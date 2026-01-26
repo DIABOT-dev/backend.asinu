@@ -17,15 +17,31 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'auth_provider') THEN
+    CREATE TYPE auth_provider AS ENUM ('EMAIL', 'GOOGLE', 'APPLE', 'PHONE', 'ZALO');
+  END IF;
+END $$;
+
+ALTER TYPE auth_provider ADD VALUE IF NOT EXISTS 'ZALO';
+
 CREATE TABLE IF NOT EXISTS users (
   id SERIAL PRIMARY KEY,
   phone VARCHAR(32) UNIQUE,
+  phone_number VARCHAR(32),
+  google_id TEXT,
+  apple_id TEXT,
+  zalo_id TEXT,
+  auth_provider auth_provider DEFAULT 'EMAIL',
   email VARCHAR(255) UNIQUE,
   password_hash TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
   deleted_at TIMESTAMP,
   token_version INTEGER DEFAULT 0
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_number ON users(phone_number);
 
 CREATE TABLE IF NOT EXISTS health_logs (
   id SERIAL PRIMARY KEY,
