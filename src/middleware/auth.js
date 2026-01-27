@@ -17,4 +17,6 @@ function authenticateJWT(req, res, next) {
   }
 }
 
-module.exports = { authenticateJWT };
+const requireAuth = authenticateJWT;
+
+module.exports = { authenticateJWT, requireAuth };

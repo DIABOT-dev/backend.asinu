@@ -1,2 +1,4 @@
 node_modules/
 *.bak.phase8
+.env
+audit_pack_v1_2/evidence_vps/

@@ -8,6 +8,7 @@ const {
   loginByZalo,
   loginByPhone,
 } = require('../controllers/auth.controller');
+const { requireAuth } = require('../middleware/auth');
 
 function authRoutes(pool) {
   const router = express.Router();
@@ -18,7 +19,7 @@ function authRoutes(pool) {
   router.post('/apple', (req, res) => loginByApple(pool, req, res));
   router.post('/zalo', (req, res) => loginByZalo(pool, req, res));
   router.post('/phone-login', (req, res) => loginByPhone(pool, req, res));
-  router.get('/me', (req, res) => getMe(pool, req, res));
+  router.get('/me', requireAuth, (req, res) => getMe(pool, req, res));
 
   return router;
 }

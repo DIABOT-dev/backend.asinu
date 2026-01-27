@@ -1,0 +1,192 @@
+﻿{
+  "info": {
+    "name": "ASINU Core V1.1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth - Email Login",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/auth/email/login",
+          "host": ["{{base_url}}"],
+          "path": ["api", "auth", "email", "login"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('login ok', () => pm.expect(json.ok).to.eql(true));",
+              "if (json.token) { pm.environment.set('token', json.token); }",
+              "if (json.user && json.user.id) { pm.environment.set('user_id', json.user.id); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Care Pulse - Event CHECK_IN (EMERGENCY)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event_type\": \"CHECK_IN\",\n  \"event_id\": \"{{$guid}}\",\n  \"client_ts\": {{\$timestamp}}000,\n  \"client_tz\": \"Asia/Bangkok\",\n  \"ui_session_id\": \"{{$guid}}\",\n  \"source\": \"manual\",\n  \"self_report\": \"EMERGENCY\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/care-pulse/events",
+          "host": ["{{base_url}}"],
+          "path": ["api", "care-pulse", "events"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "const json = pm.response.json();",
+              "pm.test('event ok', () => pm.expect(json.ok).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Care Pulse - Event POPUP_SHOWN",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event_type\": \"POPUP_SHOWN\",\n  \"event_id\": \"{{$guid}}\",\n  \"client_ts\": {{\$timestamp}}000,\n  \"client_tz\": \"Asia/Bangkok\",\n  \"ui_session_id\": \"{{ui_session_id}}\",\n  \"source\": \"scheduler\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/care-pulse/events",
+          "host": ["{{base_url}}"],
+          "path": ["api", "care-pulse", "events"]
+        }
+      }
+    },
+    {
+      "name": "Care Pulse - Event POPUP_DISMISSED",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event_type\": \"POPUP_DISMISSED\",\n  \"event_id\": \"{{$guid}}\",\n  \"client_ts\": {{\$timestamp}}000,\n  \"client_tz\": \"Asia/Bangkok\",\n  \"ui_session_id\": \"{{ui_session_id}}\",\n  \"source\": \"scheduler\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/care-pulse/events",
+          "host": ["{{base_url}}"],
+          "path": ["api", "care-pulse", "events"]
+        }
+      }
+    },
+    {
+      "name": "Care Pulse - Get State",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{base_url}}/api/care-pulse/state",
+          "host": ["{{base_url}}"],
+          "path": ["api", "care-pulse", "state"]
+        }
+      }
+    },
+    {
+      "name": "Care Pulse - Ack Escalation",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"escalation_id\": \"{{escalation_id}}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/care-pulse/escalations/ack",
+          "host": ["{{base_url}}"],
+          "path": ["api", "care-pulse", "escalations", "ack"]
+        }
+      }
+    },
+    {
+      "name": "Care Circle - Create Invitation",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"addressee_id\": 0,\n  \"relationship_type\": \"family\",\n  \"role\": \"CARE_GIVER\",\n  \"permissions\": {\"can_view_logs\": true, \"can_receive_alerts\": true, \"can_ack_escalation\": true}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/care-circle/invitations",
+          "host": ["{{base_url}}"],
+          "path": ["api", "care-circle", "invitations"]
+        }
+      }
+    },
+    {
+      "name": "Care Circle - Get Invitations",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{base_url}}/api/care-circle/invitations",
+          "host": ["{{base_url}}"],
+          "path": ["api", "care-circle", "invitations"]
+        }
+      }
+    },
+    {
+      "name": "Care Circle - Accept Invitation",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{base_url}}/api/care-circle/invitations/{{invitation_id}}/accept",
+          "host": ["{{base_url}}"],
+          "path": ["api", "care-circle", "invitations", "{{invitation_id}}", "accept"]
+        }
+      }
+    },
+    {
+      "name": "Care Circle - Get Connections",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{base_url}}/api/care-circle/connections",
+          "host": ["{{base_url}}"],
+          "path": ["api", "care-circle", "connections"]
+        }
+      }
+    }
+  ]
+}
+
