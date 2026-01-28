@@ -8,6 +8,48 @@ const chatRequestSchema = z.object({
   context: z.record(z.any()).optional(),
 });
 
+const onboardingIssueItemSchema = z
+  .object({
+    key: z.string().min(1),
+    label: z.string().min(1),
+    other_text: z.string().min(1).optional().nullable(),
+  })
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.key === 'other' && !data.other_text) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Missing other_text for key=other' });
+    }
+  });
+
+const onboardingIssueListSchema = z.array(
+  z.union([z.string(), onboardingIssueItemSchema])
+);
+
+const onboardingProfileSchema = z
+  .object({
+    age: z.enum(['30-39', '40-49', '50-59', '60+']),
+    gender: z.enum(['Nam', 'Nữ']),
+    goal: z.enum(['Giảm đau', 'Tăng linh hoạt', 'Tăng sức mạnh', 'Cải thiện vận động']),
+    body_type: z.enum(['Gầy', 'Cân đối', 'Thừa cân']),
+    medical_conditions: onboardingIssueListSchema,
+    chronic_symptoms: onboardingIssueListSchema,
+    joint_issues: z.array(onboardingIssueItemSchema),
+    flexibility: z.string().min(1),
+    stairs_performance: z.string().min(1),
+    exercise_freq: z.string().min(1),
+    walking_habit: z.string().min(1),
+    water_intake: z.string().min(1),
+    sleep_duration: z.string().min(1),
+  })
+  .strict();
+
+const onboardingRequestSchema = z
+  .object({
+    user_id: z.number().int().positive().optional(),
+    profile: onboardingProfileSchema,
+  })
+  .strict();
+
 const carePulseEventSchema = z
   .object({
     event_type: z.enum(['CHECK_IN', 'POPUP_SHOWN', 'POPUP_DISMISSED', 'APP_OPENED']),
@@ -136,6 +178,7 @@ const logDataSchemas = {
 
 module.exports = {
   chatRequestSchema,
+  onboardingRequestSchema,
   carePulseEventSchema,
   careCircleInvitationSchema,
   permissionsSchema,
