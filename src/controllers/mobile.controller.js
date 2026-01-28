@@ -1,3 +1,5 @@
+﻿const { logBaseSchema, logDataSchemas } = require('../validation/schemas');
+
 const VALID_LOG_TYPES = new Set([
   'glucose',
   'bp',
@@ -9,54 +11,52 @@ const VALID_LOG_TYPES = new Set([
   'care_pulse',
 ]);
 
-const VALID_GLUCOSE_CONTEXT = new Set([
-  'fasting',
-  'pre_meal',
-  'post_meal',
-  'before_sleep',
-  'random',
-]);
-
-const VALID_INSULIN_TIMING = new Set(['pre_meal', 'post_meal', 'bedtime', 'correction']);
-const VALID_CARE_PULSE_STATUS = new Set(['NORMAL', 'TIRED', 'EMERGENCY']);
-const VALID_CARE_PULSE_TRIGGER = new Set(['POPUP', 'HOME_WIDGET', 'EMERGENCY_BUTTON']);
-
-function toNumber(value) {
-  if (value === null || value === undefined || value === '') return null;
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
-}
-
 function isObject(value) {
   return value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function validateMobileLog(payload) {
+  const base = logBaseSchema.safeParse(payload);
+  if (!base.success) {
+    return { ok: false, error: 'Invalid payload', details: base.error.issues };
+  }
+
+  const dataSchema = logDataSchemas[base.data.log_type];
+  if (!dataSchema) {
+    return { ok: false, error: 'Invalid log_type' };
+  }
+
+  const dataParsed = dataSchema.safeParse(base.data.data || {});
+  if (!dataParsed.success) {
+    return { ok: false, error: 'Invalid data', details: dataParsed.error.issues };
+  }
+
+  return { ok: true, value: { ...base.data, data: dataParsed.data } };
 }
 
 async function createMobileLog(pool, req, res) {
   res.set('Cache-Control', 'no-store');
 
-  const payload = req.body || {};
+  if (req.body?.user_id && Number(req.body.user_id) !== Number(req.user.id)) {
+    return res.status(403).json({ ok: false, error: 'User mismatch' });
+  }
+
+  const validation = validateMobileLog(req.body || {});
+  if (!validation.ok) {
+    return res.status(400).json({ ok: false, error: validation.error, details: validation.details });
+  }
+
+  const payload = validation.value;
   const logType = payload.log_type;
   const occurredAt = payload.occurred_at;
   const source = payload.source || 'manual';
   const note = payload.note || null;
   const metadata = isObject(payload.metadata) ? payload.metadata : {};
-  const data = isObject(payload.data) ? payload.data : null;
-
-  if (!VALID_LOG_TYPES.has(logType)) {
-    return res.status(400).json({ ok: false, error: 'Invalid log_type' });
-  }
-
-  if (!occurredAt) {
-    return res.status(400).json({ ok: false, error: 'Missing occurred_at' });
-  }
+  const data = payload.data;
 
   const occurredDate = new Date(occurredAt);
   if (Number.isNaN(occurredDate.getTime())) {
     return res.status(400).json({ ok: false, error: 'Invalid occurred_at' });
-  }
-
-  if (!data) {
-    return res.status(400).json({ ok: false, error: 'Missing data' });
   }
 
   const client = await pool.connect();
@@ -74,128 +74,88 @@ async function createMobileLog(pool, req, res) {
 
     switch (logType) {
       case 'glucose': {
-        const value = toNumber(data.value);
-        if (value === null) {
-          throw new Error('Missing glucose value');
-        }
-        const unit = data.unit || 'mg/dL';
-        const context = data.context;
-        const mealTag = data.meal_tag;
-        if (context && !VALID_GLUCOSE_CONTEXT.has(context)) {
-          throw new Error('Invalid glucose context');
-        }
         await client.query(
           `INSERT INTO glucose_logs (log_id, value, unit, context, meal_tag)
            VALUES ($1, $2, $3, $4, $5)`,
-          [logId, value, unit, context || null, mealTag || null]
+          [logId, data.value, data.unit || 'mg/dL', data.context || null, data.meal_tag || null]
         );
         break;
       }
       case 'bp': {
-        const systolic = toNumber(data.systolic);
-        const diastolic = toNumber(data.diastolic);
-        const pulse = toNumber(data.pulse);
-        if (systolic === null || diastolic === null) {
-          throw new Error('Missing systolic or diastolic');
-        }
-        const unit = data.unit || 'mmHg';
         await client.query(
           `INSERT INTO blood_pressure_logs (log_id, systolic, diastolic, pulse, unit)
            VALUES ($1, $2, $3, $4, $5)`,
-          [logId, systolic, diastolic, pulse, unit]
+          [logId, data.systolic, data.diastolic, data.pulse || null, data.unit || 'mmHg']
         );
         break;
       }
       case 'weight': {
-        const weightKg = toNumber(data.weight_kg);
-        if (weightKg === null) {
-          throw new Error('Missing weight_kg');
-        }
-        const bodyFat = toNumber(data.body_fat_percent);
-        const muscle = toNumber(data.muscle_percent);
         await client.query(
           `INSERT INTO weight_logs (log_id, weight_kg, body_fat_percent, muscle_percent)
            VALUES ($1, $2, $3, $4)`,
-          [logId, weightKg, bodyFat, muscle]
+          [logId, data.weight_kg, data.body_fat_percent || null, data.muscle_percent || null]
         );
         break;
       }
       case 'water': {
-        const volume = toNumber(data.volume_ml);
-        if (volume === null) {
-          throw new Error('Missing volume_ml');
-        }
         await client.query(
           `INSERT INTO water_logs (log_id, volume_ml)
            VALUES ($1, $2)`,
-          [logId, volume]
+          [logId, data.volume_ml]
         );
         break;
       }
       case 'meal': {
-        const calories = toNumber(data.calories_kcal);
-        const macros = isObject(data.macros) ? data.macros : {};
-        const carbs = toNumber(macros.carbs_g);
-        const protein = toNumber(macros.protein_g);
-        const fat = toNumber(macros.fat_g);
-        const mealText = data.meal_text || null;
-        const photoUrl = data.photo_url || null;
         await client.query(
           `INSERT INTO meal_logs (log_id, calories_kcal, carbs_g, protein_g, fat_g, meal_text, photo_url)
            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-          [logId, calories, carbs, protein, fat, mealText, photoUrl]
+          [
+            logId,
+            data.calories_kcal ?? null,
+            data.carbs_g ?? null,
+            data.protein_g ?? null,
+            data.fat_g ?? null,
+            data.meal_text || null,
+            data.photo_url || null
+          ]
         );
         break;
       }
       case 'insulin': {
-        const doseUnits = toNumber(data.dose_units);
-        if (doseUnits === null) {
-          throw new Error('Missing dose_units');
-        }
-        const unit = data.unit || 'U';
-        const timing = data.timing || null;
-        if (timing && !VALID_INSULIN_TIMING.has(timing)) {
-          throw new Error('Invalid insulin timing');
-        }
         await client.query(
           `INSERT INTO insulin_logs (log_id, insulin_type, dose_units, unit, timing, injection_site)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [logId, data.insulin_type || null, doseUnits, unit, timing, data.injection_site || null]
+          [
+            logId,
+            data.insulin_type || null,
+            data.dose_units,
+            data.unit || 'U',
+            data.timing || null,
+            data.injection_site || null
+          ]
         );
         break;
       }
       case 'medication': {
-        const medName = data.med_name;
-        const doseText = data.dose_text;
-        if (!medName || !doseText) {
-          throw new Error('Missing med_name or dose_text');
-        }
-        const doseValue = toNumber(data.dose_value);
-        const doseUnit = data.dose_unit || null;
-        const frequencyText = data.frequency_text || null;
         await client.query(
           `INSERT INTO medication_logs (log_id, med_name, dose_text, dose_value, dose_unit, frequency_text)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [logId, medName, doseText, doseValue, doseUnit, frequencyText]
+          [
+            logId,
+            data.med_name,
+            data.dose_text,
+            data.dose_value ?? null,
+            data.dose_unit || null,
+            data.frequency_text || null
+          ]
         );
         break;
       }
       case 'care_pulse': {
-        const status = data.status;
-        const triggerSource = data.trigger_source;
-        if (!status || !triggerSource) {
-          throw new Error('Missing status or trigger_source');
-        }
-        if (!VALID_CARE_PULSE_STATUS.has(status)) {
-          throw new Error('Invalid care_pulse status');
-        }
-        if (!VALID_CARE_PULSE_TRIGGER.has(triggerSource)) {
-          throw new Error('Invalid care_pulse trigger_source');
-        }
         await client.query(
           `INSERT INTO care_pulse_logs (log_id, status, sub_status, trigger_source, escalation_sent, silence_count)
            VALUES ($1, $2, $3, $4, FALSE, 0)`,
-          [logId, status, data.sub_status || null, triggerSource]
+          [logId, data.status, data.sub_status || null, data.trigger_source]
         );
         break;
       }

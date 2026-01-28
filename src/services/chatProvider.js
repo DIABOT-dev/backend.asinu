@@ -1,0 +1,62 @@
+﻿const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+
+const buildMockReply = (message) => {
+  const trimmed = String(message || '').slice(0, 240).trim();
+  const prefix = trimmed ? `Bạn hỏi: "${trimmed}". ` : '';
+  return `${prefix}Mình có thể hỗ trợ bạn theo dõi sức khỏe và nhắc nhở hằng ngày. (Lưu ý: Thông tin chỉ mang tính tham khảo, không thay thế tư vấn y tế.)`;
+};
+
+async function callGemini(message, context) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return null;
+  }
+
+  const payload = {
+    contents: [
+      {
+        role: 'user',
+        parts: [{ text: String(message) }]
+      }
+    ]
+  };
+
+  if (context?.lang) {
+    payload.contents[0].parts.push({ text: `Language: ${context.lang}` });
+  }
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_MODEL}:generateContent?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(text || `Gemini error ${response.status}`);
+  }
+
+  const data = await response.json();
+  const reply = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join(' ').trim();
+  return reply || null;
+}
+
+async function getChatReply(message, context) {
+  if (!process.env.GEMINI_API_KEY) {
+    return { reply: buildMockReply(message), provider: 'mock' };
+  }
+
+  try {
+    const reply = await callGemini(message, context);
+    if (reply) {
+      return { reply, provider: 'gemini' };
+    }
+  } catch (err) {
+    console.warn('Gemini call failed, fallback to mock:', err?.message || err);
+  }
+
+  return { reply: buildMockReply(message), provider: 'mock' };
+}
+
+module.exports = { getChatReply };

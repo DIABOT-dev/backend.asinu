@@ -81,15 +81,12 @@ async function loginByEmail(pool, req, res) {
 }
 
 async function getMe(pool, req, res) {
-  const authHeader = req.headers.authorization || '';
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
-  if (!token) {
+  if (!req.user?.id) {
     return res.status(401).json({ ok: false, error: 'Missing token' });
   }
 
   try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    const result = await pool.query('SELECT id, email, phone FROM users WHERE id = $1', [payload.id]);
+    const result = await pool.query('SELECT id, email, phone FROM users WHERE id = $1', [req.user.id]);
     if (result.rows.length === 0) {
       return res.status(401).json({ ok: false, error: 'User not found' });
     }

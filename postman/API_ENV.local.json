@@ -1,0 +1,14 @@
+﻿{
+  "name": "ASINU Local",
+  "values": [
+    { "key": "base_url", "value": "http://localhost:3000", "enabled": true },
+    { "key": "email", "value": "", "enabled": true },
+    { "key": "password", "value": "", "enabled": true },
+    { "key": "token", "value": "", "enabled": true },
+    { "key": "user_id", "value": "", "enabled": true },
+    { "key": "invitation_id", "value": "", "enabled": true },
+    { "key": "connection_id", "value": "", "enabled": true },
+    { "key": "escalation_id", "value": "", "enabled": true },
+    { "key": "ui_session_id", "value": "", "enabled": true }
+  ]
+}
