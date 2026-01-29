@@ -1,4 +1,4 @@
-﻿const { careCircleInvitationSchema } = require('../validation/schemas');
+﻿const { careCircleInvitationSchema } = require('../validation/validation.schemas');
 
 const DEFAULT_PERMISSIONS = {
   can_view_logs: false,

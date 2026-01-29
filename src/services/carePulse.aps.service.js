@@ -1,5 +1,5 @@
 ﻿const { randomUUID } = require('crypto');
-const { updateMissionProgress } = require('./missionsService');
+const { updateMissionProgress } = require('./missions.service');
 
 const COOLDOWN_MS = 4 * 60 * 60 * 1000;
 const SIGMA_FLOOR = 5;

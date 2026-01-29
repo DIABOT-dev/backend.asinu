@@ -24,7 +24,7 @@ async function getProfile(pool, req, res) {
 
     // Try to get onboarding profile for additional info
     const onboardingResult = await pool.query(
-      `SELECT age, gender, goal, body_type
+      `SELECT display_name, age, gender, goal, body_type
        FROM user_onboarding_profiles
        WHERE user_id = $1`,
       [req.user.id]
@@ -34,7 +34,7 @@ async function getProfile(pool, req, res) {
 
     const profile = {
       id: String(user.id),
-      name: user.email ? user.email.split('@')[0] : `User ${user.id}`,
+      name: onboarding?.display_name || (user.email ? user.email.split('@')[0] : `User ${user.id}`),
       email: user.email || null,
       phone: user.phone || user.phone_number || null,
       relationship: 'Người chăm sóc',
@@ -62,8 +62,7 @@ async function updateProfile(pool, req, res) {
   const { name, phone } = req.body || {};
 
   try {
-    // We store the name as part of email or phone for now
-    // In future, add a name column to users table
+    // Update phone if provided
     if (phone) {
       await pool.query(
         `UPDATE users SET phone_number = $2, updated_at = NOW() WHERE id = $1`,
@@ -71,7 +70,51 @@ async function updateProfile(pool, req, res) {
       );
     }
 
-    return res.status(200).json({ ok: true, message: 'Profile updated' });
+    // Update name in onboarding profile
+    if (name) {
+      // Check if onboarding profile exists
+      const existing = await pool.query(
+        `SELECT id FROM user_onboarding_profiles WHERE user_id = $1`,
+        [req.user.id]
+      );
+      
+      if (existing.rows.length > 0) {
+        await pool.query(
+          `UPDATE user_onboarding_profiles SET display_name = $2, updated_at = NOW() WHERE user_id = $1`,
+          [req.user.id, name]
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO user_onboarding_profiles (user_id, display_name, created_at, updated_at)
+           VALUES ($1, $2, NOW(), NOW())`,
+          [req.user.id, name]
+        );
+      }
+    }
+
+    // Fetch updated profile to return
+    const userResult = await pool.query(
+      `SELECT id, email, phone, phone_number FROM users WHERE id = $1`,
+      [req.user.id]
+    );
+    const user = userResult.rows[0];
+
+    const onboardingResult = await pool.query(
+      `SELECT display_name, age, gender, goal, body_type FROM user_onboarding_profiles WHERE user_id = $1`,
+      [req.user.id]
+    );
+    const onboarding = onboardingResult.rows[0] || null;
+
+    const profile = {
+      id: String(user.id),
+      name: onboarding?.display_name || (user.email ? user.email.split('@')[0] : `User ${user.id}`),
+      email: user.email || null,
+      phone: phone || user.phone || user.phone_number || null,
+      relationship: 'Người chăm sóc',
+      avatarUrl: null
+    };
+
+    return res.status(200).json({ ok: true, profile });
   } catch (err) {
     console.error('update profile failed:', err);
     return res.status(500).json({ ok: false, error: 'Server error' });

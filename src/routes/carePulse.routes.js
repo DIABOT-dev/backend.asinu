@@ -1,5 +1,5 @@
 ﻿const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth.middleware');
 const { postEvent, getStateHandler, ackEscalation } = require('../controllers/carePulse.controller');
 
 function carePulseRoutes(pool) {

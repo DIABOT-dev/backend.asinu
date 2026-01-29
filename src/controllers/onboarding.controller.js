@@ -1,4 +1,4 @@
-const { onboardingRequestSchema } = require('../validation/schemas');
+const { onboardingRequestSchema } = require('../validation/validation.schemas');
 
 const normalizeText = (value) => String(value || '').trim();
 

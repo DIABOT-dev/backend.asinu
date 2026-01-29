@@ -1,5 +1,5 @@
-﻿const { evaluateAndApplyEvent, getState } = require('../services/carePulseAps');
-const { carePulseEventSchema, escalationAckSchema } = require('../validation/schemas');
+﻿const { evaluateAndApplyEvent, getState } = require('../services/carePulse.aps.service');
+const { carePulseEventSchema, escalationAckSchema } = require('../validation/validation.schemas');
 
 async function postEvent(pool, req, res) {
   try {

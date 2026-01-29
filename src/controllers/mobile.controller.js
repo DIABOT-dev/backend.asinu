@@ -1,4 +1,5 @@
-﻿const { logBaseSchema, logDataSchemas } = require('../validation/schemas');
+﻿const { logBaseSchema, logDataSchemas } = require('../validation/validation.schemas');
+const { updateMissionProgress } = require('../services/missions.service');
 
 const VALID_LOG_TYPES = new Set([
   'glucose',
@@ -164,6 +165,14 @@ async function createMobileLog(pool, req, res) {
     }
 
     await client.query('COMMIT');
+
+    // Update mission progress for health logging
+    try {
+      await updateMissionProgress(pool, req.user.id, 'DAILY_CHECKIN', 1, { goal: 1, now: occurredDate });
+    } catch (missionErr) {
+      console.warn('Failed to update mission progress:', missionErr.message);
+    }
+
     return res.status(200).json({ ok: true, log_id: logId, log_type: logType });
   } catch (err) {
     await client.query('ROLLBACK');

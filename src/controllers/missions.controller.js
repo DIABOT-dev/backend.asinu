@@ -1,4 +1,4 @@
-﻿const { getMissions } = require('../services/missionsService');
+﻿const { getMissions } = require('../services/missions.service');
 
 async function getMissionsHandler(pool, req, res) {
   if (req.query?.user_id && Number(req.query.user_id) !== Number(req.user.id)) {

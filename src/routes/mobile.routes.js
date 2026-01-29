@@ -1,5 +1,5 @@
 const express = require('express');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth.middleware');
 const { createMobileLog, getRecentLogs } = require('../controllers/mobile.controller');
 const { postChat } = require('../controllers/chat.controller');
 const { getMissionsHandler } = require('../controllers/missions.controller');

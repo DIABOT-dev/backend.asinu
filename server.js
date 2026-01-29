@@ -7,6 +7,7 @@ const authRoutes = require('./src/routes/auth.routes');
 const mobileRoutes = require('./src/routes/mobile.routes');
 const carePulseRoutes = require('./src/routes/carePulse.routes');
 const careCircleRoutes = require('./src/routes/careCircle.routes');
+const wellnessRoutes = require('./src/routes/wellness.routes');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -32,6 +33,7 @@ app.use('/api/auth', authRoutes(pool));
 app.use('/api/mobile', mobileRoutes(pool));
 app.use('/api/care-pulse', carePulseRoutes(pool));
 app.use('/api/care-circle', careCircleRoutes(pool));
+app.use('/api/wellness', wellnessRoutes(pool));
 
 // Start server after DB init
 app.listen(PORT, () => {

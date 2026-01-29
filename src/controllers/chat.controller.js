@@ -1,5 +1,5 @@
-const { chatRequestSchema } = require('../validation/schemas');
-const { getChatReply } = require('../services/chatProvider');
+const { chatRequestSchema } = require('../validation/validation.schemas');
+const { getChatReply } = require('../services/chat.provider.service');
 
 const FALLBACK_CONTEXT =
   'Người dùng chưa có hồ sơ onboarding chi tiết. Hãy trả lời thấu cảm, ngắn gọn, không giả định dữ liệu cá nhân.';

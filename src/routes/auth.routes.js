@@ -8,7 +8,7 @@ const {
   loginByZalo,
   loginByPhone,
 } = require('../controllers/auth.controller');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth } = require('../middleware/auth.middleware');
 
 function authRoutes(pool) {
   const router = express.Router();
