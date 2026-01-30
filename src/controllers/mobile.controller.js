@@ -207,7 +207,9 @@ async function getRecentLogs(pool, req, res) {
   }
 
   if (!type) {
-    const result = await pool.query(
+    // Fetch all recent logs with details - simpler approach
+    console.log('[mobile.controller] Fetching logs for user:', req.user.id, 'limit:', limit);
+    const commonResult = await pool.query(
       `SELECT id, log_type, occurred_at, source, note, metadata, created_at
        FROM logs_common
        WHERE user_id = $1
@@ -215,7 +217,38 @@ async function getRecentLogs(pool, req, res) {
        LIMIT $2`,
       [req.user.id, limit]
     );
-    return res.status(200).json({ ok: true, logs: result.rows });
+
+    console.log('[mobile.controller] Found', commonResult.rows.length, 'logs');
+
+    // Fetch details for each log type
+    const logs = await Promise.all(
+      commonResult.rows.map(async (commonLog) => {
+        const detailData = {};
+        const detail = DETAIL_TABLES[commonLog.log_type];
+        
+        if (detail) {
+          const detailResult = await pool.query(
+            `SELECT ${detail.columns.join(', ')} FROM ${detail.table} WHERE log_id = $1`,
+            [commonLog.id]
+          );
+          
+          if (detailResult.rows.length > 0) {
+            detail.columns.forEach(col => {
+              detailData[col] = detailResult.rows[0][col];
+            });
+          }
+        }
+        
+        return {
+          ...commonLog,
+          detail: detailData
+        };
+      })
+    );
+
+    console.log('[mobile.controller] Returning', logs.length, 'logs with details');
+    console.log('[mobile.controller] First log:', JSON.stringify(logs[0], null, 2));
+    return res.status(200).json({ ok: true, logs });
   }
 
   const detail = DETAIL_TABLES[type];

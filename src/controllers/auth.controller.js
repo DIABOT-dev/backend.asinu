@@ -8,7 +8,18 @@ const ZALO_SECRET_KEY = process.env.ZALO_SECRET_KEY || '';
 
 function issueJwt(user) {
   const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '30d' });
-  return { ok: true, token, user: { id: user.id, email: user.email } };
+  console.log(user)
+  return { 
+    ok: true, 
+    token, 
+    user: { 
+      id: user.id, 
+      email: user.email,
+      phone: user.phone || user.phone_number || null,
+      display_name: user.display_name || null,
+      full_name: user.full_name || null
+    } 
+  };
 }
 
 function verifySocialToken(_provider, token) {
@@ -61,7 +72,7 @@ async function loginByEmail(pool, req, res) {
   try {
     const normalizedEmail = String(email).trim().toLowerCase();
     const result = await pool.query(
-      'SELECT id, email, password_hash FROM users WHERE email = $1',
+      'SELECT id, email, password_hash, phone, phone_number, display_name, full_name FROM users WHERE email = $1',
       [normalizedEmail]
     );
 
@@ -70,12 +81,14 @@ async function loginByEmail(pool, req, res) {
     }
 
     const user = result.rows[0];
+    console.log('[auth.controller] User from DB:', user);
     const isValid = await bcrypt.compare(String(password), user.password_hash || '');
     if (!isValid) {
       return res.status(401).json({ ok: false, error: 'Invalid credentials' });
     }
 
     const response = issueJwt(user);
+    console.log('[auth.controller] Response to client:', response);
     return res.status(200).json(response);
   } catch (err) {
     console.error('Email login failed:', err);
@@ -122,7 +135,7 @@ async function loginByProvider(pool, req, res, provider, idColumn) {
 
   try {
     const existing = await pool.query(
-      `SELECT id, email FROM users WHERE ${idColumn} = $1`,
+      `SELECT id, email, phone, phone_number, display_name FROM users WHERE ${idColumn} = $1`,
       [actualProviderId]
     );
     if (existing.rows.length > 0) {
@@ -134,7 +147,7 @@ async function loginByProvider(pool, req, res, provider, idColumn) {
     const insert = await pool.query(
       `INSERT INTO users (${idColumn}, email, phone_number, auth_provider)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, email`,
+       RETURNING id, email, phone, phone_number, display_name`,
       [actualProviderId, email || null, phone_number || null, provider.toUpperCase()]
     );
     const response = issueJwt(insert.rows[0]);
