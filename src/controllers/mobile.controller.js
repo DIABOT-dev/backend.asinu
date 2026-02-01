@@ -19,17 +19,17 @@ function isObject(value) {
 function validateMobileLog(payload) {
   const base = logBaseSchema.safeParse(payload);
   if (!base.success) {
-    return { ok: false, error: 'Invalid payload', details: base.error.issues };
+    return { ok: false, error: 'Dữ liệu không hợp lệ', details: base.error.issues };
   }
 
   const dataSchema = logDataSchemas[base.data.log_type];
   if (!dataSchema) {
-    return { ok: false, error: 'Invalid log_type' };
+    return { ok: false, error: 'Loại nhật ký không hợp lệ' };
   }
 
   const dataParsed = dataSchema.safeParse(base.data.data || {});
   if (!dataParsed.success) {
-    return { ok: false, error: 'Invalid data', details: dataParsed.error.issues };
+    return { ok: false, error: 'Dữ liệu không hợp lệ', details: dataParsed.error.issues };
   }
 
   return { ok: true, value: { ...base.data, data: dataParsed.data } };
@@ -39,7 +39,7 @@ async function createMobileLog(pool, req, res) {
   res.set('Cache-Control', 'no-store');
 
   if (req.body?.user_id && Number(req.body.user_id) !== Number(req.user.id)) {
-    return res.status(403).json({ ok: false, error: 'User mismatch' });
+    return res.status(403).json({ ok: false, error: 'ID người dùng không khớp' });
   }
 
   const validation = validateMobileLog(req.body || {});
@@ -57,7 +57,7 @@ async function createMobileLog(pool, req, res) {
 
   const occurredDate = new Date(occurredAt);
   if (Number.isNaN(occurredDate.getTime())) {
-    return res.status(400).json({ ok: false, error: 'Invalid occurred_at' });
+    return res.status(400).json({ ok: false, error: 'Thời gian không hợp lệ' });
   }
 
   const client = await pool.connect();
@@ -166,9 +166,26 @@ async function createMobileLog(pool, req, res) {
 
     await client.query('COMMIT');
 
-    // Update mission progress for health logging
+    // Update mission progress based on log type
     try {
-      await updateMissionProgress(pool, req.user.id, 'DAILY_CHECKIN', 1, { goal: 1, now: occurredDate });
+      const missionMapping = {
+        'glucose': { key: 'log_glucose', goal: 2 },
+        'bp': { key: 'log_bp', goal: 2 },
+        'weight': { key: 'log_weight', goal: 1 },
+        'water': { key: 'log_water', goal: 4 },
+        'meal': { key: 'log_meal', goal: 3 },
+        'insulin': { key: 'log_insulin', goal: 1 },
+        'medication': { key: 'log_medication', goal: 1 }
+      };
+
+      const mission = missionMapping[logType];
+      if (mission) {
+        await updateMissionProgress(pool, req.user.id, mission.key, 1, { goal: mission.goal, now: occurredDate });
+        console.log(`[mobile] Updated mission ${mission.key} for user ${req.user.id}`);
+      }
+
+      // Also update daily_checkin for any health log
+      await updateMissionProgress(pool, req.user.id, 'daily_checkin', 1, { goal: 1, now: occurredDate });
     } catch (missionErr) {
       console.warn('Failed to update mission progress:', missionErr.message);
     }
@@ -203,7 +220,7 @@ async function getRecentLogs(pool, req, res) {
   const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 1), 200) : 50;
 
   if (type && !VALID_LOG_TYPES.has(type)) {
-    return res.status(400).json({ ok: false, error: 'Invalid log_type' });
+    return res.status(400).json({ ok: false, error: 'Loại nhật ký không hợp lệ' });
   }
 
   if (!type) {

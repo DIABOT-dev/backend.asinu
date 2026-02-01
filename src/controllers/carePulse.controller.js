@@ -5,7 +5,7 @@ async function postEvent(pool, req, res) {
   try {
     const parsed = carePulseEventSchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ ok: false, error: 'Invalid payload', details: parsed.error.issues });
+      return res.status(400).json({ ok: false, error: 'Dữ liệu không hợp lệ', details: parsed.error.issues });
     }
 
     const result = await evaluateAndApplyEvent(pool, {
@@ -25,7 +25,7 @@ async function postEvent(pool, req, res) {
     });
   } catch (err) {
     console.error('care-pulse event failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
@@ -42,14 +42,14 @@ async function getStateHandler(pool, req, res) {
     });
   } catch (err) {
     console.error('care-pulse state failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
 async function ackEscalation(pool, req, res) {
   const parsed = escalationAckSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: 'Invalid payload', details: parsed.error.issues });
+    return res.status(400).json({ ok: false, error: 'Dữ liệu không hợp lệ', details: parsed.error.issues });
   }
   const escalationId = parsed.data.escalation_id;
 
@@ -60,7 +60,7 @@ async function ackEscalation(pool, req, res) {
     );
 
     if (escalationResult.rows.length === 0) {
-      return res.status(404).json({ ok: false, error: 'Escalation not found' });
+      return res.status(404).json({ ok: false, error: 'Không tìm thấy cảnh báo' });
     }
 
     const escalation = escalationResult.rows[0];
@@ -74,7 +74,7 @@ async function ackEscalation(pool, req, res) {
     );
 
     if (permission.rows.length === 0) {
-      return res.status(403).json({ ok: false, error: 'Forbidden' });
+      return res.status(403).json({ ok: false, error: 'Không có quyền truy cập' });
     }
 
     if (escalation.status === 'acknowledged') {
@@ -91,7 +91,7 @@ async function ackEscalation(pool, req, res) {
     return res.status(200).json({ ok: true, status: 'acknowledged' });
   } catch (err) {
     console.error('care-pulse ack failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 

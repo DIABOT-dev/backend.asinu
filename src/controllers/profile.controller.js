@@ -6,7 +6,7 @@
 async function getProfile(pool, req, res) {
   console.log('[profile.controller] getProfile called - USER ID:', req.user?.id);
   if (!req.user?.id) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    return res.status(401).json({ ok: false, error: 'Chưa xác thực' });
   }
 
   try {
@@ -18,7 +18,7 @@ async function getProfile(pool, req, res) {
     );
     console.log('[profile.controller] DB Query result:', userResult.rows);
     if (userResult.rows.length === 0) {
-      return res.status(404).json({ ok: false, error: 'User not found' });
+      return res.status(404).json({ ok: false, error: 'Không tìm thấy người dùng' });
     }
 
     const user = userResult.rows[0];
@@ -55,13 +55,13 @@ async function getProfile(pool, req, res) {
     return res.status(200).json({ ok: true, profile });
   } catch (err) {
     console.error('get profile failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
 async function updateProfile(pool, req, res) {
   if (!req.user?.id) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    return res.status(401).json({ ok: false, error: 'Chưa xác thực' });
   }
 
   const { name, phone } = req.body || {};
@@ -143,13 +143,13 @@ async function updateProfile(pool, req, res) {
     return res.status(200).json({ ok: true, profile });
   } catch (err) {
     console.error('update profile failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
 async function deleteAccount(pool, req, res) {
   if (!req.user?.id) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    return res.status(401).json({ ok: false, error: 'Chưa xác thực' });
   }
 
   try {
@@ -158,15 +158,41 @@ async function deleteAccount(pool, req, res) {
       [req.user.id]
     );
 
-    return res.status(200).json({ ok: true, message: 'Account deleted' });
+    return res.status(200).json({ ok: true, message: 'Đã xoá tài khoản' });
   } catch (err) {
     console.error('delete account failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+  }
+}
+
+async function updatePushToken(pool, req, res) {
+  if (!req.user?.id) {
+    return res.status(401).json({ ok: false, error: 'Chưa xác thực' });
+  }
+
+  const { push_token } = req.body || {};
+  
+  if (!push_token) {
+    return res.status(400).json({ ok: false, error: 'Cần token thông báo đẩy' });
+  }
+
+  try {
+    await pool.query(
+      `UPDATE users SET push_token = $2 WHERE id = $1`,
+      [req.user.id, push_token]
+    );
+
+    console.log('[profile] Push token updated for user', req.user.id);
+    return res.status(200).json({ ok: true, message: 'Đã cập nhật token thông báo' });
+  } catch (err) {
+    console.error('update push token failed:', err);
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
 module.exports = {
   getProfile,
   updateProfile,
-  deleteAccount
+  deleteAccount,
+  updatePushToken
 };

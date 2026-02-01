@@ -2,6 +2,34 @@ const { z } = require('zod');
 
 const uuidSchema = z.string().uuid();
 
+// Phone validation schema (Vietnamese format)
+const phoneSchema = z
+  .string()
+  .min(10, 'Số điện thoại phải có ít nhất 10 số')
+  .max(15, 'Số điện thoại không hợp lệ')
+  .regex(/^[0-9+\-\s()]+$/, 'Số điện thoại chỉ được chứa số và ký tự +, -, (), khoảng trắng')
+  .transform(val => val.replace(/[\s\-()]/g, '')) // Remove formatting
+  .refine(val => /^(\+84|84|0)[0-9]{9,10}$/.test(val), {
+    message: 'Số điện thoại phải bắt đầu bằng 0, 84 hoặc +84 và có 10-11 số'
+  });
+
+// Email validation schema
+const emailSchema = z
+  .string()
+  .min(1, 'Email không được để trống')
+  .email('Email không hợp lệ')
+  .toLowerCase()
+  .trim();
+
+// Strong password validation schema
+const passwordSchema = z
+  .string()
+  .min(8, 'Mật khẩu phải có ít nhất 8 ký tự')
+  .regex(/[A-Z]/, 'Mật khẩu phải có ít nhất 1 chữ hoa')
+  .regex(/[a-z]/, 'Mật khẩu phải có ít nhất 1 chữ thường')
+  .regex(/[0-9]/, 'Mật khẩu phải có ít nhất 1 chữ số')
+  .regex(/[^A-Za-z0-9]/, 'Mật khẩu phải có ít nhất 1 ký tự đặc biệt (!@#$%^&*...)');
+
 const chatRequestSchema = z.object({
   message: z.string().min(1).max(2000),
   client_ts: z.number(),
@@ -75,7 +103,7 @@ const permissionsSchema = z
   .strict();
 
 const careCircleInvitationSchema = z.object({
-  addressee_id: z.number().int().positive(),
+  addressee_id: z.string().regex(/^\d+$/, 'addressee_id must be a numeric ID').transform(Number),
   relationship_type: z.string().optional(),
   role: z.string().optional(),
   permissions: permissionsSchema.optional(),
@@ -176,7 +204,28 @@ const logDataSchemas = {
   care_pulse: carePulseLogSchema,
 };
 
+// Auth validation schemas
+// Register requires both email AND phone
+const registerSchema = z.object({
+  email: emailSchema,
+  phone_number: phoneSchema,
+  password: passwordSchema,
+  full_name: z.string().min(1, 'Tên không được để trống').max(255).optional(),
+  display_name: z.string().max(255).optional(),
+});
+
+// Login accepts either email OR phone + password
+const loginSchema = z.object({
+  identifier: z.string().min(1, 'Email hoặc số điện thoại không được để trống'),
+  password: z.string().min(1, 'Mật khẩu không được để trống'),
+});
+
 module.exports = {
+  phoneSchema,
+  emailSchema,
+  passwordSchema,
+  registerSchema,
+  loginSchema,
   chatRequestSchema,
   onboardingRequestSchema,
   carePulseEventSchema,

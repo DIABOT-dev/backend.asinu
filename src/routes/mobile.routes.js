@@ -2,9 +2,9 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { createMobileLog, getRecentLogs } = require('../controllers/mobile.controller');
 const { postChat } = require('../controllers/chat.controller');
-const { getMissionsHandler } = require('../controllers/missions.controller');
+const { getMissionsHandler, getMissionHistoryHandler, getMissionStatsHandler } = require('../controllers/missions.controller');
 const { upsertOnboardingProfile } = require('../controllers/onboarding.controller');
-const { getProfile, updateProfile, deleteAccount } = require('../controllers/profile.controller');
+const { getProfile, updateProfile, deleteAccount, updatePushToken } = require('../controllers/profile.controller');
 const { getTreeSummary, getTreeHistory } = require('../controllers/tree.controller');
 
 function mobileRoutes(pool) {
@@ -20,6 +20,8 @@ function mobileRoutes(pool) {
 
   // Missions
   router.get('/missions', requireAuth, (req, res) => getMissionsHandler(pool, req, res));
+  router.get('/missions/history', requireAuth, (req, res) => getMissionHistoryHandler(pool, req, res));
+  router.get('/missions/stats', requireAuth, (req, res) => getMissionStatsHandler(pool, req, res));
 
   // Onboarding
   router.post('/onboarding', requireAuth, (req, res) => upsertOnboardingProfile(pool, req, res));
@@ -28,6 +30,7 @@ function mobileRoutes(pool) {
   router.get('/profile', requireAuth, (req, res) => getProfile(pool, req, res));
   router.put('/profile', requireAuth, (req, res) => updateProfile(pool, req, res));
   router.delete('/profile', requireAuth, (req, res) => deleteAccount(pool, req, res));
+  router.post('/profile/push-token', requireAuth, (req, res) => updatePushToken(pool, req, res));
 
   // Tree (Health Score)
   router.get('/tree', requireAuth, (req, res) => getTreeSummary(pool, req, res));

@@ -88,7 +88,7 @@ async function getTreeSummary(pool, req, res) {
     // - 50% from logs (max 14 logs per week = 2 per day)
     // - 50% from missions completed
     const logScore = Math.min(logCount / 14, 1) * 0.5;
-    const missionScore = totalMissions > 0 ? (completedCount / totalMissions) * 0.5 : 0.25;
+    const missionScore = totalMissions > 0 ? (completedCount / totalMissions) * 0.5 : 0; // Start from 0 if no missions
     const score = Math.round((logScore + missionScore) * 100) / 100;
 
     return res.status(200).json({

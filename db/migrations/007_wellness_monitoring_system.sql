@@ -28,7 +28,11 @@ CREATE INDEX IF NOT EXISTS idx_user_activity_logs_type
 -- 2. BẢNG ĐIỂM SỨC KHỎE (user_health_scores)
 -- Lưu điểm wellness 0-100 và trạng thái
 -- =====================================================
-CREATE TYPE wellness_status AS ENUM ('OK', 'MONITOR', 'CONCERN', 'DANGER');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'wellness_status') THEN
+    CREATE TYPE wellness_status AS ENUM ('OK', 'MONITOR', 'CONCERN', 'DANGER');
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS user_health_scores (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -77,8 +81,17 @@ CREATE TABLE IF NOT EXISTS user_wellness_state (
 -- 4. BẢNG THÔNG BÁO NGƯỜI THÂN (caregiver_alerts)
 -- Lưu các lần thông báo đến người thân
 -- =====================================================
-CREATE TYPE alert_type AS ENUM ('INFO', 'WARNING', 'URGENT', 'EMERGENCY');
-CREATE TYPE alert_status AS ENUM ('pending', 'sent', 'read', 'acknowledged', 'dismissed');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'alert_type') THEN
+    CREATE TYPE alert_type AS ENUM ('INFO', 'WARNING', 'URGENT', 'EMERGENCY');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'alert_status') THEN
+    CREATE TYPE alert_status AS ENUM ('pending', 'sent', 'read', 'acknowledged', 'dismissed');
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS caregiver_alerts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

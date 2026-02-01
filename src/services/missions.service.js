@@ -13,8 +13,43 @@ function toDateOnly(value) {
   return `${year}-${month}-${day}`;
 }
 
+// Mission translations for better UX
+const MISSION_TITLES = {
+  'log_glucose': 'Đo đường huyết',
+  'log_bp': 'Đo huyết áp',
+  'log_weight': 'Cân nặng',
+  'log_water': 'Uống nước',
+  'log_meal': 'Ghi bữa ăn',
+  'log_insulin': 'Ghi Insulin',
+  'log_medication': 'Ghi thuốc',
+  'daily_checkin': 'Điểm danh'
+};
+
+const MISSION_DESCRIPTIONS = {
+  'log_glucose': 'Đo và ghi lại chỉ số đường huyết 2 lần/ngày',
+  'log_bp': 'Theo dõi huyết áp định kỳ 2 lần/ngày',
+  'log_weight': 'Cân nặng và ghi lại 1 lần/ngày',
+  'log_water': 'Uống đủ nước, mục tiêu 4 ly/ngày',
+  'log_meal': 'Ghi chép bữa ăn, mục tiêu 3 bữa/ngày',
+  'log_insulin': 'Ghi chép liều insulin đã tiêm 1 lần/ngày',
+  'log_medication': 'Ghi chép thuốc đã uống 1 lần/ngày',
+  'daily_checkin': 'Mở app và ghi ít nhất 1 log'
+};
+
 async function getMissions(pool, userId) {
   const client = resolveClient(pool);
+  
+  // Reset ALL missions if it's a new day (not just completed ones)
+  const today = toDateOnly(new Date());
+  await client.query(
+    `UPDATE user_missions
+     SET progress = 0, status = 'active', updated_at = NOW()
+     WHERE user_id = $1
+       AND last_incremented_date IS NOT NULL
+       AND last_incremented_date::text < $2`,
+    [userId, today]
+  );
+  
   const result = await client.query(
     `SELECT mission_key, status, progress, goal, updated_at
      FROM user_missions
@@ -22,7 +57,16 @@ async function getMissions(pool, userId) {
      ORDER BY mission_key ASC`,
     [userId]
   );
-  return result.rows;
+  
+  // Add titles and descriptions
+  const missionsWithTitles = result.rows.map(mission => ({
+    ...mission,
+    title: MISSION_TITLES[mission.mission_key] || mission.mission_key,
+    description: MISSION_DESCRIPTIONS[mission.mission_key] || null,
+    id: `${userId}-${mission.mission_key}` // Add unique id for React keys
+  }));
+  
+  return missionsWithTitles;
 }
 
 async function updateMissionProgress(clientOrPool, userId, missionKey, delta, opts = {}) {

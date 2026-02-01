@@ -45,7 +45,7 @@ async function postActivity(pool, req, res) {
     if (!parsed.success) {
       return res.status(400).json({ 
         ok: false, 
-        error: 'Invalid payload', 
+        error: 'Dữ liệu không hợp lệ', 
         details: parsed.error.issues 
       });
     }
@@ -80,7 +80,7 @@ async function postActivity(pool, req, res) {
     }
   } catch (err) {
     console.error('wellness activity failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
@@ -107,7 +107,7 @@ async function getState(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness state failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
@@ -132,7 +132,7 @@ async function postCalculate(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness calculate failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
@@ -156,7 +156,7 @@ async function getHistory(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness history failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
@@ -194,7 +194,7 @@ async function getSummary(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness summary failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
@@ -219,7 +219,7 @@ async function checkShouldPrompt(pool, req, res) {
     }
   } catch (err) {
     console.error('wellness prompt check failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
@@ -250,7 +250,7 @@ async function getMyAlerts(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness get alerts failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
@@ -282,7 +282,7 @@ async function getCaregiverAlertsHandler(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness caregiver alerts failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
@@ -301,7 +301,7 @@ async function postAckAlert(pool, req, res) {
     );
 
     if (alertResult.rows.length === 0) {
-      return res.status(404).json({ ok: false, error: 'Alert not found' });
+      return res.status(404).json({ ok: false, error: 'Không tìm thấy cảnh báo' });
     }
 
     const alert = alertResult.rows[0];
@@ -318,7 +318,7 @@ async function postAckAlert(pool, req, res) {
       );
 
       if (permissionResult.rows.length === 0) {
-        return res.status(403).json({ ok: false, error: 'Forbidden' });
+        return res.status(403).json({ ok: false, error: 'Không có quyền truy cập' });
       }
     }
 
@@ -334,7 +334,7 @@ async function postAckAlert(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness ack alert failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
@@ -368,7 +368,7 @@ async function postHelpRequest(pool, req, res) {
     }
   } catch (err) {
     console.error('wellness help request failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
