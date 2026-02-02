@@ -10,6 +10,7 @@ const careCircleRoutes = require('./src/routes/careCircle.routes');
 const wellnessRoutes = require('./src/routes/wellness.routes');
 const healthRoutes = require('./src/routes/health.routes');
 const notificationRoutes = require('./src/routes/notifications.routes');
+const asinuBrainRoutes = require('./asinu-brain-extension/routes/asinuBrain.routes');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -59,6 +60,7 @@ app.use('/api/care-circle', careCircleRoutes(pool));
 app.use('/api/wellness', wellnessRoutes(pool));
 app.use('/api/health', healthRoutes(pool));
 app.use('/api/notifications', notificationRoutes(pool));
+app.use('/api/asinu-brain', asinuBrainRoutes(pool));
 
 // Start server after DB init
 app.listen(PORT, () => {
