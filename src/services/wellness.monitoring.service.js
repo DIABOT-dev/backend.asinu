@@ -841,6 +841,59 @@ async function acknowledgeAlert(pool, alertId, acknowledgedBy) {
 // EXPORTS
 // =====================================================
 
+/**
+ * Acknowledge alert with permission check
+ * @param {Object} pool - Database pool
+ * @param {number} alertId - Alert ID
+ * @param {number} userId - User acknowledging
+ * @returns {Promise<Object>} - { ok, alert, error }
+ */
+async function ackAlertWithPermission(pool, alertId, userId) {
+  try {
+    // Get alert
+    const alertResult = await pool.query(
+      'SELECT * FROM caregiver_alerts WHERE id = $1',
+      [alertId]
+    );
+
+    if (alertResult.rows.length === 0) {
+      return { ok: false, error: 'Không tìm thấy cảnh báo', statusCode: 404 };
+    }
+
+    const alert = alertResult.rows[0];
+
+    // Check if user is the caregiver or has permission
+    if (alert.caregiver_user_id !== userId) {
+      const permissionResult = await pool.query(
+        `SELECT id FROM user_connections 
+         WHERE status = 'accepted'
+           AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))
+           AND COALESCE((permissions->>'can_ack_escalation')::boolean, false) = true`,
+        [alert.user_id, userId]
+      );
+
+      if (permissionResult.rows.length === 0) {
+        return { ok: false, error: 'Không có quyền truy cập', statusCode: 403 };
+      }
+    }
+
+    // Acknowledge
+    const updated = await acknowledgeAlert(pool, alertId, userId);
+
+    return {
+      ok: true,
+      alert: {
+        id: updated.id,
+        status: updated.alert_status,
+        acknowledgedAt: updated.acknowledged_at
+      }
+    };
+  } catch (err) {
+    console.error('[wellness.monitoring.service] ackAlertWithPermission failed:', err);
+    return { ok: false, error: 'Lỗi server' };
+  }
+}
+
 module.exports = {
   // Activity logging
   logUserActivity,
@@ -858,6 +911,7 @@ module.exports = {
   // Alert management
   sendCaregiverAlert,
   acknowledgeAlert,
+  ackAlertWithPermission,
   
   // Main evaluation
   evaluateUserWellness,

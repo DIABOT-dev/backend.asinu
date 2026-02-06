@@ -3,18 +3,7 @@
  * API endpoints cho hệ thống theo dõi sức khỏe
  */
 
-const {
-  logUserActivity,
-  evaluateUserWellness,
-  getWellnessState,
-  getWellnessHistory,
-  getDailySummaries,
-  getCaregiverAlerts,
-  getAlertsForCaregiver,
-  acknowledgeAlert,
-  sendCaregiverAlert,
-  shouldPromptUser
-} = require('../services/wellness.monitoring.service');
+const wellnessService = require('../services/wellness.monitoring.service');
 const { z } = require('zod');
 
 // =====================================================
@@ -52,7 +41,7 @@ async function postActivity(pool, req, res) {
 
     const client = await pool.connect();
     try {
-      const activity = await logUserActivity(
+      const activity = await wellnessService.logUserActivity(
         client,
         req.user.id,
         parsed.data.activity_type,
@@ -61,7 +50,7 @@ async function postActivity(pool, req, res) {
       );
 
       // Auto-evaluate after activity
-      const evaluation = await evaluateUserWellness(pool, req.user.id, {
+      const evaluation = await wellnessService.evaluateUserWellness(pool, req.user.id, {
         executePrompt: false, // Don't auto-prompt from API
         executeAlert: true
       });
@@ -90,7 +79,7 @@ async function postActivity(pool, req, res) {
 // =====================================================
 async function getState(pool, req, res) {
   try {
-    const state = await getWellnessState(pool, req.user.id);
+    const state = await wellnessService.getWellnessState(pool, req.user.id);
     
     return res.status(200).json({
       ok: true,
@@ -117,7 +106,7 @@ async function getState(pool, req, res) {
 // =====================================================
 async function postCalculate(pool, req, res) {
   try {
-    const result = await evaluateUserWellness(pool, req.user.id, {
+    const result = await wellnessService.evaluateUserWellness(pool, req.user.id, {
       executePrompt: false,
       executeAlert: req.body.checkAlert !== false
     });
@@ -143,7 +132,7 @@ async function postCalculate(pool, req, res) {
 async function getHistory(pool, req, res) {
   try {
     const days = parseInt(req.query.days) || 7;
-    const history = await getWellnessHistory(pool, req.user.id, days);
+    const history = await wellnessService.getWellnessHistory(pool, req.user.id, days);
 
     return res.status(200).json({
       ok: true,
@@ -167,7 +156,7 @@ async function getHistory(pool, req, res) {
 async function getSummary(pool, req, res) {
   try {
     const days = parseInt(req.query.days) || 7;
-    const summaries = await getDailySummaries(pool, req.user.id, days);
+    const summaries = await wellnessService.getDailySummaries(pool, req.user.id, days);
 
     return res.status(200).json({
       ok: true,
@@ -206,7 +195,7 @@ async function checkShouldPrompt(pool, req, res) {
   try {
     const client = await pool.connect();
     try {
-      const decision = await shouldPromptUser(client, req.user.id);
+      const decision = await wellnessService.shouldPromptUser(client, req.user.id);
       
       return res.status(200).json({
         ok: true,
@@ -229,7 +218,7 @@ async function checkShouldPrompt(pool, req, res) {
 // =====================================================
 async function getMyAlerts(pool, req, res) {
   try {
-    const alerts = await getCaregiverAlerts(pool, req.user.id, {
+    const alerts = await wellnessService.getCaregiverAlerts(pool, req.user.id, {
       status: req.query.status,
       limit: parseInt(req.query.limit) || 20
     });
@@ -260,7 +249,7 @@ async function getMyAlerts(pool, req, res) {
 // =====================================================
 async function getCaregiverAlertsHandler(pool, req, res) {
   try {
-    const alerts = await getAlertsForCaregiver(pool, req.user.id, {
+    const alerts = await wellnessService.getAlertsForCaregiver(pool, req.user.id, {
       unreadOnly: req.query.unreadOnly === 'true',
       limit: parseInt(req.query.limit) || 20
     });
@@ -292,46 +281,18 @@ async function getCaregiverAlertsHandler(pool, req, res) {
 // =====================================================
 async function postAckAlert(pool, req, res) {
   try {
-    const alertId = req.params.id;
-    
-    // Verify caregiver has permission
-    const alertResult = await pool.query(
-      'SELECT * FROM caregiver_alerts WHERE id = $1',
-      [alertId]
-    );
-
-    if (alertResult.rows.length === 0) {
-      return res.status(404).json({ ok: false, error: 'Không tìm thấy cảnh báo' });
+    const alertId = parseInt(req.params.id, 10);
+    if (isNaN(alertId)) {
+      return res.status(400).json({ ok: false, error: 'ID không hợp lệ' });
     }
 
-    const alert = alertResult.rows[0];
-    
-    // Check if user is the caregiver or has permission
-    if (alert.caregiver_user_id !== req.user.id) {
-      // Check connection permission
-      const permissionResult = await pool.query(
-        `SELECT id FROM user_connections 
-         WHERE status = 'accepted'
-           AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))
-           AND COALESCE((permissions->>'can_ack_escalation')::boolean, false) = true`,
-        [alert.user_id, req.user.id]
-      );
+    const result = await wellnessService.ackAlertWithPermission(pool, alertId, req.user.id);
 
-      if (permissionResult.rows.length === 0) {
-        return res.status(403).json({ ok: false, error: 'Không có quyền truy cập' });
-      }
+    if (!result.ok) {
+      return res.status(result.statusCode || 400).json(result);
     }
 
-    const updated = await acknowledgeAlert(pool, alertId, req.user.id);
-
-    return res.status(200).json({
-      ok: true,
-      alert: {
-        id: updated.id,
-        status: updated.alert_status,
-        acknowledgedAt: updated.acknowledged_at
-      }
-    });
+    return res.status(200).json(result);
   } catch (err) {
     console.error('wellness ack alert failed:', err);
     return res.status(500).json({ ok: false, error: 'Lỗi server' });
@@ -346,7 +307,7 @@ async function postHelpRequest(pool, req, res) {
   try {
     const client = await pool.connect();
     try {
-      const alerts = await sendCaregiverAlert(
+      const alerts = await wellnessService.sendCaregiverAlert(
         client,
         req.user.id,
         'EMERGENCY',

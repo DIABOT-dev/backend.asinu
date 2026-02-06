@@ -112,7 +112,75 @@ async function updateMissionProgress(clientOrPool, userId, missionKey, delta, op
   return inserted.rows[0];
 }
 
+/**
+ * Get mission history
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @param {number} days - Number of days to retrieve (default 30)
+ * @returns {Promise<Object>} - { ok, history }
+ */
+async function getMissionHistory(pool, userId, days = 30) {
+  try {
+    const client = resolveClient(pool);
+    const result = await client.query(
+      `SELECT 
+        mission_key, 
+        completed_date, 
+        progress, 
+        goal,
+        created_at
+      FROM mission_history
+      WHERE user_id = $1
+        AND completed_date >= CURRENT_DATE - $2::integer
+      ORDER BY completed_date DESC, mission_key ASC`,
+      [userId, days]
+    );
+    
+    return { 
+      ok: true, 
+      history: result.rows 
+    };
+  } catch (err) {
+    console.error('[missions.service] getMissionHistory failed:', err);
+    return { ok: false, error: 'Lỗi server' };
+  }
+}
+
+/**
+ * Get mission statistics
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @returns {Promise<Object>} - { ok, stats }
+ */
+async function getMissionStats(pool, userId) {
+  try {
+    const client = resolveClient(pool);
+    const result = await client.query(
+      `SELECT 
+        mission_key,
+        COUNT(*) as total_completions,
+        MAX(completed_date) as last_completed,
+        MIN(completed_date) as first_completed
+      FROM mission_history
+      WHERE user_id = $1
+      GROUP BY mission_key
+      ORDER BY mission_key ASC`,
+      [userId]
+    );
+    
+    return { 
+      ok: true, 
+      stats: result.rows 
+    };
+  } catch (err) {
+    console.error('[missions.service] getMissionStats failed:', err);
+    return { ok: false, error: 'Lỗi server' };
+  }
+}
+
 module.exports = {
   getMissions,
-  updateMissionProgress
+  updateMissionProgress,
+  getMissionHistory,
+  getMissionStats
 };

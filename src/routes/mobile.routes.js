@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
-const { createMobileLog, getRecentLogs } = require('../controllers/mobile.controller');
+const { createMobileLog, getRecentLogs, getTodayLogs } = require('../controllers/mobile.controller');
 const { postChat } = require('../controllers/chat.controller');
 const { getMissionsHandler, getMissionHistoryHandler, getMissionStatsHandler } = require('../controllers/missions.controller');
 const { upsertOnboardingProfile } = require('../controllers/onboarding.controller');
@@ -14,6 +14,7 @@ function mobileRoutes(pool) {
   router.post('/logs', requireAuth, (req, res) => createMobileLog(pool, req, res));
   router.get('/logs', requireAuth, (req, res) => getRecentLogs(pool, req, res));
   router.get('/logs/recent', requireAuth, (req, res) => getRecentLogs(pool, req, res));
+  router.get('/logs/today', requireAuth, (req, res) => getTodayLogs(pool, req, res));
 
   // Chat
   router.post('/chat', requireAuth, (req, res) => postChat(pool, req, res));

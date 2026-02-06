@@ -56,58 +56,58 @@ const mapDecisionLabel = (decision) => {
 const buildExplainability = (input, output) => {
   const trigger = [];
   if (output.flags.bypass_acute) {
-    trigger.push('Co dau hieu uu tien');
+    trigger.push('Có dấu hiệu ưu tiên');
   } else if (output.flags.bypass_missing) {
-    trigger.push('Thieu tin hieu gan day');
+    trigger.push('Thiếu tín hiệu gần đây');
   }
 
   if (input.trend_24h > 0) {
-    trigger.push('Tin hieu tang trong 24 gio');
+    trigger.push('Tín hiệu tăng trong 24 giờ');
   }
 
   if (trigger.length === 0) {
-    trigger.push('Tin hieu on dinh gan day');
+    trigger.push('Tín hiệu ổn định gần đây');
   }
 
   const context = [];
-  if (input.age_band === '80P') context.push('Tuoi 80+');
-  if (input.age_band === '70_79') context.push('Tuoi 70-79');
-  if (input.age_band === '60_69') context.push('Tuoi 60-69');
-  if (input.comorbidity_tier > 0) context.push('Co yeu to nen');
-  if (input.frailty_tier > 0) context.push('Nen tang can theo doi');
-  if (!input.profile_verified) context.push('Ho so chua day du');
+  if (input.age_band === '80P') context.push('Tuổi 80+');
+  if (input.age_band === '70_79') context.push('Tuổi 70-79');
+  if (input.age_band === '60_69') context.push('Tuổi 60-69');
+  if (input.comorbidity_tier > 0) context.push('Có yếu tố nền');
+  if (input.frailty_tier > 0) context.push('Nền tảng cần theo dõi');
+  if (!input.profile_verified) context.push('Hồ sơ chưa đầy đủ');
 
   const action = [];
   if (output.decision === 0) {
-    action.push('Tiep tuc sinh hoat binh thuong');
-    action.push('Minh se theo doi them');
+    action.push('Tiếp tục sinh hoạt bình thường');
+    action.push('Mình sẽ theo dõi thêm');
   } else if (output.decision === 1) {
-    action.push('Nhac bac tra loi check-in');
-    action.push('Theo doi them trong hom nay');
+    action.push('Nhắc bác trả lời check-in');
+    action.push('Theo dõi thêm trong hôm nay');
   } else if (output.decision === 2) {
-    action.push('Bao nguoi than de kiem tra');
-    action.push('Theo doi thuong xuyen hon');
+    action.push('Báo người thân để kiểm tra');
+    action.push('Theo dõi thường xuyên hơn');
   } else {
-    action.push('Lien he ngay voi nguoi than');
-    action.push('Uu tien kiem tra som');
+    action.push('Liên hệ ngay với người thân');
+    action.push('Ưu tiên kiểm tra sớm');
   }
 
   let confidenceLevel = 'medium';
   const confidenceReasons = [];
   if (output.flags.bypass_acute) {
     confidenceLevel = 'high';
-    confidenceReasons.push('Co dau hieu uu tien');
+    confidenceReasons.push('Có dấu hiệu ưu tiên');
   }
 
   if (input.missing_signal === 1 || !input.profile_verified) {
     if (!output.flags.bypass_acute) {
       confidenceLevel = 'low';
     }
-    confidenceReasons.push('Thieu du lieu gan day');
+    confidenceReasons.push('Thiếu dữ liệu gần đây');
   }
 
   if (confidenceReasons.length === 0) {
-    confidenceReasons.push('Du lieu hien tai phu hop');
+    confidenceReasons.push('Dữ liệu hiện tại phù hợp');
   }
 
   return {

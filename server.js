@@ -5,12 +5,14 @@ const rateLimit = require('express-rate-limit');
 const { Pool } = require('pg');
 const authRoutes = require('./src/routes/auth.routes');
 const mobileRoutes = require('./src/routes/mobile.routes');
+const missionsRoutes = require('./src/routes/missions.routes');
 const carePulseRoutes = require('./src/routes/carePulse.routes');
 const careCircleRoutes = require('./src/routes/careCircle.routes');
 const wellnessRoutes = require('./src/routes/wellness.routes');
 const healthRoutes = require('./src/routes/health.routes');
 const notificationRoutes = require('./src/routes/notifications.routes');
 const asinuBrainRoutes = require('./asinu-brain-extension/routes/asinuBrain.routes');
+const testRoutes = require('./asinu-brain-extension/routes/test.routes');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -55,12 +57,14 @@ const pool = new Pool({ connectionString: DATABASE_URL });
 
 app.use('/api/auth', authLimiter, authRoutes(pool));
 app.use('/api/mobile', mobileRoutes(pool));
+app.use('/api/missions', missionsRoutes(pool));
 app.use('/api/care-pulse', carePulseRoutes(pool));
 app.use('/api/care-circle', careCircleRoutes(pool));
 app.use('/api/wellness', wellnessRoutes(pool));
 app.use('/api/health', healthRoutes(pool));
 app.use('/api/notifications', notificationRoutes(pool));
 app.use('/api/asinu-brain', asinuBrainRoutes(pool));
+app.use('/api/test', testRoutes(pool)); // Public test API - no auth required
 
 // Start server after DB init
 app.listen(PORT, () => {

@@ -197,6 +197,69 @@ async function saveAssistantReply(pool, userId, reply, timestamp) {
   return result.rows[0];
 }
 
+/**
+ * Process chat message and get AI reply
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @param {string} message - User message
+ * @param {Object} context - Additional context
+ * @returns {Promise<Object>} - { ok, reply, chat_id, provider, created_at, error }
+ */
+async function processChat(pool, userId, message, context = {}) {
+  const { getChatReply } = require('./chat.provider.service');
+  
+  try {
+    const now = new Date();
+
+    // Save user message
+    await saveUserMessage(pool, userId, message, now);
+
+    // Get AI provider
+    const provider = String(process.env.AI_PROVIDER || '').toLowerCase();
+    let finalMessage = message;
+    let onboardingProfile = null;
+
+    // Build context for DiaBrain provider
+    if (provider === 'diabrain') {
+      try {
+        onboardingProfile = await getOnboardingProfile(pool, userId);
+        const contextText = buildOnboardingContext(onboardingProfile);
+        finalMessage = formatMessageWithContext(message, contextText);
+      } catch (err) {
+        console.warn('[chat.service] onboarding context fetch failed:', err?.message || err);
+        finalMessage = formatMessageWithContext(message, FALLBACK_CONTEXT);
+      }
+    }
+
+    // Get AI reply
+    const providerContext = { ...context, user_id: userId };
+    const replyResult = await getChatReply(finalMessage, providerContext);
+    let reply = replyResult.reply || '';
+    const replyProvider = replyResult.provider || 'mock';
+
+    // Add mention hint for DiaBrain if needed
+    if (replyProvider === 'diabrain' && onboardingProfile) {
+      reply = enhanceReplyWithProfile(reply, onboardingProfile);
+    }
+
+    // Save assistant reply
+    const assistantRow = await saveAssistantReply(pool, userId, reply, now);
+
+    return {
+      ok: true,
+      reply,
+      chat_id: assistantRow?.id,
+      provider: replyProvider,
+      created_at: assistantRow?.created_at 
+        ? new Date(assistantRow.created_at).toISOString() 
+        : now.toISOString()
+    };
+  } catch (err) {
+    console.error('[chat.service] processChat failed:', err);
+    return { ok: false, error: 'Server error' };
+  }
+}
+
 // =====================================================
 // EXPORTS
 // =====================================================
@@ -220,4 +283,7 @@ module.exports = {
   getOnboardingProfile,
   saveUserMessage,
   saveAssistantReply,
+  
+  // Main
+  processChat,
 };

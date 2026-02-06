@@ -573,10 +573,66 @@ async function getState(pool, userId) {
   }
 }
 
+/**
+ * Acknowledge an escalation
+ * @param {Object} pool - Database pool
+ * @param {number} escalationId - Escalation ID
+ * @param {number} userId - User acknowledging
+ * @returns {Promise<Object>} - { ok, status, error }
+ */
+async function acknowledgeEscalation(pool, escalationId, userId) {
+  try {
+    // Get escalation
+    const escalationResult = await pool.query(
+      'SELECT id, user_id, status FROM care_pulse_escalations WHERE id = $1',
+      [escalationId]
+    );
+
+    if (escalationResult.rows.length === 0) {
+      return { ok: false, error: 'Không tìm thấy cảnh báo', statusCode: 404 };
+    }
+
+    const escalation = escalationResult.rows[0];
+
+    // Check permission
+    const permission = await pool.query(
+      `SELECT id
+       FROM user_connections
+       WHERE status = 'accepted'
+         AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))
+         AND COALESCE((permissions->>'can_ack_escalation')::boolean, false) = true`,
+      [escalation.user_id, userId]
+    );
+
+    if (permission.rows.length === 0) {
+      return { ok: false, error: 'Không có quyền truy cập', statusCode: 403 };
+    }
+
+    // Already acknowledged
+    if (escalation.status === 'acknowledged') {
+      return { ok: true, status: escalation.status };
+    }
+
+    // Update status
+    await pool.query(
+      `UPDATE care_pulse_escalations
+       SET status = 'acknowledged', acknowledged_at = NOW(), acknowledged_by = $2
+       WHERE id = $1`,
+      [escalationId, userId]
+    );
+
+    return { ok: true, status: 'acknowledged' };
+  } catch (err) {
+    console.error('[carePulse.aps.service] acknowledgeEscalation failed:', err);
+    return { ok: false, error: 'Lỗi server' };
+  }
+}
+
 module.exports = {
   evaluateAndApplyEvent,
   getState,
-  ensureBaseline
+  ensureBaseline,
+  acknowledgeEscalation
 };
 
 

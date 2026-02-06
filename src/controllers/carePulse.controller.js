@@ -1,13 +1,23 @@
-﻿const { evaluateAndApplyEvent, getState } = require('../services/carePulse.aps.service');
+﻿/**
+ * CarePulse Controller
+ * HTTP handlers for care pulse APS endpoints
+ */
+
+const { evaluateAndApplyEvent, getState, acknowledgeEscalation } = require('../services/carePulse.aps.service');
 const { carePulseEventSchema, escalationAckSchema } = require('../validation/validation.schemas');
 
+/**
+ * POST /api/care-pulse/events
+ * Process a care pulse event
+ */
 async function postEvent(pool, req, res) {
-  try {
-    const parsed = carePulseEventSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({ ok: false, error: 'Dữ liệu không hợp lệ', details: parsed.error.issues });
-    }
+  // Validate request
+  const parsed = carePulseEventSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: 'Dữ liệu không hợp lệ', details: parsed.error.issues });
+  }
 
+  try {
     const result = await evaluateAndApplyEvent(pool, {
       userId: req.user.id,
       event: parsed.data,
@@ -24,11 +34,15 @@ async function postEvent(pool, req, res) {
       state_name: result.state.currentStatus
     });
   } catch (err) {
-    console.error('care-pulse event failed:', err);
+    console.error('[carePulse.controller] postEvent failed:', err);
     return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
+/**
+ * GET /api/care-pulse/state
+ * Get current care pulse state
+ */
 async function getStateHandler(pool, req, res) {
   try {
     const state = await getState(pool, req.user.id);
@@ -41,58 +55,31 @@ async function getStateHandler(pool, req, res) {
       state_name: state.currentStatus
     });
   } catch (err) {
-    console.error('care-pulse state failed:', err);
+    console.error('[carePulse.controller] getStateHandler failed:', err);
     return res.status(500).json({ ok: false, error: 'Lỗi server' });
   }
 }
 
+/**
+ * POST /api/care-pulse/escalations/ack
+ * Acknowledge an escalation
+ */
 async function ackEscalation(pool, req, res) {
+  // Validate request
   const parsed = escalationAckSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({ ok: false, error: 'Dữ liệu không hợp lệ', details: parsed.error.issues });
   }
-  const escalationId = parsed.data.escalation_id;
 
-  try {
-    const escalationResult = await pool.query(
-      'SELECT id, user_id, status FROM care_pulse_escalations WHERE id = $1',
-      [escalationId]
-    );
+  // Call service
+  const result = await acknowledgeEscalation(pool, parsed.data.escalation_id, req.user.id);
 
-    if (escalationResult.rows.length === 0) {
-      return res.status(404).json({ ok: false, error: 'Không tìm thấy cảnh báo' });
-    }
-
-    const escalation = escalationResult.rows[0];
-    const permission = await pool.query(
-      `SELECT id
-       FROM user_connections
-       WHERE status = 'accepted'
-         AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))
-         AND COALESCE((permissions->>'can_ack_escalation')::boolean, false) = true`,
-      [escalation.user_id, req.user.id]
-    );
-
-    if (permission.rows.length === 0) {
-      return res.status(403).json({ ok: false, error: 'Không có quyền truy cập' });
-    }
-
-    if (escalation.status === 'acknowledged') {
-      return res.status(200).json({ ok: true, status: escalation.status });
-    }
-
-    await pool.query(
-      `UPDATE care_pulse_escalations
-       SET status = 'acknowledged', acknowledged_at = NOW(), acknowledged_by = $2
-       WHERE id = $1`,
-      [escalationId, req.user.id]
-    );
-
-    return res.status(200).json({ ok: true, status: 'acknowledged' });
-  } catch (err) {
-    console.error('care-pulse ack failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+  if (!result.ok) {
+    const statusCode = result.statusCode || 400;
+    return res.status(statusCode).json({ ok: false, error: result.error });
   }
+
+  return res.status(200).json({ ok: true, status: result.status });
 }
 
 module.exports = {
