@@ -224,22 +224,92 @@ async function updateProfile(pool, userId, updates) {
 }
 
 /**
- * Delete user account (soft delete)
+ * Delete user account (hard delete - xóa toàn bộ dữ liệu)
  * @param {Object} pool - Database pool
  * @param {number} userId - User ID
  * @returns {Promise<Object>} - { ok, message, error }
  */
 async function deleteAccount(pool, userId) {
+  const client = await pool.connect();
+  
   try {
-    await pool.query(
-      `UPDATE users SET deleted_at = NOW() WHERE id = $1`,
-      [userId]
-    );
+    // Bắt đầu transaction
+    await client.query('BEGIN');
 
-    return { ok: true, message: 'Đã xoá tài khoản' };
+    console.log(`[profile.service] Deleting account for user ${userId}`);
+
+    // Xóa các bảng liên quan theo thứ tự (child tables trước)
+    // 1. Health & Wellness logs
+    await client.query('DELETE FROM glucose_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM blood_pressure_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM weight_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM water_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM meal_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM insulin_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM medication_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM care_pulse_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM logs_common WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM health_logs WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM logs WHERE user_id = $1', [userId]);
+
+    // 2. Chat & AI
+    await client.query('DELETE FROM chat_logs WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM chat_histories WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM asinu_brain_outcomes WHERE session_id IN (SELECT id FROM asinu_brain_sessions WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM asinu_brain_events WHERE session_id IN (SELECT id FROM asinu_brain_sessions WHERE user_id = $1)', [userId]);
+    await client.query('DELETE FROM asinu_brain_sessions WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM asinu_brain_context_snapshots WHERE user_id = $1', [userId]);
+
+    // 3. Missions
+    await client.query('DELETE FROM mission_history WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM user_missions WHERE user_id = $1', [userId]);
+
+    // 4. Care Pulse & Monitoring
+    await client.query('DELETE FROM care_pulse_events WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM care_pulse_engine_state WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM care_pulse_escalations WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM caregiver_alerts WHERE user_id = $1 OR caregiver_user_id = $1', [userId]);
+    await client.query('DELETE FROM wellness_monitoring_config WHERE user_id = $1', [userId]);
+
+    // 5. Wellness & Health Tracking
+    await client.query('DELETE FROM user_activity_logs WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM user_health_scores WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM user_wellness_state WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM daily_wellness_summary WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM prompt_history WHERE user_id = $1', [userId]);
+
+    // 6. Risk Engine & Alerts
+    await client.query('DELETE FROM alert_decision_audit WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM asinu_trackers WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM risk_persistence WHERE user_id = $1', [userId]);
+
+    // 7. Care Circle & Connections
+    await client.query('DELETE FROM care_circle WHERE user_id = $1 OR member_user_id = $1', [userId]);
+    await client.query('DELETE FROM user_connections WHERE user_id = $1 OR connected_user_id = $1', [userId]);
+    await client.query('DELETE FROM user_baselines WHERE user_id = $1', [userId]);
+
+    // 8. Notifications
+    await client.query('DELETE FROM notifications WHERE user_id = $1', [userId]);
+
+    // 9. Auth & Profile
+    await client.query('DELETE FROM auth WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM user_onboarding_profiles WHERE user_id = $1', [userId]);
+
+    // 10. Cuối cùng xóa user
+    await client.query('DELETE FROM users WHERE id = $1', [userId]);
+
+    // Commit transaction
+    await client.query('COMMIT');
+
+    console.log(`[profile.service] Successfully deleted account for user ${userId}`);
+    return { ok: true, message: 'Đã xoá tài khoản và toàn bộ dữ liệu' };
   } catch (err) {
+    // Rollback nếu có lỗi
+    await client.query('ROLLBACK');
     console.error('[profile.service] deleteAccount failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: 'Lỗi khi xoá tài khoản' };
+  } finally {
+    client.release();
   }
 }
 
