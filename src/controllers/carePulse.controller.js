@@ -3,6 +3,7 @@
  * HTTP handlers for care pulse APS endpoints
  */
 
+const { t, getLang } = require('../i18n');
 const { evaluateAndApplyEvent, getState, acknowledgeEscalation } = require('../services/carePulse.aps.service');
 const { carePulseEventSchema, escalationAckSchema } = require('../validation/validation.schemas');
 
@@ -14,7 +15,7 @@ async function postEvent(pool, req, res) {
   // Validate request
   const parsed = carePulseEventSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: 'Dữ liệu không hợp lệ', details: parsed.error.issues });
+    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)), details: parsed.error.issues });
   }
 
   try {
@@ -35,7 +36,7 @@ async function postEvent(pool, req, res) {
     });
   } catch (err) {
     console.error('[carePulse.controller] postEvent failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -56,7 +57,7 @@ async function getStateHandler(pool, req, res) {
     });
   } catch (err) {
     console.error('[carePulse.controller] getStateHandler failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -68,7 +69,7 @@ async function ackEscalation(pool, req, res) {
   // Validate request
   const parsed = escalationAckSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: 'Dữ liệu không hợp lệ', details: parsed.error.issues });
+    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)), details: parsed.error.issues });
   }
 
   // Call service

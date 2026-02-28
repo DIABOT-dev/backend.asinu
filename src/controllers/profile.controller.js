@@ -3,12 +3,13 @@
  * Handles user profile operations
  */
 
+const { t, getLang } = require('../i18n');
 const profileService = require('../services/profile.service');
 
 async function getProfile(pool, req, res) {
   console.log('[profile.controller] getProfile called - USER ID:', req.user?.id);
   if (!req.user?.id) {
-    return res.status(401).json({ ok: false, error: 'Chưa xác thực' });
+    return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
 
   const result = await profileService.getProfile(pool, req.user.id);
@@ -24,7 +25,7 @@ async function getProfile(pool, req, res) {
 
 async function updateProfile(pool, req, res) {
   if (!req.user?.id) {
-    return res.status(401).json({ ok: false, error: 'Chưa xác thực' });
+    return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
 
   const { name, phone, dateOfBirth, gender, heightCm, weightKg, bloodType, chronicDiseases } = req.body || {};
@@ -60,7 +61,7 @@ async function updateProfile(pool, req, res) {
 
 async function deleteAccount(pool, req, res) {
   if (!req.user?.id) {
-    return res.status(401).json({ ok: false, error: 'Chưa xác thực' });
+    return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
 
   const result = await profileService.deleteAccount(pool, req.user.id);
@@ -74,13 +75,13 @@ async function deleteAccount(pool, req, res) {
 
 async function updatePushToken(pool, req, res) {
   if (!req.user?.id) {
-    return res.status(401).json({ ok: false, error: 'Chưa xác thực' });
+    return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
 
   const { push_token } = req.body || {};
   
   if (!push_token) {
-    return res.status(400).json({ ok: false, error: 'Cần token thông báo đẩy' });
+    return res.status(400).json({ ok: false, error: t('error.push_token_required', getLang(req)) });
   }
 
   const result = await profileService.updatePushToken(pool, req.user.id, push_token);
@@ -90,7 +91,7 @@ async function updatePushToken(pool, req, res) {
   }
 
   console.log('[profile] Push token updated for user', req.user.id);
-  return res.status(200).json({ ok: true, message: 'Đã cập nhật token thông báo' });
+  return res.status(200).json({ ok: true, message: t('success.push_token_updated', getLang(req)) });
 }
 
 module.exports = {

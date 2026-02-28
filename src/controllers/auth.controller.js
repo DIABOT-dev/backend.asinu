@@ -1,3 +1,4 @@
+const { t, getLang } = require('../i18n');
 const { registerSchema, loginSchema } = require('../validation/validation.schemas');
 const {
   registerByEmail: serviceRegister,
@@ -66,12 +67,12 @@ async function loginByProvider(pool, req, res, provider, idColumn) {
 
   // Validate token
   if (!token) {
-    return res.status(400).json({ ok: false, error: 'Thiếu token xác thực' });
+    return res.status(400).json({ ok: false, error: t('error.missing_auth_token', getLang(req)) });
   }
 
   // Verify token with provider
   if (!verifySocialToken(provider, token)) {
-    return res.status(401).json({ ok: false, error: 'Token không hợp lệ' });
+    return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
   }
 
   // Get or generate provider_id
@@ -81,7 +82,7 @@ async function loginByProvider(pool, req, res, provider, idColumn) {
   }
 
   if (!actualProviderId) {
-    return res.status(400).json({ ok: false, error: 'Thiếu provider_id hoặc email' });
+    return res.status(400).json({ ok: false, error: t('error.missing_provider_id_or_email', getLang(req)) });
   }
 
   // Call service
@@ -110,7 +111,7 @@ async function loginByPhone(pool, req, res) {
   const { phone_number } = req.body || {};
 
   if (!phone_number) {
-    return res.status(400).json({ ok: false, error: 'Thiếu số điện thoại' });
+    return res.status(400).json({ ok: false, error: t('error.missing_phone', getLang(req)) });
   }
 
   // Call service
@@ -128,19 +129,20 @@ async function loginByPhone(pool, req, res) {
 // =====================================================
 
 async function getMe(pool, req, res) {
+  const lang = getLang(req);
   if (!req.user?.id) {
-    return res.status(401).json({ ok: false, error: 'Thiếu token xác thực' });
+    return res.status(401).json({ ok: false, error: t('error.missing_auth_token', lang) });
   }
 
   try {
     const user = await getCurrentUser(pool, req.user.id);
     if (!user) {
-      return res.status(401).json({ ok: false, error: 'Không tìm thấy người dùng' });
+      return res.status(401).json({ ok: false, error: t('error.user_not_found', lang) });
     }
     return res.status(200).json({ ok: true, user });
   } catch (err) {
     console.error('[auth.controller] getMe failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', lang) });
   }
 }
 
@@ -156,7 +158,7 @@ async function searchUsers(pool, req, res) {
     return res.status(200).json({ ok: true, users });
   } catch (err) {
     console.error('[auth.controller] searchUsers failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -165,14 +167,15 @@ async function searchUsers(pool, req, res) {
 // =====================================================
 
 async function verifyToken(pool, req, res) {
+  const lang = getLang(req);
   if (!req.user?.id) {
-    return res.status(401).json({ ok: false, error: 'Token không hợp lệ' });
+    return res.status(401).json({ ok: false, error: t('error.invalid_token', lang) });
   }
 
   try {
     const user = await getCurrentUser(pool, req.user.id);
     if (!user) {
-      return res.status(401).json({ ok: false, error: 'Không tìm thấy người dùng' });
+      return res.status(401).json({ ok: false, error: t('error.user_not_found', lang) });
     }
     
     return res.status(200).json({
@@ -182,7 +185,7 @@ async function verifyToken(pool, req, res) {
     });
   } catch (err) {
     console.error('[auth.controller] verifyToken failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', lang) });
   }
 }
 

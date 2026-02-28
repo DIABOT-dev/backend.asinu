@@ -1,11 +1,12 @@
 ﻿const { getDiaBrainReply } = require('./ai/providers/diabrain');
+const { t } = require('../i18n');
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
 const buildMockReply = (message) => {
   const trimmed = String(message || '').slice(0, 240).trim();
-  const prefix = trimmed ? `Bạn hỏi: "${trimmed}". ` : '';
-  return `${prefix}Mình có thể hỗ trợ bạn theo dõi sức khỏe và nhắc nhở hằng ngày. (Lưu ý: Thông tin chỉ mang tính tham khảo, không thay thế tư vấn y tế.)`;
+  const prefix = trimmed ? t('chat.mock_reply', 'vi', { message: trimmed }) : '';
+  return `${prefix}${t('chat.mock_support')}`;
 };
 
 async function callGemini(message, context) {

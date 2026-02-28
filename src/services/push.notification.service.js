@@ -10,6 +10,7 @@
  */
 
 const EXPO_PUSH_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
+const { t } = require('../i18n');
 
 /**
  * Send a push notification via Expo Push Notification Service
@@ -95,8 +96,8 @@ async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitat
     
     return await sendPushNotification(
       [pushToken],
-      'Lời mời kết nối Care Circle',
-      `${senderName} muốn kết nối với bạn trong Care Circle`,
+      t('push.invitation_title'),
+      t('push.invitation_body', 'vi', { name: senderName }),
       {
         type: 'care_circle_invitation',
         invitationId: String(invitationId),
@@ -132,8 +133,8 @@ async function notifyCareCircleAccepted(pool, requesterId, accepterName) {
     
     return await sendPushNotification(
       [pushToken],
-      'Lời mời được chấp nhận',
-      `${accepterName} đã chấp nhận lời mời kết nối Care Circle của bạn`,
+      t('push.accepted_title'),
+      t('push.accepted_body', 'vi', { name: accepterName }),
       {
         type: 'care_circle_accepted',
         accepterId: String(requesterId),

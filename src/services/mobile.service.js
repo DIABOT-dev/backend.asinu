@@ -3,6 +3,8 @@
  * Business logic cho health logs từ mobile app
  */
 
+const { t } = require('../i18n');
+
 const VALID_LOG_TYPES = new Set([
   'glucose',
   'bp',
@@ -154,7 +156,7 @@ async function createLog(pool, userId, payload) {
 
   const occurredDate = new Date(occurredAt);
   if (Number.isNaN(occurredDate.getTime())) {
-    return { ok: false, error: 'Thời gian không hợp lệ', statusCode: 400 };
+    return { ok: false, error: t('error.invalid_time'), statusCode: 400 };
   }
 
   const client = await pool.connect();
@@ -212,7 +214,7 @@ async function getRecentLogs(pool, userId, options = {}) {
   const limit = Math.min(Math.max(Number(limitRaw) || 50, 1), 200);
 
   if (type && !VALID_LOG_TYPES.has(type)) {
-    return { ok: false, error: 'Loại nhật ký không hợp lệ', statusCode: 400 };
+    return { ok: false, error: t('error.invalid_log_type'), statusCode: 400 };
   }
 
   try {
@@ -286,7 +288,7 @@ async function getRecentLogs(pool, userId, options = {}) {
     return { ok: true, logs };
   } catch (err) {
     console.error('[mobile.service] getRecentLogs failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -297,7 +299,7 @@ async function getTodayLogs(pool, userId, options = {}) {
   const { type } = options;
 
   if (type && !VALID_LOG_TYPES.has(type)) {
-    return { ok: false, error: 'Loại nhật ký không hợp lệ', statusCode: 400 };
+    return { ok: false, error: t('error.invalid_log_type'), statusCode: 400 };
   }
 
   try {
@@ -379,7 +381,7 @@ async function getTodayLogs(pool, userId, options = {}) {
     return { ok: true, logs, count: logs.length };
   } catch (err) {
     console.error('[mobile.service] getTodayLogs error:', err);
-    return { ok: false, error: 'Lỗi khi lấy nhật ký hôm nay', statusCode: 500 };
+    return { ok: false, error: t('error.get_today_logs'), statusCode: 500 };
   }
 }
 

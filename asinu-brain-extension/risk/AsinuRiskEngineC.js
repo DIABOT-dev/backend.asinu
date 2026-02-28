@@ -9,6 +9,8 @@
  * 4. KẾT HỢP với mood và symptoms để ra quyết định cuối cùng
  */
 
+const { t } = require('../../src/i18n');
+
 const GLUCOSE_RANGES = {
   CRITICAL_LOW: 70,
   NORMAL_LOW: 100,
@@ -46,7 +48,7 @@ const assessGlucoseRisk = (value) => {
     return {
       tier: 'HIGH',
       score: 80,
-      reason: `Chỉ số rất thấp (${val} mg/dL)`
+      reason: t('risk.glucose_very_low', 'vi', { value: val })
     };
   }
   
@@ -54,7 +56,7 @@ const assessGlucoseRisk = (value) => {
     return {
       tier: 'HIGH',
       score: 75,
-      reason: `Chỉ số rất cao (${val} mg/dL)`
+      reason: t('risk.glucose_very_high', 'vi', { value: val })
     };
   }
   
@@ -63,7 +65,7 @@ const assessGlucoseRisk = (value) => {
     return {
       tier: 'MEDIUM',
       score: 50,
-      reason: `Chỉ số hơi thấp (${val} mg/dL)`
+      reason: t('risk.glucose_slightly_low', 'vi', { value: val })
     };
   }
   
@@ -71,7 +73,7 @@ const assessGlucoseRisk = (value) => {
     return {
       tier: 'MEDIUM',
       score: 45,
-      reason: `Chỉ số hơi cao (${val} mg/dL)`
+      reason: t('risk.glucose_slightly_high', 'vi', { value: val })
     };
   }
   
@@ -79,7 +81,7 @@ const assessGlucoseRisk = (value) => {
   return {
     tier: 'LOW',
     score: 10,
-    reason: `Chỉ số bình thường (${val} mg/dL)`
+    reason: t('risk.glucose_normal', 'vi', { value: val })
   };
 };
 
@@ -100,7 +102,7 @@ const assessBPRisk = (systolic, diastolic) => {
     return {
       tier: 'HIGH',
       score: 85,
-      reason: `Chỉ số rất thấp (${sys}/${dia} mmHg)`
+      reason: t('risk.bp_very_low', 'vi', { sys, dia })
     };
   }
   
@@ -108,7 +110,7 @@ const assessBPRisk = (systolic, diastolic) => {
     return {
       tier: 'HIGH',
       score: 80,
-      reason: `Chỉ số rất cao (${sys}/${dia} mmHg)`
+      reason: t('risk.bp_very_high', 'vi', { sys, dia })
     };
   }
   
@@ -117,7 +119,7 @@ const assessBPRisk = (systolic, diastolic) => {
     return {
       tier: 'MEDIUM',
       score: 45,
-      reason: `Chỉ số hơi thấp (${sys}/${dia} mmHg)`
+      reason: t('risk.bp_slightly_low', 'vi', { sys, dia })
     };
   }
   
@@ -125,7 +127,7 @@ const assessBPRisk = (systolic, diastolic) => {
     return {
       tier: 'MEDIUM',
       score: 50,
-      reason: `Chỉ số hơi cao (${sys}/${dia} mmHg)`
+      reason: t('risk.bp_slightly_high', 'vi', { sys, dia })
     };
   }
   
@@ -133,7 +135,7 @@ const assessBPRisk = (systolic, diastolic) => {
   return {
     tier: 'LOW',
     score: 10,
-    reason: `Chỉ số bình thường (${sys}/${dia} mmHg)`
+    reason: t('risk.bp_normal', 'vi', { sys, dia })
   };
 };
 
@@ -147,25 +149,25 @@ const adjustRiskByMoodSymptoms = (baseRisk, mood, symptoms = []) => {
   // Mood impact
   if (mood === 'NOT_OK') {
     adjustedScore += 15;
-    reasons.push('Tâm trạng không ổn');
+    reasons.push(t('risk.mood_not_ok'));
   } else if (mood === 'TIRED') {
     adjustedScore += 5;
-    reasons.push('Cảm thấy mệt');
+    reasons.push(t('risk.mood_tired'));
   }
   
   // Symptoms impact
   if (symptoms.includes('chest_pain') && symptoms.includes('shortness_of_breath')) {
     adjustedScore += 30;
-    reasons.push('Đau ngực + khó thở (khẩn cấp)');
+    reasons.push(t('risk.symptom_chest_breath'));
   } else if (symptoms.includes('chest_pain')) {
     adjustedScore += 20;
-    reasons.push('Đau ngực');
+    reasons.push(t('risk.symptom_chest_pain'));
   } else if (symptoms.includes('shortness_of_breath')) {
     adjustedScore += 15;
-    reasons.push('Khó thở');
+    reasons.push(t('risk.symptom_shortness_of_breath'));
   } else if (symptoms.includes('dizziness')) {
     adjustedScore += 10;
-    reasons.push('Chóng mặt');
+    reasons.push(t('risk.symptom_dizziness'));
   }
   
   // Clamp to 0-100

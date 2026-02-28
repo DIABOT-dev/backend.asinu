@@ -1,6 +1,7 @@
 const express = require('express');
 const { runDailyHealthMonitoring, runHealthMonitoringForUser } = require('../services/health.monitoring.service');
 const { requireAuth } = require('../middleware/auth.middleware');
+const { t, getLang } = require('../i18n');
 
 function healthRoutes(pool) {
   const router = express.Router();
@@ -17,14 +18,14 @@ function healthRoutes(pool) {
       
       return res.status(200).json({
         ok: true,
-        message: 'Đã hoàn thành kiểm tra sức khỏe hàng ngày',
+        message: t('health.daily_check_complete', getLang(req)),
         ...result
       });
     } catch (error) {
       console.error('[health] Error in daily monitoring endpoint:', error);
       return res.status(500).json({
         ok: false,
-        error: 'Không thể chạy kiểm tra sức khỏe hàng ngày'
+        error: t('health.daily_check_error', getLang(req))
       });
     }
   });
@@ -55,7 +56,7 @@ function healthRoutes(pool) {
       
       if (connections.rows.length === 0) {
         return res.status(200).json({ 
-          message: 'Không có care-circle để thông báo',
+          message: t('careCircle.no_care_circle', getLang(req)),
           notified: 0 
         });
       }
@@ -71,7 +72,7 @@ function healthRoutes(pool) {
         const notificationData = {
           user_id: connection.care_member_id,
           type: 'health_alert',
-          title: `Cảnh báo sức khỏe từ ${userName}`,
+          title: t('health.alert_from_user', getLang(req), { name: userName }),
           message: alertData.message,
           data: {
             type: 'health_alert',
@@ -109,7 +110,7 @@ function healthRoutes(pool) {
       
       res.json({
         success: true,
-        message: `Đã gửi cảnh báo cho ${connections.rows.length} thành viên care-circle`,
+        message: t('health.alert_sent_count', getLang(req), { count: connections.rows.length }),
         notified: connections.rows.length,
         alertType: alertData.alertType,
         severity: alertData.severity
@@ -118,7 +119,7 @@ function healthRoutes(pool) {
     } catch (error) {
       console.error('Lỗi gửi cảnh báo care-circle:', error);
       res.status(500).json({
-        error: 'Không thể gửi cảnh báo cho care-circle',
+        error: t('health.alert_send_error', getLang(req)),
         details: error.message
       });
     }
@@ -136,7 +137,7 @@ function healthRoutes(pool) {
       if (isNaN(userId)) {
         return res.status(400).json({
           ok: false,
-          error: 'ID người dùng không hợp lệ'
+          error: t('error.invalid_user_id', getLang(req))
         });
       }
 
@@ -145,13 +146,13 @@ function healthRoutes(pool) {
       
       return res.status(200).json({
         ok: true,
-        message: `Đã hoàn thành kiểm tra sức khỏe cho người dùng ${userId}`
+        message: t('health.user_check_complete', getLang(req), { userId })
       });
     } catch (error) {
       console.error('[health] Error in user monitoring endpoint:', error);
       return res.status(500).json({
         ok: false,
-        error: 'Không thể kiểm tra sức khỏe cho người dùng'
+        error: t('health.user_check_error', getLang(req))
       });
     }
   });

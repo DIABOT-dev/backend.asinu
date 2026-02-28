@@ -1,3 +1,5 @@
+const { t } = require('../../src/i18n');
+
 const DEFAULT_CONFIG = {
   w1: 0.6,
   w2: 1,
@@ -56,58 +58,58 @@ const mapDecisionLabel = (decision) => {
 const buildExplainability = (input, output) => {
   const trigger = [];
   if (output.flags.bypass_acute) {
-    trigger.push('Có dấu hiệu ưu tiên');
+    trigger.push(t('risk.priority_signal'));
   } else if (output.flags.bypass_missing) {
-    trigger.push('Thiếu tín hiệu gần đây');
+    trigger.push(t('risk.missing_recent_signal'));
   }
 
   if (input.trend_24h > 0) {
-    trigger.push('Tín hiệu tăng trong 24 giờ');
+    trigger.push(t('risk.signal_increased_24h'));
   }
 
   if (trigger.length === 0) {
-    trigger.push('Tín hiệu ổn định gần đây');
+    trigger.push(t('risk.signal_stable'));
   }
 
   const context = [];
-  if (input.age_band === '80P') context.push('Tuổi 80+');
-  if (input.age_band === '70_79') context.push('Tuổi 70-79');
-  if (input.age_band === '60_69') context.push('Tuổi 60-69');
-  if (input.comorbidity_tier > 0) context.push('Có yếu tố nền');
-  if (input.frailty_tier > 0) context.push('Nền tảng cần theo dõi');
-  if (!input.profile_verified) context.push('Hồ sơ chưa đầy đủ');
+  if (input.age_band === '80P') context.push(t('risk.age_80_plus'));
+  if (input.age_band === '70_79') context.push(t('risk.age_70_79'));
+  if (input.age_band === '60_69') context.push(t('risk.age_60_69'));
+  if (input.comorbidity_tier > 0) context.push(t('risk.has_conditions'));
+  if (input.frailty_tier > 0) context.push(t('risk.needs_monitoring'));
+  if (!input.profile_verified) context.push(t('risk.incomplete_profile'));
 
   const action = [];
   if (output.decision === 0) {
-    action.push('Tiếp tục sinh hoạt bình thường');
-    action.push('Mình sẽ theo dõi thêm');
+    action.push(t('risk.action_continue_normal'));
+    action.push(t('risk.action_will_monitor'));
   } else if (output.decision === 1) {
-    action.push('Nhắc bác trả lời check-in');
-    action.push('Theo dõi thêm trong hôm nay');
+    action.push(t('risk.action_remind_checkin'));
+    action.push(t('risk.action_monitor_today'));
   } else if (output.decision === 2) {
-    action.push('Báo người thân để kiểm tra');
-    action.push('Theo dõi thường xuyên hơn');
+    action.push(t('risk.action_notify_relative'));
+    action.push(t('risk.action_monitor_more'));
   } else {
-    action.push('Liên hệ ngay với người thân');
-    action.push('Ưu tiên kiểm tra sớm');
+    action.push(t('risk.action_contact_relative_now'));
+    action.push(t('risk.action_priority_check'));
   }
 
   let confidenceLevel = 'medium';
   const confidenceReasons = [];
   if (output.flags.bypass_acute) {
     confidenceLevel = 'high';
-    confidenceReasons.push('Có dấu hiệu ưu tiên');
+    confidenceReasons.push(t('risk.confidence_priority'));
   }
 
   if (input.missing_signal === 1 || !input.profile_verified) {
     if (!output.flags.bypass_acute) {
       confidenceLevel = 'low';
     }
-    confidenceReasons.push('Thiếu dữ liệu gần đây');
+    confidenceReasons.push(t('risk.confidence_missing_data'));
   }
 
   if (confidenceReasons.length === 0) {
-    confidenceReasons.push('Dữ liệu hiện tại phù hợp');
+    confidenceReasons.push(t('risk.confidence_data_ok'));
   }
 
   return {

@@ -3,6 +3,8 @@
  * Business logic cho user profile operations
  */
 
+const { t } = require('../i18n');
+
 /**
  * Get user profile with onboarding data
  * @param {Object} pool - Database pool
@@ -19,7 +21,7 @@ async function getProfile(pool, userId) {
     );
 
     if (userResult.rows.length === 0) {
-      return { ok: false, error: 'Không tìm thấy người dùng', statusCode: 404 };
+      return { ok: false, error: t('error.user_not_found'), statusCode: 404 };
     }
 
     const user = userResult.rows[0];
@@ -55,7 +57,7 @@ async function getProfile(pool, userId) {
     const careCircle = careCircleResult.rows.map(row => ({
       id: String(row.id),
       guardianId: String(row.guardian_id),
-      name: row.guardian_name || 'Người giám hộ',
+      name: row.guardian_name || t('profile.guardian_label'),
       phone: row.guardian_phone,
       email: row.guardian_email,
       status: row.status
@@ -84,7 +86,7 @@ async function getProfile(pool, userId) {
       name: user.full_name || user.display_name || onboarding?.display_name || (user.email ? user.email.split('@')[0] : `User123 ${user.id}`),
       email: user.email || null,
       phone: user.phone || user.phone_number || null,
-      relationship: 'Người chăm sóc',
+      relationship: t('profile.caregiver_label'),
       avatarUrl: user.avatar_url || null,
       // Health profile fields from onboarding
       dateOfBirth: onboarding?.date_of_birth || null,
@@ -106,7 +108,7 @@ async function getProfile(pool, userId) {
     return { ok: true, profile };
   } catch (err) {
     console.error('[profile.service] getProfile failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -219,7 +221,7 @@ async function updateProfile(pool, userId, updates) {
     return await getProfile(pool, userId);
   } catch (err) {
     console.error('[profile.service] updateProfile failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -302,12 +304,12 @@ async function deleteAccount(pool, userId) {
     await client.query('COMMIT');
 
     console.log(`[profile.service] Successfully deleted account for user ${userId}`);
-    return { ok: true, message: 'Đã xoá tài khoản và toàn bộ dữ liệu' };
+    return { ok: true, message: t('success.account_deleted') };
   } catch (err) {
     // Rollback nếu có lỗi
     await client.query('ROLLBACK');
     console.error('[profile.service] deleteAccount failed:', err);
-    return { ok: false, error: 'Lỗi khi xoá tài khoản' };
+    return { ok: false, error: t('profile.delete_account_error') };
   } finally {
     client.release();
   }
@@ -330,7 +332,7 @@ async function updatePushToken(pool, userId, pushToken) {
     return { ok: true };
   } catch (err) {
     console.error('[profile.service] updatePushToken failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 

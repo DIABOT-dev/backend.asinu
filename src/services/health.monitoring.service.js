@@ -8,6 +8,8 @@
  * 3. Gửi thông báo cho care circle connections
  */
 
+const { t } = require('../i18n');
+
 /**
  * Kiểm tra các giá trị đường huyết bất thường
  * @param {object} pool - Database pool
@@ -32,7 +34,7 @@ async function checkGlucoseAlerts(pool, userId) {
       return {
         type: 'no_glucose_data',
         severity: 'medium',
-        message: 'Chưa có dữ liệu đường huyết trong 24h qua',
+        message: t('health.no_glucose_24h'),
         userId
       };
     }
@@ -45,7 +47,7 @@ async function checkGlucoseAlerts(pool, userId) {
       return {
         type: 'high_glucose',
         severity: 'high',
-        message: `Đường huyết cao bất thường: ${glucose} mg/dL`,
+        message: t('health.glucose_high', 'vi', { value: glucose }),
         userId,
         value: glucose
       };
@@ -55,7 +57,7 @@ async function checkGlucoseAlerts(pool, userId) {
       return {
         type: 'low_glucose',
         severity: 'high', 
-        message: `Đường huyết thấp nguy hiểm: ${glucose} mg/dL`,
+        message: t('health.glucose_low', 'vi', { value: glucose }),
         userId,
         value: glucose
       };
@@ -71,7 +73,7 @@ async function checkGlucoseAlerts(pool, userId) {
         return {
           type: 'glucose_trend_up',
           severity: 'medium',
-          message: `Đường huyết có xu hướng tăng liên tục: ${glucose} mg/dL`,
+          message: t('health.glucose_trending_up', 'vi', { value: glucose }),
           userId,
           value: glucose
         };
@@ -115,7 +117,7 @@ async function checkBloodPressureAlerts(pool, userId) {
       return {
         type: 'high_blood_pressure',
         severity: 'high',
-        message: `Huyết áp cao: ${systolic}/${diastolic} mmHg`,
+        message: t('health.bp_high', 'vi', { systolic, diastolic }),
         userId,
         systolic,
         diastolic
@@ -127,7 +129,7 @@ async function checkBloodPressureAlerts(pool, userId) {
       return {
         type: 'low_blood_pressure', 
         severity: 'medium',
-        message: `Huyết áp thấp: ${systolic}/${diastolic} mmHg`,
+        message: t('health.bp_low', 'vi', { systolic, diastolic }),
         userId,
         systolic,
         diastolic
@@ -162,7 +164,7 @@ async function checkInactivityAlerts(pool, userId) {
       return {
         type: 'no_activity',
         severity: 'medium',
-        message: 'Chưa có dữ liệu sức khỏe nào được ghi nhận',
+        message: t('health.no_health_data'),
         userId
       };
     }
@@ -173,7 +175,7 @@ async function checkInactivityAlerts(pool, userId) {
       return {
         type: 'inactive_user',
         severity: 'medium',
-        message: `Đã ${Math.floor(daysSinceLastLog)} ngày không ghi log sức khỏe`,
+        message: t('health.no_log_days', 'vi', { days: Math.floor(daysSinceLastLog) }),
         userId,
         daysSince: Math.floor(daysSinceLastLog)
       };
@@ -236,7 +238,7 @@ async function createHealthNotifications(pool, userIds, alert, patientName) {
         [
           userId,
           'health_alert',
-          `Cảnh báo sức khỏe: ${patientName}`,
+          t('health.alert_title', 'vi', { name: patientName }),
           alert.message,
           JSON.stringify({
             alertType: alert.type,

@@ -13,6 +13,7 @@ const healthRoutes = require('./src/routes/health.routes');
 const notificationRoutes = require('./src/routes/notifications.routes');
 const asinuBrainRoutes = require('./asinu-brain-extension/routes/asinuBrain.routes');
 const testRoutes = require('./asinu-brain-extension/routes/test.routes');
+const langMiddleware = require('./src/middleware/lang.middleware');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -51,6 +52,7 @@ const authLimiter = rateLimit({
 });
 
 app.use(generalLimiter);
+app.use(langMiddleware);
 
 // Postgres connection pool
 const pool = new Pool({ connectionString: DATABASE_URL });

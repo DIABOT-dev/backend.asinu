@@ -4,6 +4,7 @@
  */
 
 const { z } = require('zod');
+const { t } = require('../i18n');
 
 // =====================================================
 // ENUMS
@@ -91,16 +92,16 @@ function isMissionCompleted(progress, goal) {
 /**
  * Get mission display title
  */
-function getMissionTitle(missionKey) {
+function getMissionTitle(missionKey, lang) {
   const titles = {
-    log_glucose: 'Ghi đường huyết',
-    log_blood_pressure: 'Ghi huyết áp',
-    log_weight: 'Ghi cân nặng',
-    log_water: 'Uống đủ nước',
-    log_meal: 'Ghi bữa ăn',
-    complete_all_logs: 'Hoàn thành tất cả ghi chép',
-    check_in: 'Check-in hàng ngày',
-    exercise: 'Tập thể dục'
+    log_glucose: t('mission.title_log_glucose', lang),
+    log_blood_pressure: t('mission.title_log_bp', lang),
+    log_weight: t('mission.title_log_weight', lang),
+    log_water: t('mission.title_log_water', lang),
+    log_meal: t('mission.title_log_meal', lang),
+    complete_all_logs: t('mission.title_complete_all', lang),
+    check_in: t('mission.title_check_in', lang),
+    exercise: t('mission.title_exercise', lang)
   };
   return titles[missionKey] || missionKey;
 }
@@ -108,16 +109,16 @@ function getMissionTitle(missionKey) {
 /**
  * Get mission description
  */
-function getMissionDescription(missionKey) {
+function getMissionDescription(missionKey, lang) {
   const descriptions = {
-    log_glucose: 'Ghi đường huyết 2 lần trong ngày',
-    log_blood_pressure: 'Đo và ghi huyết áp 1 lần',
-    log_weight: 'Cân và ghi cân nặng',
-    log_water: 'Uống đủ 2000ml nước mỗi ngày',
-    log_meal: 'Ghi 3 bữa ăn trong ngày',
-    complete_all_logs: 'Hoàn thành tất cả các ghi chép hàng ngày',
-    check_in: 'Báo cáo tình trạng sức khỏe',
-    exercise: 'Tập thể dục ít nhất 30 phút'
+    log_glucose: t('mission.desc_log_glucose', lang),
+    log_blood_pressure: t('mission.desc_log_bp', lang),
+    log_weight: t('mission.desc_log_weight', lang),
+    log_water: t('mission.desc_log_water', lang),
+    log_meal: t('mission.desc_log_meal', lang),
+    complete_all_logs: t('mission.desc_complete_all', lang),
+    check_in: t('mission.desc_check_in', lang),
+    exercise: t('mission.desc_exercise', lang)
   };
   return descriptions[missionKey] || '';
 }

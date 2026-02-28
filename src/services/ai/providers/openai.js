@@ -6,6 +6,7 @@
 const DEFAULT_TIMEOUT_MS = 10000; // 10 seconds for question generation
 const DEFAULT_MODEL = 'gpt-4o-mini'; // Cost-effective model
 const DEFAULT_TEMPERATURE = 0.7; // Balanced creativity
+const { t } = require('../../../i18n');
 
 /**
  * Get OpenAI chat completion for question generation
@@ -28,7 +29,7 @@ async function getOpenAIReply({ message, userId, sessionId, model, temperature }
     messages: [
       {
         role: 'system',
-        content: 'Bạn là trợ lý y tế chuyên nghiệp, tạo câu hỏi ngắn gọn, thân thiện cho bệnh nhân cao tuổi tại Việt Nam. Chỉ trả về câu hỏi, không giải thích.'
+        content: t('prompt.system_question')
       },
       {
         role: 'user',
@@ -129,7 +130,7 @@ async function getOpenAIChatReply({ message, userId, sessionId, context }) {
   const messages = [
     {
       role: 'system',
-      content: context || 'Bạn là trợ lý sức khỏe thân thiện, giúp bệnh nhân quản lý sức khỏe. Trả lời ngắn gọn, dễ hiểu, thấu cảm.'
+      content: context || t('prompt.system_chat')
     },
     {
       role: 'user',

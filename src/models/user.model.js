@@ -4,6 +4,7 @@
  */
 
 const { z } = require('zod');
+const { t } = require('../i18n');
 
 // =====================================================
 // ENUMS
@@ -24,30 +25,30 @@ const AuthProvider = {
 // Phone number validation (Vietnamese format)
 const phoneSchema = z
   .string()
-  .min(10, 'Số điện thoại phải có ít nhất 10 số')
-  .max(15, 'Số điện thoại không hợp lệ')
-  .regex(/^[0-9+\-\s()]+$/, 'Số điện thoại chỉ được chứa số và ký tự +, -, (), khoảng trắng')
+  .min(10, t('validation.phone_min'))
+  .max(15, t('validation.phone_invalid'))
+  .regex(/^[0-9+\-\s()]+$/, t('validation.phone_chars'))
   .transform(val => val.replace(/[\s\-()]/g, '')) // Remove spaces, dashes, parentheses
   .refine(val => /^(\+84|84|0)[0-9]{9,10}$/.test(val), {
-    message: 'Số điện thoại phải bắt đầu bằng 0, 84 hoặc +84 và có 10-11 số'
+    message: t('validation.phone_format')
   });
 
 // Email validation
 const emailSchema = z
   .string()
-  .min(1, 'Email không được để trống')
-  .email('Email không hợp lệ')
+  .min(1, t('validation.email_required'))
+  .email(t('validation.email_invalid'))
   .toLowerCase()
   .trim();
 
 // Password validation
 const passwordSchema = z
   .string()
-  .min(8, 'Mật khẩu phải có ít nhất 8 ký tự')
-  .regex(/[A-Z]/, 'Mật khẩu phải có ít nhất 1 chữ hoa')
-  .regex(/[a-z]/, 'Mật khẩu phải có ít nhất 1 chữ thường')
-  .regex(/[0-9]/, 'Mật khẩu phải có ít nhất 1 chữ số')
-  .regex(/[^A-Za-z0-9]/, 'Mật khẩu phải có ít nhất 1 ký tự đặc biệt (!@#$%^&*...)');
+  .min(8, t('validation.password_min'))
+  .regex(/[A-Z]/, t('validation.password_uppercase'))
+  .regex(/[a-z]/, t('validation.password_lowercase'))
+  .regex(/[0-9]/, t('validation.password_digit'))
+  .regex(/[^A-Za-z0-9]/, t('validation.password_special'));
 
 // =====================================================
 // USER SCHEMA
@@ -83,7 +84,7 @@ const UserCreateSchema = z.object({
   email: emailSchema,
   phone_number: phoneSchema,
   password: passwordSchema,
-  full_name: z.string().min(1, 'Tên không được để trống').max(255).optional(),
+  full_name: z.string().min(1, t('validation.name_required')).max(255).optional(),
   display_name: z.string().max(255).optional()
 });
 
@@ -97,7 +98,7 @@ const UserUpdateSchema = z.object({
   display_name: z.string().max(255).optional(),
   avatar_url: z.string().url().optional()
 }).refine(data => Object.keys(data).length > 0, {
-  message: 'Phải có ít nhất một trường để cập nhật'
+  message: t('validation.update_required')
 });
 
 /**
@@ -105,7 +106,7 @@ const UserUpdateSchema = z.object({
  * Accepts either email or phone_number + password
  */
 const UserLoginSchema = z.object({
-  identifier: z.string().min(1, 'Email hoặc số điện thoại không được để trống'),
+  identifier: z.string().min(1, t('validation.identifier_required')),
   password: passwordSchema
 });
 

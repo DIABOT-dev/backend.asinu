@@ -4,6 +4,7 @@
  */
 
 const { notifyCareCircleInvitation, notifyCareCircleAccepted } = require('./push.notification.service');
+const { t } = require('../i18n');
 
 // =====================================================
 // CONSTANTS
@@ -47,7 +48,7 @@ async function getUserDisplayName(pool, userId) {
     [userId]
   );
   const user = result.rows[0];
-  return user?.display_name || user?.full_name || user?.email || 'Người dùng';
+  return user?.display_name || user?.full_name || user?.email || t('careCircle.user_label');
 }
 
 // =====================================================
@@ -66,7 +67,7 @@ async function createInvitation(pool, requesterId, data) {
 
   // Validate not self-invite
   if (addressee_id === requesterId) {
-    return { ok: false, error: 'Không thể mời chính mình' };
+    return { ok: false, error: t('careCircle.cannot_invite_self') };
   }
 
   const perms = normalizePermissions(permissions);
@@ -100,10 +101,10 @@ async function createInvitation(pool, requesterId, data) {
     return { ok: true, invitation };
   } catch (err) {
     if (err?.code === '23505') {
-      return { ok: false, error: 'Kết nối đã tồn tại', statusCode: 409 };
+      return { ok: false, error: t('careCircle.connection_exists'), statusCode: 409 };
     }
     console.error('[careCircle.service] createInvitation failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -148,7 +149,7 @@ async function getInvitations(pool, userId, direction = 'all') {
     return { ok: true, invitations: result.rows };
   } catch (err) {
     console.error('[careCircle.service] getInvitations failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -170,7 +171,7 @@ async function acceptInvitation(pool, invitationId, userId) {
     );
 
     if (result.rows.length === 0) {
-      return { ok: false, error: 'Không tìm thấy lời mời', statusCode: 404 };
+      return { ok: false, error: t('careCircle.invitation_not_found'), statusCode: 404 };
     }
 
     const connection = result.rows[0];
@@ -185,7 +186,7 @@ async function acceptInvitation(pool, invitationId, userId) {
     return { ok: true, connection };
   } catch (err) {
     console.error('[careCircle.service] acceptInvitation failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -207,13 +208,13 @@ async function rejectInvitation(pool, invitationId, userId) {
     );
 
     if (result.rows.length === 0) {
-      return { ok: false, error: 'Không tìm thấy lời mời', statusCode: 404 };
+      return { ok: false, error: t('careCircle.invitation_not_found'), statusCode: 404 };
     }
 
     return { ok: true, invitation: result.rows[0] };
   } catch (err) {
     console.error('[careCircle.service] rejectInvitation failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -244,7 +245,7 @@ async function getConnections(pool, userId) {
     return { ok: true, connections: result.rows };
   } catch (err) {
     console.error('[careCircle.service] getConnections failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -266,13 +267,13 @@ async function deleteConnection(pool, connectionId, userId) {
     );
 
     if (result.rows.length === 0) {
-      return { ok: false, error: 'Không tìm thấy kết nối', statusCode: 404 };
+      return { ok: false, error: t('careCircle.connection_not_found'), statusCode: 404 };
     }
 
     return { ok: true, connection: result.rows[0] };
   } catch (err) {
     console.error('[careCircle.service] deleteConnection failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -288,7 +289,7 @@ async function updateConnection(pool, connectionId, userId, data) {
   const { relationship_type, role } = data;
 
   if (!relationship_type && !role) {
-    return { ok: false, error: 'Cần ít nhất một trường để cập nhật', statusCode: 400 };
+    return { ok: false, error: t('careCircle.need_at_least_one_field'), statusCode: 400 };
   }
 
   try {
@@ -300,7 +301,7 @@ async function updateConnection(pool, connectionId, userId, data) {
     );
 
     if (checkResult.rows.length === 0) {
-      return { ok: false, error: 'Không tìm thấy kết nối', statusCode: 404 };
+      return { ok: false, error: t('careCircle.connection_not_found'), statusCode: 404 };
     }
 
     // Build dynamic update query
@@ -335,7 +336,7 @@ async function updateConnection(pool, connectionId, userId, data) {
     return { ok: true, connection: result.rows[0] };
   } catch (err) {
     console.error('[careCircle.service] updateConnection failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 

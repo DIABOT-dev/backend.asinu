@@ -3,6 +3,7 @@ const { calculateRisk } = require('../risk/AsinuRiskEngine');
 const { assessClinicalRisk } = require('../risk/AsinuRiskEngineC');
 const { computePsV1, DEFAULT_CONFIG } = require('../risk/AsinuRiskEngineB');
 const { sendPushNotification } = require('../../src/services/push.notification.service');
+const { t } = require('../../src/i18n');
 const {
   generateMoodQuestion,
   generateFollowupQuestion,
@@ -22,26 +23,26 @@ const ENGINE_B_VERSION = 'B-PS-V1';
 const SHADOW_ENV_KEYS = ['ASINU_SHADOW_MODE', 'SHADOW_MODE'];
 
 const MOOD_OPTIONS = [
-  { value: 'OK', label: 'Ổn' },
-  { value: 'TIRED', label: 'Mệt' },
-  { value: 'NOT_OK', label: 'Không ổn' }
+  { value: 'OK', label: t('brain.mood_ok') },
+  { value: 'TIRED', label: t('brain.mood_tired') },
+  { value: 'NOT_OK', label: t('brain.mood_not_ok') }
 ];
 
 const SYMPTOM_OPTIONS = [
-  { value: 'none', label: 'Không có triệu chứng' },
-  { value: 'chest_pain', label: 'Đau ngực' },
-  { value: 'shortness_of_breath', label: 'Khó thở' },
-  { value: 'dizziness', label: 'Chóng mặt' },
-  { value: 'fever', label: 'Sốt' },
-  { value: 'headache', label: 'Đau đầu' },
-  { value: 'nausea', label: 'Buồn nôn' },
-  { value: 'other', label: 'Khác' }
+  { value: 'none', label: t('brain.symptom_none') },
+  { value: 'chest_pain', label: t('brain.symptom_chest_pain') },
+  { value: 'shortness_of_breath', label: t('brain.symptom_shortness_of_breath') },
+  { value: 'dizziness', label: t('brain.symptom_dizziness') },
+  { value: 'fever', label: t('brain.symptom_fever') },
+  { value: 'headache', label: t('brain.symptom_headache') },
+  { value: 'nausea', label: t('brain.symptom_nausea') },
+  { value: 'other', label: t('brain.symptom_other') }
 ];
 
 const SEVERITY_OPTIONS = [
-  { value: 'mild', label: 'Nhẹ' },
-  { value: 'moderate', label: 'Trung bình' },
-  { value: 'severe', label: 'Nặng' }
+  { value: 'mild', label: t('brain.severity_mild') },
+  { value: 'moderate', label: t('brain.severity_moderate') },
+  { value: 'severe', label: t('brain.severity_severe') }
 ];
 
 const buildMoodQuestion = (text, phase) => ({
@@ -53,12 +54,12 @@ const buildMoodQuestion = (text, phase) => ({
 });
 
 const QUESTIONS = {
-  mood_morning: buildMoodQuestion('Hôm nay bác thấy ổn không?', 'MORNING'),
-  mood_followup: (phase) => buildMoodQuestion('Bác thấy ổn hơn chưa?', phase || 'NOON'),
+  mood_morning: buildMoodQuestion(t('brain.question_how_are_you'), 'MORNING'),
+  mood_followup: (phase) => buildMoodQuestion(t('brain.question_feeling_better'), phase || 'NOON'),
   symptom_severity: {
     id: 'symptom_severity',
     type: 'symptom_severity',
-    text: 'Bác có triệu chứng nào và mức độ nào?',
+    text: t('brain.question_symptoms'),
     symptoms: SYMPTOM_OPTIONS,
     severity_options: SEVERITY_OPTIONS
   }
@@ -322,7 +323,7 @@ const getConversationHistory = async (pool, sessionId) => {
       } else {
         // Answer không có question trước đó - tạo entry giả
         history.push({
-          question: `Câu hỏi ${history.length + 1}`,
+          question: `${t('brain.question_label')} ${history.length + 1}`,
           answer,
           answerLabel
         });
@@ -427,15 +428,14 @@ const scheduleAt = (now, hours, minutes) => {
 };
 
 const computeNextDue = (path, phase, now) => {
-  // TESTING MODE: Giảm thời gian xuống 30 giây để test nhanh
-  const TESTING_MODE = process.env.TESTING_MODE === 'true' || true; // Bật mặc định để test
+  // TESTING MODE: Tắt tạm thời - đặt lại thành true để bật lại 30 giây
+  const TESTING_MODE = false;
   
   if (TESTING_MODE) {
     console.log('[computeNextDue] TESTING MODE: Next question in 30 seconds');
-    // Testing: hỏi lại sau 30 giây
-    if (path === 'GREEN') return new Date(now.getTime() + 30 * 1000); // 30 giây
-    if (path === 'YELLOW') return new Date(now.getTime() + 30 * 1000); // 30 giây
-    if (path === 'RED') return new Date(now.getTime() + 30 * 1000); // 30 giây
+    if (path === 'GREEN') return new Date(now.getTime() + 30 * 1000);
+    if (path === 'YELLOW') return new Date(now.getTime() + 30 * 1000);
+    if (path === 'RED') return new Date(now.getTime() + 30 * 1000);
     return new Date(now.getTime() + 30 * 1000);
   }
   
@@ -841,15 +841,15 @@ const buildSignal = async (pool, userId, sessionId) => {
 };
 
 const buildOutcomePayload = (riskResult) => {
-  let outcomeText = 'Cảm ơn bác đã chia sẻ.';
-  let action = 'Tiếp tục theo dõi và sinh hoạt bình thường.';
+  let outcomeText = t('brain.outcome_thanks');
+  let action = t('brain.outcome_continue_monitoring');
 
   if (riskResult.risk_tier === 'HIGH') {
-    outcomeText = 'Cần liên hệ người thân để kiểm tra.';
-    action = 'Ưu tiên liên hệ người thân và theo dõi sát.';
+    outcomeText = t('brain.outcome_contact_relative');
+    action = t('brain.outcome_priority_contact');
   } else if (riskResult.risk_tier === 'MEDIUM') {
-    outcomeText = 'Cần theo dõi sát hơn trong hôm nay.';
-    action = 'Nếu có thay đổi, hãy check-in thêm.';
+    outcomeText = t('brain.outcome_monitor_today');
+    action = t('brain.outcome_checkin_more');
   }
 
   return {
@@ -953,46 +953,46 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
     
     const reverseMap = {
       // Cha mẹ <-> Con cái
-      'bo': 'Con của bạn',
-      'Bố': 'Con của bạn',
-      'me': 'Con của bạn',
-      'Mẹ': 'Con của bạn',
-      'con-trai': 'Bố/Mẹ của bạn',
-      'Con trai': 'Bố/Mẹ của bạn',
-      'con-gai': 'Bố/Mẹ của bạn',
-      'Con gái': 'Bố/Mẹ của bạn',
+      'bo': t('brain.reverse_rel.child'),
+      'Bố': t('brain.reverse_rel.child'),
+      'me': t('brain.reverse_rel.child'),
+      'Mẹ': t('brain.reverse_rel.child'),
+      'con-trai': t('brain.reverse_rel.parent'),
+      'Con trai': t('brain.reverse_rel.parent'),
+      'con-gai': t('brain.reverse_rel.parent'),
+      'Con gái': t('brain.reverse_rel.parent'),
       
       // Vợ chồng (đối xứng)
-      'vo': 'Chồng của bạn',
-      'Vợ': 'Chồng của bạn',
-      'chong': 'Vợ của bạn',
-      'Chồng': 'Vợ của bạn',
+      'vo': t('brain.reverse_rel.husband'),
+      'Vợ': t('brain.reverse_rel.husband'),
+      'chong': t('brain.reverse_rel.wife'),
+      'Chồng': t('brain.reverse_rel.wife'),
       
       // Anh chị em
-      'anh-trai': 'Em của bạn',
-      'Anh trai': 'Em của bạn',
-      'chi-gai': 'Em của bạn',
-      'Chị gái': 'Em của bạn',
-      'em-trai': 'Anh/Chị của bạn',
-      'Em trai': 'Anh/Chị của bạn',
-      'em-gai': 'Anh/Chị của bạn',
-      'Em gái': 'Anh/Chị của bạn',
+      'anh-trai': t('brain.reverse_rel.younger_sibling'),
+      'Anh trai': t('brain.reverse_rel.younger_sibling'),
+      'chi-gai': t('brain.reverse_rel.younger_sibling'),
+      'Chị gái': t('brain.reverse_rel.younger_sibling'),
+      'em-trai': t('brain.reverse_rel.older_sibling'),
+      'Em trai': t('brain.reverse_rel.older_sibling'),
+      'em-gai': t('brain.reverse_rel.older_sibling'),
+      'Em gái': t('brain.reverse_rel.older_sibling'),
       
       // Ông bà <-> Cháu
-      'ong-noi': 'Cháu của bạn',
-      'Ông nội': 'Cháu của bạn',
-      'ba-noi': 'Cháu của bạn',
-      'Bà nội': 'Cháu của bạn',
-      'ong-ngoai': 'Cháu của bạn',
-      'Ông ngoại': 'Cháu của bạn',
-      'ba-ngoai': 'Cháu của bạn',
-      'Bà ngoại': 'Cháu của bạn',
+      'ong-noi': t('brain.reverse_rel.grandchild'),
+      'Ông nội': t('brain.reverse_rel.grandchild'),
+      'ba-noi': t('brain.reverse_rel.grandchild'),
+      'Bà nội': t('brain.reverse_rel.grandchild'),
+      'ong-ngoai': t('brain.reverse_rel.grandchild'),
+      'Ông ngoại': t('brain.reverse_rel.grandchild'),
+      'ba-ngoai': t('brain.reverse_rel.grandchild'),
+      'Bà ngoại': t('brain.reverse_rel.grandchild'),
       
       // Bạn bè, người yêu (đối xứng)
-      'ban-than': 'Bạn thân của bạn',
-      'Bạn thân': 'Bạn thân của bạn',
-      'nguoi-yeu': 'Người yêu của bạn',
-      'Người yêu': 'Người yêu của bạn',
+      'ban-than': t('brain.reverse_rel.best_friend'),
+      'Bạn thân': t('brain.reverse_rel.best_friend'),
+      'nguoi-yeu': t('brain.reverse_rel.lover'),
+      'Người yêu': t('brain.reverse_rel.lover'),
     };
     
     return reverseMap[relationshipType] || null;
@@ -1003,38 +1003,38 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
     if (!relationshipType) return null;
     
     const labelMap = {
-      'bo': 'Bố của bạn',
-      'Bố': 'Bố của bạn',
-      'me': 'Mẹ của bạn',
-      'Mẹ': 'Mẹ của bạn',
-      'con-trai': 'Con trai của bạn',
-      'Con trai': 'Con trai của bạn',
-      'con-gai': 'Con gái của bạn',
-      'Con gái': 'Con gái của bạn',
-      'vo': 'Vợ của bạn',
-      'Vợ': 'Vợ của bạn',
-      'chong': 'Chồng của bạn',
-      'Chồng': 'Chồng của bạn',
-      'anh-trai': 'Anh trai của bạn',
-      'Anh trai': 'Anh trai của bạn',
-      'chi-gai': 'Chị gái của bạn',
-      'Chị gái': 'Chị gái của bạn',
-      'em-trai': 'Em trai của bạn',
-      'Em trai': 'Em trai của bạn',
-      'em-gai': 'Em gái của bạn',
-      'Em gái': 'Em gái của bạn',
-      'ong-noi': 'Ông nội của bạn',
-      'Ông nội': 'Ông nội của bạn',
-      'ba-noi': 'Bà nội của bạn',
-      'Bà nội': 'Bà nội của bạn',
-      'ong-ngoai': 'Ông ngoại của bạn',
-      'Ông ngoại': 'Ông ngoại của bạn',
-      'ba-ngoai': 'Bà ngoại của bạn',
-      'Bà ngoại': 'Bà ngoại của bạn',
-      'ban-than': 'Bạn thân của bạn',
-      'Bạn thân': 'Bạn thân của bạn',
-      'nguoi-yeu': 'Người yêu của bạn',
-      'Người yêu': 'Người yêu của bạn',
+      'bo': t('brain.original_rel.father'),
+      'Bố': t('brain.original_rel.father'),
+      'me': t('brain.original_rel.mother'),
+      'Mẹ': t('brain.original_rel.mother'),
+      'con-trai': t('brain.original_rel.son'),
+      'Con trai': t('brain.original_rel.son'),
+      'con-gai': t('brain.original_rel.daughter'),
+      'Con gái': t('brain.original_rel.daughter'),
+      'vo': t('brain.original_rel.wife'),
+      'Vợ': t('brain.original_rel.wife'),
+      'chong': t('brain.original_rel.husband'),
+      'Chồng': t('brain.original_rel.husband'),
+      'anh-trai': t('brain.original_rel.older_brother'),
+      'Anh trai': t('brain.original_rel.older_brother'),
+      'chi-gai': t('brain.original_rel.older_sister'),
+      'Chị gái': t('brain.original_rel.older_sister'),
+      'em-trai': t('brain.original_rel.younger_brother'),
+      'Em trai': t('brain.original_rel.younger_brother'),
+      'em-gai': t('brain.original_rel.younger_sister'),
+      'Em gái': t('brain.original_rel.younger_sister'),
+      'ong-noi': t('brain.original_rel.paternal_grandfather'),
+      'Ông nội': t('brain.original_rel.paternal_grandfather'),
+      'ba-noi': t('brain.original_rel.paternal_grandmother'),
+      'Bà nội': t('brain.original_rel.paternal_grandmother'),
+      'ong-ngoai': t('brain.original_rel.maternal_grandfather'),
+      'Ông ngoại': t('brain.original_rel.maternal_grandfather'),
+      'ba-ngoai': t('brain.original_rel.maternal_grandmother'),
+      'Bà ngoại': t('brain.original_rel.maternal_grandmother'),
+      'ban-than': t('brain.original_rel.best_friend'),
+      'Bạn thân': t('brain.original_rel.best_friend'),
+      'nguoi-yeu': t('brain.original_rel.lover'),
+      'Người yêu': t('brain.original_rel.lover'),
     };
     
     return labelMap[relationshipType] || null;
@@ -1046,12 +1046,12 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
     // → caregiver nhìn patient theo relationship đảo ngược
     // Ví dụ: Patient đặt caregiver là "Bố" → caregiver nhìn patient là "Con"
     if (patientIsRequester) {
-      return reverseRelationship(relationshipType) || 'Người thân của bạn';
+      return reverseRelationship(relationshipType) || t('brain.relative_label');
     }
     // Nếu caregiver là requester (người đặt relationship)
     // → caregiver nhìn patient theo relationship gốc
     // Ví dụ: Caregiver đặt patient là "Bố" → caregiver nhìn patient là "Bố"
-    return getOriginalLabel(relationshipType) || 'Người thân của bạn';
+    return getOriginalLabel(relationshipType) || t('brain.relative_label');
   };
   
   // 1. TẠO IN-APP NOTIFICATION cho mọi người thân (personalized)
@@ -1178,8 +1178,8 @@ const checkTodayLogs = async (pool, userId) => {
     console.log(`[checkTodayLogs] userId ${userId} - NO LOGS TODAY (neither glucose nor BP)`);
     return {
       hasLogs: false,
-      message: 'Vui lòng ghi lại đường huyết hoặc huyết áp hôm nay trước để chúng tôi có thể đánh giá sức khỏe của bạn.',
-      missingTypes: ['đường huyết', 'huyết áp']
+      message: t('brain.missing_both'),
+      missingTypes: [t('brain.missing_type_glucose'), t('brain.missing_type_bp')]
     };
   }
   
@@ -1187,8 +1187,8 @@ const checkTodayLogs = async (pool, userId) => {
     console.log(`[checkTodayLogs] userId ${userId} - MISSING GLUCOSE (has BP only)`);
     return {
       hasLogs: false,
-      message: 'Vui lòng ghi lại đường huyết hôm nay để chúng tôi theo dõi tình trạng của bạn.',
-      missingTypes: ['đường huyết']
+      message: t('brain.missing_glucose'),
+      missingTypes: [t('brain.missing_type_glucose')]
     };
   }
   
@@ -1196,8 +1196,8 @@ const checkTodayLogs = async (pool, userId) => {
     console.log(`[checkTodayLogs] userId ${userId} - MISSING BP (has glucose only)`);
     return {
       hasLogs: false,
-      message: 'Vui lòng ghi lại huyết áp hôm nay để chúng tôi theo dõi sức khỏe của bạn.',
-      missingTypes: ['huyết áp']
+      message: t('brain.missing_bp'),
+      missingTypes: [t('brain.missing_type_bp')]
     };
   }
   
@@ -1434,16 +1434,16 @@ const getNextState = async (pool, userId) => {
     // Session đã hoàn thành (không còn pending question)
     // Lấy tên bệnh nhân - sẽ được replace bằng mối quan hệ trong notifyCaregivers
     const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [userId]);
-    const patientName = userResult.rows[0]?.full_name || 'Người thân';
+    const patientName = userResult.rows[0]?.full_name || t('brain.relative_fallback');
     
     const notifyResult = await notifyCaregivers(pool, userId, {
       title: engineBOutput.decision >= 3 
-        ? `[KHẨN CẤP] ${patientName} - Cảnh báo sức khỏe` 
-        : `[CẢNH BÁO] ${patientName} - Sức khỏe`,
+        ? t('brain.emergency_title', 'vi', { name: patientName })
+        : t('brain.warning_title', 'vi', { name: patientName }),
       message:
         engineBOutput.decision >= 3
-          ? `${patientName} đang có dấu hiệu sức khỏe lo ngại. Vui lòng liên hệ kiểm tra ngay.`
-          : `${patientName} cần được theo dõi sức khỏe. Hãy liên hệ hỏi thăm.`,
+          ? t('brain.emergency_msg', 'vi', { name: patientName })
+          : t('brain.warning_msg', 'vi', { name: patientName }),
       data: { 
         type: 'health_alert', 
         level: engineBOutput.decision_label,
@@ -1605,13 +1605,13 @@ const submitAnswer = async (pool, userId, payload) => {
         
         // Lấy tên bệnh nhân để notifyCaregivers replace bằng mối quan hệ
         const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [userId]);
-        const patientName = userResult.rows[0]?.full_name || 'Người thân';
+        const patientName = userResult.rows[0]?.full_name || t('brain.relative_fallback');
         
         await notifyCaregivers(pool, userId, {
           title: assessment.risk_tier === 'HIGH' 
-            ? `[KHẨN CẤP] ${patientName} - Cần kiểm tra`
-            : `[CẢNH BÁO] ${patientName} - Sức khỏe`,
-          message: `${patientName} ${assessment.summary || 'cần được kiểm tra sức khỏe.'}`,
+            ? t('brain.emergency_check_title', 'vi', { name: patientName })
+            : t('brain.warning_title', 'vi', { name: patientName }),
+          message: `${patientName} ${assessment.summary || t('brain.need_health_check')}`,
           data: {
             riskLevel: assessment.risk_tier,
             sessionId: session.id,
@@ -1731,7 +1731,7 @@ const submitAnswer = async (pool, userId, payload) => {
       if (aiDecision.notify_caregiver) {
         console.log(`[submitAnswer] ⚠️ AI quyết định GỬI CẢNH BÁO cho người thân`);
         await notifyCaregivers(pool, userId, {
-          title: '[CẢNH BÁO] Cần kiểm tra sức khỏe',
+          title: t('brain.alert_need_check'),
           message: aiDecision.ai_reasoning,
           data: { riskLevel: aiDecision.risk_tier, sessionId: session.id }
         });
@@ -1807,8 +1807,8 @@ const submitAnswer = async (pool, userId, payload) => {
       console.log(`  - Reason: ${aiDecision.ai_reasoning}`);
       
       await notifyCaregivers(pool, userId, {
-        title: '[KHẨN CẤP] Cảnh báo sức khỏe',
-        message: `Cần kiểm tra: ${aiDecision.ai_reasoning}`,
+        title: t('brain.emergency_health_alert'),
+        message: t('brain.need_check_reason', 'vi', { reason: aiDecision.ai_reasoning }),
         data: { 
           riskLevel: aiDecision.risk_tier, 
           sessionId: session.id,
@@ -1904,18 +1904,18 @@ const postEmergency = async (pool, userId, payload) => {
     // Map emergency type sang message tiếng Việt - userName sẽ được replace bằng mối quan hệ
     const emergencyMessages = {
       'VERY_UNWELL': {
-        title: `[KHẨN CẤP] ${userName}`,
-        message: `${userName} đang rất không khỏe và cần hỗ trợ ngay lập tức. Vui lòng gọi điện hoặc đến kiểm tra ngay.`
+        title: t('brain.sos_emergency_title', 'vi', { name: userName }),
+        message: t('brain.sos_emergency_msg', 'vi', { name: userName })
       },
       'ALERT_CAREGIVER': {
-        title: `[YÊU CẦU] ${userName}`,
-        message: `${userName} yêu cầu bạn liên hệ ngay. Hãy gọi điện hoặc nhắn tin kiểm tra tình hình.`
+        title: t('brain.sos_request_title', 'vi', { name: userName }),
+        message: t('brain.sos_request_msg', 'vi', { name: userName })
       }
     };
     
     const notificationContent = emergencyMessages[payload.type] || {
-      title: `[CẢNH BÁO] ${userName}`,
-      message: `${userName} cần hỗ trợ từ bạn. Vui lòng liên hệ.`
+      title: t('brain.sos_warning_title', 'vi', { name: userName }),
+      message: t('brain.sos_warning_msg', 'vi', { name: userName })
     };
     
     notifyStatus = await notifyCaregivers(pool, userId, {
@@ -1935,8 +1935,8 @@ const postEmergency = async (pool, userId, payload) => {
   const outcome = {
     risk_tier: 'HIGH',
     notify_caregiver: notifyNeeded,
-    outcome_text: 'Đã ghi nhận yêu cầu khẩn.',
-    recommended_action: 'Xin giữ bình tĩnh và liên hệ người thân.',
+    outcome_text: t('brain.sos_acknowledged'),
+    recommended_action: t('brain.sos_stay_calm'),
     metadata: { emergency_type: payload.type }
   };
 

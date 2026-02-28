@@ -1,3 +1,4 @@
+const { t } = require('../i18n');
 ﻿function resolveClient(poolOrClient) {
   if (poolOrClient && typeof poolOrClient.query === 'function') {
     return poolOrClient;
@@ -15,25 +16,25 @@ function toDateOnly(value) {
 
 // Mission translations for better UX
 const MISSION_TITLES = {
-  'log_glucose': 'Đo đường huyết',
-  'log_bp': 'Đo huyết áp',
-  'log_weight': 'Cân nặng',
-  'log_water': 'Uống nước',
-  'log_meal': 'Ghi bữa ăn',
-  'log_insulin': 'Ghi Insulin',
-  'log_medication': 'Ghi thuốc',
-  'daily_checkin': 'Điểm danh'
+  'log_glucose': t('mission.log_glucose'),
+  'log_bp': t('mission.log_bp'),
+  'log_weight': t('mission.log_weight'),
+  'log_water': t('mission.log_water'),
+  'log_meal': t('mission.log_meal'),
+  'log_insulin': t('mission.log_insulin'),
+  'log_medication': t('mission.log_medication'),
+  'daily_checkin': t('mission.daily_checkin')
 };
 
 const MISSION_DESCRIPTIONS = {
-  'log_glucose': 'Đo và ghi lại chỉ số đường huyết 2 lần/ngày',
-  'log_bp': 'Theo dõi huyết áp định kỳ 2 lần/ngày',
-  'log_weight': 'Cân nặng và ghi lại 1 lần/ngày',
-  'log_water': 'Uống đủ nước, mục tiêu 4 ly/ngày',
-  'log_meal': 'Ghi chép bữa ăn, mục tiêu 3 bữa/ngày',
-  'log_insulin': 'Ghi chép liều insulin đã tiêm 1 lần/ngày',
-  'log_medication': 'Ghi chép thuốc đã uống 1 lần/ngày',
-  'daily_checkin': 'Mở app và ghi ít nhất 1 log'
+  'log_glucose': t('mission.desc_glucose'),
+  'log_bp': t('mission.desc_bp'),
+  'log_weight': t('mission.desc_weight'),
+  'log_water': t('mission.desc_water'),
+  'log_meal': t('mission.desc_meal'),
+  'log_insulin': t('mission.desc_insulin'),
+  'log_medication': t('mission.desc_medication'),
+  'daily_checkin': t('mission.desc_checkin')
 };
 
 async function getMissions(pool, userId) {
@@ -142,7 +143,7 @@ async function getMissionHistory(pool, userId, days = 30) {
     };
   } catch (err) {
     console.error('[missions.service] getMissionHistory failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -174,7 +175,7 @@ async function getMissionStats(pool, userId) {
     };
   } catch (err) {
     console.error('[missions.service] getMissionStats failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 

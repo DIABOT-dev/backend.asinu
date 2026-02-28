@@ -10,6 +10,7 @@
  */
 
 const { randomUUID } = require('crypto');
+const { t } = require('../i18n');
 
 // =====================================================
 // DEFAULT CONFIG
@@ -572,7 +573,7 @@ async function shouldAlertCaregiver(client, userId) {
       shouldAlert: true, 
       reason: 'no_response', 
       alertType: 'WARNING',
-      message: `${state.consecutive_no_response} lần liên tiếp không có phản hồi.`
+      message: t('wellness.consecutive_no_response', 'vi', { count: state.consecutive_no_response })
     };
   }
 
@@ -582,7 +583,7 @@ async function shouldAlertCaregiver(client, userId) {
       shouldAlert: true, 
       reason: 'danger_status', 
       alertType: 'URGENT',
-      message: 'Mấy hôm nay sinh hoạt khác thường, cần theo dõi.'
+      message: t('wellness.unusual_activity')
     };
   }
 
@@ -592,7 +593,7 @@ async function shouldAlertCaregiver(client, userId) {
       shouldAlert: true, 
       reason: 'negative_mood', 
       alertType: 'WARNING',
-      message: 'Mấy ngày gần đây thường xuyên cảm thấy không ổn.'
+      message: t('wellness.feeling_unwell')
     };
   }
 
@@ -686,8 +687,8 @@ async function evaluateUserWellness(pool, userId, options = {}) {
     // Execute prompt if needed
     if (promptDecision.shouldPrompt && options.executePrompt !== false) {
       const promptMessage = promptDecision.promptType === 'mood_check' 
-        ? 'Hôm nay bạn cảm thấy thế nào?'
-        : 'Bạn có cần hỗ trợ gì không?';
+        ? t('wellness.how_are_you')
+        : t('wellness.need_help');
       
       actions.prompt = await recordPrompt(
         client, 
@@ -709,7 +710,7 @@ async function evaluateUserWellness(pool, userId, options = {}) {
         client,
         userId,
         alertDecision.alertType,
-        alertDecision.alertType === 'URGENT' ? 'Cần chú ý' : 'Thông báo theo dõi',
+        alertDecision.alertType === 'URGENT' ? t('wellness.attention_needed') : t('wellness.monitoring_alert'),
         alertDecision.message,
         alertDecision.reason,
         {
@@ -857,7 +858,7 @@ async function ackAlertWithPermission(pool, alertId, userId) {
     );
 
     if (alertResult.rows.length === 0) {
-      return { ok: false, error: 'Không tìm thấy cảnh báo', statusCode: 404 };
+      return { ok: false, error: t('wellness.alert_not_found'), statusCode: 404 };
     }
 
     const alert = alertResult.rows[0];
@@ -873,7 +874,7 @@ async function ackAlertWithPermission(pool, alertId, userId) {
       );
 
       if (permissionResult.rows.length === 0) {
-        return { ok: false, error: 'Không có quyền truy cập', statusCode: 403 };
+        return { ok: false, error: t('wellness.no_access'), statusCode: 403 };
       }
     }
 
@@ -890,7 +891,7 @@ async function ackAlertWithPermission(pool, alertId, userId) {
     };
   } catch (err) {
     console.error('[wellness.monitoring.service] ackAlertWithPermission failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 

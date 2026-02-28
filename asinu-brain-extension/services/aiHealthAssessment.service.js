@@ -8,6 +8,7 @@
  */
 
 const { getOpenAIReply } = require('../../src/services/ai/providers/openai');
+const { t } = require('../../src/i18n');
 
 /**
  * AI sinh câu hỏi tiếp theo hoặc đưa ra kết luận
@@ -28,10 +29,10 @@ const generateNextStepOrAssess = async ({ userId, conversationHistory, profile, 
     // Build context từ conversation history
     let conversationContext = '';
     if (conversationHistory && conversationHistory.length > 0) {
-      conversationContext = '\n\nHỘI THOẠI TRƯỚC ĐÓ:';
+      conversationContext = `\n\n${t('context.conversation_title')}:`;
       conversationHistory.forEach((item, index) => {
-        conversationContext += `\nCâu ${index + 1}: "${item.question}"`;
-        conversationContext += `\nTrả lời: "${item.answerLabel || item.answer}"`;
+        conversationContext += `\n${t('context.question_n', 'vi', { n: index + 1 })}: "${item.question}"`;
+        conversationContext += `\n${t('context.answer')}: "${item.answerLabel || item.answer}"`;
       });
     }
 
@@ -40,75 +41,47 @@ const generateNextStepOrAssess = async ({ userId, conversationHistory, profile, 
     if (logsSummary) {
       if (logsSummary.latest_glucose) {
         const g = logsSummary.latest_glucose;
-        healthContext += `\nĐường huyết gần nhất: ${g.value} ${g.unit || 'mg/dL'}`;
+        healthContext += `\n${t('context.latest_glucose')}: ${g.value} ${g.unit || 'mg/dL'}`;
       }
       if (logsSummary.latest_bp) {
         const bp = logsSummary.latest_bp;
-        healthContext += `\nHuyết áp gần nhất: ${bp.systolic}/${bp.diastolic} mmHg`;
+        healthContext += `\n${t('context.latest_bp')}: ${bp.systolic}/${bp.diastolic} mmHg`;
       }
     }
 
     // Build mood history context
     let moodContext = '';
     if (moodHistory && moodHistory.total > 0) {
-      moodContext = `\n\nLỊCH SỬ 48H QUA:`;
-      moodContext += `\n- Tổng số lần check-in: ${moodHistory.total}`;
-      if (moodHistory.notOkCount > 0) moodContext += `\n- Số lần "không ổn": ${moodHistory.notOkCount}`;
-      if (moodHistory.tiredCount > 0) moodContext += `\n- Số lần "mệt": ${moodHistory.tiredCount}`;
-      if (moodHistory.trend) moodContext += `\n- Xu hướng: ${moodHistory.trend}`;
+      moodContext = `\n\n${t('context.history_48h_title')}:`;
+      moodContext += `\n- ${t('context.total_checkins')}: ${moodHistory.total}`;
+      if (moodHistory.notOkCount > 0) moodContext += `\n- ${t('context.not_ok_count')}: ${moodHistory.notOkCount}`;
+      if (moodHistory.tiredCount > 0) moodContext += `\n- ${t('context.tired_count')}: ${moodHistory.tiredCount}`;
+      if (moodHistory.trend) moodContext += `\n- ${t('context.trend_label')}: ${moodHistory.trend}`;
     }
 
     // Build profile context
     let profileContext = '';
     if (profile) {
-      if (profile.age) profileContext += `\n- Tuổi: ${profile.age}`;
+      if (profile.age) profileContext += `\n- ${t('context.age_label')}: ${profile.age}`;
       if (profile.medical_conditions && Array.isArray(profile.medical_conditions)) {
         const conditions = profile.medical_conditions
           .map(c => typeof c === 'string' ? c : c.label || c.other_text)
           .filter(Boolean);
         if (conditions.length > 0) {
-          profileContext += `\n- Bệnh nền: ${conditions.join(', ')}`;
+          profileContext += `\n- ${t('context.conditions_label')}: ${conditions.join(', ')}`;
         }
       }
     }
 
     const questionCount = conversationHistory?.length || 0;
 
-    const prompt = `Bạn là bác sĩ AI đang khám sức khỏe cho bệnh nhân qua app.
-
-THÔNG TIN BỆNH NHÂN:${profileContext || '\nChưa có thông tin chi tiết'}
-${healthContext ? '\nCHỈ SỐ SỨC KHỎE:' + healthContext : ''}
-${moodContext}
-${conversationContext}
-
-SỐ CÂU ĐÃ HỎI: ${questionCount}
-
-NHIỆM VỤ CỦA BẠN:
-1. Phân tích các câu trả lời đã có
-2. Quyết định: CẦN HỎI THÊM hay ĐÃ ĐỦ THÔNG TIN để đánh giá
-
-QUY TẮC:
-- Câu hỏi phải TỰ NHIÊN, THÂN THIỆN như nói chuyện với người lớn tuổi
-- KHÔNG đề cập đến chỉ số cụ thể trong câu hỏi (không nói "đường huyết 120...")
-- Nếu chưa có câu nào: bắt đầu bằng câu hỏi chung về sức khỏe
-- Nếu bệnh nhân nói "ổn" ngay từ đầu: có thể kết thúc sớm (1-2 câu)
-- Nếu bệnh nhân nói "mệt/không ổn": hỏi thêm để hiểu rõ (2-5 câu)
-- Nếu phát hiện triệu chứng nghiêm trọng (đau ngực, khó thở): đánh giá ngay
-- Tối đa 7 câu hỏi, sau đó phải đánh giá
-
-QUAN TRỌNG: Trả lời ĐÚNG JSON format, KHÔNG có text thừa.
-
-Nếu CẦN HỎI THÊM, trả về:
-{"action":"ask","question":{"text":"Câu hỏi","type":"single_choice","options":[{"value":"v1","label":"Lựa chọn 1"},{"value":"v2","label":"Lựa chọn 2"}]},"reasoning":"Lý do"}
-
-Nếu ĐÃ ĐỦ THÔNG TIN, trả về:
-{"action":"assess","assessment":{"risk_tier":"LOW","risk_score":20,"notify_caregiver":false,"summary":"có triệu chứng X và Y","outcome_text":"Lời nhắn cho bác","recommended_action":"Hành động"},"reasoning":"Lý do"}
-
-Lưu ý:
-- risk_tier chỉ được là "HIGH", "MEDIUM", hoặc "LOW"
-- risk_score là số từ 0-100
-- notify_caregiver là true hoặc false
-- summary: KHÔNG viết "Bệnh nhân", chỉ viết triệu chứng (VD: "có triệu chứng khó thở và đau ngực")`;
+    const prompt = t('prompt.health_assessment', 'vi', { 
+      profileContext: profileContext || `\n${t('context.no_detail_info')}`,
+      healthContext: healthContext ? `\n${t('context.health_metrics_title')}:` + healthContext : '',
+      moodContext,
+      conversationContext,
+      questionCount
+    });
 
     const aiResponse = await getOpenAIReply({
       message: prompt,
@@ -148,12 +121,12 @@ Lưu ý:
         parsed = {
           action: 'ask',
           question: {
-            text: textMatch ? textMatch[1] : 'Bác thấy trong người thế nào?',
+            text: textMatch ? textMatch[1] : t('question.how_feeling'),
             type: 'single_choice',
             options: [
-              { value: 'good', label: 'Tốt' },
-              { value: 'ok', label: 'Bình thường' },
-              { value: 'not_good', label: 'Không tốt' }
+              { value: 'good', label: t('option.good') },
+              { value: 'ok', label: t('option.normal') },
+              { value: 'not_good', label: t('option.not_good') }
             ]
           },
           reasoning: 'Extracted from partial response'
@@ -162,7 +135,7 @@ Lưu ý:
     }
     
     if (!parsed) {
-      throw new Error('AI response không chứa JSON hợp lệ');
+      throw new Error(t('error.ai_invalid_json'));
     }
 
     console.log(`[AI Health Assessment] User ${userId}:`);
@@ -179,9 +152,9 @@ Lưu ý:
           type: parsed.question.type || 'single_choice',
           text: parsed.question.text,
           options: parsed.question.options || [
-            { value: 'good', label: 'Tốt' },
-            { value: 'ok', label: 'Bình thường' },
-            { value: 'not_good', label: 'Không tốt' }
+            { value: 'good', label: t('option.good') },
+            { value: 'ok', label: t('option.normal') },
+            { value: 'not_good', label: t('option.not_good') }
           ],
           step: questionCount + 1,
           generated_by_ai: true
@@ -197,8 +170,8 @@ Lưu ý:
           risk_score: parsed.assessment.risk_score || 0,
           notify_caregiver: parsed.assessment.notify_caregiver || false,
           summary: parsed.assessment.summary || '',
-          outcome_text: parsed.assessment.outcome_text || 'Cảm ơn bác đã chia sẻ.',
-          recommended_action: parsed.assessment.recommended_action || 'Tiếp tục theo dõi sức khỏe.',
+          outcome_text: parsed.assessment.outcome_text || t('assessment.default_outcome'),
+          recommended_action: parsed.assessment.recommended_action || t('assessment.default_action'),
           assessed_by: 'AI',
           total_questions: questionCount
         },
@@ -219,16 +192,16 @@ Lưu ý:
         question: {
           id: 'q_1',
           type: 'single_choice',
-          text: 'Hôm nay bác thấy trong người thế nào?',
+          text: t('question.first_how_feeling'),
           options: [
-            { value: 'good', label: 'Khỏe, bình thường' },
-            { value: 'tired', label: 'Hơi mệt' },
-            { value: 'not_good', label: 'Không được khỏe' }
+            { value: 'good', label: t('option.healthy_normal') },
+            { value: 'tired', label: t('option.little_tired') },
+            { value: 'not_good', label: t('option.not_well') }
           ],
           step: 1,
           generated_by_ai: false
         },
-        reasoning: 'Fallback: câu hỏi mở đầu'
+        reasoning: 'Fallback: opening question'
       };
     }
 
@@ -247,11 +220,11 @@ Lưu ý:
           risk_tier: riskTier,
           risk_score: hasNegativeAnswer ? 40 : 10,
           notify_caregiver: false,
-          summary: hasNegativeAnswer ? 'có dấu hiệu mệt mỏi, cần theo dõi' : 'sức khỏe ổn định',
+          summary: hasNegativeAnswer ? t('assessment.tired_summary') : t('assessment.stable_summary'),
           outcome_text: hasNegativeAnswer 
-            ? 'Bác nhớ nghỉ ngơi và uống đủ nước nhé. Nếu không đỡ thì báo cho người thân.'
-            : 'Tốt lắm bác! Bác giữ gìn sức khỏe nhé.',
-          recommended_action: 'Tiếp tục theo dõi',
+            ? t('assessment.tired_advice')
+            : t('assessment.stable_advice'),
+          recommended_action: t('assessment.continue_monitoring'),
           assessed_by: 'fallback',
           total_questions: questionCount
         },
@@ -265,17 +238,17 @@ Lưu ý:
       question: {
         id: `q_${questionCount + 1}`,
         type: 'single_choice',
-        text: 'Bác có thấy triệu chứng gì khác không?',
+        text: t('question.followup_symptoms'),
         options: [
-          { value: 'none', label: 'Không có gì' },
-          { value: 'headache', label: 'Đau đầu' },
-          { value: 'dizzy', label: 'Chóng mặt' },
-          { value: 'chest', label: 'Tức ngực' }
+          { value: 'none', label: t('option.nothing') },
+          { value: 'headache', label: t('option.headache') },
+          { value: 'dizzy', label: t('option.dizziness') },
+          { value: 'chest', label: t('option.chest_tightness') }
         ],
         step: questionCount + 1,
         generated_by_ai: false
       },
-      reasoning: 'Fallback: hỏi thêm triệu chứng'
+      reasoning: 'Fallback: asking more symptoms'
     };
   }
 };

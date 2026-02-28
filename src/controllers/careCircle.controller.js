@@ -3,6 +3,7 @@
  * HTTP handlers for care circle endpoints
  */
 
+const { t, getLang } = require('../i18n');
 const { careCircleInvitationSchema } = require('../validation/validation.schemas');
 const {
   createInvitation: serviceCreateInvitation,
@@ -25,13 +26,13 @@ const {
 async function createInvitation(pool, req, res) {
   // Validate user_id matches
   if (req.body?.user_id && Number(req.body.user_id) !== Number(req.user.id)) {
-    return res.status(403).json({ ok: false, error: 'ID người dùng không khớp' });
+    return res.status(403).json({ ok: false, error: t('error.user_id_mismatch', getLang(req)) });
   }
 
   // Validate request body
   const parsed = careCircleInvitationSchema.safeParse(req.body || {});
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: 'Dữ liệu không hợp lệ', details: parsed.error.issues });
+    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)), details: parsed.error.issues });
   }
 
   // Call service

@@ -3,6 +3,8 @@
  * Business logic cho user search và management
  */
 
+const { t } = require('../i18n');
+
 /**
  * Search users by query string
  * @param {Object} pool - Database pool
@@ -50,7 +52,7 @@ async function searchUsers(pool, currentUserId, query) {
     return { ok: true, users };
   } catch (err) {
     console.error('[users.service] searchUsers failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -87,7 +89,7 @@ async function getAllUsers(pool, currentUserId, limit = 100) {
     return { ok: true, users };
   } catch (err) {
     console.error('[users.service] getAllUsers failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 

@@ -9,6 +9,7 @@
 
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { t } = require('../i18n');
 
 // =====================================================
 // CONSTANTS
@@ -315,7 +316,7 @@ async function registerByEmail(pool, email, password, phoneNumber, fullName, dis
     // Check if email exists
     const existingEmail = await findUserByEmail(pool, normalizedEmail);
     if (existingEmail) {
-      return { ok: false, error: 'Email đã được đăng ký' };
+      return { ok: false, error: t('auth.email_already_registered') };
     }
     
     // Hash password
@@ -331,7 +332,7 @@ async function registerByEmail(pool, email, password, phoneNumber, fullName, dis
         [finalPhone]
       );
       if (phoneCheck.rows.length > 0) {
-        return { ok: false, error: 'Số điện thoại đã được sử dụng' };
+        return { ok: false, error: t('auth.phone_already_used') };
       }
     }
     
@@ -356,7 +357,7 @@ async function registerByEmail(pool, email, password, phoneNumber, fullName, dis
     };
   } catch (err) {
     console.error('[auth.service] Register failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -386,12 +387,12 @@ async function loginByEmail(pool, identifier, password) {
     }
     
     if (!user) {
-      return { ok: false, error: 'Thông tin đăng nhập không đúng' };
+      return { ok: false, error: t('auth.invalid_credentials') };
     }
     
     const isValid = await comparePassword(password, user.password_hash);
     if (!isValid) {
-      return { ok: false, error: 'Thông tin đăng nhập không đúng' };
+      return { ok: false, error: t('auth.invalid_credentials') };
     }
     
     const token_response = issueJwt(user);
@@ -402,7 +403,7 @@ async function loginByEmail(pool, identifier, password) {
     };
   } catch (err) {
     console.error('[auth.service] Login failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -443,7 +444,7 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
     };
   } catch (err) {
     console.error(`[auth.service] Login by ${provider} failed:`, err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -464,7 +465,7 @@ async function loginByPhone(pool, phoneNumber) {
     };
   } catch (err) {
     console.error('[auth.service] Phone login failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 

@@ -3,6 +3,7 @@
  * API endpoints cho hệ thống theo dõi sức khỏe
  */
 
+const { t, getLang } = require('../i18n');
 const wellnessService = require('../services/wellness.monitoring.service');
 const { z } = require('zod');
 
@@ -34,7 +35,7 @@ async function postActivity(pool, req, res) {
     if (!parsed.success) {
       return res.status(400).json({ 
         ok: false, 
-        error: 'Dữ liệu không hợp lệ', 
+        error: t('error.invalid_data', getLang(req)), 
         details: parsed.error.issues 
       });
     }
@@ -69,7 +70,7 @@ async function postActivity(pool, req, res) {
     }
   } catch (err) {
     console.error('wellness activity failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -96,7 +97,7 @@ async function getState(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness state failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -121,7 +122,7 @@ async function postCalculate(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness calculate failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -145,7 +146,7 @@ async function getHistory(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness history failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -183,7 +184,7 @@ async function getSummary(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness summary failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -208,7 +209,7 @@ async function checkShouldPrompt(pool, req, res) {
     }
   } catch (err) {
     console.error('wellness prompt check failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -239,7 +240,7 @@ async function getMyAlerts(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness get alerts failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -271,7 +272,7 @@ async function getCaregiverAlertsHandler(pool, req, res) {
     });
   } catch (err) {
     console.error('wellness caregiver alerts failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -283,7 +284,7 @@ async function postAckAlert(pool, req, res) {
   try {
     const alertId = parseInt(req.params.id, 10);
     if (isNaN(alertId)) {
-      return res.status(400).json({ ok: false, error: 'ID không hợp lệ' });
+      return res.status(400).json({ ok: false, error: t('error.invalid_id', getLang(req)) });
     }
 
     const result = await wellnessService.ackAlertWithPermission(pool, alertId, req.user.id);
@@ -295,7 +296,7 @@ async function postAckAlert(pool, req, res) {
     return res.status(200).json(result);
   } catch (err) {
     console.error('wellness ack alert failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -307,12 +308,13 @@ async function postHelpRequest(pool, req, res) {
   try {
     const client = await pool.connect();
     try {
+      const lang = getLang(req);
       const alerts = await wellnessService.sendCaregiverAlert(
         client,
         req.user.id,
         'EMERGENCY',
-        'Yêu cầu hỗ trợ',
-        req.body.message || 'Tôi cần sự giúp đỡ.',
+        t('wellness.help_request_title', lang),
+        req.body.message || t('wellness.help_request_default', lang),
         'user_request',
         { requestedAt: new Date().toISOString() }
       );
@@ -321,15 +323,15 @@ async function postHelpRequest(pool, req, res) {
         ok: true,
         alertsSent: alerts.length,
         message: alerts.length > 0 
-          ? 'Đã gửi thông báo đến người thân.' 
-          : 'Chưa có người thân được kết nối. Thông báo đã được lưu.'
+          ? t('wellness.alert_sent', lang) 
+          : t('wellness.no_caregiver', lang)
       });
     } finally {
       client.release();
     }
   } catch (err) {
     console.error('wellness help request failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 

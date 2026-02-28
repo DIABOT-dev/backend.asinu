@@ -4,6 +4,7 @@
  */
 
 const { getOpenAIReply } = require('../../src/services/ai/providers/openai');
+const { t } = require('../../src/i18n');
 
 /**
  * Extract conditions từ profile array/object
@@ -36,29 +37,29 @@ const buildHealthContext = (params) => {
     if (logsSummary.latest_glucose) {
       const g = logsSummary.latest_glucose;
       const value = g.value;
-      let status = 'bình thường';
+      let status = t('context.status_normal');
       
-      if (value > 180) status = 'rất cao';
-      else if (value > 140) status = 'hơi cao';
-      else if (value < 70) status = 'thấp';
-      else if (value < 100) status = 'tốt';
+      if (value > 180) status = t('context.status_very_high');
+      else if (value > 140) status = t('context.status_slightly_high');
+      else if (value < 70) status = t('context.status_low');
+      else if (value < 100) status = t('context.status_good');
       
-      parts.push(`Đường huyết ${value} ${g.unit || 'mg/dL'} ${status}.`);
+      parts.push(t('context.glucose_status', 'vi', { value, unit: g.unit || 'mg/dL', status }));
     }
     
     if (logsSummary.latest_bp) {
       const bp = logsSummary.latest_bp;
       const sys = bp.systolic;
       const dia = bp.diastolic;
-      let status = 'bình thường';
+      let status = t('context.status_normal');
       
-      if (sys >= 180 || dia >= 110) status = 'rất cao';
-      else if (sys >= 140 || dia >= 90) status = 'cao';
-      else if (sys >= 130 || dia >= 85) status = 'hơi cao';
-      else if (sys < 90 || dia < 60) status = 'thấp';
-      else status = 'tốt';
+      if (sys >= 180 || dia >= 110) status = t('context.status_very_high');
+      else if (sys >= 140 || dia >= 90) status = t('context.status_high');
+      else if (sys >= 130 || dia >= 85) status = t('context.status_slightly_high');
+      else if (sys < 90 || dia < 60) status = t('context.status_low');
+      else status = t('context.status_good');
       
-      parts.push(`Huyết áp ${sys}/${dia} mmHg ${status}.`);
+      parts.push(t('context.bp_status', 'vi', { sys, dia, status }));
     }
   }
 
@@ -66,11 +67,11 @@ const buildHealthContext = (params) => {
   if (profile && profile.medical_conditions) {
     const conditions = extractConditionsList(profile.medical_conditions);
     if (conditions.length > 0) {
-      parts.push(`Bệnh lý: ${conditions.slice(0, 2).join(', ')}.`);
+      parts.push(t('context.conditions', 'vi', { conditions: conditions.slice(0, 2).join(', ') }));
     }
   }
 
-  return parts.length > 0 ? parts.join(' ') : 'Chưa có đủ thông tin sức khỏe.';
+  return parts.length > 0 ? parts.join(' ') : t('context.no_health_info');
 };
 
 /**
@@ -82,52 +83,16 @@ const buildHealthContext = (params) => {
 const buildQuestionPrompt = (questionType, healthContext) => {
   switch (questionType) {
     case 'mood':
-      return `Bạn là bác sĩ. Tạo câu hỏi cho bệnh nhân.
-
-THÔNG TIN:
-${healthContext}
-
-QUY TẮC: Câu hỏi PHẢI bắt đầu bằng chỉ số sức khỏe (đường huyết hoặc huyết áp).
-
-VÍ DỤ:
-Input: "Đường huyết 180 mg/dL hơi cao. Huyết áp 140/90 mmHg."
-Output: "Đường huyết 180 mg/dL hơi cao, bác có thấy mệt hay chóng mặt không?"
-
-Input: "Huyết áp 150/95 mmHg cao."
-Output: "Huyết áp 150/95 mmHg cao hơn bình thường, bác có đau đầu không?"
-
-Bây giờ tạo câu hỏi dựa trên thông tin trên:`;
+      return t('prompt.mood', 'vi', { healthContext });
 
     case 'followup':
-      return `Bạn là bác sĩ. Tạo câu hỏi theo dõi.
-
-THÔNG TIN:
-${healthContext}
-
-QUY TẮC: Câu hỏi PHẢI bắt đầu bằng chỉ số.
-
-VÍ DỤ:
-Input: "Đường huyết 195 mg/dL. Lần trước bệnh nhân mệt."
-Output: "Đường huyết 195 mg/dL, bác thấy cơn mệt lúc sáng có giảm chưa?"
-
-Tạo câu hỏi:`;
+      return t('prompt.followup', 'vi', { healthContext });
 
     case 'symptom':
-      return `Bạn là bác sĩ. Hỏi về triệu chứng.
-
-THÔNG TIN:
-${healthContext}
-
-QUY TẮC: Câu hỏi PHẢI bắt đầu bằng chỉ số + liệt kê triệu chứng.
-
-VÍ DỤ:
-Input: "Đường huyết 250 mg/dL rất cao."
-Output: "Đường huyết 250 mg/dL rất cao - bác có run tay, đổ mồ hôi hay chóng mặt không?"
-
-Tạo câu hỏi:`;
+      return t('prompt.symptom', 'vi', { healthContext });
 
     default:
-      return `Tạo câu hỏi y tế dựa trên: ${healthContext}`;
+      return t('prompt.default', 'vi', { healthContext });
   }
 };
 
@@ -174,11 +139,11 @@ const generateMoodQuestion = async (pool, userId, phase, context) => {
     return {
       id: 'mood',
       type: 'single_choice',
-      text: questionText || 'Hôm nay bác cảm thấy thế nào?', // Fallback
+      text: questionText || t('question.how_are_you_today'), // Fallback
       options: [
-        { value: 'OK', label: 'Ổn' },
-        { value: 'TIRED', label: 'Mệt' },
-        { value: 'NOT_OK', label: 'Không ổn' }
+        { value: 'OK', label: t('brain.mood_ok') },
+        { value: 'TIRED', label: t('brain.mood_tired') },
+        { value: 'NOT_OK', label: t('brain.mood_not_ok') }
       ],
       phase_in_day: phase || null,
       generated_by_ai: true,
@@ -191,11 +156,11 @@ const generateMoodQuestion = async (pool, userId, phase, context) => {
     return {
       id: 'mood',
       type: 'single_choice',
-      text: 'Hôm nay bác cảm thấy thế nào?',
+      text: t('question.how_are_you_today'),
       options: [
-        { value: 'OK', label: 'Ổn' },
-        { value: 'TIRED', label: 'Mệt' },
-        { value: 'NOT_OK', label: 'Không ổn' }
+        { value: 'OK', label: t('brain.mood_ok') },
+        { value: 'TIRED', label: t('brain.mood_tired') },
+        { value: 'NOT_OK', label: t('brain.mood_not_ok') }
       ],
       phase_in_day: phase || null,
       generated_by_ai: false
@@ -231,11 +196,11 @@ const generateFollowupQuestion = async (pool, userId, phase, context) => {
     return {
       id: 'mood',
       type: 'single_choice',
-      text: questionText || 'Bác thấy ổn hơn chưa?', // Fallback
+      text: questionText || t('question.feeling_better'), // Fallback
       options: [
-        { value: 'OK', label: 'Ổn' },
-        { value: 'TIRED', label: 'Mệt' },
-        { value: 'NOT_OK', label: 'Không ổn' }
+        { value: 'OK', label: t('brain.mood_ok') },
+        { value: 'TIRED', label: t('brain.mood_tired') },
+        { value: 'NOT_OK', label: t('brain.mood_not_ok') }
       ],
       phase_in_day: phase || null,
       generated_by_ai: true,
@@ -248,11 +213,11 @@ const generateFollowupQuestion = async (pool, userId, phase, context) => {
     return {
       id: 'mood',
       type: 'single_choice',
-      text: 'Bác thấy ổn hơn chưa?',
+      text: t('question.feeling_better'),
       options: [
-        { value: 'OK', label: 'Ổn' },
-        { value: 'TIRED', label: 'Mệt' },
-        { value: 'NOT_OK', label: 'Không ổn' }
+        { value: 'OK', label: t('brain.mood_ok') },
+        { value: 'TIRED', label: t('brain.mood_tired') },
+        { value: 'NOT_OK', label: t('brain.mood_not_ok') }
       ],
       phase_in_day: phase || null,
       generated_by_ai: false
@@ -274,7 +239,7 @@ const generateSymptomQuestion = async (pool, userId, context) => {
     const previousMoodText = context.previousAnswer?.text || '';
     
     if (previousMoodText) {
-      healthContext += ` Lần trước bệnh nhân trả lời: "${previousMoodText}".`;
+      healthContext += ` ${t('context.previous_answer', 'vi', { text: previousMoodText })}`;
     }
 
     const prompt = buildQuestionPrompt('symptom', healthContext);
@@ -292,21 +257,21 @@ const generateSymptomQuestion = async (pool, userId, context) => {
     return {
       id: 'symptom_severity',
       type: 'symptom_severity',
-      text: questionText || 'Bác có triệu chứng nào và mức độ như thế nào?',
+      text: questionText || t('question.symptoms_severity'),
       symptoms: [
-        { value: 'none', label: 'Không có triệu chứng' },
-        { value: 'chest_pain', label: 'Đau ngực' },
-        { value: 'shortness_of_breath', label: 'Khó thở' },
-        { value: 'dizziness', label: 'Chóng mặt' },
-        { value: 'fever', label: 'Sốt' },
-        { value: 'headache', label: 'Đau đầu' },
-        { value: 'nausea', label: 'Buồn nôn' },
-        { value: 'other', label: 'Khác' }
+        { value: 'none', label: t('brain.symptom_none') },
+        { value: 'chest_pain', label: t('brain.symptom_chest_pain') },
+        { value: 'shortness_of_breath', label: t('brain.symptom_shortness_of_breath') },
+        { value: 'dizziness', label: t('brain.symptom_dizziness') },
+        { value: 'fever', label: t('brain.symptom_fever') },
+        { value: 'headache', label: t('brain.symptom_headache') },
+        { value: 'nausea', label: t('brain.symptom_nausea') },
+        { value: 'other', label: t('brain.symptom_other') }
       ],
       severity_options: [
-        { value: 'mild', label: 'Nhẹ' },
-        { value: 'moderate', label: 'Trung bình' },
-        { value: 'severe', label: 'Nặng' }
+        { value: 'mild', label: t('brain.severity_mild') },
+        { value: 'moderate', label: t('brain.severity_moderate') },
+        { value: 'severe', label: t('brain.severity_severe') }
       ],
       generated_by_ai: true,
       ai_provider: 'openai',
@@ -319,21 +284,21 @@ const generateSymptomQuestion = async (pool, userId, context) => {
     return {
       id: 'symptom_severity',
       type: 'symptom_severity',
-      text: 'Bác có triệu chứng nào và mức độ như thế nào?',
+      text: t('question.symptoms_severity'),
       symptoms: [
-        { value: 'none', label: 'Không có triệu chứng' },
-        { value: 'chest_pain', label: 'Đau ngực' },
-        { value: 'shortness_of_breath', label: 'Khó thở' },
-        { value: 'dizziness', label: 'Chóng mặt' },
-        { value: 'fever', label: 'Sốt' },
-        { value: 'headache', label: 'Đau đầu' },
-        { value: 'nausea', label: 'Buồn nôn' },
-        { value: 'other', label: 'Khác' }
+        { value: 'none', label: t('brain.symptom_none') },
+        { value: 'chest_pain', label: t('brain.symptom_chest_pain') },
+        { value: 'shortness_of_breath', label: t('brain.symptom_shortness_of_breath') },
+        { value: 'dizziness', label: t('brain.symptom_dizziness') },
+        { value: 'fever', label: t('brain.symptom_fever') },
+        { value: 'headache', label: t('brain.symptom_headache') },
+        { value: 'nausea', label: t('brain.symptom_nausea') },
+        { value: 'other', label: t('brain.symptom_other') }
       ],
       severity_options: [
-        { value: 'mild', label: 'Nhẹ' },
-        { value: 'moderate', label: 'Trung bình' },
-        { value: 'severe', label: 'Nặng' }
+        { value: 'mild', label: t('brain.severity_mild') },
+        { value: 'moderate', label: t('brain.severity_moderate') },
+        { value: 'severe', label: t('brain.severity_severe') }
       ],
       generated_by_ai: false
     };
@@ -354,62 +319,44 @@ const aiAssessRiskAndDecision = async (pool, userId, context) => {
     
     // Add mood history
     if (moodHistory) {
-      healthContext += `\n\nLỊCH SỬ TÂM TRẠNG (48h qua):`;
-      healthContext += `\n- Tổng số lần trả lời: ${moodHistory.total}`;
-      healthContext += `\n- Số lần "Không ổn": ${moodHistory.notOkCount}`;
-      healthContext += `\n- Số lần "Mệt": ${moodHistory.tiredCount}`;
-      healthContext += `\n- Trend: ${moodHistory.trend || 'Chưa rõ'}`;
+      healthContext += `\n\n${t('context.mood_history_title')}:`;
+      healthContext += `\n- ${t('context.total_responses')}: ${moodHistory.total}`;
+      healthContext += `\n- ${t('context.not_ok_count')}: ${moodHistory.notOkCount}`;
+      healthContext += `\n- ${t('context.tired_count')}: ${moodHistory.tiredCount}`;
+      healthContext += `\n- ${t('context.trend')}: ${moodHistory.trend || t('context.unknown')}`;
     }
     
     // Current session
-    healthContext += `\n\nPHIÊN HIỆN TẠI:`;
-    healthContext += `\n- Tâm trạng hiện tại: ${currentMood === 'OK' ? 'Ổn' : currentMood === 'TIRED' ? 'Mệt' : currentMood === 'NOT_OK' ? 'Không ổn' : 'Chưa trả lời'}`;
+    healthContext += `\n\n${t('context.current_session')}:`;
+    healthContext += `\n- ${t('context.current_mood')}: ${currentMood === 'OK' ? t('brain.mood_ok') : currentMood === 'TIRED' ? t('brain.mood_tired') : currentMood === 'NOT_OK' ? t('brain.mood_not_ok') : t('brain.not_answered')}`;
     
     if (symptoms && symptoms.length > 0) {
       const symptomLabels = {
-        'chest_pain': 'Đau ngực',
-        'shortness_of_breath': 'Khó thở',
-        'dizziness': 'Chóng mặt',
-        'fever': 'Sốt',
-        'headache': 'Đau đầu',
-        'nausea': 'Buồn nôn',
-        'none': 'Không có',
-        'other': 'Khác'
+        'chest_pain': t('brain.symptom_chest_pain'),
+        'shortness_of_breath': t('brain.symptom_shortness_of_breath'),
+        'dizziness': t('brain.symptom_dizziness'),
+        'fever': t('brain.symptom_fever'),
+        'headache': t('brain.symptom_headache'),
+        'nausea': t('brain.symptom_nausea'),
+        'none': t('brain.symptom_none_short'),
+        'other': t('brain.symptom_other')
       };
-      healthContext += `\n- Triệu chứng: ${symptoms.map(s => symptomLabels[s] || s).join(', ')}`;
-      healthContext += `\n- Mức độ: ${symptomSeverity === 'severe' ? 'Nặng' : symptomSeverity === 'moderate' ? 'Trung bình' : 'Nhẹ'}`;
+      healthContext += `\n- ${t('context.symptoms_label')}: ${symptoms.map(s => symptomLabels[s] || s).join(', ')}`;
+      healthContext += `\n- ${t('context.severity_label')}: ${symptomSeverity === 'severe' ? t('brain.severity_severe') : symptomSeverity === 'moderate' ? t('brain.severity_moderate') : t('brain.severity_mild')}`;
     }
     
     // Profile info
     if (profile) {
-      if (profile.age) healthContext += `\n- Tuổi: ${profile.age}`;
+      if (profile.age) healthContext += `\n- ${t('context.age_label')}: ${profile.age}`;
       if (profile.medical_conditions) {
         const conditions = extractConditionsList(profile.medical_conditions);
         if (conditions.length > 0) {
-          healthContext += `\n- Bệnh nền: ${conditions.join(', ')}`;
+          healthContext += `\n- ${t('context.conditions_label')}: ${conditions.join(', ')}`;
         }
       }
     }
     
-    const prompt = `Bạn là bác sĩ AI phân tích sức khỏe bệnh nhân. Dựa trên thông tin sau, hãy đánh giá và quyết định:
-
-${healthContext}
-
-QUAN TRỌNG - QUY TẮC ĐÁNH GIÁ:
-1. Nếu bệnh nhân trả lời "Mệt" hoặc "Không ổn" từ 2 lần trở lên trong 48h → Cần cảnh giác
-2. Nếu bệnh nhân có triệu chứng nguy hiểm (đau ngực, khó thở) → PHẢI thông báo người thân
-3. Nếu bệnh nhân liên tục mệt (≥2 lần) + có triệu chứng → PHẢI thông báo người thân
-4. Nếu chỉ số sinh tồn bất thường (đường huyết/huyết áp) → Cân nhắc thông báo
-
-TRẢ LỜI THEO FORMAT JSON CHÍNH XÁC (không có text khác):
-{
-  "risk_tier": "HIGH" hoặc "MEDIUM" hoặc "LOW",
-  "risk_score": số từ 0-100,
-  "notify_caregiver": true hoặc false,
-  "reasoning": "Giải thích ngắn gọn tại sao",
-  "outcome_text": "Câu nói với bệnh nhân (tự nhiên, thân thiện)",
-  "recommended_action": "Hành động khuyến nghị"
-}`;
+    const prompt = t('prompt.risk_assessment', 'vi', { healthContext });
 
     const aiResponse = await getOpenAIReply({
       message: prompt,
@@ -424,7 +371,7 @@ TRẢ LỜI THEO FORMAT JSON CHÍNH XÁC (không có text khác):
     // Try to extract JSON from response
     let jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      throw new Error('AI response không chứa JSON hợp lệ');
+      throw new Error(t('error.ai_invalid_json'));
     }
     
     const parsed = JSON.parse(jsonMatch[0]);
@@ -439,8 +386,8 @@ TRẢ LỜI THEO FORMAT JSON CHÍNH XÁC (không có text khác):
       risk_score: parsed.risk_score || 0,
       notify_caregiver: parsed.notify_caregiver || false,
       ai_reasoning: parsed.reasoning || '',
-      outcome_text: parsed.outcome_text || 'Cảm ơn bác đã chia sẻ.',
-      recommended_action: parsed.recommended_action || 'Tiếp tục theo dõi.',
+      outcome_text: parsed.outcome_text || t('outcome.thanks'),
+      recommended_action: parsed.recommended_action || t('outcome.continue_monitoring'),
       assessed_by: 'AI',
       ai_provider: 'openai'
     };
@@ -457,50 +404,50 @@ TRẢ LỜI THEO FORMAT JSON CHÍNH XÁC (không có text khác):
     if (moodHistory) {
       if (moodHistory.notOkCount >= 2) {
         score += 40;
-        reasons.push(`${moodHistory.notOkCount} lần không ổn trong 48h`);
+        reasons.push(t('fallback.not_ok_48h', 'vi', { count: moodHistory.notOkCount }));
       } else if (moodHistory.notOkCount >= 1) {
         score += 20;
-        reasons.push('Có lần không ổn gần đây');
+        reasons.push(t('fallback.not_ok_recent'));
       }
       
       if (moodHistory.tiredCount >= 2) {
         score += 30;
-        reasons.push(`${moodHistory.tiredCount} lần mệt trong 48h`);
+        reasons.push(t('fallback.tired_48h', 'vi', { count: moodHistory.tiredCount }));
       } else if (moodHistory.tiredCount >= 1) {
         score += 15;
-        reasons.push('Có lần mệt gần đây');
+        reasons.push(t('fallback.tired_recent'));
       }
     }
     
     // Current mood
     if (currentMood === 'NOT_OK') {
       score += 20;
-      reasons.push('Hiện tại không ổn');
+      reasons.push(t('fallback.current_not_ok'));
     } else if (currentMood === 'TIRED') {
       score += 10;
-      reasons.push('Hiện tại mệt');
+      reasons.push(t('fallback.current_tired'));
     }
     
     // Symptoms - QUAN TRỌNG
     if (symptoms && symptoms.length > 0) {
       if (symptoms.includes('chest_pain') && symptoms.includes('shortness_of_breath')) {
         score += 50; // Critical
-        reasons.push('Đau ngực + khó thở');
+        reasons.push(t('fallback.chest_shortness'));
       } else if (symptoms.includes('chest_pain')) {
         score += 30;
-        reasons.push('Đau ngực');
+        reasons.push(t('fallback.chest_pain'));
       } else if (symptoms.includes('shortness_of_breath')) {
         score += 25;
-        reasons.push('Khó thở');
+        reasons.push(t('fallback.shortness_of_breath'));
       } else if (symptoms.includes('dizziness')) {
         score += 15;
-        reasons.push('Chóng mặt');
+        reasons.push(t('fallback.dizziness'));
       }
       
       // Severity multiplier
       if (symptomSeverity === 'severe') {
         score = Math.min(100, score * 1.5);
-        reasons.push('Mức độ nặng');
+        reasons.push(t('fallback.severity_severe'));
       } else if (symptomSeverity === 'moderate') {
         score = Math.min(100, score * 1.2);
       }
@@ -520,13 +467,13 @@ TRẢ LỜI THEO FORMAT JSON CHÍNH XÁC (không có text khác):
       notify_caregiver: shouldNotify,
       ai_reasoning: `Fallback assessment: ${reasons.join(', ')}`,
       outcome_text: tier === 'HIGH' 
-        ? 'Asinu lo lắng cho sức khỏe của bác. Người thân sẽ được thông báo để hỗ trợ bác.' 
+        ? t('outcome.high_risk')
         : tier === 'MEDIUM'
-        ? 'Bác cần nghỉ ngơi và theo dõi sức khỏe. Nếu không đỡ, hãy báo cho người thân.'
-        : 'Cảm ơn bác đã chia sẻ. Bác nhớ nghỉ ngơi và uống nước nhé.',
+        ? t('outcome.medium_risk')
+        : t('outcome.low_risk'),
       recommended_action: tier === 'HIGH'
-        ? 'Liên hệ người thân hoặc bác sĩ ngay.'
-        : 'Tiếp tục theo dõi và nghỉ ngơi.',
+        ? t('outcome.action_contact_now')
+        : t('outcome.action_continue_rest'),
       assessed_by: 'fallback-rules',
       ai_provider: null
     };

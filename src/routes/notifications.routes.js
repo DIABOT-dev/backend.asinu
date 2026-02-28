@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const notificationService = require('../services/notification.service');
+const { t, getLang } = require('../i18n');
 
 function notificationRoutes(pool) {
   const router = express.Router();
@@ -32,7 +33,7 @@ function notificationRoutes(pool) {
     if (isNaN(notificationId)) {
       return res.status(400).json({
         ok: false,
-        error: 'ID thông báo không hợp lệ'
+        error: t('error.invalid_notification_id', getLang(req))
       });
     }
 

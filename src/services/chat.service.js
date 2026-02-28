@@ -5,13 +5,14 @@
  * - Format user messages
  * - Process AI replies
  */
+const { t } = require('../i18n');
 
 // =====================================================
 // CONSTANTS
 // =====================================================
 
 const FALLBACK_CONTEXT =
-  'Người dùng chưa có hồ sơ onboarding chi tiết. Hãy trả lời thấu cảm, ngắn gọn, không giả định dữ liệu cá nhân.';
+  t('chat.fallback_context');
 
 // =====================================================
 // HELPERS
@@ -57,20 +58,20 @@ const buildOnboardingContext = (profile) => {
   const joints = formatIssueList(profile.joint_issues);
   
   const notes = [];
-  notes.push(`Giới tính: ${profile.gender}. Nhóm tuổi: ${profile.age}.`);
-  notes.push(`Mục tiêu: ${profile.goal}. Thể trạng: ${profile.body_type}.`);
+  notes.push(`${t('chat.gender')}: ${profile.gender}. ${t('chat.age_group')}: ${profile.age}.`);
+  notes.push(`${t('chat.goal')}: ${profile.goal}. ${t('chat.body_type')}: ${profile.body_type}.`);
   
-  if (medical) notes.push(`Bệnh lý: ${medical}.`);
-  if (symptoms) notes.push(`Triệu chứng: ${symptoms}.`);
-  if (joints) notes.push(`Vấn đề khớp: ${joints}.`);
+  if (medical) notes.push(`${t('chat.conditions')}: ${medical}.`);
+  if (symptoms) notes.push(`${t('chat.symptoms')}: ${symptoms}.`);
+  if (joints) notes.push(`${t('chat.joint_issues')}: ${joints}.`);
   
   notes.push(
-    `Thói quen: linh hoạt ${profile.flexibility}, leo thang ${profile.stairs_performance}, ` +
-    `tập luyện ${profile.exercise_freq}, đi bộ ${profile.walking_habit}, ` +
-    `nước ${profile.water_intake}, ngủ ${profile.sleep_duration}.`
+    `${t('chat.habits')}: ${t('chat.flexibility')} ${profile.flexibility}, ${t('chat.stairs')} ${profile.stairs_performance}, ` +
+    `${t('chat.exercise')} ${profile.exercise_freq}, ${t('chat.walking')} ${profile.walking_habit}, ` +
+    `${t('chat.water')} ${profile.water_intake}, ${t('chat.sleep')} ${profile.sleep_duration}.`
   );
   
-  notes.push('Hãy trả lời thấu cảm, dễ hiểu, có bước hành động cụ thể; nhắc lại mục tiêu hoặc triệu chứng chính ít nhất một lần.');
+  notes.push(t('chat.reply_instruction'));
   
   return notes.join(' ');
 };
@@ -88,13 +89,13 @@ const buildMentionHint = (profile) => {
   const primarySymptom = symptoms[0] || joints[0] || '';
   
   if (profile.goal && primarySymptom) {
-    return `Mục tiêu của bạn là ${profile.goal}, triệu chứng chính là ${primarySymptom}.`;
+    return t('chat.goal_and_symptom', 'vi', { goal: profile.goal, symptom: primarySymptom });
   }
   if (profile.goal) {
-    return `Mục tiêu của bạn là ${profile.goal}.`;
+    return t('chat.goal_only', 'vi', { goal: profile.goal });
   }
   if (primarySymptom) {
-    return `Triệu chứng chính là ${primarySymptom}.`;
+    return t('chat.symptom_only', 'vi', { symptom: primarySymptom });
   }
   return '';
 };

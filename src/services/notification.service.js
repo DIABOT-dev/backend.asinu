@@ -3,6 +3,8 @@
  * Business logic cho notifications
  */
 
+const { t } = require('../i18n');
+
 /**
  * Get user notifications with pagination
  * @param {Object} pool - Database pool
@@ -46,7 +48,7 @@ async function getNotifications(pool, userId, options = {}) {
     };
   } catch (err) {
     console.error('[notification.service] getNotifications failed:', err);
-    return { ok: false, error: 'Không thể lấy danh sách thông báo' };
+    return { ok: false, error: t('notification.cannot_get_list') };
   }
 }
 
@@ -68,13 +70,13 @@ async function markAsRead(pool, notificationId, userId) {
     );
 
     if (result.rows.length === 0) {
-      return { ok: false, error: 'Không tìm thấy thông báo', statusCode: 404 };
+      return { ok: false, error: t('notification.not_found'), statusCode: 404 };
     }
 
     return { ok: true, notification: result.rows[0] };
   } catch (err) {
     console.error('[notification.service] markAsRead failed:', err);
-    return { ok: false, error: 'Không thể đánh dấu thông báo đã đọc' };
+    return { ok: false, error: t('notification.cannot_mark_read') };
   }
 }
 
@@ -97,7 +99,7 @@ async function markAllAsRead(pool, userId) {
     return { ok: true, markedCount: result.rows.length };
   } catch (err) {
     console.error('[notification.service] markAllAsRead failed:', err);
-    return { ok: false, error: 'Không thể đánh dấu tất cả thông báo đã đọc' };
+    return { ok: false, error: t('notification.cannot_mark_all_read') };
   }
 }
 

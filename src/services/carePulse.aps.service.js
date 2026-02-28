@@ -1,3 +1,4 @@
+const { t } = require('../i18n');
 ﻿const { randomUUID } = require('crypto');
 const { updateMissionProgress } = require('./missions.service');
 
@@ -589,7 +590,7 @@ async function acknowledgeEscalation(pool, escalationId, userId) {
     );
 
     if (escalationResult.rows.length === 0) {
-      return { ok: false, error: 'Không tìm thấy cảnh báo', statusCode: 404 };
+      return { ok: false, error: t('carePulse.alert_not_found'), statusCode: 404 };
     }
 
     const escalation = escalationResult.rows[0];
@@ -605,7 +606,7 @@ async function acknowledgeEscalation(pool, escalationId, userId) {
     );
 
     if (permission.rows.length === 0) {
-      return { ok: false, error: 'Không có quyền truy cập', statusCode: 403 };
+      return { ok: false, error: t('carePulse.no_access'), statusCode: 403 };
     }
 
     // Already acknowledged
@@ -624,7 +625,7 @@ async function acknowledgeEscalation(pool, escalationId, userId) {
     return { ok: true, status: 'acknowledged' };
   } catch (err) {
     console.error('[carePulse.aps.service] acknowledgeEscalation failed:', err);
-    return { ok: false, error: 'Lỗi server' };
+    return { ok: false, error: t('error.server') };
   }
 }
 

@@ -1,4 +1,5 @@
-﻿const { getMissions, getMissionHistory, getMissionStats } = require('../services/missions.service');
+﻿const { t, getLang } = require('../i18n');
+const { getMissions, getMissionHistory, getMissionStats } = require('../services/missions.service');
 
 /**
  * GET /api/missions
@@ -6,7 +7,7 @@
  */
 async function getMissionsHandler(pool, req, res) {
   if (req.query?.user_id && Number(req.query.user_id) !== Number(req.user.id)) {
-    return res.status(403).json({ ok: false, error: 'ID người dùng không khớp' });
+    return res.status(403).json({ ok: false, error: t('error.user_id_mismatch', getLang(req)) });
   }
 
   try {
@@ -14,7 +15,7 @@ async function getMissionsHandler(pool, req, res) {
     return res.status(200).json({ ok: true, missions });
   } catch (err) {
     console.error('[missions.controller] getMissionsHandler failed:', err);
-    return res.status(500).json({ ok: false, error: 'Lỗi server' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
