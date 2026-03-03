@@ -944,7 +944,7 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
   );
 
   if (caregiversResult.rows.length === 0) {
-    return { notified: false, status: 'NO_CAREGIVER', message: 'No caregiver linked.' };
+    return { notified: false, status: 'NO_CAREGIVER', message: t('error.no_caregiver_linked') };
   }
 
   // Đảo ngược mối quan hệ: nếu patient đặt caregiver là "Bố" thì caregiver nhìn patient là "Con"
@@ -1124,7 +1124,7 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
   }
   
   console.log(`[notifyCaregivers] Notified ${caregiverIds.length} caregivers (in-app + push: ${pushNotified})`);
-  console.log(`[notifyCaregivers] ⚠️ ALERT SENT - Risk: ${data.riskLevel}, Patient: ${userName}`);
+  console.log(`[notifyCaregivers] ALERT SENT - Risk: ${data.riskLevel}, Patient: ${userName}`);
   
   return {
     notified: true,
@@ -1201,7 +1201,7 @@ const checkTodayLogs = async (pool, userId) => {
     };
   }
   
-  console.log(`[checkTodayLogs] userId ${userId} - HAS ALL LOGS ✓ (glucose + BP)`);
+  console.log(`[checkTodayLogs] userId ${userId} - HAS ALL LOGS OK (glucose + BP)`);
   return { hasLogs: true };
 };
 
@@ -1599,7 +1599,7 @@ const submitAnswer = async (pool, userId, payload) => {
       
       // GỬI THÔNG BÁO nếu AI quyết định
       if (assessment.notify_caregiver) {
-        console.log(`[submitAnswer] ⚠️ AI quyết định GỬI CẢNH BÁO cho người thân`);
+        console.log(`[submitAnswer] AI decided to SEND ALERT to caregiver`);
         console.log(`  - Risk: ${assessment.risk_tier}, Score: ${assessment.risk_score}`);
         console.log(`  - Reason: ${assessment.summary}`);
         
@@ -1729,7 +1729,7 @@ const submitAnswer = async (pool, userId, payload) => {
       
       // GỬI THÔNG BÁO cho người thân nếu AI quyết định
       if (aiDecision.notify_caregiver) {
-        console.log(`[submitAnswer] ⚠️ AI quyết định GỬI CẢNH BÁO cho người thân`);
+        console.log(`[submitAnswer] AI decided to SEND ALERT to caregiver`);
         await notifyCaregivers(pool, userId, {
           title: t('brain.alert_need_check'),
           message: aiDecision.ai_reasoning,
@@ -1802,7 +1802,7 @@ const submitAnswer = async (pool, userId, payload) => {
     
     // GỬI THÔNG BÁO cho người thân nếu AI quyết định
     if (aiDecision.notify_caregiver) {
-      console.log(`[submitAnswer] ⚠️ AI quyết định GỬI CẢNH BÁO cho người thân`);
+      console.log(`[submitAnswer] AI decided to SEND ALERT to caregiver`);
       console.log(`  - Risk: ${aiDecision.risk_tier}, Score: ${aiDecision.risk_score}`);
       console.log(`  - Reason: ${aiDecision.ai_reasoning}`);
       
@@ -1891,7 +1891,7 @@ const postEmergency = async (pool, userId, payload) => {
   });
 
   const notifyNeeded = payload.type === 'VERY_UNWELL' || payload.type === 'ALERT_CAREGIVER';
-  let notifyStatus = { status: 'LOGGED', message: 'Emergency logged.' };
+  let notifyStatus = { status: 'LOGGED', message: t('error.emergency_logged') };
 
   if (notifyNeeded) {
     // Lấy tên bệnh nhân để gửi trong notification

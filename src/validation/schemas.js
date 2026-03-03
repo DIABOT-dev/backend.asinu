@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { t } = require('../i18n');
 
 const uuidSchema = z.string().uuid();
 
@@ -17,7 +18,7 @@ const onboardingIssueItemSchema = z
   .strict()
   .superRefine((data, ctx) => {
     if (data.key === 'other' && !data.other_text) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Missing other_text for key=other' });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('error.missing_other_text') });
     }
   });
 
@@ -62,7 +63,7 @@ const carePulseEventSchema = z
   })
   .superRefine((data, ctx) => {
     if (data.event_type === 'CHECK_IN' && !data.self_report) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Missing self_report' });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('error.missing_self_report') });
     }
   });
 

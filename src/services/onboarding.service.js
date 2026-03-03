@@ -130,10 +130,11 @@ async function upsertProfile(pool, userId, profile) {
       walking_habit,
       water_intake,
       sleep_duration,
+      onboarding_completed_at,
       created_at,
       updated_at
     ) VALUES (
-      $1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14,NOW(),NOW()
+      $1,$2,$3,$4,$5,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13,$14,NOW(),NOW(),NOW()
     )
     ON CONFLICT (user_id) DO UPDATE SET
       age = EXCLUDED.age,
@@ -149,10 +150,11 @@ async function upsertProfile(pool, userId, profile) {
       walking_habit = EXCLUDED.walking_habit,
       water_intake = EXCLUDED.water_intake,
       sleep_duration = EXCLUDED.sleep_duration,
+      onboarding_completed_at = COALESCE(user_onboarding_profiles.onboarding_completed_at, NOW()),
       updated_at = NOW()
     RETURNING user_id, age, gender, goal, body_type, medical_conditions, chronic_symptoms,
               joint_issues, flexibility, stairs_performance, exercise_freq, walking_habit,
-              water_intake, sleep_duration, created_at, updated_at`,
+              water_intake, sleep_duration, onboarding_completed_at, created_at, updated_at`,
     [
       userId,
       age,

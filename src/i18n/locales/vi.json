@@ -363,5 +363,26 @@
   "validation.update_required": "Phải có ít nhất một trường để cập nhật",
 
   "prompt.system_question": "Bạn là trợ lý y tế chuyên nghiệp, tạo câu hỏi ngắn gọn, thân thiện cho bệnh nhân cao tuổi tại Việt Nam. Chỉ trả về câu hỏi, không giải thích.",
-  "prompt.system_chat": "Bạn là trợ lý sức khỏe thân thiện, giúp bệnh nhân quản lý sức khỏe. Trả lời ngắn gọn, dễ hiểu, thấu cảm."
+  "prompt.system_chat": "Bạn là trợ lý sức khỏe thân thiện, giúp bệnh nhân quản lý sức khỏe. Trả lời ngắn gọn, dễ hiểu, thấu cảm.",
+
+  "error.too_many_requests": "Quá nhiều yêu cầu, vui lòng thử lại sau",
+  "error.too_many_auth_attempts": "Quá nhiều lần đăng nhập, vui lòng thử lại sau",
+  "error.missing_token": "Thiếu token",
+  "error.token_missing_user_id": "Token thiếu user_id",
+  "error.user_id_not_allowed": "Không được phép gửi user_id",
+  "error.invalid_payload": "Dữ liệu gửi lên không hợp lệ",
+  "error.unauthorized": "Chưa xác thực",
+  "error.unsupported_log_type": "Loại log không được hỗ trợ",
+  "error.invalid_mood_answer": "Câu trả lời tâm trạng không hợp lệ",
+  "error.invalid_symptom_answer": "Câu trả lời triệu chứng không hợp lệ",
+  "error.invalid_dynamic_answer": "Câu trả lời không hợp lệ",
+  "error.no_push_tokens": "Không có push token",
+  "error.no_valid_push_tokens": "Không có push token hợp lệ",
+  "error.no_push_token": "Không có push token",
+  "error.no_caregiver_linked": "Chưa có người thân được kết nối.",
+  "error.emergency_logged": "Đã ghi nhận tình trạng khẩn cấp.",
+  "error.missing_other_text": "Thiếu other_text cho key=other",
+  "error.missing_self_report": "Thiếu self_report",
+  "error.invalid_db_client": "Database client không hợp lệ",
+  "success.logged_out": "Đã đăng xuất"
 }

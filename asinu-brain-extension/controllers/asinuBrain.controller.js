@@ -1,5 +1,6 @@
 const { answerSchema, emergencySchema } = require('../validation/asinuBrain.schemas');
 const { getNextState, submitAnswer, getTimeline, postEmergency } = require('../services/asinuBrain.service');
+const { t, getLang } = require('../../src/i18n');
 
 async function getNextHandler(pool, req, res) {
   try {
@@ -7,17 +8,17 @@ async function getNextHandler(pool, req, res) {
     return res.status(200).json({ ok: true, ...result });
   } catch (err) {
     console.error('asinu-brain next failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
 async function postAnswerHandler(pool, req, res) {
   if (req.body?.user_id) {
-    return res.status(400).json({ ok: false, error: 'user_id is not allowed' });
+    return res.status(400).json({ ok: false, error: t('error.user_id_not_allowed', getLang(req)) });
   }
   const parsed = answerSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: 'Invalid payload', details: parsed.error.issues });
+    return res.status(400).json({ ok: false, error: t('error.invalid_payload', getLang(req)), details: parsed.error.issues });
   }
 
   try {
@@ -25,7 +26,7 @@ async function postAnswerHandler(pool, req, res) {
     return res.status(200).json({ ok: true, ...result });
   } catch (err) {
     console.error('asinu-brain answer failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -35,17 +36,17 @@ async function getTimelineHandler(pool, req, res) {
     return res.status(200).json({ ok: true, timeline });
   } catch (err) {
     console.error('asinu-brain timeline failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
 async function postEmergencyHandler(pool, req, res) {
   if (req.body?.user_id) {
-    return res.status(400).json({ ok: false, error: 'user_id is not allowed' });
+    return res.status(400).json({ ok: false, error: t('error.user_id_not_allowed', getLang(req)) });
   }
   const parsed = emergencySchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: 'Invalid payload', details: parsed.error.issues });
+    return res.status(400).json({ ok: false, error: t('error.invalid_payload', getLang(req)), details: parsed.error.issues });
   }
 
   try {
@@ -53,7 +54,7 @@ async function postEmergencyHandler(pool, req, res) {
     return res.status(200).json({ ok: true, ...result });
   } catch (err) {
     console.error('asinu-brain emergency failed:', err);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 

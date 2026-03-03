@@ -133,7 +133,7 @@ async function insertDetailLog(client, logType, logId, data) {
       break;
     }
     default:
-      throw new Error('Unsupported log_type');
+      throw new Error(t('error.unsupported_log_type'));
   }
 }
 

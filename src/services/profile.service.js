@@ -28,9 +28,9 @@ async function getProfile(pool, userId) {
 
     // Get onboarding profile for health info
     const onboardingResult = await pool.query(
-      `SELECT display_name, age, gender, goal, body_type, 
+      `SELECT display_name, age, gender, goal, body_type,
               date_of_birth, height_cm, weight_kg, blood_type,
-              medical_conditions, chronic_symptoms
+              medical_conditions, chronic_symptoms, onboarding_completed_at
        FROM user_onboarding_profiles
        WHERE user_id = $1`,
       [userId]
@@ -97,6 +97,7 @@ async function getProfile(pool, userId) {
       chronicDiseases: chronicDiseases,
       // Care circle
       careCircle: careCircle,
+      onboardingCompleted: !!onboarding?.onboarding_completed_at,
       ...(onboarding && {
         ageRange: onboarding.age,
         gender: onboarding.gender,
@@ -221,6 +222,9 @@ async function updateProfile(pool, userId, updates) {
     return await getProfile(pool, userId);
   } catch (err) {
     console.error('[profile.service] updateProfile failed:', err);
+    if (err?.code === '23505' && err?.constraint === 'users_phone_key') {
+      return { ok: false, error: t('auth.phone_already_used'), statusCode: 409 };
+    }
     return { ok: false, error: t('error.server') };
   }
 }

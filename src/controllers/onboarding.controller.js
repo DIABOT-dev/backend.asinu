@@ -14,7 +14,7 @@ async function upsertOnboardingProfile(pool, req, res) {
     return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
   if (payloadUserId !== undefined && payloadUserId !== userId) {
-    return res.status(403).json({ ok: false, error: 'user_id_mismatch' });
+    return res.status(403).json({ ok: false, error: t('error.user_id_mismatch', getLang(req)) });
   }
 
   try {

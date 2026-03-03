@@ -4,10 +4,11 @@
  */
 
 const treeService = require('../services/tree.service');
+const { t, getLang } = require('../i18n');
 
 async function getTreeSummary(pool, req, res) {
   if (!req.user?.id) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
   }
 
   const result = await treeService.getTreeSummary(pool, req.user.id);
@@ -21,7 +22,7 @@ async function getTreeSummary(pool, req, res) {
 
 async function getTreeHistory(pool, req, res) {
   if (!req.user?.id) {
-    return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
   }
 
   const result = await treeService.getTreeHistory(pool, req.user.id);

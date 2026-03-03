@@ -1,4 +1,5 @@
 const { requireAuth } = require('../../src/middleware/auth.middleware');
+const { t, getLang } = require('../../src/i18n');
 
 function requireBrainAuth(req, res, next) {
   return requireAuth(req, res, () => {
@@ -6,7 +7,7 @@ function requireBrainAuth(req, res, next) {
     const rawUserId = payload.id ?? payload.user_id ?? payload.sub;
     const userId = typeof rawUserId === 'string' ? rawUserId.trim() : rawUserId;
     if (!userId) {
-      return res.status(401).json({ ok: false, error: 'Token missing user_id' });
+      return res.status(401).json({ ok: false, error: t('error.token_missing_user_id', getLang(req)) });
     }
     req.userId = userId;
     return next();

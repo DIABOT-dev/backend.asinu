@@ -5,6 +5,7 @@
 
 const { chatRequestSchema } = require('../validation/validation.schemas');
 const { processChat } = require('../services/chat.service');
+const { t, getLang } = require('../i18n');
 
 /**
  * POST /api/chat
@@ -14,7 +15,7 @@ async function postChat(pool, req, res) {
   // Validate request
   const parsed = chatRequestSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: 'Invalid payload', details: parsed.error.issues });
+    return res.status(400).json({ ok: false, error: t('error.invalid_payload', getLang(req)), details: parsed.error.issues });
   }
 
   const { message, client_ts, context } = parsed.data;

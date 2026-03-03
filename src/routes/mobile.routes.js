@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
+const { t, getLang } = require('../i18n');
 const { createMobileLog, getRecentLogs, getTodayLogs } = require('../controllers/mobile.controller');
 const { postChat } = require('../controllers/chat.controller');
 const { getMissionsHandler, getMissionHistoryHandler, getMissionStatsHandler } = require('../controllers/missions.controller');
@@ -59,7 +60,7 @@ function mobileRoutes(pool) {
     return loginByPhone(pool, req, res);
   });
   router.post('/auth/logout', requireAuth, (req, res) => {
-    return res.status(200).json({ ok: true, message: 'Logged out' });
+    return res.status(200).json({ ok: true, message: t('success.logged_out', getLang(req)) });
   });
 
   return router;

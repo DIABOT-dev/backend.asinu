@@ -1,4 +1,5 @@
 ﻿const { getDiaBrainReply } = require('./ai/providers/diabrain');
+const { getOpenAIReply, getOpenAIChatReply } = require('./ai/providers/openai');
 const { t } = require('../i18n');
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
@@ -45,27 +46,52 @@ async function callGemini(message, context) {
   return reply || null;
 }
 
-async function getChatReply(message, context) {
-  const provider = String(process.env.AI_PROVIDER || '').toLowerCase();
+async function getChatReply(message, context, conversationHistory = [], systemPrompt = null) {
+  const provider = String(process.env.AI_PROVIDER || 'openai').toLowerCase();
+  const userId = context?.user_id ?? context?.userId ?? null;
+  
+  // DiaBrain provider
   if (provider === 'diabrain') {
-    const userId = context?.user_id ?? context?.userId ?? null;
     const sessionId = context?.session_id ?? context?.sessionId ?? null;
     return getDiaBrainReply({ message, userId, sessionId });
   }
 
-  if (!process.env.GEMINI_API_KEY) {
+  // OpenAI provider (default)
+  if (provider === 'openai' || provider === '') {
+    if (!process.env.OPENAI_CHAT_MODEL || !process.env.OPENAI_API_KEY) {
+      console.warn('OpenAI not configured, falling back to mock');
+      return { reply: buildMockReply(message), provider: 'mock' };
+    }
+    try {
+      const result = await getOpenAIChatReply({ 
+        message, 
+        userId,
+        context: systemPrompt
+      });
+      return result;
+    } catch (err) {
+      console.warn('OpenAI call failed, fallback to mock:', err?.message || err);
+      return { reply: buildMockReply(message), provider: 'mock' };
+    }
+  }
+
+  // Gemini provider
+  if (provider === 'gemini') {
+    if (!process.env.GEMINI_API_KEY) {
+      return { reply: buildMockReply(message), provider: 'mock' };
+    }
+    try {
+      const reply = await callGemini(message, context);
+      if (reply) {
+        return { reply, provider: 'gemini' };
+      }
+    } catch (err) {
+      console.warn('Gemini call failed, fallback to mock:', err?.message || err);
+    }
     return { reply: buildMockReply(message), provider: 'mock' };
   }
 
-  try {
-    const reply = await callGemini(message, context);
-    if (reply) {
-      return { reply, provider: 'gemini' };
-    }
-  } catch (err) {
-    console.warn('Gemini call failed, fallback to mock:', err?.message || err);
-  }
-
+  // Fallback
   return { reply: buildMockReply(message), provider: 'mock' };
 }
 

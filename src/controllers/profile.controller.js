@@ -53,7 +53,7 @@ async function updateProfile(pool, req, res) {
   });
 
   if (!result.ok) {
-    return res.status(500).json(result);
+    return res.status(result.statusCode || 500).json(result);
   }
 
   return res.status(200).json(result);

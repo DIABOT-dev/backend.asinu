@@ -66,7 +66,7 @@ async function createInvitation(pool, requesterId, data) {
   const { addressee_id, relationship_type, role, permissions } = data;
 
   // Validate not self-invite
-  if (addressee_id === requesterId) {
+  if (Number(addressee_id) === Number(requesterId)) {
     return { ok: false, error: t('careCircle.cannot_invite_self') };
   }
 

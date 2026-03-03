@@ -3,6 +3,8 @@
  * Business logic cho tree (health score) summary and history
  */
 
+const { t } = require('../i18n');
+
 const DAYS_IN_WEEK = 7;
 const DAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
 
@@ -101,7 +103,7 @@ async function getTreeSummary(pool, userId) {
     };
   } catch (err) {
     console.error('[tree.service] getTreeSummary failed:', err);
-    return { ok: false, error: 'Server error' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -153,7 +155,7 @@ async function getTreeHistory(pool, userId) {
     return { ok: true, history };
   } catch (err) {
     console.error('[tree.service] getTreeHistory failed:', err);
-    return { ok: false, error: 'Server error' };
+    return { ok: false, error: t('error.server') };
   }
 }
 

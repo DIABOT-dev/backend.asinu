@@ -147,8 +147,97 @@ const enhanceReplyWithProfile = (reply, profile) => {
 };
 
 // =====================================================
+// SYSTEM PROMPT BUILDING
+// =====================================================
+
+const HISTORY_LIMIT = 20; // Last 20 messages for better repeat-detection
+
+/**
+ * Build system prompt for Gemini from user profile.
+ * @param {Object|null} profile - User onboarding profile
+ * @param {number} historyLength - Number of prior messages in this conversation
+ * @returns {string} - System prompt
+ */
+const buildSystemPrompt = (profile, historyLength = 0) => {
+  const isFirstTurn = historyLength === 0;
+  const lines = ['Bạn là Asinu — trợ lý sức khỏe cá nhân.', ''];
+
+  // ── PROFILE ──────────────────────────────────────────
+  if (profile) {
+    const medical  = formatIssueList(profile.medical_conditions);
+    const symptoms = formatIssueList(profile.chronic_symptoms);
+    const joints   = formatIssueList(profile.joint_issues);
+
+    lines.push('HỒ SƠ SỨC KHỎE (đã biết — KHÔNG hỏi lại những thông tin này):');
+    if (profile.gender)    lines.push(`- Giới tính: ${profile.gender}`);
+    if (profile.age)       lines.push(`- Nhóm tuổi: ${profile.age}`);
+    if (profile.goal)      lines.push(`- Mục tiêu: ${profile.goal}`);
+    if (profile.body_type) lines.push(`- Thể trạng: ${profile.body_type}`);
+    if (medical)           lines.push(`- Bệnh lý nền: ${medical}`);
+    if (symptoms)          lines.push(`- Triệu chứng mãn tính: ${symptoms}`);
+    if (joints)            lines.push(`- Vấn đề khớp: ${joints}`);
+
+    const habits = [];
+    if (profile.exercise_freq)  habits.push(`tập ${profile.exercise_freq}`);
+    if (profile.sleep_duration) habits.push(`ngủ ${profile.sleep_duration}`);
+    if (profile.water_intake)   habits.push(`nước ${profile.water_intake}`);
+    if (habits.length) lines.push(`- Thói quen: ${habits.join(', ')}`);
+
+    // Build a concrete focus so the AI knows what to centre advice around
+    const focuses = [];
+    if (profile.goal) focuses.push(`"${profile.goal}"`);
+    if (joints)       focuses.push(`khớp (${joints})`);
+    if (symptoms)     focuses.push(symptoms);
+    if (medical)      focuses.push(medical);
+
+    if (focuses.length) {
+      lines.push('');
+      lines.push(`TRỌNG TÂM: Mọi câu hỏi và lời khuyên phải liên quan trực tiếp đến ${focuses.slice(0, 2).join(' và ')} của người dùng này.`);
+    }
+  } else {
+    lines.push('HỒ SƠ SỨC KHỎE: chưa có — hỏi thăm sức khỏe chung một cách tự nhiên.');
+  }
+
+  // ── CONVERSATION RULES ───────────────────────────────
+  lines.push('');
+  lines.push('NGUYÊN TẮC:');
+
+  if (isFirstTurn) {
+    lines.push('- Tin ĐẦU TIÊN: chào ngắn (1 câu) rồi hỏi ĐÚNG 1 câu cụ thể dựa trên hồ sơ — không hỏi chung chung.');
+  } else {
+    lines.push('- Cuộc trò chuyện đang tiếp diễn: TUYỆT ĐỐI không chào lại — đi thẳng vào nội dung.');
+  }
+
+  lines.push('- Mỗi lượt hỏi TỐI ĐA 1 câu, phải cụ thể và chưa hỏi trong lịch sử trò chuyện.');
+  lines.push('- Đọc lịch sử hội thoại: câu nào đã hỏi → KHÔNG hỏi lại dưới bất kỳ hình thức nào.');
+  lines.push('- Sau 2-3 lượt hỏi-đáp về cùng chủ đề → DỪNG hỏi, đưa ra khuyến nghị cụ thể và hành động được.');
+  lines.push('- Trả lời ngắn (2-4 câu). Nhắc trực tiếp đến tình trạng của họ: "Với [mục tiêu/triệu chứng] của bạn…"');
+  lines.push('- Không phải bác sĩ — chỉ khuyến nghị khám chuyên khoa khi thật sự cần.');
+
+  return lines.join('\n');
+};
+
+// =====================================================
 // DATABASE OPERATIONS
 // =====================================================
+
+/**
+ * Get recent conversation history for context window
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @param {number} limit - Max messages to retrieve
+ * @returns {Promise<Array<{message: string, sender: string}>>}
+ */
+async function getRecentHistory(pool, userId, limit = HISTORY_LIMIT) {
+  const result = await pool.query(
+    `SELECT message, sender FROM chat_histories
+     WHERE user_id = $1
+     ORDER BY created_at DESC
+     LIMIT $2`,
+    [userId, limit]
+  );
+  return result.rows.reverse(); // chronological order
+}
 
 /**
  * Get user's onboarding profile
@@ -208,20 +297,18 @@ async function saveAssistantReply(pool, userId, reply, timestamp) {
  */
 async function processChat(pool, userId, message, context = {}) {
   const { getChatReply } = require('./chat.provider.service');
-  
+
   try {
     const now = new Date();
-
-    // Save user message
-    await saveUserMessage(pool, userId, message, now);
-
-    // Get AI provider
     const provider = String(process.env.AI_PROVIDER || '').toLowerCase();
     let finalMessage = message;
     let onboardingProfile = null;
+    let conversationHistory = [];
+    let systemPrompt = null;
 
-    // Build context for DiaBrain provider
     if (provider === 'diabrain') {
+      // DiaBrain manages its own conversation state — keep existing behavior
+      await saveUserMessage(pool, userId, message, now);
       try {
         onboardingProfile = await getOnboardingProfile(pool, userId);
         const contextText = buildOnboardingContext(onboardingProfile);
@@ -230,18 +317,26 @@ async function processChat(pool, userId, message, context = {}) {
         console.warn('[chat.service] onboarding context fetch failed:', err?.message || err);
         finalMessage = formatMessageWithContext(message, FALLBACK_CONTEXT);
       }
+    } else {
+      // Gemini/other: fetch history + profile BEFORE saving current message
+      // so the current user turn is not duplicated in history
+      try {
+        [onboardingProfile, conversationHistory] = await Promise.all([
+          getOnboardingProfile(pool, userId),
+          getRecentHistory(pool, userId, HISTORY_LIMIT),
+        ]);
+        systemPrompt = buildSystemPrompt(onboardingProfile, conversationHistory.length);
+      } catch (err) {
+        console.warn('[chat.service] context fetch failed:', err?.message || err);
+      }
+      await saveUserMessage(pool, userId, message, now);
     }
 
-    // Get AI reply
+    // Get AI reply — pass conversation history and system prompt for Gemini
     const providerContext = { ...context, user_id: userId };
-    const replyResult = await getChatReply(finalMessage, providerContext);
-    let reply = replyResult.reply || '';
+    const replyResult = await getChatReply(finalMessage, providerContext, conversationHistory, systemPrompt);
+    const reply = replyResult.reply || '';
     const replyProvider = replyResult.provider || 'mock';
-
-    // Add mention hint for DiaBrain if needed
-    if (replyProvider === 'diabrain' && onboardingProfile) {
-      reply = enhanceReplyWithProfile(reply, onboardingProfile);
-    }
 
     // Save assistant reply
     const assistantRow = await saveAssistantReply(pool, userId, reply, now);
@@ -251,13 +346,13 @@ async function processChat(pool, userId, message, context = {}) {
       reply,
       chat_id: assistantRow?.id,
       provider: replyProvider,
-      created_at: assistantRow?.created_at 
-        ? new Date(assistantRow.created_at).toISOString() 
+      created_at: assistantRow?.created_at
+        ? new Date(assistantRow.created_at).toISOString()
         : now.toISOString()
     };
   } catch (err) {
     console.error('[chat.service] processChat failed:', err);
-    return { ok: false, error: 'Server error' };
+    return { ok: false, error: t('error.server') };
   }
 }
 
@@ -268,23 +363,26 @@ async function processChat(pool, userId, message, context = {}) {
 module.exports = {
   // Constants
   FALLBACK_CONTEXT,
-  
+  HISTORY_LIMIT,
+
   // Helpers
   collectIssueItems,
   formatIssueList,
-  
+
   // Context building
   buildOnboardingContext,
+  buildSystemPrompt,
   buildMentionHint,
   replyMentionsProfile,
   formatMessageWithContext,
   enhanceReplyWithProfile,
-  
+
   // Database operations
   getOnboardingProfile,
+  getRecentHistory,
   saveUserMessage,
   saveAssistantReply,
-  
+
   // Main
   processChat,
 };

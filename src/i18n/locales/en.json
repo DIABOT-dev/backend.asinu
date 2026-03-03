@@ -363,5 +363,26 @@
   "validation.update_required": "At least one field is required to update",
 
   "prompt.system_question": "You are a professional medical assistant, creating concise, friendly questions for elderly patients in Vietnam. Only return the question, no explanation.",
-  "prompt.system_chat": "You are a friendly health assistant, helping patients manage their health. Answer concisely, clearly, and with empathy."
+  "prompt.system_chat": "You are a friendly health assistant, helping patients manage their health. Answer concisely, clearly, and with empathy.",
+
+  "error.too_many_requests": "Too many requests, please try again later",
+  "error.too_many_auth_attempts": "Too many authentication attempts, please try again later",
+  "error.missing_token": "Missing token",
+  "error.token_missing_user_id": "Token missing user_id",
+  "error.user_id_not_allowed": "user_id is not allowed",
+  "error.invalid_payload": "Invalid payload",
+  "error.unauthorized": "Unauthorized",
+  "error.unsupported_log_type": "Unsupported log type",
+  "error.invalid_mood_answer": "Invalid mood answer",
+  "error.invalid_symptom_answer": "Invalid symptom answer",
+  "error.invalid_dynamic_answer": "Invalid dynamic answer",
+  "error.no_push_tokens": "No push tokens",
+  "error.no_valid_push_tokens": "No valid push tokens",
+  "error.no_push_token": "No push token",
+  "error.no_caregiver_linked": "No caregiver linked.",
+  "error.emergency_logged": "Emergency logged.",
+  "error.missing_other_text": "Missing other_text for key=other",
+  "error.missing_self_report": "Missing self_report",
+  "error.invalid_db_client": "Invalid db client",
+  "success.logged_out": "Logged out"
 }

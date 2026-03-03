@@ -23,7 +23,7 @@ const { t } = require('../i18n');
 async function sendPushNotification(expoPushTokens, title, body, data = {}) {
   if (!expoPushTokens || expoPushTokens.length === 0) {
     console.warn('[push] No push tokens provided');
-    return { ok: false, error: 'No push tokens' };
+    return { ok: false, error: t('error.no_push_tokens') };
   }
 
   // Filter valid Expo push tokens
@@ -33,7 +33,7 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
 
   if (validTokens.length === 0) {
     console.warn('[push] No valid Expo push tokens');
-    return { ok: false, error: 'No valid push tokens' };
+    return { ok: false, error: t('error.no_valid_push_tokens') };
   }
 
   const messages = validTokens.map(token => ({
@@ -89,7 +89,7 @@ async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitat
 
     if (result.rows.length === 0 || !result.rows[0].push_token) {
       console.log('[push] No push token found for user', addresseeId);
-      return { ok: false, error: 'No push token' };
+      return { ok: false, error: t('error.no_push_token') };
     }
 
     const pushToken = result.rows[0].push_token;
@@ -126,7 +126,7 @@ async function notifyCareCircleAccepted(pool, requesterId, accepterName) {
 
     if (result.rows.length === 0 || !result.rows[0].push_token) {
       console.log('[push] No push token found for user', requesterId);
-      return { ok: false, error: 'No push token' };
+      return { ok: false, error: t('error.no_push_token') };
     }
 
     const pushToken = result.rows[0].push_token;

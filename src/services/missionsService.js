@@ -1,8 +1,10 @@
-﻿function resolveClient(poolOrClient) {
+﻿const { t } = require('../i18n');
+
+function resolveClient(poolOrClient) {
   if (poolOrClient && typeof poolOrClient.query === 'function') {
     return poolOrClient;
   }
-  throw new Error('Invalid db client');
+  throw new Error(t('error.invalid_db_client'));
 }
 
 function toDateOnly(value) {

@@ -496,43 +496,31 @@ async function getCurrentUser(pool, userId) {
  */
 async function searchUsers(pool, currentUserId, query) {
   try {
-    let result;
-    
-    if (!query || query.length < 2) {
-      // Return all users (limited) when no query or query too short
-      result = await pool.query(
-        `SELECT id, email, phone, display_name, created_at 
-         FROM users 
-         WHERE deleted_at IS NULL 
-           AND id != $1
-         ORDER BY created_at DESC
-         LIMIT 100`,
-        [currentUserId]
-      );
-    } else {
-      // Search with query
-      const searchTerm = `%${query.toLowerCase()}%`;
-      result = await pool.query(
-        `SELECT id, email, phone, display_name, created_at 
-         FROM users 
-         WHERE deleted_at IS NULL 
-           AND id != $1
-           AND (
-             LOWER(email) LIKE $2 
-             OR LOWER(display_name) LIKE $2 
-             OR phone LIKE $2
-           )
-         ORDER BY created_at DESC
-         LIMIT 20`,
-        [currentUserId, searchTerm]
-      );
+    // Require at least 3 digits to search - phone number only for privacy
+    const phone = (query || '').trim().replace(/[\s\-()]/g, '');
+    if (phone.length < 3) {
+      return [];
     }
-    
+
+    const result = await pool.query(
+      `SELECT id, email, phone, phone_number, display_name, full_name, created_at 
+       FROM users 
+       WHERE deleted_at IS NULL 
+         AND id != $1
+         AND (
+           REPLACE(REPLACE(COALESCE(phone, ''), ' ', ''), '-', '') LIKE $2
+           OR REPLACE(REPLACE(COALESCE(phone_number, ''), ' ', ''), '-', '') LIKE $2
+         )
+       ORDER BY created_at DESC
+       LIMIT 10`,
+      [currentUserId, `%${phone}%`]
+    );
+
     return result.rows.map(user => ({
       id: String(user.id),
-      name: user.display_name || (user.email ? user.email.split('@')[0] : `User ${user.id}`),
-      email: user.email || null,
-      phone: user.phone || null
+      name: user.display_name || user.full_name || (user.email ? user.email.split('@')[0] : `User ${user.id}`),
+      email: null, // Ẩn email vì lý do bảo mật - chỉ tìm bằng SĐT
+      phone: user.phone || user.phone_number || null
     }));
   } catch (err) {
     console.error('[auth.service] Search users failed:', err);

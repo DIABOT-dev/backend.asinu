@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { t } = require('../../src/i18n');
 
 const symptomOptionSchema = z.enum([
   'none',
@@ -43,7 +44,7 @@ const answerSchema = z
     if (data.question_id === 'mood') {
       const parsed = moodAnswerSchema.safeParse(data.answer);
       if (!parsed.success) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid mood answer' });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('error.invalid_mood_answer') });
       }
       return;
     }
@@ -52,7 +53,7 @@ const answerSchema = z
     if (data.question_id === 'symptom_severity') {
       const parsed = symptomAnswerSchema.safeParse(data.answer);
       if (!parsed.success) {
-        ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid symptom answer' });
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('error.invalid_symptom_answer') });
       }
       return;
     }
@@ -60,7 +61,7 @@ const answerSchema = z
     // Dynamic AI questions (q_1, q_2, etc.)
     const parsed = dynamicAnswerSchema.safeParse(data.answer);
     if (!parsed.success) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid dynamic answer' });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: t('error.invalid_dynamic_answer') });
     }
   });
 

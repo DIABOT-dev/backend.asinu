@@ -3,6 +3,7 @@ const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { Pool } = require('pg');
+const { t, getLang } = require('./src/i18n');
 const authRoutes = require('./src/routes/auth.routes');
 const mobileRoutes = require('./src/routes/mobile.routes');
 const missionsRoutes = require('./src/routes/missions.routes');
@@ -35,7 +36,7 @@ app.get('/healthz', (req, res) => {
 const generalLimiter = rateLimit({ 
   windowMs: 15 * 60 * 1000, 
   max: 1000,
-  message: { ok: false, error: 'Too many requests, please try again later' },
+  message: { ok: false, error: t('error.too_many_requests', getLang(null)) },
   standardHeaders: true,
   legacyHeaders: false,
   // Skip rate limiting for health checks
@@ -46,7 +47,7 @@ const generalLimiter = rateLimit({
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 50, // 50 auth requests per 15 min
-  message: { ok: false, error: 'Too many authentication attempts, please try again later' },
+  message: { ok: false, error: t('error.too_many_auth_attempts', getLang(null)) },
   standardHeaders: true,
   legacyHeaders: false
 });
