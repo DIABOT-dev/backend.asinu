@@ -60,6 +60,7 @@ const onboardingProfileSchema = z
     gender: z.enum(['Nam', 'Nữ']),
     goal: z.enum(['Giảm đau', 'Tăng linh hoạt', 'Tăng sức mạnh', 'Cải thiện vận động']),
     body_type: z.enum(['Gầy', 'Cân đối', 'Thừa cân']),
+    checkup_freq: z.string().min(1),
     medical_conditions: onboardingIssueListSchema,
     chronic_symptoms: onboardingIssueListSchema,
     joint_issues: z.array(onboardingIssueItemSchema),
@@ -74,7 +75,7 @@ const onboardingProfileSchema = z
 
 const onboardingRequestSchema = z
   .object({
-    user_id: z.number().int().positive().optional(),
+    user_id: z.coerce.number().int().positive().optional(),
     profile: onboardingProfileSchema,
   })
   .strict();

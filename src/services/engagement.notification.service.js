@@ -202,37 +202,60 @@ async function generateEngagementNotification(user, context, lang = 'vi', { isPr
 
   const isEn = lang === 'en';
 
+  const angles = isEn
+    ? [
+        goal ? `their goal: "${goal}"` : null,
+        conditions ? `their condition: ${conditions}` : null,
+        loggedTodayCount === 0 ? 'they haven\'t logged any health data today' : null,
+        hoursSinceLastBrain !== null && hoursSinceLastBrain > 24 ? 'they haven\'t checked in with Asinu recently' : null,
+        'general encouragement to stay consistent with their health journey',
+      ].filter(Boolean)
+    : [
+        goal ? `mục tiêu "${goal}" của họ` : null,
+        conditions ? `bệnh lý ${conditions} của họ` : null,
+        loggedTodayCount === 0 ? 'hôm nay chưa khai báo chỉ số sức khoẻ nào' : null,
+        hoursSinceLastBrain !== null && hoursSinceLastBrain > 24 ? 'chưa check-in với Asinu gần đây' : null,
+        'động lực duy trì thói quen sức khoẻ hàng ngày',
+      ].filter(Boolean);
+
   const prompt = isEn
-    ? `You are Asinu, a friendly health assistant app.
+    ? `You are Asinu, a warm and caring health companion app.
 
 USER: ${name}${goal ? `, goal: "${goal}"` : ''}${conditions ? `, conditions: ${conditions}` : ''}
 
-USER ACTIVITY TODAY:
+RECENT ACTIVITY:
 ${activityLines.join('\n')}
 
-TASK: Generate a personalized re-engagement push notification to nudge the user to open the app.
-- Be warm and personal, like a caring friend
-- Reference their specific missing action (e.g. "you haven't logged your blood pressure today")
+POSSIBLE ANGLES (pick ONE that feels most natural and personal for this user):
+${angles.map((a, i) => `${i + 1}. Focus on ${a}`).join('\n')}
+
+TASK: Write ONE short push notification to bring the user back to the app.
+- Sound like a caring friend, NOT a reminder bot
+- Be creative — avoid generic "you haven't logged" phrasing
+- Personalize using their name, goal, or health condition when relevant
 - Max 80 characters for body
-- Do NOT mention specific health numbers
-${isPreview ? '- This is a PREVIEW/TEST — always generate content, always return shouldSend: true' : '- If inactive > 14 days → return shouldSend: false (user likely churned)'}
+- Do NOT mention specific numbers or values
+${isPreview ? '- PREVIEW mode — always generate content, always return shouldSend: true' : '- If inactive > 14 days → return shouldSend: false (user likely churned)'}
 
 Reply in strict JSON only (no extra text):
 {"shouldSend": true, "title": "Asinu", "body": "notification text here"}`
-    : `Bạn là Asinu — ứng dụng trợ lý sức khoẻ cá nhân.
+    : `Bạn là Asinu — người bạn đồng hành sức khoẻ ấm áp và quan tâm.
 
 NGƯỜI DÙNG: ${name}${goal ? `, mục tiêu: "${goal}"` : ''}${conditions ? `, bệnh lý: ${conditions}` : ''}
 
-HOẠT ĐỘNG THỰC TẾ:
+HOẠT ĐỘNG GẦN ĐÂY:
 ${activityLines.join('\n')}
 
-NHIỆM VỤ: Sinh 1 thông báo push cá nhân hóa để níu kéo người dùng mở app.
-- Giọng thân thiện như bạn bè quan tâm, KHÔNG như robot
-- Đề cập đúng hành động còn thiếu hôm nay (ví dụ "hôm nay bạn chưa khai báo đường huyết")
+CÁC GÓC ĐỘ CÓ THỂ DÙNG (chọn MỘT góc tự nhiên và phù hợp nhất với người dùng này):
+${angles.map((a, i) => `${i + 1}. Tập trung vào ${a}`).join('\n')}
+
+NHIỆM VỤ: Viết MỘT thông báo push ngắn để kéo người dùng mở app.
+- Giọng như người bạn quan tâm, KHÔNG như bot nhắc nhở
+- Sáng tạo — tránh câu kiểu "bạn chưa khai báo..." nhàm chán
+- Cá nhân hoá bằng tên, mục tiêu, hoặc bệnh lý khi phù hợp
 - Tối đa 80 ký tự phần body
 - KHÔNG đề cập số liệu cụ thể
-${isPreview ? '- Đây là PREVIEW/TEST — luôn sinh nội dung, luôn trả về shouldSend: true' : '- Nếu không vào app > 14 ngày → trả về shouldSend: false'}
-- Đa dạng nội dung, không lặp lại kiểu mẫu cũ
+${isPreview ? '- Chế độ PREVIEW — luôn sinh nội dung, luôn trả về shouldSend: true' : '- Nếu không vào app > 14 ngày → trả về shouldSend: false'}
 
 Chỉ trả về JSON thuần (không có text thừa):
 {"shouldSend": true, "title": "Asinu", "body": "nội dung thông báo"}`;
