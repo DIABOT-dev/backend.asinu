@@ -18,6 +18,34 @@ function mobileRoutes(pool) {
   router.get('/logs/today', requireAuth, (req, res) => getTodayLogs(pool, req, res));
 
   // Chat
+  const multer = require('multer');
+  const { getWhisperTranscription } = require('../services/ai/providers/openai');
+
+  const audioUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 25 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      cb(null, /\.(m4a|mp3|mp4|wav|webm)$/i.test(file.originalname));
+    }
+  });
+
+  router.post('/chat/transcribe', requireAuth, (req, res, next) => {
+    audioUpload.single('audio')(req, res, (err) => {
+      if (err) return res.status(400).json({ ok: false, error: err.message });
+      next();
+    });
+  }, async (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, error: 'No audio file' });
+    try {
+      const lang = req.headers['accept-language']?.startsWith('en') ? 'en' : 'vi';
+      const text = await getWhisperTranscription(req.file.buffer, req.file.originalname, lang);
+      return res.status(200).json({ ok: true, text });
+    } catch (err) {
+      console.error('[transcribe]', err.message);
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
   router.post('/chat', requireAuth, (req, res) => postChat(pool, req, res));
 
   // Missions

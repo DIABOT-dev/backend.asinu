@@ -14,7 +14,7 @@ const { t } = require('../i18n');
 async function getProfile(pool, userId) {
   try {
     const userResult = await pool.query(
-      `SELECT id, email, phone, phone_number, display_name, full_name, avatar_url, created_at
+      `SELECT id, email, phone, phone_number, display_name, full_name, avatar_url, created_at, language_preference
        FROM users
        WHERE id = $1 AND deleted_at IS NULL`,
       [userId]
@@ -97,6 +97,7 @@ async function getProfile(pool, userId) {
       chronicDiseases: chronicDiseases,
       // Care circle
       careCircle: careCircle,
+      languagePreference: user.language_preference || 'vi',
       onboardingCompleted: !!onboarding?.onboarding_completed_at,
       ...(onboarding && {
         ageRange: onboarding.age,
@@ -121,7 +122,7 @@ async function getProfile(pool, userId) {
  * @returns {Promise<Object>} - { ok, profile, error }
  */
 async function updateProfile(pool, userId, updates) {
-  const { name, phone, dateOfBirth, gender, heightCm, weightKg, bloodType, chronicDiseases } = updates;
+  const { name, phone, dateOfBirth, gender, heightCm, weightKg, bloodType, chronicDiseases, language } = updates;
 
   try {
     // Update name and phone in users table
@@ -138,6 +139,12 @@ async function updateProfile(pool, userId, updates) {
     if (phone !== undefined) {
       userFields.push(`phone = $${userParamIndex}`);
       userValues.push(phone);
+      userParamIndex++;
+    }
+
+    if (language !== undefined) {
+      userFields.push(`language_preference = $${userParamIndex}`);
+      userValues.push(language);
       userParamIndex++;
     }
 

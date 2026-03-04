@@ -200,7 +200,33 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
   return null;
 }
 
-module.exports = { 
+async function getWhisperTranscription(audioBuffer, filename = 'audio.m4a', lang = 'vi') {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) throw new Error('OPENAI_API_KEY not set');
+
+  const { Blob } = require('buffer');
+  const formData = new FormData();
+  formData.append('file', new Blob([audioBuffer], { type: 'audio/m4a' }), filename);
+  formData.append('model', 'whisper-1');
+  // Không truyền language → Whisper tự detect, tránh lỗi khi UI dùng tiếng Anh nhưng người dùng nói tiếng Việt
+
+  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${apiKey}` },
+    body: formData,
+    signal: AbortSignal.timeout(30000),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Whisper API error ${response.status}: ${err}`);
+  }
+  const data = await response.json();
+  return data.text || '';
+}
+
+module.exports = {
   getOpenAIReply,
-  getOpenAIChatReply 
+  getOpenAIChatReply,
+  getWhisperTranscription
 };

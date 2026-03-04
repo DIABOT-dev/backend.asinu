@@ -28,28 +28,30 @@ async function updateProfile(pool, req, res) {
     return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
 
-  const { name, phone, dateOfBirth, gender, heightCm, weightKg, bloodType, chronicDiseases } = req.body || {};
-  console.log('[profile.controller] updateProfile called with:', { 
-    userId: req.user.id, 
-    name, 
-    phone, 
-    dateOfBirth, 
+  const { name, phone, dateOfBirth, gender, heightCm, weightKg, bloodType, chronicDiseases, language } = req.body || {};
+  console.log('[profile.controller] updateProfile called with:', {
+    userId: req.user.id,
+    name,
+    phone,
+    dateOfBirth,
     gender,
-    heightCm, 
-    weightKg, 
-    bloodType, 
-    chronicDiseases 
+    heightCm,
+    weightKg,
+    bloodType,
+    chronicDiseases,
+    language
   });
 
-  const result = await profileService.updateProfile(pool, req.user.id, { 
-    name, 
-    phone, 
-    dateOfBirth, 
+  const result = await profileService.updateProfile(pool, req.user.id, {
+    name,
+    phone,
+    dateOfBirth,
     gender,
-    heightCm, 
-    weightKg, 
-    bloodType, 
-    chronicDiseases 
+    heightCm,
+    weightKg,
+    bloodType,
+    chronicDiseases,
+    language
   });
 
   if (!result.ok) {

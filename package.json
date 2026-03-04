@@ -15,6 +15,7 @@
     "express-rate-limit": "^7.0.0",
     "helmet": "^7.0.0",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.1.0",
     "pg": "^8.11.3",
     "zod": "^3.23.8"
   }

@@ -36,14 +36,16 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
     return { ok: false, error: t('error.no_valid_push_tokens') };
   }
 
+  const channelId = data?.type === 'engagement' ? 'engagement' : 'care-circle';
+
   const messages = validTokens.map(token => ({
     to: token,
     sound: 'default',
     title: title,
     body: body,
     data: data,
-    priority: 'high',
-    channelId: 'care-circle',
+    priority: data?.type === 'engagement' ? 'normal' : 'high',
+    channelId,
   }));
 
   try {
@@ -83,7 +85,7 @@ async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitat
     // Get addressee's push token from database
     // Note: You need to add a push_token column to the users table
     const result = await pool.query(
-      'SELECT push_token FROM users WHERE id = $1 AND push_token IS NOT NULL',
+      'SELECT push_token, language_preference FROM users WHERE id = $1 AND push_token IS NOT NULL',
       [addresseeId]
     );
 
@@ -93,11 +95,12 @@ async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitat
     }
 
     const pushToken = result.rows[0].push_token;
-    
+    const lang = result.rows[0].language_preference || 'vi';
+
     return await sendPushNotification(
       [pushToken],
       t('push.invitation_title'),
-      t('push.invitation_body', 'vi', { name: senderName }),
+      t('push.invitation_body', lang, { name: senderName }),
       {
         type: 'care_circle_invitation',
         invitationId: String(invitationId),
@@ -120,7 +123,7 @@ async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitat
 async function notifyCareCircleAccepted(pool, requesterId, accepterName) {
   try {
     const result = await pool.query(
-      'SELECT push_token FROM users WHERE id = $1 AND push_token IS NOT NULL',
+      'SELECT push_token, language_preference FROM users WHERE id = $1 AND push_token IS NOT NULL',
       [requesterId]
     );
 
@@ -130,11 +133,12 @@ async function notifyCareCircleAccepted(pool, requesterId, accepterName) {
     }
 
     const pushToken = result.rows[0].push_token;
-    
+    const lang = result.rows[0].language_preference || 'vi';
+
     return await sendPushNotification(
       [pushToken],
       t('push.accepted_title'),
-      t('push.accepted_body', 'vi', { name: accepterName }),
+      t('push.accepted_body', lang, { name: accepterName }),
       {
         type: 'care_circle_accepted',
         accepterId: String(requesterId),

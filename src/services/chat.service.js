@@ -153,66 +153,79 @@ const enhanceReplyWithProfile = (reply, profile) => {
 const HISTORY_LIMIT = 20; // Last 20 messages for better repeat-detection
 
 /**
- * Build system prompt for Gemini from user profile.
+ * Build system prompt for AI from user profile and health logs.
  * @param {Object|null} profile - User onboarding profile
  * @param {number} historyLength - Number of prior messages in this conversation
+ * @param {Object|null} logsSummary - Latest health metrics { latest_glucose, latest_bp }
  * @returns {string} - System prompt
  */
-const buildSystemPrompt = (profile, historyLength = 0) => {
-  const isFirstTurn = historyLength === 0;
-  const lines = ['Bạn là Asinu — trợ lý sức khỏe cá nhân.', ''];
+const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null) => {
+  const lines = [];
 
-  // ── PROFILE ──────────────────────────────────────────
+  // ── IDENTITY ─────────────────────────────────────────
+  lines.push('Bạn là Asinu — trợ lý cá nhân thân thiện, thông minh.');
+  lines.push('Bạn trò chuyện tự nhiên như một người bạn quan tâm, không phải chatbot y tế.');
+  lines.push('');
+
+  // ── USER PROFILE (background context) ────────────────
   if (profile) {
     const medical  = formatIssueList(profile.medical_conditions);
     const symptoms = formatIssueList(profile.chronic_symptoms);
     const joints   = formatIssueList(profile.joint_issues);
-
-    lines.push('HỒ SƠ SỨC KHỎE (đã biết — KHÔNG hỏi lại những thông tin này):');
-    if (profile.gender)    lines.push(`- Giới tính: ${profile.gender}`);
-    if (profile.age)       lines.push(`- Nhóm tuổi: ${profile.age}`);
-    if (profile.goal)      lines.push(`- Mục tiêu: ${profile.goal}`);
-    if (profile.body_type) lines.push(`- Thể trạng: ${profile.body_type}`);
-    if (medical)           lines.push(`- Bệnh lý nền: ${medical}`);
-    if (symptoms)          lines.push(`- Triệu chứng mãn tính: ${symptoms}`);
-    if (joints)            lines.push(`- Vấn đề khớp: ${joints}`);
-
-    const habits = [];
+    const habits   = [];
     if (profile.exercise_freq)  habits.push(`tập ${profile.exercise_freq}`);
     if (profile.sleep_duration) habits.push(`ngủ ${profile.sleep_duration}`);
     if (profile.water_intake)   habits.push(`nước ${profile.water_intake}`);
-    if (habits.length) lines.push(`- Thói quen: ${habits.join(', ')}`);
+    if (profile.walking_habit)  habits.push(`đi bộ ${profile.walking_habit}`);
 
-    // Build a concrete focus so the AI knows what to centre advice around
-    const focuses = [];
-    if (profile.goal) focuses.push(`"${profile.goal}"`);
-    if (joints)       focuses.push(`khớp (${joints})`);
-    if (symptoms)     focuses.push(symptoms);
-    if (medical)      focuses.push(medical);
+    const profileParts = [];
+    if (profile.gender)     profileParts.push(`giới tính ${profile.gender}`);
+    if (profile.age)        profileParts.push(`nhóm tuổi ${profile.age}`);
+    if (profile.goal)       profileParts.push(`mục tiêu: ${profile.goal}`);
+    if (profile.body_type)  profileParts.push(`thể trạng: ${profile.body_type}`);
+    if (profile.height_cm)  profileParts.push(`cao ${profile.height_cm}cm`);
+    if (profile.weight_kg)  profileParts.push(`nặng ${profile.weight_kg}kg`);
+    if (profile.blood_type) profileParts.push(`nhóm máu ${profile.blood_type}`);
+    if (medical)            profileParts.push(`bệnh lý: ${medical}`);
+    if (symptoms)           profileParts.push(`triệu chứng: ${symptoms}`);
+    if (joints)             profileParts.push(`vấn đề khớp: ${joints}`);
+    if (habits.length)      profileParts.push(`thói quen: ${habits.join(', ')}`);
 
-    if (focuses.length) {
-      lines.push('');
-      lines.push(`TRỌNG TÂM: Mọi câu hỏi và lời khuyên phải liên quan trực tiếp đến ${focuses.slice(0, 2).join(' và ')} của người dùng này.`);
+    if (profileParts.length) {
+      lines.push(`Thông tin người dùng (đã biết, dùng làm nền tảng — không hỏi lại): ${profileParts.join('; ')}.`);
     }
-  } else {
-    lines.push('HỒ SƠ SỨC KHỎE: chưa có — hỏi thăm sức khỏe chung một cách tự nhiên.');
   }
 
-  // ── CONVERSATION RULES ───────────────────────────────
-  lines.push('');
-  lines.push('NGUYÊN TẮC:');
-
-  if (isFirstTurn) {
-    lines.push('- Tin ĐẦU TIÊN: chào ngắn (1 câu) rồi hỏi ĐÚNG 1 câu cụ thể dựa trên hồ sơ — không hỏi chung chung.');
-  } else {
-    lines.push('- Cuộc trò chuyện đang tiếp diễn: TUYỆT ĐỐI không chào lại — đi thẳng vào nội dung.');
+  // ── HEALTH METRICS ────────────────────────────────────
+  if (logsSummary) {
+    const metrics = [];
+    if (logsSummary.latest_glucose) {
+      const g = logsSummary.latest_glucose;
+      metrics.push(`đường huyết gần nhất ${g.value} ${g.unit || 'mg/dL'}`);
+    }
+    if (logsSummary.latest_bp) {
+      const bp = logsSummary.latest_bp;
+      metrics.push(`huyết áp gần nhất ${bp.systolic}/${bp.diastolic} mmHg`);
+    }
+    if (metrics.length) {
+      lines.push(`Chỉ số sức khoẻ gần nhất: ${metrics.join(', ')}.`);
+    }
   }
 
-  lines.push('- Mỗi lượt hỏi TỐI ĐA 1 câu, phải cụ thể và chưa hỏi trong lịch sử trò chuyện.');
-  lines.push('- Đọc lịch sử hội thoại: câu nào đã hỏi → KHÔNG hỏi lại dưới bất kỳ hình thức nào.');
-  lines.push('- Sau 2-3 lượt hỏi-đáp về cùng chủ đề → DỪNG hỏi, đưa ra khuyến nghị cụ thể và hành động được.');
-  lines.push('- Trả lời ngắn (2-4 câu). Nhắc trực tiếp đến tình trạng của họ: "Với [mục tiêu/triệu chứng] của bạn…"');
-  lines.push('- Không phải bác sĩ — chỉ khuyến nghị khám chuyên khoa khi thật sự cần.');
+  if (profile || logsSummary) lines.push('');
+
+  // ── CONVERSATION STYLE ────────────────────────────────
+  lines.push('Cách trả lời:');
+  lines.push('- Trả lời đúng điều người dùng hỏi hoặc nói, bất kể chủ đề gì.');
+  lines.push('- Ngắn gọn, tự nhiên — không dài dòng, không nịnh nọt, không mở đầu sáo rỗng.');
+  lines.push(historyLength === 0
+    ? '- Lần đầu nhắn: chào ngắn 1 câu rồi vào chủ đề luôn.'
+    : '- Đang trò chuyện: không chào lại, đi thẳng vào nội dung.'
+  );
+  lines.push('- Khi hỏi về sức khoẻ: hỏi thêm để hiểu rõ nếu cần, dùng thông tin người dùng khi liên quan.');
+  lines.push('- Khi nói chuyện ngoài sức khoẻ: trả lời bình thường như người bạn.');
+  lines.push('- Không phải bác sĩ — gợi ý gặp bác sĩ khi thật sự cần thiết, không lạm dụng.');
+  lines.push('- QUAN TRỌNG: Luôn trả lời bằng đúng ngôn ngữ người dùng đang dùng trong tin nhắn (tiếng Việt → trả lời tiếng Việt, tiếng Anh → trả lời tiếng Anh).');
 
   return lines.join('\n');
 };
@@ -237,6 +250,44 @@ async function getRecentHistory(pool, userId, limit = HISTORY_LIMIT) {
     [userId, limit]
   );
   return result.rows.reverse(); // chronological order
+}
+
+/**
+ * Get latest health log metrics for AI context (glucose, blood pressure)
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @returns {Promise<{latest_glucose: Object|null, latest_bp: Object|null}>}
+ */
+async function getHealthLogsSummary(pool, userId) {
+  try {
+    const [glucoseResult, bpResult] = await Promise.all([
+      pool.query(
+        `SELECT d.value, d.unit, c.occurred_at
+         FROM logs_common c
+         JOIN glucose_logs d ON d.log_id = c.id
+         WHERE c.user_id = $1 AND c.log_type = 'glucose'
+           AND c.occurred_at >= NOW() - INTERVAL '7 days'
+         ORDER BY c.occurred_at DESC LIMIT 1`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT d.systolic, d.diastolic, c.occurred_at
+         FROM logs_common c
+         JOIN blood_pressure_logs d ON d.log_id = c.id
+         WHERE c.user_id = $1 AND c.log_type = 'bp'
+           AND c.occurred_at >= NOW() - INTERVAL '7 days'
+         ORDER BY c.occurred_at DESC LIMIT 1`,
+        [userId]
+      )
+    ]);
+    return {
+      latest_glucose: glucoseResult.rows[0] || null,
+      latest_bp: bpResult.rows[0] || null,
+    };
+  } catch (err) {
+    console.warn('[chat.service] getHealthLogsSummary failed:', err?.message);
+    return { latest_glucose: null, latest_bp: null };
+  }
 }
 
 /**
@@ -305,27 +356,40 @@ async function processChat(pool, userId, message, context = {}) {
     let onboardingProfile = null;
     let conversationHistory = [];
     let systemPrompt = null;
+    let logsSummary = null;
 
     if (provider === 'diabrain') {
       // DiaBrain manages its own conversation state — keep existing behavior
       await saveUserMessage(pool, userId, message, now);
       try {
-        onboardingProfile = await getOnboardingProfile(pool, userId);
-        const contextText = buildOnboardingContext(onboardingProfile);
+        [onboardingProfile, logsSummary] = await Promise.all([
+          getOnboardingProfile(pool, userId),
+          getHealthLogsSummary(pool, userId),
+        ]);
+        let contextText = buildOnboardingContext(onboardingProfile);
+        if (logsSummary?.latest_glucose) {
+          const g = logsSummary.latest_glucose;
+          contextText += ` Đường huyết gần nhất: ${g.value} ${g.unit || 'mg/dL'}.`;
+        }
+        if (logsSummary?.latest_bp) {
+          const bp = logsSummary.latest_bp;
+          contextText += ` Huyết áp gần nhất: ${bp.systolic}/${bp.diastolic} mmHg.`;
+        }
         finalMessage = formatMessageWithContext(message, contextText);
       } catch (err) {
         console.warn('[chat.service] onboarding context fetch failed:', err?.message || err);
         finalMessage = formatMessageWithContext(message, FALLBACK_CONTEXT);
       }
     } else {
-      // Gemini/other: fetch history + profile BEFORE saving current message
+      // Gemini/other: fetch history + profile + health logs BEFORE saving current message
       // so the current user turn is not duplicated in history
       try {
-        [onboardingProfile, conversationHistory] = await Promise.all([
+        [onboardingProfile, conversationHistory, logsSummary] = await Promise.all([
           getOnboardingProfile(pool, userId),
           getRecentHistory(pool, userId, HISTORY_LIMIT),
+          getHealthLogsSummary(pool, userId),
         ]);
-        systemPrompt = buildSystemPrompt(onboardingProfile, conversationHistory.length);
+        systemPrompt = buildSystemPrompt(onboardingProfile, conversationHistory.length, logsSummary);
       } catch (err) {
         console.warn('[chat.service] context fetch failed:', err?.message || err);
       }
@@ -379,6 +443,7 @@ module.exports = {
 
   // Database operations
   getOnboardingProfile,
+  getHealthLogsSummary,
   getRecentHistory,
   saveUserMessage,
   saveAssistantReply,
