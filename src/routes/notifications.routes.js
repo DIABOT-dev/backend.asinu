@@ -85,7 +85,7 @@ function notificationRoutes(pool) {
   router.post('/engagement/run', async (req, res) => {
     const secret = process.env.CRON_SECRET;
     if (secret && req.headers['x-cron-secret'] !== secret) {
-      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+      return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
     }
 
     try {

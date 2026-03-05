@@ -1,4 +1,5 @@
 const express = require('express');
+const { t, getLang } = require('../i18n');
 const { requireAuth } = require('../middleware/auth.middleware');
 const paymentService = require('../services/payment.service');
 
@@ -15,7 +16,7 @@ function paymentRoutes(pool) {
     const amount = Number(req.body?.amount);
 
     if (!amount || isNaN(amount) || amount < 1000) {
-      return res.status(400).json({ ok: false, error: 'Số tiền tối thiểu 1,000 VND' });
+      return res.status(400).json({ ok: false, error: t('error.min_amount', getLang(req)) });
     }
 
     try {

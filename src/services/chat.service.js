@@ -151,20 +151,50 @@ const enhanceReplyWithProfile = (reply, profile) => {
 // =====================================================
 
 const HISTORY_LIMIT = 20; // Last 20 messages for better repeat-detection
+const RETENTION_DAYS_FREE = 7;
+const RETENTION_DAYS_PREMIUM = 30;
+
+/**
+ * Kiểm tra xem tin nhắn cuối của AI có phải câu hỏi không.
+ * Chỉ dùng dấu ? để tránh false positive với câu tiếng Việt.
+ */
+const lastAiTurnWasQuestion = (history = []) => {
+  const lastAi = [...history].reverse().find(h => h.sender === 'assistant');
+  if (!lastAi) return false;
+  // Chỉ nhận là câu hỏi khi có dấu ? trong nội dung
+  return /\?/.test(lastAi.message);
+};
+
+/**
+ * Đếm số lượt AI liên tiếp (tính theo assistant turns) đặt câu hỏi.
+ * Bỏ qua user messages xen kẽ — kiểm tra các assistant turn gần nhất.
+ */
+const countConsecutiveAiQuestions = (history = []) => {
+  // Lọc chỉ assistant messages, lấy 4 cái gần nhất
+  const aiTurns = history.filter(h => h.sender === 'assistant').slice(-4);
+  let count = 0;
+  // Duyệt từ gần nhất về trước
+  for (const turn of [...aiTurns].reverse()) {
+    if (/\?/.test(turn.message)) count++;
+    else break; // Gặp turn không có ? → dừng đếm
+  }
+  return count;
+};
 
 /**
  * Build system prompt for AI from user profile and health logs.
  * @param {Object|null} profile - User onboarding profile
  * @param {number} historyLength - Number of prior messages in this conversation
  * @param {Object|null} logsSummary - Latest health metrics { latest_glucose, latest_bp }
+ * @param {Array} history - Full conversation history (for loop detection)
  * @returns {string} - System prompt
  */
-const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null) => {
+const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, history = []) => {
   const lines = [];
 
   // ── IDENTITY ─────────────────────────────────────────
   lines.push('Bạn là Asinu — trợ lý cá nhân thân thiện, thông minh.');
-  lines.push('Bạn trò chuyện tự nhiên như một người bạn quan tâm, không phải chatbot y tế.');
+  lines.push('Bạn trò chuyện tự nhiên, linh hoạt như một người bạn thực sự quan tâm, không phải chatbot y tế cứng nhắc.');
   lines.push('');
 
   // ── USER PROFILE (background context) ────────────────
@@ -192,7 +222,7 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null) => {
     if (habits.length)      profileParts.push(`thói quen: ${habits.join(', ')}`);
 
     if (profileParts.length) {
-      lines.push(`Thông tin người dùng (đã biết, dùng làm nền tảng — không hỏi lại): ${profileParts.join('; ')}.`);
+      lines.push(`Thông tin người dùng (đã biết sẵn — dùng làm nền tảng, KHÔNG hỏi lại bất kỳ điều nào đã có ở đây): ${profileParts.join('; ')}.`);
     }
   }
 
@@ -214,18 +244,39 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null) => {
 
   if (profile || logsSummary) lines.push('');
 
-  // ── CONVERSATION STYLE ────────────────────────────────
-  lines.push('Cách trả lời:');
-  lines.push('- Trả lời đúng điều người dùng hỏi hoặc nói, bất kể chủ đề gì.');
-  lines.push('- Ngắn gọn, tự nhiên — không dài dòng, không nịnh nọt, không mở đầu sáo rỗng.');
-  lines.push(historyLength === 0
-    ? '- Lần đầu nhắn: chào ngắn 1 câu rồi vào chủ đề luôn.'
-    : '- Đang trò chuyện: không chào lại, đi thẳng vào nội dung.'
-  );
-  lines.push('- Khi hỏi về sức khoẻ: hỏi thêm để hiểu rõ nếu cần, dùng thông tin người dùng khi liên quan.');
-  lines.push('- Khi nói chuyện ngoài sức khoẻ: trả lời bình thường như người bạn.');
-  lines.push('- Không phải bác sĩ — gợi ý gặp bác sĩ khi thật sự cần thiết, không lạm dụng.');
-  lines.push('- QUAN TRỌNG: Luôn trả lời bằng đúng ngôn ngữ người dùng đang dùng trong tin nhắn (tiếng Việt → trả lời tiếng Việt, tiếng Anh → trả lời tiếng Anh).');
+  // ── CONVERSATION RULES ────────────────────────────────
+  lines.push('Quy tắc bắt buộc:');
+
+  // First turn greeting
+  if (historyLength === 0) {
+    lines.push('- Lần đầu: chào ngắn 1 câu rồi đi thẳng vào nội dung, không giải thích dài.');
+  } else {
+    lines.push('- Đang trò chuyện: không chào lại, đi thẳng vào nội dung.');
+  }
+
+  lines.push('- Trả lời đúng điều người dùng đang nói/hỏi, bất kể chủ đề gì. Không kéo về sức khoẻ nếu người dùng không đề cập.');
+  lines.push('- Ngắn gọn, tự nhiên — không dài dòng, không mở đầu sáo rỗng ("Chào bạn!", "Tuyệt vời!", v.v.).');
+  lines.push('- Không phải bác sĩ — chỉ gợi ý gặp bác sĩ khi triệu chứng thực sự nghiêm trọng (đau ngực, khó thở, mất ý thức...). Không nhắc bác sĩ cho câu hỏi thông thường.');
+  lines.push('- Luôn trả lời bằng đúng ngôn ngữ người dùng dùng (Việt → Việt, Anh → Anh).');
+  lines.push('');
+
+  // ── STOP RULE (chống vòng lặp câu hỏi) ───────────────
+  lines.push('ĐIỂM DỪNG HỎI — bắt buộc tuân thủ:');
+  lines.push('- Mỗi lượt TỐI ĐA 1 câu hỏi. Phải đưa ra câu trả lời/lời khuyên cụ thể TRƯỚC, rồi mới hỏi thêm nếu thực sự cần.');
+  lines.push('- CHỈ hỏi khi thiếu thông tin mà không có cách nào trả lời nếu thiếu nó. Nếu hồ sơ hoặc lịch sử hội thoại đã đủ → KHÔNG hỏi, trả lời luôn.');
+  lines.push('- Kiểm tra lịch sử: nếu đã hỏi câu tương tự trước đó → KHÔNG hỏi lại, dùng những gì người dùng đã chia sẻ.');
+
+  // Dynamic stop injection based on conversation state
+  const consecutiveQuestions = countConsecutiveAiQuestions(history);
+  const prevWasQuestion = lastAiTurnWasQuestion(history);
+
+  if (consecutiveQuestions >= 2) {
+    lines.push('');
+    lines.push('⛔ CẢNH BÁO VÒNG LẶP: Bạn đã hỏi liên tiếp nhiều lượt. Lần này PHẢI đưa ra câu trả lời/lời khuyên cụ thể dựa trên thông tin đã có. KHÔNG được hỏi thêm bất kỳ câu nào.');
+  } else if (prevWasQuestion) {
+    lines.push('');
+    lines.push('⚠️ Lượt trước bạn đã hỏi người dùng. Lần này ưu tiên đưa ra câu trả lời hoặc lời khuyên dựa trên thông tin người dùng vừa chia sẻ. Nếu vẫn cần hỏi thêm, hỏi tối đa 1 câu sau khi đã trả lời.');
+  }
 
   return lines.join('\n');
 };
@@ -239,15 +290,17 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null) => {
  * @param {Object} pool - Database pool
  * @param {number} userId - User ID
  * @param {number} limit - Max messages to retrieve
+ * @param {number} retentionDays - How many days back to fetch (based on subscription)
  * @returns {Promise<Array<{message: string, sender: string}>>}
  */
-async function getRecentHistory(pool, userId, limit = HISTORY_LIMIT) {
+async function getRecentHistory(pool, userId, limit = HISTORY_LIMIT, retentionDays = RETENTION_DAYS_FREE) {
   const result = await pool.query(
     `SELECT message, sender FROM chat_histories
      WHERE user_id = $1
+       AND created_at >= NOW() - ($2 || ' days')::INTERVAL
      ORDER BY created_at DESC
-     LIMIT $2`,
-    [userId, limit]
+     LIMIT $3`,
+    [userId, retentionDays, limit]
   );
   return result.rows.reverse(); // chronological order
 }
@@ -348,6 +401,7 @@ async function saveAssistantReply(pool, userId, reply, timestamp) {
  */
 async function processChat(pool, userId, message, context = {}) {
   const { getChatReply } = require('./chat.provider.service');
+  const { isPremium: checkIsPremium } = require('./subscription.service');
 
   try {
     const now = new Date();
@@ -357,6 +411,10 @@ async function processChat(pool, userId, message, context = {}) {
     let conversationHistory = [];
     let systemPrompt = null;
     let logsSummary = null;
+
+    // Determine retention window based on subscription
+    const userIsPremium = await checkIsPremium(pool, userId);
+    const retentionDays = userIsPremium ? RETENTION_DAYS_PREMIUM : RETENTION_DAYS_FREE;
 
     if (provider === 'diabrain') {
       // DiaBrain manages its own conversation state — keep existing behavior
@@ -382,14 +440,13 @@ async function processChat(pool, userId, message, context = {}) {
       }
     } else {
       // Gemini/other: fetch history + profile + health logs BEFORE saving current message
-      // so the current user turn is not duplicated in history
       try {
         [onboardingProfile, conversationHistory, logsSummary] = await Promise.all([
           getOnboardingProfile(pool, userId),
-          getRecentHistory(pool, userId, HISTORY_LIMIT),
+          getRecentHistory(pool, userId, HISTORY_LIMIT, retentionDays),
           getHealthLogsSummary(pool, userId),
         ]);
-        systemPrompt = buildSystemPrompt(onboardingProfile, conversationHistory.length, logsSummary);
+        systemPrompt = buildSystemPrompt(onboardingProfile, conversationHistory.length, logsSummary, conversationHistory);
       } catch (err) {
         console.warn('[chat.service] context fetch failed:', err?.message || err);
       }
@@ -428,6 +485,8 @@ module.exports = {
   // Constants
   FALLBACK_CONTEXT,
   HISTORY_LIMIT,
+  RETENTION_DAYS_FREE,
+  RETENTION_DAYS_PREMIUM,
 
   // Helpers
   collectIssueItems,
@@ -440,6 +499,8 @@ module.exports = {
   replyMentionsProfile,
   formatMessageWithContext,
   enhanceReplyWithProfile,
+  lastAiTurnWasQuestion,
+  countConsecutiveAiQuestions,
 
   // Database operations
   getOnboardingProfile,

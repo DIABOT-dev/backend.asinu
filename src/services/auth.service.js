@@ -116,9 +116,24 @@ async function verifySocialToken(provider, token) {
 
     if (provider === 'apple') {
       // Apple uses id_token (JWT) — verify signature in production
-      // For now, accept non-empty tokens (Apple tokens are self-contained JWTs)
       console.log(`[auth.service] Apple token accepted (length: ${token.length})`);
       return { valid: true };
+    }
+
+    if (provider === 'zalo') {
+      const res = await fetch(`https://graph.zalo.me/v2.0/me?fields=id,name,picture`, {
+        headers: { access_token: token }
+      });
+      if (!res.ok) {
+        console.warn(`[auth.service] Zalo token verification failed: ${res.status}`);
+        return { valid: false };
+      }
+      const data = await res.json();
+      if (!data.id) {
+        return { valid: false };
+      }
+      console.log(`[auth.service] Zalo token verified for user ${data.id}`);
+      return { valid: true, profile: { sub: data.id, name: data.name } };
     }
 
     // Other providers: accept if non-empty
@@ -455,13 +470,31 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
     const existing = await findUserByProviderId(pool, idColumn, providerId);
     if (existing) {
       const token_response = issueJwt(existing);
-      return { 
-        ok: true, 
-        token: token_response.token, 
-        user: token_response.user 
+      return {
+        ok: true,
+        token: token_response.token,
+        user: token_response.user
       };
     }
-    
+
+    // If email provided, check if already registered via email/password
+    if (email) {
+      const emailUser = await pool.query(
+        'SELECT id, password_hash FROM users WHERE email = $1',
+        [String(email).trim().toLowerCase()]
+      );
+      if (emailUser.rows.length > 0 && emailUser.rows[0].password_hash) {
+        return { ok: false, error: t('auth.email_registered_with_password'), statusCode: 409 };
+      }
+      // If exists without password (another social), link provider to that account
+      if (emailUser.rows.length > 0) {
+        const linkedUser = emailUser.rows[0];
+        await pool.query(`UPDATE users SET ${idColumn} = $1 WHERE id = $2`, [providerId, linkedUser.id]);
+        const token_response = issueJwt(linkedUser);
+        return { ok: true, token: token_response.token, user: token_response.user };
+      }
+    }
+
     // Create new user
     const newUser = await createUserWithProvider(pool, idColumn, providerId, provider, email, phoneNumber);
     

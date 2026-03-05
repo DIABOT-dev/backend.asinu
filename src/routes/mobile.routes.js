@@ -20,6 +20,8 @@ function mobileRoutes(pool) {
   // Chat
   const multer = require('multer');
   const { getWhisperTranscription } = require('../services/ai/providers/openai');
+  const { requirePremium } = require('../middleware/subscription.middleware');
+  const { VOICE_MONTHLY_LIMIT, getVoiceUsageThisMonth, incrementVoiceUsage } = require('../services/subscription.service');
 
   const audioUpload = multer({
     storage: multer.memoryStorage(),
@@ -29,22 +31,42 @@ function mobileRoutes(pool) {
     }
   });
 
-  router.post('/chat/transcribe', requireAuth, (req, res, next) => {
-    audioUpload.single('audio')(req, res, (err) => {
-      if (err) return res.status(400).json({ ok: false, error: err.message });
-      next();
-    });
-  }, async (req, res) => {
-    if (!req.file) return res.status(400).json({ ok: false, error: 'No audio file' });
-    try {
-      const lang = req.headers['accept-language']?.startsWith('en') ? 'en' : 'vi';
-      const text = await getWhisperTranscription(req.file.buffer, req.file.originalname, lang);
-      return res.status(200).json({ ok: true, text });
-    } catch (err) {
-      console.error('[transcribe]', err.message);
-      return res.status(500).json({ ok: false, error: err.message });
+  router.post(
+    '/chat/transcribe',
+    requireAuth,
+    (req, res, next) => {
+      audioUpload.single('audio')(req, res, (err) => {
+        if (err) return res.status(400).json({ ok: false, error: err.message });
+        next();
+      });
+    },
+    requirePremium(pool),
+    async (req, res) => {
+      if (!req.file) return res.status(400).json({ ok: false, error: t('error.missing_audio', getLang(req)) });
+
+      // Kiểm tra giới hạn voice tháng này
+      const voiceUsed = await getVoiceUsageThisMonth(pool, req.user.id);
+      if (voiceUsed >= VOICE_MONTHLY_LIMIT) {
+        return res.status(429).json({
+          ok: false,
+          code: 'VOICE_LIMIT_EXCEEDED',
+          error: t('error.voice_limit_exceeded', getLang(req), { limit: VOICE_MONTHLY_LIMIT }),
+          voiceUsed,
+          voiceLimit: VOICE_MONTHLY_LIMIT,
+        });
+      }
+
+      try {
+        const lang = req.headers['accept-language']?.startsWith('en') ? 'en' : 'vi';
+        const text = await getWhisperTranscription(req.file.buffer, req.file.originalname, lang);
+        await incrementVoiceUsage(pool, req.user.id);
+        return res.status(200).json({ ok: true, text, voiceUsed: voiceUsed + 1, voiceLimit: VOICE_MONTHLY_LIMIT });
+      } catch (err) {
+        console.error('[transcribe]', err.message);
+        return res.status(500).json({ ok: false, error: err.message });
+      }
     }
-  });
+  );
 
   router.post('/chat', requireAuth, (req, res) => postChat(pool, req, res));
 

@@ -21,9 +21,12 @@ const langMiddleware = require('./src/middleware/lang.middleware');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
+const path = require('path');
 const app = express();
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(helmet());
+app.use(express.static(path.join(__dirname, 'public')));
 
 // --- OPS HEALTH CHECK (INJECTED) ---
 app.get('/api/healthz', (req, res) => {
@@ -79,3 +82,13 @@ app.use('/api/test', testRoutes(pool)); // Public test API - no auth required
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// Cleanup old chat histories every 24 hours
+setInterval(async () => {
+  try {
+    await pool.query('SELECT cleanup_chat_histories()');
+    console.log('[cleanup] Chat history cleanup completed');
+  } catch (err) {
+    console.warn('[cleanup] Chat history cleanup failed:', err?.message);
+  }
+}, 24 * 60 * 60 * 1000);

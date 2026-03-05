@@ -10,6 +10,8 @@ const {
   verifySocialToken
 } = require('../services/auth.service');
 
+const APP_CALLBACK_URI = 'asinu-lite://auth/zalo/callback';
+
 // =====================================================
 // REGISTER
 // =====================================================
@@ -109,7 +111,110 @@ async function loginByApple(pool, req, res) {
 }
 
 async function loginByZalo(pool, req, res) {
-  return loginByProvider(pool, req, res, 'zalo', 'zalo_id');
+  const { code, code_verifier } = req.body || {};
+  const lang = getLang(req);
+
+  if (!code || !code_verifier) {
+    // Fallback: token-based flow (legacy)
+    return loginByProvider(pool, req, res, 'zalo', 'zalo_id');
+  }
+
+  try {
+    // Exchange code for access_token with Zalo
+    const tokenRes = await fetch('https://oauth.zaloapp.com/v4/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'secret_key': process.env.ZALO_SECRET_KEY
+      },
+      body: new URLSearchParams({
+        app_id: process.env.ZALO_APP_ID,
+        grant_type: 'authorization_code',
+        code,
+        code_verifier
+      }).toString()
+    });
+    const tokenData = await tokenRes.json();
+
+    if (!tokenData.access_token) {
+      console.warn('[zalo] Token exchange failed:', tokenData);
+      return res.status(401).json({ ok: false, error: t('error.invalid_token', lang) });
+    }
+
+    // Get Zalo user profile
+    const profileRes = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name,picture', {
+      headers: { access_token: tokenData.access_token }
+    });
+    const profile = await profileRes.json();
+
+    if (!profile.id) {
+      return res.status(401).json({ ok: false, error: t('error.invalid_token', lang) });
+    }
+
+    const result = await serviceLoginProvider(pool, 'zalo_id', String(profile.id), 'zalo', null, null);
+    if (!result.ok) return res.status(401).json(result);
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('[zalo] OAuth error:', err);
+    return res.status(500).json({ ok: false, error: t('error.server', lang) });
+  }
+}
+
+/**
+ * GET /api/auth/zalo/callback
+ * Zalo redirects here with ?code=&state=
+ * Exchange code → get profile → create user → redirect back to app with JWT
+ */
+async function zaloCallback(pool, req, res) {
+  const { code, state } = req.query;
+
+  if (!code) {
+    return res.redirect(`${APP_CALLBACK_URI}?error=no_code`);
+  }
+
+  try {
+    // Exchange code for access_token
+    const redirectUri = `${process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`}/api/auth/zalo/callback`;
+    const tokenRes = await fetch('https://oauth.zaloapp.com/v4/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'secret_key': process.env.ZALO_SECRET_KEY
+      },
+      body: new URLSearchParams({
+        app_id: process.env.ZALO_APP_ID,
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri
+      }).toString()
+    });
+    const tokenData = await tokenRes.json();
+
+    if (!tokenData.access_token) {
+      console.warn('[zalo] Token exchange failed:', tokenData);
+      return res.redirect(`${APP_CALLBACK_URI}?error=token_exchange_failed`);
+    }
+
+    // Get user profile
+    const profileRes = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name,picture', {
+      headers: { access_token: tokenData.access_token }
+    });
+    const profile = await profileRes.json();
+
+    if (!profile.id) {
+      return res.redirect(`${APP_CALLBACK_URI}?error=profile_failed`);
+    }
+
+    const result = await serviceLoginProvider(pool, 'zalo_id', String(profile.id), 'zalo', null, null);
+    if (!result.ok) {
+      return res.redirect(`${APP_CALLBACK_URI}?error=login_failed`);
+    }
+
+    return res.redirect(`${APP_CALLBACK_URI}?token=${encodeURIComponent(result.token)}`);
+  } catch (err) {
+    console.error('[zalo] Callback error:', err);
+    return res.redirect(`${APP_CALLBACK_URI}?error=server_error`);
+  }
 }
 
 async function loginByPhone(pool, req, res) {
@@ -200,6 +305,7 @@ module.exports = {
   loginByGoogle,
   loginByApple,
   loginByZalo,
+  zaloCallback,
   loginByPhone,
   getMe,
   searchUsers,

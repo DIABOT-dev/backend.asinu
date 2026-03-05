@@ -18,6 +18,7 @@
   "error.invalid_user_id": "ID người dùng không hợp lệ",
 
   "auth.email_already_registered": "Email đã được đăng ký",
+  "auth.email_registered_with_password": "Email này đã đăng ký bằng mật khẩu, vui lòng đăng nhập bằng email/mật khẩu",
   "auth.phone_already_used": "Số điện thoại đã được sử dụng",
   "auth.invalid_credentials": "Thông tin đăng nhập không đúng",
 
@@ -384,5 +385,12 @@
   "error.missing_other_text": "Thiếu other_text cho key=other",
   "error.missing_self_report": "Thiếu self_report",
   "error.invalid_db_client": "Database client không hợp lệ",
-  "success.logged_out": "Đã đăng xuất"
+  "success.logged_out": "Đã đăng xuất",
+
+  "error.invalid_subscription_months": "Gói không hợp lệ. Chọn 1, 3, 6, hoặc 12 tháng.",
+  "error.min_amount": "Số tiền tối thiểu 1,000 VND",
+  "error.audio_only": "Chỉ chấp nhận file audio",
+  "error.missing_audio": "Thiếu file audio",
+  "error.voice_limit_exceeded": "Đã đạt giới hạn {{limit}} lượt voice/tháng",
+  "error.voice_processing": "Lỗi xử lý giọng nói"
 }

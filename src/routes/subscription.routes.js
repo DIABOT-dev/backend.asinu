@@ -1,4 +1,5 @@
 const express = require('express');
+const { t, getLang } = require('../i18n');
 const { requireAuth } = require('../middleware/auth.middleware');
 const subscriptionService = require('../services/subscription.service');
 
@@ -12,10 +13,14 @@ function subscriptionRoutes(pool) {
    */
   router.post('/qr', requireAuth, async (req, res) => {
     const userId = req.user?.id;
-    const months = Math.max(1, Math.min(12, parseInt(req.body?.months) || 1));
+    const requested = parseInt(req.body?.months) || 1;
+    const VALID_MONTHS = [1, 3, 6, 12];
+    if (!VALID_MONTHS.includes(requested)) {
+      return res.status(400).json({ ok: false, error: t('error.invalid_subscription_months', getLang(req)) });
+    }
 
     try {
-      const result = await subscriptionService.createQR(pool, userId, months);
+      const result = await subscriptionService.createQR(pool, userId, requested);
       return res.status(200).json({ ok: true, ...result });
     } catch (err) {
       console.error('[subscription] createQR error:', err);
@@ -35,6 +40,14 @@ function subscriptionRoutes(pool) {
       console.error('[subscription] getStatus error:', err);
       return res.status(500).json({ ok: false, error: err.message });
     }
+  });
+
+  /**
+   * GET /api/subscriptions/plans
+   * Danh sách gói cước (public — không cần auth).
+   */
+  router.get('/plans', (req, res) => {
+    return res.status(200).json({ ok: true, plans: Object.values(subscriptionService.PLANS) });
   });
 
   /**

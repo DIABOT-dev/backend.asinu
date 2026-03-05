@@ -1,19 +1,42 @@
 /**
  * Subscription Service — Free vs Premium tier
  *
- * Flow:
- *  1. createQR  → sinh order_code, lưu subscriptions (pending), trả về qr_url
- *  2. activateSubscription → được gọi từ webhook, cập nhật user tier
- *  3. getStatus / isPremium → kiểm tra tier hiện tại
+ * Plans (4 tiers):
+ *  1 tháng  → 199,000 VND (không giảm)
+ *  3 tháng  → 567,000 VND (-5%)
+ *  6 tháng  → 1,075,000 VND (-10%)
+ *  12 tháng → 1,910,000 VND (-20%)
+ *
+ * Premium limits:
+ *  - Lịch sử: 365 ngày
+ *  - Kết nối: 50 người
+ *  - Voice chat: 5,000 lượt/tháng
  */
 
 const crypto = require('crypto');
 
 const SEPAY_ACCOUNT = process.env.SEPAY_ACCOUNT_NUMBER;
 const SEPAY_BANK    = process.env.SEPAY_BANK_CODE;
-const SUBSCRIPTION_PRICE = Number(process.env.SUBSCRIPTION_PRICE) || 199000;
 
-// ─── Helpers ────────────────────────────────────────────────────
+// ─── Plan pricing ─────────────────────────────────────────────────
+
+const BASE_PRICE = 199000; // VND/tháng
+
+const PLANS = {
+  1:  { months: 1,  label: '1 tháng',  discount: 0,  price: 199000  },
+  3:  { months: 3,  label: '3 tháng',  discount: 5,  price: 567000  }, // 199000*3*0.95 = 567150 → 567000
+  6:  { months: 6,  label: '6 tháng',  discount: 10, price: 1075000 }, // 199000*6*0.90 = 1074600 → 1075000
+  12: { months: 12, label: '12 tháng', discount: 20, price: 1910000 }, // 199000*12*0.80 = 1910400 → 1910000
+};
+
+// ─── Limits ────────────────────────────────────────────────────────
+
+const VOICE_MONTHLY_LIMIT      = 5000;
+const PREMIUM_CONNECTION_LIMIT = 50;
+const PREMIUM_HISTORY_DAYS     = 365;
+const FREE_HISTORY_DAYS        = 7;
+
+// ─── Helpers ────────────────────────────────────────────────────────
 
 function generateOrderCode() {
   return crypto.randomBytes(8).toString('hex');
@@ -34,11 +57,11 @@ function parseSubDescription(content) {
   return { userId: Number(userMatch[1]), orderCode: orderMatch[1] };
 }
 
-// ─── getStatus ──────────────────────────────────────────────────
+// ─── getStatus ──────────────────────────────────────────────────────
 
 /**
  * Lấy trạng thái subscription hiện tại của user.
- * @returns {{ tier, isPremium, expiresAt }}
+ * @returns {{ tier, isPremium, expiresAt, voiceUsedThisMonth }}
  */
 async function getStatus(pool, userId) {
   const { rows } = await pool.query(
@@ -46,33 +69,65 @@ async function getStatus(pool, userId) {
     [userId]
   );
   const user = rows[0];
-  if (!user) return { tier: 'free', isPremium: false, expiresAt: null };
+  if (!user) return { tier: 'free', isPremium: false, expiresAt: null, voiceUsedThisMonth: 0 };
 
   const tier = user.subscription_tier || 'free';
   const expiresAt = user.subscription_expires_at;
-  const isPremium = tier === 'premium' && expiresAt && new Date(expiresAt) > new Date();
+  const isPremiumActive = tier === 'premium' && expiresAt && new Date(expiresAt) > new Date();
 
-  return { tier: isPremium ? 'premium' : 'free', isPremium: Boolean(isPremium), expiresAt };
+  const voiceUsedThisMonth = isPremiumActive ? await getVoiceUsageThisMonth(pool, userId) : 0;
+
+  return {
+    tier: isPremiumActive ? 'premium' : 'free',
+    isPremium: Boolean(isPremiumActive),
+    expiresAt,
+    voiceUsedThisMonth,
+    voiceMonthlyLimit: VOICE_MONTHLY_LIMIT,
+    plans: Object.values(PLANS),
+  };
 }
 
-// ─── isPremium ──────────────────────────────────────────────────
+// ─── isPremium ───────────────────────────────────────────────────────
 
 async function isPremium(pool, userId) {
   const status = await getStatus(pool, userId);
   return status.isPremium;
 }
 
-// ─── createQR ───────────────────────────────────────────────────
+// ─── Voice usage ─────────────────────────────────────────────────────
+
+function currentYearMonth() {
+  return new Date().toISOString().slice(0, 7); // '2026-03'
+}
+
+async function getVoiceUsageThisMonth(pool, userId) {
+  const { rows } = await pool.query(
+    `SELECT count FROM voice_usage WHERE user_id = $1 AND year_month = $2`,
+    [userId, currentYearMonth()]
+  );
+  return Number(rows[0]?.count) || 0;
+}
+
+async function incrementVoiceUsage(pool, userId) {
+  await pool.query(
+    `INSERT INTO voice_usage (user_id, year_month, count) VALUES ($1, $2, 1)
+     ON CONFLICT (user_id, year_month) DO UPDATE SET count = voice_usage.count + 1`,
+    [userId, currentYearMonth()]
+  );
+}
+
+// ─── createQR ────────────────────────────────────────────────────────
 
 /**
- * Tạo QR đăng ký Premium.
+ * Tạo QR đăng ký Premium theo gói.
  * @param {object} pool
  * @param {number} userId
- * @param {number} months - số tháng (default 1)
- * @returns {{ orderCode, qrUrl, amount, description, expiresAt }}
+ * @param {number} months - 1 | 3 | 6 | 12
+ * @returns {{ order_code, qr_url, amount, description, expires_at, plan_months, discount }}
  */
 async function createQR(pool, userId, months = 1) {
-  const amount = SUBSCRIPTION_PRICE * months;
+  const plan = PLANS[months] || PLANS[1];
+  const amount = plan.price;
   const orderCode = generateOrderCode();
   const description = buildDescription(userId, orderCode);
   const qrUrl = `https://qr.sepay.vn/img?acc=${SEPAY_ACCOUNT}&bank=${SEPAY_BANK}&amount=${amount}&des=${description}`;
@@ -81,20 +136,22 @@ async function createQR(pool, userId, months = 1) {
     `INSERT INTO subscriptions (user_id, order_code, amount, qr_url, status, plan_months, qr_expires_at)
      VALUES ($1, $2, $3, $4, 'pending', $5, NOW() + INTERVAL '30 minutes')
      RETURNING qr_expires_at`,
-    [userId, orderCode, amount, qrUrl, months]
+    [userId, orderCode, amount, qrUrl, plan.months]
   );
 
   return {
     order_code: orderCode,
-    qr_url: qrUrl,
+    qr_url:     qrUrl,
     amount,
     description,
     expires_at: rows[0].qr_expires_at,
-    plan_months: months,
+    plan_months: plan.months,
+    discount:    plan.discount,
+    label:       plan.label,
   };
 }
 
-// ─── activateSubscription ────────────────────────────────────────
+// ─── activateSubscription ─────────────────────────────────────────────
 
 /**
  * Kích hoạt Premium cho user sau khi thanh toán thành công.
@@ -105,7 +162,6 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
   try {
     await client.query('BEGIN');
 
-    // Lấy thông tin subscription
     const { rows: subRows } = await client.query(
       `SELECT * FROM subscriptions WHERE order_code = $1 AND status = 'pending' AND qr_expires_at > NOW()`,
       [orderCode]
@@ -122,7 +178,6 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
     const subEnd = new Date(now);
     subEnd.setMonth(subEnd.getMonth() + planMonths);
 
-    // Cập nhật subscriptions record
     await client.query(
       `UPDATE subscriptions
        SET status = 'completed', subscription_start = $1, subscription_end = $2, completed_at = NOW()
@@ -130,7 +185,7 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
       [now, subEnd, orderCode]
     );
 
-    // Cập nhật user tier — extend nếu đang là premium
+    // Extend nếu đang là premium
     const { rows: userRows } = await client.query(
       `SELECT subscription_tier, subscription_expires_at FROM users WHERE id = $1`,
       [userId]
@@ -143,7 +198,6 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
       user.subscription_expires_at &&
       new Date(user.subscription_expires_at) > now
     ) {
-      // Extend từ ngày hết hạn hiện tại
       const currentExpiry = new Date(user.subscription_expires_at);
       newExpiry = new Date(currentExpiry);
       newExpiry.setMonth(newExpiry.getMonth() + planMonths);
@@ -168,7 +222,7 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
   }
 }
 
-// ─── getHistory ──────────────────────────────────────────────────
+// ─── getHistory ───────────────────────────────────────────────────────
 
 async function getHistory(pool, userId, { page = 1, limit = 20 } = {}) {
   const offset = (page - 1) * limit;
@@ -195,10 +249,17 @@ async function getHistory(pool, userId, { page = 1, limit = 20 } = {}) {
 }
 
 module.exports = {
+  PLANS,
+  VOICE_MONTHLY_LIMIT,
+  PREMIUM_CONNECTION_LIMIT,
+  PREMIUM_HISTORY_DAYS,
+  FREE_HISTORY_DAYS,
   getStatus,
   isPremium,
   createQR,
   activateSubscription,
   getHistory,
   parseSubDescription,
+  getVoiceUsageThisMonth,
+  incrementVoiceUsage,
 };

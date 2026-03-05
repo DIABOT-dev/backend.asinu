@@ -38,7 +38,14 @@ async function callGemini(message, context, history = [], systemPrompt = null) {
     parts: [{ text: String(message) }]
   });
 
-  const payload = { contents };
+  const payload = {
+    contents,
+    generationConfig: {
+      temperature: 0.75,    // Giảm nhẹ để kiểm soát tốt hơn
+      topP: 0.95,
+      maxOutputTokens: 500,
+    },
+  };
 
   // Gemini systemInstruction — AI gets full profile context and conversation guidelines
   if (systemPrompt) {

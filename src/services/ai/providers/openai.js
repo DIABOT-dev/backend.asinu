@@ -127,7 +127,7 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
   const model = process.env.OPENAI_CHAT_MODEL || 'gpt-4o-mini';
   const temperature = process.env.OPENAI_CHAT_TEMPERATURE
     ? parseFloat(process.env.OPENAI_CHAT_TEMPERATURE)
-    : 0.8;
+    : 0.75; // Giảm từ 0.8 → 0.75: bớt ngẫu nhiên, kiểm soát hơn
 
   // Build messages: system → conversation history → current user message
   const messages = [{ role: 'system', content: context || t('prompt.system_chat') }];
@@ -146,9 +146,9 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
     messages,
     temperature,
     max_tokens: 500,
-    top_p: 1,
-    frequency_penalty: 0.3,
-    presence_penalty: 0.3,
+    top_p: 0.95,
+    frequency_penalty: 0.6, // Tăng từ 0.3 → 0.6: mạnh tay chống lặp từ/pattern
+    presence_penalty: 0.5,  // Tăng từ 0.3 → 0.5: tránh lặp chủ đề/câu hỏi
     ...(userId && { user: `user_${userId}` })
   };
 

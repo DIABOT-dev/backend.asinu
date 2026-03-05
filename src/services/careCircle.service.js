@@ -5,7 +5,7 @@
 
 const { notifyCareCircleInvitation, notifyCareCircleAccepted } = require('./push.notification.service');
 const { t } = require('../i18n');
-const { isPremium } = require('./subscription.service');
+const { isPremium, PREMIUM_CONNECTION_LIMIT } = require('./subscription.service');
 
 const FREE_TIER_CONNECTION_LIMIT = 3;
 
@@ -73,23 +73,24 @@ async function createInvitation(pool, requesterId, data) {
     return { ok: false, error: t('careCircle.cannot_invite_self') };
   }
 
-  // Check free tier connection limit
+  // Check connection limit (3 free, 50 premium)
   const userIsPremium = await isPremium(pool, requesterId);
-  if (!userIsPremium) {
-    const { rows: countRows } = await pool.query(
-      `SELECT COUNT(*) FROM user_connections
-       WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'`,
-      [requesterId]
-    );
-    const connectionCount = Number(countRows[0].count);
-    if (connectionCount >= FREE_TIER_CONNECTION_LIMIT) {
-      return {
-        ok: false,
-        error: 'Nâng cấp Premium để thêm nhiều người hơn',
-        code: 'CARE_CIRCLE_LIMIT',
-        statusCode: 403,
-      };
-    }
+  const connectionLimit = userIsPremium ? PREMIUM_CONNECTION_LIMIT : FREE_TIER_CONNECTION_LIMIT;
+  const { rows: countRows } = await pool.query(
+    `SELECT COUNT(*) FROM user_connections
+     WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'`,
+    [requesterId]
+  );
+  const connectionCount = Number(countRows[0].count);
+  if (connectionCount >= connectionLimit) {
+    return {
+      ok: false,
+      error: userIsPremium
+        ? `Đã đạt giới hạn tối đa ${PREMIUM_CONNECTION_LIMIT} kết nối`
+        : 'Nâng cấp Premium để thêm nhiều người hơn (miễn phí: tối đa 3)',
+      code: 'CARE_CIRCLE_LIMIT',
+      statusCode: 403,
+    };
   }
 
   const perms = normalizePermissions(permissions);
@@ -184,6 +185,25 @@ async function getInvitations(pool, userId, direction = 'all') {
  */
 async function acceptInvitation(pool, invitationId, userId) {
   try {
+    // Kiểm tra giới hạn kết nối của addressee trước khi chấp nhận
+    const addresseeIsPremium = await isPremium(pool, userId);
+    const addresseeLimit = addresseeIsPremium ? PREMIUM_CONNECTION_LIMIT : FREE_TIER_CONNECTION_LIMIT;
+    const { rows: addresseeCount } = await pool.query(
+      `SELECT COUNT(*) FROM user_connections
+       WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'`,
+      [userId]
+    );
+    if (Number(addresseeCount[0].count) >= addresseeLimit) {
+      return {
+        ok: false,
+        error: addresseeIsPremium
+          ? `Đã đạt giới hạn tối đa ${PREMIUM_CONNECTION_LIMIT} kết nối`
+          : 'Nâng cấp Premium để chấp nhận thêm kết nối (miễn phí: tối đa 3)',
+        code: 'CARE_CIRCLE_LIMIT',
+        statusCode: 403,
+      };
+    }
+
     const result = await pool.query(
       `UPDATE user_connections
        SET status = 'accepted', accepted_at = NOW(), updated_at = NOW()

@@ -217,15 +217,29 @@ async function getRecentLogs(pool, userId, options = {}) {
     return { ok: false, error: t('error.invalid_log_type'), statusCode: 400 };
   }
 
+  // History filter: 7 days for free, 365 days for premium
+  let historyFilter = `AND occurred_at > NOW() - INTERVAL '7 days'`; // default free
+  try {
+    const tierRow = await pool.query(
+      `SELECT subscription_tier, subscription_expires_at FROM users WHERE id = $1`,
+      [userId]
+    );
+    const row = tierRow.rows[0];
+    const isUserPremium = row?.subscription_tier === 'premium' && row?.subscription_expires_at && new Date(row.subscription_expires_at) > new Date();
+    historyFilter = isUserPremium
+      ? `AND occurred_at > NOW() - INTERVAL '365 days'`
+      : `AND occurred_at > NOW() - INTERVAL '7 days'`;
+  } catch (_) { /* fall through — keep 7-day default */ }
+
   try {
     if (!type) {
       // Fetch all recent logs with details
       console.log('[mobile.service] Fetching logs for user:', userId, 'limit:', limit);
-      
+
       const commonResult = await pool.query(
         `SELECT id, log_type, occurred_at, source, note, metadata, created_at
          FROM logs_common
-         WHERE user_id = $1
+         WHERE user_id = $1 ${historyFilter}
          ORDER BY occurred_at DESC
          LIMIT $2`,
         [userId, limit]
@@ -265,12 +279,12 @@ async function getRecentLogs(pool, userId, options = {}) {
     // Fetch specific type with join
     const detail = DETAIL_TABLES[type];
     const detailColumns = detail.columns.map((col) => `d.${col}`).join(', ');
-    
+
     const result = await pool.query(
       `SELECT c.id, c.log_type, c.occurred_at, c.source, c.note, c.metadata, c.created_at, ${detailColumns}
        FROM logs_common c
        JOIN ${detail.table} d ON d.log_id = c.id
-       WHERE c.user_id = $1 AND c.log_type = $2
+       WHERE c.user_id = $1 AND c.log_type = $2 ${historyFilter}
        ORDER BY c.occurred_at DESC
        LIMIT $3`,
       [userId, type, limit]
