@@ -8,6 +8,7 @@
  */
 
 const crypto = require('crypto');
+const subscriptionService = require('./subscription.service');
 
 const SEPAY_ACCOUNT = process.env.SEPAY_ACCOUNT_NUMBER;
 const SEPAY_BANK    = process.env.SEPAY_BANK_CODE;
@@ -81,7 +82,24 @@ async function handleWebhook(pool, req) {
   const transferAmount = Number(body.transferAmount);
   const content        = String(body.content || '');
 
-  // 2. Parse mô tả để lấy userId và orderCode
+  // 2. Kiểm tra loại giao dịch dựa vào nội dung chuyển khoản
+  // asinusub → subscription payment
+  if (content.includes('asinusub')) {
+    const subParsed = subscriptionService.parseSubDescription(content);
+    if (!subParsed) {
+      console.log('[payment] webhook: malformed subscription content:', content);
+      return { ok: true, message: 'ignored' };
+    }
+    console.log(`[payment] webhook → subscription payment for user ${subParsed.userId}`);
+    const result = await subscriptionService.activateSubscription(
+      pool,
+      subParsed.userId,
+      subParsed.orderCode
+    );
+    return { ok: result.ok, message: result.ok ? 'subscription_activated' : result.message };
+  }
+
+  // 3. Parse mô tả để lấy userId và orderCode (wallet top-up)
   const parsed = parseDescription(content);
   if (!parsed) {
     // Không phải giao dịch của Asinu — trả 200 để SePay không retry

@@ -70,15 +70,20 @@ async function loginByProvider(pool, req, res, provider, idColumn) {
     return res.status(400).json({ ok: false, error: t('error.missing_auth_token', getLang(req)) });
   }
 
-  // Verify token with provider
-  if (!verifySocialToken(provider, token)) {
+  // Verify token with provider (now async, returns { valid, profile })
+  const verification = await verifySocialToken(provider, token);
+  if (!verification.valid) {
     return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
   }
 
-  // Get or generate provider_id
-  let actualProviderId = provider_id;
-  if (!actualProviderId && email) {
-    actualProviderId = `${provider}_${email}`;
+  // Use verified email/sub from provider if available, fallback to request body
+  const verifiedEmail = verification.profile?.email || email;
+  const verifiedSub = verification.profile?.sub;
+
+  // Get or generate provider_id — prefer verified sub from provider
+  let actualProviderId = verifiedSub || provider_id;
+  if (!actualProviderId && verifiedEmail) {
+    actualProviderId = `${provider}_${verifiedEmail}`;
   }
 
   if (!actualProviderId) {
@@ -86,12 +91,12 @@ async function loginByProvider(pool, req, res, provider, idColumn) {
   }
 
   // Call service
-  const result = await serviceLoginProvider(pool, idColumn, actualProviderId, provider, email, phone_number);
-  
+  const result = await serviceLoginProvider(pool, idColumn, actualProviderId, provider, verifiedEmail, phone_number);
+
   if (!result.ok) {
     return res.status(401).json(result);
   }
-  
+
   return res.status(200).json(result);
 }
 

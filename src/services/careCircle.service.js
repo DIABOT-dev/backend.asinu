@@ -5,6 +5,9 @@
 
 const { notifyCareCircleInvitation, notifyCareCircleAccepted } = require('./push.notification.service');
 const { t } = require('../i18n');
+const { isPremium } = require('./subscription.service');
+
+const FREE_TIER_CONNECTION_LIMIT = 3;
 
 // =====================================================
 // CONSTANTS
@@ -68,6 +71,25 @@ async function createInvitation(pool, requesterId, data) {
   // Validate not self-invite
   if (Number(addressee_id) === Number(requesterId)) {
     return { ok: false, error: t('careCircle.cannot_invite_self') };
+  }
+
+  // Check free tier connection limit
+  const userIsPremium = await isPremium(pool, requesterId);
+  if (!userIsPremium) {
+    const { rows: countRows } = await pool.query(
+      `SELECT COUNT(*) FROM user_connections
+       WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'`,
+      [requesterId]
+    );
+    const connectionCount = Number(countRows[0].count);
+    if (connectionCount >= FREE_TIER_CONNECTION_LIMIT) {
+      return {
+        ok: false,
+        error: 'Nâng cấp Premium để thêm nhiều người hơn',
+        code: 'CARE_CIRCLE_LIMIT',
+        statusCode: 403,
+      };
+    }
   }
 
   const perms = normalizePermissions(permissions);

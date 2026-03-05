@@ -13,6 +13,8 @@ const wellnessRoutes = require('./src/routes/wellness.routes');
 const healthRoutes = require('./src/routes/health.routes');
 const notificationRoutes = require('./src/routes/notifications.routes');
 const paymentRoutes = require('./src/routes/payment.routes');
+const subscriptionRoutes = require('./src/routes/subscription.routes');
+const voiceRoutes = require('./src/routes/voice.routes');
 const asinuBrainRoutes = require('./asinu-brain-extension/routes/asinuBrain.routes');
 const testRoutes = require('./asinu-brain-extension/routes/test.routes');
 const langMiddleware = require('./src/middleware/lang.middleware');
@@ -68,6 +70,8 @@ app.use('/api/wellness', wellnessRoutes(pool));
 app.use('/api/health', healthRoutes(pool));
 app.use('/api/notifications', notificationRoutes(pool));
 app.use('/api/payments', paymentRoutes(pool));
+app.use('/api/subscriptions', subscriptionRoutes(pool));
+app.use('/api/voice', voiceRoutes(pool));
 app.use('/api/asinu-brain', asinuBrainRoutes(pool));
 app.use('/api/test', testRoutes(pool)); // Public test API - no auth required
 
