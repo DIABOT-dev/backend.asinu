@@ -7,7 +7,7 @@ const { t, getLang } = require('../i18n');
 const profileService = require('../services/profile.service');
 
 async function getProfile(pool, req, res) {
-  console.log('[profile.controller] getProfile called - USER ID:', req.user?.id);
+
   if (!req.user?.id) {
     return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
@@ -19,7 +19,6 @@ async function getProfile(pool, req, res) {
     return res.status(statusCode).json(result);
   }
 
-  console.log('[profile.controller] Sending profile:', result.profile);
   return res.status(200).json(result);
 }
 
@@ -29,19 +28,6 @@ async function updateProfile(pool, req, res) {
   }
 
   const { name, phone, dateOfBirth, gender, heightCm, weightKg, bloodType, chronicDiseases, language } = req.body || {};
-  console.log('[profile.controller] updateProfile called with:', {
-    userId: req.user.id,
-    name,
-    phone,
-    dateOfBirth,
-    gender,
-    heightCm,
-    weightKg,
-    bloodType,
-    chronicDiseases,
-    language
-  });
-
   const result = await profileService.updateProfile(pool, req.user.id, {
     name,
     phone,
@@ -92,7 +78,6 @@ async function updatePushToken(pool, req, res) {
     return res.status(500).json(result);
   }
 
-  console.log('[profile] Push token updated for user', req.user.id);
   return res.status(200).json({ ok: true, message: t('success.push_token_updated', getLang(req)) });
 }
 

@@ -14,7 +14,7 @@ async function getMissionsHandler(pool, req, res) {
     const missions = await getMissions(pool, req.user.id);
     return res.status(200).json({ ok: true, missions });
   } catch (err) {
-    console.error('[missions.controller] getMissionsHandler failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }

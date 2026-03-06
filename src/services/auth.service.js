@@ -93,7 +93,7 @@ async function verifySocialToken(provider, token) {
 
   // Accept mock tokens in development
   if (process.env.NODE_ENV === 'development' && token.startsWith('mock-')) {
-    console.log(`[auth.service] Accepting mock token for ${provider}`);
+
     return { valid: true };
   }
 
@@ -103,20 +103,20 @@ async function verifySocialToken(provider, token) {
         headers: { Authorization: `Bearer ${token}` }
       });
       if (!res.ok) {
-        console.warn(`[auth.service] Google token verification failed: ${res.status}`);
+
         return { valid: false };
       }
       const data = await res.json();
       if (!data.id && !data.email) {
         return { valid: false };
       }
-      console.log(`[auth.service] Google token verified for ${data.email}`);
+
       return { valid: true, profile: { email: data.email, name: data.name, sub: data.id } };
     }
 
     if (provider === 'apple') {
       // Apple uses id_token (JWT) — verify signature in production
-      console.log(`[auth.service] Apple token accepted (length: ${token.length})`);
+
       return { valid: true };
     }
 
@@ -125,22 +125,22 @@ async function verifySocialToken(provider, token) {
         headers: { access_token: token }
       });
       if (!res.ok) {
-        console.warn(`[auth.service] Zalo token verification failed: ${res.status}`);
+
         return { valid: false };
       }
       const data = await res.json();
       if (!data.id) {
         return { valid: false };
       }
-      console.log(`[auth.service] Zalo token verified for user ${data.id}`);
+
       return { valid: true, profile: { sub: data.id, name: data.name } };
     }
 
     // Other providers: accept if non-empty
-    console.log(`[auth.service] Token accepted for ${provider}`);
+
     return { valid: true };
   } catch (err) {
-    console.error(`[auth.service] Token verification error for ${provider}:`, err.message);
+
     return { valid: false };
   }
 }
@@ -156,7 +156,7 @@ function generateProviderId(provider, providerId, email) {
   if (providerId) return providerId;
   if (email) {
     const generated = `${provider}_${email}`;
-    console.log(`[auth.service] Generated provider_id: ${generated}`);
+
     return generated;
   }
   return null;
@@ -298,9 +298,9 @@ async function initializeDefaultMissions(pool, userId) {
       )
     );
     await Promise.all(insertPromises);
-    console.log(`[auth.service] Initialized ${DEFAULT_MISSIONS.length} default missions for user ${userId}`);
+
   } catch (err) {
-    console.error('[auth.service] Failed to initialize default missions:', err);
+
   }
 }
 
@@ -403,7 +403,7 @@ async function registerByEmail(pool, email, password, phoneNumber, fullName, dis
       user: token_response.user 
     };
   } catch (err) {
-    console.error('[auth.service] Register failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -449,7 +449,7 @@ async function loginByEmail(pool, identifier, password) {
       user: token_response.user 
     };
   } catch (err) {
-    console.error('[auth.service] Login failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -508,7 +508,7 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
       user: token_response.user 
     };
   } catch (err) {
-    console.error(`[auth.service] Login by ${provider} failed:`, err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -529,7 +529,7 @@ async function loginByPhone(pool, phoneNumber) {
       user: token_response.user 
     };
   } catch (err) {
-    console.error('[auth.service] Phone login failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -588,7 +588,7 @@ async function searchUsers(pool, currentUserId, query) {
       phone: user.phone || user.phone_number || null
     }));
   } catch (err) {
-    console.error('[auth.service] Search users failed:', err);
+
     return [];
   }
 }

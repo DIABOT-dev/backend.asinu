@@ -35,7 +35,7 @@ async function transcribeAudio(audioBuffer, mimeType, filename = 'audio.m4a') {
 
   if (!response.ok) {
     const errText = await response.text();
-    console.error('[voice] Whisper error:', errText);
+
     throw new Error(`Whisper API error: ${response.status}`);
   }
 
@@ -99,14 +99,13 @@ Không cung cấp chẩn đoán y tế. Khuyến khích gặp bác sĩ khi cần
 
   if (!chatResponse.ok) {
     const errText = await chatResponse.text();
-    console.error('[voice] Chat API error:', errText);
+
     throw new Error(`Chat API error: ${chatResponse.status}`);
   }
 
   const chatData = await chatResponse.json();
   const reply = chatData.choices?.[0]?.message?.content || 'Xin lỗi, tôi không thể trả lời lúc này.';
 
-  console.log(`[voice] user ${userId}: "${transcript.slice(0, 50)}..." → "${reply.slice(0, 50)}..."`);
   return { transcript, reply };
 }
 

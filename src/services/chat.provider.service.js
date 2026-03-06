@@ -60,7 +60,7 @@ async function callGemini(message, context, history = [], systemPrompt = null) {
   for (let attempt = 0; attempt <= GEMINI_MAX_RETRIES; attempt++) {
     if (attempt > 0) {
       const backoffMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-      console.warn(`[chat] Gemini rate limited — waiting ${backoffMs}ms before retry ${attempt}/${GEMINI_MAX_RETRIES}`);
+
       await new Promise((r) => setTimeout(r, backoffMs));
     }
 
@@ -107,7 +107,7 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
 
   if (provider === 'openai' || provider === '') {
     if (!process.env.OPENAI_API_KEY) {
-      console.warn('[chat] OPENAI_API_KEY not set, falling back to mock');
+
       return { reply: buildMockReply(message), provider: 'mock' };
     }
     try {
@@ -115,7 +115,7 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
       const result = await getOpenAIChatReply({ message, userId, context: systemPrompt, history });
       if (result) return result;
     } catch (err) {
-      console.warn('OpenAI call failed, fallback to mock:', err?.message || err);
+      console.error('[ChatProvider] OpenAI error:', err.message);
     }
     return { reply: buildMockReply(message), provider: 'mock' };
   }
@@ -130,7 +130,7 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
         return { reply, provider: 'gemini' };
       }
     } catch (err) {
-      console.warn('Gemini call failed, fallback to mock:', err?.message || err);
+
     }
     return { reply: buildMockReply(message), provider: 'mock' };
   }

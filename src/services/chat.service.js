@@ -272,10 +272,10 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
 
   if (consecutiveQuestions >= 2) {
     lines.push('');
-    lines.push('⛔ CẢNH BÁO VÒNG LẶP: Bạn đã hỏi liên tiếp nhiều lượt. Lần này PHẢI đưa ra câu trả lời/lời khuyên cụ thể dựa trên thông tin đã có. KHÔNG được hỏi thêm bất kỳ câu nào.');
+    lines.push('CẢNH BÁO VÒNG LẶP: Bạn đã hỏi liên tiếp nhiều lượt. Lần này PHẢI đưa ra câu trả lời/lời khuyên cụ thể dựa trên thông tin đã có. KHÔNG được hỏi thêm bất kỳ câu nào.');
   } else if (prevWasQuestion) {
     lines.push('');
-    lines.push('⚠️ Lượt trước bạn đã hỏi người dùng. Lần này ưu tiên đưa ra câu trả lời hoặc lời khuyên dựa trên thông tin người dùng vừa chia sẻ. Nếu vẫn cần hỏi thêm, hỏi tối đa 1 câu sau khi đã trả lời.');
+    lines.push('Lượt trước bạn đã hỏi người dùng. Lần này ưu tiên đưa ra câu trả lời hoặc lời khuyên dựa trên thông tin người dùng vừa chia sẻ. Nếu vẫn cần hỏi thêm, hỏi tối đa 1 câu sau khi đã trả lời.');
   }
 
   return lines.join('\n');
@@ -338,7 +338,7 @@ async function getHealthLogsSummary(pool, userId) {
       latest_bp: bpResult.rows[0] || null,
     };
   } catch (err) {
-    console.warn('[chat.service] getHealthLogsSummary failed:', err?.message);
+
     return { latest_glucose: null, latest_bp: null };
   }
 }
@@ -403,6 +403,8 @@ async function processChat(pool, userId, message, context = {}) {
   const { getChatReply } = require('./chat.provider.service');
   const { isPremium: checkIsPremium } = require('./subscription.service');
 
+  console.log(`[Chat] user=${userId} msg="${message.slice(0, 80)}${message.length > 80 ? '…' : ''}"`);
+
   try {
     const now = new Date();
     const provider = String(process.env.AI_PROVIDER || '').toLowerCase();
@@ -415,6 +417,7 @@ async function processChat(pool, userId, message, context = {}) {
     // Determine retention window based on subscription
     const userIsPremium = await checkIsPremium(pool, userId);
     const retentionDays = userIsPremium ? RETENTION_DAYS_PREMIUM : RETENTION_DAYS_FREE;
+    console.log(`[Chat] user=${userId} provider=${provider || 'default'} premium=${userIsPremium}`);
 
     if (provider === 'diabrain') {
       // DiaBrain manages its own conversation state — keep existing behavior
@@ -435,7 +438,7 @@ async function processChat(pool, userId, message, context = {}) {
         }
         finalMessage = formatMessageWithContext(message, contextText);
       } catch (err) {
-        console.warn('[chat.service] onboarding context fetch failed:', err?.message || err);
+
         finalMessage = formatMessageWithContext(message, FALLBACK_CONTEXT);
       }
     } else {
@@ -448,7 +451,7 @@ async function processChat(pool, userId, message, context = {}) {
         ]);
         systemPrompt = buildSystemPrompt(onboardingProfile, conversationHistory.length, logsSummary, conversationHistory);
       } catch (err) {
-        console.warn('[chat.service] context fetch failed:', err?.message || err);
+
       }
       await saveUserMessage(pool, userId, message, now);
     }
@@ -458,6 +461,8 @@ async function processChat(pool, userId, message, context = {}) {
     const replyResult = await getChatReply(finalMessage, providerContext, conversationHistory, systemPrompt);
     const reply = replyResult.reply || '';
     const replyProvider = replyResult.provider || 'mock';
+
+    console.log(`[Chat] user=${userId} provider=${replyProvider} reply="${reply.slice(0, 100)}${reply.length > 100 ? '…' : ''}"`);
 
     // Save assistant reply
     const assistantRow = await saveAssistantReply(pool, userId, reply, now);
@@ -472,7 +477,7 @@ async function processChat(pool, userId, message, context = {}) {
         : now.toISOString()
     };
   } catch (err) {
-    console.error('[chat.service] processChat failed:', err);
+    console.error(`[Chat] user=${userId} error:`, err.message);
     return { ok: false, error: t('error.server') };
   }
 }

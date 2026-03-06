@@ -87,10 +87,10 @@ async function handleWebhook(pool, req) {
   if (content.includes('asinusub')) {
     const subParsed = subscriptionService.parseSubDescription(content);
     if (!subParsed) {
-      console.log('[payment] webhook: malformed subscription content:', content);
+
       return { ok: true, message: 'ignored' };
     }
-    console.log(`[payment] webhook → subscription payment for user ${subParsed.userId}`);
+
     const result = await subscriptionService.activateSubscription(
       pool,
       subParsed.userId,
@@ -103,7 +103,7 @@ async function handleWebhook(pool, req) {
   const parsed = parseDescription(content);
   if (!parsed) {
     // Không phải giao dịch của Asinu — trả 200 để SePay không retry
-    console.log('[payment] webhook ignored (unknown content):', content);
+
     return { ok: true, message: 'ignored' };
   }
 
@@ -117,7 +117,7 @@ async function handleWebhook(pool, req) {
   );
 
   if (!rows.length) {
-    console.warn('[payment] webhook: payment not found or expired', orderCode);
+
     return { ok: false, statusCode: 404, message: 'Payment not found or expired' };
   }
 
@@ -129,7 +129,6 @@ async function handleWebhook(pool, req) {
       `UPDATE payments SET status = 'failed' WHERE order_code = $1`,
       [orderCode]
     );
-    console.warn('[payment] amount mismatch', { expected: payment.amount, received: transferAmount });
     return { ok: false, statusCode: 400, message: 'Amount mismatch' };
   }
 
@@ -151,13 +150,12 @@ async function handleWebhook(pool, req) {
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('[payment] webhook transaction failed:', err);
+
     return { ok: false, statusCode: 500, message: 'Internal error' };
   } finally {
     client.release();
   }
 
-  console.log(`[payment] ✅ user ${userId} nạp ${transferAmount}đ — order ${orderCode}`);
   return { ok: true, message: 'completed', userId, amount: transferAmount, orderCode };
 }
 

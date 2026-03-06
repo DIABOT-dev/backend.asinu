@@ -624,7 +624,7 @@ async function acknowledgeEscalation(pool, escalationId, userId) {
 
     return { ok: true, status: 'acknowledged' };
   } catch (err) {
-    console.error('[carePulse.aps.service] acknowledgeEscalation failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }

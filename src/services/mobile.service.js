@@ -181,19 +181,19 @@ async function createLog(pool, userId, payload) {
       const mission = MISSION_MAPPING[logType];
       if (mission) {
         await updateMissionProgress(pool, userId, mission.key, 1, { goal: mission.goal, now: occurredDate });
-        console.log(`[mobile.service] Updated mission ${mission.key} for user ${userId}`);
+
       }
 
       // Also update daily_checkin for any health log
       await updateMissionProgress(pool, userId, 'daily_checkin', 1, { goal: 1, now: occurredDate });
     } catch (missionErr) {
-      console.warn('[mobile.service] Failed to update mission progress:', missionErr.message);
+
     }
 
     return { ok: true, logId, logType };
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('[mobile.service] createLog failed:', err);
+
     const message = err.message || 'Invalid payload';
     const isValidationError = message.startsWith('Missing') || message.startsWith('Invalid');
     return { ok: false, error: message, statusCode: isValidationError ? 400 : 500 };
@@ -234,7 +234,6 @@ async function getRecentLogs(pool, userId, options = {}) {
   try {
     if (!type) {
       // Fetch all recent logs with details
-      console.log('[mobile.service] Fetching logs for user:', userId, 'limit:', limit);
 
       const commonResult = await pool.query(
         `SELECT id, log_type, occurred_at, source, note, metadata, created_at
@@ -244,8 +243,6 @@ async function getRecentLogs(pool, userId, options = {}) {
          LIMIT $2`,
         [userId, limit]
       );
-
-      console.log('[mobile.service] Found', commonResult.rows.length, 'logs');
 
       // Fetch details for each log type
       const logs = await Promise.all(
@@ -301,7 +298,7 @@ async function getRecentLogs(pool, userId, options = {}) {
 
     return { ok: true, logs };
   } catch (err) {
-    console.error('[mobile.service] getRecentLogs failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -321,8 +318,7 @@ async function getTodayLogs(pool, userId, options = {}) {
 
     if (!type) {
       // Lấy tất cả logs hôm nay
-      console.log('[mobile.service] Fetching today logs for user:', userId);
-      
+
       const commonResult = await pool.query(
         `SELECT id, log_type, occurred_at, source, note, metadata, created_at
          FROM logs_common
@@ -330,8 +326,6 @@ async function getTodayLogs(pool, userId, options = {}) {
          ORDER BY occurred_at DESC`,
         [userId]
       );
-
-      console.log('[mobile.service] Found', commonResult.rows.length, 'logs today');
 
       // Lấy chi tiết cho từng log
       const logs = await Promise.all(
@@ -364,7 +358,6 @@ async function getTodayLogs(pool, userId, options = {}) {
       logs.forEach(log => {
         typeCount[log.log_type] = (typeCount[log.log_type] || 0) + 1;
       });
-      console.log('[mobile.service] Today logs by type:', typeCount);
 
       return { ok: true, logs, count: logs.length, breakdown: typeCount };
     }
@@ -391,10 +384,9 @@ async function getTodayLogs(pool, userId, options = {}) {
       return { ...row, detail: detailData };
     });
 
-    console.log(`[mobile.service] Found ${logs.length} ${type} logs today`);
     return { ok: true, logs, count: logs.length };
   } catch (err) {
-    console.error('[mobile.service] getTodayLogs error:', err);
+
     return { ok: false, error: t('error.get_today_logs'), statusCode: 500 };
   }
 }

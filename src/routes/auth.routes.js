@@ -7,6 +7,7 @@ const {
   loginByApple,
   loginByZalo,
   zaloCallback,
+  facebookCallback,
   loginByPhone,
   searchUsers,
   verifyToken
@@ -23,6 +24,7 @@ function authRoutes(pool) {
   router.post('/apple', (req, res) => loginByApple(pool, req, res));
   router.post('/zalo', (req, res) => loginByZalo(pool, req, res));
   router.get('/zalo/callback', (req, res) => zaloCallback(pool, req, res));
+  router.get('/facebook/callback', (req, res) => facebookCallback(pool, req, res));
   router.post('/phone-login', (req, res) => loginByPhone(pool, req, res));
 
   // ===== AUTHENTICATED ENDPOINTS =====

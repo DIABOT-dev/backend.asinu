@@ -211,11 +211,11 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
     );
 
     await client.query('COMMIT');
-    console.log(`[subscription] ✅ user ${userId} activated premium until ${newExpiry.toISOString()}`);
+
     return { ok: true, expiresAt: newExpiry, planMonths };
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error('[subscription] activateSubscription failed:', err);
+
     return { ok: false, message: 'Internal error' };
   } finally {
     client.release();

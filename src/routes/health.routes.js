@@ -13,7 +13,7 @@ function healthRoutes(pool) {
    */
   router.post('/monitor/daily', async (req, res) => {
     try {
-      console.log('[health] Manual trigger: daily monitoring');
+
       const result = await runDailyHealthMonitoring(pool);
       
       return res.status(200).json({
@@ -22,7 +22,7 @@ function healthRoutes(pool) {
         ...result
       });
     } catch (error) {
-      console.error('[health] Error in daily monitoring endpoint:', error);
+
       return res.status(500).json({
         ok: false,
         error: t('health.daily_check_error', getLang(req))
@@ -117,7 +117,7 @@ function healthRoutes(pool) {
       });
       
     } catch (error) {
-      console.error('Lỗi gửi cảnh báo care-circle:', error);
+
       res.status(500).json({
         error: t('health.alert_send_error', getLang(req)),
         details: error.message
@@ -141,7 +141,6 @@ function healthRoutes(pool) {
         });
       }
 
-      console.log(`[health] Manual trigger: monitoring for user ${userId}`);
       await runHealthMonitoringForUser(pool, userId);
       
       return res.status(200).json({
@@ -149,7 +148,7 @@ function healthRoutes(pool) {
         message: t('health.user_check_complete', getLang(req), { userId })
       });
     } catch (error) {
-      console.error('[health] Error in user monitoring endpoint:', error);
+
       return res.status(500).json({
         ok: false,
         error: t('health.user_check_error', getLang(req))

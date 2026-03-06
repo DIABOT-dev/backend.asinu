@@ -2,6 +2,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const notificationService = require('../services/notification.service');
 const { runEngagementNotifications, previewEngagementNotification } = require('../services/engagement.notification.service');
+const { runBasicNotifications } = require('../services/basic.notification.service');
 const { t, getLang } = require('../i18n');
 
 function notificationRoutes(pool) {
@@ -72,7 +73,7 @@ function notificationRoutes(pool) {
       const result = await previewEngagementNotification(pool, req.user.id);
       return res.status(200).json({ ok: true, ...result });
     } catch (err) {
-      console.error('[notifications] preview error:', err);
+
       return res.status(500).json({ ok: false, error: err.message });
     }
   });
@@ -89,11 +90,31 @@ function notificationRoutes(pool) {
     }
 
     try {
-      console.log('[notifications] Manual trigger: engagement notifications');
+
       const result = await runEngagementNotifications(pool);
       return res.status(200).json(result);
     } catch (err) {
-      console.error('[notifications] engagement run error:', err);
+
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  /**
+   * POST /api/notifications/basic/run
+   * Chạy 8 thông báo cứng dựa trên giờ hiện tại (VN timezone).
+   * Cron gọi mỗi giờ. Truyền body { hour: N } để test giờ cụ thể.
+   */
+  router.post('/basic/run', async (req, res) => {
+    const secret = process.env.CRON_SECRET;
+    if (secret && req.headers['x-cron-secret'] !== secret) {
+      return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
+    }
+
+    const forceHour = req.body?.hour !== undefined ? Number(req.body.hour) : null;
+    try {
+      const result = await runBasicNotifications(pool, forceHour);
+      return res.status(200).json(result);
+    } catch (err) {
       return res.status(500).json({ ok: false, error: err.message });
     }
   });

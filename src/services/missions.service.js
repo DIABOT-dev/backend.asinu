@@ -142,7 +142,7 @@ async function getMissionHistory(pool, userId, days = 30) {
       history: result.rows 
     };
   } catch (err) {
-    console.error('[missions.service] getMissionHistory failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -174,7 +174,7 @@ async function getMissionStats(pool, userId) {
       stats: result.rows 
     };
   } catch (err) {
-    console.error('[missions.service] getMissionStats failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }

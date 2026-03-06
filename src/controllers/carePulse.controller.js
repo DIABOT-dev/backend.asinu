@@ -35,7 +35,7 @@ async function postEvent(pool, req, res) {
       state_name: result.state.currentStatus
     });
   } catch (err) {
-    console.error('[carePulse.controller] postEvent failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -56,7 +56,7 @@ async function getStateHandler(pool, req, res) {
       state_name: state.currentStatus
     });
   } catch (err) {
-    console.error('[carePulse.controller] getStateHandler failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }

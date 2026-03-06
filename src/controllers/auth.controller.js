@@ -10,7 +10,10 @@ const {
   verifySocialToken
 } = require('../services/auth.service');
 
-const APP_CALLBACK_URI = 'asinu-lite://auth/zalo/callback';
+const ZALO_CALLBACK_URI    = 'asinu-lite://auth/zalo/callback';
+const FACEBOOK_CALLBACK_URI = 'asinu-lite://auth/facebook/callback';
+// Keep backward-compat alias
+const APP_CALLBACK_URI = ZALO_CALLBACK_URI;
 
 // =====================================================
 // REGISTER
@@ -137,7 +140,7 @@ async function loginByZalo(pool, req, res) {
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-      console.warn('[zalo] Token exchange failed:', tokenData);
+
       return res.status(401).json({ ok: false, error: t('error.invalid_token', lang) });
     }
 
@@ -155,7 +158,7 @@ async function loginByZalo(pool, req, res) {
     if (!result.ok) return res.status(401).json(result);
     return res.status(200).json(result);
   } catch (err) {
-    console.error('[zalo] OAuth error:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', lang) });
   }
 }
@@ -191,7 +194,7 @@ async function zaloCallback(pool, req, res) {
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-      console.warn('[zalo] Token exchange failed:', tokenData);
+
       return res.redirect(`${APP_CALLBACK_URI}?error=token_exchange_failed`);
     }
 
@@ -212,8 +215,62 @@ async function zaloCallback(pool, req, res) {
 
     return res.redirect(`${APP_CALLBACK_URI}?token=${encodeURIComponent(result.token)}`);
   } catch (err) {
-    console.error('[zalo] Callback error:', err);
+
     return res.redirect(`${APP_CALLBACK_URI}?error=server_error`);
+  }
+}
+
+/**
+ * GET /api/auth/facebook/callback
+ * Facebook redirects here with ?code=
+ * Exchange code → get profile → create user → redirect back to app with JWT
+ */
+async function facebookCallback(pool, req, res) {
+  const { code } = req.query;
+
+  if (!code) {
+    return res.redirect(`${FACEBOOK_CALLBACK_URI}?error=no_code`);
+  }
+
+  try {
+    const backendUrl = process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const redirectUri = `${backendUrl}/api/auth/facebook/callback`;
+
+    // Exchange code for access_token
+    const tokenRes = await fetch(
+      `https://graph.facebook.com/v18.0/oauth/access_token?${new URLSearchParams({
+        client_id: process.env.FACEBOOK_APP_ID,
+        client_secret: process.env.FACEBOOK_APP_SECRET,
+        redirect_uri: redirectUri,
+        code,
+      })}`
+    );
+    const tokenData = await tokenRes.json();
+
+    if (!tokenData.access_token) {
+      return res.redirect(`${FACEBOOK_CALLBACK_URI}?error=token_exchange_failed`);
+    }
+
+    // Get user profile
+    const profileRes = await fetch(
+      `https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${tokenData.access_token}`
+    );
+    const profile = await profileRes.json();
+
+    if (!profile.id) {
+      return res.redirect(`${FACEBOOK_CALLBACK_URI}?error=profile_failed`);
+    }
+
+    const email = profile.email || null;
+    const result = await serviceLoginProvider(pool, 'facebook_id', String(profile.id), 'facebook', email, null);
+    if (!result.ok) {
+      return res.redirect(`${FACEBOOK_CALLBACK_URI}?error=login_failed`);
+    }
+
+    return res.redirect(`${FACEBOOK_CALLBACK_URI}?token=${encodeURIComponent(result.token)}`);
+  } catch (err) {
+    console.error('[Facebook callback] error:', err.message);
+    return res.redirect(`${FACEBOOK_CALLBACK_URI}?error=server_error`);
   }
 }
 
@@ -251,7 +308,7 @@ async function getMe(pool, req, res) {
     }
     return res.status(200).json({ ok: true, user });
   } catch (err) {
-    console.error('[auth.controller] getMe failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', lang) });
   }
 }
@@ -267,7 +324,7 @@ async function searchUsers(pool, req, res) {
     const users = await serviceSearchUsers(pool, req.user.id, q);
     return res.status(200).json({ ok: true, users });
   } catch (err) {
-    console.error('[auth.controller] searchUsers failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -294,7 +351,7 @@ async function verifyToken(pool, req, res) {
       profile: user
     });
   } catch (err) {
-    console.error('[auth.controller] verifyToken failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', lang) });
   }
 }
@@ -306,6 +363,7 @@ module.exports = {
   loginByApple,
   loginByZalo,
   zaloCallback,
+  facebookCallback,
   loginByPhone,
   getMe,
   searchUsers,

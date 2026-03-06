@@ -3,7 +3,7 @@
  * Sử dụng OpenAI Chat Completions API để sinh câu hỏi thông minh
  */
 
-const DEFAULT_TIMEOUT_MS = 15000; // 15 seconds
+const DEFAULT_TIMEOUT_MS = 30000; // 30 seconds
 const OPENAI_MAX_RETRIES = 3;
 const DEFAULT_MODEL = 'gpt-4o-mini'; // Cost-effective model
 const DEFAULT_TEMPERATURE = 0.7; // Balanced creativity
@@ -157,7 +157,7 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
   for (let attempt = 0; attempt <= OPENAI_MAX_RETRIES; attempt++) {
     if (attempt > 0) {
       const backoffMs = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
-      console.warn(`[chat] OpenAI rate limited — waiting ${backoffMs}ms before retry ${attempt}/${OPENAI_MAX_RETRIES}`);
+
       await new Promise((r) => setTimeout(r, backoffMs));
     }
 

@@ -109,7 +109,7 @@ async function getProfile(pool, userId) {
 
     return { ok: true, profile };
   } catch (err) {
-    console.error('[profile.service] getProfile failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -228,7 +228,7 @@ async function updateProfile(pool, userId, updates) {
     // Fetch updated profile to return
     return await getProfile(pool, userId);
   } catch (err) {
-    console.error('[profile.service] updateProfile failed:', err);
+
     if (err?.code === '23505' && err?.constraint === 'users_phone_key') {
       return { ok: false, error: t('auth.phone_already_used'), statusCode: 409 };
     }
@@ -248,8 +248,6 @@ async function deleteAccount(pool, userId) {
   try {
     // Bắt đầu transaction
     await client.query('BEGIN');
-
-    console.log(`[profile.service] Deleting account for user ${userId}`);
 
     // Xóa các bảng liên quan theo thứ tự (child tables trước)
     // 1. Health & Wellness logs
@@ -314,12 +312,11 @@ async function deleteAccount(pool, userId) {
     // Commit transaction
     await client.query('COMMIT');
 
-    console.log(`[profile.service] Successfully deleted account for user ${userId}`);
     return { ok: true, message: t('success.account_deleted') };
   } catch (err) {
     // Rollback nếu có lỗi
     await client.query('ROLLBACK');
-    console.error('[profile.service] deleteAccount failed:', err);
+
     return { ok: false, error: t('profile.delete_account_error') };
   } finally {
     client.release();
@@ -342,7 +339,7 @@ async function updatePushToken(pool, userId, pushToken) {
 
     return { ok: true };
   } catch (err) {
-    console.error('[profile.service] updatePushToken failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }

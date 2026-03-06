@@ -5,7 +5,7 @@ const onboardingService = require('../services/onboarding.service');
 async function upsertOnboardingProfile(pool, req, res) {
   const parsed = onboardingRequestSchema.safeParse(req.body);
   if (!parsed.success) {
-    console.error('[onboarding] validation failed:', JSON.stringify(parsed.error.issues, null, 2));
+
     return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)), details: parsed.error.issues });
   }
 
@@ -22,7 +22,7 @@ async function upsertOnboardingProfile(pool, req, res) {
     const savedProfile = await onboardingService.upsertProfile(pool, userId, profile);
     return res.status(200).json({ ok: true, profile: savedProfile });
   } catch (err) {
-    console.error('onboarding upsert failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }

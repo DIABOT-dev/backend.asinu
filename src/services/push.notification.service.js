@@ -22,7 +22,7 @@ const { t } = require('../i18n');
  */
 async function sendPushNotification(expoPushTokens, title, body, data = {}) {
   if (!expoPushTokens || expoPushTokens.length === 0) {
-    console.warn('[push] No push tokens provided');
+
     return { ok: false, error: t('error.no_push_tokens') };
   }
 
@@ -32,7 +32,7 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
   );
 
   if (validTokens.length === 0) {
-    console.warn('[push] No valid Expo push tokens');
+
     return { ok: false, error: t('error.no_valid_push_tokens') };
   }
 
@@ -61,14 +61,13 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
     const result = await response.json();
     
     if (!response.ok) {
-      console.error('[push] Expo push service error:', result);
+
       return { ok: false, error: result.message || 'Push service error' };
     }
 
-    console.log('[push] Notifications sent successfully:', result);
     return { ok: true, data: result };
   } catch (error) {
-    console.error('[push] Error sending push notification:', error);
+
     return { ok: false, error: error.message };
   }
 }
@@ -90,7 +89,7 @@ async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitat
     );
 
     if (result.rows.length === 0 || !result.rows[0].push_token) {
-      console.log('[push] No push token found for user', addresseeId);
+
       return { ok: false, error: t('error.no_push_token') };
     }
 
@@ -109,7 +108,7 @@ async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitat
       }
     );
   } catch (error) {
-    console.error('[push] Error notifying care circle invitation:', error);
+
     return { ok: false, error: error.message };
   }
 }
@@ -128,7 +127,7 @@ async function notifyCareCircleAccepted(pool, requesterId, accepterName) {
     );
 
     if (result.rows.length === 0 || !result.rows[0].push_token) {
-      console.log('[push] No push token found for user', requesterId);
+
       return { ok: false, error: t('error.no_push_token') };
     }
 
@@ -146,7 +145,7 @@ async function notifyCareCircleAccepted(pool, requesterId, accepterName) {
       }
     );
   } catch (error) {
-    console.error('[push] Error notifying care circle accepted:', error);
+
     return { ok: false, error: error.message };
   }
 }

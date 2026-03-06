@@ -890,7 +890,7 @@ async function ackAlertWithPermission(pool, alertId, userId) {
       }
     };
   } catch (err) {
-    console.error('[wellness.monitoring.service] ackAlertWithPermission failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }

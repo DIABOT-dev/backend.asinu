@@ -69,7 +69,7 @@ async function postActivity(pool, req, res) {
       client.release();
     }
   } catch (err) {
-    console.error('wellness activity failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -96,7 +96,7 @@ async function getState(pool, req, res) {
       }
     });
   } catch (err) {
-    console.error('wellness state failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -121,7 +121,7 @@ async function postCalculate(pool, req, res) {
       alertSent: result.alert ? true : false
     });
   } catch (err) {
-    console.error('wellness calculate failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -145,7 +145,7 @@ async function getHistory(pool, req, res) {
       }))
     });
   } catch (err) {
-    console.error('wellness history failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -183,7 +183,7 @@ async function getSummary(pool, req, res) {
       }))
     });
   } catch (err) {
-    console.error('wellness summary failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -208,7 +208,7 @@ async function checkShouldPrompt(pool, req, res) {
       client.release();
     }
   } catch (err) {
-    console.error('wellness prompt check failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -239,7 +239,7 @@ async function getMyAlerts(pool, req, res) {
       }))
     });
   } catch (err) {
-    console.error('wellness get alerts failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -271,7 +271,7 @@ async function getCaregiverAlertsHandler(pool, req, res) {
       }))
     });
   } catch (err) {
-    console.error('wellness caregiver alerts failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -295,7 +295,7 @@ async function postAckAlert(pool, req, res) {
 
     return res.status(200).json(result);
   } catch (err) {
-    console.error('wellness ack alert failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -330,7 +330,7 @@ async function postHelpRequest(pool, req, res) {
       client.release();
     }
   } catch (err) {
-    console.error('wellness help request failed:', err);
+
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }

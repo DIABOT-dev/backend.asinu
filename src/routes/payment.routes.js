@@ -23,7 +23,7 @@ function paymentRoutes(pool) {
       const result = await paymentService.createQR(pool, userId, amount);
       return res.status(200).json({ ok: true, ...result });
     } catch (err) {
-      console.error('[payment] createQR error:', err);
+
       return res.status(err.statusCode || 500).json({ ok: false, error: err.message });
     }
   });
@@ -39,7 +39,7 @@ function paymentRoutes(pool) {
       const result = await paymentService.handleWebhook(pool, req);
       return res.status(result.statusCode || 200).json({ ok: result.ok, message: result.message });
     } catch (err) {
-      console.error('[payment] webhook error:', err);
+
       return res.status(500).json({ ok: false, error: err.message });
     }
   });
@@ -53,7 +53,7 @@ function paymentRoutes(pool) {
       const result = await paymentService.getBalance(pool, req.user.id);
       return res.status(200).json({ ok: true, ...result });
     } catch (err) {
-      console.error('[payment] getBalance error:', err);
+
       return res.status(500).json({ ok: false, error: err.message });
     }
   });
@@ -69,7 +69,7 @@ function paymentRoutes(pool) {
       const result = await paymentService.getHistory(pool, req.user.id, { page, limit });
       return res.status(200).json({ ok: true, ...result });
     } catch (err) {
-      console.error('[payment] getHistory error:', err);
+
       return res.status(500).json({ ok: false, error: err.message });
     }
   });

@@ -102,7 +102,7 @@ async function getTreeSummary(pool, userId) {
       totalMissions: totalMissions || 12
     };
   } catch (err) {
-    console.error('[tree.service] getTreeSummary failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -154,7 +154,7 @@ async function getTreeHistory(pool, userId) {
 
     return { ok: true, history };
   } catch (err) {
-    console.error('[tree.service] getTreeHistory failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }

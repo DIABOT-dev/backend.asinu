@@ -71,7 +71,7 @@ function voiceRoutes(pool) {
           voiceLimit: VOICE_MONTHLY_LIMIT,
         });
       } catch (err) {
-        console.error('[voice] chat error:', err);
+
         return res.status(500).json({ ok: false, error: err.message || t('error.voice_processing', getLang(req)) });
       }
     }

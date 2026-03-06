@@ -82,7 +82,7 @@ async function checkGlucoseAlerts(pool, userId) {
 
     return null;
   } catch (error) {
-    console.error('[health] Error checking glucose alerts:', error);
+
     return null;
   }
 }
@@ -138,7 +138,7 @@ async function checkBloodPressureAlerts(pool, userId) {
 
     return null;
   } catch (error) {
-    console.error('[health] Error checking blood pressure alerts:', error);
+
     return null;
   }
 }
@@ -183,7 +183,7 @@ async function checkInactivityAlerts(pool, userId) {
 
     return null;
   } catch (error) {
-    console.error('[health] Error checking inactivity alerts:', error);
+
     return null;
   }
 }
@@ -210,7 +210,7 @@ async function getCareCircleConnections(pool, userId) {
 
     return result.rows.map(row => row.connection_user_id);
   } catch (error) {
-    console.error('[health] Error getting care circle connections:', error);
+
     return [];
   }
 }
@@ -253,9 +253,8 @@ async function createHealthNotifications(pool, userIds, alert, patientName) {
       );
     }
 
-    console.log(`[health] Created ${userIds.length} notifications for alert: ${alert.type}`);
   } catch (error) {
-    console.error('[health] Error creating health notifications:', error);
+
   }
 }
 
@@ -298,11 +297,10 @@ async function runHealthMonitoringForUser(pool, userId) {
         }
       }
 
-      console.log(`[health] Found ${alerts.length} alerts for user ${userId}, notified ${connections.length} connections`);
     }
 
   } catch (error) {
-    console.error(`[health] Error running monitoring for user ${userId}:`, error);
+
   }
 }
 
@@ -312,7 +310,6 @@ async function runHealthMonitoringForUser(pool, userId) {
  */
 async function runDailyHealthMonitoring(pool) {
   try {
-    console.log('[health] Starting daily health monitoring...');
 
     // Lấy danh sách users có care circle connections
     const result = await pool.query(
@@ -330,8 +327,6 @@ async function runDailyHealthMonitoring(pool) {
       ...result.rows.map(r => r.user_id).filter(Boolean)
     ])];
 
-    console.log(`[health] Monitoring ${userIds.length} users with care circle connections`);
-
     // Chạy monitoring cho từng user
     for (const userId of userIds) {
       await runHealthMonitoringForUser(pool, userId);
@@ -339,11 +334,10 @@ async function runDailyHealthMonitoring(pool) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
 
-    console.log('[health] Daily health monitoring completed');
     return { success: true, usersMonitored: userIds.length };
 
   } catch (error) {
-    console.error('[health] Error in daily health monitoring:', error);
+
     return { success: false, error: error.message };
   }
 }

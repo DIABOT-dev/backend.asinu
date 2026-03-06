@@ -270,7 +270,7 @@ Chỉ trả về JSON thuần (không có text thừa):
   const text = aiResponse.reply.trim();
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
-    console.warn(`[engagement] Could not parse AI response for user ${user.id}:`, text);
+
     return { shouldSend: false };
   }
 
@@ -282,7 +282,7 @@ Chỉ trả về JSON thuần (không có text thừa):
       body: parsed.body || '',
     };
   } catch {
-    console.warn(`[engagement] JSON parse failed for user ${user.id}`);
+
     return { shouldSend: false };
   }
 }
@@ -359,10 +359,8 @@ async function markNotificationSent(pool, userId) {
 }
 
 async function runEngagementNotifications(pool) {
-  console.log('[engagement] Starting engagement notification run...');
 
   const users = await getEligibleUsers(pool);
-  console.log(`[engagement] Found ${users.length} eligible users`);
 
   let sent = 0;
   let skipped = 0;
@@ -375,7 +373,7 @@ async function runEngagementNotifications(pool) {
       const decision = await generateEngagementNotification(user, context, lang);
 
       if (!decision.shouldSend) {
-        console.log(`[engagement] AI skipped user ${user.id}`);
+
         skipped++;
         continue;
       }
@@ -389,21 +387,20 @@ async function runEngagementNotifications(pool) {
 
       if (result.ok) {
         await markNotificationSent(pool, user.id);
-        console.log(`[engagement] Sent to user ${user.id}: "${decision.body}"`);
+
         sent++;
       } else {
-        console.warn(`[engagement] Push failed for user ${user.id}:`, result.error);
+
         errors++;
       }
 
       await new Promise(resolve => setTimeout(resolve, 200));
     } catch (err) {
-      console.error(`[engagement] Error user ${user.id}:`, err?.message || err);
+
       errors++;
     }
   }
 
-  console.log(`[engagement] Done — sent: ${sent}, skipped: ${skipped}, errors: ${errors}`);
   return { ok: true, total: users.length, sent, skipped, errors };
 }
 

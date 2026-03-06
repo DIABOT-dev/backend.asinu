@@ -27,7 +27,7 @@ function requirePremium(pool) {
       }
       next();
     } catch (err) {
-      console.error('[subscription.middleware] requirePremium error:', err);
+
       return res.status(500).json({ ok: false, error: 'Internal server error' });
     }
   };

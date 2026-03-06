@@ -47,7 +47,7 @@ async function getNotifications(pool, userId, options = {}) {
       }
     };
   } catch (err) {
-    console.error('[notification.service] getNotifications failed:', err);
+
     return { ok: false, error: t('notification.cannot_get_list') };
   }
 }
@@ -75,7 +75,7 @@ async function markAsRead(pool, notificationId, userId) {
 
     return { ok: true, notification: result.rows[0] };
   } catch (err) {
-    console.error('[notification.service] markAsRead failed:', err);
+
     return { ok: false, error: t('notification.cannot_mark_read') };
   }
 }
@@ -98,7 +98,7 @@ async function markAllAsRead(pool, userId) {
 
     return { ok: true, markedCount: result.rows.length };
   } catch (err) {
-    console.error('[notification.service] markAllAsRead failed:', err);
+
     return { ok: false, error: t('notification.cannot_mark_all_read') };
   }
 }

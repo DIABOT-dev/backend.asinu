@@ -59,7 +59,7 @@ async function getChatReply(message, context, conversationHistory = [], systemPr
   // OpenAI provider (default)
   if (provider === 'openai' || provider === '') {
     if (!process.env.OPENAI_CHAT_MODEL || !process.env.OPENAI_API_KEY) {
-      console.warn('OpenAI not configured, falling back to mock');
+
       return { reply: buildMockReply(message), provider: 'mock' };
     }
     try {
@@ -70,7 +70,7 @@ async function getChatReply(message, context, conversationHistory = [], systemPr
       });
       return result;
     } catch (err) {
-      console.warn('OpenAI call failed, fallback to mock:', err?.message || err);
+
       return { reply: buildMockReply(message), provider: 'mock' };
     }
   }
@@ -86,7 +86,7 @@ async function getChatReply(message, context, conversationHistory = [], systemPr
         return { reply, provider: 'gemini' };
       }
     } catch (err) {
-      console.warn('Gemini call failed, fallback to mock:', err?.message || err);
+
     }
     return { reply: buildMockReply(message), provider: 'mock' };
   }

@@ -23,7 +23,7 @@ function subscriptionRoutes(pool) {
       const result = await subscriptionService.createQR(pool, userId, requested);
       return res.status(200).json({ ok: true, ...result });
     } catch (err) {
-      console.error('[subscription] createQR error:', err);
+
       return res.status(500).json({ ok: false, error: err.message });
     }
   });
@@ -37,7 +37,7 @@ function subscriptionRoutes(pool) {
       const result = await subscriptionService.getStatus(pool, req.user.id);
       return res.status(200).json({ ok: true, ...result });
     } catch (err) {
-      console.error('[subscription] getStatus error:', err);
+
       return res.status(500).json({ ok: false, error: err.message });
     }
   });
@@ -61,7 +61,7 @@ function subscriptionRoutes(pool) {
       const result = await subscriptionService.getHistory(pool, req.user.id, { page, limit });
       return res.status(200).json({ ok: true, ...result });
     } catch (err) {
-      console.error('[subscription] getHistory error:', err);
+
       return res.status(500).json({ ok: false, error: err.message });
     }
   });

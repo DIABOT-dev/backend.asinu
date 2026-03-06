@@ -194,6 +194,72 @@ async function getProfile(pool, userId) {
   return result.rows[0] || null;
 }
 
+/**
+ * Lưu profile do AI thu thập (linh hoạt hơn, không ràng buộc enum).
+ * @param {Object} pool
+ * @param {number} userId
+ * @param {Object} aiProfile - Profile object từ AI
+ */
+async function upsertProfileFromAI(pool, userId, aiProfile) {
+  const medical  = Array.isArray(aiProfile.medical_conditions)  ? aiProfile.medical_conditions  : [];
+  const symptoms = Array.isArray(aiProfile.chronic_symptoms)    ? aiProfile.chronic_symptoms    : [];
+  const joints   = Array.isArray(aiProfile.joint_issues)        ? aiProfile.joint_issues        : [];
+
+  const result = await pool.query(
+    `INSERT INTO user_onboarding_profiles (
+      user_id, age, gender, goal, body_type,
+      medical_conditions, chronic_symptoms, joint_issues,
+      exercise_freq, sleep_duration, water_intake, checkup_freq,
+      flexibility, stairs_performance, walking_habit,
+      raw_profile, onboarding_completed_at, created_at, updated_at
+    ) VALUES (
+      $1, $2, $3, $4, $5,
+      $6::jsonb, $7::jsonb, $8::jsonb,
+      $9, $10, $11, $12, $13, $14, $15,
+      $16::jsonb, NOW(), NOW(), NOW()
+    )
+    ON CONFLICT (user_id) DO UPDATE SET
+      age                     = EXCLUDED.age,
+      gender                  = EXCLUDED.gender,
+      goal                    = EXCLUDED.goal,
+      body_type               = EXCLUDED.body_type,
+      medical_conditions      = EXCLUDED.medical_conditions,
+      chronic_symptoms        = EXCLUDED.chronic_symptoms,
+      joint_issues            = EXCLUDED.joint_issues,
+      exercise_freq           = EXCLUDED.exercise_freq,
+      sleep_duration          = EXCLUDED.sleep_duration,
+      water_intake            = EXCLUDED.water_intake,
+      checkup_freq            = EXCLUDED.checkup_freq,
+      flexibility             = EXCLUDED.flexibility,
+      stairs_performance      = EXCLUDED.stairs_performance,
+      walking_habit           = EXCLUDED.walking_habit,
+      raw_profile             = EXCLUDED.raw_profile,
+      onboarding_completed_at = COALESCE(user_onboarding_profiles.onboarding_completed_at, NOW()),
+      updated_at              = NOW()
+    RETURNING *`,
+    [
+      userId,
+      aiProfile.age         || null,
+      aiProfile.gender      || null,
+      aiProfile.goal        || null,
+      aiProfile.body_type   || null,
+      JSON.stringify(medical),
+      JSON.stringify(symptoms),
+      JSON.stringify(joints),
+      aiProfile.exercise_freq       || null,
+      aiProfile.sleep_duration      || null,
+      aiProfile.water_intake        || null,
+      aiProfile.checkup_freq        || null,
+      aiProfile.flexibility         || null,
+      aiProfile.stairs_performance  || null,
+      aiProfile.walking_habit       || null,
+      JSON.stringify(aiProfile),
+    ]
+  );
+
+  return result.rows[0];
+}
+
 // =====================================================
 // EXPORTS
 // =====================================================
@@ -204,8 +270,9 @@ module.exports = {
   issueLabel,
   normalizeStringList,
   normalizeJointIssues,
-  
+
   // Database operations
   upsertProfile,
+  upsertProfileFromAI,
   getProfile,
 };

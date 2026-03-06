@@ -5,6 +5,8 @@ const { createMobileLog, getRecentLogs, getTodayLogs } = require('../controllers
 const { postChat } = require('../controllers/chat.controller');
 const { getMissionsHandler, getMissionHistoryHandler, getMissionStatsHandler } = require('../controllers/missions.controller');
 const { upsertOnboardingProfile } = require('../controllers/onboarding.controller');
+const onboardingAiService = require('../services/onboarding.ai.service');
+const onboardingService   = require('../services/onboarding.service');
 const { getProfile, updateProfile, deleteAccount, updatePushToken } = require('../controllers/profile.controller');
 const { getTreeSummary, getTreeHistory } = require('../controllers/tree.controller');
 
@@ -62,7 +64,7 @@ function mobileRoutes(pool) {
         await incrementVoiceUsage(pool, req.user.id);
         return res.status(200).json({ ok: true, text, voiceUsed: voiceUsed + 1, voiceLimit: VOICE_MONTHLY_LIMIT });
       } catch (err) {
-        console.error('[transcribe]', err.message);
+
         return res.status(500).json({ ok: false, error: err.message });
       }
     }
@@ -75,8 +77,36 @@ function mobileRoutes(pool) {
   router.get('/missions/history', requireAuth, (req, res) => getMissionHistoryHandler(pool, req, res));
   router.get('/missions/stats', requireAuth, (req, res) => getMissionStatsHandler(pool, req, res));
 
-  // Onboarding
+  // Onboarding — legacy form
   router.post('/onboarding', requireAuth, (req, res) => upsertOnboardingProfile(pool, req, res));
+
+  // Onboarding — AI-driven: lấy câu hỏi tiếp theo
+  router.post('/onboarding/next', requireAuth, async (req, res) => {
+    const { messages = [], language = 'vi' } = req.body;
+    if (!Array.isArray(messages)) {
+      return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+    }
+    try {
+      const result = await onboardingAiService.getNextQuestion(messages, language);
+      return res.status(200).json({ ok: true, ...result });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
+    }
+  });
+
+  // Onboarding — AI-driven: lưu profile khi AI báo done
+  router.post('/onboarding/complete', requireAuth, async (req, res) => {
+    const { profile } = req.body;
+    if (!profile || typeof profile !== 'object') {
+      return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+    }
+    try {
+      const saved = await onboardingService.upsertProfileFromAI(pool, req.user.id, profile);
+      return res.status(200).json({ ok: true, profile: saved });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
+    }
+  });
 
   // Profile
   router.get('/profile', requireAuth, (req, res) => getProfile(pool, req, res));

@@ -119,14 +119,14 @@ async function createInvitation(pool, requesterId, data) {
 
     // Send push notification (non-blocking)
     notifyCareCircleInvitation(pool, addressee_id, requesterName, invitation.id)
-      .catch(err => console.error('[careCircle.service] Failed to send notification:', err));
+      .catch(() => {});
 
     return { ok: true, invitation };
   } catch (err) {
     if (err?.code === '23505') {
       return { ok: false, error: t('careCircle.connection_exists'), statusCode: 409 };
     }
-    console.error('[careCircle.service] createInvitation failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -171,7 +171,7 @@ async function getInvitations(pool, userId, direction = 'all') {
     );
     return { ok: true, invitations: result.rows };
   } catch (err) {
-    console.error('[careCircle.service] getInvitations failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -223,11 +223,11 @@ async function acceptInvitation(pool, invitationId, userId) {
 
     // Send push notification (non-blocking)
     notifyCareCircleAccepted(pool, connection.requester_id, accepterName)
-      .catch(err => console.error('[careCircle.service] Failed to send acceptance notification:', err));
+      .catch(() => {});
 
     return { ok: true, connection };
   } catch (err) {
-    console.error('[careCircle.service] acceptInvitation failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -255,7 +255,7 @@ async function rejectInvitation(pool, invitationId, userId) {
 
     return { ok: true, invitation: result.rows[0] };
   } catch (err) {
-    console.error('[careCircle.service] rejectInvitation failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -286,7 +286,7 @@ async function getConnections(pool, userId) {
     );
     return { ok: true, connections: result.rows };
   } catch (err) {
-    console.error('[careCircle.service] getConnections failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -314,7 +314,7 @@ async function deleteConnection(pool, connectionId, userId) {
 
     return { ok: true, connection: result.rows[0] };
   } catch (err) {
-    console.error('[careCircle.service] deleteConnection failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
@@ -377,7 +377,7 @@ async function updateConnection(pool, connectionId, userId, data) {
 
     return { ok: true, connection: result.rows[0] };
   } catch (err) {
-    console.error('[careCircle.service] updateConnection failed:', err);
+
     return { ok: false, error: t('error.server') };
   }
 }
