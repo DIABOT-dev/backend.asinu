@@ -186,7 +186,7 @@ async function findUserByEmail(pool, email) {
  */
 async function findUserById(pool, userId) {
   const result = await pool.query(
-    'SELECT id, email, phone FROM users WHERE id = $1',
+    'SELECT id, email, phone_number FROM users WHERE id = $1',
     [userId]
   );
   return result.rows[0] || null;
@@ -253,12 +253,26 @@ async function createUserWithProvider(pool, idColumn, providerId, provider, emai
  * @returns {Promise<Object>} - User
  */
 async function createOrUpdateUserWithPhone(pool, phoneNumber) {
+  const normalized = normalizePhoneNumber(phoneNumber);
+  const variants = getPhoneVariants(normalized);
+
+  // Find existing user across both phone columns
+  const existing = await pool.query(
+    `SELECT id, email FROM users
+     WHERE phone_number = ANY($1::text[])
+       AND deleted_at IS NULL
+     LIMIT 1`,
+    [variants]
+  );
+  if (existing.rows.length > 0) {
+    return existing.rows[0];
+  }
+
   const result = await pool.query(
     `INSERT INTO users (phone_number, auth_provider)
      VALUES ($1, 'PHONE')
-     ON CONFLICT (phone_number) DO UPDATE SET deleted_at = NULL
      RETURNING id, email`,
-    [phoneNumber]
+    [normalized]
   );
   return result.rows[0];
 }
@@ -313,15 +327,15 @@ async function initializeDefaultMissions(pool, userId) {
 function normalizePhoneNumber(phoneNumber) {
   const cleaned = phoneNumber.replace(/[\s\-()]/g, '');
   if (cleaned.startsWith('0')) {
-    return '+84' + cleaned.substring(1);
+    return cleaned; // 0984532246 → 0984532246
   }
   if (cleaned.startsWith('+84')) {
-    return cleaned;
+    return '0' + cleaned.substring(3); // +84984532246 → 0984532246
   }
-  if (cleaned.startsWith('84')) {
-    return '+' + cleaned;
+  if (cleaned.startsWith('84') && cleaned.length >= 11) {
+    return '0' + cleaned.substring(2); // 84984532246 → 0984532246
   }
-  return '+84' + cleaned;
+  return cleaned;
 }
 
 /**
@@ -370,10 +384,12 @@ async function registerByEmail(pool, email, password, phoneNumber, fullName, dis
     let finalPhone = null;
     if (phoneNumber) {
       finalPhone = normalizePhoneNumber(phoneNumber);
-      // Check if phone exists
+      // Check both phone columns with all format variants
       const phoneCheck = await pool.query(
-        'SELECT id FROM users WHERE phone_number = $1',
-        [finalPhone]
+        `SELECT id FROM users
+         WHERE phone_number = ANY($1::text[])
+           AND deleted_at IS NULL`,
+        [getPhoneVariants(finalPhone)]
       );
       if (phoneCheck.rows.length > 0) {
         return { ok: false, error: t('auth.phone_already_used') };
@@ -424,7 +440,7 @@ async function loginByEmail(pool, identifier, password) {
       // Search by phone variants
       const variants = getPhoneVariants(identifier);
       const result = await pool.query(
-        'SELECT id, email, password_hash, phone, phone_number, display_name, full_name FROM users WHERE phone_number = ANY($1::text[])',
+        'SELECT id, email, password_hash, phone_number, display_name, full_name FROM users WHERE phone_number = ANY($1::text[])',
         [variants]
       );
       user = result.rows[0];
@@ -545,7 +561,7 @@ async function getCurrentUser(pool, userId) {
   return {
     id: String(user.id),
     email: user.email || null,
-    phone: user.phone || null
+    phone: user.phone_number || null
   };
 }
 
@@ -565,14 +581,11 @@ async function searchUsers(pool, currentUserId, query) {
     }
 
     const result = await pool.query(
-      `SELECT id, email, phone, phone_number, display_name, full_name, created_at 
-       FROM users 
-       WHERE deleted_at IS NULL 
+      `SELECT id, email, phone_number, display_name, full_name, created_at
+       FROM users
+       WHERE deleted_at IS NULL
          AND id != $1
-         AND (
-           REPLACE(REPLACE(COALESCE(phone, ''), ' ', ''), '-', '') LIKE $2
-           OR REPLACE(REPLACE(COALESCE(phone_number, ''), ' ', ''), '-', '') LIKE $2
-         )
+         AND REPLACE(REPLACE(COALESCE(phone_number, ''), ' ', ''), '-', '') LIKE $2
        ORDER BY created_at DESC
        LIMIT 10`,
       [currentUserId, `%${phone}%`]
@@ -582,7 +595,7 @@ async function searchUsers(pool, currentUserId, query) {
       id: String(user.id),
       name: user.display_name || user.full_name || (user.email ? user.email.split('@')[0] : `User ${user.id}`),
       email: null, // Ẩn email vì lý do bảo mật - chỉ tìm bằng SĐT
-      phone: user.phone || user.phone_number || null
+      phone: user.phone_number || null
     }));
   } catch (err) {
 

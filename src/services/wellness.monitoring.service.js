@@ -808,7 +808,7 @@ async function getCaregiverAlerts(pool, userId, options = {}) {
  * Get alerts for caregiver (người thân)
  */
 async function getAlertsForCaregiver(pool, caregiverUserId, options = {}) {
-  let query = `SELECT ca.*, u.phone, u.email
+  let query = `SELECT ca.*, u.phone_number, u.email
                FROM caregiver_alerts ca
                JOIN users u ON u.id = ca.user_id
                WHERE ca.caregiver_user_id = $1`;

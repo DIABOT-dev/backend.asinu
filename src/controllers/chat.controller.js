@@ -4,7 +4,7 @@
  */
 
 const { chatRequestSchema } = require('../validation/validation.schemas');
-const { processChat } = require('../services/chat.service');
+const { processChat, getChatHistory, RETENTION_DAYS_FREE, RETENTION_DAYS_PREMIUM } = require('../services/chat.service');
 const { t, getLang } = require('../i18n');
 
 /**
@@ -37,4 +37,29 @@ async function postChat(pool, req, res) {
   });
 }
 
-module.exports = { postChat };
+/**
+ * GET /api/mobile/chat/history
+ * Get chat history for display
+ */
+async function getChatHistoryHandler(pool, req, res) {
+  try {
+    const userId = req.user.id;
+    const isPremium = req.user.subscription_tier === 'premium';
+    const retentionDays = isPremium ? RETENTION_DAYS_PREMIUM : RETENTION_DAYS_FREE;
+    const messages = await getChatHistory(pool, userId, 200, retentionDays);
+
+    return res.status(200).json({
+      ok: true,
+      messages: messages.map(m => ({
+        id: String(m.id),
+        role: m.sender === 'assistant' ? 'assistant' : 'user',
+        text: m.message,
+        timestamp: new Date(m.created_at).toISOString()
+      }))
+    });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
+  }
+}
+
+module.exports = { postChat, getChatHistoryHandler };

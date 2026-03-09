@@ -59,8 +59,7 @@ const passwordSchema = z
  */
 const UserSchema = z.object({
   id: z.number().int().positive(),
-  phone: z.string().nullable().optional(), // Legacy field
-  phone_number: z.string().nullable().optional(), // Preferred field
+  phone_number: z.string().nullable().optional(),
   google_id: z.string().nullable().optional(),
   apple_id: z.string().nullable().optional(),
   zalo_id: z.string().nullable().optional(),

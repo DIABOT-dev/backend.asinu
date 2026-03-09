@@ -106,7 +106,7 @@ async function getPreferences(pool, userId) {
   const { rows } = await pool.query(
     `SELECT morning_hour, evening_hour, water_hour,
             inferred_morning_hour, inferred_evening_hour, inferred_water_hour,
-            inferred_at, updated_at
+            inferred_at, updated_at, reminders_enabled
      FROM user_notification_preferences
      WHERE user_id = $1`,
     [userId]
@@ -127,23 +127,28 @@ async function getPreferences(pool, userId) {
     effective_morning_hour: p.morning_hour ?? p.inferred_morning_hour ?? DEFAULTS.morning,
     effective_evening_hour: p.evening_hour ?? p.inferred_evening_hour ?? DEFAULTS.evening,
     effective_water_hour:   p.water_hour   ?? p.inferred_water_hour   ?? DEFAULTS.water,
+
+    reminders_enabled: p.reminders_enabled !== false, // default true if no row yet
   };
 }
 
 /**
  * Lưu preferences do user chọn. Truyền null để reset về auto.
  */
-async function updatePreferences(pool, userId, { morning_hour, evening_hour, water_hour }) {
+async function updatePreferences(pool, userId, { morning_hour, evening_hour, water_hour, reminders_enabled }) {
+  const hasReminders = reminders_enabled !== undefined;
   await pool.query(
     `INSERT INTO user_notification_preferences
-       (user_id, morning_hour, evening_hour, water_hour, updated_at)
-     VALUES ($1, $2, $3, $4, NOW())
+       (user_id, morning_hour, evening_hour, water_hour, reminders_enabled, updated_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())
      ON CONFLICT (user_id) DO UPDATE SET
-       morning_hour = $2,
-       evening_hour = $3,
-       water_hour   = $4,
-       updated_at   = NOW()`,
-    [userId, morning_hour ?? null, evening_hour ?? null, water_hour ?? null]
+       morning_hour      = $2,
+       evening_hour      = $3,
+       water_hour        = $4,
+       reminders_enabled = CASE WHEN $6 THEN $5 ELSE user_notification_preferences.reminders_enabled END,
+       updated_at        = NOW()`,
+    [userId, morning_hour ?? null, evening_hour ?? null, water_hour ?? null,
+     hasReminders ? reminders_enabled : true, hasReminders]
   );
 }
 

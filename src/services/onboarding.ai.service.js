@@ -131,7 +131,7 @@ async function callOpenAI(messages, language) {
         model,
         messages: [{ role: 'system', content: systemPrompt }, ...messages],
         temperature: 0.7,
-        max_tokens: 700,
+        max_completion_tokens: 700,
         response_format: { type: 'json_object' },
       }),
       signal: controller.signal,

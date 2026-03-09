@@ -150,9 +150,11 @@ const enhanceReplyWithProfile = (reply, profile) => {
 // SYSTEM PROMPT BUILDING
 // =====================================================
 
-const HISTORY_LIMIT = 20; // Last 20 messages for better repeat-detection
+const HISTORY_LIMIT_FREE = 50;     // AI context: 50 messages for free users (7 ngày)
+const HISTORY_LIMIT_PREMIUM = 300; // AI context: 300 messages for premium (~128K token window)
+const HISTORY_LIMIT = HISTORY_LIMIT_FREE; // default export (backward compat)
 const RETENTION_DAYS_FREE = 7;
-const RETENTION_DAYS_PREMIUM = 30;
+const RETENTION_DAYS_PREMIUM = 365;
 
 /**
  * Kiểm tra một đoạn text có phải câu hỏi không.
@@ -200,33 +202,64 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
   const lines = [];
 
   // ── IDENTITY ─────────────────────────────────────────
-  lines.push('Bạn là Asinu — trợ lý cá nhân thân thiện, thông minh.');
-  lines.push('Bạn trò chuyện tự nhiên, linh hoạt như một người bạn thực sự quan tâm, không phải chatbot y tế cứng nhắc.');
-  lines.push('');
+  lines.push('Bạn là Asinu — người bạn thân thiết, hiểu biết, luôn lắng nghe và quan tâm thật sự.');
+  lines.push('Hãy trò chuyện như một người bạn thực thụ: thoải mái, gần gũi, đôi khi hài hước nhẹ nhàng. Không cứng nhắc, không theo khuôn mẫu, không "chatbot".');
+  lines.push('Mỗi tin nhắn nên nghe như do người viết ra, không phải máy móc. Câu ngắn, ý rõ, đúng trọng tâm.');
 
   // ── USER PROFILE (background context) ────────────────
   if (profile) {
     const medical  = formatIssueList(profile.medical_conditions);
     const symptoms = formatIssueList(profile.chronic_symptoms);
     const joints   = formatIssueList(profile.joint_issues);
-    const habits   = [];
+
+    // User goals: V2 stores as JSONB array, V1 stores as string
+    const goalList = Array.isArray(profile.user_goal) && profile.user_goal.length
+      ? profile.user_goal.join(', ')
+      : (profile.goal || '');
+
+    // Age: V2 uses birth_year, V1 uses age
+    let ageDisplay = '';
+    if (profile.birth_year) {
+      const age = new Date().getFullYear() - parseInt(profile.birth_year);
+      ageDisplay = `${age} tuổi (sinh ${profile.birth_year})`;
+    } else if (profile.age) {
+      ageDisplay = `nhóm tuổi ${profile.age}`;
+    }
+
+    const habits = [];
     if (profile.exercise_freq)  habits.push(`tập ${profile.exercise_freq}`);
-    if (profile.sleep_duration) habits.push(`ngủ ${profile.sleep_duration}`);
+    if (profile.sleep_hours)    habits.push(`ngủ ${profile.sleep_hours}`);
+    else if (profile.sleep_duration) habits.push(`ngủ ${profile.sleep_duration}`);
     if (profile.water_intake)   habits.push(`nước ${profile.water_intake}`);
     if (profile.walking_habit)  habits.push(`đi bộ ${profile.walking_habit}`);
+    if (profile.meals_per_day)  habits.push(`${profile.meals_per_day}/ngày`);
+    if (profile.dinner_time)    habits.push(`ăn tối ${profile.dinner_time}`);
+    if (profile.sweet_intake)   habits.push(`đồ ngọt ${profile.sweet_intake}`);
+    if (profile.post_meal_drowsy && profile.post_meal_drowsy !== 'Không') {
+      habits.push(`buồn ngủ sau ăn: ${profile.post_meal_drowsy}`);
+    }
 
     const profileParts = [];
-    if (profile.gender)     profileParts.push(`giới tính ${profile.gender}`);
-    if (profile.age)        profileParts.push(`nhóm tuổi ${profile.age}`);
-    if (profile.goal)       profileParts.push(`mục tiêu: ${profile.goal}`);
-    if (profile.body_type)  profileParts.push(`thể trạng: ${profile.body_type}`);
-    if (profile.height_cm)  profileParts.push(`cao ${profile.height_cm}cm`);
-    if (profile.weight_kg)  profileParts.push(`nặng ${profile.weight_kg}kg`);
-    if (profile.blood_type) profileParts.push(`nhóm máu ${profile.blood_type}`);
-    if (medical)            profileParts.push(`bệnh lý: ${medical}`);
-    if (symptoms)           profileParts.push(`triệu chứng: ${symptoms}`);
-    if (joints)             profileParts.push(`vấn đề khớp: ${joints}`);
-    if (habits.length)      profileParts.push(`thói quen: ${habits.join(', ')}`);
+    if (profile.gender)          profileParts.push(`giới tính ${profile.gender}`);
+    if (ageDisplay)              profileParts.push(ageDisplay);
+    if (goalList)                profileParts.push(`mục tiêu: ${goalList}`);
+    if (profile.body_type)       profileParts.push(`thể trạng: ${profile.body_type}`);
+    if (profile.height_cm)       profileParts.push(`cao ${profile.height_cm}cm`);
+    if (profile.weight_kg)       profileParts.push(`nặng ${profile.weight_kg}kg`);
+    if (profile.blood_type)      profileParts.push(`nhóm máu ${profile.blood_type}`);
+    if (medical)                 profileParts.push(`bệnh lý: ${medical}`);
+    if (symptoms)                profileParts.push(`triệu chứng: ${symptoms}`);
+    if (joints)                  profileParts.push(`vấn đề khớp: ${joints}`);
+    if (profile.daily_medication && profile.daily_medication !== 'Không') {
+      profileParts.push(`dùng thuốc hàng ngày: ${profile.daily_medication}`);
+    }
+    if (habits.length)           profileParts.push(`thói quen: ${habits.join(', ')}`);
+    if (profile.user_group) {
+      const groupLabel = profile.user_group === 'monitoring' ? 'cần theo dõi sát'
+        : profile.user_group === 'metabolic_risk' ? 'nguy cơ chuyển hóa'
+        : 'sức khoẻ tốt';
+      profileParts.push(`nhóm sức khoẻ: ${groupLabel}`);
+    }
 
     if (profileParts.length) {
       lines.push(`Thông tin người dùng (đã biết sẵn — dùng làm nền tảng, KHÔNG hỏi lại bất kỳ điều nào đã có ở đây): ${profileParts.join('; ')}.`);
@@ -288,29 +321,19 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
 
   if (profile || logsSummary) lines.push('');
 
-  // ── CONVERSATION RULES ────────────────────────────────
-  lines.push('Quy tắc bắt buộc:');
-
-  // First turn greeting
+  // ── CÁCH NÓI CHUYỆN ──────────────────────────────────
   if (historyLength === 0) {
-    lines.push('- Lần đầu: chào ngắn 1 câu rồi đi thẳng vào nội dung, không giải thích dài.');
-  } else {
-    lines.push('- Đang trò chuyện: không chào lại, đi thẳng vào nội dung.');
+    lines.push('Tin nhắn đầu tiên: chào thật ngắn rồi vào thẳng vấn đề.');
   }
 
-  lines.push('- Trả lời đúng điều người dùng đang nói/hỏi, bất kể chủ đề gì. Không kéo về sức khoẻ nếu người dùng không đề cập.');
-  lines.push('- Ngắn gọn, tự nhiên — không dài dòng, không mở đầu sáo rỗng ("Chào bạn!", "Tuyệt vời!", v.v.).');
-  lines.push('- Không phải bác sĩ — chỉ gợi ý gặp bác sĩ khi triệu chứng thực sự nghiêm trọng (đau ngực, khó thở, mất ý thức...). Không nhắc bác sĩ cho câu hỏi thông thường.');
-  lines.push('- Luôn trả lời bằng đúng ngôn ngữ người dùng dùng (Việt → Việt, Anh → Anh).');
-  lines.push('');
+  lines.push(`Cách bạn nói chuyện: như nhắn tin với bạn thân — câu ngắn, đúng việc, không rào đón. Không bao giờ mở đầu bằng "Ok", "Được", "Chào bạn", "Tuyệt vời", "Mình hiểu", "Mình nói thẳng luôn", "Để mình giải thích" hay bất kỳ câu dẫn sáo rỗng nào — vào thẳng nội dung luôn. Không liệt kê 1-2-3, không dùng dấu gạch ngang đầu dòng, không indent. Không dùng **, *, ##. Trả lời đúng ngôn ngữ người dùng dùng.`);
+
+  lines.push(`Về sức khoẻ: bạn biết nhiều và chia sẻ thẳng thắn. Thuốc không kê đơn phổ biến như paracetamol, ibuprofen thì nói bình thường, kèm lưu ý liều dùng nếu cần. Thuốc kê đơn thì hướng sang bác sĩ/dược sĩ một cách tự nhiên, không phải vì "bị giới hạn" mà vì đó là việc đúng đắn. Khi ai đó hỏi mình bị bệnh gì, hãy nói thẳng là việc đó cần bác sĩ khám trực tiếp mới chính xác được, rồi gợi ý họ đi khám — đừng đoán bệnh. Không phải lúc nào cũng cần nhắc bác sĩ, chỉ khi thực sự cần thiết.`);
+
+  lines.push(`Quan trọng: đừng bao giờ nói "mình bị giới hạn", "mình không được phép", "ngoài khả năng" hay bất cứ kiểu nào nghe như mình đang đọc luật. Nếu có gì không muốn nói thẳng, hãy chuyển hướng một cách thật tự nhiên như người bình thường.`);
 
   // ── STOP RULE (chống vòng lặp câu hỏi) ───────────────
-  lines.push('ĐIỂM DỪNG HỎI — bắt buộc tuân thủ:');
-  lines.push('- Mỗi lượt TỐI ĐA 1 câu hỏi. PHẢI đưa ra câu trả lời/lời khuyên cụ thể TRƯỚC, rồi mới hỏi thêm nếu thực sự cần.');
-  lines.push('- CHỈ hỏi khi thiếu thông tin mà KHÔNG CÓ CÁCH NÀO trả lời nếu thiếu nó. Nếu hồ sơ hoặc lịch sử hội thoại đã đủ → KHÔNG hỏi, trả lời luôn.');
-  lines.push('- Kiểm tra lịch sử hội thoại: nếu đã hỏi câu tương tự hoặc người dùng đã đề cập → KHÔNG hỏi lại, dùng thông tin đã có.');
-  lines.push('- Khi cần hỏi: ưu tiên hỏi về thông số LIÊN QUAN trực tiếp đến vấn đề người dùng đang đề cập (VD: hỏi về thời điểm đo nếu người dùng chia sẻ đường huyết, hỏi về triệu chứng cụ thể nếu họ than đau). KHÔNG hỏi chung chung kiểu "Bạn cảm thấy thế nào?".');
-  lines.push('- Nếu người dùng đã có dữ liệu (profile + chỉ số ghi nhận ở trên): dùng dữ liệu đó để đưa ra nhận xét/lời khuyên cụ thể thay vì hỏi lại.');
+  lines.push(`Hỏi lại: chỉ hỏi khi thực sự thiếu thông tin và không có cách nào trả lời nếu thiếu nó. Mỗi lượt tối đa 1 câu hỏi, và phải đưa ra nhận xét/lời khuyên cụ thể trước. Nếu đã biết đủ từ hồ sơ hoặc lịch sử chat thì đừng hỏi lại, trả lời luôn.`);
 
   // Dynamic stop injection based on conversation state
   const consecutiveQuestions = countConsecutiveAiQuestions(history);
@@ -349,6 +372,26 @@ async function getRecentHistory(pool, userId, limit = HISTORY_LIMIT, retentionDa
     [userId, retentionDays, limit]
   );
   return result.rows.reverse(); // chronological order
+}
+
+/**
+ * Get chat history for display in the app (with created_at)
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @param {number} limit - Max messages
+ * @param {number} retentionDays - How many days back
+ * @returns {Promise<Array>}
+ */
+async function getChatHistory(pool, userId, limit = 100, retentionDays = RETENTION_DAYS_FREE) {
+  const result = await pool.query(
+    `SELECT id, message, sender, created_at FROM chat_histories
+     WHERE user_id = $1
+       AND created_at >= NOW() - ($2 || ' days')::INTERVAL
+     ORDER BY created_at ASC
+     LIMIT $3`,
+    [userId, retentionDays, limit]
+  );
+  return result.rows;
 }
 
 /**
@@ -530,9 +573,10 @@ async function processChat(pool, userId, message, context = {}) {
     } else {
       // Gemini/other: fetch history + profile + health logs BEFORE saving current message
       try {
+        const historyLimit = userIsPremium ? HISTORY_LIMIT_PREMIUM : HISTORY_LIMIT_FREE;
         [onboardingProfile, conversationHistory, logsSummary] = await Promise.all([
           getOnboardingProfile(pool, userId),
-          getRecentHistory(pool, userId, HISTORY_LIMIT, retentionDays),
+          getRecentHistory(pool, userId, historyLimit, retentionDays),
           getHealthLogsSummary(pool, userId),
         ]);
         systemPrompt = buildSystemPrompt(onboardingProfile, conversationHistory.length, logsSummary, conversationHistory);
@@ -545,7 +589,18 @@ async function processChat(pool, userId, message, context = {}) {
     // Get AI reply — pass conversation history and system prompt for Gemini
     const providerContext = { ...context, user_id: userId };
     const replyResult = await getChatReply(finalMessage, providerContext, conversationHistory, systemPrompt);
-    const reply = replyResult.reply || '';
+    const rawReply = replyResult.reply || '';
+    // Strip markdown formatting (**, *, ##, _) so chat UI shows plain text
+    const reply = rawReply
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/\*(.+?)\*/g, '$1')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/^[-–—]\s+/gm, '')       // xóa dấu gạch đầu dòng
+      .replace(/^[ \t]+/gm, '')          // xóa indent đầu dòng
+      .replace(/__(.+?)__/g, '$1')
+      .replace(/_(.+?)_/g, '$1')
+      .replace(/\n{3,}/g, '\n\n')        // giảm khoảng trắng thừa
+      .trim();
     const replyProvider = replyResult.provider || 'mock';
 
     console.log(`[Chat] user=${userId} provider=${replyProvider} reply="${reply.slice(0, 100)}${reply.length > 100 ? '…' : ''}"`);
@@ -576,6 +631,8 @@ module.exports = {
   // Constants
   FALLBACK_CONTEXT,
   HISTORY_LIMIT,
+  HISTORY_LIMIT_FREE,
+  HISTORY_LIMIT_PREMIUM,
   RETENTION_DAYS_FREE,
   RETENTION_DAYS_PREMIUM,
 
@@ -597,6 +654,7 @@ module.exports = {
   getOnboardingProfile,
   getHealthLogsSummary,
   getRecentHistory,
+  getChatHistory,
   saveUserMessage,
   saveAssistantReply,
 

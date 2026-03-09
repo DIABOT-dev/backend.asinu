@@ -4,6 +4,7 @@
  */
 
 const { t } = require('../i18n');
+const { normalizePhoneNumber, getPhoneVariants } = require('./auth.service');
 
 /**
  * Get user profile with onboarding data
@@ -14,7 +15,7 @@ const { t } = require('../i18n');
 async function getProfile(pool, userId) {
   try {
     const userResult = await pool.query(
-      `SELECT id, email, phone, phone_number, display_name, full_name, avatar_url, created_at, language_preference
+      `SELECT id, email, phone_number, display_name, full_name, avatar_url, created_at, language_preference
        FROM users
        WHERE id = $1 AND deleted_at IS NULL`,
       [userId]
@@ -45,7 +46,7 @@ async function getProfile(pool, userId) {
         cc.status,
         u.id as guardian_id,
         u.full_name as guardian_name,
-        u.phone as guardian_phone,
+        u.phone_number as guardian_phone_number,
         u.email as guardian_email
        FROM care_circle cc
        JOIN users u ON cc.guardian_id = u.id
@@ -58,7 +59,7 @@ async function getProfile(pool, userId) {
       id: String(row.id),
       guardianId: String(row.guardian_id),
       name: row.guardian_name || t('profile.guardian_label'),
-      phone: row.guardian_phone,
+      phone: row.guardian_phone_number,
       email: row.guardian_email,
       status: row.status
     }));
@@ -75,17 +76,19 @@ async function getProfile(pool, userId) {
       }
     }
 
-    // Combine medical_conditions and chronic_symptoms for chronic diseases
+    // Combine medical_conditions and chronic_symptoms, filter out "none" sentinel values
+    const NONE_VALUES = ['không có', 'none', 'no', 'không', ''];
     const chronicDiseases = [
       ...(onboarding?.medical_conditions || []),
       ...(onboarding?.chronic_symptoms || [])
-    ];
+    ].filter(v => !NONE_VALUES.includes(String(v).toLowerCase().trim()))
+     .filter((v, i, arr) => arr.indexOf(v) === i); // deduplicate
 
     const profile = {
       id: String(user.id),
       name: user.full_name || user.display_name || onboarding?.display_name || (user.email ? user.email.split('@')[0] : `User123 ${user.id}`),
       email: user.email || null,
-      phone: user.phone || user.phone_number || null,
+      phone: user.phone_number || null,
       relationship: t('profile.caregiver_label'),
       avatarUrl: user.avatar_url || null,
       // Health profile fields from onboarding
@@ -137,8 +140,20 @@ async function updateProfile(pool, userId, updates) {
     }
 
     if (phone !== undefined) {
-      userFields.push(`phone = $${userParamIndex}`);
-      userValues.push(phone);
+      const normalizedPhone = normalizePhoneNumber(phone);
+      // Check uniqueness across both phone columns, exclude current user
+      const phoneCheck = await pool.query(
+        `SELECT id FROM users
+         WHERE phone_number = ANY($1::text[])
+           AND id != $2
+           AND deleted_at IS NULL`,
+        [getPhoneVariants(normalizedPhone), userId]
+      );
+      if (phoneCheck.rows.length > 0) {
+        return { ok: false, error: t('auth.phone_already_used'), statusCode: 409 };
+      }
+      userFields.push(`phone_number = $${userParamIndex}`);
+      userValues.push(normalizedPhone);
       userParamIndex++;
     }
 
@@ -215,6 +230,10 @@ async function updateProfile(pool, userId, updates) {
       onboardingFields.push(`medical_conditions = $${onboardingParamIndex}`);
       onboardingValues.push(JSON.stringify(chronicDiseases));
       onboardingParamIndex++;
+      // Clear chronic_symptoms too so old onboarding data doesn't bleed through
+      onboardingFields.push(`chronic_symptoms = $${onboardingParamIndex}`);
+      onboardingValues.push(JSON.stringify([]));
+      onboardingParamIndex++;
     }
 
     if (onboardingFields.length > 0) {
@@ -289,7 +308,7 @@ async function deleteAccount(pool, userId) {
     await client.query('DELETE FROM daily_wellness_summary WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM prompt_history WHERE user_id = $1', [userId]);
 
-    // 6. Risk Engine & Alerts
+    // 6. Risk Engine & Alerts (used by asinu-brain-extension)
     await client.query('DELETE FROM alert_decision_audit WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM asinu_trackers WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM risk_persistence WHERE user_id = $1', [userId]);
@@ -352,7 +371,7 @@ async function updatePushToken(pool, userId, pushToken) {
 async function getBasicProfile(pool, userId) {
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.email, u.phone, u.phone_number, u.full_name, u.display_name,
+      `SELECT u.id, u.email, u.phone_number, u.full_name, u.display_name,
               u.avatar_url, u.language_preference,
               uop.onboarding_completed_at,
               uop.age AS age_range, uop.gender, uop.goal
@@ -371,7 +390,7 @@ async function getBasicProfile(pool, userId) {
         id:                  String(r.id),
         name:                r.full_name || r.display_name || (r.email ? r.email.split('@')[0] : `User ${r.id}`),
         email:               r.email || null,
-        phone:               r.phone || r.phone_number || null,
+        phone:               r.phone_number || null,
         avatarUrl:           r.avatar_url || null,
         languagePreference:  r.language_preference || 'vi',
         onboardingCompleted: !!r.onboarding_completed_at,

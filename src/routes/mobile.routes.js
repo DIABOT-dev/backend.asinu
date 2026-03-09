@@ -2,13 +2,18 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { t, getLang } = require('../i18n');
 const { createMobileLog, getRecentLogs, getTodayLogs } = require('../controllers/mobile.controller');
-const { postChat } = require('../controllers/chat.controller');
+const { postChat, getChatHistoryHandler } = require('../controllers/chat.controller');
 const { getMissionsHandler, getMissionHistoryHandler, getMissionStatsHandler } = require('../controllers/missions.controller');
 const { upsertOnboardingProfile } = require('../controllers/onboarding.controller');
 const onboardingAiService = require('../services/onboarding.ai.service');
 const onboardingService   = require('../services/onboarding.service');
-const { getProfile, getBasicProfile, updateProfile, deleteAccount, updatePushToken } = require('../controllers/profile.controller');
+const { getProfile, getBasicProfile, updateProfile, deleteAccount, updatePushToken, clearPushToken } = require('../controllers/profile.controller');
 const { getTreeSummary, getTreeHistory } = require('../controllers/tree.controller');
+const {
+  startCheckinHandler, followUpHandler, triageHandler,
+  todayCheckinHandler, emergencyHandler,
+  pendingAlertsHandler, confirmAlertHandler,
+} = require('../controllers/checkin.controller');
 
 function mobileRoutes(pool) {
   const router = express.Router();
@@ -69,6 +74,7 @@ function mobileRoutes(pool) {
   );
 
   router.post('/chat', requireAuth, (req, res) => postChat(pool, req, res));
+  router.get('/chat/history', requireAuth, (req, res) => getChatHistoryHandler(pool, req, res));
 
   // Missions
   router.get('/missions', requireAuth, (req, res) => getMissionsHandler(pool, req, res));
@@ -106,12 +112,32 @@ function mobileRoutes(pool) {
     }
   });
 
+  // Onboarding — V2 fixed 5-page wizard
+  router.post('/onboarding/complete-v2', requireAuth, async (req, res) => {
+    try {
+      const saved = await onboardingService.upsertProfileV2(pool, req.user.id, req.body);
+      return res.json({ ok: true, profile: saved });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: 'Server error' });
+    }
+  });
+
   // Profile
   router.get('/profile/basic', requireAuth, (req, res) => getBasicProfile(pool, req, res));
   router.get('/profile', requireAuth, (req, res) => getProfile(pool, req, res));
   router.put('/profile', requireAuth, (req, res) => updateProfile(pool, req, res));
   router.delete('/profile', requireAuth, (req, res) => deleteAccount(pool, req, res));
   router.post('/profile/push-token', requireAuth, (req, res) => updatePushToken(pool, req, res));
+  router.delete('/profile/push-token', requireAuth, (req, res) => clearPushToken(pool, req, res));
+
+  // Health Check-in
+  router.get('/checkin/today',     requireAuth, (req, res) => todayCheckinHandler(pool, req, res));
+  router.post('/checkin/start',    requireAuth, (req, res) => startCheckinHandler(pool, req, res));
+  router.post('/checkin/followup', requireAuth, (req, res) => followUpHandler(pool, req, res));
+  router.post('/checkin/triage',          requireAuth, (req, res) => triageHandler(pool, req, res));
+  router.post('/checkin/emergency',       requireAuth, (req, res) => emergencyHandler(pool, req, res));
+  router.get ('/checkin/pending-alerts',  requireAuth, (req, res) => pendingAlertsHandler(pool, req, res));
+  router.post('/checkin/confirm-alert',   requireAuth, (req, res) => confirmAlertHandler(pool, req, res));
 
   // Tree (Health Score)
   router.get('/tree', requireAuth, (req, res) => getTreeSummary(pool, req, res));

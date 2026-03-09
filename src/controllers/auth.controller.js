@@ -145,8 +145,8 @@ async function loginByZalo(pool, req, res) {
       return res.status(401).json({ ok: false, error: t('error.invalid_token', lang) });
     }
 
-    // Get Zalo user profile
-    const profileRes = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name,picture', {
+    // Get Zalo user profile (request phone if app has permission)
+    const profileRes = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name,picture,phone', {
       headers: { access_token: tokenData.access_token }
     });
     const profile = await profileRes.json();
@@ -155,7 +155,9 @@ async function loginByZalo(pool, req, res) {
       return res.status(401).json({ ok: false, error: t('error.invalid_token', lang) });
     }
 
-    const result = await serviceLoginProvider(pool, 'zalo_id', String(profile.id), 'zalo', null, null);
+    const { normalizePhoneNumber } = require('../services/auth.service');
+    const zaloPhone = profile.phone ? normalizePhoneNumber(profile.phone) : null;
+    const result = await serviceLoginProvider(pool, 'zalo_id', String(profile.id), 'zalo', null, zaloPhone);
     if (!result.ok) return res.status(401).json(result);
     return res.status(200).json(result);
   } catch (err) {
@@ -199,8 +201,8 @@ async function zaloCallback(pool, req, res) {
       return res.redirect(`${APP_CALLBACK_URI}?error=token_exchange_failed`);
     }
 
-    // Get user profile
-    const profileRes = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name,picture', {
+    // Get user profile (request phone if app has permission)
+    const profileRes = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name,picture,phone', {
       headers: { access_token: tokenData.access_token }
     });
     const profile = await profileRes.json();
@@ -209,7 +211,9 @@ async function zaloCallback(pool, req, res) {
       return res.redirect(`${APP_CALLBACK_URI}?error=profile_failed`);
     }
 
-    const result = await serviceLoginProvider(pool, 'zalo_id', String(profile.id), 'zalo', null, null);
+    const { normalizePhoneNumber } = require('../services/auth.service');
+    const zaloPhone = profile.phone ? normalizePhoneNumber(profile.phone) : null;
+    const result = await serviceLoginProvider(pool, 'zalo_id', String(profile.id), 'zalo', null, zaloPhone);
     if (!result.ok) {
       return res.redirect(`${APP_CALLBACK_URI}?error=login_failed`);
     }

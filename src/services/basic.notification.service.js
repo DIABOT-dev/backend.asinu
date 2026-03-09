@@ -16,15 +16,18 @@
  */
 
 const { sendPushNotification } = require('./push.notification.service');
+const { runCheckinFollowUps, runMorningCheckin, runAlertConfirmationFollowUps } = require('./checkin.service');
 const { t } = require('../i18n');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
 // Effective-hour SQL snippet helpers
 // COALESCE(user-set, inferred, default) = $N
-const morningHourExpr = (def = 8)  => `COALESCE(np.morning_hour, np.inferred_morning_hour, ${def})`;
-const eveningHourExpr = (def = 21) => `COALESCE(np.evening_hour, np.inferred_evening_hour, ${def})`;
-const waterHourExpr   = (def = 14) => `COALESCE(np.water_hour,   np.inferred_water_hour,   ${def})`;
+const morningHourExpr  = (def = 8)  => `COALESCE(np.morning_hour, np.inferred_morning_hour, ${def})`;
+const eveningHourExpr  = (def = 21) => `COALESCE(np.evening_hour, np.inferred_evening_hour, ${def})`;
+const waterHourExpr    = (def = 14) => `COALESCE(np.water_hour,   np.inferred_water_hour,   ${def})`;
+// Only send reminders when user hasn't disabled task reminders (null = default true)
+const remindersEnabled = () => `COALESCE(np.reminders_enabled, true) = true`;
 
 // ─── Timezone helper ───────────────────────────────────────────────
 
@@ -56,6 +59,7 @@ async function runMorningLog(pool, hour) {
     WHERE u.push_token IS NOT NULL
       AND u.deleted_at IS NULL
       AND uop.onboarding_completed_at IS NOT NULL
+      AND ${remindersEnabled()}
       AND ${morningHourExpr(8)} = $1
       AND NOT EXISTS (
         SELECT 1 FROM notifications n
@@ -90,6 +94,7 @@ async function runEveningLog(pool, hour) {
     WHERE u.push_token IS NOT NULL
       AND u.deleted_at IS NULL
       AND uop.onboarding_completed_at IS NOT NULL
+      AND ${remindersEnabled()}
       AND ${eveningHourExpr(21)} = $1
       AND NOT EXISTS (
         SELECT 1 FROM notifications n
@@ -124,6 +129,7 @@ async function runWater(pool, hour) {
     WHERE u.push_token IS NOT NULL
       AND u.deleted_at IS NULL
       AND uop.onboarding_completed_at IS NOT NULL
+      AND ${remindersEnabled()}
       AND ${waterHourExpr(14)} = $1
       AND NOT EXISTS (
         SELECT 1 FROM notifications n
@@ -158,6 +164,7 @@ async function runGlucose(pool, hour) {
     WHERE u.push_token IS NOT NULL
       AND u.deleted_at IS NULL
       AND uop.onboarding_completed_at IS NOT NULL
+      AND ${remindersEnabled()}
       AND ${morningHourExpr(8)} = $1
       AND (
         LOWER(uop.medical_conditions::text) LIKE '%ti%u đường%'
@@ -198,6 +205,7 @@ async function runBP(pool, hour) {
     WHERE u.push_token IS NOT NULL
       AND u.deleted_at IS NULL
       AND uop.onboarding_completed_at IS NOT NULL
+      AND ${remindersEnabled()}
       AND ${morningHourExpr(8)} = $1
       AND (
         LOWER(uop.medical_conditions::text) LIKE '%huy%t áp%'
@@ -242,6 +250,7 @@ async function runMedication(pool, slot, hour) {
     WHERE u.push_token IS NOT NULL
       AND u.deleted_at IS NULL
       AND uop.onboarding_completed_at IS NOT NULL
+      AND ${remindersEnabled()}
       AND ${hourExpr} = $1
       AND uop.medical_conditions::text != '[]'
       AND NOT EXISTS (
@@ -311,6 +320,7 @@ async function runStreakMilestones(pool, hour) {
     WHERE u.push_token IS NOT NULL
       AND u.deleted_at IS NULL
       AND uop.onboarding_completed_at IS NOT NULL
+      AND ${remindersEnabled()}
       AND ${morningHourExpr(8)} = $1
       AND EXISTS (
         SELECT 1 FROM logs_common lc
@@ -355,9 +365,11 @@ async function runWeeklyRecap(pool) {
       ) AS days_logged
     FROM users u
     JOIN user_onboarding_profiles uop ON uop.user_id = u.id
+    LEFT JOIN user_notification_preferences np ON np.user_id = u.id
     WHERE u.push_token IS NOT NULL
       AND u.deleted_at IS NULL
       AND uop.onboarding_completed_at IS NOT NULL
+      AND ${remindersEnabled()}
       AND NOT EXISTS (
         SELECT 1 FROM notifications n
         WHERE n.user_id = u.id AND n.type = 'weekly_recap'
@@ -403,6 +415,9 @@ async function runBasicNotifications(pool, forceHour = null) {
     runMedication(pool, 'morning', hour),
     runMedication(pool, 'evening', hour),
     runStreakMilestones(pool, hour),
+    runMorningCheckin(pool, hour),             // 7am health check-in push
+    runCheckinFollowUps(pool),                 // follow-up + escalation (every hour)
+    runAlertConfirmationFollowUps(pool),       // nhắc caregiver chưa xác nhận sau 30 phút
     ...(hour === 20 && dow === 0 ? [runWeeklyRecap(pool)] : []),
   ];
 

@@ -38,7 +38,7 @@ async function getOpenAIReply({ message, userId, sessionId, model, temperature }
       }
     ],
     temperature: selectedTemp,
-    max_tokens: 150, // Câu hỏi ngắn gọn
+    max_completion_tokens: 150, // Câu hỏi ngắn gọn
     top_p: 1,
     frequency_penalty: 0.3, // Tránh lặp từ
     presence_penalty: 0.3
@@ -145,7 +145,7 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
     model,
     messages,
     temperature,
-    max_tokens: 500,
+    max_completion_tokens: 500,
     top_p: 0.95,
     frequency_penalty: 0.6, // Tăng từ 0.3 → 0.6: mạnh tay chống lặp từ/pattern
     presence_penalty: 0.5,  // Tăng từ 0.3 → 0.5: tránh lặp chủ đề/câu hỏi

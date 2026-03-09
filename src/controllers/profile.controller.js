@@ -81,6 +81,14 @@ async function updatePushToken(pool, req, res) {
   return res.status(200).json({ ok: true, message: t('success.push_token_updated', getLang(req)) });
 }
 
+async function clearPushToken(pool, req, res) {
+  if (!req.user?.id) {
+    return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
+  }
+  await pool.query('UPDATE users SET push_token = NULL WHERE id = $1', [req.user.id]);
+  return res.status(200).json({ ok: true });
+}
+
 async function getBasicProfile(pool, req, res) {
   if (!req.user?.id) {
     return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
@@ -97,5 +105,6 @@ module.exports = {
   getBasicProfile,
   updateProfile,
   deleteAccount,
-  updatePushToken
+  updatePushToken,
+  clearPushToken,
 };

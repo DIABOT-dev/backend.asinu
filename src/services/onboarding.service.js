@@ -261,6 +261,186 @@ async function upsertProfileFromAI(pool, userId, aiProfile) {
 }
 
 // =====================================================
+// ONBOARDING V2 — RISK SCORING
+// =====================================================
+
+/**
+ * Calculate risk score from onboarding V2 data.
+ * @param {Object} data - V2 onboarding data
+ * @returns {number} - Risk score
+ */
+function calcRiskScore(data) {
+  let score = 0;
+
+  const year = parseInt(data.birth_year);
+  if (!isNaN(year)) {
+    const age = new Date().getFullYear() - year;
+    if (age >= 70) score += 40;
+    else if (age >= 60) score += 30;
+    else if (age >= 50) score += 20;
+    else if (age >= 40) score += 10;
+  }
+
+  const diseases = Array.isArray(data.medical_conditions) ? data.medical_conditions : [];
+  const DISEASE_SCORES = {
+    'Tiểu đường': 25,
+    'Bệnh tim': 25,
+    'Cao huyết áp': 20,
+    'Tiền tiểu đường': 15,
+    'Mỡ máu': 15,
+    'Tiền đình': 10,
+    'Đau dạ dày': 10,
+    'Gout': 10,
+  };
+  diseases.forEach(d => { score += DISEASE_SCORES[d] || 10; });
+
+  const h = parseFloat(data.height_cm);
+  const w = parseFloat(data.weight_kg);
+  if (h > 0 && w > 0) {
+    const bmi = w / ((h / 100) ** 2);
+    if (bmi >= 30) score += 20;
+    else if (bmi >= 25) score += 10;
+  }
+
+  if (data.daily_medication === 'Có') score += 10;
+  if (data.exercise_freq === 'Ít vận động') score += 10;
+  if (data.sleep_hours === 'Ít hơn 5 giờ') score += 15;
+  else if (data.sleep_hours === '6-7 giờ') score += 5;
+  if (data.sweet_intake === 'Thường xuyên') score += 10;
+  if (data.post_meal_drowsy === 'Thường xuyên') score += 10;
+  if (data.dinner_time === 'Sau 20 giờ') score += 5;
+
+  return score;
+}
+
+/**
+ * Determine user group from risk score.
+ * @param {number} score
+ * @returns {string}
+ */
+function calcGroup(score) {
+  if (score <= 30) return 'wellness';
+  if (score <= 70) return 'metabolic_risk';
+  return 'monitoring';
+}
+
+/**
+ * Upsert user onboarding profile (V2 — fixed 5-page wizard).
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @param {Object} data - V2 onboarding data
+ * @returns {Promise<Object>} - Saved profile
+ */
+async function upsertProfileV2(pool, userId, data) {
+  const {
+    birth_year,
+    gender,
+    height_cm,
+    weight_kg,
+    phone,
+    medical_conditions,
+    daily_medication,
+    checkup_freq,
+    exercise_freq,
+    sleep_hours,
+    meals_per_day,
+    post_meal_drowsy,
+    dinner_time,
+    sweet_intake,
+    user_goal,
+  } = data;
+
+  const normalizedConditions = Array.isArray(medical_conditions) ? medical_conditions : [];
+  const normalizedGoals = Array.isArray(user_goal) ? user_goal : [];
+
+  const risk_score = calcRiskScore(data);
+  const user_group = calcGroup(risk_score);
+
+  const result = await pool.query(
+    `INSERT INTO user_onboarding_profiles (
+      user_id,
+      birth_year,
+      gender,
+      height_cm,
+      weight_kg,
+      medical_conditions,
+      chronic_symptoms,
+      daily_medication,
+      checkup_freq,
+      exercise_freq,
+      sleep_hours,
+      meals_per_day,
+      post_meal_drowsy,
+      dinner_time,
+      sweet_intake,
+      user_goal,
+      risk_score,
+      user_group,
+      onboarding_completed_at,
+      created_at,
+      updated_at
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6::jsonb, '[]'::jsonb,
+      $7, $8, $9, $10, $11, $12, $13, $14,
+      $15::jsonb, $16, $17,
+      NOW(), NOW(), NOW()
+    )
+    ON CONFLICT (user_id) DO UPDATE SET
+      birth_year              = EXCLUDED.birth_year,
+      gender                  = EXCLUDED.gender,
+      height_cm               = EXCLUDED.height_cm,
+      weight_kg               = EXCLUDED.weight_kg,
+      medical_conditions      = EXCLUDED.medical_conditions,
+      chronic_symptoms        = '[]'::jsonb,
+      daily_medication        = EXCLUDED.daily_medication,
+      checkup_freq            = EXCLUDED.checkup_freq,
+      exercise_freq           = EXCLUDED.exercise_freq,
+      sleep_hours             = EXCLUDED.sleep_hours,
+      meals_per_day           = EXCLUDED.meals_per_day,
+      post_meal_drowsy        = EXCLUDED.post_meal_drowsy,
+      dinner_time             = EXCLUDED.dinner_time,
+      sweet_intake            = EXCLUDED.sweet_intake,
+      user_goal               = EXCLUDED.user_goal,
+      risk_score              = EXCLUDED.risk_score,
+      user_group              = EXCLUDED.user_group,
+      onboarding_completed_at = NOW(),
+      updated_at              = NOW()
+    RETURNING *`,
+    [
+      userId,
+      birth_year ? parseInt(birth_year) : null,
+      gender || null,
+      height_cm ? parseFloat(height_cm) : null,
+      weight_kg ? parseFloat(weight_kg) : null,
+      JSON.stringify(normalizedConditions),
+      daily_medication || null,
+      checkup_freq || null,
+      exercise_freq || null,
+      sleep_hours || null,
+      meals_per_day || null,
+      post_meal_drowsy || null,
+      dinner_time || null,
+      sweet_intake || null,
+      JSON.stringify(normalizedGoals),
+      risk_score,
+      user_group,
+    ]
+  );
+
+  const saved = result.rows[0];
+
+  // Update phone number in users table if provided
+  if (phone && /^0\d{9}$/.test(phone.trim())) {
+    await pool.query(
+      'UPDATE users SET phone_number = $1 WHERE id = $2 AND (phone_number IS NULL OR phone_number = \'\')',
+      [phone.trim(), userId]
+    );
+  }
+
+  return saved;
+}
+
+// =====================================================
 // EXPORTS
 // =====================================================
 
@@ -274,5 +454,6 @@ module.exports = {
   // Database operations
   upsertProfile,
   upsertProfileFromAI,
+  upsertProfileV2,
   getProfile,
 };

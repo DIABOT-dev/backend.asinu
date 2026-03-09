@@ -15,11 +15,11 @@ const { t } = require('../i18n');
 async function searchUsers(pool, currentUserId, query) {
   try {
     const result = await pool.query(
-      `SELECT 
+      `SELECT
         id,
         COALESCE(display_name, full_name, email) as name,
         email,
-        COALESCE(phone, phone_number) as phone
+        phone_number as phone
        FROM users
        WHERE deleted_at IS NULL
          AND id != $1
@@ -27,11 +27,10 @@ async function searchUsers(pool, currentUserId, query) {
            display_name ILIKE $2
            OR full_name ILIKE $2
            OR email ILIKE $2
-           OR phone ILIKE $2
            OR phone_number ILIKE $2
          )
-       ORDER BY 
-         CASE 
+       ORDER BY
+         CASE
            WHEN display_name ILIKE $3 THEN 1
            WHEN full_name ILIKE $3 THEN 2
            WHEN email ILIKE $3 THEN 3
@@ -66,11 +65,11 @@ async function searchUsers(pool, currentUserId, query) {
 async function getAllUsers(pool, currentUserId, limit = 100) {
   try {
     const result = await pool.query(
-      `SELECT 
+      `SELECT
         id,
         COALESCE(display_name, full_name, email) as name,
         email,
-        COALESCE(phone, phone_number) as phone
+        phone_number as phone
        FROM users
        WHERE deleted_at IS NULL
          AND id != $1

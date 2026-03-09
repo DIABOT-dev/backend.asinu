@@ -92,7 +92,7 @@ Không cung cấp chẩn đoán y tế. Khuyến khích gặp bác sĩ khi cần
           content: transcript,
         },
       ],
-      max_tokens: 500,
+      max_completion_tokens: 500,
       temperature: 0.7,
     }),
   });
@@ -214,7 +214,7 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
         { role: 'user', content: transcript }
       ],
       temperature: 0.1,
-      max_tokens: 300,
+      max_completion_tokens: 300,
       response_format: { type: 'json_object' }
     }),
     signal: AbortSignal.timeout(20000),

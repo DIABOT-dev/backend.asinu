@@ -161,8 +161,8 @@ async function getInvitations(pool, userId, direction = 'all') {
   try {
     const result = await pool.query(
       `SELECT uc.*,
-              u1.full_name as requester_full_name, u1.email as requester_email, u1.phone as requester_phone,
-              u2.full_name as addressee_full_name, u2.email as addressee_email, u2.phone as addressee_phone
+              u1.full_name as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
+              u2.full_name as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
        FROM user_connections uc
        LEFT JOIN users u1 ON uc.requester_id = u1.id
        LEFT JOIN users u2 ON uc.addressee_id = u2.id
@@ -274,8 +274,8 @@ async function getConnections(pool, userId) {
   try {
     const result = await pool.query(
       `SELECT uc.*,
-              u1.full_name as requester_full_name, u1.email as requester_email, u1.phone as requester_phone,
-              u2.full_name as addressee_full_name, u2.email as addressee_email, u2.phone as addressee_phone
+              u1.full_name as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
+              u2.full_name as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
        FROM user_connections uc
        LEFT JOIN users u1 ON uc.requester_id = u1.id
        LEFT JOIN users u2 ON uc.addressee_id = u2.id

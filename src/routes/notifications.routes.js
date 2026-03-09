@@ -83,7 +83,7 @@ function notificationRoutes(pool) {
    * Body: { morning_hour, evening_hour, water_hour }
    */
   router.put('/preferences', requireAuth, async (req, res) => {
-    const { morning_hour, evening_hour, water_hour } = req.body;
+    const { morning_hour, evening_hour, water_hour, reminders_enabled } = req.body;
 
     // Validate ranges nếu không phải null
     const inRange = (v, min, max) => v === null || v === undefined || (Number.isInteger(v) && v >= min && v <= max);
@@ -96,6 +96,7 @@ function notificationRoutes(pool) {
         morning_hour: morning_hour ?? null,
         evening_hour: evening_hour ?? null,
         water_hour:   water_hour   ?? null,
+        reminders_enabled: reminders_enabled !== undefined ? Boolean(reminders_enabled) : undefined,
       });
       const prefs = await getPreferences(pool, req.user.id);
       return res.status(200).json({ ok: true, ...prefs });
