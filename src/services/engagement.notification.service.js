@@ -50,94 +50,133 @@ async function getEligibleUsers(pool) {
 }
 
 /**
- * Lấy toàn bộ context hoạt động của user để AI nhận định
+ * Lấy context của MỘT user (dùng cho preview).
  */
 async function getUserContext(pool, userId) {
-  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const map = await getBatchContexts(pool, [userId]);
+  return map.get(userId) ?? {
+    profile: null, todayLogTypes: [], loggedTodayCount: 0,
+    hoursSinceLastLog: null, hoursSinceLastBrain: null,
+    latestGlucose: null, latestBp: null,
+  };
+}
+
+/**
+ * Lấy context của NHIỀU user cùng lúc — 6 queries thay vì 6 × N queries.
+ * @param {object} pool
+ * @param {number[]} userIds
+ * @returns {Map<number, object>} userId → context
+ */
+async function getBatchContexts(pool, userIds) {
+  if (!userIds.length) return new Map();
+
+  const ids = userIds; // dùng với ANY($1::int[])
 
   const [
-    profileResult,
-    todayLogsResult,
-    lastLogResult,
-    lastBrainResult,
-    glucoseResult,
-    bpResult,
+    profileRows,
+    todayLogRows,
+    lastLogRows,
+    lastBrainRows,
+    glucoseRows,
+    bpRows,
   ] = await Promise.all([
-    // Profile sức khoẻ
+    // 1. Profiles
     pool.query(
-      `SELECT age, gender, goal, body_type, medical_conditions, chronic_symptoms
-       FROM user_onboarding_profiles WHERE user_id = $1`,
-      [userId]
+      `SELECT user_id, age, gender, goal, body_type, medical_conditions, chronic_symptoms
+       FROM user_onboarding_profiles
+       WHERE user_id = ANY($1::int[])`,
+      [ids]
     ),
 
-    // Hôm nay đã log những gì?
+    // 2. Log types hôm nay (group by user + type)
     pool.query(
-      `SELECT DISTINCT log_type
+      `SELECT user_id, log_type
        FROM logs_common
-       WHERE user_id = $1
+       WHERE user_id = ANY($1::int[])
          AND occurred_at >= CURRENT_DATE
-         AND occurred_at < CURRENT_DATE + INTERVAL '1 day'`,
-      [userId]
+         AND occurred_at < CURRENT_DATE + INTERVAL '1 day'
+       GROUP BY user_id, log_type`,
+      [ids]
     ),
 
-    // Lần cuối log bất kỳ là khi nào?
+    // 3. Lần cuối log
     pool.query(
-      `SELECT MAX(occurred_at) AS last_log_at,
+      `SELECT user_id,
               EXTRACT(EPOCH FROM (NOW() - MAX(occurred_at))) / 3600 AS hours_since_log
        FROM logs_common
-       WHERE user_id = $1`,
-      [userId]
+       WHERE user_id = ANY($1::int[])
+       GROUP BY user_id`,
+      [ids]
     ),
 
-    // Lần cuối làm brain check-in là khi nào?
+    // 4. Lần cuối brain check-in
     pool.query(
-      `SELECT MAX(created_at) AS last_brain_at,
+      `SELECT user_id,
               EXTRACT(EPOCH FROM (NOW() - MAX(created_at))) / 3600 AS hours_since_brain
        FROM asinu_brain_sessions
-       WHERE user_id = $1`,
-      [userId]
+       WHERE user_id = ANY($1::int[])
+       GROUP BY user_id`,
+      [ids]
     ),
 
-    // Chỉ số đường huyết gần nhất (7 ngày)
+    // 5. Glucose gần nhất mỗi user (7 ngày) — DISTINCT ON lấy row mới nhất
     pool.query(
-      `SELECT d.value, d.unit, c.occurred_at
+      `SELECT DISTINCT ON (c.user_id)
+              c.user_id, d.value, d.unit, c.occurred_at
        FROM logs_common c
        JOIN glucose_logs d ON d.log_id = c.id
-       WHERE c.user_id = $1 AND c.log_type = 'glucose'
+       WHERE c.user_id = ANY($1::int[])
+         AND c.log_type = 'glucose'
          AND c.occurred_at >= NOW() - INTERVAL '7 days'
-       ORDER BY c.occurred_at DESC LIMIT 1`,
-      [userId]
+       ORDER BY c.user_id, c.occurred_at DESC`,
+      [ids]
     ),
 
-    // Huyết áp gần nhất (7 ngày)
+    // 6. Huyết áp gần nhất mỗi user (7 ngày)
     pool.query(
-      `SELECT d.systolic, d.diastolic, c.occurred_at
+      `SELECT DISTINCT ON (c.user_id)
+              c.user_id, d.systolic, d.diastolic, c.occurred_at
        FROM logs_common c
        JOIN blood_pressure_logs d ON d.log_id = c.id
-       WHERE c.user_id = $1 AND c.log_type = 'bp'
+       WHERE c.user_id = ANY($1::int[])
+         AND c.log_type = 'bp'
          AND c.occurred_at >= NOW() - INTERVAL '7 days'
-       ORDER BY c.occurred_at DESC LIMIT 1`,
-      [userId]
+       ORDER BY c.user_id, c.occurred_at DESC`,
+      [ids]
     ),
   ]);
 
-  const todayLogTypes = todayLogsResult.rows.map(r => r.log_type);
-  const hoursSinceLog = lastLogResult.rows[0]?.hours_since_log
-    ? Math.round(parseFloat(lastLogResult.rows[0].hours_since_log))
-    : null;
-  const hoursSinceBrain = lastBrainResult.rows[0]?.hours_since_brain
-    ? Math.round(parseFloat(lastBrainResult.rows[0].hours_since_brain))
-    : null;
+  // Index các kết quả theo user_id
+  const profiles    = new Map(profileRows.rows.map(r => [r.user_id, r]));
+  const lastLogs    = new Map(lastLogRows.rows.map(r => [r.user_id, r]));
+  const lastBrains  = new Map(lastBrainRows.rows.map(r => [r.user_id, r]));
+  const glucoses    = new Map(glucoseRows.rows.map(r => [r.user_id, r]));
+  const bps         = new Map(bpRows.rows.map(r => [r.user_id, r]));
 
-  return {
-    profile: profileResult.rows[0] || null,
-    todayLogTypes,                          // ['glucose', 'bp', ...]
-    loggedTodayCount: todayLogTypes.length,
-    hoursSinceLastLog: hoursSinceLog,       // null = chưa bao giờ log
-    hoursSinceLastBrain: hoursSinceBrain,   // null = chưa bao giờ check-in
-    latestGlucose: glucoseResult.rows[0] || null,
-    latestBp: bpResult.rows[0] || null,
-  };
+  // today log types: group by user_id → string[]
+  const todayLogs = new Map();
+  for (const r of todayLogRows.rows) {
+    if (!todayLogs.has(r.user_id)) todayLogs.set(r.user_id, []);
+    todayLogs.get(r.user_id).push(r.log_type);
+  }
+
+  // Assemble context map
+  const result = new Map();
+  for (const uid of userIds) {
+    const ll  = lastLogs.get(uid);
+    const lb  = lastBrains.get(uid);
+    const types = todayLogs.get(uid) ?? [];
+    result.set(uid, {
+      profile:           profiles.get(uid)  ?? null,
+      todayLogTypes:     types,
+      loggedTodayCount:  types.length,
+      hoursSinceLastLog: ll  ? Math.round(parseFloat(ll.hours_since_log))   : null,
+      hoursSinceLastBrain: lb ? Math.round(parseFloat(lb.hours_since_brain)) : null,
+      latestGlucose:     glucoses.get(uid)  ?? null,
+      latestBp:          bps.get(uid)       ?? null,
+    });
+  }
+  return result;
 }
 
 function extractConditions(items) {
@@ -362,13 +401,16 @@ async function runEngagementNotifications(pool) {
 
   const users = await getEligibleUsers(pool);
 
+  // Batch: lấy context của tất cả users trong 6 queries thay vì 6×N
+  const contextMap = await getBatchContexts(pool, users.map(u => u.id));
+
   let sent = 0;
   let skipped = 0;
   let errors = 0;
 
   for (const user of users) {
     try {
-      const context = await getUserContext(pool, user.id);
+      const context = contextMap.get(user.id);
       const lang = user.language_preference || 'vi';
       const decision = await generateEngagementNotification(user, context, lang);
 
@@ -408,5 +450,6 @@ module.exports = {
   runEngagementNotifications,
   generateEngagementNotification,
   getUserContext,
+  getBatchContexts,
   previewEngagementNotification,
 };

@@ -7,7 +7,7 @@ const { getMissionsHandler, getMissionHistoryHandler, getMissionStatsHandler } =
 const { upsertOnboardingProfile } = require('../controllers/onboarding.controller');
 const onboardingAiService = require('../services/onboarding.ai.service');
 const onboardingService   = require('../services/onboarding.service');
-const { getProfile, updateProfile, deleteAccount, updatePushToken } = require('../controllers/profile.controller');
+const { getProfile, getBasicProfile, updateProfile, deleteAccount, updatePushToken } = require('../controllers/profile.controller');
 const { getTreeSummary, getTreeHistory } = require('../controllers/tree.controller');
 
 function mobileRoutes(pool) {
@@ -46,7 +46,6 @@ function mobileRoutes(pool) {
     async (req, res) => {
       if (!req.file) return res.status(400).json({ ok: false, error: t('error.missing_audio', getLang(req)) });
 
-      // Kiểm tra giới hạn voice tháng này
       const voiceUsed = await getVoiceUsageThisMonth(pool, req.user.id);
       if (voiceUsed >= VOICE_MONTHLY_LIMIT) {
         return res.status(429).json({
@@ -64,7 +63,6 @@ function mobileRoutes(pool) {
         await incrementVoiceUsage(pool, req.user.id);
         return res.status(200).json({ ok: true, text, voiceUsed: voiceUsed + 1, voiceLimit: VOICE_MONTHLY_LIMIT });
       } catch (err) {
-
         return res.status(500).json({ ok: false, error: err.message });
       }
     }
@@ -109,6 +107,7 @@ function mobileRoutes(pool) {
   });
 
   // Profile
+  router.get('/profile/basic', requireAuth, (req, res) => getBasicProfile(pool, req, res));
   router.get('/profile', requireAuth, (req, res) => getProfile(pool, req, res));
   router.put('/profile', requireAuth, (req, res) => updateProfile(pool, req, res));
   router.delete('/profile', requireAuth, (req, res) => deleteAccount(pool, req, res));

@@ -155,14 +155,23 @@ const RETENTION_DAYS_FREE = 7;
 const RETENTION_DAYS_PREMIUM = 30;
 
 /**
+ * Kiểm tra một đoạn text có phải câu hỏi không.
+ * Hỗ trợ cả câu có ? và câu hỏi tiếng Việt không có ?.
+ */
+const isQuestion = (text) => {
+  if (!text) return false;
+  if (/\?/.test(text)) return true;
+  // Câu hỏi tiếng Việt hay bỏ dấu hỏi chấm
+  return /(\bkhông\s*$|\bchưa\s*$|\bsao\s*$|như thế nào|bao (nhiêu|lâu|giờ|lần)|mấy (giờ|lần|ngày|tuần)|lúc nào|khi nào|bao giờ|tại sao|vì sao|làm sao|ở đâu)/i.test(text.trim());
+};
+
+/**
  * Kiểm tra xem tin nhắn cuối của AI có phải câu hỏi không.
- * Chỉ dùng dấu ? để tránh false positive với câu tiếng Việt.
  */
 const lastAiTurnWasQuestion = (history = []) => {
   const lastAi = [...history].reverse().find(h => h.sender === 'assistant');
   if (!lastAi) return false;
-  // Chỉ nhận là câu hỏi khi có dấu ? trong nội dung
-  return /\?/.test(lastAi.message);
+  return isQuestion(lastAi.message);
 };
 
 /**
@@ -170,13 +179,11 @@ const lastAiTurnWasQuestion = (history = []) => {
  * Bỏ qua user messages xen kẽ — kiểm tra các assistant turn gần nhất.
  */
 const countConsecutiveAiQuestions = (history = []) => {
-  // Lọc chỉ assistant messages, lấy 4 cái gần nhất
   const aiTurns = history.filter(h => h.sender === 'assistant').slice(-4);
   let count = 0;
-  // Duyệt từ gần nhất về trước
   for (const turn of [...aiTurns].reverse()) {
-    if (/\?/.test(turn.message)) count++;
-    else break; // Gặp turn không có ? → dừng đếm
+    if (isQuestion(turn.message)) count++;
+    else break;
   }
   return count;
 };
@@ -224,6 +231,10 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
     if (profileParts.length) {
       lines.push(`Thông tin người dùng (đã biết sẵn — dùng làm nền tảng, KHÔNG hỏi lại bất kỳ điều nào đã có ở đây): ${profileParts.join('; ')}.`);
     }
+    const mentionHint = buildMentionHint(profile);
+    if (mentionHint) {
+      lines.push(`Gợi ý cá nhân hóa: ${mentionHint} — đề cập khi phù hợp, không cần nhắc mọi lúc.`);
+    }
   }
 
   // ── HEALTH METRICS ────────────────────────────────────
@@ -231,14 +242,47 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
     const metrics = [];
     if (logsSummary.latest_glucose) {
       const g = logsSummary.latest_glucose;
-      metrics.push(`đường huyết gần nhất ${g.value} ${g.unit || 'mg/dL'}`);
+      const trend = logsSummary.glucose_trend ? ` (xu hướng: ${logsSummary.glucose_trend})` : '';
+      metrics.push(`đường huyết gần nhất ${g.value} ${g.unit || 'mg/dL'}${trend}`);
     }
     if (logsSummary.latest_bp) {
       const bp = logsSummary.latest_bp;
-      metrics.push(`huyết áp gần nhất ${bp.systolic}/${bp.diastolic} mmHg`);
+      const pulse = bp.pulse ? `, nhịp tim ${bp.pulse} bpm` : '';
+      metrics.push(`huyết áp gần nhất ${bp.systolic}/${bp.diastolic} mmHg${pulse}`);
+    }
+    if (logsSummary.latest_weight) {
+      const w = logsSummary.latest_weight;
+      const bf = w.bodyfat_pct ? `, mỡ ${w.bodyfat_pct}%` : '';
+      metrics.push(`cân nặng gần nhất ${w.weight_kg} kg${bf}`);
+    }
+    if (logsSummary.water_today_ml) {
+      metrics.push(`nước uống hôm nay ${logsSummary.water_today_ml} ml`);
+    }
+    if (logsSummary.recent_medications?.length) {
+      const meds = logsSummary.recent_medications.map(m => `${m.medication}${m.dose ? ' ' + m.dose : ''}`).join(', ');
+      metrics.push(`thuốc đang dùng: ${meds}`);
     }
     if (metrics.length) {
-      lines.push(`Chỉ số sức khoẻ gần nhất: ${metrics.join(', ')}.`);
+      lines.push(`Chỉ số sức khoẻ đã ghi nhận (dùng làm căn cứ trả lời, KHÔNG hỏi lại các thông số đã có): ${metrics.join('; ')}.`);
+    }
+    // Cross-reference bệnh lý + chỉ số để AI có nhận xét cụ thể hơn
+    if (profile) {
+      const medical = formatIssueList(profile.medical_conditions).toLowerCase();
+      const crossRefs = [];
+      if ((medical.includes('tiểu đường') || medical.includes('đái tháo đường')) && logsSummary.latest_glucose) {
+        const g = logsSummary.latest_glucose;
+        if (g.value > 180) crossRefs.push(`đường huyết ${g.value} mg/dL vượt ngưỡng sau ăn cho người tiểu đường (<180)`);
+        else if (g.value < 70) crossRefs.push(`đường huyết ${g.value} mg/dL thấp, nguy cơ hạ đường huyết`);
+        else crossRefs.push(`đường huyết ${g.value} mg/dL trong phạm vi chấp nhận cho người tiểu đường`);
+      }
+      if ((medical.includes('huyết áp cao') || medical.includes('tăng huyết áp')) && logsSummary.latest_bp) {
+        const bp = logsSummary.latest_bp;
+        if (bp.systolic >= 140 || bp.diastolic >= 90) crossRefs.push(`huyết áp ${bp.systolic}/${bp.diastolic} vượt ngưỡng cho người THA (<140/90)`);
+        else crossRefs.push(`huyết áp ${bp.systolic}/${bp.diastolic} đang kiểm soát tốt`);
+      }
+      if (crossRefs.length) {
+        lines.push(`Nhận xét kết hợp (dùng khi liên quan): ${crossRefs.join('; ')}.`);
+      }
     }
   }
 
@@ -262,9 +306,11 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
 
   // ── STOP RULE (chống vòng lặp câu hỏi) ───────────────
   lines.push('ĐIỂM DỪNG HỎI — bắt buộc tuân thủ:');
-  lines.push('- Mỗi lượt TỐI ĐA 1 câu hỏi. Phải đưa ra câu trả lời/lời khuyên cụ thể TRƯỚC, rồi mới hỏi thêm nếu thực sự cần.');
-  lines.push('- CHỈ hỏi khi thiếu thông tin mà không có cách nào trả lời nếu thiếu nó. Nếu hồ sơ hoặc lịch sử hội thoại đã đủ → KHÔNG hỏi, trả lời luôn.');
-  lines.push('- Kiểm tra lịch sử: nếu đã hỏi câu tương tự trước đó → KHÔNG hỏi lại, dùng những gì người dùng đã chia sẻ.');
+  lines.push('- Mỗi lượt TỐI ĐA 1 câu hỏi. PHẢI đưa ra câu trả lời/lời khuyên cụ thể TRƯỚC, rồi mới hỏi thêm nếu thực sự cần.');
+  lines.push('- CHỈ hỏi khi thiếu thông tin mà KHÔNG CÓ CÁCH NÀO trả lời nếu thiếu nó. Nếu hồ sơ hoặc lịch sử hội thoại đã đủ → KHÔNG hỏi, trả lời luôn.');
+  lines.push('- Kiểm tra lịch sử hội thoại: nếu đã hỏi câu tương tự hoặc người dùng đã đề cập → KHÔNG hỏi lại, dùng thông tin đã có.');
+  lines.push('- Khi cần hỏi: ưu tiên hỏi về thông số LIÊN QUAN trực tiếp đến vấn đề người dùng đang đề cập (VD: hỏi về thời điểm đo nếu người dùng chia sẻ đường huyết, hỏi về triệu chứng cụ thể nếu họ than đau). KHÔNG hỏi chung chung kiểu "Bạn cảm thấy thế nào?".');
+  lines.push('- Nếu người dùng đã có dữ liệu (profile + chỉ số ghi nhận ở trên): dùng dữ liệu đó để đưa ra nhận xét/lời khuyên cụ thể thay vì hỏi lại.');
 
   // Dynamic stop injection based on conversation state
   const consecutiveQuestions = countConsecutiveAiQuestions(history);
@@ -272,10 +318,10 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
 
   if (consecutiveQuestions >= 2) {
     lines.push('');
-    lines.push('CẢNH BÁO VÒNG LẶP: Bạn đã hỏi liên tiếp nhiều lượt. Lần này PHẢI đưa ra câu trả lời/lời khuyên cụ thể dựa trên thông tin đã có. KHÔNG được hỏi thêm bất kỳ câu nào.');
+    lines.push(`CANH BAO VONG LAP: Da hoi lien tiep ${consecutiveQuestions} luot. PHAI tra loi cu the ngay, KHONG hoi them.`);
   } else if (prevWasQuestion) {
     lines.push('');
-    lines.push('Lượt trước bạn đã hỏi người dùng. Lần này ưu tiên đưa ra câu trả lời hoặc lời khuyên dựa trên thông tin người dùng vừa chia sẻ. Nếu vẫn cần hỏi thêm, hỏi tối đa 1 câu sau khi đã trả lời.');
+    lines.push('Lượt trước bạn đã hỏi người dùng. Lần này PHẢI đưa ra câu trả lời hoặc lời khuyên cụ thể trước dựa trên thông tin người dùng vừa chia sẻ. Chỉ hỏi thêm tối đa 1 câu ở cuối nếu thực sự cần thiết.');
   }
 
   return lines.join('\n');
@@ -313,33 +359,73 @@ async function getRecentHistory(pool, userId, limit = HISTORY_LIMIT, retentionDa
  */
 async function getHealthLogsSummary(pool, userId) {
   try {
-    const [glucoseResult, bpResult] = await Promise.all([
+    const [glucoseResult, bpResult, weightResult, waterResult, medResult] = await Promise.all([
       pool.query(
         `SELECT d.value, d.unit, c.occurred_at
          FROM logs_common c
          JOIN glucose_logs d ON d.log_id = c.id
          WHERE c.user_id = $1 AND c.log_type = 'glucose'
            AND c.occurred_at >= NOW() - INTERVAL '7 days'
-         ORDER BY c.occurred_at DESC LIMIT 1`,
+         ORDER BY c.occurred_at DESC LIMIT 3`,
         [userId]
       ),
       pool.query(
-        `SELECT d.systolic, d.diastolic, c.occurred_at
+        `SELECT d.systolic, d.diastolic, d.pulse, c.occurred_at
          FROM logs_common c
          JOIN blood_pressure_logs d ON d.log_id = c.id
          WHERE c.user_id = $1 AND c.log_type = 'bp'
            AND c.occurred_at >= NOW() - INTERVAL '7 days'
+         ORDER BY c.occurred_at DESC LIMIT 3`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT d.weight_kg, d.body_fat_percent, c.occurred_at
+         FROM logs_common c
+         JOIN weight_logs d ON d.log_id = c.id
+         WHERE c.user_id = $1 AND c.log_type = 'weight'
+           AND c.occurred_at >= NOW() - INTERVAL '30 days'
          ORDER BY c.occurred_at DESC LIMIT 1`,
         [userId]
-      )
+      ),
+      pool.query(
+        `SELECT SUM(d.volume_ml) as total_ml, c.occurred_at::date as log_date
+         FROM logs_common c
+         JOIN water_logs d ON d.log_id = c.id
+         WHERE c.user_id = $1 AND c.log_type = 'water'
+           AND c.occurred_at >= NOW() - INTERVAL '1 days'
+         GROUP BY c.occurred_at::date
+         ORDER BY log_date DESC LIMIT 1`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT d.med_name, d.dose_text, d.frequency_text, c.occurred_at
+         FROM logs_common c
+         JOIN medication_logs d ON d.log_id = c.id
+         WHERE c.user_id = $1 AND c.log_type = 'medication'
+           AND c.occurred_at >= NOW() - INTERVAL '3 days'
+         ORDER BY c.occurred_at DESC LIMIT 3`,
+        [userId]
+      ),
     ]);
+
+    // Glucose trend từ 3 readings gần nhất
+    const glucoseRows = glucoseResult.rows;
+    let glucoseTrend = null;
+    if (glucoseRows.length >= 2) {
+      const diff = glucoseRows[0].value - glucoseRows[glucoseRows.length - 1].value;
+      glucoseTrend = diff > 10 ? 'tăng' : diff < -10 ? 'giảm' : 'ổn định';
+    }
+
     return {
-      latest_glucose: glucoseResult.rows[0] || null,
+      latest_glucose: glucoseRows[0] || null,
+      glucose_trend: glucoseTrend,
       latest_bp: bpResult.rows[0] || null,
+      latest_weight: weightResult.rows[0] || null,
+      water_today_ml: waterResult.rows[0]?.total_ml || null,
+      recent_medications: medResult.rows,
     };
   } catch (err) {
-
-    return { latest_glucose: null, latest_bp: null };
+    return { latest_glucose: null, latest_bp: null, latest_weight: null, water_today_ml: null, recent_medications: [] };
   }
 }
 

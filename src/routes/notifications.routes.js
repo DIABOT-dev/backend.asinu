@@ -3,6 +3,7 @@ const { requireAuth } = require('../middleware/auth.middleware');
 const notificationService = require('../services/notification.service');
 const { runEngagementNotifications, previewEngagementNotification } = require('../services/engagement.notification.service');
 const { runBasicNotifications } = require('../services/basic.notification.service');
+const { getPreferences, updatePreferences } = require('../services/smart.schedule.service');
 const { t, getLang } = require('../i18n');
 
 function notificationRoutes(pool) {
@@ -64,6 +65,46 @@ function notificationRoutes(pool) {
   });
 
   /**
+   * GET /api/notifications/preferences
+   * Lấy giờ nhắc của user (user-set + inferred + effective).
+   */
+  router.get('/preferences', requireAuth, async (req, res) => {
+    try {
+      const prefs = await getPreferences(pool, req.user.id);
+      return res.status(200).json({ ok: true, ...prefs });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  /**
+   * PUT /api/notifications/preferences
+   * Cập nhật giờ nhắc. Gửi null để reset về auto.
+   * Body: { morning_hour, evening_hour, water_hour }
+   */
+  router.put('/preferences', requireAuth, async (req, res) => {
+    const { morning_hour, evening_hour, water_hour } = req.body;
+
+    // Validate ranges nếu không phải null
+    const inRange = (v, min, max) => v === null || v === undefined || (Number.isInteger(v) && v >= min && v <= max);
+    if (!inRange(morning_hour, 5, 11) || !inRange(evening_hour, 17, 23) || !inRange(water_hour, 10, 18)) {
+      return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
+    }
+
+    try {
+      await updatePreferences(pool, req.user.id, {
+        morning_hour: morning_hour ?? null,
+        evening_hour: evening_hour ?? null,
+        water_hour:   water_hour   ?? null,
+      });
+      const prefs = await getPreferences(pool, req.user.id);
+      return res.status(200).json({ ok: true, ...prefs });
+    } catch (err) {
+      return res.status(500).json({ ok: false, error: err.message });
+    }
+  });
+
+  /**
    * GET /api/notifications/engagement/preview
    * AI sinh nội dung thông báo cho user hiện tại (KHÔNG gửi push thật).
    * Dùng cho nút test trong app — frontend nhận title+body rồi show local notification.
@@ -85,7 +126,7 @@ function notificationRoutes(pool) {
    */
   router.post('/engagement/run', async (req, res) => {
     const secret = process.env.CRON_SECRET;
-    if (secret && req.headers['x-cron-secret'] !== secret) {
+    if (!secret || req.headers['x-cron-secret'] !== secret) {
       return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
     }
 
@@ -106,7 +147,7 @@ function notificationRoutes(pool) {
    */
   router.post('/basic/run', async (req, res) => {
     const secret = process.env.CRON_SECRET;
-    if (secret && req.headers['x-cron-secret'] !== secret) {
+    if (!secret || req.headers['x-cron-secret'] !== secret) {
       return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
     }
 

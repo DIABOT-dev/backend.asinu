@@ -47,6 +47,7 @@ function subscriptionRoutes(pool) {
    * Danh sách gói cước (public — không cần auth).
    */
   router.get('/plans', (req, res) => {
+    res.set('Cache-Control', 'public, max-age=3600');
     return res.status(200).json({ ok: true, plans: Object.values(subscriptionService.PLANS) });
   });
 

@@ -10,8 +10,9 @@ const {
   verifySocialToken
 } = require('../services/auth.service');
 
-const ZALO_CALLBACK_URI    = 'asinu-lite://auth/zalo/callback';
+const ZALO_CALLBACK_URI     = 'asinu-lite://auth/zalo/callback';
 const FACEBOOK_CALLBACK_URI = 'asinu-lite://auth/facebook/callback';
+const GOOGLE_CALLBACK_URI   = 'asinu-lite://auth/google/callback';
 // Keep backward-compat alias
 const APP_CALLBACK_URI = ZALO_CALLBACK_URI;
 
@@ -356,6 +357,88 @@ async function verifyToken(pool, req, res) {
   }
 }
 
+/**
+ * GET /api/auth/google/initiate
+ * Redirect browser to Google OAuth consent screen (server-side flow for Android)
+ */
+async function googleInitiate(pool, req, res) {
+  const backendUrl = process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+  const redirectUri = `${backendUrl}/api/auth/google/callback`;
+  const clientId = process.env.GOOGLE_WEB_CLIENT_ID;
+
+  if (!clientId) {
+    return res.redirect(`${GOOGLE_CALLBACK_URI}?error=google_not_configured`);
+  }
+
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    access_type: 'online',
+    state: Buffer.from(JSON.stringify({ n: Date.now() })).toString('base64'),
+  });
+
+  return res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+}
+
+/**
+ * GET /api/auth/google/callback
+ * Google redirects here with ?code=
+ * Exchange code → get profile → create user → redirect back to app with JWT
+ */
+async function googleCallback(pool, req, res) {
+  const { code } = req.query;
+
+  if (!code) {
+    return res.redirect(`${GOOGLE_CALLBACK_URI}?error=no_code`);
+  }
+
+  try {
+    const backendUrl = process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const redirectUri = `${backendUrl}/api/auth/google/callback`;
+    const clientId = process.env.GOOGLE_WEB_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_WEB_CLIENT_SECRET;
+
+    // Exchange code for tokens
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: 'authorization_code',
+      }).toString(),
+    });
+    const tokenData = await tokenRes.json();
+
+    if (!tokenData.access_token) {
+      return res.redirect(`${GOOGLE_CALLBACK_URI}?error=token_exchange_failed`);
+    }
+
+    // Get user profile
+    const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    });
+    const profile = await profileRes.json();
+
+    if (!profile.id) {
+      return res.redirect(`${GOOGLE_CALLBACK_URI}?error=profile_failed`);
+    }
+
+    const result = await serviceLoginProvider(pool, 'google_id', String(profile.id), 'google', profile.email || null, null);
+    if (!result.ok) {
+      return res.redirect(`${GOOGLE_CALLBACK_URI}?error=login_failed`);
+    }
+
+    return res.redirect(`${GOOGLE_CALLBACK_URI}?token=${encodeURIComponent(result.token)}`);
+  } catch (err) {
+    return res.redirect(`${GOOGLE_CALLBACK_URI}?error=server_error`);
+  }
+}
+
 module.exports = {
   registerByEmail,
   loginByEmail,
@@ -364,6 +447,8 @@ module.exports = {
   loginByZalo,
   zaloCallback,
   facebookCallback,
+  googleInitiate,
+  googleCallback,
   loginByPhone,
   getMe,
   searchUsers,

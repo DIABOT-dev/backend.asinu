@@ -12,6 +12,10 @@ function healthRoutes(pool) {
    * Thường được gọi bởi cronjob
    */
   router.post('/monitor/daily', async (req, res) => {
+    const secret = process.env.CRON_SECRET;
+    if (!secret || req.headers['x-cron-secret'] !== secret) {
+      return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
+    }
     try {
 
       const result = await runDailyHealthMonitoring(pool);
@@ -30,9 +34,10 @@ function healthRoutes(pool) {
     }
   });
 
-  // Endpoint để gửi cảnh báo health cho care-circle  
-  router.post('/alert-care-circle', async (req, res) => {
-    const { userId, alertData } = req.body;
+  // Endpoint để gửi cảnh báo health cho care-circle
+  router.post('/alert-care-circle', requireAuth, async (req, res) => {
+    const userId = req.user.id; // lấy từ token, không tin body
+    const { alertData } = req.body;
     
     try {
       // Tìm tất cả care-circle connections của user
@@ -55,9 +60,10 @@ function healthRoutes(pool) {
       const connections = await pool.query(connectionsQuery, [userId]);
       
       if (connections.rows.length === 0) {
-        return res.status(200).json({ 
+        return res.status(200).json({
+          ok: true,
           message: t('careCircle.no_care_circle', getLang(req)),
-          notified: 0 
+          notified: 0
         });
       }
       
@@ -108,19 +114,19 @@ function healthRoutes(pool) {
         await pool.query(insertQuery, insertValues);
       }
       
-      res.json({
-        success: true,
+      return res.status(200).json({
+        ok: true,
         message: t('health.alert_sent_count', getLang(req), { count: connections.rows.length }),
         notified: connections.rows.length,
         alertType: alertData.alertType,
         severity: alertData.severity
       });
-      
+
     } catch (error) {
 
-      res.status(500).json({
-        error: t('health.alert_send_error', getLang(req)),
-        details: error.message
+      return res.status(500).json({
+        ok: false,
+        error: t('health.alert_send_error', getLang(req))
       });
     }
   });

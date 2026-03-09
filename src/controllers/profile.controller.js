@@ -81,8 +81,20 @@ async function updatePushToken(pool, req, res) {
   return res.status(200).json({ ok: true, message: t('success.push_token_updated', getLang(req)) });
 }
 
+async function getBasicProfile(pool, req, res) {
+  if (!req.user?.id) {
+    return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
+  }
+  const result = await profileService.getBasicProfile(pool, req.user.id);
+  if (!result.ok) {
+    return res.status(result.statusCode || 500).json(result);
+  }
+  return res.status(200).json(result);
+}
+
 module.exports = {
   getProfile,
+  getBasicProfile,
   updateProfile,
   deleteAccount,
   updatePushToken

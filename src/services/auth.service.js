@@ -15,7 +15,10 @@ const { t } = require('../i18n');
 // CONSTANTS
 // =====================================================
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_only_change_me';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('[FATAL] JWT_SECRET environment variable is not set. Server cannot start.');
+}
 const JWT_EXPIRES_IN = '30d';
 
 // =====================================================
@@ -89,12 +92,6 @@ async function comparePassword(password, hash) {
 async function verifySocialToken(provider, token) {
   if (!token || typeof token !== 'string') {
     return { valid: false };
-  }
-
-  // Accept mock tokens in development
-  if (process.env.NODE_ENV === 'development' && token.startsWith('mock-')) {
-
-    return { valid: true };
   }
 
   try {

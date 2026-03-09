@@ -344,8 +344,50 @@ async function updatePushToken(pool, userId, pushToken) {
   }
 }
 
+/**
+ * Lấy profile tối giản — chỉ dùng cho bootstrap khi app khởi động.
+ * 1 query duy nhất, không load care circle / health data nặng.
+ * @returns {Promise<Object>} - { ok, profile, error }
+ */
+async function getBasicProfile(pool, userId) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.id, u.email, u.phone, u.phone_number, u.full_name, u.display_name,
+              u.avatar_url, u.language_preference,
+              uop.onboarding_completed_at,
+              uop.age AS age_range, uop.gender, uop.goal
+       FROM users u
+       LEFT JOIN user_onboarding_profiles uop ON uop.user_id = u.id
+       WHERE u.id = $1 AND u.deleted_at IS NULL`,
+      [userId]
+    );
+
+    if (!rows.length) return { ok: false, error: t('error.user_not_found'), statusCode: 404 };
+
+    const r = rows[0];
+    return {
+      ok: true,
+      profile: {
+        id:                  String(r.id),
+        name:                r.full_name || r.display_name || (r.email ? r.email.split('@')[0] : `User ${r.id}`),
+        email:               r.email || null,
+        phone:               r.phone || r.phone_number || null,
+        avatarUrl:           r.avatar_url || null,
+        languagePreference:  r.language_preference || 'vi',
+        onboardingCompleted: !!r.onboarding_completed_at,
+        ageRange:            r.age_range || null,
+        gender:              r.gender || null,
+        goal:                r.goal || null,
+      },
+    };
+  } catch (err) {
+    return { ok: false, error: t('error.server') };
+  }
+}
+
 module.exports = {
   getProfile,
+  getBasicProfile,
   updateProfile,
   deleteAccount,
   updatePushToken
