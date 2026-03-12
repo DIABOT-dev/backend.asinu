@@ -76,6 +76,68 @@ function mobileRoutes(pool) {
   router.post('/chat', requireAuth, (req, res) => postChat(pool, req, res));
   router.get('/chat/history', requireAuth, (req, res) => getChatHistoryHandler(pool, req, res));
 
+  // Chat feedback (like / dislike / note)
+  router.post('/chat/feedback', requireAuth, async (req, res) => {
+    const { messageId, messageText, feedbackType } = req.body;
+    const userId = req.user.id;
+    if (!['like', 'dislike', 'note'].includes(feedbackType) || !messageId || !messageText) {
+      return res.status(400).json({ ok: false, error: 'Invalid request' });
+    }
+    try {
+      if (feedbackType === 'note') {
+        await pool.query(
+          `INSERT INTO chat_feedback (user_id, message_id, message_text, feedback_type) VALUES ($1,$2,$3,'note')`,
+          [userId, messageId, messageText]
+        );
+        return res.json({ ok: true, action: 'saved' });
+      }
+      // like / dislike — toggle or switch
+      const { rows } = await pool.query(
+        `SELECT id, feedback_type FROM chat_feedback WHERE user_id=$1 AND message_id=$2 AND feedback_type IN ('like','dislike')`,
+        [userId, messageId]
+      );
+      if (rows.length > 0) {
+        if (rows[0].feedback_type === feedbackType) {
+          await pool.query('DELETE FROM chat_feedback WHERE id=$1', [rows[0].id]);
+          return res.json({ ok: true, action: 'removed' });
+        }
+        await pool.query('UPDATE chat_feedback SET feedback_type=$1, updated_at=NOW() WHERE id=$2', [feedbackType, rows[0].id]);
+        return res.json({ ok: true, action: 'updated' });
+      }
+      await pool.query(
+        `INSERT INTO chat_feedback (user_id, message_id, message_text, feedback_type) VALUES ($1,$2,$3,$4)`,
+        [userId, messageId, messageText, feedbackType]
+      );
+      return res.json({ ok: true, action: 'saved' });
+    } catch {
+      return res.status(500).json({ ok: false, error: 'Server error' });
+    }
+  });
+
+  router.get('/chat/notes', requireAuth, async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT id, message_text, created_at FROM chat_feedback WHERE user_id=$1 AND feedback_type='note' ORDER BY created_at DESC`,
+        [req.user.id]
+      );
+      return res.json({ ok: true, notes: rows });
+    } catch {
+      return res.status(500).json({ ok: false, error: 'Server error' });
+    }
+  });
+
+  router.delete('/chat/notes/:id', requireAuth, async (req, res) => {
+    try {
+      await pool.query(
+        `DELETE FROM chat_feedback WHERE id=$1 AND user_id=$2 AND feedback_type='note'`,
+        [parseInt(req.params.id), req.user.id]
+      );
+      return res.json({ ok: true });
+    } catch {
+      return res.status(500).json({ ok: false, error: 'Server error' });
+    }
+  });
+
   // Missions
   router.get('/missions', requireAuth, (req, res) => getMissionsHandler(pool, req, res));
   router.get('/missions/history', requireAuth, (req, res) => getMissionHistoryHandler(pool, req, res));
@@ -115,6 +177,16 @@ function mobileRoutes(pool) {
   // Onboarding — V2 fixed 5-page wizard
   router.post('/onboarding/complete-v2', requireAuth, async (req, res) => {
     try {
+      const { phone } = req.body;
+      if (phone && /^0\d{9}$/.test(phone.trim())) {
+        const dup = await pool.query(
+          'SELECT id FROM users WHERE phone_number = $1 AND id != $2',
+          [phone.trim(), req.user.id]
+        );
+        if (dup.rows.length > 0) {
+          return res.status(409).json({ ok: false, error: 'Số điện thoại đã được sử dụng' });
+        }
+      }
       const saved = await onboardingService.upsertProfileV2(pool, req.user.id, req.body);
       return res.json({ ok: true, profile: saved });
     } catch (err) {

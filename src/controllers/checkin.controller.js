@@ -3,7 +3,7 @@ const { t, getLang } = require('../i18n');
 
 async function startCheckinHandler(pool, req, res) {
   const { status } = req.body;
-  if (!['fine', 'tired', 'very_tired'].includes(status)) {
+  if (!['fine', 'tired', 'very_tired', 'specific_concern'].includes(status)) {
     return res.status(400).json({ ok: false, error: 'Invalid status' });
   }
   try {
@@ -42,8 +42,8 @@ async function triageHandler(pool, req, res) {
 
 async function todayCheckinHandler(pool, req, res) {
   try {
-    const session = await checkinService.getTodayCheckin(pool, req.user.id);
-    return res.json({ ok: true, session });
+    const { session, continuityMessage } = await checkinService.getTodayCheckin(pool, req.user.id);
+    return res.json({ ok: true, session, continuityMessage });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

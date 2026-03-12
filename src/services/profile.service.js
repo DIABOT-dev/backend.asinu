@@ -30,7 +30,7 @@ async function getProfile(pool, userId) {
     // Get onboarding profile for health info
     const onboardingResult = await pool.query(
       `SELECT display_name, age, gender, goal, body_type,
-              date_of_birth, height_cm, weight_kg, blood_type,
+              date_of_birth, birth_year, height_cm, weight_kg, blood_type,
               medical_conditions, chronic_symptoms, onboarding_completed_at
        FROM user_onboarding_profiles
        WHERE user_id = $1`,
@@ -64,7 +64,7 @@ async function getProfile(pool, userId) {
       status: row.status
     }));
 
-    // Calculate age from date_of_birth
+    // Calculate age from date_of_birth, fall back to birth_year for v2 onboarding users
     let age = null;
     if (onboarding?.date_of_birth) {
       const today = new Date();
@@ -74,6 +74,8 @@ async function getProfile(pool, userId) {
       if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
         age--;
       }
+    } else if (onboarding?.birth_year) {
+      age = new Date().getFullYear() - parseInt(onboarding.birth_year);
     }
 
     // Combine medical_conditions and chronic_symptoms, filter out "none" sentinel values

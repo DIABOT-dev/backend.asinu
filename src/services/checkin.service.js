@@ -13,7 +13,7 @@
  */
 
 const { sendPushNotification } = require('./push.notification.service');
-const { getNextTriageQuestion } = require('./checkin.ai.service');
+const { getNextTriageQuestion, buildContinuityMessage, calcFollowUpHours } = require('./checkin.ai.service');
 const { t } = require('../i18n');
 
 /**
@@ -66,22 +66,63 @@ function todayVN() {
   return nowVN().toISOString().slice(0, 10);
 }
 
+/** Check-in session date: resets at 05:00 VN (not midnight).
+ *  Before 05:00 → use previous calendar day. */
+function checkinDateVN() {
+  const vn = nowVN();
+  if (vn.getHours() < 5) {
+    vn.setDate(vn.getDate() - 1);
+  }
+  return vn.toISOString().slice(0, 10);
+}
+
 /** Calculate next follow-up time based on flow + checkin count */
-function calcNextCheckin(flowState, currentStatus, followUpCount = 0) {
+function calcNextCheckin(flowState, currentStatus, followUpCount = 0, followUpHoursFromAI = null) {
   if (flowState === 'monitoring') return todayEvening9pm();
-  if (flowState === 'high_alert')  return hoursFromNow(2);
-  // follow_up: first time = 3h, subsequent = 4h
+  // Nếu AI trả về followUpHours → dùng luôn
+  if (followUpHoursFromAI) return hoursFromNow(followUpHoursFromAI);
+  if (flowState === 'high_alert')  return hoursFromNow(followUpCount === 0 ? 1 : 2);
+  // follow_up: first = 3h, subsequent = 4h
   return hoursFromNow(followUpCount === 0 ? 3 : 4);
+}
+
+// ─── Get yesterday's session ─────────────────────────────────────────────────
+
+/**
+ * Lấy session ngày hôm qua (dùng cho Continuity Check).
+ */
+async function getYesterdaySession(pool, userId) {
+  const vn = new Date(new Date().toLocaleString('en-US', { timeZone: TZ }));
+  vn.setDate(vn.getDate() - 1);
+  const yesterday = vn.toISOString().slice(0, 10);
+  const { rows } = await pool.query(
+    `SELECT session_date, initial_status, triage_summary, triage_severity, flow_state
+     FROM health_checkins WHERE user_id = $1 AND session_date = $2`,
+    [userId, yesterday]
+  );
+  return rows[0] || null;
 }
 
 // ─── Get today's session ─────────────────────────────────────────────────────
 
 async function getTodayCheckin(pool, userId) {
-  const { rows } = await pool.query(
-    `SELECT * FROM health_checkins WHERE user_id = $1 AND session_date = $2`,
-    [userId, todayVN()]
-  );
-  return rows[0] || null;
+  const [sessionRes, profileRes, yesterdaySession] = await Promise.all([
+    pool.query(
+      `SELECT * FROM health_checkins WHERE user_id = $1 AND session_date = $2`,
+      [userId, checkinDateVN()]
+    ),
+    pool.query(
+      `SELECT COALESCE(language_preference, 'vi') AS lang FROM users WHERE id = $1`,
+      [userId]
+    ),
+    getYesterdaySession(pool, userId),
+  ]);
+
+  const session = sessionRes.rows[0] || null;
+  const lang = profileRes.rows[0]?.lang || 'vi';
+  const continuityMessage = buildContinuityMessage(yesterdaySession, lang);
+
+  return { session, continuityMessage };
 }
 
 // ─── Start / record initial check-in ─────────────────────────────────────────
@@ -91,12 +132,12 @@ async function getTodayCheckin(pool, userId) {
  * Called when user responds to morning push or taps "Update sức khoẻ".
  */
 async function startCheckin(pool, userId, status) {
-  const date = todayVN();
+  const date = checkinDateVN();
 
   let flowState;
-  if (status === 'fine')        flowState = 'monitoring';
-  else if (status === 'tired')  flowState = 'follow_up';
-  else                          flowState = 'high_alert';
+  if (status === 'fine')                                      flowState = 'monitoring';
+  else if (status === 'tired' || status === 'specific_concern') flowState = 'follow_up';
+  else                                                         flowState = 'high_alert';
 
   const nextAt = calcNextCheckin(flowState, status, 0);
 
@@ -178,13 +219,63 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
  */
 async function getUserProfile(pool, userId) {
   const { rows } = await pool.query(
-    `SELECT uop.*, u.id as uid
+    `SELECT uop.*, u.id as uid, COALESCE(u.language_preference, 'vi') as lang
      FROM user_onboarding_profiles uop
      JOIN users u ON u.id = uop.user_id
      WHERE uop.user_id = $1`,
     [userId]
   );
   return rows[0] || {};
+}
+
+/**
+ * Get recent health metrics + previous checkin summaries for AI context.
+ */
+async function getRecentHealthContext(pool, userId) {
+  const [glucoseRes, bpRes, weightRes, checkinsRes] = await Promise.all([
+    // Glucose 7 ngày gần nhất (tối đa 5 bản ghi)
+    pool.query(
+      `SELECT gl.value, gl.unit, gl.context, lc.occurred_at
+       FROM glucose_logs gl
+       JOIN logs_common lc ON lc.id = gl.log_id
+       WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '7 days'
+       ORDER BY lc.occurred_at DESC LIMIT 5`,
+      [userId]
+    ),
+    // Huyết áp 7 ngày gần nhất (tối đa 5 bản ghi)
+    pool.query(
+      `SELECT bp.systolic, bp.diastolic, bp.pulse, lc.occurred_at
+       FROM blood_pressure_logs bp
+       JOIN logs_common lc ON lc.id = bp.log_id
+       WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '7 days'
+       ORDER BY lc.occurred_at DESC LIMIT 5`,
+      [userId]
+    ),
+    // Cân nặng gần nhất
+    pool.query(
+      `SELECT wl.weight_kg, lc.occurred_at
+       FROM weight_logs wl
+       JOIN logs_common lc ON lc.id = wl.log_id
+       WHERE lc.user_id = $1
+       ORDER BY lc.occurred_at DESC LIMIT 1`,
+      [userId]
+    ),
+    // 3 lần checkin gần nhất (không tính hôm nay)
+    pool.query(
+      `SELECT session_date, initial_status, triage_summary, triage_severity
+       FROM health_checkins
+       WHERE user_id = $1 AND triage_completed_at IS NOT NULL
+       ORDER BY session_date DESC LIMIT 3`,
+      [userId]
+    ),
+  ]);
+
+  return {
+    recentGlucose: glucoseRes.rows,
+    recentBP: bpRes.rows,
+    latestWeight: weightRes.rows[0] || null,
+    previousCheckins: checkinsRes.rows,
+  };
 }
 
 /**
@@ -198,11 +289,23 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
   if (!rows.length) throw new Error('Session not found');
   const session = rows[0];
 
-  const profile = await getUserProfile(pool, userId);
-  const result  = await getNextTriageQuestion({
-    status:          session.initial_status,
+  // Xác định phase: nếu session có triage_completed_at rồi → đây là follow-up
+  // Hoặc nếu flow_state cho thấy đây là follow-up định kỳ
+  const isFollowUpPhase = session.triage_completed_at != null;
+
+  const [profile, healthContext] = await Promise.all([
+    getUserProfile(pool, userId),
+    getRecentHealthContext(pool, userId),
+  ]);
+
+  const result = await getNextTriageQuestion({
+    status:                  session.initial_status,
+    phase:                   isFollowUpPhase ? 'followup' : 'initial',
+    lang:                    profile.lang || 'vi',
     profile,
+    healthContext,
     previousAnswers,
+    previousSessionSummary:  session.triage_summary || null,
   });
 
   // Save latest triage messages
@@ -214,17 +317,21 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     [JSON.stringify(previousAnswers), checkinId]
   );
 
-  // If AI says done, save summary
+  // If AI says done, save summary + update next check-in time
   if (result.isDone) {
+    const followUpHours = result.followUpHours || calcFollowUpHours(result.severity || 'medium');
+    const nextAt = hoursFromNow(followUpHours);
+
     await pool.query(
       `UPDATE health_checkins SET
          triage_summary       = $1,
          triage_severity      = $2,
          triage_messages      = $3::jsonb,
          triage_completed_at  = NOW(),
+         next_checkin_at      = $4,
          updated_at           = NOW()
-       WHERE id = $4`,
-      [result.summary, result.severity, JSON.stringify(previousAnswers), checkinId]
+       WHERE id = $5`,
+      [result.summary, result.severity, JSON.stringify(previousAnswers), nextAt, checkinId]
     );
 
     // AI đánh giá cần cảnh báo gia đình ngay → alert luôn không chờ no-response
@@ -267,7 +374,7 @@ async function triggerEmergency(pool, userId, location) {
        emergency_location  = $3::jsonb,
        flow_state          = 'high_alert',
        updated_at          = NOW()`,
-    [userId, todayVN(), JSON.stringify(location || null)]
+    [userId, checkinDateVN(), JSON.stringify(location || null)]
   );
 
   // Get user info
@@ -335,7 +442,7 @@ async function runCheckinFollowUps(pool) {
        AND hc.resolved_at IS NULL
        AND hc.session_date = $2
        AND hc.flow_state != 'resolved'`,
-    [now, todayVN()]
+    [now, checkinDateVN()]
   );
 
   let sent = 0;
@@ -591,7 +698,7 @@ async function runMorningCheckin(pool, hour) {
          SELECT 1 FROM health_checkins hc
          WHERE hc.user_id = u.id AND hc.session_date = $1
        )`,
-    [todayVN()]
+    [checkinDateVN()]
   );
 
   let sent = 0;
@@ -611,6 +718,7 @@ async function runMorningCheckin(pool, hour) {
 
 module.exports = {
   getTodayCheckin,
+  getYesterdaySession,
   startCheckin,
   recordFollowUp,
   processTriageStep,
