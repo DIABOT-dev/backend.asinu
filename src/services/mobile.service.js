@@ -194,7 +194,7 @@ async function createLog(pool, userId, payload) {
   } catch (err) {
     await client.query('ROLLBACK');
 
-    const message = err.message || 'Invalid payload';
+    const message = err.message || t('error.invalid_payload');
     const isValidationError = message.startsWith('Missing') || message.startsWith('Invalid');
     return { ok: false, error: message, statusCode: isValidationError ? 400 : 500 };
   } finally {

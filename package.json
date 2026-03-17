@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node scripts/migrate.js && node server.js",
     "build": "node -c 'require(\"./server.js\")' && echo 'Backend build successful'",
-    "test": "echo \"No tests specified\" && exit 0"
+    "test": "echo \"No tests specified\" && exit 0",
+    "db:reset": "node scripts/reset-db.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

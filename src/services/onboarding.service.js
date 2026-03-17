@@ -338,6 +338,7 @@ async function upsertProfileV2(pool, userId, data) {
     height_cm,
     weight_kg,
     phone,
+    blood_type,
     medical_conditions,
     daily_medication,
     checkup_freq,
@@ -363,6 +364,7 @@ async function upsertProfileV2(pool, userId, data) {
       gender,
       height_cm,
       weight_kg,
+      blood_type,
       medical_conditions,
       chronic_symptoms,
       daily_medication,
@@ -380,9 +382,9 @@ async function upsertProfileV2(pool, userId, data) {
       created_at,
       updated_at
     ) VALUES (
-      $1, $2, $3, $4, $5, $6::jsonb, '[]'::jsonb,
-      $7, $8, $9, $10, $11, $12, $13, $14,
-      $15::jsonb, $16, $17,
+      $1, $2, $3, $4, $5, $6, $7::jsonb, '[]'::jsonb,
+      $8, $9, $10, $11, $12, $13, $14, $15,
+      $16::jsonb, $17, $18,
       NOW(), NOW(), NOW()
     )
     ON CONFLICT (user_id) DO UPDATE SET
@@ -390,6 +392,7 @@ async function upsertProfileV2(pool, userId, data) {
       gender                  = EXCLUDED.gender,
       height_cm               = EXCLUDED.height_cm,
       weight_kg               = EXCLUDED.weight_kg,
+      blood_type              = EXCLUDED.blood_type,
       medical_conditions      = EXCLUDED.medical_conditions,
       chronic_symptoms        = '[]'::jsonb,
       daily_medication        = EXCLUDED.daily_medication,
@@ -412,6 +415,7 @@ async function upsertProfileV2(pool, userId, data) {
       gender || null,
       height_cm ? parseFloat(height_cm) : null,
       weight_kg ? parseFloat(weight_kg) : null,
+      blood_type || null,
       JSON.stringify(normalizedConditions),
       daily_medication || null,
       checkup_freq || null,

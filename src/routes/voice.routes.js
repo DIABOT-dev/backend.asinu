@@ -15,7 +15,7 @@ const upload = multer({
     if (allowed.includes(file.mimetype) || file.mimetype.startsWith('audio/')) {
       cb(null, true);
     } else {
-      cb(new Error(t('error.audio_only', 'vi')), false);
+      cb(new Error(t('error.audio_only', getLang(req))), false);
     }
   },
 });

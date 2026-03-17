@@ -22,11 +22,13 @@ const SEPAY_BANK    = process.env.SEPAY_BANK_CODE;
 
 const BASE_PRICE = 199000; // VND/tháng
 
+const { t } = require('../i18n');
+
 const PLANS = {
-  1:  { months: 1,  label: '1 tháng',  discount: 0,  price: 199000  },
-  3:  { months: 3,  label: '3 tháng',  discount: 5,  price: 567000  }, // 199000*3*0.95 = 567150 → 567000
-  6:  { months: 6,  label: '6 tháng',  discount: 10, price: 1075000 }, // 199000*6*0.90 = 1074600 → 1075000
-  12: { months: 12, label: '12 tháng', discount: 20, price: 1910000 }, // 199000*12*0.80 = 1910400 → 1910000
+  1:  { months: 1,  labelKey: 'subscription.plan_1',  discount: 0,  price: 199000  },
+  3:  { months: 3,  labelKey: 'subscription.plan_3',  discount: 5,  price: 567000  }, // 199000*3*0.95 = 567150 → 567000
+  6:  { months: 6,  labelKey: 'subscription.plan_6',  discount: 10, price: 1075000 }, // 199000*6*0.90 = 1074600 → 1075000
+  12: { months: 12, labelKey: 'subscription.plan_12', discount: 20, price: 1910000 }, // 199000*12*0.80 = 1910400 → 1910000
 };
 
 // ─── Limits ────────────────────────────────────────────────────────
@@ -83,7 +85,7 @@ async function getStatus(pool, userId) {
     expiresAt,
     voiceUsedThisMonth,
     voiceMonthlyLimit: VOICE_MONTHLY_LIMIT,
-    plans: Object.values(PLANS),
+    plans: Object.values(PLANS).map(p => ({ ...p, label: t(p.labelKey, 'vi') })),
   };
 }
 
@@ -147,7 +149,7 @@ async function createQR(pool, userId, months = 1) {
     expires_at: rows[0].qr_expires_at,
     plan_months: plan.months,
     discount:    plan.discount,
-    label:       plan.label,
+    label:       t(plan.labelKey),
   };
 }
 
@@ -169,7 +171,7 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
 
     if (!subRows.length) {
       await client.query('ROLLBACK');
-      return { ok: false, message: 'Subscription not found or expired' };
+      return { ok: false, message: t('error.subscription_not_found') };
     }
 
     const sub = subRows[0];
@@ -216,7 +218,7 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
   } catch (err) {
     await client.query('ROLLBACK');
 
-    return { ok: false, message: 'Internal error' };
+    return { ok: false, message: t('error.server') };
   } finally {
     client.release();
   }

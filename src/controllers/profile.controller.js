@@ -62,13 +62,16 @@ async function deleteAccount(pool, req, res) {
 }
 
 async function updatePushToken(pool, req, res) {
+  console.log('[updatePushToken] req.body:', JSON.stringify(req.body));
+  console.log('[updatePushToken] req.user:', req.user?.id);
   if (!req.user?.id) {
     return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
 
   const { push_token } = req.body || {};
-  
+
   if (!push_token) {
+    console.log('[updatePushToken] No push_token in body');
     return res.status(400).json({ ok: false, error: t('error.push_token_required', getLang(req)) });
   }
 

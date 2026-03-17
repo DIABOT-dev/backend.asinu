@@ -58,7 +58,7 @@ function logsRoutes(pool) {
       if (!req.file) {
         return res.status(400).json({
           ok: false,
-          error: t('error.missing_audio', getLang(req)) || 'Thiếu file âm thanh.',
+          error: t('error.missing_audio', getLang(req)),
         });
       }
 
@@ -67,7 +67,7 @@ function logsRoutes(pool) {
       if (!log_type || !VALID_LOG_TYPES.includes(log_type)) {
         return res.status(400).json({
           ok: false,
-          error: `log_type không hợp lệ. Phải là: ${VALID_LOG_TYPES.join(', ')}.`,
+          error: t('voice.invalid_log_type', getLang(req), { types: VALID_LOG_TYPES.join(', ') }),
         });
       }
 
@@ -84,8 +84,7 @@ function logsRoutes(pool) {
           ok: false,
           code: 'VOICE_LIMIT_EXCEEDED',
           error:
-            t('error.voice_limit_exceeded', getLang(req), { limit: VOICE_MONTHLY_LIMIT }) ||
-            `Đã đạt giới hạn ${VOICE_MONTHLY_LIMIT} lượt ghi âm tháng này.`,
+            t('error.voice_limit_exceeded', getLang(req), { limit: VOICE_MONTHLY_LIMIT }),
           voiceUsed,
           voiceLimit: VOICE_MONTHLY_LIMIT,
         });
@@ -112,7 +111,7 @@ function logsRoutes(pool) {
           ok: false,
           transcript: '',
           parsed: null,
-          error: err.message || 'Xử lý giọng nói thất bại. Vui lòng thử lại sau.',
+          error: err.message || t('error.voice_processing', getLang(req)),
         });
       }
     }

@@ -286,7 +286,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     `SELECT * FROM health_checkins WHERE id = $1 AND user_id = $2`,
     [checkinId, userId]
   );
-  if (!rows.length) throw new Error('Session not found');
+  if (!rows.length) throw new Error(t('error.session_not_found'));
   const session = rows[0];
 
   // Xác định phase: nếu session có triage_completed_at rồi → đây là follow-up
@@ -297,6 +297,26 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     getUserProfile(pool, userId),
     getRecentHealthContext(pool, userId),
   ]);
+
+  // Hard limit: force conclusion if AI hasn't stopped in time
+  const isFollowUp = isFollowUpPhase;
+  const isVeryUnwell = session.initial_status === 'very_tired';
+  const maxQuestions = isFollowUp ? 3 : (isVeryUnwell ? 6 : 8);
+
+  if (previousAnswers.length >= maxQuestions) {
+    // AI đã hỏi đủ số câu → buộc kết thúc
+    return {
+      ok: true,
+      isDone: true,
+      summary: 'Đã thu thập đủ thông tin sức khoẻ.',
+      severity: isVeryUnwell ? 'high' : 'medium',
+      recommendation: 'Bạn hãy nghỉ ngơi và theo dõi thêm nhé. Tôi sẽ hỏi lại sau.',
+      needsDoctor: false,
+      needsFamilyAlert: false,
+      hasRedFlag: false,
+      followUpHours: calcFollowUpHours(isVeryUnwell ? 'high' : 'medium', previousAnswers.length),
+    };
+  }
 
   const result = await getNextTriageQuestion({
     status:                  session.initial_status,
@@ -343,11 +363,12 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
       );
 
       // Thông báo in-app cho chính user biết gia đình đã được nhắn
+      const userLang = profile.lang || 'vi';
       await sendCheckinNotification(
         pool, userId, null,
         'caregiver_alert',
-        'Asinu đã thông báo người thân',
-        'Dựa trên tình trạng của bạn, Asinu đã gửi thông báo đến vòng kết nối để họ có thể hỗ trợ bạn.',
+        t('checkin.family_notified_title', userLang),
+        t('checkin.family_notified_body', userLang),
         { checkinId: String(checkinId) }
       );
     }
@@ -385,7 +406,8 @@ async function triggerEmergency(pool, userId, location) {
     [userId]
   );
   const user = userRows[0] || {};
-  const userName = user.display_name || user.full_name || 'Người dùng';
+  const lang = user.lang || 'vi';
+  const userName = user.display_name || user.full_name || t('careCircle.user_label', lang);
 
   // Get care circle members who can receive alerts
   const { rows: caregivers } = await pool.query(
@@ -401,8 +423,8 @@ async function triggerEmergency(pool, userId, location) {
   const locationStr = location
     ? ` (${location.lat?.toFixed(4)}, ${location.lng?.toFixed(4)})`
     : '';
-  const title = 'Khẩn cấp — Cần giúp đỡ ngay';
-  const body  = `${userName} đang cần giúp đỡ khẩn cấp${locationStr}. Vui lòng kiểm tra ngay.`;
+  const title = t('checkin.emergency_title', lang);
+  const body  = t('checkin.emergency_body', lang, { name: userName, location: locationStr });
   const data  = { userId: String(userId), location };
 
   for (const cg of caregivers) {
@@ -416,8 +438,8 @@ async function triggerEmergency(pool, userId, location) {
     ok: true,
     caregiversAlerted: caregivers.length,
     message: caregivers.length
-      ? `Đã thông báo ${caregivers.length} người trong vòng kết nối.`
-      : 'Không có người thân nào trong vòng kết nối để thông báo.',
+      ? t('checkin.emergency_alerted', lang, { count: caregivers.length })
+      : t('checkin.emergency_no_caregivers', lang),
   };
 }
 
@@ -453,14 +475,15 @@ async function runCheckinFollowUps(pool) {
 
     if (newMissCount === 1) {
       // First miss → push + in-app nhắc
+      const sLang = session.lang || 'vi';
       const msg = session.flow_state === 'high_alert'
-        ? 'Bạn có ổn không? Chạm vào đây để phản hồi — chúng tôi đang theo dõi bạn.'
-        : 'Tình trạng của bạn đã cải thiện chưa? Cập nhật nhanh để chúng tôi theo dõi cùng.';
+        ? t('checkin.followup_high_alert', sLang)
+        : t('checkin.followup_normal', sLang);
 
       await sendCheckinNotification(
         pool, session.user_id, session.push_token,
         'checkin_followup',
-        'Asinu đang hỏi thăm bạn',
+        t('checkin.followup_title', sLang),
         msg,
         { checkinId: String(session.id) }
       );
@@ -486,11 +509,12 @@ async function runCheckinFollowUps(pool) {
       }
 
       // Still push + in-app user one more time
+      const sLang2 = session.lang || 'vi';
       await sendCheckinNotification(
         pool, session.user_id, session.push_token,
         'checkin_followup_urgent',
-        'Chúng tôi chưa nhận được phản hồi từ bạn',
-        'Hãy cho Asinu biết bạn đang thế nào.',
+        t('checkin.no_response_title', sLang2),
+        t('checkin.no_response_body', sLang2),
         { checkinId: String(session.id) }
       );
       sent++;
@@ -516,11 +540,12 @@ async function runCheckinFollowUps(pool) {
 /** Alert all eligible care circle members about user's non-response */
 async function alertFamily(pool, session, alertType = 'caregiver_alert') {
   const { rows: userRows } = await pool.query(
-    `SELECT display_name, full_name FROM users WHERE id=$1`,
+    `SELECT display_name, full_name, COALESCE(language_preference,'vi') AS lang FROM users WHERE id=$1`,
     [session.user_id]
   );
   const user = userRows[0] || {};
-  const name = user.display_name || user.full_name || 'Người thân của bạn';
+  const aLang = user.lang || 'vi';
+  const name = user.display_name || user.full_name || t('brain.relative_label', aLang);
 
   const { rows: caregivers } = await pool.query(
     `SELECT u.id, u.push_token
@@ -534,11 +559,11 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
   if (!caregivers.length) return;
 
   const title = alertType === 'emergency'
-    ? 'Khẩn cấp — Cần giúp đỡ ngay'
-    : 'Cần kiểm tra sức khoẻ';
+    ? t('checkin.emergency_title', aLang)
+    : t('checkin.health_check_needed_title', aLang);
   const body = alertType === 'emergency'
-    ? `${name} đang cần giúp đỡ khẩn cấp. Vui lòng kiểm tra ngay.`
-    : `${name} báo cáo không khoẻ và chưa phản hồi. Vui lòng liên lạc để kiểm tra.`;
+    ? t('checkin.emergency_family_body', aLang, { name })
+    : t('checkin.no_response_family_body', aLang, { name });
 
   for (const cg of caregivers) {
     // Upsert confirmation record (skip if already confirmed)
@@ -584,30 +609,57 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
  * @param {'seen'|'on_my_way'|'called'} action
  */
 async function confirmCaregiverAlert(pool, caregiverId, alertId, action) {
-  const { rows } = await pool.query(
+  // 1. SELECT the alert first to get patient_id before updating
+  const { rows: alertRows } = await pool.query(
+    `SELECT cac.*, (SELECT user_id FROM health_checkins WHERE id=cac.checkin_id) AS patient_id
+     FROM caregiver_alert_confirmations cac
+     WHERE cac.id=$1 AND cac.caregiver_id=$2 AND cac.confirmed_at IS NULL`,
+    [alertId, caregiverId]
+  );
+  if (!alertRows.length) return { ok: false, error: t('careCircle.alert_not_found_or_confirmed') };
+
+  const alert = alertRows[0];
+
+  // 2. Check can_ack_escalation permission
+  const { rows: permRows } = await pool.query(
+    `SELECT id FROM user_connections
+     WHERE status = 'accepted'
+       AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))
+       AND COALESCE((permissions->>'can_ack_escalation')::boolean, false) = true`,
+    [alert.patient_id, caregiverId]
+  );
+  if (permRows.length === 0) {
+    return { ok: false, error: t('careCircle.no_permission') };
+  }
+
+  // 3. Now UPDATE to confirm the alert
+  await pool.query(
     `UPDATE caregiver_alert_confirmations
      SET confirmed_at=NOW(), confirmed_action=$1
-     WHERE id=$2 AND caregiver_id=$3 AND confirmed_at IS NULL
-     RETURNING *, (SELECT user_id FROM health_checkins WHERE id=checkin_id) AS patient_id`,
+     WHERE id=$2 AND caregiver_id=$3 AND confirmed_at IS NULL`,
     [action, alertId, caregiverId]
   );
-  if (!rows.length) return { ok: false, error: 'Not found or already confirmed' };
-
-  const alert = rows[0];
 
   // Thông báo in-app cho user bệnh biết người thân đã xác nhận
   const { rows: cgRows } = await pool.query(
     `SELECT display_name, full_name FROM users WHERE id=$1`, [caregiverId]
   );
-  const cgName = cgRows[0]?.display_name || cgRows[0]?.full_name || 'Người thân';
-  const actionLabel = action === 'on_my_way' ? 'đang trên đường đến'
-    : action === 'called' ? 'đã gọi điện cho bạn' : 'đã xem thông báo';
+  // Get patient lang for notification
+  const { rows: patientRows } = await pool.query(
+    `SELECT COALESCE(language_preference,'vi') AS lang FROM users WHERE id=$1`,
+    [alert.patient_id]
+  );
+  const pLang = patientRows[0]?.lang || 'vi';
+  const cgName = cgRows[0]?.display_name || cgRows[0]?.full_name || t('brain.relative_fallback', pLang);
+  const actionKey = action === 'on_my_way' ? 'checkin.action_on_my_way'
+    : action === 'called' ? 'checkin.action_called' : 'checkin.action_seen';
+  const actionLabel = t(actionKey, pLang);
 
   await sendCheckinNotification(
     pool, alert.patient_id, null,
     'caregiver_confirmed',
     `${cgName} ${actionLabel}`,
-    `${cgName} đã nhận thông báo về tình trạng của bạn và ${actionLabel}.`,
+    t('checkin.caregiver_confirmed_body', pLang, { name: cgName, action: actionLabel }),
     { alertId: String(alertId), caregiverId: String(caregiverId) }
   );
 
@@ -635,7 +687,7 @@ async function getPendingCaregiverAlerts(pool, caregiverId) {
     alertType:     r.alert_type,
     sentAt:        r.sent_at,
     checkinId:     r.checkin_id,
-    patientName:   r.display_name || r.full_name || 'Người thân',
+    patientName:   r.display_name || r.full_name || t('brain.relative_fallback'),
     currentStatus: r.current_status,
     flowState:     r.flow_state,
   }));
@@ -659,11 +711,11 @@ async function runAlertConfirmationFollowUps(pool) {
   );
 
   for (const alert of rows) {
-    const patientName = alert.patient_name || alert.patient_full_name || 'Người thân';
+    const patientName = alert.patient_name || alert.patient_full_name || t('brain.relative_fallback');
     const title = alert.alert_type === 'emergency'
-      ? 'Nhắc lại: Khẩn cấp — Cần kiểm tra ngay'
-      : 'Nhắc lại: Cần kiểm tra sức khoẻ';
-    const body = `${patientName} vẫn cần được hỗ trợ. Bạn đã xác nhận chưa?`;
+      ? t('checkin.reminder_emergency_title')
+      : t('checkin.reminder_health_check_title');
+    const body = t('checkin.reminder_confirm_body', 'vi', { name: patientName });
 
     await sendCheckinNotification(
       pool, alert.caregiver_id, alert.push_token || null,
@@ -706,14 +758,133 @@ async function runMorningCheckin(pool, hour) {
     await sendCheckinNotification(
       pool, user.id, user.push_token,
       'morning_checkin',
-      'Asinu hỏi thăm buổi sáng',
-      'Sáng nay bạn cảm thấy thế nào? Nhấn để cập nhật tình trạng sức khoẻ.',
+      t('checkin.morning_title', user.lang),
+      t('checkin.morning_body', user.lang),
       {}
     );
     sent++;
   }
 
   return { type: 'morning_checkin', total: rows.length, sent };
+}
+
+// ─── Health Report ──────────────────────────────────────────────────────────
+
+/**
+ * Tạo báo cáo sức khoẻ tuần/tháng từ lịch sử check-in.
+ * @param {object} pool
+ * @param {number} userId
+ * @param {number} days - 7 (tuần) hoặc 30 (tháng)
+ */
+async function getHealthReport(pool, userId, days = 7) {
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+  const sinceStr = since.toISOString().slice(0, 10);
+
+  // Lấy tất cả sessions trong khoảng thời gian
+  const { rows: sessions } = await pool.query(
+    `SELECT id, session_date, initial_status, current_status, flow_state,
+            triage_summary, triage_severity, triage_messages,
+            resolved_at, family_alerted, emergency_triggered,
+            created_at
+     FROM health_checkins
+     WHERE user_id = $1 AND session_date >= $2
+     ORDER BY session_date DESC`,
+    [userId, sinceStr]
+  );
+
+  if (!sessions.length) {
+    return {
+      totalDays: days,
+      checkinDays: 0,
+      sessions: [],
+      severityDistribution: { low: 0, medium: 0, high: 0 },
+      statusDistribution: { fine: 0, tired: 0, very_tired: 0, specific_concern: 0 },
+      commonSymptoms: [],
+      alerts: { familyAlerted: 0, emergencyTriggered: 0 },
+      trend: 'stable',
+      highlights: [],
+    };
+  }
+
+  // Phân bố severity
+  const severityDist = { low: 0, medium: 0, high: 0 };
+  const statusDist = { fine: 0, tired: 0, very_tired: 0, specific_concern: 0 };
+  let familyAlerted = 0;
+  let emergencyTriggered = 0;
+  const symptomMap = {};
+
+  for (const s of sessions) {
+    if (s.triage_severity && severityDist[s.triage_severity] !== undefined) {
+      severityDist[s.triage_severity]++;
+    }
+    if (s.initial_status && statusDist[s.initial_status] !== undefined) {
+      statusDist[s.initial_status]++;
+    }
+    if (s.family_alerted) familyAlerted++;
+    if (s.emergency_triggered) emergencyTriggered++;
+
+    // Trích xuất triệu chứng từ triage_messages
+    const msgs = Array.isArray(s.triage_messages) ? s.triage_messages : [];
+    for (const m of msgs) {
+      if (m.answer) {
+        const answer = m.answer.toLowerCase().trim();
+        if (answer.length > 1 && answer.length < 50 && !['có', 'không', 'ổn', 'ok', 'đúng', 'rồi', 'chưa', 'vẫn vậy'].includes(answer)) {
+          symptomMap[answer] = (symptomMap[answer] || 0) + 1;
+        }
+      }
+    }
+  }
+
+  // Top triệu chứng
+  const commonSymptoms = Object.entries(symptomMap)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([symptom, count]) => ({ symptom, count }));
+
+  // Xu hướng: so sánh nửa đầu vs nửa sau
+  const half = Math.ceil(sessions.length / 2);
+  const recentHalf = sessions.slice(0, half);
+  const olderHalf = sessions.slice(half);
+  const severityScore = { low: 1, medium: 2, high: 3 };
+  const avgRecent = recentHalf.reduce((s, r) => s + (severityScore[r.triage_severity] || 1), 0) / (recentHalf.length || 1);
+  const avgOlder = olderHalf.length
+    ? olderHalf.reduce((s, r) => s + (severityScore[r.triage_severity] || 1), 0) / olderHalf.length
+    : avgRecent;
+
+  let trend = 'stable';
+  if (avgRecent < avgOlder - 0.3) trend = 'improving';
+  else if (avgRecent > avgOlder + 0.3) trend = 'worsening';
+
+  // Highlights
+  const highlights = [];
+  const checkinDays = new Set(sessions.map(s => s.session_date)).size;
+  highlights.push({ type: 'consistency', value: `${checkinDays}/${days}` });
+  if (severityDist.high > 0) highlights.push({ type: 'high_severity_days', value: severityDist.high });
+  if (trend === 'improving') highlights.push({ type: 'trend', value: 'improving' });
+  if (trend === 'worsening') highlights.push({ type: 'trend', value: 'worsening' });
+
+  // Session summaries cho UI
+  const sessionSummaries = sessions.map(s => ({
+    date: s.session_date,
+    status: s.initial_status,
+    severity: s.triage_severity,
+    summary: s.triage_summary,
+    flowState: s.flow_state,
+    resolved: !!s.resolved_at,
+  }));
+
+  return {
+    totalDays: days,
+    checkinDays,
+    sessions: sessionSummaries,
+    severityDistribution: severityDist,
+    statusDistribution: statusDist,
+    commonSymptoms,
+    alerts: { familyAlerted, emergencyTriggered },
+    trend,
+    highlights,
+  };
 }
 
 module.exports = {
@@ -728,4 +899,5 @@ module.exports = {
   confirmCaregiverAlert,
   getPendingCaregiverAlerts,
   runAlertConfirmationFollowUps,
+  getHealthReport,
 };

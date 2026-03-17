@@ -12,7 +12,8 @@ const {
   rejectInvitation: serviceRejectInvitation,
   getConnections: serviceGetConnections,
   deleteConnection: serviceDeleteConnection,
-  updateConnection: serviceUpdateConnection
+  updateConnection: serviceUpdateConnection,
+  updateConnectionPermissions: serviceUpdateConnectionPermissions
 } = require('../services/careCircle.service');
 
 // =====================================================
@@ -148,6 +149,23 @@ async function updateConnection(pool, req, res) {
   return res.status(200).json({ ok: true, connection: result.connection });
 }
 
+/**
+ * PUT /api/care-circle/connections/:id/permissions
+ * Update permissions for a connection
+ */
+async function updateConnectionPermissions(pool, req, res) {
+  const connectionId = req.params.id;
+  const { permissions } = req.body;
+  if (!permissions || typeof permissions !== 'object') {
+    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+  }
+  const result = await serviceUpdateConnectionPermissions(pool, connectionId, req.user.id, permissions);
+  if (!result.ok) {
+    return res.status(result.statusCode || 400).json({ ok: false, error: result.error });
+  }
+  return res.json({ ok: true, connection: result.connection });
+}
+
 module.exports = {
   createInvitation,
   getInvitations,
@@ -155,5 +173,6 @@ module.exports = {
   rejectInvitation,
   getConnections,
   deleteConnection,
-  updateConnection
+  updateConnection,
+  updateConnectionPermissions
 };

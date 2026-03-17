@@ -353,14 +353,15 @@ async function deleteAccount(pool, userId) {
  */
 async function updatePushToken(pool, userId, pushToken) {
   try {
-    await pool.query(
-      `UPDATE users SET push_token = $1, updated_at = NOW() WHERE id = $2`,
+    console.log('[updatePushToken] userId:', userId, 'token:', pushToken?.substring(0, 30));
+    const result = await pool.query(
+      `UPDATE users SET push_token = $1 WHERE id = $2`,
       [pushToken, userId]
     );
-
+    console.log('[updatePushToken] Success, rowCount:', result.rowCount);
     return { ok: true };
   } catch (err) {
-
+    console.error('[updatePushToken] DB Error:', err.message, err.code);
     return { ok: false, error: t('error.server') };
   }
 }

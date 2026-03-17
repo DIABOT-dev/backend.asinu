@@ -9,6 +9,7 @@
 
 const crypto = require('crypto');
 const subscriptionService = require('./subscription.service');
+const { t } = require('../i18n');
 
 const SEPAY_ACCOUNT = process.env.SEPAY_ACCOUNT_NUMBER;
 const SEPAY_BANK    = process.env.SEPAY_BANK_CODE;
@@ -47,7 +48,7 @@ function parseDescription(content) {
  */
 async function createQR(pool, userId, amount) {
   if (!amount || amount < 1000) {
-    throw Object.assign(new Error('Số tiền tối thiểu 1,000 VND'), { statusCode: 400 });
+    throw Object.assign(new Error(t('error.min_amount')), { statusCode: 400 });
   }
 
   const orderCode   = generateOrderCode();
@@ -75,7 +76,7 @@ async function handleWebhook(pool, req) {
   const authHeader = req.headers['authorization'] || '';
   const incoming   = authHeader.replace(/^Apikey\s+/i, '').trim();
   if (!SEPAY_API_KEY || incoming !== SEPAY_API_KEY) {
-    return { ok: false, statusCode: 401, message: 'Unauthorized' };
+    return { ok: false, statusCode: 401, message: t('error.unauthorized') };
   }
 
   const body = req.body;
@@ -118,7 +119,7 @@ async function handleWebhook(pool, req) {
 
   if (!rows.length) {
 
-    return { ok: false, statusCode: 404, message: 'Payment not found or expired' };
+    return { ok: false, statusCode: 404, message: t('error.payment_not_found') };
   }
 
   const payment = rows[0];
@@ -129,7 +130,7 @@ async function handleWebhook(pool, req) {
       `UPDATE payments SET status = 'failed' WHERE order_code = $1`,
       [orderCode]
     );
-    return { ok: false, statusCode: 400, message: 'Amount mismatch' };
+    return { ok: false, statusCode: 400, message: t('error.payment_amount_mismatch') };
   }
 
   // 5. Cập nhật atomically: mark completed + cộng wallet
@@ -151,7 +152,7 @@ async function handleWebhook(pool, req) {
   } catch (err) {
     await client.query('ROLLBACK');
 
-    return { ok: false, statusCode: 500, message: 'Internal error' };
+    return { ok: false, statusCode: 500, message: t('error.server') };
   } finally {
     client.release();
   }

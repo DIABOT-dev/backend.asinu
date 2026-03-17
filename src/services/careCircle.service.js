@@ -86,8 +86,8 @@ async function createInvitation(pool, requesterId, data) {
     return {
       ok: false,
       error: userIsPremium
-        ? `Đã đạt giới hạn tối đa ${PREMIUM_CONNECTION_LIMIT} kết nối`
-        : 'Nâng cấp Premium để thêm nhiều người hơn (miễn phí: tối đa 3)',
+        ? t('careCircle.premium_limit_reached', 'vi', { limit: PREMIUM_CONNECTION_LIMIT })
+        : t('careCircle.upgrade_premium'),
       code: 'CARE_CIRCLE_LIMIT',
       statusCode: 403,
     };
@@ -197,8 +197,8 @@ async function acceptInvitation(pool, invitationId, userId) {
       return {
         ok: false,
         error: addresseeIsPremium
-          ? `Đã đạt giới hạn tối đa ${PREMIUM_CONNECTION_LIMIT} kết nối`
-          : 'Nâng cấp Premium để chấp nhận thêm kết nối (miễn phí: tối đa 3)',
+          ? t('careCircle.premium_limit_reached', 'vi', { limit: PREMIUM_CONNECTION_LIMIT })
+          : t('careCircle.upgrade_premium_accept'),
         code: 'CARE_CIRCLE_LIMIT',
         statusCode: 403,
       };
@@ -382,6 +382,34 @@ async function updateConnection(pool, connectionId, userId, data) {
   }
 }
 
+/**
+ * Update permissions for an existing connection
+ * @param {Object} pool - Database pool
+ * @param {number} connectionId - Connection ID
+ * @param {number} userId - User ID (must be the requester/patient)
+ * @param {Object} newPermissions - New permissions object
+ * @returns {Promise<Object>} - { ok, connection, error }
+ */
+async function updateConnectionPermissions(pool, connectionId, userId, newPermissions) {
+  const perms = normalizePermissions(newPermissions);
+  try {
+    // Only the patient (requester who invited) can update permissions
+    const result = await pool.query(
+      `UPDATE user_connections
+       SET permissions = $1::jsonb, updated_at = NOW()
+       WHERE id = $2 AND requester_id = $3 AND status = 'accepted'
+       RETURNING *`,
+      [JSON.stringify(perms), connectionId, userId]
+    );
+    if (result.rows.length === 0) {
+      return { ok: false, error: t('careCircle.connection_not_found'), statusCode: 404 };
+    }
+    return { ok: true, connection: result.rows[0] };
+  } catch (err) {
+    return { ok: false, error: t('error.server') };
+  }
+}
+
 // =====================================================
 // EXPORTS
 // =====================================================
@@ -390,15 +418,16 @@ module.exports = {
   // Helpers
   normalizePermissions,
   getUserDisplayName,
-  
+
   // Invitations
   createInvitation,
   getInvitations,
   acceptInvitation,
   rejectInvitation,
-  
+
   // Connections
   getConnections,
   deleteConnection,
-  updateConnection
+  updateConnection,
+  updateConnectionPermissions
 };

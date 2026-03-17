@@ -6,7 +6,10 @@
 const { t } = require('../i18n');
 
 const DAYS_IN_WEEK = 7;
-const DAY_LABELS = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+const DAY_LABEL_KEYS = [
+  'tree.day_sun', 'tree.day_mon', 'tree.day_tue', 'tree.day_wed',
+  'tree.day_thu', 'tree.day_fri', 'tree.day_sat',
+];
 
 function getStartOfWeek(date) {
   const d = new Date(date);
@@ -147,7 +150,7 @@ async function getTreeHistory(pool, userId) {
       const value = Math.min(count * 25, 100);
       
       history.push({
-        label: DAY_LABELS[dayIndex],
+        label: t(DAY_LABEL_KEYS[dayIndex]),
         value
       });
     }

@@ -387,7 +387,7 @@ async function getChatHistory(pool, userId, limit = 100, retentionDays = RETENTI
     `SELECT id, message, sender, created_at FROM chat_histories
      WHERE user_id = $1
        AND created_at >= NOW() - ($2 || ' days')::INTERVAL
-     ORDER BY created_at ASC
+     ORDER BY created_at ASC, CASE sender WHEN 'user' THEN 0 ELSE 1 END ASC
      LIMIT $3`,
     [userId, retentionDays, limit]
   );

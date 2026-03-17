@@ -3,6 +3,8 @@
  * Premium only feature.
  */
 
+const { t } = require('../i18n');
+
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-4o';
 
@@ -61,7 +63,7 @@ async function voiceChat(pool, userId, audioBuffer, mimeType, filename) {
   const transcript = await transcribeAudio(audioBuffer, mimeType, filename);
 
   if (!transcript.trim()) {
-    return { transcript: '', reply: 'Tôi không nghe thấy gì. Bạn có thể nói lại không?' };
+    return { transcript: '', reply: t('voice.no_audio') };
   }
 
   // 2. Get user profile for context
@@ -104,7 +106,7 @@ Không cung cấp chẩn đoán y tế. Khuyến khích gặp bác sĩ khi cần
   }
 
   const chatData = await chatResponse.json();
-  const reply = chatData.choices?.[0]?.message?.content || 'Xin lỗi, tôi không thể trả lời lúc này.';
+  const reply = chatData.choices?.[0]?.message?.content || t('voice.fallback_reply');
 
   return { transcript, reply };
 }
@@ -194,7 +196,7 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
       ok: false,
       transcript: '',
       parsed: null,
-      error: 'Không nghe thấy nội dung. Vui lòng nói to và rõ hơn, sau đó thử lại.'
+      error: t('voice.no_content')
     };
   }
 
@@ -234,7 +236,7 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
       ok: false,
       transcript,
       parsed: null,
-      error: 'AI không thể phân tích dữ liệu. Vui lòng thử lại.'
+      error: t('voice.ai_parse_error')
     };
   }
 
@@ -243,7 +245,7 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
       ok: false,
       transcript,
       parsed: null,
-      error: parsed.error || 'Không nhận ra số liệu hợp lệ. Vui lòng nói rõ hơn.'
+      error: parsed.error || t('voice.invalid_data')
     };
   }
 

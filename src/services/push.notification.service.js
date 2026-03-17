@@ -78,7 +78,7 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
     
     if (!response.ok) {
 
-      return { ok: false, error: result.message || 'Push service error' };
+      return { ok: false, error: result.message || t('error.push_service_error') };
     }
 
     return { ok: true, data: result };
