@@ -13,7 +13,7 @@ const {
   startCheckinHandler, followUpHandler, triageHandler,
   todayCheckinHandler, emergencyHandler,
   pendingAlertsHandler, confirmAlertHandler,
-  healthReportHandler, resetTodayHandler,
+  healthReportHandler, resetTodayHandler, simulateTimePassHandler,
 } = require('../controllers/checkin.controller');
 
 function mobileRoutes(pool) {
@@ -177,6 +177,21 @@ function mobileRoutes(pool) {
     }
   });
 
+  // Return like/dislike feedback map for UI state
+  router.get('/chat/feedbacks', requireAuth, async (req, res) => {
+    try {
+      const { rows } = await pool.query(
+        `SELECT message_id, feedback_type FROM chat_feedback WHERE user_id=$1 AND feedback_type IN ('like','dislike')`,
+        [req.user.id]
+      );
+      const map = {};
+      for (const r of rows) map[r.message_id] = r.feedback_type;
+      return res.json({ ok: true, feedbacks: map });
+    } catch {
+      return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
+    }
+  });
+
   // Return list of message_ids that user has noted (for UI state)
   router.get('/chat/noted-ids', requireAuth, async (req, res) => {
     try {
@@ -276,6 +291,7 @@ function mobileRoutes(pool) {
   router.post('/checkin/confirm-alert',   requireAuth, (req, res) => confirmAlertHandler(pool, req, res));
   router.get ('/checkin/report',          requireAuth, (req, res) => healthReportHandler(pool, req, res));
   router.post('/checkin/reset-today',    requireAuth, (req, res) => resetTodayHandler(pool, req, res));
+  router.post('/checkin/simulate-time',  requireAuth, (req, res) => simulateTimePassHandler(pool, req, res));
 
   // DEV — Test push notifications
   router.post('/test-notification', requireAuth, async (req, res) => {

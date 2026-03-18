@@ -318,15 +318,99 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     };
   }
 
-  const result = await getNextTriageQuestion({
-    status:                  session.initial_status,
+  // ── Hard-coded red flag detection — bypass AI if user already reported danger signs ──
+  const RED_FLAG_KEYWORDS = [
+    'khó thở', 'đau ngực', 'tức ngực', 'hoa mắt', 'đau ngực lan',
+    'vã mồ hôi', 'ngất', 'co giật', 'không thở được', 'tim đập nhanh',
+    'chest pain', 'difficulty breathing', 'shortness of breath', 'fainting',
+    'blurred vision', 'chest tightness',
+  ];
+
+  const allAnswerText = previousAnswers.map(a => a.answer.toLowerCase()).join(' ');
+  const hasRedFlagInAnswers = RED_FLAG_KEYWORDS.some(kw => allAnswerText.includes(kw));
+
+  if (hasRedFlagInAnswers) {
+    const allSymptoms = previousAnswers.map(a => a.answer).join(', ');
+    const urgentResult = {
+      ok: true,
+      isDone: true,
+      summary: allSymptoms,
+      severity: 'high',
+      recommendation: profile.lang === 'en'
+        ? 'You reported serious symptoms. Please rest and see a doctor as soon as possible.'
+        : 'Bạn có dấu hiệu cần chú ý. Hãy nghỉ ngơi và liên hệ bác sĩ sớm nhất có thể.',
+      needsDoctor: true,
+      needsFamilyAlert: true,
+      hasRedFlag: true,
+      followUpHours: 1,
+    };
+
+    // Save to DB
+    await pool.query(
+      `UPDATE health_checkins SET
+         triage_summary=$1, triage_severity=$2, triage_messages=$3::jsonb,
+         triage_completed_at=NOW(), next_checkin_at=$4, updated_at=NOW()
+       WHERE id=$5`,
+      [urgentResult.summary, urgentResult.severity, JSON.stringify(previousAnswers),
+       hoursFromNow(1), checkinId]
+    );
+
+    // Alert family immediately
+    if (!session.family_alerted) {
+      await alertFamily(pool, session);
+      await pool.query(
+        `UPDATE health_checkins SET family_alerted=true, family_alerted_at=NOW() WHERE id=$1`,
+        [checkinId]
+      );
+    }
+
+    return urgentResult;
+  }
+
+  // For follow-up: pass previous triage Q&A so AI doesn't repeat questions
+  const prevTriageMessages = isFollowUpPhase
+    ? (Array.isArray(session.triage_messages) ? session.triage_messages : [])
+    : [];
+
+  let result = await getNextTriageQuestion({
+    status:                  isFollowUpPhase ? (session.current_status || session.initial_status) : session.initial_status,
     phase:                   isFollowUpPhase ? 'followup' : 'initial',
     lang:                    profile.lang || 'vi',
     profile,
     healthContext,
     previousAnswers,
     previousSessionSummary:  session.triage_summary || null,
+    previousTriageMessages:  prevTriageMessages,
   });
+
+  // ── Anti-loop: if AI returns a question too similar to a previous one → force conclusion ──
+  if (!result.isDone && result.question && previousAnswers.length > 0) {
+    const newQ = result.question.toLowerCase();
+    const isDuplicate = previousAnswers.some(a => {
+      const prevQ = a.question.toLowerCase();
+      // Check if >60% of words overlap
+      const newWords = new Set(newQ.split(/\s+/));
+      const prevWords = prevQ.split(/\s+/);
+      const overlap = prevWords.filter(w => newWords.has(w)).length;
+      return overlap / Math.max(prevWords.length, 1) > 0.6;
+    });
+
+    if (isDuplicate) {
+      const allSymptoms = previousAnswers.map(a => a.answer).join(', ');
+      result = {
+        isDone: true,
+        summary: allSymptoms,
+        severity: isVeryUnwell ? 'high' : 'medium',
+        recommendation: profile.lang === 'en'
+          ? 'Thank you for sharing. Please rest and take care.'
+          : 'Cảm ơn bạn đã chia sẻ. Hãy nghỉ ngơi và theo dõi thêm nhé.',
+        needsDoctor: false,
+        needsFamilyAlert: false,
+        hasRedFlag: false,
+        followUpHours: calcFollowUpHours(isVeryUnwell ? 'high' : 'medium', previousAnswers.length),
+      };
+    }
+  }
 
   // Save latest triage messages
   await pool.query(
@@ -410,11 +494,12 @@ async function triggerEmergency(pool, userId, location) {
   const userName = user.display_name || user.full_name || t('careCircle.user_label', lang);
 
   // Get care circle members who can receive alerts
+  // requester_id = patient, addressee_id = caregiver
   const { rows: caregivers } = await pool.query(
     `SELECT u.id, u.push_token
      FROM user_connections uc
-     JOIN users u ON u.id = uc.caregiver_id
-     WHERE uc.patient_id = $1
+     JOIN users u ON u.id = uc.addressee_id
+     WHERE uc.requester_id = $1
        AND uc.status = 'accepted'
        AND COALESCE((uc.permissions->>'can_receive_alerts')::boolean, false) = true`,
     [userId]
@@ -550,8 +635,8 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
   const { rows: caregivers } = await pool.query(
     `SELECT u.id, u.push_token
      FROM user_connections uc
-     JOIN users u ON u.id = uc.caregiver_id
-     WHERE uc.patient_id = $1 AND uc.status='accepted'
+     JOIN users u ON u.id = uc.addressee_id
+     WHERE uc.requester_id = $1 AND uc.status='accepted'
        AND COALESCE((uc.permissions->>'can_receive_alerts')::boolean,false) = true`,
     [session.user_id]
   );

@@ -83,11 +83,16 @@ function notificationRoutes(pool) {
    * Body: { morning_hour, evening_hour, water_hour }
    */
   router.put('/preferences', requireAuth, async (req, res) => {
-    const { morning_hour, evening_hour, water_hour, reminders_enabled } = req.body;
+    const { morning_hour, evening_hour, water_hour, reminders_enabled,
+            morning_time, afternoon_time, evening_time } = req.body;
 
-    // Validate ranges nếu không phải null
+    // Validate ranges nếu không phải null (legacy hour fields)
     const inRange = (v, min, max) => v === null || v === undefined || (Number.isInteger(v) && v >= min && v <= max);
+    const validTime = (v) => v === null || v === undefined || /^\d{2}:\d{2}$/.test(v);
     if (!inRange(morning_hour, 5, 11) || !inRange(evening_hour, 17, 23) || !inRange(water_hour, 10, 18)) {
+      return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
+    }
+    if (!validTime(morning_time) || !validTime(afternoon_time) || !validTime(evening_time)) {
       return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
     }
 
@@ -96,6 +101,7 @@ function notificationRoutes(pool) {
         morning_hour: morning_hour ?? null,
         evening_hour: evening_hour ?? null,
         water_hour:   water_hour   ?? null,
+        morning_time, afternoon_time, evening_time,
         reminders_enabled: reminders_enabled !== undefined ? Boolean(reminders_enabled) : undefined,
       });
       const prefs = await getPreferences(pool, req.user.id);

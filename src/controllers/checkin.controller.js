@@ -81,6 +81,26 @@ async function confirmAlertHandler(pool, req, res) {
   }
 }
 
+// DEV ONLY — simulate time passing: set next_checkin_at to past so follow-up triggers immediately
+async function simulateTimePassHandler(pool, req, res) {
+  try {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+    const { rows } = await pool.query(
+      `UPDATE health_checkins
+       SET next_checkin_at = NOW() - INTERVAL '1 minute', updated_at = NOW()
+       WHERE user_id = $1 AND session_date = $2 AND resolved_at IS NULL
+       RETURNING id, next_checkin_at, flow_state, current_status`,
+      [req.user.id, today]
+    );
+    if (!rows.length) {
+      return res.json({ ok: false, error: 'No active session today' });
+    }
+    return res.json({ ok: true, session: rows[0], message: 'Time simulated — follow-up ready' });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
 // DEV ONLY — reset today's checkin session for testing
 async function resetTodayHandler(pool, req, res) {
   try {
@@ -116,4 +136,5 @@ module.exports = {
   confirmAlertHandler,
   healthReportHandler,
   resetTodayHandler,
+  simulateTimePassHandler,
 };

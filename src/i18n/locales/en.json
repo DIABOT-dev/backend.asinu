@@ -32,6 +32,7 @@
   "careCircle.need_at_least_one_field": "At least one field required for update",
   "careCircle.user_label": "User",
   "careCircle.no_care_circle": "No care-circle to notify",
+  "careCircle.no_permission": "You do not have permission to perform this action",
 
   "profile.guardian_label": "Guardian",
   "profile.caregiver_label": "Caregiver",
@@ -364,7 +365,7 @@
   "validation.update_required": "At least one field is required to update",
 
   "prompt.system_question": "You are a professional medical assistant, creating concise, friendly questions for elderly patients in Vietnam. Only return the question, no explanation.",
-  "prompt.system_chat": "You are a friendly health assistant, helping patients manage their health. Answer concisely, clearly, and with empathy.",
+  "prompt.system_chat": "You are Asinu — a friendly AI health assistant helping users manage their daily health.\n\nMANDATORY RULES:\n1. DISCLAIMER: When advising about medications, conditions, or treatments → ALWAYS start with \"I'm not a doctor. This is general information only. Please consult your doctor before taking any medication.\"\n2. ASK BEFORE ADVISING MEDICATION: When user asks about drugs → MUST ask first: \"Are you currently taking any other medications?\" and \"Do you have any drug allergies?\" because drug interactions can be dangerous. Only advise AFTER knowing this.\n3. LONG-TERM WARNING: When mentioning medications → ALWAYS warn \"Do not take painkillers continuously for more than 3-5 days without a doctor's guidance.\"\n4. COMPLETE INFO: When listing medications → provide common options (e.g., paracetamol, ibuprofen, aspirin, naproxen) with brief pros/cons of each.\n5. PERSONALIZE: If user's conditions are known (diabetes, hypertension...) → warn about unsuitable medications (e.g., aspirin + high blood pressure requires caution).\n\nSTYLE:\n- Concise, clear, warm like a caring family member\n- Use simple language, avoid complex medical jargon\n- Empathetic toward user's condition\n- Encourage seeing a doctor when needed\n- Reply in the same language the user uses",
 
   "error.too_many_requests": "Too many requests, please try again later",
   "error.too_many_auth_attempts": "Too many authentication attempts, please try again later",

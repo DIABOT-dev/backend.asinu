@@ -8,6 +8,7 @@
  */
 
 const DEFAULTS = { morning: 8, evening: 21, water: 14 };
+const DEFAULT_TIMES = { morning: '08:00', afternoon: '14:00', evening: '21:00' };
 
 // Số log tối thiểu để infer (tránh kết luận từ quá ít data)
 const MIN_LOGS_MORNING = 5;
@@ -106,6 +107,8 @@ async function getPreferences(pool, userId) {
   const { rows } = await pool.query(
     `SELECT morning_hour, evening_hour, water_hour,
             inferred_morning_hour, inferred_evening_hour, inferred_water_hour,
+            morning_time, afternoon_time, evening_time,
+            inferred_morning_time, inferred_afternoon_time, inferred_evening_time,
             inferred_at, updated_at, reminders_enabled
      FROM user_notification_preferences
      WHERE user_id = $1`,
@@ -128,6 +131,17 @@ async function getPreferences(pool, userId) {
     effective_evening_hour: p.evening_hour ?? p.inferred_evening_hour ?? DEFAULTS.evening,
     effective_water_hour:   p.water_hour   ?? p.inferred_water_hour   ?? DEFAULTS.water,
 
+    // HH:MM time strings (new)
+    morning_time:   p.morning_time   ?? null,
+    afternoon_time: p.afternoon_time ?? null,
+    evening_time:   p.evening_time   ?? null,
+    inferred_morning_time:   p.inferred_morning_time   ?? null,
+    inferred_afternoon_time: p.inferred_afternoon_time ?? null,
+    inferred_evening_time:   p.inferred_evening_time   ?? null,
+    effective_morning_time:   p.morning_time   ?? p.inferred_morning_time   ?? DEFAULT_TIMES.morning,
+    effective_afternoon_time: p.afternoon_time ?? p.inferred_afternoon_time ?? DEFAULT_TIMES.afternoon,
+    effective_evening_time:   p.evening_time   ?? p.inferred_evening_time   ?? DEFAULT_TIMES.evening,
+
     reminders_enabled: p.reminders_enabled !== false, // default true if no row yet
   };
 }
@@ -135,20 +149,38 @@ async function getPreferences(pool, userId) {
 /**
  * Lưu preferences do user chọn. Truyền null để reset về auto.
  */
-async function updatePreferences(pool, userId, { morning_hour, evening_hour, water_hour, reminders_enabled }) {
+async function updatePreferences(pool, userId, {
+  morning_hour, evening_hour, water_hour, reminders_enabled,
+  morning_time, afternoon_time, evening_time,
+}) {
   const hasReminders = reminders_enabled !== undefined;
+
+  // Also sync hour from time string for backward compat with cron
+  const extractHour = (time) => time ? parseInt(time.split(':')[0], 10) : undefined;
+  const mh = morning_time !== undefined ? extractHour(morning_time) : morning_hour;
+  const eh = evening_time !== undefined ? extractHour(evening_time) : evening_hour;
+
   await pool.query(
     `INSERT INTO user_notification_preferences
-       (user_id, morning_hour, evening_hour, water_hour, reminders_enabled, updated_at)
-     VALUES ($1, $2, $3, $4, $5, NOW())
+       (user_id, morning_hour, evening_hour, water_hour,
+        morning_time, afternoon_time, evening_time,
+        reminders_enabled, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
      ON CONFLICT (user_id) DO UPDATE SET
-       morning_hour      = $2,
-       evening_hour      = $3,
-       water_hour        = $4,
-       reminders_enabled = CASE WHEN $6 THEN $5 ELSE user_notification_preferences.reminders_enabled END,
+       morning_hour      = COALESCE($2, user_notification_preferences.morning_hour),
+       evening_hour      = COALESCE($3, user_notification_preferences.evening_hour),
+       water_hour        = COALESCE($4, user_notification_preferences.water_hour),
+       morning_time      = CASE WHEN $9 THEN $5 ELSE user_notification_preferences.morning_time END,
+       afternoon_time    = CASE WHEN $10 THEN $6 ELSE user_notification_preferences.afternoon_time END,
+       evening_time      = CASE WHEN $11 THEN $7 ELSE user_notification_preferences.evening_time END,
+       reminders_enabled = CASE WHEN $12 THEN $8 ELSE user_notification_preferences.reminders_enabled END,
        updated_at        = NOW()`,
-    [userId, morning_hour ?? null, evening_hour ?? null, water_hour ?? null,
-     hasReminders ? reminders_enabled : true, hasReminders]
+    [userId,
+     mh ?? null, eh ?? null, water_hour ?? null,
+     morning_time ?? null, afternoon_time ?? null, evening_time ?? null,
+     hasReminders ? reminders_enabled : true,
+     morning_time !== undefined, afternoon_time !== undefined, evening_time !== undefined,
+     hasReminders]
   );
 }
 
