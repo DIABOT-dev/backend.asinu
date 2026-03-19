@@ -333,6 +333,7 @@ function calcGroup(score) {
  */
 async function upsertProfileV2(pool, userId, data) {
   const {
+    full_name,
     birth_year,
     gender,
     height_cm,
@@ -433,11 +434,26 @@ async function upsertProfileV2(pool, userId, data) {
 
   const saved = result.rows[0];
 
-  // Update phone number in users table if provided
+  // Update full_name and phone number in users table if provided
+  const userUpdates = [];
+  const userParams = [];
+  let paramIdx = 1;
+
+  if (full_name && full_name.trim()) {
+    userUpdates.push(`full_name = $${paramIdx}`);
+    userParams.push(full_name.trim());
+    paramIdx++;
+  }
   if (phone && /^0\d{9}$/.test(phone.trim())) {
+    userUpdates.push(`phone_number = COALESCE(NULLIF(phone_number, ''), $${paramIdx})`);
+    userParams.push(phone.trim());
+    paramIdx++;
+  }
+  if (userUpdates.length > 0) {
+    userParams.push(userId);
     await pool.query(
-      'UPDATE users SET phone_number = $1 WHERE id = $2 AND (phone_number IS NULL OR phone_number = \'\')',
-      [phone.trim(), userId]
+      `UPDATE users SET ${userUpdates.join(', ')} WHERE id = $${paramIdx}`,
+      userParams
     );
   }
 

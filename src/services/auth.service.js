@@ -112,9 +112,52 @@ async function verifySocialToken(provider, token) {
     }
 
     if (provider === 'apple') {
-      // Apple uses id_token (JWT) — verify signature in production
+      // Apple sends identityToken (JWT signed by Apple)
+      // Decode header to get kid, fetch Apple's public keys, verify signature
+      try {
+        const crypto = require('crypto');
 
-      return { valid: true };
+        // 1. Decode JWT header to get kid
+        const [headerB64] = token.split('.');
+        const header = JSON.parse(Buffer.from(headerB64, 'base64url').toString());
+        const kid = header.kid;
+        if (!kid) return { valid: false };
+
+        // 2. Fetch Apple's public keys
+        const keysRes = await fetch('https://appleid.apple.com/auth/keys');
+        if (!keysRes.ok) {
+          console.error('[Apple Auth] Failed to fetch Apple keys');
+          return { valid: false };
+        }
+        const { keys } = await keysRes.json();
+        const appleKey = keys.find(k => k.kid === kid);
+        if (!appleKey) {
+          console.error('[Apple Auth] No matching key for kid:', kid);
+          return { valid: false };
+        }
+
+        // 3. Convert JWK to PEM
+        const keyObject = crypto.createPublicKey({ key: appleKey, format: 'jwk' });
+        const pem = keyObject.export({ type: 'spki', format: 'pem' });
+
+        // 4. Verify JWT
+        const decoded = jwt.verify(token, pem, {
+          algorithms: ['RS256'],
+          issuer: 'https://appleid.apple.com',
+          audience: process.env.APPLE_BUNDLE_ID || 'com.asinu.lite',
+        });
+
+        return {
+          valid: true,
+          profile: {
+            email: decoded.email || undefined,
+            sub: decoded.sub,
+          }
+        };
+      } catch (appleErr) {
+        console.error('[Apple Auth] Token verification failed:', appleErr.message);
+        return { valid: false };
+      }
     }
 
     if (provider === 'zalo') {
