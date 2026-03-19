@@ -111,8 +111,8 @@ async function getNextTriageQuestion({
   const isFollowUp = phase === 'followup';
 
   // Giới hạn câu hỏi theo phase
-  const maxQuestions = isFollowUp ? 3 : (isVeryUnwell ? 6 : 8);
-  const minQuestions = isFollowUp ? 2 : 3; // TỐI THIỂU câu hỏi trước khi cho phép isDone
+  const maxQuestions = isFollowUp ? 3 : (isVeryUnwell ? 6 : 8);  // Follow-up: 3, Rất mệt: 6, Hơi mệt: 8
+  const minQuestions = isFollowUp ? 2 : 3;  // Tối thiểu 3 câu initial, 2 câu follow-up (trừ red flag)
 
   const age = profile.birth_year
     ? new Date().getFullYear() - parseInt(profile.birth_year)
