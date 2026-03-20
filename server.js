@@ -19,6 +19,7 @@ const logsRoutes = require('./src/routes/logs.routes');
 const asinuBrainRoutes = require('./asinu-brain-extension/routes/asinuBrain.routes');
 const testRoutes = require('./asinu-brain-extension/routes/test.routes');
 const langMiddleware = require('./src/middleware/lang.middleware');
+const { getRedis } = require('./src/lib/redis');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -30,8 +31,10 @@ app.use(helmet());
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- OPS HEALTH CHECK (INJECTED) ---
-app.get('/api/healthz', (req, res) => {
-  res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
+app.get('/api/healthz', async (req, res) => {
+  let redisOk = false;
+  try { redisOk = (await getRedis().ping()) === 'PONG'; } catch { /* ignore */ }
+  res.status(200).json({ status: 'ok', redis: redisOk ? 'connected' : 'disconnected', uptime: process.uptime(), timestamp: new Date().toISOString() });
 });
 app.get('/healthz', (req, res) => {
   res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
@@ -80,7 +83,11 @@ app.use('/api/logs', logsRoutes(pool));
 app.use('/api/asinu-brain', asinuBrainRoutes(pool));
 app.use('/api/test', testRoutes(pool)); // Public test API - no auth required
 
-// Start server after DB init
+// Connect Redis then start server
+getRedis().connect().catch((err) => {
+  console.warn('[Redis] Could not connect — running without cache:', err.message);
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });

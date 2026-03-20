@@ -4,7 +4,7 @@
  */
 
 const { t, getLang } = require('../i18n');
-const wellnessService = require('../services/wellness.monitoring.service');
+const wellnessService = require('../services/wellness/wellness.monitoring.service');
 const { z } = require('zod');
 
 // =====================================================

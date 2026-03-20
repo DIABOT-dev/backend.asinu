@@ -1,4 +1,5 @@
-const checkinService = require('../services/checkin.service');
+const checkinService = require('../services/checkin/checkin.service');
+const engagementService = require('../services/profile/engagement.service');
 const { t, getLang } = require('../i18n');
 
 async function startCheckinHandler(pool, req, res) {
@@ -126,6 +127,45 @@ async function healthReportHandler(pool, req, res) {
   }
 }
 
+/**
+ * GET /api/mobile/health-score
+ * Get user's health score
+ */
+async function healthScoreHandler(pool, req, res) {
+  try {
+    const result = await checkinService.getHealthScore(pool, req.user.id);
+    return res.json({ ok: true, ...result });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
+/**
+ * GET /api/mobile/engagement/pattern
+ * Get user's engagement pattern
+ */
+async function engagementPatternHandler(pool, req, res) {
+  try {
+    const pattern = await engagementService.getUserPattern(pool, req.user.id);
+    return res.json({ ok: true, ...pattern });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
+/**
+ * GET /api/mobile/engagement/optimal-time
+ * Get user's optimal notification time
+ */
+async function engagementOptimalTimeHandler(pool, req, res) {
+  try {
+    const times = await engagementService.getOptimalNotificationTime(pool, req.user.id);
+    return res.json({ ok: true, ...times });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
 module.exports = {
   startCheckinHandler,
   followUpHandler,
@@ -137,4 +177,7 @@ module.exports = {
   healthReportHandler,
   resetTodayHandler,
   simulateTimePassHandler,
+  healthScoreHandler,
+  engagementPatternHandler,
+  engagementOptimalTimeHandler,
 };

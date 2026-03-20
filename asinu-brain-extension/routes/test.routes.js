@@ -6,8 +6,8 @@ const {
   testAllQuestions,
   testHealth
 } = require('../controllers/test.controller');
-const { sendPushNotification } = require('../../src/services/push.notification.service');
-const { generateEngagementNotification, getUserContext } = require('../../src/services/engagement.notification.service');
+const { sendPushNotification } = require('../../src/services/notification/push.notification.service');
+const { generateEngagementNotification, getUserContext } = require('../../src/services/notification/engagement.notification.service');
 
 /**
  * Public Test Routes - No Authentication Required

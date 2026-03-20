@@ -1,0 +1,135 @@
+ASINU Full System Test — 18:57:37 19/3/2026
+AI: GPT-4o (thật) | 4.7s
+
+╔═══════════════════════════════════════════════════════════╗
+║  ASINU — Full System Test                                ║
+║  12 Features + Check-in Flow | AI: GPT-4o (thật)         ║
+╚═══════════════════════════════════════════════════════════╝
+
+╔═══════════════════════════════════════════════════╗
+║  LUỒNG CHECK-IN HOÀN CHỈNH (AI THẬT)            ║
+╚═══════════════════════════════════════════════════╝
+
+--- Bước 1: Kiểm tra check-in hôm nay ---
+  ✓ GET /checkin/today API 200
+  📋 Đã check-in hôm nay: true
+  📋 Session: id=54, status=tired, flow=follow_up, severity=low
+
+--- Bước 2: Bắt đầu check-in ---
+  ✓ Start check-in — session_id=54, followup=true
+
+--- Bước 3: AI Triage (GPT-4o thật) ---
+  ✓ Triage câu 1: API 200
+  [AI] Câu 1: "Tình trạng mệt mỏi và chóng mặt của bạn hiện tại thế nào so với lúc trước?"
+     Options: ["đã đỡ hơn","vẫn như cũ","mệt hơn trước"] (multiSelect=false)
+  ✓ Triage câu 1: format đúng
+     → Chọn (first): "đã đỡ hơn"
+  ✓ Triage câu 2: API 200
+  [AI] Câu 2: "Ngoài mệt mỏi và chóng mặt, bạn có thêm triệu chứng nào khác không?"
+     Options: ["đau đầu","đau họng","sốt","không có gì thêm"] (multiSelect=true)
+  ✓ Triage câu 2: format đúng
+     → Chọn (multi): "đau đầu, đau họng"
+  ✓ Triage câu 3: API 200
+  📋 [AI] KẾT LUẬN:
+     severity: medium
+     summary: "Tình trạng của bạn vẫn như cũ, với triệu chứng đau đầu và đau họng. Không có triệu chứng mới nào đáng lo ngại xuất hiện."
+     recommendation: "Tôi sẽ tiếp tục theo dõi. Hỏi lại sau vài giờ nữa."
+     needsDoctor: false
+     hasRedFlag: false
+     followUpHours: 3h
+  ✓ Triage kết luận: severity hợp lệ
+  ✓ Triage kết luận: có recommendation
+  ✓ Triage kết luận: có followUpHours
+  ✓ Triage: hỏi >= 2 câu (min) — 2 câu
+
+--- Bước 4: Kiểm tra session sau triage ---
+  ✓ Session updated: flow_state — follow_up
+  ✓ Session updated: triage_severity
+  ✓ Session updated: next_checkin_at
+  📋 Sau triage: flow=follow_up, severity=medium, next=2026-03-19T14:57:37.916Z
+
+--- Bước 5: Health Score sau check-in ---
+  ✓ Health Score API 200
+  ✓ Health Score level hợp lệ
+  ✓ Health Score checkinDone=true
+  📋 Health Score: level=monitor, factors=["status_tired","triage_severity_medium"]
+
+=== #1 HEALTH SCORE ===
+  ✓ #1 API 200
+  ✓ #1 level hợp lệ — monitor
+  ✓ #1 factors array
+  ✓ #1 checkinDone boolean
+  ✓ #1 User 2 API 200
+  ✓ #1 User 2 level hợp lệ — danger
+
+=== #2 AI→SYSTEM REACT ===
+  ✓ #2 flow_state phản ứng — follow_up
+  ✓ #2 current_status cập nhật — tired
+  ✓ #2 next_checkin_at có
+
+=== #3 NOTIFICATION PRIORITY ===
+  ✓ #3 API 200
+  ✓ #3 Có priority field
+  ✓ #3 Priority phân bố hợp lý — {"high":3,"medium":5,"low":11,"critical":1}
+
+=== #4 NOTIFICATION ORCHESTRATOR ===
+  ✓ #4 dispatch function
+  ✓ #4 TYPE_PRIORITY map
+  ✓ #4 emergency=critical
+  ✓ #4 morning_checkin=medium
+
+=== #5 AI FALLBACK ===
+  ✓ #5 Initial: 5 câu rồi kết luận
+  ✓ #5 Followup: 3 câu rồi kết luận
+  ✓ #5 very_tired → severity high
+  ✓ #5 English question
+
+=== #6 SMART ALERT ===
+  ✓ #6 shouldAlertFamily trong code
+  ✓ #6 Check elderly (65+)
+  ✓ #6 Check nighttime
+  ✓ #6 Check avgNoResponse
+  ✓ #6 Tích hợp vào follow-up logic
+
+=== #7 USER ENGAGEMENT ===
+  ✓ #7 Pattern API 200
+  ✓ #7 activeHours array
+  ✓ #7 responseRate number
+  ✓ #7 Optimal time API 200
+  ✓ #7 morning/afternoon/evening
+  📋 Pattern: rate=1, hours=[18]
+  📋 Optimal: 8h / 12h / 18h
+
+=== #8 AI SAFETY ===
+  ✓ #8 BANNED_PHRASES count — 20 phrases
+  ✓ #8 Filter "bạn bị"
+  ✓ #8 Filter "hãy uống thuốc"
+  ✓ #8 Filter "không cần đi bác sĩ"
+  ✓ #8 High severity → doctor ref
+  ✓ #8 Red flag → needsDoctor=true
+  ✓ #8 Chat filter works
+
+=== #9 AI LOGS ===
+  ✓ #9 logAiInteraction function
+  ✓ #9 Migration 047 exists
+  ✓ #9 Tích hợp triage
+  ✓ #9 Tích hợp chat
+
+=== #10 HABIT REPORT ===
+  ✓ #10 Report API 200
+  ✓ #10 responseRate — 100%
+  ✓ #10 avgCheckinHour — ~14h
+  ✓ #10 trend — worsening
+  ✓ #10 checkinDays
+
+=== #11 PERSONALIZED TIMING ===
+  ✓ #11 getPreferredHour exists
+
+=== #12 CARE CIRCLE DASHBOARD ===
+  ✓ #12 API responds — status=403
+  ✓ #12 Security check (403) — Đúng — không có quyền
+
+════════════════════════════════════════════════════════════
+TỔNG KẾT: 66/66 passed, 0 failed (4.7s)
+ALL TESTS PASSED!
+════════════════════════════════════════════════════════════

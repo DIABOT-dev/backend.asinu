@@ -3,7 +3,7 @@
  * Handles tree (health score) summary and history
  */
 
-const treeService = require('../services/tree.service');
+const treeService = require('../services/tree/tree.service');
 const { t, getLang } = require('../i18n');
 
 async function getTreeSummary(pool, req, res) {

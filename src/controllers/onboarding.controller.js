@@ -1,6 +1,7 @@
 const { t, getLang } = require('../i18n');
 const { onboardingRequestSchema } = require('../validation/validation.schemas');
-const onboardingService = require('../services/onboarding.service');
+const onboardingService = require('../services/onboarding/onboarding.service');
+const onboardingAiService = require('../services/onboarding/onboarding.ai.service');
 
 async function upsertOnboardingProfile(pool, req, res) {
   const parsed = onboardingRequestSchema.safeParse(req.body);
@@ -27,4 +28,66 @@ async function upsertOnboardingProfile(pool, req, res) {
   }
 }
 
-module.exports = { upsertOnboardingProfile };
+/**
+ * POST /api/mobile/onboarding/next
+ * AI-driven: get next onboarding question
+ */
+async function onboardingNext(pool, req, res) {
+  const { messages = [], language = 'vi' } = req.body;
+  if (!Array.isArray(messages)) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+  }
+  try {
+    const result = await onboardingAiService.getNextQuestion(messages, language);
+    return res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
+  }
+}
+
+/**
+ * POST /api/mobile/onboarding/complete
+ * AI-driven: save profile when AI reports done
+ */
+async function onboardingComplete(pool, req, res) {
+  const { profile } = req.body;
+  if (!profile || typeof profile !== 'object') {
+    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+  }
+  try {
+    const saved = await onboardingService.upsertProfileFromAI(pool, req.user.id, profile);
+    return res.status(200).json({ ok: true, profile: saved });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
+  }
+}
+
+/**
+ * POST /api/mobile/onboarding/complete-v2
+ * V2 fixed 5-page wizard
+ */
+async function onboardingCompleteV2(pool, req, res) {
+  try {
+    const { phone } = req.body;
+    if (phone && /^0\d{9}$/.test(phone.trim())) {
+      const dup = await pool.query(
+        'SELECT id FROM users WHERE phone_number = $1 AND id != $2',
+        [phone.trim(), req.user.id]
+      );
+      if (dup.rows.length > 0) {
+        return res.status(409).json({ ok: false, error: t('auth.phone_already_used', getLang(req)) });
+      }
+    }
+    const saved = await onboardingService.upsertProfileV2(pool, req.user.id, req.body);
+    return res.json({ ok: true, profile: saved });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
+  }
+}
+
+module.exports = {
+  upsertOnboardingProfile,
+  onboardingNext,
+  onboardingComplete,
+  onboardingCompleteV2,
+};

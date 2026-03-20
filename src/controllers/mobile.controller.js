@@ -1,6 +1,6 @@
 ﻿const { t, getLang } = require('../i18n');
 const { logBaseSchema, logDataSchemas } = require('../validation/validation.schemas');
-const mobileService = require('../services/mobile.service');
+const mobileService = require('../services/profile/mobile.service');
 
 function validateMobileLog(payload) {
   const base = logBaseSchema.safeParse(payload);
@@ -71,4 +71,4 @@ async function getRecentLogs(pool, req, res) {
   return res.status(200).json(result);
 }
 
-module.exports = { createMobileLog, getRecentLogs };
+module.exports = { createMobileLog, getRecentLogs, getTodayLogs };

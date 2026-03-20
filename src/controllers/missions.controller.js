@@ -1,5 +1,5 @@
 ﻿const { t, getLang } = require('../i18n');
-const { getMissions, getMissionHistory, getMissionStats } = require('../services/missions.service');
+const { getMissions, getMissionHistory, getMissionStats } = require('../services/missions/missions.service');
 
 /**
  * GET /api/missions

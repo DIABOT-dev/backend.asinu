@@ -4,7 +4,7 @@
  */
 
 const { t, getLang } = require('../i18n');
-const { evaluateAndApplyEvent, getState, acknowledgeEscalation } = require('../services/carePulse.aps.service');
+const { evaluateAndApplyEvent, getState, acknowledgeEscalation } = require('../services/health/carePulse.aps.service');
 const { carePulseEventSchema, escalationAckSchema } = require('../validation/validation.schemas');
 
 /**

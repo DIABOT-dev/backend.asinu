@@ -3,7 +3,7 @@
  * Protect premium-only endpoints.
  */
 
-const { isPremium } = require('../services/subscription.service');
+const { isPremium } = require('../services/payment/subscription.service');
 const { t, getLang } = require('../i18n');
 
 /**

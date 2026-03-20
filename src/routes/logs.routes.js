@@ -8,15 +8,7 @@ const express = require('express');
 const multer = require('multer');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { requirePremium } = require('../middleware/subscription.middleware');
-const { parseLogVoice } = require('../services/voice.service');
-const { t, getLang } = require('../i18n');
-const {
-  VOICE_MONTHLY_LIMIT,
-  getVoiceUsageThisMonth,
-  incrementVoiceUsage,
-} = require('../services/subscription.service');
-
-const VALID_LOG_TYPES = ['glucose', 'blood_pressure'];
+const { voiceParse } = require('../controllers/logs.controller');
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -32,17 +24,6 @@ const upload = multer({
 function logsRoutes(pool) {
   const router = express.Router();
 
-  /**
-   * POST /api/logs/voice-parse
-   *
-   * Body (multipart/form-data):
-   *   audio    — audio file (m4a, mp4, wav, webm...)
-   *   log_type — "glucose" | "blood_pressure"
-   *
-   * Response:
-   *   { ok: true,  transcript, parsed: { log_type, value?, context?, systolic?, diastolic?, pulse?, notes? } }
-   *   { ok: false, transcript, parsed: null, error: "<Vietnamese message asking user to retry with more info>" }
-   */
   router.post(
     '/voice-parse',
     requireAuth,
@@ -53,68 +34,7 @@ function logsRoutes(pool) {
         next();
       });
     },
-    async (req, res) => {
-      // Validate audio
-      if (!req.file) {
-        return res.status(400).json({
-          ok: false,
-          error: t('error.missing_audio', getLang(req)),
-        });
-      }
-
-      // Validate log_type
-      const { log_type } = req.body;
-      if (!log_type || !VALID_LOG_TYPES.includes(log_type)) {
-        return res.status(400).json({
-          ok: false,
-          error: t('voice.invalid_log_type', getLang(req), { types: VALID_LOG_TYPES.join(', ') }),
-        });
-      }
-
-      // Check monthly voice limit
-      let voiceUsed;
-      try {
-        voiceUsed = await getVoiceUsageThisMonth(pool, req.user.id);
-      } catch {
-        voiceUsed = 0;
-      }
-
-      if (voiceUsed >= VOICE_MONTHLY_LIMIT) {
-        return res.status(429).json({
-          ok: false,
-          code: 'VOICE_LIMIT_EXCEEDED',
-          error:
-            t('error.voice_limit_exceeded', getLang(req), { limit: VOICE_MONTHLY_LIMIT }),
-          voiceUsed,
-          voiceLimit: VOICE_MONTHLY_LIMIT,
-        });
-      }
-
-      try {
-        const result = await parseLogVoice(
-          req.file.buffer,
-          req.file.mimetype,
-          req.file.originalname || 'voice_log.m4a',
-          log_type
-        );
-
-        // Count usage only when audio was actually processed (transcript exists)
-        if (result.transcript) {
-          try {
-            await incrementVoiceUsage(pool, req.user.id);
-          } catch { /* non-blocking */ }
-        }
-
-        return res.status(200).json(result);
-      } catch (err) {
-        return res.status(500).json({
-          ok: false,
-          transcript: '',
-          parsed: null,
-          error: err.message || t('error.voice_processing', getLang(req)),
-        });
-      }
-    }
+    (req, res) => voiceParse(pool, req, res)
   );
 
   return router;

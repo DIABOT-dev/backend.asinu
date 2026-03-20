@@ -4,7 +4,7 @@
  */
 
 const { t, getLang } = require('../i18n');
-const profileService = require('../services/profile.service');
+const profileService = require('../services/profile/profile.service');
 
 async function getProfile(pool, req, res) {
 

@@ -4,7 +4,7 @@
  */
 
 const { t, getLang } = require('../i18n');
-const usersService = require('../services/users.service');
+const usersService = require('../services/auth/users.service');
 
 async function searchUsers(pool, req, res) {
   const query = String(req.query.q || '').trim();

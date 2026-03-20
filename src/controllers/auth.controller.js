@@ -8,7 +8,7 @@ const {
   getCurrentUser,
   searchUsers: serviceSearchUsers,
   verifySocialToken
-} = require('../services/auth.service');
+} = require('../services/auth/auth.service');
 
 const ZALO_CALLBACK_URI     = 'asinu-lite://auth/zalo/callback';
 const FACEBOOK_CALLBACK_URI = 'asinu-lite://auth/facebook/callback';
@@ -155,7 +155,7 @@ async function loginByZalo(pool, req, res) {
       return res.status(401).json({ ok: false, error: t('error.invalid_token', lang) });
     }
 
-    const { normalizePhoneNumber } = require('../services/auth.service');
+    const { normalizePhoneNumber } = require('../services/auth/auth.service');
     const zaloPhone = profile.phone ? normalizePhoneNumber(profile.phone) : null;
     const result = await serviceLoginProvider(pool, 'zalo_id', String(profile.id), 'zalo', null, zaloPhone);
     if (!result.ok) return res.status(401).json(result);
@@ -211,7 +211,7 @@ async function zaloCallback(pool, req, res) {
       return res.redirect(`${APP_CALLBACK_URI}?error=profile_failed`);
     }
 
-    const { normalizePhoneNumber } = require('../services/auth.service');
+    const { normalizePhoneNumber } = require('../services/auth/auth.service');
     const zaloPhone = profile.phone ? normalizePhoneNumber(profile.phone) : null;
     const result = await serviceLoginProvider(pool, 'zalo_id', String(profile.id), 'zalo', null, zaloPhone);
     if (!result.ok) {

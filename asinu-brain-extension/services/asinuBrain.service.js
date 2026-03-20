@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const { calculateRisk } = require('../risk/AsinuRiskEngine');
 const { assessClinicalRisk } = require('../risk/AsinuRiskEngineC');
 const { computePsV1, DEFAULT_CONFIG } = require('../risk/AsinuRiskEngineB');
-const { sendPushNotification } = require('../../src/services/push.notification.service');
+const { sendPushNotification } = require('../../src/services/notification/push.notification.service');
 const { t } = require('../../src/i18n');
 const {
   generateMoodQuestion,
