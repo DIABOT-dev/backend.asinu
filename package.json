@@ -5,6 +5,7 @@
   "type": "commonjs",
   "scripts": {
     "start": "node scripts/migrate.js && node server.js",
+    "dev": "node scripts/migrate.js && nodemon server.js",
     "build": "node -c 'require(\"./server.js\")' && echo 'Backend build successful'",
     "test": "echo \"No tests specified\" && exit 0",
     "db:reset": "node scripts/reset-db.js"
@@ -21,5 +22,8 @@
     "openai": "^6.27.0",
     "pg": "^8.11.3",
     "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }

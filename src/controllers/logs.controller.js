@@ -11,7 +11,7 @@ const {
   incrementVoiceUsage,
 } = require('../services/payment/subscription.service');
 
-const VALID_LOG_TYPES = ['glucose', 'blood_pressure'];
+const VALID_LOG_TYPES = ['glucose', 'blood_pressure', 'insulin'];
 
 /**
  * POST /api/logs/voice-parse

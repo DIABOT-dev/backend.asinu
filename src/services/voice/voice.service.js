@@ -182,12 +182,49 @@ Phạm vi hợp lệ: systolic 60-300, diastolic 30-200.
 Systolic phải lớn hơn diastolic. Nếu ngược lại → hỏi lại.
 Chỉ trả về JSON thuần, không markdown, không giải thích thêm.`;
 
+const INSULIN_SYSTEM = `Bạn là AI chuyên trích xuất thông tin tiêm insulin từ văn bản tiếng Việt.
+
+Nhiệm vụ: Phân tích văn bản người dùng nói và trả về JSON.
+
+Format JSON bắt buộc:
+{
+  "ok": true,
+  "log_type": "insulin",
+  "insulin_type": "<tên insulin nếu có, ví dụ: NovoRapid, Lantus, Humalog, Apidra, Levemir, Tresiba, hoặc null>",
+  "dose_units": <số đơn vị IU, ví dụ 10>,
+  "timing": "<pre_meal|post_meal|bedtime|correction hoặc null>",
+  "injection_site": "<abdomen|thigh|arm|buttock hoặc null>",
+  "notes": "<ghi chú nếu có, hoặc null>"
+}
+
+Hoặc nếu KHÔNG nhận ra thông tin hợp lệ:
+{
+  "ok": false,
+  "error": "<giải thích rõ bằng tiếng Việt, ví dụ: 'Không tìm thấy liều insulin. Vui lòng nói rõ, ví dụ: tiêm 10 đơn vị Lantus trước ăn'>"
+}
+
+Quy tắc timing:
+- "trước ăn" / "trước bữa ăn" → pre_meal
+- "sau ăn" / "sau bữa ăn" → post_meal
+- "trước ngủ" / "buổi tối" / "tối" → bedtime
+- "hiệu chỉnh" / "bổ sung" / "chỉnh" → correction
+
+Quy tắc injection_site:
+- "bụng" / "bụng dưới" → abdomen
+- "đùi" → thigh
+- "cánh tay" / "bắp tay" → arm
+- "mông" → buttock
+
+Phạm vi liều hợp lệ: 1 - 200 IU.
+Trích xuất số liệu dù người dùng nói dài dòng, miễn là có số đơn vị rõ ràng.
+Chỉ trả về JSON thuần, không markdown, không giải thích thêm.`;
+
 /**
  * Transcribe audio + parse health log data using GPT-4o JSON mode.
  * @param {Buffer} audioBuffer
  * @param {string} mimeType
  * @param {string} filename
- * @param {'glucose'|'blood_pressure'} logType
+ * @param {'glucose'|'blood_pressure'|'insulin'} logType
  * @returns {Promise<{ ok: boolean, transcript: string, parsed: object|null, error: string|null }>}
  */
 async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
@@ -206,7 +243,9 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
   }
 
   // Step 2: GPT-4o parse transcript → structured JSON
-  const systemPrompt = logType === 'glucose' ? GLUCOSE_SYSTEM : BP_SYSTEM;
+  const systemPrompt = logType === 'glucose' ? GLUCOSE_SYSTEM
+    : logType === 'insulin' ? INSULIN_SYSTEM
+    : BP_SYSTEM;
 
   const chatRes = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
