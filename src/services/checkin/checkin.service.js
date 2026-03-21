@@ -1103,7 +1103,10 @@ async function getHealthReport(pool, userId, days = 7) {
       'just now', 'a few hours ago', 'since morning', 'since yesterday',
       // Status responses
       'đã đỡ', 'vẫn vậy', 'mệt hơn', 'đã đỡ hơn', 'vẫn như cũ', 'mệt hơn trước',
-      'better', 'about the same', 'worse',
+      'vẫn như lúc đầu', 'có vẻ nặng hơn', 'đang đỡ dần', 'vẫn giống lúc đầu',
+      'better', 'about the same', 'worse', 'getting better', 'getting worse',
+      // Selection responses
+      'không có gì thêm', 'không có triệu chứng mới', 'không thêm gì',
       // Action responses
       'nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì',
       'đã nghỉ ngơi', 'đã ăn uống', 'đã uống thuốc',
@@ -1211,12 +1214,21 @@ async function getHealthScore(pool, userId) {
 
   // 1. Today's check-in
   const { rows: checkinRows } = await pool.query(
-    `SELECT initial_status, triage_severity, emergency_triggered, flow_state
+    `SELECT initial_status, triage_severity, emergency_triggered, flow_state, triage_completed_at
      FROM health_checkins WHERE user_id = $1 AND session_date = $2`,
     [userId, today]
   );
   const checkin = checkinRows[0] || null;
-  const checkinDone = checkin !== null;
+  // Check-in is "done" if:
+  // - status is "fine" (no triage needed), OR
+  // - triage completed, OR
+  // - flow_state is "monitoring" or "resolved" (backend already processed)
+  const checkinDone = checkin !== null && (
+    checkin.initial_status === 'fine'
+    || checkin.triage_completed_at !== null
+    || checkin.flow_state === 'monitoring'
+    || checkin.flow_state === 'resolved'
+  );
 
   // 2. Latest glucose (last 24h)
   const { rows: glucoseRows } = await pool.query(

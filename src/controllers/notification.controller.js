@@ -195,11 +195,31 @@ async function runBasic(pool, req, res) {
   }
 }
 
+async function deleteOne(pool, req, res) {
+  try {
+    await pool.query('DELETE FROM notifications WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
+async function deleteAll(pool, req, res) {
+  try {
+    await pool.query('DELETE FROM notifications WHERE user_id = $1', [req.user.id]);
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
 module.exports = {
   testNotificationHandler,
   getNotifications,
   markAsRead,
   markAllAsRead,
+  deleteOne,
+  deleteAll,
   getNotificationPreferences,
   updateNotificationPreferences,
   previewEngagement,
