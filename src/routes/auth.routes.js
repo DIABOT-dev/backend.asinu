@@ -8,6 +8,7 @@ const {
   loginByZalo,
   zaloCallback,
   facebookCallback,
+  loginByFacebookToken,
   googleInitiate,
   googleCallback,
   loginByPhone,
@@ -27,6 +28,7 @@ function authRoutes(pool) {
   router.post('/zalo', (req, res) => loginByZalo(pool, req, res));
   router.get('/zalo/callback', (req, res) => zaloCallback(pool, req, res));
   router.get('/facebook/callback', (req, res) => facebookCallback(pool, req, res));
+  router.post('/facebook/token', (req, res) => loginByFacebookToken(pool, req, res));
   router.get('/google/initiate', (req, res) => googleInitiate(pool, req, res));
   router.get('/google/callback', (req, res) => googleCallback(pool, req, res));
   router.post('/phone-login', (req, res) => loginByPhone(pool, req, res));

@@ -443,6 +443,38 @@ async function googleCallback(pool, req, res) {
   }
 }
 
+/**
+ * POST /api/auth/facebook/token
+ * Android native FBSDK flow — receives FB access_token, validates with Graph API, returns app JWT
+ */
+async function loginByFacebookToken(pool, req, res) {
+  const { access_token } = req.body || {};
+  if (!access_token) {
+    return res.status(400).json({ ok: false, error: 'access_token required' });
+  }
+  try {
+    const profileRes = await fetch(
+      `https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${access_token}`
+    );
+    const profile = await profileRes.json();
+
+    if (!profile.id || profile.error) {
+      return res.status(401).json({ ok: false, error: 'Invalid Facebook access token' });
+    }
+
+    const email = profile.email || null;
+    const result = await serviceLoginProvider(pool, 'facebook_id', String(profile.id), 'facebook', email, null);
+    if (!result.ok) {
+      return res.status(400).json({ ok: false, error: result.error || 'Login failed' });
+    }
+
+    return res.json({ ok: true, token: result.token });
+  } catch (err) {
+    console.error('[Facebook token login] error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Server error' });
+  }
+}
+
 module.exports = {
   registerByEmail,
   loginByEmail,
@@ -451,6 +483,7 @@ module.exports = {
   loginByZalo,
   zaloCallback,
   facebookCallback,
+  loginByFacebookToken,
   googleInitiate,
   googleCallback,
   loginByPhone,

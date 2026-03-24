@@ -20,6 +20,7 @@ const asinuBrainRoutes = require('./asinu-brain-extension/routes/asinuBrain.rout
 const testRoutes = require('./asinu-brain-extension/routes/test.routes');
 const langMiddleware = require('./src/middleware/lang.middleware');
 const { getRedis } = require('./src/lib/redis');
+const { runBasicNotifications } = require('./src/services/notification/basic.notification.service');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -92,6 +93,26 @@ getRedis().connect().catch((err) => {
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+// Per-minute notification cron — fires at exact HH:MM configured by each user
+function scheduleNotifications() {
+  const now = new Date();
+  const msToNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
+  setTimeout(() => {
+    const tick = async () => {
+      try {
+        const result = await runBasicNotifications(pool);
+        if (result.totalSent > 0)
+          console.log(`[cron] sent=${result.totalSent} at ${result.hour}:${String(result.minute).padStart(2,'0')}`);
+      } catch (err) {
+        console.warn('[cron] runBasicNotifications failed:', err?.message);
+      }
+    };
+    tick();
+    setInterval(tick, 60 * 1000);
+  }, msToNextMinute);
+}
+scheduleNotifications();
 
 // Cleanup old chat histories every 24 hours
 setInterval(async () => {

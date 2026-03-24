@@ -3,7 +3,8 @@
  * Business logic for care circle connections (invitations, connections, permissions)
  */
 
-const { notifyCareCircleInvitation, notifyCareCircleAccepted } = require('../notification/push.notification.service');
+const { notifyCareCircleInvitation } = require('../notification/push.notification.service');
+const { sendAndSave } = require('../notification/basic.notification.service');
 const { t } = require('../../i18n');
 const { isPremium, PREMIUM_CONNECTION_LIMIT } = require('../payment/subscription.service');
 const { cacheGet, cacheSet } = require('../../lib/redis');
@@ -167,8 +168,8 @@ async function getInvitations(pool, userId, direction = 'all') {
   try {
     const result = await pool.query(
       `SELECT uc.*,
-              u1.full_name as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
-              u2.full_name as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
+              COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
+              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
        FROM user_connections uc
        LEFT JOIN users u1 ON uc.requester_id = u1.id
        LEFT JOIN users u2 ON uc.addressee_id = u2.id
@@ -227,8 +228,19 @@ async function acceptInvitation(pool, invitationId, userId) {
     // Get accepter name for notification
     const accepterName = await getUserDisplayName(pool, userId);
 
-    // Send push notification (non-blocking)
-    notifyCareCircleAccepted(pool, connection.requester_id, accepterName)
+    // Send push + save in-app notification (non-blocking)
+    pool.query('SELECT id, push_token, language_preference FROM users WHERE id = $1', [connection.requester_id])
+      .then(r => {
+        const requester = r.rows[0];
+        if (!requester) return;
+        const lang = requester.language_preference || 'vi';
+        const title = t('push.accepted_title', lang);
+        const body = t('push.accepted_body', lang, { name: accepterName });
+        return sendAndSave(pool, { id: requester.id, push_token: requester.push_token }, 'care_circle_accepted', title, body, {
+          accepterName,
+          connectionId: String(connection.id),
+        });
+      })
       .catch(() => {});
 
     return { ok: true, connection };
@@ -280,8 +292,8 @@ async function getConnections(pool, userId) {
   try {
     const result = await pool.query(
       `SELECT uc.*,
-              u1.full_name as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
-              u2.full_name as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
+              COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
+              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
        FROM user_connections uc
        LEFT JOIN users u1 ON uc.requester_id = u1.id
        LEFT JOIN users u2 ON uc.addressee_id = u2.id

@@ -29,14 +29,18 @@ const TYPE_PRIORITY = {
   milestone: 'low',
 };
 
-// ─── Effective hour SQL helpers ───────────────────────────────────
-// Priority: HH:MM time (extract hour) → user-set hour → inferred hour → default
-const morningHourExpr = (def = 8) =>
-  `COALESCE(EXTRACT(HOUR FROM np.morning_time::time)::int, np.morning_hour, np.inferred_morning_hour, ${def})`;
-const afternoonHourExpr = (def = 14) =>
-  `COALESCE(EXTRACT(HOUR FROM np.afternoon_time::time)::int, ${def})`;
-const eveningHourExpr = (def = 21) =>
-  `COALESCE(EXTRACT(HOUR FROM np.evening_time::time)::int, np.evening_hour, np.inferred_evening_hour, ${def})`;
+// ─── Exact HH:MM match helpers ────────────────────────────────────
+// Matches both hour AND minute so notifications fire at the exact configured time.
+// When no time is set (NULL), falls back to default HH:00.
+const morningMatch = (defH = 8) => `
+  COALESCE(EXTRACT(HOUR   FROM np.morning_time::time)::int, np.morning_hour, np.inferred_morning_hour, ${defH}) = $1
+  AND COALESCE(EXTRACT(MINUTE FROM np.morning_time::time)::int, 0) = $2`;
+const afternoonMatch = (defH = 14) => `
+  COALESCE(EXTRACT(HOUR   FROM np.afternoon_time::time)::int, ${defH}) = $1
+  AND COALESCE(EXTRACT(MINUTE FROM np.afternoon_time::time)::int, 0) = $2`;
+const eveningMatch = (defH = 21) => `
+  COALESCE(EXTRACT(HOUR   FROM np.evening_time::time)::int, np.evening_hour, np.inferred_evening_hour, ${defH}) = $1
+  AND COALESCE(EXTRACT(MINUTE FROM np.evening_time::time)::int, 0) = $2`;
 const remindersEnabled = () => `COALESCE(np.reminders_enabled, true) = true`;
 
 function nowVN() {
@@ -125,13 +129,13 @@ const NO_LOG_TODAY = (logType = null) => logType
 
 // ─── 1. Morning log reminder ──────────────────────────────────────
 
-async function runMorningLog(pool, hour) {
+async function runMorningLog(pool, hour, minute) {
   const { rows } = await pool.query(`
     ${USER_SELECT}
-    AND ${morningHourExpr(8)} = $1
+    AND ${morningMatch(8)}
     ${NOT_SENT_TODAY('reminder_log_morning')}
     ${NO_LOG_TODAY()}
-  `, [hour]);
+  `, [hour, minute]);
 
   let sent = 0;
   for (const user of rows) {
@@ -152,12 +156,12 @@ async function runMorningLog(pool, hour) {
 
 // ─── 2. Afternoon reminder (NEW — uses afternoon_time) ───────────
 
-async function runAfternoon(pool, hour) {
+async function runAfternoon(pool, hour, minute) {
   const { rows } = await pool.query(`
     ${USER_SELECT}
-    AND ${afternoonHourExpr(14)} = $1
+    AND ${afternoonMatch(14)}
     ${NOT_SENT_TODAY('reminder_afternoon')}
-  `, [hour]);
+  `, [hour, minute]);
 
   let sent = 0;
   for (const user of rows) {
@@ -187,17 +191,12 @@ async function runAfternoon(pool, hour) {
 
 // ─── 3. Evening log reminder ──────────────────────────────────────
 
-async function runEveningLog(pool, hour) {
+async function runEveningLog(pool, hour, minute) {
   const { rows } = await pool.query(`
     ${USER_SELECT}
-    AND ${eveningHourExpr(21)} = $1
+    AND ${eveningMatch(21)}
     ${NOT_SENT_TODAY('reminder_log_evening')}
-    AND (
-      SELECT COUNT(*) FROM logs_common lc
-      WHERE lc.user_id = u.id
-        AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
-    ) < 2
-  `, [hour]);
+  `, [hour, minute]);
 
   let sent = 0;
   for (const user of rows) {
@@ -218,10 +217,10 @@ async function runEveningLog(pool, hour) {
 
 // ─── 4. Glucose reminder — diabetes only ─────────────────────────
 
-async function runGlucose(pool, hour) {
+async function runGlucose(pool, hour, minute) {
   const { rows } = await pool.query(`
     ${USER_SELECT}
-    AND ${morningHourExpr(8)} = $1
+    AND ${morningMatch(8)}
     AND (
       LOWER(uop.medical_conditions::text) LIKE '%ti%u đường%'
       OR LOWER(uop.medical_conditions::text) LIKE '%diabetes%'
@@ -230,7 +229,7 @@ async function runGlucose(pool, hour) {
     )
     ${NOT_SENT_TODAY('reminder_glucose')}
     ${NO_LOG_TODAY('glucose')}
-  `, [hour]);
+  `, [hour, minute]);
 
   let sent = 0;
   for (const user of rows) {
@@ -246,10 +245,10 @@ async function runGlucose(pool, hour) {
 
 // ─── 5. Blood pressure reminder — hypertension only ──────────────
 
-async function runBP(pool, hour) {
+async function runBP(pool, hour, minute) {
   const { rows } = await pool.query(`
     ${USER_SELECT}
-    AND ${morningHourExpr(8)} = $1
+    AND ${morningMatch(8)}
     AND (
       LOWER(uop.medical_conditions::text) LIKE '%huy%t áp%'
       OR LOWER(uop.medical_conditions::text) LIKE '%hypertension%'
@@ -259,7 +258,7 @@ async function runBP(pool, hour) {
     )
     ${NOT_SENT_TODAY('reminder_bp')}
     ${NO_LOG_TODAY('blood_pressure')}
-  `, [hour]);
+  `, [hour, minute]);
 
   let sent = 0;
   for (const user of rows) {
@@ -275,17 +274,17 @@ async function runBP(pool, hour) {
 
 // ─── 6. Medication reminder ───────────────────────────────────────
 
-async function runMedication(pool, slot, hour) {
+async function runMedication(pool, slot, hour, minute) {
   const type = `reminder_medication_${slot}`;
-  const hourExpr = slot === 'morning' ? morningHourExpr(8) : eveningHourExpr(21);
+  const timeMatch = slot === 'morning' ? morningMatch(8) : eveningMatch(21);
 
   const { rows } = await pool.query(`
     ${USER_SELECT}
-    AND ${hourExpr} = $1
+    AND ${timeMatch}
     AND uop.medical_conditions::text != '[]'
     ${NOT_SENT_TODAY(type)}
     ${NO_LOG_TODAY('medication')}
-  `, [hour]);
+  `, [hour, minute]);
 
   let sent = 0;
   for (const user of rows) {
@@ -325,11 +324,11 @@ async function getUserStreak(pool, userId) {
   return streak;
 }
 
-async function runStreakMilestones(pool, hour) {
+async function runStreakMilestones(pool, hour, minute) {
   const { rows: activeUsers } = await pool.query(`
     ${USER_SELECT}
-    AND ${morningHourExpr(8)} = $1
-  `, [hour]);
+    AND ${morningMatch(8)}
+  `, [hour, minute]);
 
   let sent = 0;
   for (const user of activeUsers) {
@@ -431,31 +430,32 @@ async function getPreferredHour(pool, userId, defaultHour) {
 
 // ─── Main orchestrator ────────────────────────────────────────────
 
-async function runBasicNotifications(pool, forceHour = null) {
+async function runBasicNotifications(pool, forceHour = null, forceMinute = null) {
   const vn = nowVN();
-  const hour = forceHour !== null ? forceHour : vn.getHours();
+  const hour   = forceHour   !== null ? forceHour   : vn.getHours();
+  const minute = forceMinute !== null ? forceMinute : vn.getMinutes();
   const dow = vn.getDay(); // 0 = Sunday
 
   const jobs = [
-    runMorningLog(pool, hour),
-    runAfternoon(pool, hour),           // NEW — afternoon reminder
-    runEveningLog(pool, hour),
-    runGlucose(pool, hour),
-    runBP(pool, hour),
-    runMedication(pool, 'morning', hour),
-    runMedication(pool, 'evening', hour),
-    runStreakMilestones(pool, hour),
+    runMorningLog(pool, hour, minute),
+    runAfternoon(pool, hour, minute),
+    runEveningLog(pool, hour, minute),
+    runGlucose(pool, hour, minute),
+    runBP(pool, hour, minute),
+    runMedication(pool, 'morning', hour, minute),
+    runMedication(pool, 'evening', hour, minute),
+    runStreakMilestones(pool, hour, minute),
     runMorningCheckin(pool, hour),
     runCheckinFollowUps(pool),
     runAlertConfirmationFollowUps(pool),
-    ...(hour === 20 && dow === 0 ? [runWeeklyRecap(pool)] : []),
+    ...(hour === 20 && minute === 0 && dow === 0 ? [runWeeklyRecap(pool)] : []),
   ];
 
   const results = await Promise.all(jobs);
   const totalSent = results.reduce((s, r) => s + (r.sent || 0), 0);
   const totalEligible = results.reduce((s, r) => s + (r.total || 0), 0);
 
-  return { ok: true, hour, results, totalSent, totalEligible };
+  return { ok: true, hour, minute, results, totalSent, totalEligible };
 }
 
 module.exports = { runBasicNotifications, sendAndSave, getPreferredHour };

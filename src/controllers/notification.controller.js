@@ -186,9 +186,10 @@ async function runBasic(pool, req, res) {
     return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
   }
 
-  const forceHour = req.body?.hour !== undefined ? Number(req.body.hour) : null;
+  const forceHour   = req.body?.hour   !== undefined ? Number(req.body.hour)   : null;
+  const forceMinute = req.body?.minute !== undefined ? Number(req.body.minute) : null;
   try {
-    const result = await runBasicNotifications(pool, forceHour);
+    const result = await runBasicNotifications(pool, forceHour, forceMinute);
     return res.status(200).json(result);
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
