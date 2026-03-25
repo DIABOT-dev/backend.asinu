@@ -684,7 +684,7 @@ async function shouldAlertFamily(pool, userId, session) {
   const isElderly = age && age >= 65;
 
   // 3. Check time of day (night = more concerning)
-  const hour = new Date().getHours();
+  const hour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour: 'numeric', hour12: false }), 10);
   const isNightTime = hour >= 22 || hour < 6;
 
   // 4. Check latest severity

@@ -6,7 +6,7 @@ const COOLDOWN_MS = 4 * 60 * 60 * 1000;
 const SIGMA_FLOOR = 5;
 
 const DEFAULT_BASELINE = {
-  timezone: 'Asia/Bangkok',
+  timezone: 'Asia/Ho_Chi_Minh',
   morning_start_hour: 6,
   morning_end_hour: 10,
   evening_start_hour: 19,

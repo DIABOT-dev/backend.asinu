@@ -45,8 +45,7 @@ const MOOD_VALUES = {
 // =====================================================
 
 const getToday = () => {
-  const now = new Date();
-  return now.toISOString().split('T')[0];
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
 };
 
 const minutesSince = (date) => {
