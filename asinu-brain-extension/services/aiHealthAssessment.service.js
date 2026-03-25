@@ -290,8 +290,244 @@ const processAnswerAndGetNext = async ({ userId, conversationHistory, answer, an
   });
 };
 
+/**
+ * AI hỏi nhanh 2-3 câu trong tình huống khẩn cấp SUDDEN_TIRED
+ * Tối đa 3 câu, sau đó phải đánh giá và quyết định có báo người thân không
+ */
+const generateEmergencyTriageStep = async ({ userId, conversationHistory, profile, logsSummary }) => {
+  const MAX_EMERGENCY_QUESTIONS = 3;
+  const questionCount = conversationHistory?.length || 0;
+
+  try {
+    let healthContext = '';
+    if (logsSummary) {
+      if (logsSummary.latest_glucose) {
+        const g = logsSummary.latest_glucose;
+        healthContext += `\n- Đường huyết gần nhất: ${g.value} ${g.unit || 'mg/dL'}`;
+      }
+      if (logsSummary.latest_bp) {
+        const bp = logsSummary.latest_bp;
+        healthContext += `\n- Huyết áp gần nhất: ${bp.systolic}/${bp.diastolic} mmHg`;
+      }
+    }
+
+    let profileContext = '';
+    if (profile) {
+      if (profile.age) profileContext += `\n- Tuổi: ${profile.age}`;
+      if (profile.medical_conditions && Array.isArray(profile.medical_conditions)) {
+        const conditions = profile.medical_conditions
+          .map(c => typeof c === 'string' ? c : c.label || c.other_text)
+          .filter(Boolean);
+        if (conditions.length > 0) profileContext += `\n- Bệnh nền: ${conditions.join(', ')}`;
+      }
+    }
+
+    let conversationContext = '';
+    if (conversationHistory && conversationHistory.length > 0) {
+      conversationContext = '\n\nCÂU HỎI VÀ TRẢ LỜI ĐÃ CÓ:';
+      conversationHistory.forEach((item, i) => {
+        conversationContext += `\nCâu ${i + 1}: "${item.question}"`;
+        conversationContext += `\nTrả lời: "${item.answerLabel || item.answer}"`;
+      });
+    }
+
+    const prompt = t('prompt.emergency_triage', 'vi', {
+      profileContext: profileContext || '\n- Không có thông tin chi tiết',
+      healthContext: healthContext ? `\nCHỈ SỐ SỨC KHỎE:${healthContext}` : '',
+      conversationContext,
+      questionCount
+    });
+
+    const aiResponse = await getOpenAIReply({
+      message: prompt,
+      userId: userId.toString(),
+      sessionId: `emergency-triage-${userId}-${Date.now()}`,
+      temperature: 0.3
+    });
+
+    const responseText = aiResponse.reply.trim();
+    let parsed = null;
+
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        let jsonStr = jsonMatch[0]
+          .replace(/[\r\n\t]/g, ' ')
+          .replace(/,\s*}/g, '}')
+          .replace(/,\s*]/g, ']')
+          .replace(/(['"])?([a-zA-Z_][a-zA-Z0-9_]*)\1\s*:/g, '"$2":');
+        parsed = JSON.parse(jsonStr);
+      } catch (e) { /* ignore */ }
+    }
+
+    if (!parsed) throw new Error('AI response invalid');
+
+    // Force assess if max questions reached
+    if (questionCount >= MAX_EMERGENCY_QUESTIONS && parsed.action === 'ask') {
+      parsed.action = 'assess';
+      parsed.assessment = {
+        risk_tier: 'MEDIUM',
+        risk_score: 50,
+        notify_caregiver: false,
+        outcome_text: 'Đã ghi nhận tình trạng của bạn. Hãy nghỉ ngơi và theo dõi thêm.',
+        recommended_action: 'Nghỉ ngơi, uống nước, đo lại chỉ số nếu có thiết bị.'
+      };
+    }
+
+    if (parsed.action === 'ask') {
+      const questionType = parsed.question.type || 'single_choice';
+      return {
+        continue: true,
+        question: {
+          id: `eq_${questionCount + 1}`,
+          type: questionType,
+          text: parsed.question.text,
+          options: questionType === 'open_text'
+            ? undefined
+            : (parsed.question.options || [
+                { value: 'yes', label: 'Có' },
+                { value: 'no', label: 'Không' }
+              ]),
+          step: questionCount + 1,
+          generated_by_ai: true
+        }
+      };
+    } else {
+      const a = parsed.assessment;
+      return {
+        continue: false,
+        assessment: {
+          risk_tier: a.risk_tier || 'MEDIUM',
+          risk_score: a.risk_score || 50,
+          notify_caregiver: a.notify_caregiver || false,
+          outcome_text: a.outcome_text || 'Đã ghi nhận. Hãy nghỉ ngơi.',
+          recommended_action: a.recommended_action || 'Nghỉ ngơi và theo dõi.',
+          alert_title: a.alert_title || null,
+          alert_message: a.alert_message || null,
+          total_questions: questionCount
+        }
+      };
+    }
+  } catch (error) {
+    console.error('[Emergency Triage] AI error:', error);
+    // Fallback
+    if (questionCount === 0) {
+      return {
+        continue: true,
+        question: {
+          id: 'eq_1',
+          type: 'single_choice',
+          text: 'Bạn đang cảm thấy thế nào?',
+          options: [
+            { value: 'dizzy', label: 'Chóng mặt / ngất xỉu' },
+            { value: 'chest', label: 'Đau ngực / khó thở' },
+            { value: 'weak', label: 'Yếu người / run tay' },
+            { value: 'tired', label: 'Mệt mỏi thông thường' }
+          ],
+          step: 1,
+          generated_by_ai: false
+        }
+      };
+    }
+    const hasDangerous = conversationHistory.some(item =>
+      ['dizzy', 'chest', 'yes'].includes(item.answer)
+    );
+    return {
+      continue: false,
+      assessment: {
+        risk_tier: hasDangerous ? 'HIGH' : 'MEDIUM',
+        risk_score: hasDangerous ? 80 : 45,
+        notify_caregiver: hasDangerous,
+        outcome_text: hasDangerous
+          ? 'Tình trạng của bạn cần được chú ý. Đã thông báo người thân.'
+          : 'Đã ghi nhận. Hãy nghỉ ngơi và uống nước.',
+        recommended_action: hasDangerous
+          ? 'Nằm nghỉ ngay, không di chuyển một mình.'
+          : 'Nghỉ ngơi, uống nước, đo lại chỉ số nếu có.',
+        alert_title: hasDangerous ? '[KHẨN] Người thân cần kiểm tra ngay' : null,
+        alert_message: hasDangerous ? 'Người thân vừa báo mệt đột ngột và có triệu chứng đáng lo. Vui lòng liên hệ kiểm tra ngay.' : null,
+        total_questions: questionCount
+      }
+    };
+  }
+};
+
+/**
+ * AI soạn tin nhắn cá nhân hóa cho người thân (VERY_UNWELL / ALERT_CAREGIVER)
+ */
+const craftPersonalizedEmergencyMessage = async ({ userId, emergencyType, userName, profile, logsSummary }) => {
+  try {
+    let profileContext = '';
+    if (profile) {
+      if (profile.age) profileContext += `\n- Tuổi: ${profile.age}`;
+      if (profile.medical_conditions && Array.isArray(profile.medical_conditions)) {
+        const conditions = profile.medical_conditions
+          .map(c => typeof c === 'string' ? c : c.label || c.other_text)
+          .filter(Boolean);
+        if (conditions.length > 0) profileContext += `\n- Bệnh nền: ${conditions.join(', ')}`;
+      }
+    }
+
+    let healthContext = '';
+    if (logsSummary) {
+      if (logsSummary.latest_glucose) {
+        const g = logsSummary.latest_glucose;
+        healthContext += `\n- Đường huyết gần nhất: ${g.value} ${g.unit || 'mg/dL'}`;
+      }
+      if (logsSummary.latest_bp) {
+        const bp = logsSummary.latest_bp;
+        healthContext += `\n- Huyết áp gần nhất: ${bp.systolic}/${bp.diastolic} mmHg`;
+      }
+    }
+
+    const prompt = t('prompt.emergency_notification', 'vi', {
+      emergencyType: emergencyType === 'VERY_UNWELL' ? 'Rất không ổn' : 'Cần báo người thân',
+      userName,
+      profileContext: profileContext || '\n- Không có thông tin chi tiết',
+      healthContext: healthContext ? `\nCHỈ SỐ SỨC KHỎE:${healthContext}` : ''
+    });
+
+    const aiResponse = await getOpenAIReply({
+      message: prompt,
+      userId: userId.toString(),
+      sessionId: `emergency-notify-${userId}-${Date.now()}`,
+      temperature: 0.4
+    });
+
+    const responseText = aiResponse.reply.trim();
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        let jsonStr = jsonMatch[0]
+          .replace(/[\r\n\t]/g, ' ')
+          .replace(/,\s*}/g, '}')
+          .replace(/,\s*]/g, ']')
+          .replace(/(['"])?([a-zA-Z_][a-zA-Z0-9_]*)\1\s*:/g, '"$2":');
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.title && parsed.message) return parsed;
+      } catch (e) { /* ignore */ }
+    }
+  } catch (error) {
+    console.error('[Emergency Notification] AI error:', error);
+  }
+  // Fallback
+  const fallbackMessages = {
+    VERY_UNWELL: {
+      title: `[KHẨN] ${userName} - Rất không ổn`,
+      message: `${userName} vừa báo đang rất không ổn và cần hỗ trợ ngay. Vui lòng liên hệ hoặc kiểm tra ngay lập tức.`
+    },
+    ALERT_CAREGIVER: {
+      title: `[YÊU CẦU] ${userName} cần bạn`,
+      message: `${userName} đang cần bạn liên hệ gấp. Vui lòng gọi điện hoặc tới kiểm tra ngay.`
+    }
+  };
+  return fallbackMessages[emergencyType] || fallbackMessages.VERY_UNWELL;
+};
+
 module.exports = {
   generateNextStepOrAssess,
   startHealthCheck,
-  processAnswerAndGetNext
+  processAnswerAndGetNext,
+  generateEmergencyTriageStep,
+  craftPersonalizedEmergencyMessage
 };

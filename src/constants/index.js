@@ -1,17 +1,26 @@
 const TZ = 'Asia/Ho_Chi_Minh';
 
 const TYPE_PRIORITY = {
-  emergency: 'critical',
-  health_alert: 'high',
-  caregiver_alert: 'high',
-  checkin_followup: 'high',
-  checkin_followup_urgent: 'critical',
-  morning_checkin: 'medium',
-  care_circle_invitation: 'medium',
-  reminder_glucose: 'medium',
-  reminder_bp: 'medium',
-  evening_checkin: 'low',
-  milestone: 'low',
+  emergency:                  'critical',
+  checkin_followup_urgent:    'critical',
+  health_alert:               'high',
+  caregiver_alert:            'high',
+  checkin_followup:           'high',
+  morning_checkin:            'medium',
+  care_circle_invitation:     'medium',
+  care_circle_accepted:       'medium',
+  reminder_glucose:           'medium',
+  reminder_bp:                'medium',
+  reminder_medication:        'medium',
+  reminder_afternoon:         'low',
+  reminder_morning:           'low',
+  evening_checkin:            'low',
+  caregiver_confirmed:        'low',
+  milestone:                  'low',
+  streak_start:               'low',
+  streak_milestone:           'low',
+  weekly_recap:               'low',
+  engagement:                 'low',
 };
 
 const SEVERITY_COLORS = {
@@ -20,27 +29,47 @@ const SEVERITY_COLORS = {
   high: '#dc2626',
 };
 
+// NOTIF_MAP — dùng cho dev test push. Mỗi type có title + body mẫu với emoji.
 const NOTIF_MAP = {
-  reminder_log_morning:      { title: 'Nhắc nhở buổi sáng',           body: 'Đã đến giờ ghi chỉ số sức khoẻ buổi sáng.' },
-  reminder_log_evening:      { title: 'Nhắc nhở buổi tối',            body: 'Đừng quên ghi chỉ số sức khoẻ trước khi ngủ nhé.' },
-  reminder_water:            { title: 'Uống nước nào!',               body: 'Đã đến giờ uống nước. Hãy giữ cơ thể luôn đủ nước nhé.' },
-  reminder_glucose:          { title: 'Đo đường huyết',               body: 'Đã đến giờ kiểm tra đường huyết.' },
-  reminder_bp:               { title: 'Đo huyết áp',                  body: 'Đã đến giờ kiểm tra huyết áp.' },
-  reminder_medication_morning:{ title: 'Uống thuốc buổi sáng',        body: 'Nhớ uống thuốc đúng giờ nhé.' },
-  reminder_medication_evening:{ title: 'Uống thuốc buổi tối',         body: 'Đừng quên uống thuốc tối nhé.' },
-  weekly_recap:              { title: 'Tổng kết tuần',                body: 'Tuần này bạn đã ghi 15 lần log. Rất tuyệt!' },
-  engagement:                { title: 'Asinu nhớ bạn!',               body: 'Lâu rồi chưa check-in. Sức khoẻ bạn thế nào?' },
-  streak_7:                  { title: 'Chuỗi 7 ngày!',               body: 'Bạn đã log liên tục 7 ngày. Tiếp tục phát huy!' },
-  streak_14:                 { title: 'Chuỗi 14 ngày!',              body: 'Tuyệt vời! 14 ngày liên tục.' },
-  streak_30:                 { title: 'Chuỗi 30 ngày!',              body: 'Phi thường! 1 tháng liên tục ghi log!' },
-  morning_checkin:           { title: 'Check-in sức khoẻ',            body: 'Chào buổi sáng! Hôm nay bạn thấy thế nào?' },
-  checkin_followup:          { title: 'Cập nhật sức khoẻ',            body: 'Asinu muốn hỏi thăm tình trạng của bạn.' },
-  checkin_followup_urgent:   { title: 'Cần cập nhật',                body: 'Bạn chưa phản hồi. Tình trạng hiện tại thế nào?' },
-  emergency:                 { title: 'Khẩn cấp!',                  body: 'Người thân của bạn cần hỗ trợ ngay!' },
-  care_circle_invitation:    { title: 'Lời mời Care Circle',          body: 'Nguyễn Văn A đã mời bạn vào nhóm chăm sóc.' },
-  care_circle_accepted:      { title: 'Đã chấp nhận',                body: 'Nguyễn Văn B đã tham gia nhóm chăm sóc của bạn.' },
-  caregiver_alert:           { title: 'Cảnh báo người thân',         body: 'Người thân của bạn đang cần sự quan tâm.' },
-  health_alert:              { title: 'Cảnh báo sức khoẻ',            body: 'Chỉ số đường huyết bất thường được phát hiện.' },
+  // ── Nhắc nhở sức khoẻ ──────────────────────────────────────────
+  reminder_log_morning:       { title: '☀️ Nhắc ghi log buổi sáng',        body: 'Chào buổi sáng! 🌿 Ghi lại chỉ số sức khỏe hôm nay nhé.' },
+  reminder_log_evening:       { title: '🌙 Chưa ghi log buổi tối',         body: 'Sắp nghỉ rồi! Ghi thêm số liệu sức khỏe trước khi ngủ nha 💙' },
+  reminder_afternoon:         { title: '⛅ Nhắc buổi chiều',               body: 'Buổi chiều rồi! 💙 Bạn có muốn cập nhật sức khoẻ không?' },
+  reminder_morning:           { title: '🌅 Nhắc buổi sáng',               body: 'Sáng tốt lành! ☀️ Đừng quên ghi chỉ số sức khỏe hôm nay nhé.' },
+  reminder_water:             { title: '💧 Uống nước nào!',                body: 'Đã đến giờ uống nước rồi! 💧 Giữ cơ thể luôn đủ nước nhé.' },
+  reminder_glucose:           { title: '🩸 Đến giờ đo đường huyết',        body: 'Đo xong nhớ ghi kết quả vào app để theo dõi chính xác hơn 🩸' },
+  reminder_bp:                { title: '💓 Đến giờ đo huyết áp',           body: 'Đo xong nhớ ghi kết quả vào app để Asinu theo dõi cùng 💓' },
+  reminder_medication_morning:{ title: '💊 Uống thuốc buổi sáng',          body: 'Uống thuốc sáng đúng giờ nhé! 💊 Uống đều đặn là chìa khóa sức khỏe tốt.' },
+  reminder_medication_evening:{ title: '🌙💊 Uống thuốc buổi tối',         body: 'Trước khi ngủ, nhớ uống thuốc tối nhé! 💊 Đừng bỏ liều nào bạn ơi.' },
+  reminder_medication:        { title: '💊 Nhắc uống thuốc',               body: 'Đến giờ uống thuốc rồi! 💊 Uống đúng liều, đúng giờ nhé.' },
+
+  // ── Check-in ────────────────────────────────────────────────────
+  morning_checkin:            { title: '☀️ Asinu hỏi thăm buổi sáng',      body: 'Chào buổi sáng! 🌿 Hôm nay bạn cảm thấy thế nào?' },
+  evening_checkin:            { title: '🌙 Asinu hỏi thăm buổi tối',       body: 'Tối rồi! Bạn cảm thấy thế nào sau một ngày dài? 💙' },
+  checkin_followup:           { title: '💙 Asinu đang hỏi thăm bạn',       body: '🌿 Tình trạng của bạn đã cải thiện chưa? Cập nhật nhanh nhé.' },
+  checkin_followup_urgent:    { title: '⏰ Asinu chưa nhận được phản hồi',  body: 'Bạn có ổn không? 💙 Hãy cho Asinu biết để chúng tôi theo dõi cùng.' },
+
+  // ── Cảnh báo / khẩn cấp ────────────────────────────────────────
+  emergency:                  { title: '🚨 Khẩn cấp — Cần giúp đỡ ngay!',  body: '🚨 Người thân của bạn đang cần hỗ trợ khẩn cấp. Kiểm tra ngay!' },
+  health_alert:               { title: '⚠️ Cảnh báo sức khoẻ',             body: 'Phát hiện chỉ số bất thường. Hãy kiểm tra và cập nhật tình trạng nhé.' },
+  caregiver_alert:            { title: '⚠️ Cần quan tâm người thân',        body: 'Người thân của bạn đang cần sự quan tâm. Vui lòng liên lạc kiểm tra.' },
+  caregiver_confirmed:        { title: '✅ Người thân đã phản hồi',         body: '💙 Người thân đã nhận thông báo và đang hỗ trợ bạn rồi.' },
+
+  // ── Care Circle ─────────────────────────────────────────────────
+  care_circle_invitation:     { title: '🤝 Lời mời Care Circle',            body: 'Có người muốn kết nối với bạn trong Care Circle — cùng chăm sóc nhau nhé!' },
+  care_circle_accepted:       { title: '✅ Lời mời được chấp nhận',         body: '🎉 Thành viên mới đã tham gia nhóm chăm sóc của bạn!' },
+
+  // ── Streak / thành tích ─────────────────────────────────────────
+  streak_7:                   { title: '🔥 Chuỗi 7 ngày liên tục!',        body: '🔥 Tuyệt vời! Bạn đã log 7 ngày liên tục — thói quen tốt đang hình thành rồi!' },
+  streak_14:                  { title: '🔥🔥 Chuỗi 14 ngày liên tục!',     body: '🔥🔥 Rất tốt! 14 ngày không bỏ lỡ — bạn đang trên đà tuyệt vời đó!' },
+  streak_30:                  { title: '🏆 Chuỗi 30 ngày liên tục!',       body: '🏆 Xuất sắc! 30 ngày liên tục — bạn đã xây dựng thói quen sức khỏe đáng nể!' },
+  streak_start:               { title: '✨ Bắt đầu chuỗi mới!',            body: '✨ Ngày đầu tiên của chuỗi mới! Cùng giữ thói quen mỗi ngày nhé 💪' },
+  streak_milestone:           { title: '🏅 Mốc streak mới!',               body: '🏅 Bạn vừa đạt một mốc streak mới. Tuyệt vời lắm, tiếp tục nhé!' },
+  milestone:                  { title: '🎯 Đạt mục tiêu!',                 body: '🎉 Bạn vừa hoàn thành một mục tiêu sức khỏe. Tự hào lắm!' },
+
+  // ── Tổng kết / gắn kết ─────────────────────────────────────────
+  weekly_recap:               { title: '📊 Tổng kết tuần',                 body: '📊 Xem lại hành trình sức khoẻ tuần này của bạn nhé!' },
+  engagement:                 { title: '💙 Asinu nhớ bạn!',                body: 'Lâu rồi chưa gặp! 🌿 Sức khoẻ bạn dạo này thế nào rồi?' },
 };
 
 module.exports = { TZ, TYPE_PRIORITY, SEVERITY_COLORS, NOTIF_MAP };

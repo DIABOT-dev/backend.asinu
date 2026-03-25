@@ -54,6 +54,11 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
   const notifType = data?.type || '';
   const config = SOUND_MAP[notifType] || { channelId: 'reminder', sound: 'asinu_reminder.wav', priority: 'normal' };
 
+  // Caregiver alert cần xác nhận → thêm categoryIdentifier để hiện nút trên notification
+  const isCaregiverAlert = ['caregiver_alert', 'alert', 'emergency'].includes(notifType)
+    || data?.alertType === 'emergency'
+    || data?.requiresImmediate === true;
+
   const messages = validTokens.map(token => ({
     to: token,
     sound: config.sound,
@@ -62,6 +67,7 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
     data: data,
     priority: config.priority,
     channelId: config.channelId,
+    ...(isCaregiverAlert && { categoryIdentifier: 'health_alert' }),
   }));
 
   try {

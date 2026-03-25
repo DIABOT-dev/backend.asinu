@@ -16,9 +16,9 @@ const FREE_TIER_CONNECTION_LIMIT = 3;
 // =====================================================
 
 const DEFAULT_PERMISSIONS = {
-  can_view_logs: false,
-  can_receive_alerts: false,
-  can_ack_escalation: false
+  can_view_logs: true,
+  can_receive_alerts: true,
+  can_ack_escalation: true,
 };
 
 // =====================================================
@@ -391,9 +391,21 @@ async function updateConnection(pool, connectionId, userId, data) {
       RETURNING *
     `;
 
-    const result = await pool.query(updateQuery, values);
+    await pool.query(updateQuery, values);
 
-    return { ok: true, connection: result.rows[0] };
+    // Re-fetch with user names joined
+    const { rows } = await pool.query(
+      `SELECT uc.*,
+              COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
+              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
+       FROM user_connections uc
+       JOIN users u1 ON u1.id = uc.requester_id
+       JOIN users u2 ON u2.id = uc.addressee_id
+       WHERE uc.id = $1`,
+      [connectionId]
+    );
+
+    return { ok: true, connection: rows[0] };
   } catch (err) {
 
     return { ok: false, error: t('error.server') };
@@ -411,18 +423,28 @@ async function updateConnection(pool, connectionId, userId, data) {
 async function updateConnectionPermissions(pool, connectionId, userId, newPermissions) {
   const perms = normalizePermissions(newPermissions);
   try {
-    // Only the patient (requester who invited) can update permissions
     const result = await pool.query(
       `UPDATE user_connections
        SET permissions = $1::jsonb, updated_at = NOW()
-       WHERE id = $2 AND requester_id = $3 AND status = 'accepted'
-       RETURNING *`,
+       WHERE id = $2 AND (requester_id = $3 OR addressee_id = $3) AND status = 'accepted'
+       RETURNING id`,
       [JSON.stringify(perms), connectionId, userId]
     );
     if (result.rows.length === 0) {
       return { ok: false, error: t('careCircle.connection_not_found'), statusCode: 404 };
     }
-    return { ok: true, connection: result.rows[0] };
+    // Re-fetch with user names joined
+    const { rows } = await pool.query(
+      `SELECT uc.*,
+              COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
+              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
+       FROM user_connections uc
+       JOIN users u1 ON u1.id = uc.requester_id
+       JOIN users u2 ON u2.id = uc.addressee_id
+       WHERE uc.id = $1`,
+      [result.rows[0].id]
+    );
+    return { ok: true, connection: rows[0] };
   } catch (err) {
     return { ok: false, error: t('error.server') };
   }

@@ -17,16 +17,25 @@ const TZ = 'Asia/Ho_Chi_Minh';
 // ─── Priority map ────────────────────────────────────────────────
 const TYPE_PRIORITY = {
   emergency: 'critical',
+  checkin_followup_urgent: 'critical',
   health_alert: 'high',
   caregiver_alert: 'high',
   checkin_followup: 'high',
-  checkin_followup_urgent: 'critical',
   morning_checkin: 'medium',
   care_circle_invitation: 'medium',
+  care_circle_accepted: 'medium',
   reminder_glucose: 'medium',
   reminder_bp: 'medium',
+  reminder_medication: 'medium',
+  reminder_afternoon: 'low',
+  reminder_morning: 'low',
   evening_checkin: 'low',
+  caregiver_confirmed: 'low',
   milestone: 'low',
+  streak_start: 'low',
+  streak_milestone: 'low',
+  weekly_recap: 'low',
+  engagement: 'low',
 };
 
 // ─── Exact HH:MM match helpers ────────────────────────────────────

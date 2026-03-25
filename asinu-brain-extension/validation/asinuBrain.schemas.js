@@ -72,10 +72,28 @@ const emergencySchema = z
   })
   .strict();
 
+const emergencyTriageAnswerSchema = z
+  .object({
+    session_id: z.string().min(1),
+    question_id: z.string().min(1),
+    answer: z.union([
+      z.object({
+        option_id: z.string().min(1),
+        label: z.string().optional()
+      }),
+      z.object({
+        text_input: z.string().min(1).max(500),
+        label: z.string().optional()
+      })
+    ])
+  })
+  .strict();
+
 module.exports = {
   answerSchema,
   moodAnswerSchema,
   symptomAnswerSchema,
   dynamicAnswerSchema,
-  emergencySchema
+  emergencySchema,
+  emergencyTriageAnswerSchema
 };

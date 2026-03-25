@@ -19,7 +19,7 @@ const {
   healthReportHandler, resetTodayHandler, simulateTimePassHandler,
   healthScoreHandler, engagementPatternHandler, engagementOptimalTimeHandler,
 } = require('../controllers/checkin.controller');
-const { getCaregiverLogs, getMemberHealthSummary } = require('../controllers/careCircle.controller');
+const { getCaregiverLogs, getCaregiverCheckins, getMemberHealthSummary } = require('../controllers/careCircle.controller');
 const { testNotificationHandler } = require('../controllers/notification.controller');
 
 function mobileRoutes(pool) {
@@ -33,6 +33,7 @@ function mobileRoutes(pool) {
 
   // Caregiver view patient logs (requires can_view_logs permission)
   router.get('/caregiver/logs/:patientId', requireAuth, (req, res) => getCaregiverLogs(pool, req, res));
+  router.get('/caregiver/checkins/:patientId', requireAuth, (req, res) => getCaregiverCheckins(pool, req, res));
 
   // Chat
   const audioUpload = multer({
@@ -100,8 +101,12 @@ function mobileRoutes(pool) {
   router.get ('/checkin/pending-alerts',  requireAuth, (req, res) => pendingAlertsHandler(pool, req, res));
   router.post('/checkin/confirm-alert',   requireAuth, (req, res) => confirmAlertHandler(pool, req, res));
   router.get ('/checkin/report',          requireAuth, (req, res) => healthReportHandler(pool, req, res));
-  router.post('/checkin/reset-today',    requireAuth, (req, res) => resetTodayHandler(pool, req, res));
-  router.post('/checkin/simulate-time',  requireAuth, (req, res) => simulateTimePassHandler(pool, req, res));
+  // DEV-ONLY — blocked in production
+  if (process.env.NODE_ENV !== 'production') {
+    router.post('/checkin/reset-today',   requireAuth, (req, res) => resetTodayHandler(pool, req, res));
+    router.post('/checkin/simulate-time', requireAuth, (req, res) => simulateTimePassHandler(pool, req, res));
+    router.post('/test-notification',     requireAuth, (req, res) => testNotificationHandler(pool, req, res));
+  }
 
   // Health Score
   router.get('/health-score', requireAuth, (req, res) => healthScoreHandler(pool, req, res));
@@ -109,9 +114,6 @@ function mobileRoutes(pool) {
   // Engagement patterns
   router.get('/engagement/pattern', requireAuth, (req, res) => engagementPatternHandler(pool, req, res));
   router.get('/engagement/optimal-time', requireAuth, (req, res) => engagementOptimalTimeHandler(pool, req, res));
-
-  // DEV — Test push notifications
-  router.post('/test-notification', requireAuth, (req, res) => testNotificationHandler(pool, req, res));
 
   // Care Circle Dashboard — caregiver views member's health summary
   router.get('/care-circle/member/:memberId/health-summary', requireAuth, (req, res) => getMemberHealthSummary(pool, req, res));

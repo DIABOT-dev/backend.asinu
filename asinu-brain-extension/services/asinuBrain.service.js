@@ -13,7 +13,8 @@ const {
 const {
   generateNextStepOrAssess,
   startHealthCheck,
-  processAnswerAndGetNext
+  generateEmergencyTriageStep,
+  craftPersonalizedEmergencyMessage
 } = require('./aiHealthAssessment.service');
 
 // Flag để bật/tắt AI Dynamic Mode
@@ -308,11 +309,11 @@ const getConversationHistory = async (pool, sessionId) => {
         options: row.payload.options || []
       };
     }
-    if (row.payload?.option_id || row.payload?.value) {
+    if (row.payload?.option_id || row.payload?.value || row.payload?.text_input) {
       // Đây là answer event
-      const answer = row.payload.option_id || row.payload.value;
+      const answer = row.payload.text_input || row.payload.option_id || row.payload.value;
       const answerLabel = row.payload.label || row.payload.option_label || answer;
-      
+
       if (currentQuestion) {
         history.push({
           ...currentQuestion,
@@ -1869,6 +1870,119 @@ const getTimeline = async (pool, userId) => {
   return combined.slice(0, 50);
 };
 
+/**
+ * Bắt đầu luồng hỏi AI cho SUDDEN_TIRED — trả về câu hỏi đầu tiên
+ */
+const startEmergencyTriage = async (pool, userId) => {
+  const session = await createSession(pool, userId);
+  const snapshot = await ensureSnapshot(pool, session.id, userId);
+  const profile = snapshot?.onboarding || null;
+  const logsSummary = snapshot?.logs_summary || null;
+
+  const result = await generateEmergencyTriageStep({
+    userId,
+    conversationHistory: [],
+    profile,
+    logsSummary
+  });
+
+  await recordEvent(pool, {
+    sessionId: session.id,
+    userId,
+    eventType: 'question',
+    questionId: result.question.id,
+    payload: { question_text: result.question.text, options: result.question.options, emergency: true }
+  });
+
+  return { session_id: session.id, question: result.question };
+};
+
+/**
+ * Nhận câu trả lời trong luồng SUDDEN_TIRED — trả về câu hỏi tiếp hoặc kết quả đánh giá
+ */
+const submitEmergencyTriageAnswer = async (pool, userId, payload) => {
+  const { session_id, question_id, answer } = payload;
+
+  let session = await getSessionById(pool, userId, session_id);
+  if (!session || session.status !== 'open') {
+    session = await createSession(pool, userId);
+  }
+
+  await recordEvent(pool, {
+    sessionId: session.id,
+    userId,
+    eventType: 'answer',
+    questionId: question_id,
+    payload: { ...answer, emergency: true }
+  });
+  await markSessionAnswered(pool, session.id);
+
+  const snapshot = await ensureSnapshot(pool, session.id, userId);
+  const conversationHistory = await getConversationHistory(pool, session.id);
+
+  const result = await generateEmergencyTriageStep({
+    userId,
+    conversationHistory,
+    profile: snapshot?.onboarding || null,
+    logsSummary: snapshot?.logs_summary || null
+  });
+
+  if (result.continue) {
+    await recordEvent(pool, {
+      sessionId: session.id,
+      userId,
+      eventType: 'question',
+      questionId: result.question.id,
+      payload: { question_text: result.question.text, options: result.question.options, emergency: true }
+    });
+    return { isDone: false, question: result.question };
+  }
+
+  // Assessment done — notify if needed
+  const assessment = result.assessment;
+  let notifyStatus = null;
+
+  if (assessment.notify_caregiver) {
+    const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [userId]);
+    const userName = userResult.rows[0]?.full_name || userResult.rows[0]?.email || `User ${userId}`;
+
+    notifyStatus = await notifyCaregivers(pool, userId, {
+      title: assessment.alert_title || `[KHẨN] ${userName}`,
+      message: assessment.alert_message || `${userName} đang mệt đột ngột và cần được kiểm tra ngay.`,
+      data: {
+        alertType: 'emergency',
+        emergencyType: 'SUDDEN_TIRED',
+        severity: assessment.risk_tier === 'HIGH' ? 'critical' : 'high',
+        requiresImmediate: assessment.risk_tier === 'HIGH'
+      }
+    });
+  }
+
+  await recordOutcome(pool, {
+    sessionId: session.id,
+    userId,
+    outcome: {
+      risk_tier: assessment.risk_tier,
+      notify_caregiver: assessment.notify_caregiver,
+      outcome_text: assessment.outcome_text,
+      recommended_action: assessment.recommended_action,
+      metadata: { emergency_type: 'SUDDEN_TIRED', questions_asked: assessment.total_questions }
+    }
+  });
+  await closeSession(pool, session.id, null);
+
+  return {
+    isDone: true,
+    outcome: {
+      risk_tier: assessment.risk_tier,
+      notify_caregiver: assessment.notify_caregiver,
+      outcome_text: assessment.outcome_text,
+      recommended_action: assessment.recommended_action,
+      caregiver_notified: notifyStatus?.notified || false
+    }
+  };
+};
+
 const postEmergency = async (pool, userId, payload) => {
   const session = await createSession(pool, userId);
   const now = new Date();
@@ -1894,34 +2008,30 @@ const postEmergency = async (pool, userId, payload) => {
   let notifyStatus = { status: 'LOGGED', message: t('error.emergency_logged') };
 
   if (notifyNeeded) {
-    // Lấy tên bệnh nhân để gửi trong notification
     const userResult = await pool.query(
       'SELECT full_name, email FROM users WHERE id = $1',
       [userId]
     );
     const userName = userResult.rows[0]?.full_name || userResult.rows[0]?.email || `User ${userId}`;
-    
-    // Map emergency type sang message tiếng Việt - userName sẽ được replace bằng mối quan hệ
-    const emergencyMessages = {
-      'VERY_UNWELL': {
-        title: t('brain.sos_emergency_title', 'vi', { name: userName }),
-        message: t('brain.sos_emergency_msg', 'vi', { name: userName })
-      },
-      'ALERT_CAREGIVER': {
-        title: t('brain.sos_request_title', 'vi', { name: userName }),
-        message: t('brain.sos_request_msg', 'vi', { name: userName })
-      }
-    };
-    
-    const notificationContent = emergencyMessages[payload.type] || {
-      title: t('brain.sos_warning_title', 'vi', { name: userName }),
-      message: t('brain.sos_warning_msg', 'vi', { name: userName })
-    };
-    
+
+    // Lấy profile + logs để AI soạn tin cá nhân hóa
+    const [profile, logsSummary] = await Promise.all([
+      fetchOnboardingProfile(pool, userId),
+      fetchLogsSummary(pool, userId)
+    ]);
+
+    const aiMessage = await craftPersonalizedEmergencyMessage({
+      userId,
+      emergencyType: payload.type,
+      userName,
+      profile,
+      logsSummary
+    });
+
     notifyStatus = await notifyCaregivers(pool, userId, {
-      title: notificationContent.title,
-      message: notificationContent.message,
-      data: { 
+      title: aiMessage.title,
+      message: aiMessage.message,
+      data: {
         alertType: 'emergency',
         emergencyType: payload.type,
         severity: 'critical',
@@ -1953,5 +2063,7 @@ module.exports = {
   getNextState,
   submitAnswer,
   getTimeline,
-  postEmergency
+  postEmergency,
+  startEmergencyTriage,
+  submitEmergencyTriageAnswer
 };

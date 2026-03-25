@@ -22,22 +22,32 @@ const { sendPushNotification } = require('../notification/push.notification.serv
 const { getNextTriageQuestion, buildContinuityMessage, calcFollowUpHours } = require('./checkin.ai.service');
 const { dispatch: dispatchNotification } = require('../notification/notification.orchestrator');
 const { trackEvent } = require('../profile/engagement.service');
+const { updateMissionProgress } = require('../missions/missions.service');
 const { t } = require('../../i18n');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
 
 // ─── Priority map ────────────────────────────────────────────────
 const TYPE_PRIORITY = {
   emergency: 'critical',
+  checkin_followup_urgent: 'critical',
   health_alert: 'high',
   caregiver_alert: 'high',
   checkin_followup: 'high',
-  checkin_followup_urgent: 'critical',
   morning_checkin: 'medium',
   care_circle_invitation: 'medium',
+  care_circle_accepted: 'medium',
   reminder_glucose: 'medium',
   reminder_bp: 'medium',
+  reminder_medication: 'medium',
+  reminder_afternoon: 'low',
+  reminder_morning: 'low',
   evening_checkin: 'low',
+  caregiver_confirmed: 'low',
   milestone: 'low',
+  streak_start: 'low',
+  streak_milestone: 'low',
+  weekly_recap: 'low',
+  engagement: 'low',
 };
 
 /**
@@ -53,12 +63,19 @@ const TYPE_PRIORITY = {
 async function sendCheckinNotification(pool, userId, pushToken, type, title, body, data = {}) {
   const priority = TYPE_PRIORITY[type] || 'low';
 
-  // Use orchestrator for DB save + cooldown; handle push separately
   const tasks = [
-    dispatchNotification(pool, { userId, type, title, body, data, priority }),
+    dispatchNotification(pool, { userId, type, title, body, data, priority })
+      .then(r => console.log(`[NOTIF] dispatchNotification type=${type} userId=${userId} ok=${r?.ok} id=${r?.id}`))
+      .catch(e => console.error(`[NOTIF] dispatchNotification FAILED:`, e.message)),
   ];
   if (pushToken) {
-    tasks.push(sendPushNotification([pushToken], title, body, { type, ...data }));
+    tasks.push(
+      sendPushNotification([pushToken], title, body, { type, ...data })
+        .then(r => console.log(`[NOTIF] push type=${type} userId=${userId} ok=${r?.ok} data=${JSON.stringify(r?.data)}`))
+        .catch(e => console.error(`[NOTIF] push FAILED:`, e.message))
+    );
+  } else {
+    console.warn(`[NOTIF] no pushToken for userId=${userId} type=${type} — skipping push`);
   }
   await Promise.allSettled(tasks);
 }
@@ -74,11 +91,12 @@ function nowVN() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: TZ }));
 }
 
-/** 21:00 VN time today */
+/** 21:00 VN time today — fixed timezone calculation */
 function todayEvening9pm() {
-  const vn = nowVN();
-  vn.setHours(21, 0, 0, 0);
-  return vn;
+  const vnDateStr = new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+  const t = new Date(`${vnDateStr}T21:00:00+07:00`);
+  // If already past 21:00 VN, push to tomorrow 21:00
+  return t <= new Date() ? new Date(t.getTime() + 24 * 60 * 60 * 1000) : t;
 }
 
 /** now + hours in UTC */
@@ -102,6 +120,7 @@ function checkinDateVN() {
 
 /** Calculate next follow-up time based on flow + checkin count */
 function calcNextCheckin(flowState, currentStatus, followUpCount = 0, followUpHoursFromAI = null) {
+  if (flowState === 'resolved') return null;
   if (flowState === 'monitoring') return todayEvening9pm();
   // Nếu AI trả về followUpHours → dùng luôn
   if (followUpHoursFromAI) return hoursFromNow(followUpHoursFromAI);
@@ -189,6 +208,9 @@ async function startCheckin(pool, userId, status) {
   // Invalidate health score cache
   await cacheDel(`health:score:${userId}`);
 
+  // Mark daily_checkin mission as completed
+  updateMissionProgress(pool, userId, 'daily_checkin', 1, { goal: 1 }).catch(() => {});
+
   return rows[0];
 }
 
@@ -207,12 +229,21 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
   if (!cur.length) return null;
   const session = cur[0];
 
+  // Already resolved — nothing to update
+  if (session.flow_state === 'resolved') return session;
+
   let flowState = session.flow_state;
   let resolvedAt = null;
 
   if (newStatus === 'fine') {
-    // Recovering: move to light monitoring
-    flowState = 'monitoring';
+    if (session.flow_state === 'monitoring') {
+      // Evening confirmation after a "fine" morning → fully resolved
+      flowState = 'resolved';
+      resolvedAt = new Date();
+    } else {
+      // Recovering from tired/high_alert → back to light monitoring
+      flowState = 'monitoring';
+    }
   } else if (newStatus === 'very_tired' || session.flow_state === 'high_alert') {
     // Escalate or maintain high alert
     flowState = 'high_alert';
@@ -592,8 +623,10 @@ async function reactToTriageResult(pool, userId, checkinId, result) {
  * Alerts ALL care circle members with can_receive_alerts=true.
  */
 async function triggerEmergency(pool, userId, location) {
+  console.log(`[SOS] triggerEmergency userId=${userId} location=${JSON.stringify(location)}`);
+
   // Mark session
-  await pool.query(
+  const { rows: sessionRows } = await pool.query(
     `INSERT INTO health_checkins
        (user_id, session_date, initial_status, current_status, flow_state,
         emergency_triggered, emergency_location, resolved_at, updated_at)
@@ -602,9 +635,12 @@ async function triggerEmergency(pool, userId, location) {
        emergency_triggered = true,
        emergency_location  = $3::jsonb,
        flow_state          = 'high_alert',
-       updated_at          = NOW()`,
+       updated_at          = NOW()
+     RETURNING id`,
     [userId, checkinDateVN(), JSON.stringify(location || null)]
   );
+  const checkinId = sessionRows[0]?.id;
+  console.log(`[SOS] checkin upserted id=${checkinId}`);
 
   // Get user info
   const { rows: userRows } = await pool.query(
@@ -617,30 +653,54 @@ async function triggerEmergency(pool, userId, location) {
   const lang = user.lang || 'vi';
   const userName = user.display_name || user.full_name || t('careCircle.user_label', lang);
 
-  // Get care circle members who can receive alerts
-  // requester_id = patient, addressee_id = caregiver
+  // Get care circle members who can receive alerts (both directions)
   const { rows: caregivers } = await pool.query(
-    `SELECT u.id, u.push_token
+    `SELECT u.id, u.push_token,
+            uc.permissions->>'can_receive_alerts' as can_receive_alerts,
+            uc.status
      FROM user_connections uc
-     JOIN users u ON u.id = uc.addressee_id
-     WHERE uc.requester_id = $1
+     JOIN users u ON u.id = CASE
+       WHEN uc.requester_id = $1 THEN uc.addressee_id
+       ELSE uc.requester_id
+     END
+     WHERE (uc.requester_id = $1 OR uc.addressee_id = $1)
        AND uc.status = 'accepted'
        AND COALESCE((uc.permissions->>'can_receive_alerts')::boolean, false) = true`,
     [userId]
   );
+  console.log(`[SOS] found ${caregivers.length} caregiver(s):`, caregivers.map(c => ({ id: c.id, hasToken: !!c.push_token, can_receive_alerts: c.can_receive_alerts })));
 
   const locationStr = location
     ? ` (${location.lat?.toFixed(4)}, ${location.lng?.toFixed(4)})`
     : '';
   const title = t('checkin.emergency_title', lang);
   const body  = t('checkin.emergency_body', lang, { name: userName, location: locationStr });
-  const data  = { userId: String(userId), location };
+  const data  = { type: 'emergency', userId: String(userId), location };
 
   for (const cg of caregivers) {
-    await sendCheckinNotification(
+    // Insert confirmation record so caregiver sees pending alert
+    if (checkinId) {
+      try {
+        await pool.query(
+          `INSERT INTO caregiver_alert_confirmations
+             (checkin_id, caregiver_id, patient_id, alert_type, sent_at, resent_count)
+           VALUES ($1,$2,$3,'emergency',NOW(),0)
+           ON CONFLICT (checkin_id, caregiver_id) DO UPDATE SET
+             alert_type = 'emergency', sent_at = NOW(), confirmed_at = NULL, resent_count = 0`,
+          [checkinId, cg.id, userId]
+        );
+        console.log(`[SOS] inserted caregiver_alert_confirmations for caregiver=${cg.id}`);
+      } catch (e) {
+        console.error(`[SOS] failed to insert confirmation for caregiver=${cg.id}:`, e.message);
+      }
+    }
+
+    console.log(`[SOS] sending notification to caregiver=${cg.id} pushToken=${cg.push_token ? cg.push_token.slice(0,30) + '...' : 'NONE'}`);
+    const result = await sendCheckinNotification(
       pool, cg.id, cg.push_token || null,
       'emergency', title, body, data
     );
+    console.log(`[SOS] notification sent to caregiver=${cg.id}`, result);
   }
 
   return {
@@ -819,8 +879,12 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
   const { rows: caregivers } = await pool.query(
     `SELECT u.id, u.push_token
      FROM user_connections uc
-     JOIN users u ON u.id = uc.addressee_id
-     WHERE uc.requester_id = $1 AND uc.status='accepted'
+     JOIN users u ON u.id = CASE
+       WHEN uc.requester_id = $1 THEN uc.addressee_id
+       ELSE uc.requester_id
+     END
+     WHERE (uc.requester_id = $1 OR uc.addressee_id = $1)
+       AND uc.status = 'accepted'
        AND COALESCE((uc.permissions->>'can_receive_alerts')::boolean,false) = true`,
     [session.user_id]
   );
@@ -966,7 +1030,12 @@ async function getPendingCaregiverAlerts(pool, caregiverId) {
  * Cron: gửi lại alert sau 30 phút nếu chưa xác nhận (tối đa 1 lần)
  */
 async function runAlertConfirmationFollowUps(pool) {
-  const cutoff = new Date(Date.now() - 30 * 60 * 1000); // 30 phút trước
+  // Re-alert every 30 minutes until caregiver confirms, up to MAX_RESENDS times
+  const MAX_RESENDS = 4; // max 4 re-alerts (= 2 hours total after initial)
+  const RESEND_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
+
+  // Find unconfirmed alerts where last send was >= 30 min ago and haven't hit max
+  const cutoff = new Date(Date.now() - RESEND_INTERVAL_MS);
   const { rows } = await pool.query(
     `SELECT cac.*, u.push_token,
             p.display_name AS patient_name, p.full_name AS patient_full_name
@@ -974,13 +1043,14 @@ async function runAlertConfirmationFollowUps(pool) {
      JOIN users u ON u.id = cac.caregiver_id
      JOIN users p ON p.id = cac.patient_id
      WHERE cac.confirmed_at IS NULL
-       AND cac.sent_at <= $1
-       AND cac.resent_count = 0`,
-    [cutoff]
+       AND cac.resent_count < $1
+       AND COALESCE(cac.resent_at, cac.sent_at) <= $2`,
+    [MAX_RESENDS, cutoff]
   );
 
   for (const alert of rows) {
     const patientName = alert.patient_name || alert.patient_full_name || t('brain.relative_fallback');
+    const resendNum = alert.resent_count + 1;
     const title = alert.alert_type === 'emergency'
       ? t('checkin.reminder_emergency_title')
       : t('checkin.reminder_health_check_title');
@@ -992,8 +1062,8 @@ async function runAlertConfirmationFollowUps(pool) {
       { alertId: String(alert.id), patientId: String(alert.patient_id), checkinId: String(alert.checkin_id) }
     );
     await pool.query(
-      `UPDATE caregiver_alert_confirmations SET resent_count=1, resent_at=NOW() WHERE id=$1`,
-      [alert.id]
+      `UPDATE caregiver_alert_confirmations SET resent_count=$1, resent_at=NOW() WHERE id=$2`,
+      [resendNum, alert.id]
     );
   }
   return { resent: rows.length };

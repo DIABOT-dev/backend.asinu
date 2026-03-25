@@ -40,7 +40,10 @@ const MISSION_DESCRIPTIONS = {
 
 async function getMissions(pool, userId) {
   const client = resolveClient(pool);
-  
+
+  // Clear tree summary cache so home screen sees fresh mission counts
+  await cacheDel(`tree:summary:${userId}`);
+
   // Reset ALL missions if it's a new day (not just completed ones)
   const today = toDateOnly(new Date());
   await client.query(

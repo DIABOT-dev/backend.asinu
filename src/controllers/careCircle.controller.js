@@ -213,6 +213,52 @@ async function getCaregiverLogs(pool, req, res) {
 }
 
 /**
+ * GET /api/mobile/caregiver/checkins/:patientId
+ * Caregiver view patient's check-in history (requires can_view_logs permission)
+ */
+async function getCaregiverCheckins(pool, req, res) {
+  const caregiverId = req.user.id;
+  const patientId = parseInt(req.params.patientId);
+  if (!patientId) return res.status(400).json({ ok: false, error: 'Invalid patient ID' });
+
+  try {
+    // Check connection exists and has can_view_logs permission
+    const { rows: connRows } = await pool.query(
+      `SELECT id FROM user_connections
+       WHERE status = 'accepted'
+         AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))
+         AND COALESCE((permissions->>'can_view_logs')::boolean, false) = true`,
+      [patientId, caregiverId]
+    );
+    if (connRows.length === 0) {
+      return res.status(403).json({ ok: false, error: 'No permission to view logs' });
+    }
+
+    // Fetch patient's check-in sessions (last 14 days)
+    const { rows: sessions } = await pool.query(
+      `SELECT id, session_date, initial_status, current_status, flow_state,
+              triage_summary, triage_severity, family_alerted, emergency_triggered,
+              resolved_at, created_at
+       FROM health_checkins
+       WHERE user_id = $1 AND session_date >= CURRENT_DATE - INTERVAL '14 days'
+       ORDER BY session_date DESC`,
+      [patientId]
+    );
+
+    // Get patient name
+    const { rows: patientRows } = await pool.query(
+      `SELECT display_name, full_name FROM users WHERE id = $1`,
+      [patientId]
+    );
+    const patientName = patientRows[0]?.display_name || patientRows[0]?.full_name || '';
+
+    return res.json({ ok: true, patientName, sessions });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: 'Server error' });
+  }
+}
+
+/**
  * GET /api/mobile/care-circle/member/:memberId/health-summary
  * Care Circle Dashboard — caregiver views member's health summary
  */
@@ -264,5 +310,6 @@ module.exports = {
   updateConnection,
   updateConnectionPermissions,
   getCaregiverLogs,
+  getCaregiverCheckins,
   getMemberHealthSummary,
 };

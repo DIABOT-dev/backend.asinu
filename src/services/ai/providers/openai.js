@@ -14,15 +14,15 @@ const { t } = require('../../../i18n');
  * @param {Object} params - { message, userId, sessionId, model, temperature }
  * @returns {Promise<Object>} - { reply, provider, meta }
  */
-async function getOpenAIReply({ message, userId, sessionId, model, temperature }) {
+async function getOpenAIReply({ message, userId, sessionId, model, temperature, maxTokens }) {
   const apiKey = process.env.OPENAI_API_KEY;
-  
+
   if (!apiKey) {
     throw new Error('OPENAI_API_KEY is not set in environment variables');
   }
 
   const selectedModel = model || process.env.OPENAI_MODEL || DEFAULT_MODEL;
-  const selectedTemp = temperature !== undefined ? temperature : 
+  const selectedTemp = temperature !== undefined ? temperature :
     (process.env.OPENAI_TEMPERATURE ? parseFloat(process.env.OPENAI_TEMPERATURE) : DEFAULT_TEMPERATURE);
 
   const payload = {
@@ -38,7 +38,7 @@ async function getOpenAIReply({ message, userId, sessionId, model, temperature }
       }
     ],
     temperature: selectedTemp,
-    max_completion_tokens: 150, // Câu hỏi ngắn gọn
+    max_completion_tokens: maxTokens || 400, // Tăng mặc định để tránh truncate JSON
     top_p: 1,
     frequency_penalty: 0.3, // Tránh lặp từ
     presence_penalty: 0.3

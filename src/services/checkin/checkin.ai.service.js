@@ -98,8 +98,8 @@ function calcFollowUpHours(severity, answerCount = 0) {
 const FALLBACK_QUESTIONS = {
   initial: {
     vi: [
-      // TYPE 2 — Severity
-      { question: 'Mức độ mệt của bạn hiện tại thế nào?', options: ['nhẹ', 'trung bình', 'khá nặng', 'rất nặng'], multiSelect: false },
+      // TYPE 2 — Severity (calibrated to "hơi mệt" — no "rất nặng" here)
+      { question: 'Mức độ mệt của bạn hiện tại thế nào?', options: ['nhẹ', 'trung bình', 'khá nặng'], multiSelect: false },
       // TYPE 3 — Symptoms
       { question: 'Bạn đang gặp triệu chứng nào?', options: ['mệt mỏi', 'chóng mặt', 'đau đầu', 'buồn nôn', 'khát nước', 'không rõ'], multiSelect: true },
       // TYPE 4 — Onset
@@ -110,7 +110,7 @@ const FALLBACK_QUESTIONS = {
       { question: 'Bạn đã làm gì để cải thiện chưa?', options: ['nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì'], multiSelect: true },
     ],
     en: [
-      { question: 'How severe is your tiredness right now?', options: ['mild', 'moderate', 'quite severe', 'very severe'], multiSelect: false },
+      { question: 'How severe is your tiredness right now?', options: ['mild', 'moderate', 'quite severe'], multiSelect: false },
       { question: 'What symptoms are you experiencing?', options: ['fatigue', 'dizziness', 'headache', 'nausea', 'thirst', 'not sure'], multiSelect: true },
       { question: 'When did this start?', options: ['just now', 'a few hours ago', 'since morning', 'since yesterday'], multiSelect: false },
       { question: 'What might have caused this?', options: ['lack of sleep', 'skipped meals', 'stress', 'missed medication', 'not sure'], multiSelect: true },
@@ -192,8 +192,9 @@ async function getNextTriageQuestion({
   const isFollowUp = phase === 'followup';
 
   // Giới hạn câu hỏi theo phase
-  const maxQuestions = isFollowUp ? 3 : (isVeryUnwell ? 6 : 8);  // Follow-up: 3, Rất mệt: 6, Hơi mệt: 8
-  const minQuestions = isFollowUp ? 2 : 3;  // Tối thiểu 3 câu initial, 2 câu follow-up (trừ red flag)
+  // Hơi mệt: max 4 (tránh tra tấn user), Rất mệt: max 5 (cần đủ thông tin nguy hiểm)
+  const maxQuestions = isFollowUp ? 3 : (isVeryUnwell ? 5 : 4);
+  const minQuestions = isFollowUp ? 2 : 3;
 
   const age = profile.birth_year
     ? new Date().getFullYear() - parseInt(profile.birth_year)
@@ -227,6 +228,38 @@ async function getNextTriageQuestion({
     ? previousAnswers.map((a, i) => `Q${i + 1}: "${a.question}" → "${a.answer}"`).join('\n')
     : '(Chưa hỏi câu nào)';
 
+  // ── Pre-compute: TYPEs đã hỏi & triệu chứng đã biết ──
+  // Giúp AI không cần tự suy luận, tránh lặp và nhầm lẫn
+  const usedTypes = new Set();
+  const knownSymptoms = new Set();
+
+  for (const a of previousAnswers) {
+    const q = a.question.toLowerCase();
+    const ans = (a.answer || '').toLowerCase();
+
+    // Detect TYPE from question content
+    if (q.includes('mức độ') || q.includes('how severe') || q.includes('khó chịu')) usedTypes.add(2);
+    if (q.includes('triệu chứng') || q.includes('symptoms') || q.includes('tình trạng nào')) usedTypes.add(3);
+    if (q.includes('bắt đầu') || q.includes('when did') || q.includes('từ khi nào') || q.includes('từ bao giờ')) usedTypes.add(4);
+    if (q.includes('thay đổi') || q.includes('diễn tiến') || q.includes('progression') || q.includes('có nặng hơn') || q.includes('có đỡ')) usedTypes.add(5);
+    if (q.includes('nguy hiểm') || q.includes('khó thở') || q.includes('đau ngực') || q.includes('red flag') || q.includes('dấu hiệu nào')) usedTypes.add(6);
+    if (q.includes('nguyên nhân') || q.includes('cause') || q.includes('dẫn đến')) usedTypes.add(7);
+    if (q.includes('đã làm') || q.includes('action') || q.includes('cải thiện') || q.includes('have you done')) usedTypes.add(8);
+
+    // Extract symptoms from answers to TYPE 3 / TYPE 6
+    if (usedTypes.has(3) || usedTypes.has(6)) {
+      ans.split(/,|;/).map(s => s.trim()).filter(Boolean).forEach(s => knownSymptoms.add(s));
+    }
+  }
+
+  const usedTypesStr = usedTypes.size > 0
+    ? `TYPEs đã dùng trong phiên này: ${[...usedTypes].map(n => `TYPE ${n}`).join(', ')} → KHÔNG hỏi lại các TYPE này.`
+    : 'Chưa hỏi TYPE nào.';
+
+  const knownSymptomsStr = knownSymptoms.size > 0
+    ? `Triệu chứng user đã khai: ${[...knownSymptoms].join(', ')} → KHÔNG đưa vào options ở câu hỏi tiếp theo.`
+    : '';
+
   // ── Tạo system prompt theo phase ──
   let systemPrompt;
 
@@ -246,19 +279,21 @@ async function getNextTriageQuestion({
   const contextBlock = `=== THÔNG TIN NGƯỜI DÙNG ===
 - Tuổi: ${age ? age + ' tuổi' : 'không rõ'}
 - Bệnh nền: ${conditions || 'không có'}
-- Nhóm: ${profile.user_group || 'wellness'}
 ${healthDataSection}
 ${prevCheckinsSection}
 ${prevSummary}
 ${prevTriageDetail}
 
 === PHIÊN HIỆN TẠI (${answerCount}/${maxQuestions} câu đã hỏi) ===
-${historyText}`;
+${historyText}
 
-  // ── Minimum question enforcement ──
-  const minQRule = answerCount < minQuestions
-    ? `\n⛔ CHƯA ĐỦ CÂU HỎI: Mới hỏi ${answerCount}/${minQuestions} câu tối thiểu. BẮT BUỘC isDone=false. Phải hỏi thêm ít nhất ${minQuestions - answerCount} câu nữa trước khi kết luận (TRỪ KHI phát hiện red flag nguy hiểm).`
-    : '';
+=== TRACKING (đọc trước khi tạo câu hỏi) ===
+${usedTypesStr}
+${knownSymptomsStr || '(Chưa biết triệu chứng cụ thể)'}
+Còn lại tối đa: ${maxQuestions - answerCount} câu${answerCount >= maxQuestions - 1 ? ' — ĐÂY LÀ CÂU CUỐI, BẮT BUỘC isDone=true' : ''}.
+${answerCount < minQuestions ? `⛔ CHƯA ĐỦ ${minQuestions} CÂU TỐI THIỂU — isDone PHẢI là false (trừ red flag).` : `✓ Đã đủ câu tối thiểu, có thể kết luận nếu đã rõ.`}`;
+
+  const minQRule = ''; // đã tích hợp vào contextBlock, không cần inject riêng
 
   if (isFollowUp) {
     // ══════════════════════════════════════════════════════════════════
@@ -266,55 +301,56 @@ ${historyText}`;
     // Follow-up định kỳ: 3 lớp câu hỏi, 2-3 câu/lần
     // ══════════════════════════════════════════════════════════════════
 
-    systemPrompt = `Bạn là Asinu — trợ lý sức khoẻ đang theo dõi định kỳ trong ngày.
-Người dùng trước đó báo "${statusLabel}".
+    // Detect which follow-up layers have been used
+    const usedLayers = new Set();
+    for (const a of previousAnswers) {
+      const q = a.question.toLowerCase();
+      if (q.includes('so với') || q.includes('thế nào rồi') || q.includes('compared to') || q.includes('how are you now')) usedLayers.add(1);
+      if (q.includes('triệu chứng') || q.includes('symptom') || q.includes('thêm') || q.includes('new')) usedLayers.add(2);
+      if (q.includes('nghỉ ngơi') || q.includes('đã làm') || q.includes('rested') || q.includes('action')) usedLayers.add(3);
+    }
+    const layersLeft = [1, 2, 3].filter(l => !usedLayers.has(l));
+
+    // Build initial symptom context from triage summary for follow-up
+    const initialSymptomContext = previousSessionSummary
+      ? `Triệu chứng ghi nhận ban đầu: "${previousSessionSummary}"`
+      : (knownSymptomsStr || '');
+
+    systemPrompt = `Bạn là Asinu — đang theo dõi sức khoẻ định kỳ.
+Người dùng trước đó báo "${statusLabel}". ${initialSymptomContext}
 
 ${contextBlock}
-${minQRule}
 
-=== NHIỆM VỤ: ${status === 'fine' ? 'TỔNG KẾT CUỐI NGÀY' : 'THEO DÕI DIỄN BIẾN (SYMPTOM PROGRESSION)'} ===
-${status === 'fine' ? `Người dùng cho biết họ ỔN. Đây là check-in tối — hỏi tổng kết ngày:
-- Câu 1: "Hôm nay bạn cảm thấy thế nào?" (multiSelect=false, options: rất tốt / khá ổn / hơi mệt / không tốt lắm)
-- Nếu user nói ổn → hỏi thêm 1 câu về thói quen rồi isDone=true
-- Nếu user nói mệt → hỏi thêm 1-2 câu rồi kết luận` : ''}
+=== NHIỆM VỤ: THEO DÕI DIỄN BIẾN ===
+Hỏi theo thứ tự 3 LỚP (mỗi lớp tối đa 1 lần). Lớp chưa hỏi: ${layersLeft.length > 0 ? layersLeft.map(l => `LỚP ${l}`).join(', ') : 'đã hỏi hết → isDone=true'}.
 
-=== CÁCH FOLLOW ĐÚNG CHUẨN Y KHOA ===
-Bác sĩ khi follow bệnh nhân luôn hỏi: "Hiện tại bạn thấy thế nào so với lúc trước?"
-Chỉ câu này thôi đã giúp hiểu diễn tiến bệnh.
+LỚP 1 — TRẠNG THÁI (multiSelect=false) — hỏi TRƯỚC TIÊN${usedLayers.has(1) ? ' ✓ ĐÃ HỎI' : ''}
+  Nhắc đúng triệu chứng từ lần trước: "Tình trạng [triệu chứng cụ thể] giờ thế nào rồi?"
+  Options: đã đỡ nhiều / vẫn như cũ / mệt hơn trước
 
-AI hỏi theo 3 LỚP (mỗi lớp chỉ hỏi 1 lần, KHÔNG lặp):
+LỚP 2 — TRIỆU CHỨNG MỚI (multiSelect=true) — chỉ hỏi nếu chưa đỡ${usedLayers.has(2) ? ' ✓ ĐÃ HỎI' : ''}
+  "Ngoài [triệu chứng đã biết], bạn có thêm dấu hiệu nào không?"
+  Options chỉ gồm triệu chứng MỚI chưa khai + "không có gì thêm"
+  ⚡ Nếu user báo: khó thở / đau ngực / hoa mắt / vã mồ hôi → isDone=true NGAY, hasRedFlag=true
 
-LỚP 1 — TRẠNG THÁI HIỆN TẠI (multiSelect=false) — HỎI TRƯỚC TIÊN
-  Nhắc lại triệu chứng CỤ THỂ từ lần trước (Perceived Care Loop)
-  Ví dụ: "Tình trạng đau đầu và chóng mặt lúc sáng giờ thế nào rồi?"
-  Options: đã đỡ hơn / vẫn như cũ / mệt hơn trước
+LỚP 3 — HÀNH ĐỘNG (multiSelect=true) — hỏi trước khi kết luận${usedLayers.has(3) ? ' ✓ ĐÃ HỎI' : ''}
+  "Bạn đã nghỉ ngơi hay làm gì để đỡ hơn chưa?"
+  Options: nghỉ ngơi / ăn uống / uống thuốc / uống nước / chưa làm gì
 
-LỚP 2 — TRIỆU CHỨNG MỚI (multiSelect=true) — CHỈ nếu chưa đỡ VÀ chưa hỏi
-  Ví dụ: "Ngoài đau đầu, bạn có thêm triệu chứng nào khác không?"
-  Options: triệu chứng MỚI + "không có gì thêm"
-  ⚠️ Nếu có dấu hiệu nguy hiểm (khó thở, đau ngực, tức ngực, hoa mắt) → isDone=true, hasRedFlag=true NGAY
+=== KẾT LUẬN ===
+✓ Lớp 1 trả lời "đã đỡ" → isDone=true ngay, progression=improved, severity=low, followUpHours=6
+✓ Vẫn như cũ sau đủ câu → isDone=true, progression=same, severity=medium, followUpHours=3
+✓ Nặng hơn + red flag → isDone=true, hasRedFlag=true, needsDoctor=true, severity=high, followUpHours=1
+✓ Nặng hơn, không red flag → isDone=true, progression=worsened, severity=medium, followUpHours=2
 
-LỚP 3 — HÀNH ĐỘNG (multiSelect=true) — CHỈ nếu chưa kết luận VÀ chưa hỏi
-  Ví dụ: "Bạn đã nghỉ ngơi hoặc ăn uống gì chưa?"
+⚠️ NGUYÊN TẮC:
+- KHÔNG đưa vào options triệu chứng user đã khai
+- KHÔNG lặp lớp đã hỏi (xem danh sách ✓ ở trên)
+- Nhắc đúng tên triệu chứng user đã báo, không hỏi chung chung
 
-=== KẾT LUẬN (chỉ sau khi đã hỏi ít nhất ${minQuestions} câu, TRỪ red flag) ===
-✓ ĐÃ ĐỠ: isDone=true, progression=improved, followUpHours: 6–8
-✓ VẪN VẬY: isDone=true, progression=same, followUpHours: 3–4, recommendation: "Tôi sẽ tiếp tục theo dõi. Hỏi lại sau vài giờ nữa."
-✓ NẶNG HƠN + CÓ RED FLAG: isDone=true, hasRedFlag=true, needsDoctor=true, severity=high, followUpHours: 1
-✓ NẶNG HƠN + KHÔNG RED FLAG: isDone=true, progression=worsened, followUpHours: 1–2
-
-=== NGUYÊN TẮC ===
-- ĐỌC KỸ history trước khi tạo câu hỏi — KHÔNG hỏi lại điều đã biết
-- KHÔNG đưa options trùng với câu trả lời trước
-- Mỗi lớp chỉ hỏi TỐI ĐA 1 lần
-- ${answerCount < minQuestions ? `⛔ MỚI HỎI ${answerCount} CÂU — CHƯA ĐỦ ${minQuestions} CÂU TỐI THIỂU → isDone=false BẮT BUỘC` : ''}
-- ${answerCount >= maxQuestions - 1 ? `⚠️ CÂU CUỐI (${answerCount + 1}/${maxQuestions}) — BẮT BUỘC isDone=true!` : `Đã hỏi ${answerCount}/${maxQuestions} câu.`}
-- Kết thúc bằng câu quan tâm: "Tôi sẽ hỏi lại bạn sau nhé."
-
-Respond in JSON only.
-⚠️ BẮT BUỘC: "options" phải là mảng có ít nhất 2 phần tử. KHÔNG BAO GIỜ trả options rỗng [].
-Format câu hỏi: {"isDone":false,"question":"...","options":["opt1","opt2","opt3"],"multiSelect":true|false}
-Format kết luận: {"isDone":true,"progression":"improved|same|worsened","hasRedFlag":false,"summary":"...","severity":"low|medium|high","recommendation":"...","needsDoctor":false,"needsFamilyAlert":false,"followUpHours":3}
+Respond in JSON only. "options" có ít nhất 2 phần tử.
+Format câu hỏi: {"isDone":false,"question":"...","options":["opt1","opt2"],"multiSelect":true|false}
+Format kết luận: {"isDone":true,"progression":"improved|same|worsened","summary":"...","severity":"low|medium|high","recommendation":"...","needsDoctor":false,"needsFamilyAlert":false,"hasRedFlag":false,"followUpHours":3,"closeMessage":"Tôi sẽ hỏi lại bạn sau X tiếng nhé."}
 
 LANGUAGE: ${lang === 'en' ? 'English' : 'Vietnamese'}.`;
 
@@ -325,112 +361,58 @@ LANGUAGE: ${lang === 'en' ? 'English' : 'Vietnamese'}.`;
     // Tối thiểu 3 câu, tối đa 8 câu
     // ══════════════════════════════════════════════════════════════════
 
-    systemPrompt = `Bạn là Asinu — trợ lý sức khoẻ AI, hỏi thăm như bác sĩ gia đình.
-Người dùng vừa cho biết họ "${statusLabel}" (TYPE 1 — Chief Complaint đã xác định — KHÔNG hỏi lại).
+    systemPrompt = `Bạn là Asinu — trợ lý sức khoẻ AI, hỏi như bác sĩ gia đình.
+Người dùng báo: "${statusLabel}". TYPE 1 (Chief Complaint) đã rõ — KHÔNG hỏi lại.
 
 ${contextBlock}
-${minQRule}
 
-=== NHIỆM VỤ: LÀM RÕ TÌNH TRẠNG (Clinical Interview) ===
-Hỏi tối thiểu ${minQuestions} câu, tối đa ${maxQuestions} câu.
-${isVeryUnwell ? '⚡ RẤT MỆT → ưu tiên phát hiện dấu hiệu nguy hiểm, nhưng VẪN phải hỏi ít nhất 3 câu!' : ''}
+=== THỨ TỰ CÂU HỎI (chọn TYPE tiếp theo chưa dùng, theo thứ tự ưu tiên) ===
+${isVeryUnwell ? `
+RẤT MỆT — thứ tự ưu tiên:
+① TYPE 3 — Triệu chứng (multiSelect=true): "Bạn đang gặp triệu chứng nào?" — hỏi TRƯỚC TIÊN
+   Options MỚI (không trùng triệu chứng đã biết): mệt mỏi / chóng mặt / đau đầu / buồn nôn / tức ngực / khó thở / hoa mắt / vã mồ hôi / không rõ
+② TYPE 6 — Red flag (multiSelect=true): "Ngoài [triệu chứng đã khai], bạn có thêm dấu hiệu nào không?"
+   Options chỉ gồm: khó thở / đau ngực / tức ngực / hoa mắt / vã mồ hôi / ngất / không có
+   ⚡ Nếu user chọn bất kỳ dấu hiệu nào (trừ "không có") → isDone=true NGAY, hasRedFlag=true, needsDoctor=true, severity=high
+② TYPE 2 — Severity (multiSelect=false): "Mức độ nặng của bạn thế nào?"
+   Options: trung bình / khá nặng / rất nặng
+   Ánh xạ: "rất nặng" → severity=high (bắt buộc)
+③ TYPE 4 — Onset (multiSelect=false): "Tình trạng [triệu chứng] bắt đầu từ khi nào?"
+   Options: vừa mới / vài giờ trước / từ sáng / từ hôm qua
+④ TYPE 7 — Nguyên nhân (multiSelect=true): nếu còn câu hỏi
+⑤ Kết luận nếu đã đủ thông tin` : `
+HƠI MỆT — thứ tự ưu tiên:
+① TYPE 3 — Triệu chứng (multiSelect=true): "Bạn đang gặp triệu chứng nào?" — hỏi TRƯỚC TIÊN
+   Options MỚI (không trùng triệu chứng đã biết): mệt mỏi / chóng mặt / đau đầu / buồn nôn / khát nước / ăn không ngon / không rõ
+② TYPE 4 — Onset (multiSelect=false): "Tình trạng [triệu chứng cụ thể] bắt đầu từ khi nào?"
+   Options: vừa mới / vài giờ trước / từ sáng / từ hôm qua / vài ngày nay
+③ TYPE 5 — Diễn tiến (multiSelect=false): "Từ [thời điểm] đến giờ, tình trạng có thay đổi không?"
+   Options: đang đỡ dần / vẫn như cũ / có vẻ nặng hơn
+   Nếu "nặng hơn" → hỏi thêm TYPE 6 (red flag) trước khi kết luận
+④ TYPE 7 hoặc TYPE 8 — chỉ nếu còn câu hỏi VÀ cần thêm thông tin
+⑤ Kết luận`}
 
-⚡⚡⚡ TRƯỚC KHI TẠO CÂU HỎI MỚI — BẮT BUỘC ĐỌC HISTORY:
-1. User đã trả lời những gì? Triệu chứng nào đã khai?
-2. Có dấu hiệu nguy hiểm không? (đau ngực, khó thở, tức ngực, hoa mắt, vã mồ hôi)
-3. Đã hỏi TYPE câu hỏi nào rồi? → chuyển sang TYPE tiếp theo
+⚠️ NGUYÊN TẮC CỨNG:
+- KHÔNG tạo câu hỏi thuộc TYPE đã có trong danh sách "TYPEs đã dùng" ở trên
+- KHÔNG đưa vào options bất kỳ triệu chứng nào đã có trong "Triệu chứng user đã khai"
+- Mỗi câu hỏi PHẢI nhắc tên triệu chứng CỤ THỂ user đã nói (không hỏi chung chung)
+- Nếu user báo red flag (đau ngực / khó thở / hoa mắt / vã mồ hôi / ngất) → isDone=true NGAY
+- Severity kết luận: nếu user chọn "rất nặng" ở bất kỳ câu nào → severity=high (không được giảm xuống)
+${conditions ? `- Bệnh nền [${conditions}] → ưu tiên hỏi triệu chứng liên quan bệnh nền này` : ''}
+${prevCheckinsStr ? `- Hôm qua/gần đây user có triệu chứng tương tự → nhắc lại để tạo cảm giác theo dõi liên tục` : ''}
 
-=== 9 TYPE CÂU HỎI Y KHOA (Question Templates) ===
-Dạy AI cách suy nghĩ như bác sĩ, không đưa câu hỏi cố định.
-Chọn TYPE phù hợp DỰA TRÊN câu trả lời trước. Mỗi TYPE chỉ hỏi TỐI ĐA 1 lần.
+🔒 QUY TẮC OPTIONS THEO TỪNG LOẠI CÂU HỎI (bắt buộc tuân thủ):
+• Câu hỏi TRIỆU CHỨNG (TYPE 3): options = tên triệu chứng (mệt mỏi, chóng mặt, đau đầu, ...) — KHÔNG được có mức độ (nhẹ/nặng)
+• Câu hỏi MỨC ĐỘ (TYPE 2): options = mức độ (nhẹ, trung bình, khá nặng, rất nặng) — KHÔNG được có triệu chứng
+• Câu hỏi THỜI ĐIỂM (TYPE 4): options = mốc thời gian (vừa mới, vài giờ trước, từ sáng, từ hôm qua) — không được có gì khác
+• Câu hỏi DIỄN TIẾN (TYPE 5): options = xu hướng thay đổi (đang đỡ dần, vẫn như cũ, có vẻ nặng hơn)
+• Câu hỏi RED FLAG (TYPE 6): options = dấu hiệu nguy hiểm cụ thể + "không có" — KHÔNG được có triệu chứng thông thường
+• Câu hỏi NGUYÊN NHÂN (TYPE 7): options = nguyên nhân (ngủ ít, bỏ bữa, căng thẳng, quên thuốc, không rõ)
+• Câu hỏi HÀNH ĐỘNG (TYPE 8): options = hành động đã làm (nghỉ ngơi, ăn uống, uống nước, uống thuốc, chưa làm gì)
 
-TYPE 1 — KHOANH VÙNG (Chief Complaint) — ĐÃ BIẾT: "${statusLabel}" → KHÔNG HỎI LẠI
-
-TYPE 2 — ĐỊNH LƯỢNG NHANH (Severity Check) — dùng đầu tiên
-  Mục tiêu: biết mức độ khó chịu
-  multiSelect=false
-  Ví dụ: "Mức độ mệt của bạn hiện tại thế nào?" | nhẹ / trung bình / khá nặng / rất nặng
-
-TYPE 3 — XÁC ĐỊNH TRIỆU CHỨNG (Symptom Identification) — dùng sau severity
-  Mục tiêu: biết user đang gặp triệu chứng gì cụ thể
-  multiSelect=true (có thể gặp nhiều triệu chứng)
-  Ví dụ: "Bạn đang gặp tình trạng nào?" | mệt mỏi / chóng mặt / đau đầu / buồn nôn / khát nước / không rõ
-
-TYPE 4 — THỜI ĐIỂM XUẤT HIỆN (Onset Question) — dùng SAU khi biết triệu chứng
-  Mục tiêu: biết triệu chứng bắt đầu khi nào
-  multiSelect=false
-  Ví dụ: "Tình trạng [triệu chứng cụ thể] bắt đầu từ khi nào?" | vừa mới / vài giờ trước / từ sáng / từ hôm qua
-
-TYPE 5 — DIỄN TIẾN (Progression Question) — dùng khi đã biết onset
-  Mục tiêu: triệu chứng đang cải thiện hay xấu đi
-  multiSelect=false
-  Ví dụ: "Từ [thời điểm] đến giờ, tình trạng [triệu chứng] có thay đổi không?" | đang đỡ dần / vẫn giống lúc đầu / có vẻ nặng hơn
-
-TYPE 6 — PHÁT HIỆN NGUY CƠ (Red Flag Question) — dùng khi triệu chứng nặng hoặc xấu đi
-  Mục tiêu: phát hiện dấu hiệu nguy hiểm LIÊN QUAN đến triệu chứng đã khai
-  multiSelect=true
-  Ví dụ: "Ngoài [triệu chứng], bạn có gặp tình trạng nào?" | hoa mắt / vã mồ hôi / khó thở / đau ngực / không có
-  ⚠️ Nếu user báo red flag → isDone=true NGAY, hasRedFlag=true, needsDoctor=true, severity=high
-
-TYPE 7 — TÌM NGUYÊN NHÂN (Cause Exploration) — dùng khi cần hiểu bối cảnh
-  Mục tiêu: giúp user nhận ra nguyên nhân, cá nhân hoá lời khuyên
-  multiSelect=true
-  Ví dụ: "Bạn nghĩ điều gì có thể dẫn đến tình trạng này?" | ngủ ít / bỏ bữa / căng thẳng / quên uống thuốc / không rõ
-
-TYPE 8 — HÀNH ĐỘNG ĐÃ LÀM (Action Taken) — dùng trước khi kết luận
-  Mục tiêu: biết user đã xử lý gì, tránh lời khuyên trùng
-  multiSelect=true
-  Ví dụ: "Bạn đã làm gì để cải thiện chưa?" | nghỉ ngơi / ăn uống / uống nước / uống thuốc / chưa làm gì
-
-TYPE 9 — THIẾT LẬP THEO DÕI (Monitoring Setup) — dùng khi kết luận
-  Mục tiêu: thiết lập follow-up, tạo cảm giác AI đang theo dõi (Perceived Care Loop)
-  Đây KHÔNG phải câu hỏi — đây là phần kết luận. Gắn vào "closeMessage" hoặc "recommendation".
-  Ví dụ: "Tôi sẽ hỏi lại tình trạng của bạn sau X giờ nhé."
-
-=== FLOW ĐÚNG CHUẨN (ví dụ user báo "hơi mệt") ===
-Câu 1: TYPE 2 — "Mức độ mệt của bạn hiện tại thế nào?" (severity)
-Câu 2: TYPE 3 — "Bạn đang gặp triệu chứng nào?" (symptoms) ← multiSelect=true
-Câu 3: TYPE 4 — "Tình trạng mệt mỏi và đau đầu bắt đầu từ khi nào?" (onset) ← nhắc đúng triệu chứng
-Câu 4: TYPE 5 — "Từ sáng đến giờ có nặng hơn không?" (progression)
-Câu 5: TYPE 7 — "Bạn nghĩ nguyên nhân có thể là gì?" (cause)
-→ Kết luận với TYPE 9 trong closeMessage
-
-=== FLOW KHI "RẤT MỆT" ===
-Câu 1: TYPE 3 — "Bạn đang gặp triệu chứng nào?" (ưu tiên biết triệu chứng trước)
-Câu 2: TYPE 6 — "Ngoài [triệu chứng], bạn có hoa mắt, khó thở hoặc đau ngực không?" (red flag sớm)
-Câu 3: TYPE 4 — "Tình trạng này bắt đầu từ khi nào?" (onset)
-→ Nếu không có red flag: hỏi thêm TYPE 7/8 rồi kết luận
-→ Nếu có red flag: isDone=true NGAY
-
-=== VÍ DỤ SAI ===
-❌ Hỏi 1 câu rồi isDone=true (PHẢI hỏi ít nhất ${minQuestions} câu!)
-❌ User: "mệt mỏi" → AI isDone=true (thiếu onset, severity, progression!)
-❌ User: "đau đầu" → AI: "Bạn nghĩ do gì?" (nhảy sang TYPE 7 khi chưa hỏi TYPE 4/5)
-❌ Lặp lại triệu chứng user đã nói trong options
-
-=== CONTINUITY CHECK (Perceived Care Loop) ===
-${prevCheckinsStr ? `User có lịch sử check-in gần đây → ĐỌC KỸ:
-- Nếu triệu chứng tương tự ngày trước → nhắc lại trong câu hỏi: "Hôm qua bạn có nói đau đầu. Hôm nay tình trạng thế nào?"
-- Nếu triệu chứng mới → tập trung vào triệu chứng mới
-- Tạo cảm giác AI đang thật sự theo dõi liên tục` : '- Chưa có lịch sử → hỏi tổng quát theo logic y khoa'}
-${conditions ? `- Bệnh nền ${conditions} → câu hỏi liên hệ với bệnh nền khi phù hợp` : ''}
-
-=== NGUYÊN TẮC BẮT BUỘC ===
-1. KHÔNG hỏi Chief Complaint (đã biết: "${statusLabel}")
-2. KHÔNG hỏi thông tin đã có từ profile / dữ liệu / lịch sử
-3. KHÔNG lặp câu hỏi / TYPE đã hỏi trong phiên — ĐỌC KỸ history
-4. KHÔNG đưa options trùng với câu trả lời đã chọn ở câu trước
-5. Mỗi TYPE chỉ hỏi TỐI ĐA 1 lần
-6. Mỗi câu PHẢI nhắc lại triệu chứng cụ thể user đã nói (nếu đã biết)
-7. ⚡ Nếu user báo red flag → isDone=true NGAY, hasRedFlag=true, needsDoctor=true (ngoại lệ duy nhất cho min question)
-8. Khi kết luận → TYPE 9: "Tôi sẽ hỏi lại tình trạng của bạn sau X tiếng nhé."
-9. ${answerCount < minQuestions ? `⛔ MỚI HỎI ${answerCount} CÂU — CHƯA ĐỦ ${minQuestions} CÂU TỐI THIỂU → isDone PHẢI là false (trừ red flag)!` : `Đã hỏi ${answerCount}/${maxQuestions} câu.`}
-10. ${answerCount >= maxQuestions - 1 ? `⚠️ CÂU CUỐI (${answerCount + 1}/${maxQuestions}) — BẮT BUỘC isDone=true!` : 'Tiếp tục hỏi theo TYPE tiếp theo.'}
-
-Respond in JSON only.
-⚠️ BẮT BUỘC: "options" phải là mảng có ít nhất 2 phần tử. KHÔNG BAO GIỜ trả options rỗng [].
-Format câu hỏi: {"isDone":false,"question":"...","options":["opt1","opt2","opt3"],"multiSelect":true|false}
-Format kết luận: {"isDone":true,"summary":"...","severity":"low|medium|high","recommendation":"...","needsDoctor":false,"needsFamilyAlert":false,"hasRedFlag":false,"followUpHours":3,"closeMessage":"Tôi sẽ hỏi lại tình trạng của bạn sau X tiếng nhé."}
+Respond in JSON only. "options" phải có ít nhất 2 phần tử.
+Format câu hỏi: {"isDone":false,"question":"...","options":["opt1","opt2"],"multiSelect":true|false}
+Format kết luận: {"isDone":true,"summary":"...","severity":"low|medium|high","recommendation":"...","needsDoctor":false,"needsFamilyAlert":false,"hasRedFlag":false,"followUpHours":3,"closeMessage":"Tôi sẽ hỏi lại bạn sau X tiếng nhé."}
 
 LANGUAGE: ${lang === 'en' ? 'English' : 'Vietnamese'}.`;
   }
@@ -446,8 +428,8 @@ LANGUAGE: ${lang === 'en' ? 'English' : 'Vietnamese'}.`;
     response = await getClient().chat.completions.create({
       model: 'gpt-4o',
       messages: [{ role: 'user', content: systemPrompt }],
-      max_completion_tokens: 400,
-      temperature: 0.4,
+      max_completion_tokens: 500,
+      temperature: 0.2,
       response_format: { type: 'json_object' },
     }, { signal: controller.signal });
 
@@ -512,6 +494,46 @@ LANGUAGE: ${lang === 'en' ? 'English' : 'Vietnamese'}.`;
             : ["vừa mới", "vài giờ trước", "từ sáng", "từ hôm qua"]),
         multiSelect: answerCount === 0,
       };
+    }
+
+    // ── Severity safety override ──
+    // If user explicitly answered "rất nặng" / "very severe" in any triage answer,
+    // severity must be at least "high" — AI must not downgrade it to medium/low.
+    if (parsed.isDone) {
+      const HIGH_SEVERITY_KEYWORDS = ['rất nặng', 'very severe', 'rất tệ', 'rất khó chịu', 'cực kỳ'];
+      const answersText = previousAnswers.map(a => (a.answer || '').toLowerCase()).join(' ');
+      if (HIGH_SEVERITY_KEYWORDS.some(kw => answersText.includes(kw))) {
+        if (parsed.severity !== 'high') {
+          console.log(`[TriageAI] ⚠️ Severity override: AI returned "${parsed.severity}" but answers contain high-severity keyword → forcing "high"`);
+          parsed.severity = 'high';
+        }
+      }
+    }
+
+    // ── Options sanity check (server-side) ──
+    // Prevent AI from mixing option types (e.g. severity words in symptom question)
+    if (!parsed.isDone && parsed.options && parsed.question) {
+      const q = parsed.question.toLowerCase();
+      const SEVERITY_WORDS = ['nhẹ', 'trung bình', 'khá nặng', 'rất nặng', 'mild', 'moderate', 'severe'];
+      const SYMPTOM_WORDS = ['mệt mỏi', 'chóng mặt', 'đau đầu', 'buồn nôn', 'fatigue', 'dizziness', 'headache', 'nausea'];
+      const isSymptomQ = q.includes('triệu chứng') || q.includes('tình trạng nào') || q.includes('symptoms') || q.includes('experiencing');
+      const isSeverityQ = q.includes('mức độ') || q.includes('how severe') || q.includes('nặng thế nào');
+
+      if (isSymptomQ) {
+        // Remove severity words from symptom question options
+        const filtered = parsed.options.filter(o => !SEVERITY_WORDS.includes(o.toLowerCase().trim()));
+        if (filtered.length >= 2) parsed.options = filtered;
+      } else if (isSeverityQ) {
+        // Remove symptom words from severity question options
+        const filtered = parsed.options.filter(o => !SYMPTOM_WORDS.some(sw => o.toLowerCase().includes(sw)));
+        if (filtered.length >= 2) parsed.options = filtered;
+      }
+
+      // Ensure options don't contain already-known symptoms
+      if (knownSymptoms.size > 0 && isSymptomQ) {
+        const filtered = parsed.options.filter(o => !knownSymptoms.has(o.toLowerCase().trim()));
+        if (filtered.length >= 2) parsed.options = filtered;
+      }
     }
 
     // Gắn followUpHours mặc định nếu AI không trả về

@@ -22,6 +22,11 @@ async function followUpHandler(pool, req, res) {
   }
   try {
     const session = await checkinService.recordFollowUp(pool, req.user.id, checkin_id, status);
+    if (!session) return res.status(404).json({ ok: false, error: t('error.session_not_found', getLang(req)) });
+    if (session.flow_state === 'resolved' && session.current_status !== status) {
+      // Was already resolved before this call — return it as-is
+      return res.json({ ok: true, session, already_resolved: true });
+    }
     return res.json({ ok: true, session });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

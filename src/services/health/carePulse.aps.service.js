@@ -492,7 +492,7 @@ async function evaluateAndApplyEvent(pool, { userId, event, now }) {
 
     if (event.event_type === 'CHECK_IN') {
       await updateBaselineFromEvents(client, userId);
-      await updateMissionProgress(client, userId, 'DAILY_CHECKIN', 1, { goal: 1, now: eventTime });
+      await updateMissionProgress(client, userId, 'daily_checkin', 1, { goal: 1, now: eventTime });
     }
 
     const updated = await client.query(

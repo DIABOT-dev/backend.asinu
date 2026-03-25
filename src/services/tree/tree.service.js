@@ -33,19 +33,24 @@ async function getTreeSummary(pool, userId) {
     if (cached) return cached;
 
     const now = new Date();
-    const startOfWeek = getStartOfWeek(now);
 
-    // Get missions completed this week
+    // Use UTC date (same as toDateOnly in missions.service) to avoid timezone mismatch
+    const yyyy = now.getUTCFullYear();
+    const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(now.getUTCDate()).padStart(2, '0');
+    const todayUTC = `${yyyy}-${mm}-${dd}`;
+
+    // Get missions completed TODAY (using last_incremented_date = UTC date, consistent with updateMissionProgress)
     const missionsResult = await pool.query(
       `SELECT COUNT(*) as completed_count
        FROM user_missions
        WHERE user_id = $1
          AND status = 'completed'
-         AND updated_at >= $2`,
-      [userId, startOfWeek.toISOString()]
+         AND last_incremented_date = $2`,
+      [userId, todayUTC]
     );
 
-    // Get total active missions count
+    // Get total active missions count for today
     const totalMissionsResult = await pool.query(
       `SELECT COUNT(*) as total
        FROM user_missions
@@ -53,31 +58,38 @@ async function getTreeSummary(pool, userId) {
       [userId]
     );
 
-    // Calculate streak days based on consecutive daily activity
-    const streakResult = await pool.query(
-      `SELECT DISTINCT DATE(occurred_at) as log_date
-       FROM logs_common
-       WHERE user_id = $1
-       ORDER BY log_date DESC
-       LIMIT 30`,
-      [userId]
-    );
+    // Calculate streak: consecutive days where ALL missions were completed
+    // Uses mission_history which records each mission completion with completed_date
+    const totalForStreak = parseInt(totalMissionsResult.rows[0]?.total || 0);
 
     let streakDays = 0;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    if (totalForStreak > 0) {
+      const streakResult = await pool.query(
+        `SELECT completed_date
+         FROM mission_history
+         WHERE user_id = $1
+           AND completed_date >= CURRENT_DATE - INTERVAL '31 days'
+         GROUP BY completed_date
+         HAVING COUNT(DISTINCT mission_key) >= $2
+         ORDER BY completed_date DESC`,
+        [userId, totalForStreak]
+      );
 
-    for (let i = 0; i < streakResult.rows.length; i++) {
-      const logDate = new Date(streakResult.rows[i].log_date);
-      logDate.setHours(0, 0, 0, 0);
-      
-      const expectedDate = new Date(today);
-      expectedDate.setDate(expectedDate.getDate() - i);
-      
-      if (logDate.getTime() === expectedDate.getTime()) {
-        streakDays++;
-      } else {
-        break;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      for (let i = 0; i < streakResult.rows.length; i++) {
+        const logDate = new Date(streakResult.rows[i].completed_date);
+        logDate.setHours(0, 0, 0, 0);
+
+        const expectedDate = new Date(today);
+        expectedDate.setDate(expectedDate.getDate() - i);
+
+        if (logDate.getTime() === expectedDate.getTime()) {
+          streakDays++;
+        } else {
+          break;
+        }
       }
     }
 
@@ -105,7 +117,7 @@ async function getTreeSummary(pool, userId) {
       ok: true,
       score,
       streakDays,
-      completedThisWeek: completedCount,
+      completedToday: completedCount,
       totalMissions: totalMissions || 12
     };
     await cacheSet(`tree:summary:${userId}`, result, 1800); // 30 min
