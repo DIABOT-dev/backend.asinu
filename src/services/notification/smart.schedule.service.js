@@ -11,9 +11,10 @@ const DEFAULTS = { morning: 8, evening: 21, water: 14 };
 const DEFAULT_TIMES = { morning: '08:00', afternoon: '14:00', evening: '21:00' };
 
 // Số log tối thiểu để infer (tránh kết luận từ quá ít data)
-const MIN_LOGS_MORNING = 5;
-const MIN_LOGS_EVENING = 5;
-const MIN_LOGS_WATER   = 3;
+const MIN_LOGS_MORNING   = 5;
+const MIN_LOGS_EVENING   = 5;
+const MIN_LOGS_WATER     = 3;
+const MIN_LOGS_AFTERNOON = 3;
 
 // Không re-infer nếu đã infer trong vòng 7 ngày
 const INFER_STALE_DAYS = 7;
@@ -56,9 +57,10 @@ async function inferHours(pool, userId) {
   }
 
   return {
-    morning_hour: peakHour(sumByHour(5,  11),       MIN_LOGS_MORNING),
-    evening_hour: peakHour(sumByHour(17, 23),        MIN_LOGS_EVENING),
-    water_hour:   peakHour(sumByHour(10, 18, 'water'), MIN_LOGS_WATER),
+    morning_hour:   peakHour(sumByHour(5,  11),          MIN_LOGS_MORNING),
+    evening_hour:   peakHour(sumByHour(17, 23),          MIN_LOGS_EVENING),
+    water_hour:     peakHour(sumByHour(10, 18, 'water'), MIN_LOGS_WATER),
+    afternoon_hour: peakHour(sumByHour(11, 16),          MIN_LOGS_AFTERNOON),
   };
 }
 
@@ -81,21 +83,28 @@ async function refreshInferredHours(pool, userId, { force = false } = {}) {
     }
   }
 
-  const { morning_hour, evening_hour, water_hour } = await inferHours(pool, userId);
+  const { morning_hour, evening_hour, water_hour, afternoon_hour } = await inferHours(pool, userId);
+
+  const toTime = (h) => h != null ? `${String(h).padStart(2, '0')}:00` : null;
 
   await pool.query(
     `INSERT INTO user_notification_preferences
-       (user_id, inferred_morning_hour, inferred_evening_hour, inferred_water_hour, inferred_at)
-     VALUES ($1, $2, $3, $4, NOW())
+       (user_id, inferred_morning_hour, inferred_evening_hour, inferred_water_hour,
+        inferred_morning_time, inferred_afternoon_time, inferred_evening_time, inferred_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
      ON CONFLICT (user_id) DO UPDATE SET
-       inferred_morning_hour = $2,
-       inferred_evening_hour = $3,
-       inferred_water_hour   = $4,
-       inferred_at           = NOW()`,
-    [userId, morning_hour, evening_hour, water_hour]
+       inferred_morning_hour   = $2,
+       inferred_evening_hour   = $3,
+       inferred_water_hour     = $4,
+       inferred_morning_time   = COALESCE($5, user_notification_preferences.inferred_morning_time),
+       inferred_afternoon_time = COALESCE($6, user_notification_preferences.inferred_afternoon_time),
+       inferred_evening_time   = COALESCE($7, user_notification_preferences.inferred_evening_time),
+       inferred_at             = NOW()`,
+    [userId, morning_hour, evening_hour, water_hour,
+     toTime(morning_hour), toTime(afternoon_hour), toTime(evening_hour)]
   );
 
-  return { morning_hour, evening_hour, water_hour };
+  return { morning_hour, evening_hour, water_hour, afternoon_hour };
 }
 
 /**

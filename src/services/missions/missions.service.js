@@ -15,6 +15,16 @@ function toDateOnly(value) {
   return `${year}-${month}-${day}`;
 }
 
+/** Trả về ngày hiện tại theo giờ Việt Nam (UTC+7), format YYYY-MM-DD */
+function todayVietnam() {
+  const now = new Date();
+  const vn = new Date(now.getTime() + 7 * 60 * 60 * 1000);
+  const year = vn.getUTCFullYear();
+  const month = String(vn.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(vn.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 // Mission translations for better UX
 const MISSION_TITLES = {
   'log_glucose': t('mission.log_glucose'),
@@ -45,7 +55,7 @@ async function getMissions(pool, userId) {
   await cacheDel(`tree:summary:${userId}`);
 
   // Reset ALL missions if it's a new day (not just completed ones)
-  const today = toDateOnly(new Date());
+  const today = todayVietnam();
   await client.query(
     `UPDATE user_missions
      SET progress = 0, status = 'active', updated_at = NOW()
@@ -84,7 +94,7 @@ async function updateMissionProgress(clientOrPool, userId, missionKey, delta, op
   const client = resolveClient(clientOrPool);
   const now = opts.now ? new Date(opts.now) : new Date();
   const goal = Number(opts.goal || 1);
-  const today = toDateOnly(now);
+  const today = opts.now ? toDateOnly(now) : todayVietnam();
 
   const existing = await client.query(
     `SELECT * FROM user_missions WHERE user_id = $1 AND mission_key = $2 FOR UPDATE`,

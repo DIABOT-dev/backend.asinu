@@ -32,22 +32,18 @@ async function getTreeSummary(pool, userId) {
     const cached = await cacheGet(`tree:summary:${userId}`);
     if (cached) return cached;
 
-    const now = new Date();
+    // Vietnam timezone (UTC+7) — phải nhất quán với missions.service.js
+    const nowVN = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    const todayVN = `${nowVN.getUTCFullYear()}-${String(nowVN.getUTCMonth() + 1).padStart(2, '0')}-${String(nowVN.getUTCDate()).padStart(2, '0')}`;
 
-    // Use UTC date (same as toDateOnly in missions.service) to avoid timezone mismatch
-    const yyyy = now.getUTCFullYear();
-    const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-    const dd = String(now.getUTCDate()).padStart(2, '0');
-    const todayUTC = `${yyyy}-${mm}-${dd}`;
-
-    // Get missions completed TODAY (using last_incremented_date = UTC date, consistent with updateMissionProgress)
+    // Get missions completed TODAY (last_incremented_date lưu theo giờ VN)
     const missionsResult = await pool.query(
       `SELECT COUNT(*) as completed_count
        FROM user_missions
        WHERE user_id = $1
          AND status = 'completed'
          AND last_incremented_date = $2`,
-      [userId, todayUTC]
+      [userId, todayVN]
     );
 
     // Get total active missions count for today
@@ -75,17 +71,15 @@ async function getTreeSummary(pool, userId) {
         [userId, totalForStreak]
       );
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+      // So sánh ngày theo VN timezone — tránh lệch ngày khi server chạy UTC
+      const todayVNMs = Date.UTC(nowVN.getUTCFullYear(), nowVN.getUTCMonth(), nowVN.getUTCDate());
 
       for (let i = 0; i < streakResult.rows.length; i++) {
-        const logDate = new Date(streakResult.rows[i].completed_date);
-        logDate.setHours(0, 0, 0, 0);
+        const d = new Date(streakResult.rows[i].completed_date);
+        const logMs = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+        const expectedMs = todayVNMs - i * 86400000;
 
-        const expectedDate = new Date(today);
-        expectedDate.setDate(expectedDate.getDate() - i);
-
-        if (logDate.getTime() === expectedDate.getTime()) {
+        if (logMs === expectedMs) {
           streakDays++;
         } else {
           break;

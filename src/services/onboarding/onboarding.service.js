@@ -462,6 +462,9 @@ async function upsertProfileV2(pool, userId, data) {
     );
   }
 
+  // Invalidate profile cache so next fetch returns fresh data
+  await cacheDel(`profile:${userId}`, `user:name:${userId}`);
+
   return saved;
 }
 

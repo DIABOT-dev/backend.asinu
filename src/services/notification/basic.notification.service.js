@@ -45,8 +45,8 @@ const morningMatch = (defH = 8) => `
   COALESCE(EXTRACT(HOUR   FROM np.morning_time::time)::int, np.morning_hour, np.inferred_morning_hour, ${defH}) = $1
   AND COALESCE(EXTRACT(MINUTE FROM np.morning_time::time)::int, 0) = $2`;
 const afternoonMatch = (defH = 14) => `
-  COALESCE(EXTRACT(HOUR   FROM np.afternoon_time::time)::int, ${defH}) = $1
-  AND COALESCE(EXTRACT(MINUTE FROM np.afternoon_time::time)::int, 0) = $2`;
+  COALESCE(EXTRACT(HOUR   FROM np.afternoon_time::time)::int, EXTRACT(HOUR   FROM np.inferred_afternoon_time::time)::int, ${defH}) = $1
+  AND COALESCE(EXTRACT(MINUTE FROM np.afternoon_time::time)::int, EXTRACT(MINUTE FROM np.inferred_afternoon_time::time)::int, 0) = $2`;
 const eveningMatch = (defH = 21) => `
   COALESCE(EXTRACT(HOUR   FROM np.evening_time::time)::int, np.evening_hour, np.inferred_evening_hour, ${defH}) = $1
   AND COALESCE(EXTRACT(MINUTE FROM np.evening_time::time)::int, 0) = $2`;
@@ -444,6 +444,17 @@ async function runBasicNotifications(pool, forceHour = null, forceMinute = null)
   const hour   = forceHour   !== null ? forceHour   : vn.getHours();
   const minute = forceMinute !== null ? forceMinute : vn.getMinutes();
   const dow = vn.getDay(); // 0 = Sunday
+
+  // Quiet hours 22:00–05:00 VN: only run urgent jobs, skip all reminders
+  const isQuietHours = hour >= 22 || hour < 5;
+  if (isQuietHours) {
+    const results = await Promise.all([
+      runCheckinFollowUps(pool),
+      runAlertConfirmationFollowUps(pool),
+    ]);
+    const totalSent = results.reduce((s, r) => s + (r.sent || 0), 0);
+    return { ok: true, hour, minute, quietHours: true, results, totalSent, totalEligible: 0 };
+  }
 
   const jobs = [
     runMorningLog(pool, hour, minute),
