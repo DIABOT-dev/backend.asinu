@@ -90,6 +90,19 @@ async function sendAndSave(pool, userOrId, type, title, body, data = {}, overrid
     if (rows.length > 0) return false;
   }
 
+  // Same-type dedup: skip if exact same type was sent to this user in the last 5 minutes
+  try {
+    const { rows: dup } = await pool.query(
+      `SELECT 1 FROM notifications WHERE user_id = $1 AND type = $2
+         AND created_at >= NOW() - make_interval(mins => 5) LIMIT 1`,
+      [userId, type]
+    );
+    if (dup.length > 0) {
+      console.log(`[sendAndSave] Skipped ${type} for user ${userId} (same-type dedup 5min)`);
+      return false;
+    }
+  } catch {}
+
   // Insert DB record FIRST, only push if insert succeeds
   try {
     await pool.query(

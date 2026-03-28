@@ -9,7 +9,7 @@
  */
 
 const COOLDOWN_MINUTES = {
-  critical: 0,      // no cooldown for critical
+  critical: 1,      // 1 min cooldown — prevents panic multi-tap but still urgent
   high: 30,          // 30 min cooldown
   medium: 60,        // 1h cooldown
   low: 120,          // 2h cooldown
@@ -44,25 +44,42 @@ async function dispatch(pool, { userId, type, title, body, data = {}, priority =
   const effectivePriority = priority || TYPE_PRIORITY[type] || 'low';
   const cooldownMinutes = COOLDOWN_MINUTES[effectivePriority];
 
-  // Atomic: INSERT only if no recent notification of same type within cooldown window
-  const { rows } = await pool.query(
-    `INSERT INTO notifications (user_id, type, title, message, data, priority)
-     SELECT $1, $2, $3, $4, $5::jsonb, $6
-     WHERE NOT EXISTS (
-       SELECT 1 FROM notifications
-       WHERE user_id = $1 AND type = $2
-         AND created_at >= NOW() - make_interval(mins => $7::int)
-     )
-     RETURNING id`,
-    [userId, type, title, body, JSON.stringify(data), effectivePriority, cooldownMinutes || 0]
-  );
+  // Use advisory lock per user+type to prevent race conditions
+  // hashtext gives a stable int for the string, ensuring same user+type always gets same lock
+  const client = await pool.connect();
+  try {
+    // Advisory lock scoped to this user+type (released on client.release)
+    await client.query(`SELECT pg_advisory_lock(hashtext($1))`, [`notif:${userId}:${type}`]);
 
-  if (rows.length === 0) {
-    console.log(`[Orchestrator] Skipped ${type} for user ${userId} (cooldown ${cooldownMinutes}min)`);
+    // Check cooldown
+    if (cooldownMinutes > 0) {
+      const { rows: recent } = await client.query(
+        `SELECT 1 FROM notifications WHERE user_id = $1 AND type = $2
+           AND created_at >= NOW() - make_interval(mins => $3) LIMIT 1`,
+        [userId, type, cooldownMinutes]
+      );
+      if (recent.length > 0) {
+        console.log(`[Orchestrator] Skipped ${type} for user ${userId} (cooldown ${cooldownMinutes}min)`);
+        return null;
+      }
+    }
+
+    // Insert
+    const { rows } = await client.query(
+      `INSERT INTO notifications (user_id, type, title, message, data, priority)
+       VALUES ($1, $2, $3, $4, $5::jsonb, $6) RETURNING id`,
+      [userId, type, title, body, JSON.stringify(data), effectivePriority]
+    );
+
+    return { ok: true, notificationId: rows[0].id };
+  } catch (err) {
+    console.error(`[Orchestrator] dispatch failed for ${type} user=${userId}:`, err.message);
     return null;
+  } finally {
+    // Advisory lock released when client returns to pool
+    await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [`notif:${userId}:${type}`]).catch(() => {});
+    client.release();
   }
-
-  return { ok: true, notificationId: rows[0].id };
 }
 
 module.exports = { dispatch, TYPE_PRIORITY };

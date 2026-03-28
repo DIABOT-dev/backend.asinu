@@ -3,7 +3,6 @@
  * Business logic for care circle connections (invitations, connections, permissions)
  */
 
-const { notifyCareCircleInvitation } = require('../notification/push.notification.service');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { t } = require('../../i18n');
 const { isPremium, PREMIUM_CONNECTION_LIMIT } = require('../payment/subscription.service');
@@ -124,8 +123,19 @@ async function createInvitation(pool, requesterId, data) {
     // Get requester name for notification
     const requesterName = await getUserDisplayName(pool, requesterId);
 
-    // Send push notification (non-blocking)
-    notifyCareCircleInvitation(pool, addressee_id, requesterName, invitation.id)
+    // Send push + save in-app notification (non-blocking)
+    pool.query('SELECT push_token, language_preference FROM users WHERE id = $1', [addressee_id])
+      .then(r => {
+        const addressee = r.rows[0];
+        if (!addressee?.push_token) return;
+        const lang = addressee.language_preference || 'vi';
+        const { t: tt } = require('../../i18n');
+        return sendAndSave(pool, { id: addressee_id, push_token: addressee.push_token },
+          'care_circle_invitation',
+          tt('push.invitation_title', lang),
+          tt('push.invitation_body', lang, { name: requesterName }),
+          { invitationId: String(invitation.id), senderName: requesterName });
+      })
       .catch(() => {});
 
     return { ok: true, invitation };

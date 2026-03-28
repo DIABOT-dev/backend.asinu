@@ -169,6 +169,14 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
 
   if (!severity) return;
 
+  // Skip if health_alert was already sent for this user in the last 10 minutes
+  const { rows: recentAlert } = await pool.query(
+    `SELECT 1 FROM notifications WHERE user_id = $1 AND type = 'health_alert'
+       AND created_at >= NOW() - make_interval(mins => 10) LIMIT 1`,
+    [userId]
+  );
+  if (recentAlert.length > 0) return;
+
   // Get user name
   const { rows: [user] } = await pool.query(
     'SELECT full_name, display_name FROM users WHERE id = $1', [userId]

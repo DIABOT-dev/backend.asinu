@@ -371,9 +371,12 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
   if (!rows.length) throw new Error(t('error.session_not_found'));
   const session = rows[0];
 
-  // Xác định phase: nếu session có triage_completed_at rồi → đây là follow-up
-  // Hoặc nếu flow_state cho thấy đây là follow-up định kỳ
-  const isFollowUpPhase = session.triage_completed_at != null;
+  // Xác định phase: follow-up nếu:
+  // 1. triage_completed_at đã set (initial triage đã xong), HOẶC
+  // 2. triage_messages đã có data (initial triage đã hỏi nhưng chưa kết luận), HOẶC
+  // 3. triage_summary đã có (tóm tắt đã lưu từ lần trước)
+  const hasPriorTriage = Array.isArray(session.triage_messages) && session.triage_messages.length > 0;
+  const isFollowUpPhase = session.triage_completed_at != null || (hasPriorTriage && previousAnswers.length === 0);
 
   const [profile, healthContext] = await Promise.all([
     getUserProfile(pool, userId),
@@ -820,7 +823,6 @@ async function runCheckinFollowUps(pool) {
     `UPDATE health_checkins
      SET next_checkin_at = NOW() + INTERVAL '2 hours', updated_at = NOW()
      FROM users u
-     LEFT JOIN user_onboarding_profiles uop ON uop.user_id = u.id
      WHERE u.id = health_checkins.user_id
        AND u.deleted_at IS NULL
        AND health_checkins.next_checkin_at <= $1
@@ -829,7 +831,7 @@ async function runCheckinFollowUps(pool) {
        AND health_checkins.flow_state != 'resolved'
      RETURNING health_checkins.*, u.push_token, u.display_name, u.full_name,
                COALESCE(u.language_preference,'vi') as lang,
-               uop.risk_score`,
+               (SELECT uop.risk_score FROM user_onboarding_profiles uop WHERE uop.user_id = u.id) as risk_score`,
     [now, checkinDateVN()]
   );
 

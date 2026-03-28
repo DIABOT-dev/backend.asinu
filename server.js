@@ -96,16 +96,24 @@ app.listen(PORT, () => {
 
 // Per-minute notification cron — fires at exact HH:MM configured by each user
 function scheduleNotifications() {
+  let isRunning = false;
   const now = new Date();
   const msToNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
   setTimeout(() => {
     const tick = async () => {
+      if (isRunning) {
+        console.log('[cron] skipped — previous tick still running');
+        return;
+      }
+      isRunning = true;
       try {
         const result = await runBasicNotifications(pool);
         if (result.totalSent > 0)
           console.log(`[cron] sent=${result.totalSent} at ${result.hour}:${String(result.minute).padStart(2,'0')}`);
       } catch (err) {
         console.warn('[cron] runBasicNotifications failed:', err?.message);
+      } finally {
+        isRunning = false;
       }
     };
     tick();
