@@ -570,27 +570,6 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
 }
 
 /**
- * Login by phone only
- * @param {Object} pool - Database pool
- * @param {string} phoneNumber - Phone number
- * @returns {Promise<Object>} - { ok, token, user, error }
- */
-async function loginByPhone(pool, phoneNumber) {
-  try {
-    const user = await createOrUpdateUserWithPhone(pool, phoneNumber);
-    const token_response = issueJwt(user);
-    return { 
-      ok: true, 
-      token: token_response.token, 
-      user: token_response.user 
-    };
-  } catch (err) {
-
-    return { ok: false, error: t('error.server') };
-  }
-}
-
-/**
  * Get current user profile
  * @param {Object} pool - Database pool
  * @param {number} userId - User ID
@@ -646,6 +625,10 @@ async function searchUsers(pool, currentUserId, query) {
   }
 }
 
+async function logout(pool, userId) {
+  await pool.query('UPDATE users SET push_token = NULL WHERE id = $1', [userId]);
+}
+
 // =====================================================
 // EXPORTS
 // =====================================================
@@ -679,10 +662,10 @@ module.exports = {
   registerByEmail,
   loginByEmail,
   loginByProvider,
-  loginByPhone,
   getCurrentUser,
   searchUsers,
-  
+  logout,
+
   // Missions
   initializeDefaultMissions,
 };

@@ -323,8 +323,8 @@ async function deleteAccount(pool, userId) {
     await client.query('DELETE FROM risk_persistence WHERE user_id = $1', [userId]);
 
     // 7. Care Circle & Connections
-    await client.query('DELETE FROM care_circle WHERE user_id = $1 OR member_user_id = $1', [userId]);
-    await client.query('DELETE FROM user_connections WHERE user_id = $1 OR connected_user_id = $1', [userId]);
+    await client.query('DELETE FROM care_circle WHERE patient_id = $1 OR guardian_id = $1', [userId]);
+    await client.query('DELETE FROM user_connections WHERE requester_id = $1 OR addressee_id = $1', [userId]);
     await client.query('DELETE FROM user_baselines WHERE user_id = $1', [userId]);
 
     // 8. Notifications
@@ -369,6 +369,11 @@ async function deleteAccount(pool, userId) {
 async function updatePushToken(pool, userId, pushToken) {
   try {
     console.log('[updatePushToken] userId:', userId, 'token:', pushToken?.substring(0, 30));
+    // Clear this token from any other user first (1 device = 1 user)
+    await pool.query(
+      `UPDATE users SET push_token = NULL WHERE push_token = $1 AND id != $2`,
+      [pushToken, userId]
+    );
     const result = await pool.query(
       `UPDATE users SET push_token = $1 WHERE id = $2`,
       [pushToken, userId]

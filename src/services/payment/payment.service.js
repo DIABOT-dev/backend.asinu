@@ -110,15 +110,15 @@ async function handleWebhook(pool, req) {
 
   const { userId, orderCode } = parsed;
 
-  // 3. Tìm payment pending còn hạn
+  // 3. Atomically claim the pending payment (prevents double-credit on webhook retry)
   const { rows } = await pool.query(
-    `SELECT * FROM payments
-     WHERE order_code = $1 AND status = 'pending' AND expires_at > NOW()`,
+    `UPDATE payments SET status = 'completed', completed_at = NOW()
+     WHERE order_code = $1 AND status = 'pending' AND expires_at > NOW()
+     RETURNING *`,
     [orderCode]
   );
 
   if (!rows.length) {
-
     return { ok: false, statusCode: 404, message: t('error.payment_not_found') };
   }
 
@@ -133,29 +133,11 @@ async function handleWebhook(pool, req) {
     return { ok: false, statusCode: 400, message: t('error.payment_amount_mismatch') };
   }
 
-  // 5. Cập nhật atomically: mark completed + cộng wallet
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    await client.query(
-      `UPDATE payments SET status = 'completed', completed_at = NOW() WHERE order_code = $1`,
-      [orderCode]
-    );
-
-    await client.query(
-      `UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2`,
-      [transferAmount, userId]
-    );
-
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-
-    return { ok: false, statusCode: 500, message: t('error.server') };
-  } finally {
-    client.release();
-  }
+  // 5. Cộng wallet
+  await pool.query(
+    `UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2`,
+    [transferAmount, userId]
+  );
 
   return { ok: true, message: 'completed', userId, amount: transferAmount, orderCode };
 }

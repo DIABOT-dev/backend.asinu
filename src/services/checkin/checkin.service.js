@@ -63,21 +63,29 @@ const TYPE_PRIORITY = {
 async function sendCheckinNotification(pool, userId, pushToken, type, title, body, data = {}) {
   const priority = TYPE_PRIORITY[type] || 'low';
 
-  const tasks = [
-    dispatchNotification(pool, { userId, type, title, body, data, priority })
-      .then(r => console.log(`[NOTIF] dispatchNotification type=${type} userId=${userId} ok=${r?.ok} id=${r?.id}`))
-      .catch(e => console.error(`[NOTIF] dispatchNotification FAILED:`, e.message)),
-  ];
-  if (pushToken) {
-    tasks.push(
-      sendPushNotification([pushToken], title, body, { type, ...data })
-        .then(r => console.log(`[NOTIF] push type=${type} userId=${userId} ok=${r?.ok} data=${JSON.stringify(r?.data)}`))
-        .catch(e => console.error(`[NOTIF] push FAILED:`, e.message))
-    );
-  } else {
-    console.warn(`[NOTIF] no pushToken for userId=${userId} type=${type} — skipping push`);
+  // Orchestrator controls cooldown — only send push if DB insert succeeds
+  let dispatched = null;
+  try {
+    dispatched = await dispatchNotification(pool, { userId, type, title, body, data, priority });
+    console.log(`[NOTIF] dispatchNotification type=${type} userId=${userId} ok=${dispatched?.ok} id=${dispatched?.notificationId}`);
+  } catch (e) {
+    console.error(`[NOTIF] dispatchNotification FAILED:`, e.message);
+    return;
   }
-  await Promise.allSettled(tasks);
+
+  if (!dispatched) {
+    console.log(`[NOTIF] push skipped type=${type} userId=${userId} — cooldown`);
+    return;
+  }
+
+  if (pushToken) {
+    try {
+      const r = await sendPushNotification([pushToken], title, body, { type, ...data });
+      console.log(`[NOTIF] push type=${type} userId=${userId} ok=${r?.ok}`);
+    } catch (e) {
+      console.error(`[NOTIF] push FAILED:`, e.message);
+    }
+  }
 }
 
 const TZ = 'Asia/Ho_Chi_Minh';
@@ -296,7 +304,7 @@ async function getUserProfile(pool, userId) {
  * Get recent health metrics + previous checkin summaries for AI context.
  */
 async function getRecentHealthContext(pool, userId) {
-  const [glucoseRes, bpRes, weightRes, checkinsRes] = await Promise.all([
+  const [glucoseRes, bpRes, weightRes, checkinsRes, medRes] = await Promise.all([
     // Glucose 7 ngày gần nhất (tối đa 5 bản ghi)
     pool.query(
       `SELECT gl.value, gl.unit, gl.context, lc.occurred_at
@@ -332,6 +340,15 @@ async function getRecentHealthContext(pool, userId) {
        ORDER BY session_date DESC LIMIT 3`,
       [userId]
     ),
+    // [G8] Medication log today — check if user took medication
+    pool.query(
+      `SELECT lc.log_type, lc.occurred_at
+       FROM logs_common lc
+       WHERE lc.user_id = $1 AND lc.log_type = 'medication'
+         AND DATE(lc.occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = DATE(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
+       LIMIT 1`,
+      [userId]
+    ),
   ]);
 
   return {
@@ -339,6 +356,7 @@ async function getRecentHealthContext(pool, userId) {
     recentBP: bpRes.rows,
     latestWeight: weightRes.rows[0] || null,
     previousCheckins: checkinsRes.rows,
+    tookMedicationToday: medRes.rows.length > 0,
   };
 }
 
@@ -365,7 +383,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
   // Hard limit: force conclusion if AI hasn't stopped in time
   const isFollowUp = isFollowUpPhase;
   const isVeryUnwell = session.initial_status === 'very_tired';
-  const maxQuestions = isFollowUp ? 3 : (isVeryUnwell ? 6 : 8);
+  const maxQuestions = isFollowUp ? 3 : 8;
 
   if (previousAnswers.length >= maxQuestions) {
     // AI đã hỏi đủ số câu → buộc kết thúc
@@ -452,16 +470,35 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     userId,
   });
 
+  // ── Double enforcement: block early isDone at service level too ──
+  const minQForPhase = isFollowUp ? 2 : 5;
+  console.log(`[Triage] enforcement check: isDone=${result.isDone}, answers=${previousAnswers.length}, min=${minQForPhase}, hasRedFlag=${result.hasRedFlag}, isFollowUp=${isFollowUp}`);
+  if (result.isDone && previousAnswers.length < minQForPhase && !result.hasRedFlag) {
+    console.log(`[Triage] ⛔ Service-level block: isDone at ${previousAnswers.length}/${minQForPhase}. Returning fallback.`);
+    const fallbacks = [
+      { q: 'Từ lúc bắt đầu đến giờ, tình trạng có thay đổi không?', opts: ['đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn'], multi: false, types: [5] },
+      { q: 'Bạn nghĩ điều gì có thể dẫn đến tình trạng này?', opts: ['ngủ ít', 'bỏ bữa', 'căng thẳng', 'quên uống thuốc', 'không rõ'], multi: true, types: [7] },
+      { q: 'Bạn đã làm gì để cải thiện chưa?', opts: ['nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì'], multi: true, types: [8] },
+      { q: 'Mức độ khó chịu của bạn hiện tại thế nào?', opts: ['nhẹ', 'trung bình', 'khá nặng'], multi: false, types: [2] },
+      { q: 'Tình trạng này có hay xảy ra không?', opts: ['lần đầu', 'thỉnh thoảng', 'hay bị', 'gần đây bị nhiều hơn'], multi: false, types: [10] },
+    ];
+    // Find a question whose TYPE hasn't been used
+    const usedQs = new Set(previousAnswers.map(a => a.question.toLowerCase()));
+    const fb = fallbacks.find(f => !usedQs.has(f.q.toLowerCase())) || fallbacks[fallbacks.length - 1];
+    result = { ok: true, isDone: false, question: fb.q, options: fb.opts, multiSelect: fb.multi };
+  }
+
   // ── Anti-loop: if AI returns a question too similar to a previous one → force conclusion ──
-  if (!result.isDone && result.question && previousAnswers.length > 0) {
+  // Only apply after minQuestions met (don't cut short initial interview)
+  if (!result.isDone && result.question && previousAnswers.length >= minQForPhase) {
     const newQ = result.question.toLowerCase();
     const isDuplicate = previousAnswers.some(a => {
       const prevQ = a.question.toLowerCase();
-      // Check if >60% of words overlap
-      const newWords = new Set(newQ.split(/\s+/));
-      const prevWords = prevQ.split(/\s+/);
+      const newWords = new Set(newQ.split(/\s+/).filter(w => w.length > 2));
+      const prevWords = prevQ.split(/\s+/).filter(w => w.length > 2);
+      if (prevWords.length === 0) return false;
       const overlap = prevWords.filter(w => newWords.has(w)).length;
-      return overlap / Math.max(prevWords.length, 1) > 0.6;
+      return overlap / prevWords.length > 0.7;
     });
 
     if (isDuplicate) {
@@ -675,7 +712,7 @@ async function triggerEmergency(pool, userId, location) {
     : '';
   const title = t('checkin.emergency_title', lang);
   const body  = t('checkin.emergency_body', lang, { name: userName, location: locationStr });
-  const data  = { type: 'emergency', userId: String(userId), location };
+  const data  = { type: 'emergency', userId: String(userId), location, patientPhone: user.phone_number || '' };
 
   for (const cg of caregivers) {
     // Insert confirmation record so caregiver sees pending alert
@@ -777,18 +814,22 @@ async function shouldAlertFamily(pool, userId, session) {
 async function runCheckinFollowUps(pool) {
   const now = new Date();
 
-  // Sessions overdue (next_checkin_at passed and not resolved)
+  // Atomically claim overdue sessions by pushing next_checkin_at forward,
+  // preventing concurrent cron ticks from picking up the same session
   const { rows: overdue } = await pool.query(
-    `SELECT hc.*, u.push_token, u.display_name, u.full_name,
-            COALESCE(u.language_preference,'vi') as lang,
-            uop.risk_score
-     FROM health_checkins hc
-     JOIN users u ON u.id = hc.user_id
-     LEFT JOIN user_onboarding_profiles uop ON uop.user_id = hc.user_id
-     WHERE hc.next_checkin_at <= $1
-       AND hc.resolved_at IS NULL
-       AND hc.session_date = $2
-       AND hc.flow_state != 'resolved'`,
+    `UPDATE health_checkins
+     SET next_checkin_at = NOW() + INTERVAL '2 hours', updated_at = NOW()
+     FROM users u
+     LEFT JOIN user_onboarding_profiles uop ON uop.user_id = u.id
+     WHERE u.id = health_checkins.user_id
+       AND u.deleted_at IS NULL
+       AND health_checkins.next_checkin_at <= $1
+       AND health_checkins.resolved_at IS NULL
+       AND health_checkins.session_date = $2
+       AND health_checkins.flow_state != 'resolved'
+     RETURNING health_checkins.*, u.push_token, u.display_name, u.full_name,
+               COALESCE(u.language_preference,'vi') as lang,
+               uop.risk_score`,
     [now, checkinDateVN()]
   );
 
@@ -869,7 +910,7 @@ async function runCheckinFollowUps(pool) {
 /** Alert all eligible care circle members about user's non-response */
 async function alertFamily(pool, session, alertType = 'caregiver_alert') {
   const { rows: userRows } = await pool.query(
-    `SELECT display_name, full_name, COALESCE(language_preference,'vi') AS lang FROM users WHERE id=$1`,
+    `SELECT display_name, full_name, phone_number, COALESCE(language_preference,'vi') AS lang FROM users WHERE id=$1`,
     [session.user_id]
   );
   const user = userRows[0] || {};
@@ -928,7 +969,7 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
     await sendCheckinNotification(
       pool, cg.id, cg.push_token || null,
       alertType, title, body,
-      { alertId: String(alertId), patientId: String(session.user_id), checkinId: String(session.id) }
+      { alertId: String(alertId), patientId: String(session.user_id), checkinId: String(session.id), patientPhone: user.phone_number || '' }
     );
   }
 }
@@ -1049,6 +1090,13 @@ async function runAlertConfirmationFollowUps(pool) {
   );
 
   for (const alert of rows) {
+    // Skip if alertFamily already sent a caregiver_alert to this caregiver within the resend interval
+    const { rows: recentNotif } = await pool.query(
+      `SELECT 1 FROM notifications WHERE user_id = $1 AND type = 'caregiver_alert' AND created_at >= $2 LIMIT 1`,
+      [alert.caregiver_id, cutoff]
+    );
+    if (recentNotif.length > 0) continue;
+
     const patientName = alert.patient_name || alert.patient_full_name || t('brain.relative_fallback');
     const resendNum = alert.resent_count + 1;
     const title = alert.alert_type === 'emergency'
@@ -1082,12 +1130,19 @@ async function runMorningCheckin(pool, hour) {
     `SELECT u.id, u.push_token, COALESCE(u.language_preference,'vi') AS lang
      FROM users u
      JOIN user_onboarding_profiles uop ON uop.user_id = u.id
+     LEFT JOIN user_notification_preferences np ON np.user_id = u.id
      WHERE u.push_token IS NOT NULL
        AND u.deleted_at IS NULL
        AND uop.onboarding_completed_at IS NOT NULL
+       AND COALESCE(np.reminders_enabled, true) = true
        AND NOT EXISTS (
          SELECT 1 FROM health_checkins hc
          WHERE hc.user_id = u.id AND hc.session_date = $1
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM notifications n
+         WHERE n.user_id = u.id AND n.type = 'morning_checkin'
+           AND DATE(n.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = DATE(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
        )`,
     [checkinDateVN()]
   );

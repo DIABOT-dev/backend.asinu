@@ -7,7 +7,7 @@ function healthRoutes(pool) {
 
   router.post('/monitor/daily', (req, res) => runDailyMonitor(pool, req, res));
   router.post('/alert-care-circle', requireAuth, (req, res) => alertCareCircle(pool, req, res));
-  router.post('/monitor/user/:userId', requireAuth, (req, res) => runUserMonitor(pool, req, res));
+  router.post('/monitor/user/:userId', (req, res) => runUserMonitor(pool, req, res));
 
   return router;
 }

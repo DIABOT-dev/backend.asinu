@@ -24,15 +24,14 @@ async function getMissionsHandler(pool, req, res) {
  * Get mission history for past N days
  */
 async function getMissionHistoryHandler(pool, req, res) {
-  const { days = 30 } = req.query;
-  
-  const result = await getMissionHistory(pool, req.user.id, Number(days));
-  
-  if (!result.ok) {
-    return res.status(500).json(result);
+  try {
+    const { days = 30 } = req.query;
+    const result = await getMissionHistory(pool, req.user.id, Number(days));
+    if (!result.ok) return res.status(500).json(result);
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
-  
-  return res.status(200).json(result);
 }
 
 /**
@@ -40,13 +39,13 @@ async function getMissionHistoryHandler(pool, req, res) {
  * Get mission completion statistics
  */
 async function getMissionStatsHandler(pool, req, res) {
-  const result = await getMissionStats(pool, req.user.id);
-  
-  if (!result.ok) {
-    return res.status(500).json(result);
+  try {
+    const result = await getMissionStats(pool, req.user.id);
+    if (!result.ok) return res.status(500).json(result);
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
-  
-  return res.status(200).json(result);
 }
 
 module.exports = { 

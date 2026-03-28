@@ -191,16 +191,21 @@ async function getInvitations(pool, userId, direction = 'all') {
  * @returns {Promise<Object>} - { ok, connection, error }
  */
 async function acceptInvitation(pool, invitationId, userId) {
+  const client = await pool.connect();
   try {
-    // Kiểm tra giới hạn kết nối của addressee trước khi chấp nhận
-    const addresseeIsPremium = await isPremium(pool, userId);
-    const addresseeLimit = addresseeIsPremium ? PREMIUM_CONNECTION_LIMIT : FREE_TIER_CONNECTION_LIMIT;
-    const { rows: addresseeCount } = await pool.query(
+    await client.query('BEGIN');
+
+    // Lock user's connections to prevent concurrent accepts exceeding limit
+    const { rows: addresseeCount } = await client.query(
       `SELECT COUNT(*) FROM user_connections
-       WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'`,
+       WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'
+       FOR UPDATE`,
       [userId]
     );
+    const addresseeIsPremium = await isPremium(pool, userId);
+    const addresseeLimit = addresseeIsPremium ? PREMIUM_CONNECTION_LIMIT : FREE_TIER_CONNECTION_LIMIT;
     if (Number(addresseeCount[0].count) >= addresseeLimit) {
+      await client.query('ROLLBACK');
       return {
         ok: false,
         error: addresseeIsPremium
@@ -211,7 +216,7 @@ async function acceptInvitation(pool, invitationId, userId) {
       };
     }
 
-    const result = await pool.query(
+    const result = await client.query(
       `UPDATE user_connections
        SET status = 'accepted', accepted_at = NOW(), updated_at = NOW()
        WHERE id = $1 AND addressee_id = $2 AND status = 'pending'
@@ -220,10 +225,24 @@ async function acceptInvitation(pool, invitationId, userId) {
     );
 
     if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
       return { ok: false, error: t('careCircle.invitation_not_found'), statusCode: 404 };
     }
 
-    const connection = result.rows[0];
+    await client.query('COMMIT');
+
+    // Fetch full connection with user names (same shape as getConnections)
+    const fullResult = await pool.query(
+      `SELECT uc.*,
+              COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
+              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
+       FROM user_connections uc
+       LEFT JOIN users u1 ON uc.requester_id = u1.id
+       LEFT JOIN users u2 ON uc.addressee_id = u2.id
+       WHERE uc.id = $1`,
+      [result.rows[0].id]
+    );
+    const connection = fullResult.rows[0] || result.rows[0];
 
     // Get accepter name for notification
     const accepterName = await getUserDisplayName(pool, userId);
@@ -245,8 +264,10 @@ async function acceptInvitation(pool, invitationId, userId) {
 
     return { ok: true, connection };
   } catch (err) {
-
+    await client.query('ROLLBACK').catch(() => {});
     return { ok: false, error: t('error.server') };
+  } finally {
+    client.release();
   }
 }
 
@@ -274,6 +295,32 @@ async function rejectInvitation(pool, invitationId, userId) {
     return { ok: true, invitation: result.rows[0] };
   } catch (err) {
 
+    return { ok: false, error: t('error.server') };
+  }
+}
+
+/**
+ * Cancel a pending invitation (sender only)
+ * @param {Object} pool - Database pool
+ * @param {number} invitationId - Invitation ID
+ * @param {number} requesterId - User who originally sent the invitation
+ * @returns {Promise<Object>} - { ok, error }
+ */
+async function cancelInvitation(pool, invitationId, requesterId) {
+  try {
+    const result = await pool.query(
+      `DELETE FROM user_connections
+       WHERE id = $1 AND requester_id = $2 AND status = 'pending'
+       RETURNING id`,
+      [invitationId, requesterId]
+    );
+
+    if (result.rows.length === 0) {
+      return { ok: false, error: t('careCircle.invitation_not_found'), statusCode: 404 };
+    }
+
+    return { ok: true };
+  } catch (err) {
     return { ok: false, error: t('error.server') };
   }
 }
@@ -464,6 +511,7 @@ module.exports = {
   getInvitations,
   acceptInvitation,
   rejectInvitation,
+  cancelInvitation,
 
   // Connections
   getConnections,

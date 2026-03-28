@@ -11,6 +11,7 @@ const {
   getInvitations: serviceGetInvitations,
   acceptInvitation: serviceAcceptInvitation,
   rejectInvitation: serviceRejectInvitation,
+  cancelInvitation: serviceCancelInvitation,
   getConnections: serviceGetConnections,
   deleteConnection: serviceDeleteConnection,
   updateConnection: serviceUpdateConnection,
@@ -96,6 +97,19 @@ async function rejectInvitation(pool, req, res) {
   }
 
   return res.status(200).json({ ok: true, invitation: result.invitation });
+}
+
+/**
+ * DELETE /api/care-circle/invitations/:id
+ * Cancel a sent invitation (sender only)
+ */
+async function cancelInvitation(pool, req, res) {
+  const invitationId = req.params.id;
+  const result = await serviceCancelInvitation(pool, invitationId, req.user.id);
+  if (!result.ok) {
+    return res.status(result.statusCode || 400).json({ ok: false, error: result.error });
+  }
+  return res.status(200).json({ ok: true });
 }
 
 // =====================================================
@@ -266,11 +280,12 @@ async function getMemberHealthSummary(pool, req, res) {
   const caregiverId = req.user.id;
   const memberId = parseInt(req.params.memberId);
 
-  // Verify caregiver has access to this member
+  // Verify caregiver has access and can_view_logs permission
   const accessCheck = await pool.query(
     `SELECT id FROM user_connections
      WHERE ((requester_id = $2 AND addressee_id = $1) OR (requester_id = $1 AND addressee_id = $2))
-       AND status = 'accepted'`,
+       AND status = 'accepted'
+       AND COALESCE((permissions->>'can_view_logs')::boolean, false) = true`,
     [caregiverId, memberId]
   );
 
@@ -305,6 +320,7 @@ module.exports = {
   getInvitations,
   acceptInvitation,
   rejectInvitation,
+  cancelInvitation,
   getConnections,
   deleteConnection,
   updateConnection,

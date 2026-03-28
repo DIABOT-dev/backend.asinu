@@ -5,6 +5,7 @@ const {
   getInvitations,
   acceptInvitation,
   rejectInvitation,
+  cancelInvitation,
   getConnections,
   deleteConnection,
   updateConnection,
@@ -18,6 +19,7 @@ function careCircleRoutes(pool) {
   router.get('/invitations', requireAuth, (req, res) => getInvitations(pool, req, res));
   router.post('/invitations/:id/accept', requireAuth, (req, res) => acceptInvitation(pool, req, res));
   router.post('/invitations/:id/reject', requireAuth, (req, res) => rejectInvitation(pool, req, res));
+  router.delete('/invitations/:id', requireAuth, (req, res) => cancelInvitation(pool, req, res));
   router.get('/connections', requireAuth, (req, res) => getConnections(pool, req, res));
   router.put('/connections/:id', requireAuth, (req, res) => updateConnection(pool, req, res));
   router.put('/connections/:id/permissions', requireAuth, (req, res) => updateConnectionPermissions(pool, req, res));

@@ -13,6 +13,9 @@ const {
   runBasic,
 } = require('../controllers/notification.controller');
 
+let basicRunning = false;
+let engagementRunning = false;
+
 function notificationRoutes(pool) {
   const router = express.Router();
 
@@ -24,8 +27,16 @@ function notificationRoutes(pool) {
   router.get('/preferences',   requireAuth, (req, res) => getNotificationPreferences(pool, req, res));
   router.put('/preferences',   requireAuth, (req, res) => updateNotificationPreferences(pool, req, res));
   router.get('/engagement/preview', requireAuth, (req, res) => previewEngagement(pool, req, res));
-  router.post('/engagement/run',    (req, res) => runEngagement(pool, req, res));
-  router.post('/basic/run',         (req, res) => runBasic(pool, req, res));
+  router.post('/engagement/run', async (req, res) => {
+    if (engagementRunning) return res.status(429).json({ error: 'Engagement cron already running' });
+    engagementRunning = true;
+    try { await runEngagement(pool, req, res); } finally { engagementRunning = false; }
+  });
+  router.post('/basic/run', async (req, res) => {
+    if (basicRunning) return res.status(429).json({ error: 'Basic cron already running' });
+    basicRunning = true;
+    try { await runBasic(pool, req, res); } finally { basicRunning = false; }
+  });
 
   return router;
 }

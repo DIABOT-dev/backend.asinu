@@ -234,6 +234,86 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
   }
 }
 
+// ─── payWithWallet ───────────────────────────────────────────────────
+
+/**
+ * Thanh toán gói Premium bằng số dư ví.
+ * Atomic: kiểm tra số dư → trừ ví → kích hoạt premium.
+ */
+async function payWithWallet(pool, userId, months = 1) {
+  const plan = PLANS[months] || PLANS[1];
+  const amount = plan.price;
+  const orderCode = generateOrderCode();
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    // Lock row và kiểm tra số dư
+    const { rows: userRows } = await client.query(
+      `SELECT wallet_balance, subscription_tier, subscription_expires_at
+       FROM users WHERE id = $1 FOR UPDATE`,
+      [userId]
+    );
+    const user = userRows[0];
+    if (!user) {
+      await client.query('ROLLBACK');
+      return { ok: false, message: t('error.user_not_found') };
+    }
+
+    if (Number(user.wallet_balance) < amount) {
+      await client.query('ROLLBACK');
+      return {
+        ok: false,
+        message: `Số dư ví không đủ. Cần ${amount.toLocaleString('vi-VN')}đ, hiện có ${Number(user.wallet_balance).toLocaleString('vi-VN')}đ.`,
+      };
+    }
+
+    // Trừ số dư ví
+    await client.query(
+      `UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2`,
+      [amount, userId]
+    );
+
+    // Ghi lịch sử subscription
+    const now = new Date();
+    const subEnd = new Date(now);
+    subEnd.setMonth(subEnd.getMonth() + plan.months);
+
+    await client.query(
+      `INSERT INTO subscriptions (user_id, order_code, amount, qr_url, status, plan_months, subscription_start, subscription_end, completed_at, qr_expires_at)
+       VALUES ($1, $2, $3, '', 'completed', $4, $5, $6, NOW(), NOW())`,
+      [userId, orderCode, amount, plan.months, now, subEnd]
+    );
+
+    // Gia hạn nếu đang là premium
+    let newExpiry = subEnd;
+    if (
+      user.subscription_tier === 'premium' &&
+      user.subscription_expires_at &&
+      new Date(user.subscription_expires_at) > now
+    ) {
+      newExpiry = new Date(user.subscription_expires_at);
+      newExpiry.setMonth(newExpiry.getMonth() + plan.months);
+    }
+
+    await client.query(
+      `UPDATE users SET subscription_tier = 'premium', subscription_expires_at = $1 WHERE id = $2`,
+      [newExpiry, userId]
+    );
+
+    await client.query('COMMIT');
+    await cacheDel(`subscription:${userId}`);
+
+    return { ok: true, expiresAt: newExpiry, planMonths: plan.months };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    return { ok: false, message: t('error.server') };
+  } finally {
+    client.release();
+  }
+}
+
 // ─── getHistory ───────────────────────────────────────────────────────
 
 async function getHistory(pool, userId, { page = 1, limit = 20 } = {}) {
@@ -262,6 +342,7 @@ async function getHistory(pool, userId, { page = 1, limit = 20 } = {}) {
 
 module.exports = {
   PLANS,
+  payWithWallet,
   VOICE_MONTHLY_LIMIT,
   PREMIUM_CONNECTION_LIMIT,
   PREMIUM_HISTORY_DAYS,

@@ -133,13 +133,13 @@ async function getTreeHistory(pool, userId) {
     const cached = await cacheGet(`tree:history:${userId}`);
     if (cached) return cached;
 
-    // Get daily log counts for the past 7 days
+    // Get daily log counts for the past 7 days (Vietnam timezone)
     const result = await pool.query(
-      `SELECT DATE(occurred_at) as log_date, COUNT(*) as count
+      `SELECT DATE(occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh') as log_date, COUNT(*) as count
        FROM logs_common
        WHERE user_id = $1
          AND occurred_at >= NOW() - INTERVAL '7 days'
-       GROUP BY DATE(occurred_at)
+       GROUP BY DATE(occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh')
        ORDER BY log_date ASC`,
       [userId]
     );
@@ -150,10 +150,10 @@ async function getTreeHistory(pool, userId) {
       logsByDate[dateStr] = parseInt(row.count);
     }
 
-    // Build history for the past 7 days
+    // Build history for the past 7 days (Vietnam timezone)
     const history = [];
-    const today = new Date();
-    
+    const today = new Date(new Date().getTime() + 7 * 60 * 60 * 1000);
+
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);

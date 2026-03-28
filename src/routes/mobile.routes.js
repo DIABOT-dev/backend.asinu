@@ -139,11 +139,9 @@ function mobileRoutes(pool) {
     const { loginByEmail } = require('../controllers/auth.controller');
     return loginByEmail(pool, req, res);
   });
-  router.post('/auth/phone', (req, res) => {
-    const { loginByPhone } = require('../controllers/auth.controller');
-    return loginByPhone(pool, req, res);
-  });
-  router.post('/auth/logout', requireAuth, (req, res) => {
+  router.post('/auth/logout', requireAuth, async (req, res) => {
+    const { logout } = require('../services/auth/auth.service');
+    await logout(pool, req.user.id).catch(() => {});
     return res.status(200).json({ ok: true, message: t('success.logged_out', getLang(req)) });
   });
 

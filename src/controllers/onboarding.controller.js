@@ -69,10 +69,12 @@ async function onboardingComplete(pool, req, res) {
 async function onboardingCompleteV2(pool, req, res) {
   try {
     const { phone } = req.body;
-    if (phone && /^0\d{9}$/.test(phone.trim())) {
+    if (phone && phone.trim().length >= 9) {
+      const { normalizePhoneNumber, getPhoneVariants } = require('../services/auth/auth.service');
+      const variants = getPhoneVariants(normalizePhoneNumber(phone.trim()));
       const dup = await pool.query(
-        'SELECT id FROM users WHERE phone_number = $1 AND id != $2',
-        [phone.trim(), req.user.id]
+        'SELECT id FROM users WHERE phone_number = ANY($1::text[]) AND id != $2',
+        [variants, req.user.id]
       );
       if (dup.rows.length > 0) {
         return res.status(409).json({ ok: false, error: t('auth.phone_already_used', getLang(req)) });

@@ -63,6 +63,15 @@ function nowVN() {
  * Accepts either a user object (with .id and .push_token) or a plain userId (number).
  * Optional `overridePriority` lets callers (e.g. NotificationOrchestrator) set priority explicitly.
  */
+// Reminder types that should be spaced apart (5 min gap between any two)
+const REMINDER_TYPES = new Set([
+  'reminder_morning_summary', 'reminder_afternoon', 'reminder_evening_summary',
+  'reminder_log_morning', 'reminder_log_evening',
+  'reminder_glucose', 'reminder_bp', 'reminder_medication_morning', 'reminder_medication_evening',
+  'morning_checkin', 'streak_7', 'streak_14', 'streak_30', 'weekly_recap',
+]);
+const CROSS_TYPE_GAP_MINUTES = 5;
+
 async function sendAndSave(pool, userOrId, type, title, body, data = {}, overridePriority = null) {
   const isObject = typeof userOrId === 'object' && userOrId !== null;
   const userId = isObject ? userOrId.id : userOrId;
@@ -70,21 +79,37 @@ async function sendAndSave(pool, userOrId, type, title, body, data = {}, overrid
 
   const priority = overridePriority || TYPE_PRIORITY[type] || 'low';
 
-  const tasks = [
-    pool.query(
-      `INSERT INTO notifications (user_id, type, title, message, data, priority) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [userId, type, title, body, JSON.stringify(data), priority]
-    ),
-  ];
-  if (pushToken) {
-    tasks.push(sendPushNotification([pushToken], title, body, { type, ...data }));
+  // Cross-type spacing: skip if user received any reminder push in last 5 minutes
+  if (REMINDER_TYPES.has(type)) {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM notifications WHERE user_id = $1
+         AND type = ANY($2::text[])
+         AND created_at >= NOW() - make_interval(mins => $3) LIMIT 1`,
+      [userId, [...REMINDER_TYPES], CROSS_TYPE_GAP_MINUTES]
+    );
+    if (rows.length > 0) return false;
   }
 
-  const results = await Promise.allSettled(tasks);
-  // Return true if push was sent successfully (or no push needed)
-  if (!pushToken) return true;
-  const pushResult = results[1];
-  return pushResult?.status === 'fulfilled' && pushResult?.value?.ok;
+  // Insert DB record FIRST, only push if insert succeeds
+  try {
+    await pool.query(
+      `INSERT INTO notifications (user_id, type, title, message, data, priority) VALUES ($1,$2,$3,$4,$5,$6)`,
+      [userId, type, title, body, JSON.stringify(data), priority]
+    );
+  } catch (err) {
+    console.error(`[sendAndSave] DB insert failed for ${type} user=${userId}:`, err.message);
+    return false;
+  }
+
+  if (pushToken) {
+    try {
+      const result = await sendPushNotification([pushToken], title, body, { type, ...data });
+      return result?.ok || false;
+    } catch {
+      return false;
+    }
+  }
+  return true;
 }
 
 // ─── Personalization helpers ──────────────────────────────────────
@@ -136,31 +161,100 @@ const NO_LOG_TODAY = (logType = null) => logType
         AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
     )`;
 
-// ─── 1. Morning log reminder ──────────────────────────────────────
+// ─── 1. Morning summary (merged: log + glucose + bp + medication) ──
 
-async function runMorningLog(pool, hour, minute) {
+async function runMorningSummary(pool, hour, minute) {
+  // Query all users whose morning time matches, not yet sent today
   const { rows } = await pool.query(`
-    ${USER_SELECT}
-    AND ${morningMatch(8)}
-    ${NOT_SENT_TODAY('reminder_log_morning')}
-    ${NO_LOG_TODAY()}
+    SELECT u.id, u.push_token,
+           COALESCE(u.language_preference,'vi') AS lang,
+           u.display_name, u.full_name,
+           uop.medical_conditions,
+           (SELECT triage_summary FROM health_checkins hc
+            WHERE hc.user_id = u.id AND hc.triage_summary IS NOT NULL
+            ORDER BY hc.session_date DESC LIMIT 1) AS last_symptom,
+           (SELECT lg.value FROM glucose_logs lg
+            JOIN logs_common lc ON lc.id = lg.log_id
+            WHERE lc.user_id = u.id ORDER BY lc.occurred_at DESC LIMIT 1) AS last_glucose,
+           (SELECT lb.systolic || '/' || lb.diastolic FROM blood_pressure_logs lb
+            JOIN logs_common lc ON lc.id = lb.log_id
+            WHERE lc.user_id = u.id ORDER BY lc.occurred_at DESC LIMIT 1) AS last_bp,
+           NOT EXISTS (
+             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id
+               AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
+           ) AS no_log_today,
+           NOT EXISTS (
+             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id AND lc.log_type = 'glucose'
+               AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
+           ) AS no_glucose_today,
+           NOT EXISTS (
+             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id AND lc.log_type = 'blood_pressure'
+               AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
+           ) AS no_bp_today,
+           NOT EXISTS (
+             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id AND lc.log_type = 'medication'
+               AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
+           ) AS no_medication_today
+    FROM users u
+    JOIN user_onboarding_profiles uop ON uop.user_id = u.id
+    LEFT JOIN user_notification_preferences np ON np.user_id = u.id
+    WHERE u.push_token IS NOT NULL
+      AND u.deleted_at IS NULL
+      AND uop.onboarding_completed_at IS NOT NULL
+      AND ${remindersEnabled()}
+      AND ${morningMatch(8)}
+      AND NOT EXISTS (
+        SELECT 1 FROM notifications n
+        WHERE n.user_id = u.id AND n.type = 'reminder_morning_summary'
+          AND DATE(n.created_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
+      )
   `, [hour, minute]);
 
   let sent = 0;
   for (const user of rows) {
     const name = getUserName(user);
     const greeting = getGreeting(user.lang, hour);
-    const title = user.lang === 'en'
-      ? `${greeting}${name ? ', ' + name : ''}!`
-      : `${greeting}${name ? ' ' + name : ''}!`;
-    const body = user.last_symptom
-      ? (user.lang === 'en'
-        ? `How are you feeling today? Yesterday: ${user.last_symptom}. Log your health stats.`
-        : `Hôm nay bạn thế nào? Hôm qua: ${user.last_symptom}. Hãy ghi lại chỉ số sức khỏe.`)
-      : t('push.reminder_log_morning_body', user.lang);
-    if (await sendAndSave(pool, user, 'reminder_log_morning', title, body)) sent++;
+    const conditions = parseConditions(user.medical_conditions);
+    const isEn = user.lang === 'en';
+
+    // Build task list based on what user needs to do today
+    const tasks = [];
+    if (conditions.hasDiabetes && user.no_glucose_today) {
+      const prev = user.last_glucose ? (isEn ? ` (last: ${user.last_glucose})` : ` (gần nhất: ${user.last_glucose})`) : '';
+      tasks.push(isEn ? `blood glucose 🩸${prev}` : `đo đường huyết 🩸${prev}`);
+    }
+    if (conditions.hasHypertension && user.no_bp_today) {
+      const prev = user.last_bp ? (isEn ? ` (last: ${user.last_bp})` : ` (gần nhất: ${user.last_bp})`) : '';
+      tasks.push(isEn ? `blood pressure 💓${prev}` : `đo huyết áp 💓${prev}`);
+    }
+    if (conditions.hasAny && user.no_medication_today) {
+      tasks.push(isEn ? 'take medication 💊' : 'uống thuốc 💊');
+    }
+    if (user.no_log_today && tasks.length === 0) {
+      tasks.push(isEn ? 'log your health stats 📋' : 'ghi chỉ số sức khỏe 📋');
+    }
+
+    // Skip if nothing to remind
+    if (tasks.length === 0) continue;
+
+    const title = isEn
+      ? `${greeting}${name ? ', ' + name : ''}! ☀️`
+      : `${greeting}${name ? ' ' + name : ''}! ☀️`;
+
+    let body;
+    if (user.last_symptom) {
+      body = isEn
+        ? `Yesterday: ${user.last_symptom}. Today: ${tasks.join(', ')}.`
+        : `Hôm qua: ${user.last_symptom}. Hôm nay nhớ: ${tasks.join(', ')}.`;
+    } else {
+      body = isEn
+        ? `Today's reminders: ${tasks.join(', ')}.`
+        : `Hôm nay nhớ: ${tasks.join(', ')}.`;
+    }
+
+    if (await sendAndSave(pool, user, 'reminder_morning_summary', title, body)) sent++;
   }
-  return { type: 'morning_log', total: rows.length, sent };
+  return { type: 'morning_summary', total: rows.length, sent };
 }
 
 // ─── 2. Afternoon reminder (NEW — uses afternoon_time) ───────────
@@ -198,119 +292,78 @@ async function runAfternoon(pool, hour, minute) {
   return { type: 'afternoon', total: rows.length, sent };
 }
 
-// ─── 3. Evening log reminder ──────────────────────────────────────
+// ─── 3. Evening summary (merged: log + medication) ────────────────
 
-async function runEveningLog(pool, hour, minute) {
+async function runEveningSummary(pool, hour, minute) {
   const { rows } = await pool.query(`
-    ${USER_SELECT}
-    AND ${eveningMatch(21)}
-    ${NOT_SENT_TODAY('reminder_log_evening')}
+    SELECT u.id, u.push_token,
+           COALESCE(u.language_preference,'vi') AS lang,
+           u.display_name, u.full_name,
+           uop.medical_conditions,
+           (SELECT triage_summary FROM health_checkins hc
+            WHERE hc.user_id = u.id AND hc.triage_summary IS NOT NULL
+            ORDER BY hc.session_date DESC LIMIT 1) AS last_symptom,
+           NOT EXISTS (
+             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id
+               AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
+               AND EXTRACT(HOUR FROM lc.occurred_at AT TIME ZONE '${TZ}') >= 17
+           ) AS no_evening_log,
+           NOT EXISTS (
+             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id AND lc.log_type = 'medication'
+               AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
+           ) AS no_medication_today
+    FROM users u
+    JOIN user_onboarding_profiles uop ON uop.user_id = u.id
+    LEFT JOIN user_notification_preferences np ON np.user_id = u.id
+    WHERE u.push_token IS NOT NULL
+      AND u.deleted_at IS NULL
+      AND uop.onboarding_completed_at IS NOT NULL
+      AND ${remindersEnabled()}
+      AND ${eveningMatch(21)}
+      AND NOT EXISTS (
+        SELECT 1 FROM notifications n
+        WHERE n.user_id = u.id AND n.type = 'reminder_evening_summary'
+          AND DATE(n.created_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
+      )
   `, [hour, minute]);
 
   let sent = 0;
   for (const user of rows) {
     const name = getUserName(user);
-    const greeting = getGreeting(user.lang, hour);
-    const title = user.lang === 'en'
-      ? `${greeting}${name ? ', ' + name : ''}`
-      : `${greeting}${name ? ' ' + name : ''}`;
-    const body = user.last_symptom
-      ? (user.lang === 'en'
-        ? `End your day with a health update. Recent: ${user.last_symptom}`
-        : `Hãy cập nhật sức khỏe cuối ngày. Gần đây: ${user.last_symptom}`)
-      : t('push.reminder_log_evening_body', user.lang);
-    if (await sendAndSave(pool, user, 'reminder_log_evening', title, body)) sent++;
+    const conditions = parseConditions(user.medical_conditions);
+    const isEn = user.lang === 'en';
+
+    const tasks = [];
+    if (conditions.hasAny && user.no_medication_today) {
+      tasks.push(isEn ? 'take evening medication 💊' : 'uống thuốc tối 💊');
+    }
+    if (user.no_evening_log) {
+      tasks.push(isEn ? 'log your health stats 📋' : 'ghi chỉ số sức khỏe 📋');
+    }
+
+    if (tasks.length === 0) continue;
+
+    const title = isEn
+      ? `Good evening${name ? ', ' + name : ''} 🌙`
+      : `Chào buổi tối${name ? ' ' + name : ''} 🌙`;
+
+    let body;
+    if (user.last_symptom) {
+      body = isEn
+        ? `Before bed: ${tasks.join(', ')}. Recent: ${user.last_symptom}.`
+        : `Trước khi ngủ: ${tasks.join(', ')}. Gần đây: ${user.last_symptom}.`;
+    } else {
+      body = isEn
+        ? `Before bed, remember: ${tasks.join(', ')} 💙`
+        : `Trước khi ngủ nhớ: ${tasks.join(', ')} 💙`;
+    }
+
+    if (await sendAndSave(pool, user, 'reminder_evening_summary', title, body)) sent++;
   }
-  return { type: 'evening_log', total: rows.length, sent };
+  return { type: 'evening_summary', total: rows.length, sent };
 }
 
-// ─── 4. Glucose reminder — diabetes only ─────────────────────────
-
-async function runGlucose(pool, hour, minute) {
-  const { rows } = await pool.query(`
-    ${USER_SELECT}
-    AND ${morningMatch(8)}
-    AND (
-      LOWER(uop.medical_conditions::text) LIKE '%ti%u đường%'
-      OR LOWER(uop.medical_conditions::text) LIKE '%diabetes%'
-      OR LOWER(uop.raw_profile::text) LIKE '%ti%u đường%'
-      OR LOWER(uop.raw_profile::text) LIKE '%diabetes%'
-    )
-    ${NOT_SENT_TODAY('reminder_glucose')}
-    ${NO_LOG_TODAY('glucose')}
-  `, [hour, minute]);
-
-  let sent = 0;
-  for (const user of rows) {
-    const name = getUserName(user);
-    const title = user.lang === 'en'
-      ? `Blood glucose check${name ? ', ' + name : ''}`
-      : `Nhắc đo đường huyết${name ? ' ' + name : ''}`;
-    if (await sendAndSave(pool, user, 'reminder_glucose', title,
-      t('push.reminder_glucose_body', user.lang))) sent++;
-  }
-  return { type: 'glucose', total: rows.length, sent };
-}
-
-// ─── 5. Blood pressure reminder — hypertension only ──────────────
-
-async function runBP(pool, hour, minute) {
-  const { rows } = await pool.query(`
-    ${USER_SELECT}
-    AND ${morningMatch(8)}
-    AND (
-      LOWER(uop.medical_conditions::text) LIKE '%huy%t áp%'
-      OR LOWER(uop.medical_conditions::text) LIKE '%hypertension%'
-      OR LOWER(uop.medical_conditions::text) LIKE '%blood pressure%'
-      OR LOWER(uop.raw_profile::text) LIKE '%huy%t áp%'
-      OR LOWER(uop.raw_profile::text) LIKE '%hypertension%'
-    )
-    ${NOT_SENT_TODAY('reminder_bp')}
-    ${NO_LOG_TODAY('blood_pressure')}
-  `, [hour, minute]);
-
-  let sent = 0;
-  for (const user of rows) {
-    const name = getUserName(user);
-    const title = user.lang === 'en'
-      ? `Blood pressure check${name ? ', ' + name : ''}`
-      : `Nhắc đo huyết áp${name ? ' ' + name : ''}`;
-    if (await sendAndSave(pool, user, 'reminder_bp', title,
-      t('push.reminder_bp_body', user.lang))) sent++;
-  }
-  return { type: 'bp', total: rows.length, sent };
-}
-
-// ─── 6. Medication reminder ───────────────────────────────────────
-
-async function runMedication(pool, slot, hour, minute) {
-  const type = `reminder_medication_${slot}`;
-  const timeMatch = slot === 'morning' ? morningMatch(8) : eveningMatch(21);
-
-  const { rows } = await pool.query(`
-    ${USER_SELECT}
-    AND ${timeMatch}
-    AND uop.medical_conditions::text != '[]'
-    ${NOT_SENT_TODAY(type)}
-    ${NO_LOG_TODAY('medication')}
-  `, [hour, minute]);
-
-  let sent = 0;
-  for (const user of rows) {
-    const name = getUserName(user);
-    const slotLabel = slot === 'morning'
-      ? (user.lang === 'en' ? 'morning' : 'sáng')
-      : (user.lang === 'en' ? 'evening' : 'tối');
-    const title = user.lang === 'en'
-      ? `${slotLabel.charAt(0).toUpperCase() + slotLabel.slice(1)} medication${name ? ', ' + name : ''}`
-      : `Nhắc thuốc buổi ${slotLabel}${name ? ' ' + name : ''}`;
-    const body = user.lang === 'en'
-      ? `Remember to take your ${slotLabel} medication on time.`
-      : `Nhớ uống thuốc buổi ${slotLabel} đúng giờ nhé.`;
-    if (await sendAndSave(pool, user, type, title, body)) sent++;
-  }
-  return { type, total: rows.length, sent };
-}
+// ─── (Glucose, BP, Medication morning/evening — merged into morning/evening summary above) ──
 
 // ─── 7. Streak milestones ─────────────────────────────────────────
 
@@ -456,22 +509,21 @@ async function runBasicNotifications(pool, forceHour = null, forceMinute = null)
     return { ok: true, hour, minute, quietHours: true, results, totalSent, totalEligible: 0 };
   }
 
-  const jobs = [
-    runMorningLog(pool, hour, minute),
-    runAfternoon(pool, hour, minute),
-    runEveningLog(pool, hour, minute),
-    runGlucose(pool, hour, minute),
-    runBP(pool, hour, minute),
-    runMedication(pool, 'morning', hour, minute),
-    runMedication(pool, 'evening', hour, minute),
-    runStreakMilestones(pool, hour, minute),
-    runMorningCheckin(pool, hour),
+  // Run sequentially so cross-type 5-min gap works (earlier job blocks later ones for same user)
+  const results = [];
+  results.push(await runMorningCheckin(pool, hour));
+  results.push(await runMorningSummary(pool, hour, minute));
+  results.push(await runAfternoon(pool, hour, minute));
+  results.push(await runEveningSummary(pool, hour, minute));
+  results.push(await runStreakMilestones(pool, hour, minute));
+  if (hour === 20 && minute === 0 && dow === 0) results.push(await runWeeklyRecap(pool));
+  // Checkin follow-ups are urgent — run independently (not subject to reminder gap)
+  const [followUps, alertFollowUps] = await Promise.all([
     runCheckinFollowUps(pool),
     runAlertConfirmationFollowUps(pool),
-    ...(hour === 20 && minute === 0 && dow === 0 ? [runWeeklyRecap(pool)] : []),
-  ];
+  ]);
+  results.push(followUps, alertFollowUps);
 
-  const results = await Promise.all(jobs);
   const totalSent = results.reduce((s, r) => s + (r.sent || 0), 0);
   const totalEligible = results.reduce((s, r) => s + (r.total || 0), 0);
 

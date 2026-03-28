@@ -5,6 +5,7 @@
 
 const { t } = require('../../i18n');
 const { cacheDel } = require('../../lib/redis');
+const { sendAndSave } = require('../notification/basic.notification.service');
 
 const VALID_LOG_TYPES = new Set([
   'glucose',
@@ -139,6 +140,67 @@ async function insertDetailLog(client, logType, logId, data) {
 }
 
 /**
+ * Check critical health values after logging and alert care circle caregivers.
+ * Runs async (fire-and-forget) so it doesn't block the log response.
+ */
+async function checkAndAlertCareCircle(pool, userId, logType, data) {
+  let severity = null;
+  let title = '';
+  let body = '';
+
+  if (logType === 'glucose' && data.value) {
+    const v = parseFloat(data.value);
+    if (v > 250 || v < 70) {
+      severity = 'critical';
+      title = v > 250 ? 'Đường huyết rất cao' : 'Đường huyết rất thấp';
+      body = `Chỉ số đường huyết: ${v} mg/dL`;
+    }
+  }
+
+  if (logType === 'bp' && data.systolic && data.diastolic) {
+    const sys = parseFloat(data.systolic);
+    const dia = parseFloat(data.diastolic);
+    if (sys >= 180 || dia >= 110) {
+      severity = 'critical';
+      title = 'Huyết áp nguy hiểm';
+      body = `Huyết áp: ${sys}/${dia} mmHg`;
+    }
+  }
+
+  if (!severity) return;
+
+  // Get user name
+  const { rows: [user] } = await pool.query(
+    'SELECT full_name, display_name FROM users WHERE id = $1', [userId]
+  );
+  const name = user?.display_name || user?.full_name || `User ${userId}`;
+
+  // Notify the user themselves
+  await sendAndSave(pool, { id: userId, push_token: null }, 'health_alert',
+    title, body, { alertType: logType, severity });
+
+  // Find care circle caregivers with alert permission
+  const { rows: caregivers } = await pool.query(
+    `SELECT u.id, u.push_token
+     FROM user_connections uc
+     JOIN users u ON (
+       CASE WHEN uc.requester_id = $1 THEN uc.addressee_id ELSE uc.requester_id END = u.id
+     )
+     WHERE uc.status = 'accepted'
+       AND (uc.requester_id = $1 OR uc.addressee_id = $1)
+       AND u.deleted_at IS NULL
+       AND (uc.permissions->>'can_receive_alerts')::boolean = true`,
+    [userId]
+  );
+
+  for (const cg of caregivers) {
+    await sendAndSave(pool, cg, 'health_alert',
+      `${name}: ${title}`, body,
+      { alertType: logType, severity, patientId: userId });
+  }
+}
+
+/**
  * Create a new mobile log
  * @param {Object} pool - Database pool
  * @param {number} userId - User ID
@@ -196,6 +258,9 @@ async function createLog(pool, userId, payload) {
       `tree:summary:${userId}`, `tree:history:${userId}`,
       `health:score:${userId}`, `missions:${userId}`
     );
+
+    // Check critical health values and alert care circle
+    checkAndAlertCareCircle(pool, userId, logType, data).catch(() => {});
 
     return { ok: true, logId, logType };
   } catch (err) {

@@ -64,9 +64,32 @@ async function getHistory(pool, req, res) {
   }
 }
 
+/**
+ * POST /api/subscriptions/wallet
+ * Thanh toán gói Premium bằng số dư ví
+ */
+async function payWithWallet(pool, req, res) {
+  const userId = req.user?.id;
+  const requested = parseInt(req.body?.months) || 1;
+  if (!VALID_MONTHS.includes(requested)) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_subscription_months', getLang(req)) });
+  }
+
+  try {
+    const result = await subscriptionService.payWithWallet(pool, userId, requested);
+    if (!result.ok) {
+      return res.status(400).json({ ok: false, error: result.message });
+    }
+    return res.status(200).json({ ok: true, expiresAt: result.expiresAt, planMonths: result.planMonths });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
 module.exports = {
   createQR,
   getStatus,
   getPlans,
   getHistory,
+  payWithWallet,
 };

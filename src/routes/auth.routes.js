@@ -11,7 +11,6 @@ const {
   loginByFacebookToken,
   googleInitiate,
   googleCallback,
-  loginByPhone,
   searchUsers,
   verifyToken
 } = require('../controllers/auth.controller');
@@ -31,8 +30,6 @@ function authRoutes(pool) {
   router.post('/facebook/token', (req, res) => loginByFacebookToken(pool, req, res));
   router.get('/google/initiate', (req, res) => googleInitiate(pool, req, res));
   router.get('/google/callback', (req, res) => googleCallback(pool, req, res));
-  router.post('/phone-login', (req, res) => loginByPhone(pool, req, res));
-
   // ===== AUTHENTICATED ENDPOINTS =====
   router.get('/me', requireAuth, (req, res) => getMe(pool, req, res));
   router.post('/verify', requireAuth, (req, res) => verifyToken(pool, req, res));

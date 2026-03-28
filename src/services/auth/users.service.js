@@ -14,32 +14,23 @@ const { t } = require('../../i18n');
  */
 async function searchUsers(pool, currentUserId, query) {
   try {
-    const result = await pool.query(
-      `SELECT
-        id,
-        COALESCE(display_name, full_name, email) as name,
-        email,
-        phone_number as phone
-       FROM users
-       WHERE deleted_at IS NULL
-         AND id != $1
-         AND (
-           display_name ILIKE $2
-           OR full_name ILIKE $2
-           OR email ILIKE $2
-           OR phone_number ILIKE $2
-         )
-       ORDER BY
-         CASE
-           WHEN display_name ILIKE $3 THEN 1
-           WHEN full_name ILIKE $3 THEN 2
-           WHEN email ILIKE $3 THEN 3
-           ELSE 4
-         END,
-         COALESCE(display_name, full_name, email)
-       LIMIT 20`,
-      [currentUserId, `%${query}%`, `${query}%`]
-    );
+    const q = query.trim();
+    // Chỉ chấp nhận số điện thoại hợp lệ: 10 số bắt đầu 0, hoặc +84 + 9 số
+    const isValidPhone = /^(0[0-9]{9}|\+84[0-9]{9})$/.test(q);
+    if (!isValidPhone) {
+      return { ok: true, users: [] };
+    }
+
+    // Chuẩn hoá: +84xxxxxxxxx → 0xxxxxxxxx
+    const normalized = q.startsWith('+84') ? '0' + q.slice(3) : q;
+    const sql = `SELECT id, COALESCE(display_name, full_name, email) as name, email, phone_number as phone
+                 FROM users
+                 WHERE deleted_at IS NULL AND id != $1
+                   AND REGEXP_REPLACE(phone_number, '^\\+84', '0') = $2
+                 LIMIT 1`;
+    const params = [currentUserId, normalized];
+
+    const result = await pool.query(sql, params);
 
     const users = result.rows.map(row => ({
       id: String(row.id),

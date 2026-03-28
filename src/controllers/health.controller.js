@@ -128,6 +128,10 @@ async function runDailyMonitor(pool, req, res) {
  * Chạy health monitoring cho user cụ thể
  */
 async function runUserMonitor(pool, req, res) {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.headers['x-cron-secret'] !== secret) {
+    return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
+  }
   try {
     const userId = parseInt(req.params.userId);
     if (isNaN(userId)) {

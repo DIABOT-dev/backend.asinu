@@ -8,9 +8,6 @@
  * push separately or use sendCheckinNotification which wraps both.
  */
 
-// Cooldown tracking (prevent spam)
-const recentNotifications = new Map(); // "userId:type" -> lastSentAt timestamp
-
 const COOLDOWN_MINUTES = {
   critical: 0,      // no cooldown for critical
   high: 30,          // 30 min cooldown
@@ -45,36 +42,27 @@ const TYPE_PRIORITY = {
  */
 async function dispatch(pool, { userId, type, title, body, data = {}, priority = null }) {
   const effectivePriority = priority || TYPE_PRIORITY[type] || 'low';
+  const cooldownMinutes = COOLDOWN_MINUTES[effectivePriority];
 
-  // Check cooldown
-  const userKey = `${userId}:${type}`;
-  const now = Date.now();
-  const lastSent = recentNotifications.get(userKey);
-  const cooldown = COOLDOWN_MINUTES[effectivePriority] * 60 * 1000;
+  // Atomic: INSERT only if no recent notification of same type within cooldown window
+  const { rows } = await pool.query(
+    `INSERT INTO notifications (user_id, type, title, message, data, priority)
+     SELECT $1, $2, $3, $4, $5::jsonb, $6
+     WHERE NOT EXISTS (
+       SELECT 1 FROM notifications
+       WHERE user_id = $1 AND type = $2
+         AND created_at >= NOW() - make_interval(mins => $7::int)
+     )
+     RETURNING id`,
+    [userId, type, title, body, JSON.stringify(data), effectivePriority, cooldownMinutes || 0]
+  );
 
-  if (lastSent && (now - lastSent) < cooldown) {
-    console.log(`[Orchestrator] Skipped ${type} for user ${userId} (cooldown ${COOLDOWN_MINUTES[effectivePriority]}min)`);
+  if (rows.length === 0) {
+    console.log(`[Orchestrator] Skipped ${type} for user ${userId} (cooldown ${cooldownMinutes}min)`);
     return null;
   }
 
-  // Save to DB
-  const result = await pool.query(
-    `INSERT INTO notifications (user_id, type, title, message, data, priority) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-    [userId, type, title, body, JSON.stringify(data), effectivePriority]
-  );
-
-  // Track
-  recentNotifications.set(userKey, now);
-
-  // Cleanup old entries when map gets large
-  if (recentNotifications.size > 500) {
-    const cutoff = now - 24 * 60 * 60 * 1000;
-    for (const [k, v] of recentNotifications) {
-      if (v < cutoff) recentNotifications.delete(k);
-    }
-  }
-
-  return { ok: true, notificationId: result.rows[0]?.id };
+  return { ok: true, notificationId: rows[0].id };
 }
 
 module.exports = { dispatch, TYPE_PRIORITY };

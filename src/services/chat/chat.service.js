@@ -200,13 +200,20 @@ const countConsecutiveAiQuestions = (history = []) => {
  * @param {Array} history - Full conversation history (for loop detection)
  * @returns {string} - System prompt
  */
-const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, history = []) => {
+const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, history = [], lang = 'vi') => {
+  const isEn = lang === 'en';
   const lines = [];
 
   // ── IDENTITY ─────────────────────────────────────────
-  lines.push('Bạn là Asinu — người bạn thân thiết, hiểu biết, luôn lắng nghe và quan tâm thật sự.');
-  lines.push('Hãy trò chuyện như một người bạn thực thụ: thoải mái, gần gũi, đôi khi hài hước nhẹ nhàng. Không cứng nhắc, không theo khuôn mẫu, không "chatbot".');
-  lines.push('Mỗi tin nhắn nên nghe như do người viết ra, không phải máy móc. Câu ngắn, ý rõ, đúng trọng tâm.');
+  if (isEn) {
+    lines.push('You are Asinu — a close, knowledgeable friend who truly listens and cares.');
+    lines.push('Chat like a real friend: relaxed, warm, sometimes lightly humorous. Not stiff, not scripted, not "chatbot-like".');
+    lines.push('Each message should sound like a person wrote it, not a machine. Short sentences, clear points, on topic.');
+  } else {
+    lines.push('Bạn là Asinu — người bạn thân thiết, hiểu biết, luôn lắng nghe và quan tâm thật sự.');
+    lines.push('Hãy trò chuyện như một người bạn thực thụ: thoải mái, gần gũi, đôi khi hài hước nhẹ nhàng. Không cứng nhắc, không theo khuôn mẫu, không "chatbot".');
+    lines.push('Mỗi tin nhắn nên nghe như do người viết ra, không phải máy móc. Câu ngắn, ý rõ, đúng trọng tâm.');
+  }
 
   // ── USER PROFILE (background context) ────────────────
   if (profile) {
@@ -223,52 +230,56 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
     let ageDisplay = '';
     if (profile.birth_year) {
       const age = new Date().getFullYear() - parseInt(profile.birth_year);
-      ageDisplay = `${age} tuổi (sinh ${profile.birth_year})`;
+      ageDisplay = isEn ? `${age} years old (born ${profile.birth_year})` : `${age} tuổi (sinh ${profile.birth_year})`;
     } else if (profile.age) {
-      ageDisplay = `nhóm tuổi ${profile.age}`;
+      ageDisplay = isEn ? `age group ${profile.age}` : `nhóm tuổi ${profile.age}`;
     }
 
     const habits = [];
-    if (profile.exercise_freq)  habits.push(`tập ${profile.exercise_freq}`);
-    if (profile.sleep_hours)    habits.push(`ngủ ${profile.sleep_hours}`);
-    else if (profile.sleep_duration) habits.push(`ngủ ${profile.sleep_duration}`);
-    if (profile.water_intake)   habits.push(`nước ${profile.water_intake}`);
-    if (profile.walking_habit)  habits.push(`đi bộ ${profile.walking_habit}`);
-    if (profile.meals_per_day)  habits.push(`${profile.meals_per_day}/ngày`);
-    if (profile.dinner_time)    habits.push(`ăn tối ${profile.dinner_time}`);
-    if (profile.sweet_intake)   habits.push(`đồ ngọt ${profile.sweet_intake}`);
+    if (profile.exercise_freq)  habits.push(isEn ? `exercise ${profile.exercise_freq}` : `tập ${profile.exercise_freq}`);
+    if (profile.sleep_hours)    habits.push(isEn ? `sleep ${profile.sleep_hours}` : `ngủ ${profile.sleep_hours}`);
+    else if (profile.sleep_duration) habits.push(isEn ? `sleep ${profile.sleep_duration}` : `ngủ ${profile.sleep_duration}`);
+    if (profile.water_intake)   habits.push(isEn ? `water ${profile.water_intake}` : `nước ${profile.water_intake}`);
+    if (profile.walking_habit)  habits.push(isEn ? `walking ${profile.walking_habit}` : `đi bộ ${profile.walking_habit}`);
+    if (profile.meals_per_day)  habits.push(isEn ? `${profile.meals_per_day} meals/day` : `${profile.meals_per_day}/ngày`);
+    if (profile.dinner_time)    habits.push(isEn ? `dinner ${profile.dinner_time}` : `ăn tối ${profile.dinner_time}`);
+    if (profile.sweet_intake)   habits.push(isEn ? `sweets ${profile.sweet_intake}` : `đồ ngọt ${profile.sweet_intake}`);
     if (profile.post_meal_drowsy && profile.post_meal_drowsy !== 'Không') {
-      habits.push(`buồn ngủ sau ăn: ${profile.post_meal_drowsy}`);
+      habits.push(isEn ? `post-meal drowsiness: ${profile.post_meal_drowsy}` : `buồn ngủ sau ăn: ${profile.post_meal_drowsy}`);
     }
 
     const profileParts = [];
-    if (profile.gender)          profileParts.push(`giới tính ${profile.gender}`);
+    if (profile.gender)          profileParts.push(isEn ? `gender ${profile.gender}` : `giới tính ${profile.gender}`);
     if (ageDisplay)              profileParts.push(ageDisplay);
-    if (goalList)                profileParts.push(`mục tiêu: ${goalList}`);
-    if (profile.body_type)       profileParts.push(`thể trạng: ${profile.body_type}`);
-    if (profile.height_cm)       profileParts.push(`cao ${profile.height_cm}cm`);
-    if (profile.weight_kg)       profileParts.push(`nặng ${profile.weight_kg}kg`);
-    if (profile.blood_type)      profileParts.push(`nhóm máu ${profile.blood_type}`);
-    if (medical)                 profileParts.push(`bệnh lý: ${medical}`);
-    if (symptoms)                profileParts.push(`triệu chứng: ${symptoms}`);
-    if (joints)                  profileParts.push(`vấn đề khớp: ${joints}`);
+    if (goalList)                profileParts.push(isEn ? `goal: ${goalList}` : `mục tiêu: ${goalList}`);
+    if (profile.body_type)       profileParts.push(isEn ? `body type: ${profile.body_type}` : `thể trạng: ${profile.body_type}`);
+    if (profile.height_cm)       profileParts.push(isEn ? `height ${profile.height_cm}cm` : `cao ${profile.height_cm}cm`);
+    if (profile.weight_kg)       profileParts.push(isEn ? `weight ${profile.weight_kg}kg` : `nặng ${profile.weight_kg}kg`);
+    if (profile.blood_type)      profileParts.push(isEn ? `blood type ${profile.blood_type}` : `nhóm máu ${profile.blood_type}`);
+    if (medical)                 profileParts.push(isEn ? `conditions: ${medical}` : `bệnh lý: ${medical}`);
+    if (symptoms)                profileParts.push(isEn ? `symptoms: ${symptoms}` : `triệu chứng: ${symptoms}`);
+    if (joints)                  profileParts.push(isEn ? `joint issues: ${joints}` : `vấn đề khớp: ${joints}`);
     if (profile.daily_medication && profile.daily_medication !== 'Không') {
-      profileParts.push(`dùng thuốc hàng ngày: ${profile.daily_medication}`);
+      profileParts.push(isEn ? `daily medication: ${profile.daily_medication}` : `dùng thuốc hàng ngày: ${profile.daily_medication}`);
     }
-    if (habits.length)           profileParts.push(`thói quen: ${habits.join(', ')}`);
+    if (habits.length)           profileParts.push(isEn ? `habits: ${habits.join(', ')}` : `thói quen: ${habits.join(', ')}`);
     if (profile.user_group) {
-      const groupLabel = profile.user_group === 'monitoring' ? 'cần theo dõi sát'
-        : profile.user_group === 'metabolic_risk' ? 'nguy cơ chuyển hóa'
-        : 'sức khoẻ tốt';
-      profileParts.push(`nhóm sức khoẻ: ${groupLabel}`);
+      const groupLabel = isEn
+        ? (profile.user_group === 'monitoring' ? 'needs close monitoring' : profile.user_group === 'metabolic_risk' ? 'metabolic risk' : 'good health')
+        : (profile.user_group === 'monitoring' ? 'cần theo dõi sát' : profile.user_group === 'metabolic_risk' ? 'nguy cơ chuyển hóa' : 'sức khoẻ tốt');
+      profileParts.push(isEn ? `health group: ${groupLabel}` : `nhóm sức khoẻ: ${groupLabel}`);
     }
 
     if (profileParts.length) {
-      lines.push(`Thông tin người dùng (đã biết sẵn — dùng làm nền tảng, KHÔNG hỏi lại bất kỳ điều nào đã có ở đây): ${profileParts.join('; ')}.`);
+      lines.push(isEn
+        ? `User info (already known — use as background, do NOT ask about any of this): ${profileParts.join('; ')}.`
+        : `Thông tin người dùng (đã biết sẵn — dùng làm nền tảng, KHÔNG hỏi lại bất kỳ điều nào đã có ở đây): ${profileParts.join('; ')}.`);
     }
     const mentionHint = buildMentionHint(profile);
     if (mentionHint) {
-      lines.push(`Gợi ý cá nhân hóa: ${mentionHint} — đề cập khi phù hợp, không cần nhắc mọi lúc.`);
+      lines.push(isEn
+        ? `Personalization hint: ${mentionHint} — mention when relevant, not every time.`
+        : `Gợi ý cá nhân hóa: ${mentionHint} — đề cập khi phù hợp, không cần nhắc mọi lúc.`);
     }
   }
 
@@ -277,76 +288,87 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
     const metrics = [];
     if (logsSummary.latest_glucose) {
       const g = logsSummary.latest_glucose;
-      const trend = logsSummary.glucose_trend ? ` (xu hướng: ${logsSummary.glucose_trend})` : '';
-      metrics.push(`đường huyết gần nhất ${g.value} ${g.unit || 'mg/dL'}${trend}`);
+      const trend = logsSummary.glucose_trend ? (isEn ? ` (trend: ${logsSummary.glucose_trend})` : ` (xu hướng: ${logsSummary.glucose_trend})`) : '';
+      metrics.push(isEn ? `latest glucose ${g.value} ${g.unit || 'mg/dL'}${trend}` : `đường huyết gần nhất ${g.value} ${g.unit || 'mg/dL'}${trend}`);
     }
     if (logsSummary.latest_bp) {
       const bp = logsSummary.latest_bp;
-      const pulse = bp.pulse ? `, nhịp tim ${bp.pulse} bpm` : '';
-      metrics.push(`huyết áp gần nhất ${bp.systolic}/${bp.diastolic} mmHg${pulse}`);
+      const pulse = bp.pulse ? (isEn ? `, heart rate ${bp.pulse} bpm` : `, nhịp tim ${bp.pulse} bpm`) : '';
+      metrics.push(isEn ? `latest BP ${bp.systolic}/${bp.diastolic} mmHg${pulse}` : `huyết áp gần nhất ${bp.systolic}/${bp.diastolic} mmHg${pulse}`);
     }
     if (logsSummary.latest_weight) {
       const w = logsSummary.latest_weight;
-      const bf = w.bodyfat_pct ? `, mỡ ${w.bodyfat_pct}%` : '';
-      metrics.push(`cân nặng gần nhất ${w.weight_kg} kg${bf}`);
+      const bf = w.bodyfat_pct ? (isEn ? `, body fat ${w.bodyfat_pct}%` : `, mỡ ${w.bodyfat_pct}%`) : '';
+      metrics.push(isEn ? `latest weight ${w.weight_kg} kg${bf}` : `cân nặng gần nhất ${w.weight_kg} kg${bf}`);
     }
     if (logsSummary.water_today_ml) {
-      metrics.push(`nước uống hôm nay ${logsSummary.water_today_ml} ml`);
+      metrics.push(isEn ? `water today ${logsSummary.water_today_ml} ml` : `nước uống hôm nay ${logsSummary.water_today_ml} ml`);
     }
     if (logsSummary.recent_medications?.length) {
       const meds = logsSummary.recent_medications.map(m => `${m.medication}${m.dose ? ' ' + m.dose : ''}`).join(', ');
-      metrics.push(`thuốc đang dùng: ${meds}`);
+      metrics.push(isEn ? `current medications: ${meds}` : `thuốc đang dùng: ${meds}`);
     }
     if (metrics.length) {
-      lines.push(`Chỉ số sức khoẻ đã ghi nhận (dùng làm căn cứ trả lời, KHÔNG hỏi lại các thông số đã có): ${metrics.join('; ')}.`);
+      lines.push(isEn
+        ? `Recorded health metrics (use as reference, do NOT ask about these): ${metrics.join('; ')}.`
+        : `Chỉ số sức khoẻ đã ghi nhận (dùng làm căn cứ trả lời, KHÔNG hỏi lại các thông số đã có): ${metrics.join('; ')}.`);
     }
-    // Cross-reference bệnh lý + chỉ số để AI có nhận xét cụ thể hơn
+    // Cross-reference conditions + metrics
     if (profile) {
       const medical = formatIssueList(profile.medical_conditions).toLowerCase();
       const crossRefs = [];
-      if ((medical.includes('tiểu đường') || medical.includes('đái tháo đường')) && logsSummary.latest_glucose) {
+      if ((medical.includes('tiểu đường') || medical.includes('đái tháo đường') || medical.includes('diabetes')) && logsSummary.latest_glucose) {
         const g = logsSummary.latest_glucose;
-        if (g.value > 180) crossRefs.push(`đường huyết ${g.value} mg/dL vượt ngưỡng sau ăn cho người tiểu đường (<180)`);
-        else if (g.value < 70) crossRefs.push(`đường huyết ${g.value} mg/dL thấp, nguy cơ hạ đường huyết`);
-        else crossRefs.push(`đường huyết ${g.value} mg/dL trong phạm vi chấp nhận cho người tiểu đường`);
+        if (g.value > 180) crossRefs.push(isEn ? `glucose ${g.value} mg/dL exceeds post-meal target for diabetics (<180)` : `đường huyết ${g.value} mg/dL vượt ngưỡng sau ăn cho người tiểu đường (<180)`);
+        else if (g.value < 70) crossRefs.push(isEn ? `glucose ${g.value} mg/dL low, hypoglycemia risk` : `đường huyết ${g.value} mg/dL thấp, nguy cơ hạ đường huyết`);
+        else crossRefs.push(isEn ? `glucose ${g.value} mg/dL within acceptable range for diabetics` : `đường huyết ${g.value} mg/dL trong phạm vi chấp nhận cho người tiểu đường`);
       }
-      if ((medical.includes('huyết áp cao') || medical.includes('tăng huyết áp')) && logsSummary.latest_bp) {
+      if ((medical.includes('huyết áp cao') || medical.includes('tăng huyết áp') || medical.includes('hypertension')) && logsSummary.latest_bp) {
         const bp = logsSummary.latest_bp;
-        if (bp.systolic >= 140 || bp.diastolic >= 90) crossRefs.push(`huyết áp ${bp.systolic}/${bp.diastolic} vượt ngưỡng cho người THA (<140/90)`);
-        else crossRefs.push(`huyết áp ${bp.systolic}/${bp.diastolic} đang kiểm soát tốt`);
+        if (bp.systolic >= 140 || bp.diastolic >= 90) crossRefs.push(isEn ? `BP ${bp.systolic}/${bp.diastolic} exceeds target for hypertension (<140/90)` : `huyết áp ${bp.systolic}/${bp.diastolic} vượt ngưỡng cho người THA (<140/90)`);
+        else crossRefs.push(isEn ? `BP ${bp.systolic}/${bp.diastolic} well controlled` : `huyết áp ${bp.systolic}/${bp.diastolic} đang kiểm soát tốt`);
       }
       if (crossRefs.length) {
-        lines.push(`Nhận xét kết hợp (dùng khi liên quan): ${crossRefs.join('; ')}.`);
+        lines.push(isEn ? `Cross-reference notes (use when relevant): ${crossRefs.join('; ')}.` : `Nhận xét kết hợp (dùng khi liên quan): ${crossRefs.join('; ')}.`);
       }
     }
   }
 
   if (profile || logsSummary) lines.push('');
 
-  // ── CÁCH NÓI CHUYỆN ──────────────────────────────────
+  // ── CONVERSATION STYLE ──────────────────────────────────
   if (historyLength === 0) {
-    lines.push('Tin nhắn đầu tiên: chào thật ngắn rồi vào thẳng vấn đề.');
+    lines.push(isEn ? 'First message: greet briefly then get straight to the point.' : 'Tin nhắn đầu tiên: chào thật ngắn rồi vào thẳng vấn đề.');
   }
 
-  lines.push(`Cách bạn nói chuyện: như nhắn tin với bạn thân — câu ngắn, đúng việc, không rào đón. Không bao giờ mở đầu bằng "Ok", "Được", "Chào bạn", "Tuyệt vời", "Mình hiểu", "Mình nói thẳng luôn", "Để mình giải thích" hay bất kỳ câu dẫn sáo rỗng nào — vào thẳng nội dung luôn. Không liệt kê 1-2-3, không dùng dấu gạch ngang đầu dòng, không indent. Không dùng **, *, ##. Trả lời đúng ngôn ngữ người dùng dùng.`);
+  if (isEn) {
+    lines.push('How you talk: like texting a close friend — short, direct, no filler. Never open with "OK", "Sure", "Great question", "I understand", "Let me explain" or any cliché opener — jump straight to the content. No numbered lists, no bullet points, no indentation. No **, *, ##. Always reply in the same language the user uses.');
+    lines.push('About health: you are knowledgeable and speak frankly. Common OTC meds like paracetamol, ibuprofen — mention normally with dosage notes if needed. For prescription meds, naturally suggest seeing a doctor/pharmacist — not because you are "limited" but because it is the right thing. When someone asks what disease they have, say directly that only a doctor can diagnose accurately, then suggest they get checked. You do not always need to mention a doctor, only when truly necessary.');
+    lines.push('Important: never say "I am limited", "I am not allowed", "beyond my capability" or anything that sounds like reading rules. If there is something you prefer not to say directly, redirect naturally like a normal person would.');
+  } else {
+    lines.push(`Cách bạn nói chuyện: như nhắn tin với bạn thân — câu ngắn, đúng việc, không rào đón. Không bao giờ mở đầu bằng "Ok", "Được", "Chào bạn", "Tuyệt vời", "Mình hiểu", "Mình nói thẳng luôn", "Để mình giải thích" hay bất kỳ câu dẫn sáo rỗng nào — vào thẳng nội dung luôn. Không liệt kê 1-2-3, không dùng dấu gạch ngang đầu dòng, không indent. Không dùng **, *, ##. Trả lời đúng ngôn ngữ người dùng dùng.`);
+    lines.push(`Về sức khoẻ: bạn biết nhiều và chia sẻ thẳng thắn. Thuốc không kê đơn phổ biến như paracetamol, ibuprofen thì nói bình thường, kèm lưu ý liều dùng nếu cần. Thuốc kê đơn thì hướng sang bác sĩ/dược sĩ một cách tự nhiên, không phải vì "bị giới hạn" mà vì đó là việc đúng đắn. Khi ai đó hỏi mình bị bệnh gì, hãy nói thẳng là việc đó cần bác sĩ khám trực tiếp mới chính xác được, rồi gợi ý họ đi khám — đừng đoán bệnh. Không phải lúc nào cũng cần nhắc bác sĩ, chỉ khi thực sự cần thiết.`);
+    lines.push(`Quan trọng: đừng bao giờ nói "mình bị giới hạn", "mình không được phép", "ngoài khả năng" hay bất cứ kiểu nào nghe như mình đang đọc luật. Nếu có gì không muốn nói thẳng, hãy chuyển hướng một cách thật tự nhiên như người bình thường.`);
+  }
 
-  lines.push(`Về sức khoẻ: bạn biết nhiều và chia sẻ thẳng thắn. Thuốc không kê đơn phổ biến như paracetamol, ibuprofen thì nói bình thường, kèm lưu ý liều dùng nếu cần. Thuốc kê đơn thì hướng sang bác sĩ/dược sĩ một cách tự nhiên, không phải vì "bị giới hạn" mà vì đó là việc đúng đắn. Khi ai đó hỏi mình bị bệnh gì, hãy nói thẳng là việc đó cần bác sĩ khám trực tiếp mới chính xác được, rồi gợi ý họ đi khám — đừng đoán bệnh. Không phải lúc nào cũng cần nhắc bác sĩ, chỉ khi thực sự cần thiết.`);
+  // ── STOP RULE ───────────────
+  lines.push(isEn
+    ? 'Follow-up questions: only ask when truly missing critical info. Max 1 question per turn, and always give a concrete comment/advice first. If you already know enough from profile or chat history, just answer.'
+    : `Hỏi lại: chỉ hỏi khi thực sự thiếu thông tin và không có cách nào trả lời nếu thiếu nó. Mỗi lượt tối đa 1 câu hỏi, và phải đưa ra nhận xét/lời khuyên cụ thể trước. Nếu đã biết đủ từ hồ sơ hoặc lịch sử chat thì đừng hỏi lại, trả lời luôn.`);
 
-  lines.push(`Quan trọng: đừng bao giờ nói "mình bị giới hạn", "mình không được phép", "ngoài khả năng" hay bất cứ kiểu nào nghe như mình đang đọc luật. Nếu có gì không muốn nói thẳng, hãy chuyển hướng một cách thật tự nhiên như người bình thường.`);
-
-  // ── STOP RULE (chống vòng lặp câu hỏi) ───────────────
-  lines.push(`Hỏi lại: chỉ hỏi khi thực sự thiếu thông tin và không có cách nào trả lời nếu thiếu nó. Mỗi lượt tối đa 1 câu hỏi, và phải đưa ra nhận xét/lời khuyên cụ thể trước. Nếu đã biết đủ từ hồ sơ hoặc lịch sử chat thì đừng hỏi lại, trả lời luôn.`);
-
-  // Dynamic stop injection based on conversation state
   const consecutiveQuestions = countConsecutiveAiQuestions(history);
   const prevWasQuestion = lastAiTurnWasQuestion(history);
 
   if (consecutiveQuestions >= 2) {
     lines.push('');
-    lines.push(`CANH BAO VONG LAP: Da hoi lien tiep ${consecutiveQuestions} luot. PHAI tra loi cu the ngay, KHONG hoi them.`);
+    lines.push(isEn
+      ? `LOOP WARNING: Already asked ${consecutiveQuestions} consecutive turns. MUST give a concrete answer NOW, do NOT ask more.`
+      : `CANH BAO VONG LAP: Da hoi lien tiep ${consecutiveQuestions} luot. PHAI tra loi cu the ngay, KHONG hoi them.`);
   } else if (prevWasQuestion) {
     lines.push('');
-    lines.push('Lượt trước bạn đã hỏi người dùng. Lần này PHẢI đưa ra câu trả lời hoặc lời khuyên cụ thể trước dựa trên thông tin người dùng vừa chia sẻ. Chỉ hỏi thêm tối đa 1 câu ở cuối nếu thực sự cần thiết.');
+    lines.push(isEn
+      ? 'You asked a question last turn. This turn you MUST provide a concrete answer or advice first based on what the user just shared. Only ask 1 more question at the end if truly necessary.'
+      : 'Lượt trước bạn đã hỏi người dùng. Lần này PHẢI đưa ra câu trả lời hoặc lời khuyên cụ thể trước dựa trên thông tin người dùng vừa chia sẻ. Chỉ hỏi thêm tối đa 1 câu ở cuối nếu thực sự cần thiết.');
   }
 
   return lines.join('\n');
@@ -545,10 +567,15 @@ async function processChat(pool, userId, message, context = {}) {
     let systemPrompt = null;
     let logsSummary = null;
 
-    // Determine retention window based on subscription
+    // Determine user language + retention window
+    const { rows: [userRow] } = await pool.query(
+      'SELECT COALESCE(language_preference, $2) AS lang FROM users WHERE id = $1',
+      [userId, 'vi']
+    );
+    const userLang = userRow?.lang || context.lang || 'vi';
     const userIsPremium = await checkIsPremium(pool, userId);
     const retentionDays = userIsPremium ? RETENTION_DAYS_PREMIUM : RETENTION_DAYS_FREE;
-    console.log(`[Chat] user=${userId} provider=${provider || 'default'} premium=${userIsPremium}`);
+    console.log(`[Chat] user=${userId} provider=${provider || 'default'} premium=${userIsPremium} lang=${userLang}`);
 
     if (provider === 'diabrain') {
       // DiaBrain manages its own conversation state — keep existing behavior
@@ -581,7 +608,7 @@ async function processChat(pool, userId, message, context = {}) {
           getRecentHistory(pool, userId, historyLimit, retentionDays),
           getHealthLogsSummary(pool, userId),
         ]);
-        systemPrompt = buildSystemPrompt(onboardingProfile, conversationHistory.length, logsSummary, conversationHistory);
+        systemPrompt = buildSystemPrompt(onboardingProfile, conversationHistory.length, logsSummary, conversationHistory, userLang);
       } catch (err) {
 
       }

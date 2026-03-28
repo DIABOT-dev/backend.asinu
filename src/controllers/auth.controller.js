@@ -4,7 +4,6 @@ const {
   registerByEmail: serviceRegister,
   loginByEmail: serviceLogin,
   loginByProvider: serviceLoginProvider,
-  loginByPhone: serviceLoginByPhone,
   getCurrentUser,
   searchUsers: serviceSearchUsers,
   verifySocialToken
@@ -279,23 +278,6 @@ async function facebookCallback(pool, req, res) {
   }
 }
 
-async function loginByPhone(pool, req, res) {
-  const { phone_number } = req.body || {};
-
-  if (!phone_number) {
-    return res.status(400).json({ ok: false, error: t('error.missing_phone', getLang(req)) });
-  }
-
-  // Call service
-  const result = await serviceLoginByPhone(pool, phone_number);
-  
-  if (!result.ok) {
-    return res.status(401).json(result);
-  }
-  
-  return res.status(200).json(result);
-}
-
 // =====================================================
 // GET CURRENT USER
 // =====================================================
@@ -448,26 +430,100 @@ async function googleCallback(pool, req, res) {
  * Android native FBSDK flow — receives FB access_token, validates with Graph API, returns app JWT
  */
 async function loginByFacebookToken(pool, req, res) {
-  const { access_token } = req.body || {};
-  if (!access_token) {
-    return res.status(400).json({ ok: false, error: 'access_token required' });
+  const { access_token, id_token, user_id } = req.body || {};
+  if (!access_token && !id_token && !user_id) {
+    return res.status(400).json({ ok: false, error: 'access_token or id_token required' });
   }
   try {
-    const profileRes = await fetch(
-      `https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${access_token}`
-    );
-    const profile = await profileRes.json();
+    const appId = process.env.FACEBOOK_APP_ID;
+    const appSecret = process.env.FACEBOOK_APP_SECRET;
 
-    if (!profile.id || profile.error) {
-      return res.status(401).json({ ok: false, error: 'Invalid Facebook access token' });
+    let userId = null;
+    let email = null;
+
+    if (id_token) {
+      // iOS SDK v16+ Limited Login: verify JWT via Facebook JWKS
+      console.log('[FB token] iOS id_token flow, user_id:', user_id);
+
+      // Decode JWT header để xác định issuer → đúng JWKS endpoint
+      const [headerB64Pre] = id_token.split('.');
+      const headerPre = JSON.parse(Buffer.from(headerB64Pre, 'base64').toString());
+      const jwksUrl = headerPre.iss === 'https://limited.facebook.com'
+        ? 'https://limited.facebook.com/.well-known/oauth/openid/jwks/'
+        : 'https://www.facebook.com/.well-known/oauth/openid/jwks/';
+
+      // Fetch JWKS from Facebook
+      const jwksRes = await fetch(jwksUrl);
+      const jwks = await jwksRes.json();
+
+      // Decode JWT header to get kid
+      const [headerB64] = id_token.split('.');
+      const header = JSON.parse(Buffer.from(headerB64, 'base64').toString());
+      const jwk = jwks.keys?.find(k => k.kid === header.kid);
+
+      if (!jwk) {
+        console.error('[FB token] JWKS key not found for kid:', header.kid);
+        return res.status(401).json({ ok: false, error: 'Invalid Facebook id_token: key not found' });
+      }
+
+      // Verify JWT signature using Node crypto
+      const crypto = require('crypto');
+      const [hB64, pB64, sigB64] = id_token.split('.');
+      const signingInput = `${hB64}.${pB64}`;
+      const signature = Buffer.from(sigB64.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+
+      const pubKey = crypto.createPublicKey({ key: jwk, format: 'jwk' });
+      const valid = crypto.verify('SHA256', Buffer.from(signingInput), pubKey, signature);
+
+      if (!valid) {
+        console.error('[FB token] JWT signature invalid');
+        return res.status(401).json({ ok: false, error: 'Invalid Facebook id_token: bad signature' });
+      }
+
+      // Decode payload
+      const payload = JSON.parse(Buffer.from(pB64, 'base64').toString());
+      console.log('[FB token] JWT payload:', JSON.stringify({ sub: payload.sub, aud: payload.aud, iss: payload.iss }));
+
+      const validIssuers = ['https://www.facebook.com', 'https://limited.facebook.com'];
+      if (payload.aud !== appId || !validIssuers.includes(payload.iss)) {
+        return res.status(401).json({ ok: false, error: 'Invalid Facebook id_token: aud/iss mismatch' });
+      }
+
+      userId = payload.sub || user_id;
+      email = payload.email || null;
+
+    } else {
+      // Android: standard access_token via debug_token endpoint
+      const debugRes = await fetch(
+        `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(access_token)}&access_token=${appId}|${appSecret}`
+      );
+      const debugJson = await debugRes.json();
+      console.log('[FB token] debug_token response:', JSON.stringify(debugJson?.data));
+
+      if (!debugJson?.data?.is_valid || debugJson?.data?.app_id !== appId) {
+        console.error('[FB token] debug_token invalid:', JSON.stringify(debugJson));
+        return res.status(401).json({ ok: false, error: 'Invalid Facebook access token' });
+      }
+
+      userId = debugJson.data.user_id;
+
+      const profileRes = await fetch(
+        `https://graph.facebook.com/${userId}?fields=id,name,email&access_token=${appId}|${appSecret}`
+      );
+      const profile = await profileRes.json();
+      email = profile.email || null;
     }
 
-    const email = profile.email || null;
-    const result = await serviceLoginProvider(pool, 'facebook_id', String(profile.id), 'facebook', email, null);
+    if (!userId) {
+      return res.status(401).json({ ok: false, error: 'Could not determine Facebook user ID' });
+    }
+
+    const result = await serviceLoginProvider(pool, 'facebook_id', String(userId), 'facebook', email, null);
     if (!result.ok) {
       return res.status(400).json({ ok: false, error: result.error || 'Login failed' });
     }
 
+    console.log('[FB token] login success, userId:', userId);
     return res.json({ ok: true, token: result.token });
   } catch (err) {
     console.error('[Facebook token login] error:', err.message);
@@ -486,7 +542,6 @@ module.exports = {
   loginByFacebookToken,
   googleInitiate,
   googleCallback,
-  loginByPhone,
   getMe,
   searchUsers,
   verifyToken

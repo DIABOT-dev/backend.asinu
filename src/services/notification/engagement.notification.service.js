@@ -8,6 +8,7 @@
 
 const { getOpenAIReply } = require('../ai/providers/openai');
 const { sendPushNotification } = require('./push.notification.service');
+const { sendAndSave } = require('./basic.notification.service');
 
 const COOLDOWN_HOURS = 48;
 const MIN_INACTIVE_HOURS = 24;
@@ -30,8 +31,10 @@ async function getEligibleUsers(pool) {
      FROM users u
      LEFT JOIN user_activity_logs al
        ON al.user_id = u.id AND al.activity_type = 'APP_OPEN'
+     LEFT JOIN user_notification_preferences np ON np.user_id = u.id
      WHERE u.push_token IS NOT NULL
        AND u.deleted_at IS NULL
+       AND COALESCE(np.reminders_enabled, true) = true
        AND (
          u.last_engagement_notif_at IS NULL
          OR u.last_engagement_notif_at < NOW() - INTERVAL '${COOLDOWN_HOURS} hours'
@@ -420,20 +423,19 @@ async function runEngagementNotifications(pool) {
         continue;
       }
 
-      const result = await sendPushNotification(
-        [user.push_token],
+      const ok = await sendAndSave(
+        pool,
+        { id: user.id, push_token: user.push_token },
+        'engagement',
         decision.title,
-        decision.body,
-        { type: 'engagement' }
+        decision.body
       );
 
-      if (result.ok) {
+      if (ok) {
         await markNotificationSent(pool, user.id);
-
         sent++;
       } else {
-
-        errors++;
+        skipped++;
       }
 
       await new Promise(resolve => setTimeout(resolve, 200));
