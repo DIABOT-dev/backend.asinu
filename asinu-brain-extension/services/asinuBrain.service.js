@@ -2055,7 +2055,8 @@ const postEmergency = async (pool, userId, payload) => {
 
   return {
     status: notifyStatus.status || 'LOGGED',
-    message: notifyStatus.message || 'Emergency recorded.'
+    message: notifyStatus.message || 'Emergency recorded.',
+    caregiversAlerted: notifyStatus.inAppCreated || 0,
   };
 };
 

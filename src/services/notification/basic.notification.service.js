@@ -251,21 +251,31 @@ async function runMorningSummary(pool, hour, minute) {
     if (tasks.length === 0) continue;
 
     const title = isEn
-      ? `${greeting}${name ? ', ' + name : ''}! ☀️`
-      : `${greeting}${name ? ' ' + name : ''}! ☀️`;
+      ? `☀️ ${greeting}${name ? ' ' + name : ''}!`
+      : `☀️ ${greeting}${name ? ' ' + name : ''}!`;
 
     let body;
     if (user.last_symptom) {
       body = isEn
-        ? `Yesterday: ${user.last_symptom}. Today: ${tasks.join(', ')}.`
-        : `Hôm qua: ${user.last_symptom}. Hôm nay nhớ: ${tasks.join(', ')}.`;
+        ? `Yesterday you mentioned ${user.last_symptom} — how are you feeling today? Don't forget: ${tasks.join(', ')}. Asinu is here for you 💙`
+        : `Hôm qua bạn có nói bị ${user.last_symptom} — hôm nay thấy đỡ hơn chưa? Nhớ ${tasks.join(', ')} nha. Asinu luôn bên bạn 💙`;
     } else {
       body = isEn
-        ? `Today's reminders: ${tasks.join(', ')}.`
-        : `Hôm nay nhớ: ${tasks.join(', ')}.`;
+        ? `A new day begins! Let's take care of your health together: ${tasks.join(', ')}. You're doing great 💪`
+        : `Ngày mới rồi! Mình cùng chăm sóc sức khoẻ nhé: ${tasks.join(', ')}. Bạn đang làm rất tốt 💪`;
     }
 
-    if (await sendAndSave(pool, user, 'reminder_morning_summary', title, body)) sent++;
+    // Build missing types for deep link
+    const missingTypes = [];
+    if (conditions.hasDiabetes && user.no_glucose_today) missingTypes.push('glucose');
+    if (conditions.hasHypertension && user.no_bp_today) missingTypes.push('blood_pressure');
+    if (conditions.hasAny && user.no_medication_today) missingTypes.push('medication');
+
+    if (await sendAndSave(pool, user, 'reminder_morning_summary', title, body, {
+      type: 'reminder_morning_summary',
+      missingTypes,
+      firstMissing: missingTypes[0] || 'checkin',
+    })) sent++;
   }
   return { type: 'morning_summary', total: rows.length, sent };
 }
@@ -282,25 +292,30 @@ async function runAfternoon(pool, hour, minute) {
   let sent = 0;
   for (const user of rows) {
     const name = getUserName(user);
-    const title = user.lang === 'en'
-      ? `Afternoon check${name ? ', ' + name : ''}`
-      : `Nhắc buổi chiều${name ? ' ' + name : ''}`;
     const conditions = parseConditions(user.medical_conditions);
+    const isEn = user.lang === 'en';
+    const title = isEn
+      ? `🌤️ Hey${name ? ' ' + name : ''}, afternoon check-in`
+      : `🌤️ Chiều rồi${name ? ' ' + name + ' ơi' : ''}!`;
     let body;
     if (conditions.hasDiabetes) {
-      body = user.lang === 'en'
-        ? 'Have you had enough water? Check your blood sugar if needed.'
-        : 'Bạn đã uống đủ nước chưa? Nhớ kiểm tra đường huyết nếu cần.';
+      body = isEn
+        ? `How are you feeling this afternoon? Remember to drink water and check your blood sugar if you haven't yet. Your body will thank you 😊`
+        : `Chiều nay bạn thấy thế nào? Nhớ uống nước đều đặn và kiểm tra đường huyết nếu chưa nha. Cơ thể bạn sẽ cảm ơn vì điều đó 😊`;
     } else if (conditions.hasHypertension) {
-      body = user.lang === 'en'
-        ? 'Stay hydrated and take a moment to rest if you feel tired.'
-        : 'Nhớ uống đủ nước và nghỉ ngơi nếu thấy mệt nhé.';
+      body = isEn
+        ? `Take a little break if you can — rest is just as important as medicine. Have you had enough water today? 💧`
+        : `Nghỉ tay chút đi nha — nghỉ ngơi cũng quan trọng như uống thuốc vậy. Hôm nay bạn uống đủ nước chưa? 💧`;
     } else {
-      body = user.lang === 'en'
-        ? 'How are you this afternoon? Stay hydrated and take care of yourself.'
-        : 'Buổi chiều bạn thế nào? Nhớ uống nước và chăm sóc bản thân nhé.';
+      body = isEn
+        ? `How's your afternoon going? Take a moment to stretch, drink some water, and breathe. Small habits make a big difference 🌿`
+        : `Buổi chiều của bạn thế nào rồi? Đứng dậy vươn vai tí, uống ngụm nước, hít thở sâu nha. Những thói quen nhỏ tạo thay đổi lớn lắm 🌿`;
     }
-    if (await sendAndSave(pool, user, 'reminder_afternoon', title, body)) sent++;
+    const target = conditions.hasDiabetes ? 'glucose' : conditions.hasHypertension ? 'blood_pressure' : 'home';
+    if (await sendAndSave(pool, user, 'reminder_afternoon', title, body, {
+      type: 'reminder_afternoon',
+      target,
+    })) sent++;
   }
   return { type: 'afternoon', total: rows.length, sent };
 }
@@ -357,21 +372,29 @@ async function runEveningSummary(pool, hour, minute) {
     if (tasks.length === 0) continue;
 
     const title = isEn
-      ? `Good evening${name ? ', ' + name : ''} 🌙`
-      : `Chào buổi tối${name ? ' ' + name : ''} 🌙`;
+      ? `🌙 Good evening${name ? ' ' + name : ''}!`
+      : `🌙 Tối rồi${name ? ' ' + name + ' ơi' : ''}!`;
 
     let body;
     if (user.last_symptom) {
       body = isEn
-        ? `Before bed: ${tasks.join(', ')}. Recent: ${user.last_symptom}.`
-        : `Trước khi ngủ: ${tasks.join(', ')}. Gần đây: ${user.last_symptom}.`;
+        ? `Before you rest tonight: ${tasks.join(', ')}. You mentioned ${user.last_symptom} recently — hope you're feeling better. Sleep well 💙`
+        : `Trước khi nghỉ ngơi tối nay nhớ: ${tasks.join(', ')} nha. Gần đây bạn có bị ${user.last_symptom} — mong bạn đã đỡ hơn rồi. Ngủ ngon 💙`;
     } else {
       body = isEn
-        ? `Before bed, remember: ${tasks.join(', ')} 💙`
-        : `Trước khi ngủ nhớ: ${tasks.join(', ')} 💙`;
+        ? `You did great today! Before bed, just remember: ${tasks.join(', ')}. Rest well, tomorrow is a new day 🌟`
+        : `Hôm nay bạn đã rất giỏi rồi! Trước khi ngủ nhớ: ${tasks.join(', ')} nha. Nghỉ ngơi thật ngon, ngày mai lại là ngày mới 🌟`;
     }
 
-    if (await sendAndSave(pool, user, 'reminder_evening_summary', title, body)) sent++;
+    const missingTypes = [];
+    if (conditions.hasAny && user.no_medication_today) missingTypes.push('medication');
+    if (user.no_evening_log) missingTypes.push('log');
+
+    if (await sendAndSave(pool, user, 'reminder_evening_summary', title, body, {
+      type: 'reminder_evening_summary',
+      missingTypes,
+      firstMissing: missingTypes[0] || 'home',
+    })) sent++;
   }
   return { type: 'evening_summary', total: rows.length, sent };
 }

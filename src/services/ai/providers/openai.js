@@ -145,10 +145,10 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
     model,
     messages,
     temperature,
-    max_completion_tokens: 500,
+    max_completion_tokens: 4096,
     top_p: 0.95,
-    frequency_penalty: 0.6, // Tăng từ 0.3 → 0.6: mạnh tay chống lặp từ/pattern
-    presence_penalty: 0.5,  // Tăng từ 0.3 → 0.5: tránh lặp chủ đề/câu hỏi
+    frequency_penalty: 0.2,
+    presence_penalty: 0.2,
     ...(userId && { user: `user_${userId}` })
   };
 

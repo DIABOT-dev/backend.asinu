@@ -20,6 +20,7 @@
 
 const { sendPushNotification } = require('../notification/push.notification.service');
 const { getNextTriageQuestion, buildContinuityMessage, calcFollowUpHours } = require('./checkin.ai.service');
+const { saveSymptomLogs } = require('./symptom-tracker.service');
 const { dispatch: dispatchNotification } = require('../notification/notification.orchestrator');
 const { trackEvent } = require('../profile/engagement.service');
 const { updateMissionProgress } = require('../missions/missions.service');
@@ -304,7 +305,8 @@ async function getUserProfile(pool, userId) {
  * Get recent health metrics + previous checkin summaries for AI context.
  */
 async function getRecentHealthContext(pool, userId) {
-  const [glucoseRes, bpRes, weightRes, checkinsRes, medRes] = await Promise.all([
+  const { getSymptomFrequencyContext, getMedicationAdherenceContext } = require('./symptom-tracker.service');
+  const [glucoseRes, bpRes, weightRes, checkinsRes, medRes, symptomFreqCtx, medAdherenceCtx] = await Promise.all([
     // Glucose 7 ngày gần nhất (tối đa 5 bản ghi)
     pool.query(
       `SELECT gl.value, gl.unit, gl.context, lc.occurred_at
@@ -349,6 +351,10 @@ async function getRecentHealthContext(pool, userId) {
        LIMIT 1`,
       [userId]
     ),
+    // Symptom frequency context (from symptom_frequency table)
+    getSymptomFrequencyContext(pool, userId).catch(() => null),
+    // Medication adherence 7 days (from medication_adherence table)
+    getMedicationAdherenceContext(pool, userId).catch(() => null),
   ]);
 
   return {
@@ -357,6 +363,8 @@ async function getRecentHealthContext(pool, userId) {
     latestWeight: weightRes.rows[0] || null,
     previousCheckins: checkinsRes.rows,
     tookMedicationToday: medRes.rows.length > 0,
+    symptomFrequencyContext: symptomFreqCtx,
+    medicationAdherenceContext: medAdherenceCtx,
   };
 }
 
@@ -452,6 +460,12 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     // #2: System reacts to AI findings
     await reactToTriageResult(pool, userId, checkinId, urgentResult);
 
+    // #3: Extract and save symptoms for AI memory
+    saveSymptomLogs(pool, userId, checkinId, previousAnswers, session.session_date).catch(() => {});
+
+    // Invalidate health score cache so home screen updates immediately
+    await cacheDel(`health:score:${userId}`);
+
     return urgentResult;
   }
 
@@ -475,8 +489,13 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
 
   // ── Double enforcement: block early isDone at service level too ──
   const minQForPhase = isFollowUp ? 2 : 5;
-  console.log(`[Triage] enforcement check: isDone=${result.isDone}, answers=${previousAnswers.length}, min=${minQForPhase}, hasRedFlag=${result.hasRedFlag}, isFollowUp=${isFollowUp}`);
-  if (result.isDone && previousAnswers.length < minQForPhase && !result.hasRedFlag) {
+  // Follow-up: allow early conclusion if user says "improved" in layer 1
+  const IMPROVED_KEYWORDS = ['đã đỡ', 'đỡ nhiều', 'đỡ rồi', 'hết rồi', 'ổn rồi', 'better', 'improved', 'đang đỡ'];
+  const userImproved = isFollowUp && previousAnswers.some(a =>
+    IMPROVED_KEYWORDS.some(kw => a.answer.toLowerCase().includes(kw))
+  );
+  console.log(`[Triage] enforcement check: isDone=${result.isDone}, answers=${previousAnswers.length}, min=${minQForPhase}, hasRedFlag=${result.hasRedFlag}, isFollowUp=${isFollowUp}, userImproved=${userImproved}`);
+  if (result.isDone && previousAnswers.length < minQForPhase && !result.hasRedFlag && !userImproved) {
     console.log(`[Triage] ⛔ Service-level block: isDone at ${previousAnswers.length}/${minQForPhase}. Returning fallback.`);
     const fallbacks = [
       { q: 'Từ lúc bắt đầu đến giờ, tình trạng có thay đổi không?', opts: ['đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn'], multi: false, types: [5] },
@@ -568,6 +587,12 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
 
     // #2: System reacts to AI findings
     await reactToTriageResult(pool, userId, checkinId, result);
+
+    // #3: Extract and save symptoms for AI memory
+    saveSymptomLogs(pool, userId, checkinId, previousAnswers, session.session_date).catch(() => {});
+
+    // Invalidate health score cache so home screen updates immediately
+    await cacheDel(`health:score:${userId}`);
   }
 
   return result;
@@ -1156,7 +1181,7 @@ async function runMorningCheckin(pool, hour) {
       'morning_checkin',
       t('checkin.morning_title', user.lang),
       t('checkin.morning_body', user.lang),
-      {}
+      { type: 'morning_checkin' }
     );
     sent++;
   }
