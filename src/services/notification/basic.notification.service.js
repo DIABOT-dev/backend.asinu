@@ -128,7 +128,11 @@ async function sendAndSave(pool, userOrId, type, title, body, data = {}, overrid
 // ─── Personalization helpers ──────────────────────────────────────
 
 function getUserName(user) {
-  return user.display_name || user.full_name || '';
+  const full = user.display_name || user.full_name || '';
+  if (!full) return '';
+  // Lấy tên ngắn (tên cuối) cho notification title ngắn gọn
+  const parts = full.trim().split(/\s+/);
+  return parts[parts.length - 1];
 }
 
 function getGreeting(lang, hour) {

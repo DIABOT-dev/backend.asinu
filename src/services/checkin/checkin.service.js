@@ -96,6 +96,17 @@ const FAMILY_ALERT_RISK_THRESHOLD = 30;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
+/**
+ * Lấy tên ngắn từ full name (tên cuối cùng trong tên Việt Nam).
+ * "Dương Anh Đức" → "Đức"
+ * "Nguyễn Thị Mai" → "Mai"
+ */
+function getShortName(fullName) {
+  if (!fullName) return '';
+  const parts = fullName.trim().split(/\s+/);
+  return parts[parts.length - 1];
+}
+
 function nowVN() {
   return new Date(new Date().toLocaleString('en-US', { timeZone: TZ }));
 }
@@ -716,7 +727,8 @@ async function triggerEmergency(pool, userId, location) {
   );
   const user = userRows[0] || {};
   const lang = user.lang || 'vi';
-  const userName = user.display_name || user.full_name || t('careCircle.user_label', lang);
+  const fullName = user.display_name || user.full_name || t('careCircle.user_label', lang);
+  const userName = getShortName(fullName) || fullName;
 
   // Get care circle members who can receive alerts (both directions)
   const { rows: caregivers } = await pool.query(
@@ -905,7 +917,7 @@ async function runCheckinFollowUps(pool) {
       await sendCheckinNotification(
         pool, session.user_id, session.push_token,
         'checkin_followup_urgent',
-        t('checkin.no_response_title', sLang2),
+        t('checkin.no_response_title', sLang2, { name: getShortName(session.display_name || session.full_name) || '' }),
         t('checkin.no_response_body', sLang2),
         { checkinId: String(session.id) }
       );
@@ -942,7 +954,8 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
   );
   const user = userRows[0] || {};
   const aLang = user.lang || 'vi';
-  const name = user.display_name || user.full_name || t('brain.relative_label', aLang);
+  const fullN = user.display_name || user.full_name || t('brain.relative_label', aLang);
+  const name = getShortName(fullN) || fullN;
 
   const { rows: caregivers } = await pool.query(
     `SELECT u.id, u.push_token
@@ -1051,7 +1064,8 @@ async function confirmCaregiverAlert(pool, caregiverId, alertId, action) {
     [alert.patient_id]
   );
   const pLang = patientRows[0]?.lang || 'vi';
-  const cgName = cgRows[0]?.display_name || cgRows[0]?.full_name || t('brain.relative_fallback', pLang);
+  const cgFullName = cgRows[0]?.display_name || cgRows[0]?.full_name || t('brain.relative_fallback', pLang);
+  const cgName = getShortName(cgFullName) || cgFullName;
   const actionKey = action === 'on_my_way' ? 'checkin.action_on_my_way'
     : action === 'called' ? 'checkin.action_called' : 'checkin.action_seen';
   const actionLabel = t(actionKey, pLang);
@@ -1088,7 +1102,7 @@ async function getPendingCaregiverAlerts(pool, caregiverId) {
     alertType:     r.alert_type,
     sentAt:        r.sent_at,
     checkinId:     r.checkin_id,
-    patientName:   r.display_name || r.full_name || t('brain.relative_fallback'),
+    patientName:   getShortName(r.display_name || r.full_name) || r.display_name || r.full_name || t('brain.relative_fallback'),
     currentStatus: r.current_status,
     flowState:     r.flow_state,
   }));
@@ -1124,7 +1138,8 @@ async function runAlertConfirmationFollowUps(pool) {
     );
     if (recentNotif.length > 0) continue;
 
-    const patientName = alert.patient_name || alert.patient_full_name || t('brain.relative_fallback');
+    const patientFullName = alert.patient_name || alert.patient_full_name || t('brain.relative_fallback');
+    const patientName = getShortName(patientFullName) || patientFullName;
     const resendNum = alert.resent_count + 1;
     const title = alert.alert_type === 'emergency'
       ? t('checkin.reminder_emergency_title')
