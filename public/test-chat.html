@@ -387,23 +387,25 @@ async function sendFree() {
 }
 
 // ─── CHAT AI (dùng API thật /api/mobile/chat) ───
+let chatSending = false;
 async function sendChat() {
   const input = document.getElementById('chat-input');
-  const text = input.value.trim(); if (!text || !authToken) return;
+  const text = input.value.trim(); if (!text || !authToken || chatSending) return;
+  chatSending = true;
   document.getElementById('chat-send').disabled = true; input.value = '';
   addMsg('chat-messages','user',text);
   addMsg('chat-messages','system','AI đang trả lời...');
   try {
     const res = await fetch('/api/mobile/chat', {
       method: 'POST', headers: apiHeaders(),
-      body: JSON.stringify({ message: text }),
+      body: JSON.stringify({ message: text, client_ts: Date.now() }),
     });
     removeLast('chat-messages','AI đang');
     const data = await res.json();
     if (data.ok) { addMsg('chat-messages','ai',data.reply); }
     else { addMsg('chat-messages','system','Lỗi: '+(data.error||'Không rõ')); }
   } catch (e) { removeLast('chat-messages','AI đang'); addMsg('chat-messages','system','Lỗi: '+e.message); }
-  finally { document.getElementById('chat-send').disabled = false; }
+  finally { chatSending = false; document.getElementById('chat-send').disabled = false; }
 }
 
 // ─── Enter key handlers ───
