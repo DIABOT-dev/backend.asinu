@@ -13,24 +13,24 @@ async function seed() {
 
   // 1. Onboarding profile
   await pool.query(`
-    INSERT INTO user_onboarding_profiles (user_id, birth_year, gender, medical_conditions, daily_medication, height_cm, weight_kg, goal, body_type, exercise_freq, sleep_duration, water_intake, full_name)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+    INSERT INTO user_onboarding_profiles (user_id, birth_year, gender, medical_conditions, daily_medication, height_cm, weight_kg, goal, body_type, exercise_freq, sleep_duration, water_intake)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
     ON CONFLICT (user_id) DO UPDATE SET
       birth_year=$2, gender=$3, medical_conditions=$4, daily_medication=$5,
-      height_cm=$6, weight_kg=$7, goal=$8, full_name=$13
+      height_cm=$6, weight_kg=$7, goal=$8
   `, [
     USER_ID, 1958, 'Nam',
     JSON.stringify(['Tiểu đường', 'Cao huyết áp', 'Tim mạch']),
     'Có', 165, 68, 'Kiểm soát đường huyết',
-    'Trung bình', '2-3 lần/tuần', '6-7 tiếng', '4-5 ly/ngày',
-    'Trần Văn Hùng'
+    'Trung bình', '2-3 lần/tuần', '6-7 tiếng', '4-5 ly/ngày'
   ]);
   console.log('  OK: profile');
 
   // 2. Update users table
-  await pool.query(`
-    UPDATE users SET full_name=$1, display_name=$2 WHERE id=$3
-  `, ['Trần Văn Hùng', 'Chú Hùng', USER_ID]).catch(() => {});
+  await pool.query(
+    `UPDATE users SET full_name=$1, display_name=$2 WHERE id=$3`,
+    ['Trần Văn Hùng', 'Chú Hùng', USER_ID]
+  ).catch(() => {});
   console.log('  OK: user name');
 
   // 3. Health check-ins (7 ngày)
@@ -54,7 +54,7 @@ async function seed() {
   }
   console.log('  OK: 7 check-ins');
 
-  // 4. Glucose logs
+  // 4. Glucose logs (bảng: logs_common + glucose_logs)
   const glucoseVals = [210, 178, 225, 195, 185, 168, 190];
   for (let i = 0; i < glucoseVals.length; i++) {
     const d = new Date(); d.setDate(d.getDate() - (6 - i));
@@ -64,14 +64,14 @@ async function seed() {
         [USER_ID, d.toISOString()]
       );
       await pool.query(
-        `INSERT INTO log_glucose (log_id, value, unit, context) VALUES ($1, $2, 'mg/dL', 'trước ăn')`,
+        `INSERT INTO glucose_logs (log_id, value, unit, context) VALUES ($1, $2, 'mg/dL', 'trước ăn')`,
         [r.rows[0].id, glucoseVals[i]]
       );
-    } catch {}
+    } catch (e) { console.error('  glucose skip:', e.message); }
   }
   console.log('  OK: 7 glucose logs');
 
-  // 5. BP logs
+  // 5. BP logs (bảng: logs_common + blood_pressure_logs)
   const bpVals = [[155,95,82],[142,88,76],[160,98,85],[148,92,78],[145,90,78],[150,93,80],[138,86,74]];
   for (let i = 0; i < bpVals.length; i++) {
     const d = new Date(); d.setDate(d.getDate() - (6 - i));
@@ -81,10 +81,10 @@ async function seed() {
         [USER_ID, d.toISOString()]
       );
       await pool.query(
-        `INSERT INTO log_blood_pressure (log_id, systolic, diastolic, pulse) VALUES ($1, $2, $3, $4)`,
+        `INSERT INTO blood_pressure_logs (log_id, systolic, diastolic, pulse) VALUES ($1, $2, $3, $4)`,
         [r.rows[0].id, bpVals[i][0], bpVals[i][1], bpVals[i][2]]
       );
-    } catch {}
+    } catch (e) { console.error('  bp skip:', e.message); }
   }
   console.log('  OK: 7 BP logs');
 
@@ -120,7 +120,7 @@ async function seed() {
   const baseTime = new Date();
   baseTime.setDate(baseTime.getDate() - 2);
   for (let i = 0; i < chats.length; i++) {
-    const t = new Date(baseTime.getTime() + i * 60000); // cách nhau 1 phút
+    const t = new Date(baseTime.getTime() + i * 60000);
     await pool.query(
       `INSERT INTO chat_histories (user_id, message, sender, created_at) VALUES ($1, $2, $3, $4)`,
       [USER_ID, chats[i][1], chats[i][0], t.toISOString()]
