@@ -84,23 +84,22 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   </div>
   <div style="padding:8px 16px;display:flex;gap:8px;background:#f9f9f9;border-top:1px solid #eee;">
     <div style="display:flex;flex-direction:column;gap:6px;width:100%;">
-      <div style="font-size:11px;color:#666;font-weight:600;">CHECK-IN LẦN ĐẦU (không có history)</div>
+      <div style="font-size:11px;color:#666;font-weight:600;">CHECK-IN HÀNG NGÀY (giống app thật)</div>
       <div style="display:flex;gap:6px;">
-        <button onclick="startCheckin('tired','initial',false)" style="flex:1;padding:8px;border:2px solid #22c55e;background:#f0fdf4;border-radius:8px;font-weight:600;color:#16a34a;cursor:pointer;font-size:12px;">Hơi mệt</button>
-        <button onclick="startCheckin('very_tired','initial',false)" style="flex:1;padding:8px;border:2px solid #ef4444;background:#fef2f2;border-radius:8px;font-weight:600;color:#dc2626;cursor:pointer;font-size:12px;">Rất mệt</button>
-        <button onclick="startCheckin('specific_concern','initial',false)" style="flex:1;padding:8px;border:2px solid #8b5cf6;background:#f5f3ff;border-radius:8px;font-weight:600;color:#7c3aed;cursor:pointer;font-size:12px;">Vấn đề cụ thể</button>
+        <button onclick="addMsg('checkin-messages','ai','✅ Tuyệt! Bạn đang khoẻ. Asinu sẽ hỏi thăm lại vào tối nay nhé 💙')" style="flex:1;padding:10px;border:2px solid #22c55e;background:#f0fdf4;border-radius:8px;font-weight:600;color:#16a34a;cursor:pointer;font-size:13px;">😊 Tôi ổn</button>
+        <button onclick="startCheckin('tired','initial',false)" style="flex:1;padding:10px;border:2px solid #f59e0b;background:#fffbeb;border-radius:8px;font-weight:600;color:#d97706;cursor:pointer;font-size:13px;">😐 Hơi mệt</button>
+        <button onclick="startCheckin('very_tired','initial',false)" style="flex:1;padding:10px;border:2px solid #ef4444;background:#fef2f2;border-radius:8px;font-weight:600;color:#dc2626;cursor:pointer;font-size:13px;">😢 Rất mệt</button>
       </div>
-      <div style="font-size:11px;color:#666;font-weight:600;margin-top:4px;">CHECK-IN CÓ HISTORY (đã check-in nhiều ngày)</div>
+      <div style="font-size:11px;color:#666;font-weight:600;margin-top:6px;">CHECK-IN CÓ HISTORY (đã check-in nhiều ngày)</div>
       <div style="display:flex;gap:6px;">
-        <button onclick="startCheckin('tired','initial',true)" style="flex:1;padding:8px;border:2px solid #f59e0b;background:#fffbeb;border-radius:8px;font-weight:600;color:#d97706;cursor:pointer;font-size:12px;">Hơi mệt</button>
-        <button onclick="startCheckin('very_tired','initial',true)" style="flex:1;padding:8px;border:2px solid #ef4444;background:#fef2f2;border-radius:8px;font-weight:600;color:#dc2626;cursor:pointer;font-size:12px;">Rất mệt</button>
+        <button onclick="startCheckin('tired','initial',true)" style="flex:1;padding:8px;border:2px solid #f59e0b;background:#fffbeb;border-radius:8px;font-weight:600;color:#d97706;cursor:pointer;font-size:12px;">😐 Hơi mệt</button>
+        <button onclick="startCheckin('very_tired','initial',true)" style="flex:1;padding:8px;border:2px solid #ef4444;background:#fef2f2;border-radius:8px;font-weight:600;color:#dc2626;cursor:pointer;font-size:12px;">😢 Rất mệt</button>
       </div>
-      <div style="font-size:11px;color:#666;font-weight:600;margin-top:4px;">FOLLOW-UP (sau check-in trước đó)</div>
+      <div style="font-size:11px;color:#666;font-weight:600;margin-top:6px;">FOLLOW-UP (sau check-in trước đó)</div>
       <div style="display:flex;gap:6px;">
-        <button onclick="startFollowup('đã đỡ nhiều')" style="flex:1;padding:8px;border:2px solid #22c55e;background:#f0fdf4;border-radius:8px;font-weight:600;color:#16a34a;cursor:pointer;font-size:11px;">FU: Đã đỡ</button>
-        <button onclick="startFollowup('vẫn như cũ')" style="flex:1;padding:8px;border:2px solid #f59e0b;background:#fffbeb;border-radius:8px;font-weight:600;color:#d97706;cursor:pointer;font-size:11px;">FU: Vẫn vậy</button>
-        <button onclick="startFollowup('mệt hơn trước')" style="flex:1;padding:8px;border:2px solid #ef4444;background:#fef2f2;border-radius:8px;font-weight:600;color:#dc2626;cursor:pointer;font-size:11px;">FU: Nặng hơn</button>
-        <button onclick="startCheckin('tired','followup',true)" style="flex:1;padding:8px;border:2px solid #3b82f6;background:#eff6ff;border-radius:8px;font-weight:600;color:#2563eb;cursor:pointer;font-size:11px;">FU: Tự chọn</button>
+        <button onclick="startFollowup('đã đỡ nhiều')" style="flex:1;padding:8px;border:2px solid #22c55e;background:#f0fdf4;border-radius:8px;font-weight:600;color:#16a34a;cursor:pointer;font-size:11px;">😊 Đã đỡ</button>
+        <button onclick="startFollowup('vẫn như cũ')" style="flex:1;padding:8px;border:2px solid #f59e0b;background:#fffbeb;border-radius:8px;font-weight:600;color:#d97706;cursor:pointer;font-size:11px;">😐 Vẫn vậy</button>
+        <button onclick="startFollowup('mệt hơn trước')" style="flex:1;padding:8px;border:2px solid #ef4444;background:#fef2f2;border-radius:8px;font-weight:600;color:#dc2626;cursor:pointer;font-size:11px;">😢 Nặng hơn</button>
       </div>
     </div>
   </div>
@@ -181,14 +180,7 @@ function showOptions(options, multiSelect) {
     };
     wrapper.appendChild(btn);
   });
-  if (multiSelect) {
-    const sendBtn = document.createElement('button');
-    sendBtn.className = 'opt-btn';
-    sendBtn.textContent = '✓ Xác nhận';
-    sendBtn.style.background = '#08b8a2'; sendBtn.style.color = '#fff'; sendBtn.style.border = 'none';
-    sendBtn.onclick = () => sendCheckin();
-    wrapper.appendChild(sendBtn);
-  }
+  // multiSelect: user chọn options rồi bấm "Gửi" ở input area
   container.appendChild(wrapper);
 }
 
