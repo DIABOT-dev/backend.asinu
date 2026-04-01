@@ -10,8 +10,6 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 
 .header { background: linear-gradient(135deg, #08b8a2, #069b87); color: #fff; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
 .header h1 { font-size: 18px; font-weight: 700; }
-.header select { background: rgba(255,255,255,0.2); color: #fff; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
-.header select option { color: #333; }
 
 .tabs { display: flex; background: #fff; border-bottom: 2px solid #e5e5e5; }
 .tab { flex: 1; padding: 12px; text-align: center; font-weight: 600; font-size: 14px; cursor: pointer; border-bottom: 3px solid transparent; color: #666; transition: all 0.2s; }
@@ -60,35 +58,53 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .checkin-buttons .sub-label { font-size: 11px; color: #999; margin-bottom: 6px; }
 .checkin-buttons .btn-row { display: flex; gap: 8px; }
 .checkin-buttons .btn-row button { flex: 1; padding: 12px; border-radius: 10px; font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.2s; }
-.checkin-buttons .btn-row button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.login-screen { display: flex; flex: 1; align-items: center; justify-content: center; }
+.login-box { width: 340px; padding: 32px 24px; background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+.login-box h2 { font-size: 20px; color: #333; margin-bottom: 4px; }
+.login-box .sub { font-size: 13px; color: #999; margin-bottom: 20px; }
+.login-box input { width: 100%; padding: 12px 14px; border: 2px solid #e0e0e0; border-radius: 10px; font-size: 14px; margin-bottom: 10px; outline: none; }
+.login-box input:focus { border-color: #08b8a2; }
+.login-box button { width: 100%; padding: 14px; background: #08b8a2; color: #fff; border: none; border-radius: 10px; font-weight: 700; font-size: 15px; cursor: pointer; }
+.login-box button:disabled { opacity: 0.5; }
+.login-box .error { color: #dc2626; font-size: 12px; margin-top: 8px; display: none; }
 </style>
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="login-screen" class="login-screen">
+  <div class="login-box">
+    <h2>Asinu AI</h2>
+    <div class="sub">Đăng nhập để sử dụng</div>
+    <input id="login-id" placeholder="Email hoặc số điện thoại">
+    <input id="login-pw" type="password" placeholder="Mật khẩu">
+    <button onclick="doLogin()" id="login-btn">Đăng nhập</button>
+    <div id="login-error" class="error"></div>
+  </div>
+</div>
+
+<!-- APP (hidden until login) -->
+<div id="app-screen" style="display:none;flex:1;flex-direction:column;">
+
 <div class="header">
-  <h1>Asinu AI Test</h1>
-  <select id="profileSelect">
-    <option value="young_male">22M — Bạn/Mình</option>
-    <option value="mid_female">45F Huyết áp — Chị/Em</option>
-    <option value="old_male" selected>68M Tiểu đường+Tim — Chú/Cháu</option>
-    <option value="old_female">65F Tiểu đường+HA — Cô/Cháu</option>
-  </select>
-  <button onclick="resetAll()" style="padding:6px 14px;border:2px solid #ef4444;background:#fef2f2;border-radius:8px;font-weight:600;color:#dc2626;cursor:pointer;font-size:12px;">Reset session</button>
-  <button onclick="clearMemory()" style="padding:6px 14px;border:2px solid #f59e0b;background:#fffbeb;border-radius:8px;font-weight:600;color:#d97706;cursor:pointer;font-size:12px;">Xóa memory</button>
+  <h1>Asinu AI</h1>
+  <span id="user-label" style="font-size:12px;opacity:0.8;flex:1;"></span>
+  <button onclick="resetSession()" style="padding:6px 14px;border:2px solid rgba(255,255,255,0.4);background:transparent;border-radius:8px;font-weight:600;color:#fff;cursor:pointer;font-size:12px;">Reset</button>
+  <button onclick="doLogout()" style="padding:6px 14px;border:2px solid #fca5a5;background:rgba(255,255,255,0.1);border-radius:8px;font-weight:600;color:#fef2f2;cursor:pointer;font-size:12px;">Thoát</button>
 </div>
 
 <div class="tabs">
   <div class="tab active" data-tab="checkin" onclick="switchTab('checkin')">Check-in</div>
   <div class="tab" data-tab="free" onclick="switchTab('free')">AI Tự do</div>
   <div class="tab" data-tab="chat" onclick="switchTab('chat')">Chat AI</div>
-  <div class="tab" data-tab="live" onclick="switchTab('live')">Live Chat</div>
 </div>
 
 <!-- CHECK-IN PANEL -->
 <div class="panel active" id="panel-checkin">
   <div class="messages" id="checkin-messages"></div>
   <div id="checkin-options"></div>
-  <div class="input-area" id="checkin-input-area">
+  <div class="input-area" id="checkin-input-area" style="display:none;">
     <input id="checkin-input" placeholder="Nhập triệu chứng hoặc chọn ở trên...">
     <button onclick="sendCheckin()" id="checkin-send">Gửi</button>
   </div>
@@ -103,25 +119,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 <div class="panel" id="panel-free">
   <div class="messages" id="free-messages"></div>
   <div class="input-area">
-    <textarea id="free-input" rows="2" placeholder="Nói tình trạng của bạn... VD: Tôi hơi mệt từ sáng"></textarea>
+    <textarea id="free-input" rows="2" placeholder="Nói tình trạng của bạn..."></textarea>
     <button onclick="sendFree()" id="free-send">Gửi</button>
-  </div>
-  <div style="padding:6px 16px;background:#f9f9f9;border-top:1px solid #eee;display:flex;gap:8px;align-items:center;">
-    <span style="font-size:11px;color:#999;">Gợi ý:</span>
-    <button onclick="document.getElementById('free-input').value='Tôi hơi mệt từ sáng';sendFree()" style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;font-size:11px;cursor:pointer;color:#555;">Tôi hơi mệt</button>
-    <button onclick="document.getElementById('free-input').value='Tôi bị chóng mặt và buồn nôn';sendFree()" style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;font-size:11px;cursor:pointer;color:#555;">Chóng mặt</button>
-    <button onclick="document.getElementById('free-input').value='Hôm nay tôi khoẻ';sendFree()" style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;font-size:11px;cursor:pointer;color:#555;">Tôi khoẻ</button>
   </div>
 </div>
 
 <!-- CHAT PANEL -->
 <div class="panel" id="panel-chat">
-  <div id="chat-welcome" style="padding:20px 16px;text-align:center;">
-    <div style="font-size:40px;margin-bottom:8px;">👋</div>
-    <div id="chat-greeting" style="font-size:16px;font-weight:600;color:#333;margin-bottom:4px;"></div>
-    <div style="font-size:13px;color:#888;margin-bottom:16px;">Asinu luôn ở đây lắng nghe. Hỏi bất cứ điều gì nhé!</div>
-    <div id="chat-chips" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;"></div>
-  </div>
   <div class="messages" id="chat-messages"></div>
   <div class="input-area">
     <textarea id="chat-input" rows="2" placeholder="Hỏi Asinu bất cứ điều gì..."></textarea>
@@ -129,53 +133,74 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   </div>
 </div>
 
-<!-- LIVE CHAT PANEL (user thật) -->
-<div class="panel" id="panel-live">
-  <!-- Login form -->
-  <div id="live-login" style="padding:24px 16px;max-width:360px;margin:0 auto;">
-    <div style="font-size:15px;font-weight:600;color:#333;margin-bottom:12px;">Đăng nhập tài khoản thật</div>
-    <input id="live-identifier" placeholder="Email hoặc số điện thoại" style="width:100%;padding:10px 14px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px;margin-bottom:8px;outline:none;">
-    <input id="live-password" type="password" placeholder="Mật khẩu" style="width:100%;padding:10px 14px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px;margin-bottom:12px;outline:none;">
-    <button onclick="liveLogin()" id="live-login-btn" style="width:100%;padding:12px;background:#08b8a2;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">Đăng nhập</button>
-    <div id="live-login-error" style="color:#dc2626;font-size:12px;margin-top:8px;display:none;"></div>
-  </div>
-  <!-- Chat area (hidden until login) -->
-  <div id="live-chat-area" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
-    <div style="padding:8px 16px;background:#f0fdfa;border-bottom:1px solid #e0f2f1;display:flex;justify-content:space-between;align-items:center;">
-      <span id="live-user-info" style="font-size:12px;color:#08b8a2;font-weight:600;"></span>
-      <button onclick="liveLogout()" style="padding:4px 10px;border:1px solid #ef4444;border-radius:6px;background:#fff;color:#dc2626;font-size:11px;cursor:pointer;font-weight:600;">Đăng xuất</button>
-    </div>
-    <div class="messages" id="live-messages" style="flex:1;overflow-y:auto;"></div>
-    <div class="input-area">
-      <textarea id="live-input" rows="2" placeholder="Nhắn tin với Asinu..."></textarea>
-      <button onclick="sendLive()" id="live-send">Gửi</button>
-    </div>
-  </div>
-</div>
+</div><!-- end app-screen -->
 
 <script>
-const PROFILES = {
-  young_male: { birth_year: 2004, gender: 'Nam', medical_conditions: [], daily_medication: 'Không', height_cm: 172, weight_kg: 65, full_name: 'Nguyễn Minh Tuấn' },
-  mid_female: { birth_year: 1981, gender: 'Nữ', medical_conditions: ['Cao huyết áp'], daily_medication: 'Có', height_cm: 160, weight_kg: 55, full_name: 'Lê Thị Hương' },
-  old_male: { birth_year: 1958, gender: 'Nam', medical_conditions: ['Tiểu đường', 'Cao huyết áp', 'Tim mạch'], daily_medication: 'Có', height_cm: 165, weight_kg: 68, full_name: 'Trần Văn Hùng' },
-  old_female: { birth_year: 1961, gender: 'Nữ', medical_conditions: ['Tiểu đường', 'Cao huyết áp'], daily_medication: 'Có', height_cm: 155, weight_kg: 60, full_name: 'Nguyễn Thị Mai' },
-};
+// ─── AUTH ───
+let authToken = localStorage.getItem('asinu_token') || null;
+let authUser = null;
 
-// ─── Session state (giống app thật) ───
-let session = {
-  flowState: null,       // null | 'monitoring' | 'follow_up' | 'high_alert' | 'resolved'
-  initialStatus: null,
-  currentStatus: null,
-  triageSummary: null,
-  triageSeverity: null,
-  followUpCount: 0,
-  followUpHours: null,
-};
-let checkinState = { status: null, phase: 'initial', answers: [], currentQ: null, done: false };
-let chatHistory = [];
+async function doLogin() {
+  const id = document.getElementById('login-id').value.trim();
+  const pw = document.getElementById('login-pw').value.trim();
+  const err = document.getElementById('login-error');
+  if (!id || !pw) { err.textContent = 'Nhập đủ thông tin.'; err.style.display = 'block'; return; }
+  err.style.display = 'none';
+  document.getElementById('login-btn').disabled = true;
+  try {
+    const res = await fetch('/api/auth/email/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: id, password: pw }),
+    });
+    const data = await res.json();
+    if (!data.ok || !data.token) { err.textContent = data.error || 'Sai tài khoản hoặc mật khẩu.'; err.style.display = 'block'; return; }
+    authToken = data.token;
+    localStorage.setItem('asinu_token', authToken);
+    await initApp();
+  } catch (e) { err.textContent = 'Lỗi: ' + e.message; err.style.display = 'block'; }
+  finally { document.getElementById('login-btn').disabled = false; }
+}
 
-function getProfile() { return PROFILES[document.getElementById('profileSelect').value]; }
+function doLogout() {
+  authToken = null; authUser = null;
+  localStorage.removeItem('asinu_token');
+  document.getElementById('app-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+}
 
+function apiHeaders() {
+  return { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + authToken };
+}
+
+async function initApp() {
+  try {
+    const meRes = await fetch('/api/auth/me', { headers: apiHeaders() });
+    const meData = await meRes.json();
+    if (!meData.ok) { doLogout(); return; }
+    authUser = meData.user;
+    document.getElementById('user-label').textContent = authUser.email || authUser.phone || '';
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app-screen').style.display = 'flex';
+
+    // Load chat history
+    try {
+      const hRes = await fetch('/api/mobile/chat/history', { headers: apiHeaders() });
+      const hData = await hRes.json();
+      if (hData.ok && hData.history) {
+        document.getElementById('chat-messages').innerHTML = '';
+        for (const m of hData.history.slice(-30)) {
+          addMsg('chat-messages', m.role === 'user' ? 'user' : 'ai', m.text);
+        }
+      }
+    } catch {}
+
+    resetSession();
+  } catch { doLogout(); }
+}
+
+document.getElementById('login-pw').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+// ─── UTILS ───
 function switchTab(tab) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
@@ -193,656 +218,201 @@ function addMsg(container, role, text, meta) {
   el.scrollTop = el.scrollHeight;
 }
 
-// ─── Status bar ───
+// ─── CHECK-IN (giống app thật) ───
+let session = { flowState: null, initialStatus: null, currentStatus: null, triageSummary: null, triageSeverity: null, followUpCount: 0, followUpHours: null };
+let checkinState = { status: null, phase: 'initial', answers: [], currentQ: null, done: false };
+
 function updateStatusBar() {
   const bar = document.getElementById('status-bar');
   const text = document.getElementById('status-text');
-  if (!session.flowState) {
-    bar.style.display = 'none';
-    return;
-  }
+  if (!session.flowState) { bar.style.display = 'none'; return; }
   bar.style.display = 'flex';
   bar.className = 'status-bar ' + session.flowState;
-  const labels = {
-    monitoring: 'Monitoring — Đang theo dõi, follow-up lúc 21h',
-    follow_up: `Follow-up — Theo dõi sau ${session.followUpHours || 3}h`,
-    high_alert: `High Alert — Theo dõi sau ${session.followUpHours || 1}h`,
-    resolved: 'Resolved — Hoàn tất, chúc ngủ ngon!',
-  };
-  text.textContent = `${labels[session.flowState]} | Follow-up #${session.followUpCount}`;
+  const labels = { monitoring: 'Monitoring — follow-up lúc 21h', follow_up: `Follow-up sau ${session.followUpHours||3}h`, high_alert: `High Alert sau ${session.followUpHours||1}h`, resolved: 'Resolved' };
+  text.textContent = `${labels[session.flowState]} | #${session.followUpCount}`;
 }
 
-// ─── Render buttons theo flow state ───
 function updateButtons() {
-  const container = document.getElementById('checkin-buttons');
-  const inputArea = document.getElementById('checkin-input-area');
-
+  const c = document.getElementById('checkin-buttons');
+  const ia = document.getElementById('checkin-input-area');
+  const btn = (fn, label, color, bg) => `<button onclick="${fn}" style="border:2px solid ${color};background:${bg};color:${color};">${label}</button>`;
   if (!session.flowState) {
-    // Chưa check-in → hiện nút check-in sáng
-    inputArea.style.display = 'none';
-    container.innerHTML = `
-      <div class="label">Hôm nay bạn thế nào?</div>
-      <div class="sub-label">Check-in buổi sáng</div>
-      <div class="btn-row">
-        <button onclick="doInitialCheckin('fine')" style="border:2px solid #22c55e;background:#f0fdf4;color:#16a34a;">Tôi ổn</button>
-        <button onclick="doInitialCheckin('tired')" style="border:2px solid #f59e0b;background:#fffbeb;color:#d97706;">Hơi mệt</button>
-        <button onclick="doInitialCheckin('very_tired')" style="border:2px solid #ef4444;background:#fef2f2;color:#dc2626;">Rất mệt</button>
-      </div>
-    `;
+    ia.style.display = 'none';
+    c.innerHTML = `<div class="label">Hôm nay bạn thế nào?</div><div class="btn-row">${btn("doInitCheckin('fine')","Tôi ổn","#22c55e","#f0fdf4")}${btn("doInitCheckin('tired')","Hơi mệt","#d97706","#fffbeb")}${btn("doInitCheckin('very_tired')","Rất mệt","#dc2626","#fef2f2")}</div>`;
   } else if (session.flowState === 'monitoring') {
-    // Monitoring → chờ follow-up tối (giả lập bằng nút)
-    inputArea.style.display = 'none';
-    container.innerHTML = `
-      <div class="label">Follow-up buổi tối (giả lập 21h)</div>
-      <div class="sub-label">Hệ thống hỏi lại: "Hôm nay thế nào rồi?"</div>
-      <div class="btn-row">
-        <button onclick="doFollowUp('fine')" style="border:2px solid #22c55e;background:#f0fdf4;color:#16a34a;">Tôi ổn</button>
-        <button onclick="doFollowUp('tired')" style="border:2px solid #f59e0b;background:#fffbeb;color:#d97706;">Hơi mệt</button>
-        <button onclick="doFollowUp('very_tired')" style="border:2px solid #ef4444;background:#fef2f2;color:#dc2626;">Rất mệt</button>
-      </div>
-    `;
+    ia.style.display = 'none';
+    c.innerHTML = `<div class="label">Follow-up buổi tối</div><div class="btn-row">${btn("doFollowUp('fine')","Tôi ổn","#22c55e","#f0fdf4")}${btn("doFollowUp('tired')","Hơi mệt","#d97706","#fffbeb")}${btn("doFollowUp('very_tired')","Rất mệt","#dc2626","#fef2f2")}</div>`;
   } else if (session.flowState === 'follow_up' || session.flowState === 'high_alert') {
-    // Đang follow_up hoặc high_alert → hỏi lại sau X giờ
-    const hours = session.flowState === 'high_alert' ? (session.followUpHours || 1) : (session.followUpHours || 3);
-    const alertLevel = session.flowState === 'high_alert' ? 'KHẨN' : '';
-    inputArea.style.display = 'none';
-    container.innerHTML = `
-      <div class="label">Follow-up sau ${hours}h ${alertLevel ? '(' + alertLevel + ')' : ''}</div>
-      <div class="sub-label">Lần trước: "${session.triageSummary}" (${(session.triageSeverity || '').toUpperCase()})</div>
-      <div class="btn-row">
-        <button onclick="doFollowUp('fine')" style="border:2px solid #22c55e;background:#f0fdf4;color:#16a34a;">Đã đỡ</button>
-        <button onclick="doFollowUp('tired')" style="border:2px solid #f59e0b;background:#fffbeb;color:#d97706;">Vẫn vậy</button>
-        <button onclick="doFollowUp('very_tired')" style="border:2px solid #ef4444;background:#fef2f2;color:#dc2626;">Nặng hơn</button>
-      </div>
-    `;
+    ia.style.display = 'none';
+    c.innerHTML = `<div class="label">Follow-up ${session.flowState==='high_alert'?'(KHẨN)':''}</div><div class="sub-label">Trước: "${session.triageSummary||''}"</div><div class="btn-row">${btn("doFollowUp('fine')","Đã đỡ","#22c55e","#f0fdf4")}${btn("doFollowUp('tired')","Vẫn vậy","#d97706","#fffbeb")}${btn("doFollowUp('very_tired')","Nặng hơn","#dc2626","#fef2f2")}</div>`;
   } else if (session.flowState === 'resolved') {
-    // Resolved → hiện nút reset
-    inputArea.style.display = 'none';
-    container.innerHTML = `
-      <div class="label" style="color:#2563eb;">Session hoàn tất!</div>
-      <div class="sub-label">Tự reset sau 5 giây hoặc bấm Reset session</div>
-      <div class="btn-row">
-        <button onclick="resetAll()" style="border:2px solid #3b82f6;background:#eff6ff;color:#2563eb;">Bắt đầu session mới</button>
-      </div>
-    `;
-    setTimeout(() => resetAll(), 5000);
+    ia.style.display = 'none';
+    c.innerHTML = `<div class="label" style="color:#2563eb;">Hoàn tất!</div><div class="btn-row"><button onclick="resetSession()" style="border:2px solid #3b82f6;background:#eff6ff;color:#2563eb;">Session mới</button></div>`;
+    setTimeout(() => resetSession(), 5000);
   }
 }
 
-// ─── Reset ───
-function resetAll() {
+function resetSession() {
   session = { flowState: null, initialStatus: null, currentStatus: null, triageSummary: null, triageSeverity: null, followUpCount: 0, followUpHours: null };
   checkinState = { status: null, phase: 'initial', answers: [], currentQ: null, done: false };
-  chatHistory = [];
   document.getElementById('checkin-messages').innerHTML = '';
   document.getElementById('checkin-options').innerHTML = '';
   document.getElementById('checkin-input').value = '';
-  document.getElementById('chat-messages').innerHTML = '';
-  document.getElementById('chat-input').value = '';
-  const chatWelcome = document.getElementById('chat-welcome');
-  if (chatWelcome) chatWelcome.style.display = 'block';
-  freeHistory = [];
   document.getElementById('free-messages').innerHTML = '';
   document.getElementById('free-input').value = '';
-  updateStatusBar();
-  updateButtons();
-  updateChatWelcome();
-  addMsg('checkin-messages', 'system', 'Session mới. Chọn profile rồi check-in.');
-  addMsg('free-messages', 'system', 'Nói tình trạng sức khoẻ của bạn. AI sẽ hỏi thêm để hiểu rõ vấn đề.');
+  freeHistory = [];
+  updateStatusBar(); updateButtons();
+  addMsg('checkin-messages', 'system', 'Chọn trạng thái để check-in.');
+  addMsg('free-messages', 'system', 'Nói tình trạng sức khoẻ. AI sẽ hỏi thêm để hiểu rõ.');
 }
 
-// ─── Initial check-in (buổi sáng) ───
-function doInitialCheckin(status) {
-  session.initialStatus = status;
-  session.currentStatus = status;
-
-  if (status === 'fine') {
-    session.flowState = 'monitoring';
-    addMsg('checkin-messages', 'ai', 'Tuyệt! Bạn đang khoẻ. Asinu sẽ hỏi thăm lại lúc 21h tối nay nhé.');
-    updateStatusBar();
-    updateButtons();
-    return;
-  }
-
-  // tired / very_tired → bắt đầu triage AI
-  if (status === 'tired') session.flowState = 'follow_up';
-  else session.flowState = 'high_alert';
-
+function doInitCheckin(status) {
+  session.initialStatus = status; session.currentStatus = status;
+  if (status === 'fine') { session.flowState = 'monitoring'; addMsg('checkin-messages','ai','Tuyệt! Asinu sẽ hỏi thăm lại lúc 21h tối nay.'); updateStatusBar(); updateButtons(); return; }
+  session.flowState = status === 'tired' ? 'follow_up' : 'high_alert';
   checkinState = { status, phase: 'initial', answers: [], currentQ: null, done: false, withHistory: false };
   document.getElementById('checkin-messages').innerHTML = '';
   document.getElementById('checkin-options').innerHTML = '';
   document.getElementById('checkin-input-area').style.display = 'flex';
   document.getElementById('checkin-buttons').innerHTML = '';
-  const label = status === 'very_tired' ? 'Rất mệt' : 'Hơi mệt';
-  addMsg('checkin-messages', 'system', `Check-in sáng: ${label}`);
-  updateStatusBar();
-  callTriage();
+  addMsg('checkin-messages','system',`Check-in: ${status==='very_tired'?'Rất mệt':'Hơi mệt'}`);
+  updateStatusBar(); callTriage();
 }
 
-// ─── Follow-up (tối / sau Xh) ───
 function doFollowUp(newStatus) {
   session.followUpCount++;
-  const prevFlowState = session.flowState;
-  const prevSummary = session.triageSummary;
-
+  const prev = session.flowState;
   if (newStatus === 'fine') {
-    if (prevFlowState === 'monitoring') {
-      // Monitoring + fine → RESOLVED
-      session.flowState = 'resolved';
-      session.currentStatus = 'fine';
-      addMsg('checkin-messages', 'ai', 'Tuyệt vời! Hôm nay bạn khoẻ cả ngày. Chúc ngủ ngon nhé!');
-      updateStatusBar();
-      updateButtons();
-      return;
-    } else {
-      // follow_up/high_alert + fine → chuyển về monitoring (hẹn 21h)
-      session.flowState = 'monitoring';
-      session.currentStatus = 'fine';
-      addMsg('checkin-messages', 'ai', 'Tốt quá! Bạn đã đỡ hơn rồi. Asinu sẽ hỏi lại lúc 21h tối nhé.');
-      updateStatusBar();
-      updateButtons();
-      return;
-    }
+    if (prev === 'monitoring') { session.flowState = 'resolved'; addMsg('checkin-messages','ai','Hôm nay khoẻ cả ngày. Chúc ngủ ngon!'); }
+    else { session.flowState = 'monitoring'; addMsg('checkin-messages','ai','Đã đỡ rồi. Asinu sẽ hỏi lại lúc 21h.'); }
+    session.currentStatus = 'fine'; updateStatusBar(); updateButtons(); return;
   }
-
-  // tired / very_tired → triage AI (follow-up phase)
-  if (newStatus === 'very_tired' || prevFlowState === 'high_alert') {
-    session.flowState = 'high_alert';
-  } else {
-    session.flowState = 'follow_up';
-  }
+  session.flowState = (newStatus === 'very_tired' || prev === 'high_alert') ? 'high_alert' : 'follow_up';
   session.currentStatus = newStatus;
-
-  checkinState = {
-    status: newStatus,
-    phase: 'followup',
-    answers: [],
-    currentQ: null,
-    done: false,
-    withHistory: true,
-    autoAnswer: newStatus === 'very_tired' ? 'mệt hơn trước' : 'vẫn như cũ',
-  };
+  checkinState = { status: newStatus, phase: 'followup', answers: [], currentQ: null, done: false, withHistory: true, autoAnswer: newStatus === 'very_tired' ? 'mệt hơn trước' : 'vẫn như cũ' };
   document.getElementById('checkin-messages').innerHTML = '';
   document.getElementById('checkin-options').innerHTML = '';
   document.getElementById('checkin-input-area').style.display = 'flex';
   document.getElementById('checkin-buttons').innerHTML = '';
-  const label = newStatus === 'very_tired' ? 'Nặng hơn' : 'Vẫn vậy';
-  addMsg('checkin-messages', 'system', `Follow-up #${session.followUpCount}: ${label} | Trước đó: "${prevSummary || session.initialStatus}"`);
-  updateStatusBar();
-  callTriage();
+  addMsg('checkin-messages','system',`Follow-up #${session.followUpCount}`);
+  updateStatusBar(); callTriage();
 }
 
-// ─── Triage AI call ───
 async function callTriage() {
-  addMsg('checkin-messages', 'system', 'AI đang suy nghĩ...');
-  const profile = getProfile();
+  addMsg('checkin-messages','system','AI đang suy nghĩ...');
   try {
-    const healthContext = session.followUpCount > 0 ? {
+    const hc = session.followUpCount > 0 ? {
       recentGlucose: [{ value: 195, unit: 'mg/dL', context: 'trước ăn', occurred_at: new Date().toISOString() }],
       recentBP: [{ systolic: 148, diastolic: 92, pulse: 78, occurred_at: new Date().toISOString() }],
-      previousCheckins: session.triageSummary ? [{
-        session_date: new Date().toISOString().slice(0,10),
-        initial_status: session.initialStatus,
-        triage_summary: session.triageSummary,
-        triage_severity: session.triageSeverity,
-      }] : [],
-      symptomFrequencyContext: session.followUpCount > 1 ? `- theo dõi: ${session.followUpCount} lần follow-up hôm nay` : '',
-      medicationAdherenceContext: 'Thuốc 7 ngày: 5/7 (bỏ 2 ngày)',
-      tookMedicationToday: true,
+      previousCheckins: session.triageSummary ? [{ session_date: new Date().toISOString().slice(0,10), initial_status: session.initialStatus, triage_summary: session.triageSummary, triage_severity: session.triageSeverity }] : [],
+      medicationAdherenceContext: 'Thuốc 7 ngày: 5/7', tookMedicationToday: true,
     } : {};
-
     const res = await fetch('/api/test/triage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        status: checkinState.status,
-        phase: checkinState.phase,
-        lang: 'vi',
-        profile,
-        healthContext,
-        previousAnswers: checkinState.answers,
-        previousSessionSummary: checkinState.phase === 'followup' ? (session.triageSummary || null) : null,
-      }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: checkinState.status, phase: checkinState.phase, lang: 'vi', profile: {}, healthContext: hc, previousAnswers: checkinState.answers, previousSessionSummary: checkinState.phase==='followup' ? session.triageSummary : null }),
     });
-
-    const msgs = document.getElementById('checkin-messages');
-    const last = msgs.lastChild;
-    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
-
+    removeLast('checkin-messages','AI đang');
     const data = await res.json();
     if (data.isDone) {
       checkinState.done = true;
       document.getElementById('checkin-options').innerHTML = '';
       const sev = data.severity || 'low';
-
-      // Lưu kết luận vào session
-      session.triageSummary = data.summary || '';
-      session.triageSeverity = sev;
+      session.triageSummary = data.summary || ''; session.triageSeverity = sev;
       if (data.followUpHours) session.followUpHours = data.followUpHours;
-
-      addMsg('checkin-messages', 'ai',
-        `Kết luận\n\n${data.summary || ''}\n\n${data.recommendation || ''}\n\n${data.closeMessage || ''}`,
-        `<span class="badge ${sev}">${sev.toUpperCase()}</span> | needsDoctor: ${data.needsDoctor?'CÓ':'không'} | familyAlert: ${data.needsFamilyAlert?'CÓ':'không'} | redFlag: ${data.hasRedFlag?'CÓ':'không'}`
-      );
-
-      updateStatusBar();
-      updateButtons();
+      addMsg('checkin-messages','ai',`Kết luận\n\n${data.summary||''}\n\n${data.recommendation||''}\n\n${data.closeMessage||''}`,
+        `<span class="badge ${sev}">${sev.toUpperCase()}</span> | needsDoctor: ${data.needsDoctor?'CÓ':'không'} | redFlag: ${data.hasRedFlag?'CÓ':'không'}`);
+      updateStatusBar(); updateButtons();
     } else {
       checkinState.currentQ = data.question;
-      addMsg('checkin-messages', 'ai', data.question,
-        `multiSelect: ${data.multiSelect?'có':'không'} | allowFreeText: ${data.allowFreeText?'có':'không'} | options: ${(data.options||[]).length}`);
+      addMsg('checkin-messages','ai',data.question,`options: ${(data.options||[]).length}`);
       showOptions(data.options, data.multiSelect);
       if (checkinState.autoAnswer && checkinState.answers.length === 0) {
-        const auto = checkinState.autoAnswer;
-        checkinState.autoAnswer = null;
-        setTimeout(() => {
-          document.getElementById('checkin-input').value = auto;
-          sendCheckin();
-        }, 500);
+        const a = checkinState.autoAnswer; checkinState.autoAnswer = null;
+        setTimeout(() => { document.getElementById('checkin-input').value = a; sendCheckin(); }, 500);
       }
     }
-  } catch (err) {
-    const msgs = document.getElementById('checkin-messages');
-    const last = msgs.lastChild;
-    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
-    addMsg('checkin-messages', 'system', 'Lỗi: ' + err.message);
-  }
+  } catch (e) { removeLast('checkin-messages','AI đang'); addMsg('checkin-messages','system','Lỗi: '+e.message); }
 }
 
-function showOptions(options, multiSelect) {
-  const container = document.getElementById('checkin-options');
-  container.innerHTML = '';
+function removeLast(container, keyword) {
+  const el = document.getElementById(container);
+  const last = el.lastChild;
+  if (last && last.textContent.includes(keyword)) el.removeChild(last);
+}
+
+function showOptions(options, multi) {
+  const c = document.getElementById('checkin-options'); c.innerHTML = '';
   if (!options || !options.length) return;
-  const wrapper = document.createElement('div');
-  wrapper.className = 'options';
-  const selected = new Set();
+  const w = document.createElement('div'); w.className = 'options';
+  const sel = new Set();
   options.forEach(opt => {
-    const btn = document.createElement('button');
-    btn.className = 'opt-btn';
-    btn.textContent = opt;
-    btn.onclick = () => {
-      if (multiSelect) {
-        if (selected.has(opt)) { selected.delete(opt); btn.classList.remove('selected'); }
-        else { selected.add(opt); btn.classList.add('selected'); }
-        document.getElementById('checkin-input').value = [...selected].join(', ');
-      } else {
-        document.getElementById('checkin-input').value = opt;
-        sendCheckin();
-      }
-    };
-    wrapper.appendChild(btn);
+    const b = document.createElement('button'); b.className = 'opt-btn'; b.textContent = opt;
+    b.onclick = () => { if (multi) { sel.has(opt)?sel.delete(opt):sel.add(opt); b.classList.toggle('selected'); document.getElementById('checkin-input').value=[...sel].join(', '); } else { document.getElementById('checkin-input').value=opt; sendCheckin(); } };
+    w.appendChild(b);
   });
-  container.appendChild(wrapper);
+  c.appendChild(w);
 }
 
 async function sendCheckin() {
   const input = document.getElementById('checkin-input');
   const text = input.value.trim();
   if (!text || checkinState.done) return;
-  input.value = '';
-  document.getElementById('checkin-options').innerHTML = '';
-  addMsg('checkin-messages', 'user', text);
-  checkinState.answers.push({ question: checkinState.currentQ || '', answer: text });
+  input.value = ''; document.getElementById('checkin-options').innerHTML = '';
+  addMsg('checkin-messages','user',text);
+  checkinState.answers.push({ question: checkinState.currentQ||'', answer: text });
   await callTriage();
 }
 
-// ─── Chat welcome + chips ───
-function updateChatWelcome() {
-  const profile = getProfile();
-  const age = new Date().getFullYear() - profile.birth_year;
-  const isMale = profile.gender.includes('Nam');
-  let hon = 'bạn';
-  if (age >= 60) hon = isMale ? 'chú' : 'cô';
-  else if (age >= 40) hon = isMale ? 'anh' : 'chị';
-  const name = profile.full_name.trim().split(/\s+/).pop();
-  const hour = new Date().getHours();
-  let timeGreet = 'Chào';
-  if (hour < 12) timeGreet = 'Chào buổi sáng';
-  else if (hour < 18) timeGreet = 'Chào buổi chiều';
-  else timeGreet = 'Chào buổi tối';
-
-  document.getElementById('chat-greeting').textContent = `${timeGreet}, ${hon} ${name}!`;
-
-  const conditions = profile.medical_conditions || [];
-  const chips = [];
-  chips.push({ text: 'Hôm nay tôi nên ăn gì?', icon: '🍽' });
-  chips.push({ text: 'Tôi nên tập gì hôm nay?', icon: '🏃' });
-  chips.push({ text: 'Tôi khó ngủ quá', icon: '😴' });
-  if (conditions.some(c => c.includes('Tiểu đường'))) {
-    chips.push({ text: 'Đường huyết 195 có cao không?', icon: '🩸' });
-    chips.push({ text: 'Tôi quên uống thuốc tiểu đường', icon: '💊' });
-  }
-  if (conditions.some(c => c.includes('huyết áp'))) {
-    chips.push({ text: 'Huyết áp 148/92 có nguy hiểm không?', icon: '❤️' });
-    chips.push({ text: 'Cách hạ huyết áp tự nhiên?', icon: '🌿' });
-  }
-  if (conditions.some(c => c.includes('Tim'))) {
-    chips.push({ text: 'Tôi bị đau ngực nhẹ', icon: '💗' });
-  }
-  chips.push({ text: 'Tôi thấy lo lắng về sức khoẻ', icon: '😟' });
-  chips.push({ text: 'Kể chuyện vui cho tôi nghe', icon: '😊' });
-
-  const container = document.getElementById('chat-chips');
-  container.innerHTML = chips.map(c =>
-    `<button onclick="document.getElementById('chat-input').value='${c.text}';sendChat()" style="padding:8px 14px;border:1.5px solid #e0e0e0;border-radius:20px;background:#fff;font-size:13px;cursor:pointer;color:#555;display:flex;align-items:center;gap:4px;transition:all 0.2s;" onmouseover="this.style.borderColor='#08b8a2';this.style.color='#08b8a2'" onmouseout="this.style.borderColor='#e0e0e0';this.style.color='#555'">${c.icon} ${c.text}</button>`
-  ).join('');
-}
-
-document.getElementById('profileSelect').addEventListener('change', () => {
-  updateChatWelcome();
-});
-
 // ─── AI TỰ DO ───
 let freeHistory = [];
-let freeSending = false;
-
 async function sendFree() {
   const input = document.getElementById('free-input');
-  const text = input.value.trim();
-  if (!text || freeSending) return;
-  freeSending = true;
-  document.getElementById('free-send').disabled = true;
-  input.value = '';
-  addMsg('free-messages', 'user', text);
-  addMsg('free-messages', 'system', 'AI đang trả lời...');
+  const text = input.value.trim(); if (!text) return;
+  document.getElementById('free-send').disabled = true; input.value = '';
+  addMsg('free-messages','user',text);
+  addMsg('free-messages','system','AI đang trả lời...');
   try {
     const res = await fetch('/api/test/free-triage', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, profile: getProfile(), history: freeHistory }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, profile: {}, history: freeHistory }),
     });
-    const msgs = document.getElementById('free-messages');
-    const last = msgs.lastChild;
-    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
+    removeLast('free-messages','AI đang');
     const data = await res.json();
     const reply = data.reply || data.error || 'Lỗi';
     freeHistory.push({ role: 'user', content: text });
     freeHistory.push({ role: 'assistant', content: reply });
-    addMsg('free-messages', 'ai', reply);
-  } catch (err) {
-    const msgs = document.getElementById('free-messages');
-    const last = msgs.lastChild;
-    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
-    addMsg('free-messages', 'system', 'Lỗi: ' + err.message);
-  } finally {
-    freeSending = false;
-    document.getElementById('free-send').disabled = false;
-  }
+    addMsg('free-messages','ai',reply);
+  } catch (e) { removeLast('free-messages','AI đang'); addMsg('free-messages','system','Lỗi: '+e.message); }
+  finally { document.getElementById('free-send').disabled = false; }
 }
 
-// ─── CHAT MEMORY (localStorage per profile) ───
-function getMemoryKey() {
-  return 'asinu_memories_' + document.getElementById('profileSelect').value;
-}
-function loadMemories() {
-  try { return JSON.parse(localStorage.getItem(getMemoryKey()) || '[]'); } catch { return []; }
-}
-function saveMemories(memories) {
-  localStorage.setItem(getMemoryKey(), JSON.stringify(memories.slice(0, 20)));
-}
-function clearMemory() {
-  localStorage.removeItem(getMemoryKey());
-  addMsg('chat-messages', 'system', 'Memory đã xóa cho profile này.');
-}
-async function extractMemories(allMessages) {
-  if (allMessages.length < 4) return;
-  try {
-    const res = await fetch('/api/test/extract-memories', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: allMessages, existingMemories: loadMemories() }),
-    });
-    const data = await res.json();
-    if (!data.memories || !data.memories.length) return;
-    const existing = loadMemories();
-    for (const item of data.memories) {
-      if (!item.content || !item.category) continue;
-      if (item.action === 'update' && item.old_content) {
-        const idx = existing.findIndex(m => m.content === item.old_content);
-        if (idx >= 0) existing[idx] = { content: item.content, category: item.category };
-        else existing.push({ content: item.content, category: item.category });
-      } else {
-        existing.push({ content: item.content, category: item.category });
-      }
-    }
-    saveMemories(existing);
-    console.log('[Memory] Saved', data.memories.length, 'new memories. Total:', existing.length);
-  } catch (err) {
-    console.error('[Memory] Extract failed:', err.message);
-  }
-}
-
-// ─── CHAT ───
-function showChatFollowUpChips(reply) {
-  // Gợi ý câu hỏi tiếp theo dựa trên nội dung AI vừa trả lời
-  const chips = [];
-  const r = reply.toLowerCase();
-  if (r.includes('đường huyết') || r.includes('tiểu đường') || r.includes('glucose')) {
-    chips.push('Nên đo đường huyết lúc nào?');
-    chips.push('Thực đơn cho người tiểu đường?');
-  }
-  if (r.includes('huyết áp') || r.includes('tăng huyết áp')) {
-    chips.push('Cách đo huyết áp đúng?');
-    chips.push('Thức ăn nào hạ huyết áp?');
-  }
-  if (r.includes('ngủ') || r.includes('mất ngủ') || r.includes('giấc ngủ')) {
-    chips.push('Bài tập thở trước khi ngủ?');
-    chips.push('Nên uống gì để dễ ngủ?');
-  }
-  if (r.includes('tập') || r.includes('vận động') || r.includes('đi bộ')) {
-    chips.push('Tập bao lâu mỗi ngày?');
-    chips.push('Bài tập nào phù hợp tuổi tôi?');
-  }
-  if (r.includes('thuốc') || r.includes('medication')) {
-    chips.push('Quên thuốc thì làm sao?');
-    chips.push('Tác dụng phụ của thuốc?');
-  }
-  if (r.includes('lo lắng') || r.includes('stress') || r.includes('căng thẳng')) {
-    chips.push('Cách giảm stress nhanh?');
-    chips.push('Bài tập thư giãn?');
-  }
-  // Luôn có chip chung
-  if (chips.length === 0) {
-    chips.push('Kể thêm đi');
-    chips.push('Tôi nên làm gì tiếp?');
-  }
-  chips.push('Cảm ơn Asinu!');
-
-  const container = document.createElement('div');
-  container.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding:4px 0;margin-top:8px;';
-  chips.slice(0, 3).forEach(c => {
-    const btn = document.createElement('button');
-    btn.textContent = c;
-    btn.style.cssText = 'padding:6px 12px;border:1.5px solid #08b8a2;border-radius:16px;background:#f0fdfa;font-size:12px;cursor:pointer;color:#08b8a2;font-weight:600;transition:all 0.2s;';
-    btn.onmouseover = () => { btn.style.background = '#08b8a2'; btn.style.color = '#fff'; };
-    btn.onmouseout = () => { btn.style.background = '#f0fdfa'; btn.style.color = '#08b8a2'; };
-    btn.onclick = () => { document.getElementById('chat-input').value = c; sendChat(); };
-    container.appendChild(btn);
-  });
-  const el = document.getElementById('chat-messages');
-  el.appendChild(container);
-  el.scrollTop = el.scrollHeight;
-}
-
+// ─── CHAT AI (dùng API thật /api/mobile/chat) ───
 async function sendChat() {
   const input = document.getElementById('chat-input');
-  const text = input.value.trim();
-  if (!text) return;
-  // Ẩn welcome screen khi bắt đầu chat
-  const welcome = document.getElementById('chat-welcome');
-  if (welcome) welcome.style.display = 'none';
-
-  document.getElementById('chat-send').disabled = true;
-  input.value = '';
-  addMsg('chat-messages', 'user', text);
-  addMsg('chat-messages', 'system', 'AI đang trả lời...');
-  try {
-    const res = await fetch('/api/test/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, profile: getProfile(), history: chatHistory, memories: loadMemories() }),
-    });
-    const msgs = document.getElementById('chat-messages');
-    const last = msgs.lastChild;
-    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
-    const data = await res.json();
-    const reply = data.reply || 'Lỗi';
-    chatHistory.push({ sender: 'user', message: text });
-    chatHistory.push({ sender: 'assistant', message: reply });
-    addMsg('chat-messages', 'ai', reply, `${reply.length} ký tự`);
-    showChatFollowUpChips(reply);
-    // Extract memories in background
-    extractMemories(chatHistory);
-  } catch (err) {
-    const msgs = document.getElementById('chat-messages');
-    const last = msgs.lastChild;
-    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
-    addMsg('chat-messages', 'system', 'Lỗi: ' + err.message);
-  } finally {
-    document.getElementById('chat-send').disabled = false;
-  }
-}
-
-// Enter key handlers
-let chatSending = false;
-document.getElementById('chat-input').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    if (!chatSending) { chatSending = true; sendChat().finally(() => { chatSending = false; }); }
-  }
-});
-document.getElementById('checkin-input').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') { e.preventDefault(); sendCheckin(); }
-});
-document.getElementById('free-input').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendFree();
-  }
-});
-
-// ─── LIVE CHAT (user thật) ───
-let liveToken = localStorage.getItem('asinu_live_token') || null;
-let liveUser = null;
-let liveSending = false;
-
-async function liveLogin() {
-  const identifier = document.getElementById('live-identifier').value.trim();
-  const password = document.getElementById('live-password').value.trim();
-  const errEl = document.getElementById('live-login-error');
-  if (!identifier || !password) { errEl.textContent = 'Nhập đủ thông tin.'; errEl.style.display = 'block'; return; }
-  errEl.style.display = 'none';
-  document.getElementById('live-login-btn').disabled = true;
-  try {
-    const res = await fetch('/api/auth/email/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier, password }),
-    });
-    const data = await res.json();
-    if (!data.ok || !data.token) {
-      errEl.textContent = data.error || 'Sai tài khoản hoặc mật khẩu.';
-      errEl.style.display = 'block';
-      return;
-    }
-    liveToken = data.token;
-    localStorage.setItem('asinu_live_token', liveToken);
-    await liveInit();
-  } catch (err) {
-    errEl.textContent = 'Lỗi kết nối: ' + err.message;
-    errEl.style.display = 'block';
-  } finally {
-    document.getElementById('live-login-btn').disabled = false;
-  }
-}
-
-function liveLogout() {
-  liveToken = null;
-  liveUser = null;
-  localStorage.removeItem('asinu_live_token');
-  document.getElementById('live-login').style.display = 'block';
-  document.getElementById('live-chat-area').style.display = 'none';
-  document.getElementById('live-messages').innerHTML = '';
-}
-
-async function liveInit() {
-  if (!liveToken) return;
-  try {
-    // Lấy thông tin user
-    const meRes = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + liveToken } });
-    const meData = await meRes.json();
-    if (!meData.ok) { liveLogout(); return; }
-    liveUser = meData.user;
-    document.getElementById('live-user-info').textContent = `${liveUser.email || liveUser.phone || 'User #' + liveUser.id}`;
-    document.getElementById('live-login').style.display = 'none';
-    document.getElementById('live-chat-area').style.display = 'flex';
-
-    // Load chat history
-    const histRes = await fetch('/api/mobile/chat/history', { headers: { 'Authorization': 'Bearer ' + liveToken } });
-    const histData = await histRes.json();
-    document.getElementById('live-messages').innerHTML = '';
-    if (histData.ok && histData.history) {
-      for (const msg of histData.history.slice(-50)) {
-        addMsg('live-messages', msg.role === 'user' ? 'user' : 'ai', msg.text);
-      }
-    }
-    if (!histData.history || histData.history.length === 0) {
-      addMsg('live-messages', 'system', 'Bắt đầu chat với Asinu. Tin nhắn sẽ được lưu vào tài khoản thật.');
-    }
-  } catch (err) {
-    console.error('[Live] Init error:', err);
-    liveLogout();
-  }
-}
-
-async function sendLive() {
-  const input = document.getElementById('live-input');
-  const text = input.value.trim();
-  if (!text || liveSending || !liveToken) return;
-  liveSending = true;
-  document.getElementById('live-send').disabled = true;
-  input.value = '';
-  addMsg('live-messages', 'user', text);
-  addMsg('live-messages', 'system', 'AI đang trả lời...');
+  const text = input.value.trim(); if (!text || !authToken) return;
+  document.getElementById('chat-send').disabled = true; input.value = '';
+  addMsg('chat-messages','user',text);
+  addMsg('chat-messages','system','AI đang trả lời...');
   try {
     const res = await fetch('/api/mobile/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + liveToken },
+      method: 'POST', headers: apiHeaders(),
       body: JSON.stringify({ message: text }),
     });
-    const msgs = document.getElementById('live-messages');
-    const last = msgs.lastChild;
-    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
+    removeLast('chat-messages','AI đang');
     const data = await res.json();
-    if (data.ok) {
-      addMsg('live-messages', 'ai', data.reply);
-    } else {
-      addMsg('live-messages', 'system', 'Lỗi: ' + (data.error || 'Không rõ'));
-    }
-  } catch (err) {
-    const msgs = document.getElementById('live-messages');
-    const last = msgs.lastChild;
-    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
-    addMsg('live-messages', 'system', 'Lỗi: ' + err.message);
-  } finally {
-    liveSending = false;
-    document.getElementById('live-send').disabled = false;
-  }
+    if (data.ok) { addMsg('chat-messages','ai',data.reply); }
+    else { addMsg('chat-messages','system','Lỗi: '+(data.error||'Không rõ')); }
+  } catch (e) { removeLast('chat-messages','AI đang'); addMsg('chat-messages','system','Lỗi: '+e.message); }
+  finally { document.getElementById('chat-send').disabled = false; }
 }
 
-document.getElementById('live-input').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendLive(); }
-});
-
-// Auto-login nếu có token cũ
-if (liveToken) liveInit();
+// ─── Enter key handlers ───
+document.getElementById('checkin-input').addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); sendCheckin(); } });
+document.getElementById('free-input').addEventListener('keydown', e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); sendFree(); } });
+document.getElementById('chat-input').addEventListener('keydown', e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); sendChat(); } });
 
 // ─── Init ───
-updateStatusBar();
-updateButtons();
-updateChatWelcome();
-addMsg('checkin-messages', 'system', 'Chọn profile rồi check-in.');
-addMsg('free-messages', 'system', 'Nói tình trạng sức khoẻ của bạn. AI sẽ hỏi thêm để hiểu rõ vấn đề.');
+if (authToken) initApp();
 </script>
 </body>
 </html>
