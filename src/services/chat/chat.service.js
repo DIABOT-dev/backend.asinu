@@ -381,6 +381,29 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
     }
   }
 
+  // ── MEDICAL-FIRST RULE ──
+  if (profile) {
+    const med = formatIssueList(profile.medical_conditions);
+    const hasConditions = med && !med.toLowerCase().includes('không có') && med.trim().length > 0;
+
+    if (hasConditions) {
+      lines.push('');
+      const medLower = med.toLowerCase();
+      const hasDiabetes = medLower.includes('tiểu đường') || medLower.includes('diabetes');
+      const hasHypertension = medLower.includes('huyết áp') || medLower.includes('hypertension');
+      const hasHeart = medLower.includes('tim') || medLower.includes('heart') || medLower.includes('cardiac');
+
+      if (isEn) {
+        lines.push('⚠️ MEDICAL-FIRST RULE: User has ' + med + '. Filter ALL advice through their conditions. Safety > taste.');
+      } else {
+        lines.push('⚠️ NGUYÊN TẮC Y KHOA TRƯỚC TIÊN: Người dùng có ' + med + '. MỌI lời khuyên PHẢI an toàn cho bệnh nền. An toàn > ngon miệng.');
+        if (hasDiabetes) lines.push('🔴 TIỂU ĐƯỜNG: CẤM gợi ý phở, bún, miến, mì, xôi, bánh cuốn, cơm tấm, cháo trắng, nước ngọt, đồ ngọt, chuối, xoài, nho, dưa hấu — kể cả biến tấu "gạo lứt". Dùng: cơm gạo lứt ít, rau, cá, đậu phụ, trứng, trái cây ít ngọt.');
+        if (hasHypertension) lines.push('🔴 HUYẾT ÁP: CẤM đồ mặn (mắm nhiều, dưa muối, mì gói), thịt mỡ (ba chỉ, sườn), đồ chiên. Dùng: hấp/luộc, ít muối, cá, rau.');
+        if (hasHeart) lines.push('🔴 TIM MẠCH: CẤM mỡ bão hòa, nội tạng, đồ chiên, thịt quay. Dùng: cá omega-3, dầu ô liu, rau, hạt.');
+      }
+    }
+  }
+
   if (profile || logsSummary) lines.push('');
 
   // ── CONVERSATION STYLE ──────────────────────────────────

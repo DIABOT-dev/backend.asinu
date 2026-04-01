@@ -90,6 +90,49 @@ function testRoutes(pool) {
     }
   });
 
+  // ─── Test Chat UI ───
+  const path = require('path');
+  router.get('/chat-ui', (req, res) => {
+    res.sendFile(path.join(__dirname, '../../public/test-chat.html'));
+  });
+
+  // ─── Test Triage AI ───
+  router.post('/triage', async (req, res) => {
+    try {
+      const { getNextTriageQuestion } = require('../../src/services/checkin/checkin.ai.service');
+      const result = await getNextTriageQuestion(req.body);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── Test Chat AI ───
+  router.post('/chat', async (req, res) => {
+    try {
+      const { buildSystemPrompt } = require('../../src/services/chat/chat.service');
+      const { message, profile, history = [] } = req.body;
+      const systemPrompt = buildSystemPrompt(profile, history.length,
+        { latest_glucose: { value: 195, unit: 'mg/dL' }, latest_bp: { systolic: 148, diastolic: 92, pulse: 78 } },
+        history, 'vi');
+      const messages = [{ role: 'system', content: systemPrompt }];
+      for (const turn of history) messages.push({ role: turn.sender === 'user' ? 'user' : 'assistant', content: turn.message });
+      messages.push({ role: 'user', content: message });
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+        body: JSON.stringify({ model: 'gpt-4o', messages, max_completion_tokens: 4096, temperature: 0.75, frequency_penalty: 0.2, presence_penalty: 0.2 }),
+      });
+      const data = await response.json();
+      const reply = (data.choices?.[0]?.message?.content || 'Lỗi')
+        .replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1')
+        .replace(/^#{1,6}\s+/gm, '').replace(/__(.+?)__/g, '$1').replace(/_(.+?)_/g, '$1').trim();
+      res.json({ reply });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   return router;
 }
 

@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asinu AI Test Console</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f0e8; height: 100vh; display: flex; flex-direction: column; }
+
+.header { background: linear-gradient(135deg, #08b8a2, #069b87); color: #fff; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
+.header h1 { font-size: 18px; font-weight: 700; }
+.header select { background: rgba(255,255,255,0.2); color: #fff; border: 1px solid rgba(255,255,255,0.3); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+.header select option { color: #333; }
+
+.tabs { display: flex; background: #fff; border-bottom: 2px solid #e5e5e5; }
+.tab { flex: 1; padding: 12px; text-align: center; font-weight: 600; font-size: 14px; cursor: pointer; border-bottom: 3px solid transparent; color: #666; transition: all 0.2s; }
+.tab.active { color: #08b8a2; border-bottom-color: #08b8a2; }
+
+.panel { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+.panel.active { display: flex; }
+
+/* Chat area */
+.messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.msg { max-width: 85%; padding: 12px 16px; border-radius: 16px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; }
+.msg.ai { background: #fff; color: #333; align-self: flex-start; border: 1px solid #e0e0e0; border-bottom-left-radius: 4px; }
+.msg.user { background: #08b8a2; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
+.msg.system { background: #fef3c7; color: #92400e; align-self: center; font-size: 12px; border-radius: 8px; text-align: center; }
+.msg .meta { font-size: 11px; color: #999; margin-top: 6px; }
+.msg.ai .meta { color: #aaa; }
+
+/* Options */
+.options { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 16px; }
+.opt-btn { padding: 8px 16px; border-radius: 20px; border: 2px solid #08b8a2; background: #fff; color: #08b8a2; font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.opt-btn:hover { background: #08b8a2; color: #fff; }
+.opt-btn.selected { background: #08b8a2; color: #fff; }
+
+/* Input */
+.input-area { padding: 12px 16px; background: #fff; border-top: 1px solid #e5e5e5; display: flex; gap: 8px; }
+.input-area input, .input-area textarea { flex: 1; padding: 10px 14px; border: 2px solid #e0e0e0; border-radius: 12px; font-size: 14px; outline: none; resize: none; }
+.input-area input:focus, .input-area textarea:focus { border-color: #08b8a2; }
+.input-area button { padding: 10px 20px; background: #08b8a2; color: #fff; border: none; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: pointer; }
+.input-area button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Config panel */
+.config { padding: 16px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.config label { font-size: 13px; font-weight: 600; color: #555; }
+.config select, .config input { width: 100%; padding: 8px 12px; border: 1.5px solid #ddd; border-radius: 8px; font-size: 13px; }
+.config .row { display: flex; gap: 8px; }
+.config .row > * { flex: 1; }
+
+.loading { text-align: center; color: #08b8a2; padding: 8px; font-size: 13px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.badge.high { background: #fecaca; color: #dc2626; }
+.badge.medium { background: #fef3c7; color: #d97706; }
+.badge.low { background: #dcfce7; color: #16a34a; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🩺 Asinu AI Test</h1>
+  <select id="profileSelect">
+    <option value="young_male">22M — Bạn/Mình</option>
+    <option value="mid_female">45F Huyết áp — Chị/Em</option>
+    <option value="old_male" selected>68M Tiểu đường+Tim — Chú/Cháu</option>
+    <option value="old_female">65F Tiểu đường+HA — Cô/Cháu</option>
+  </select>
+  <button onclick="clearSession()" style="padding:6px 14px;border:2px solid #ef4444;background:#fef2f2;border-radius:8px;font-weight:600;color:#dc2626;cursor:pointer;font-size:12px;">🗑 Xoá session</button>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="checkin" onclick="switchTab('checkin')">Check-in</div>
+  <div class="tab" data-tab="chat" onclick="switchTab('chat')">Chat AI</div>
+</div>
+
+<!-- CHECK-IN PANEL -->
+<div class="panel active" id="panel-checkin">
+  <div class="messages" id="checkin-messages"></div>
+  <div id="checkin-options"></div>
+  <div class="input-area">
+    <input id="checkin-input" placeholder="Nhập triệu chứng hoặc chọn ở trên...">
+    <button onclick="sendCheckin()" id="checkin-send">Gửi</button>
+  </div>
+  <div style="padding:8px 16px;display:flex;gap:8px;background:#f9f9f9;border-top:1px solid #eee;">
+    <div style="display:flex;flex-direction:column;gap:6px;width:100%;">
+      <div style="font-size:11px;color:#666;font-weight:600;">CHECK-IN LẦN ĐẦU (không có history)</div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="startCheckin('tired','initial',false)" style="flex:1;padding:8px;border:2px solid #22c55e;background:#f0fdf4;border-radius:8px;font-weight:600;color:#16a34a;cursor:pointer;font-size:12px;">Hơi mệt</button>
+        <button onclick="startCheckin('very_tired','initial',false)" style="flex:1;padding:8px;border:2px solid #ef4444;background:#fef2f2;border-radius:8px;font-weight:600;color:#dc2626;cursor:pointer;font-size:12px;">Rất mệt</button>
+        <button onclick="startCheckin('specific_concern','initial',false)" style="flex:1;padding:8px;border:2px solid #8b5cf6;background:#f5f3ff;border-radius:8px;font-weight:600;color:#7c3aed;cursor:pointer;font-size:12px;">Vấn đề cụ thể</button>
+      </div>
+      <div style="font-size:11px;color:#666;font-weight:600;margin-top:4px;">CHECK-IN CÓ HISTORY (đã check-in nhiều ngày)</div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="startCheckin('tired','initial',true)" style="flex:1;padding:8px;border:2px solid #f59e0b;background:#fffbeb;border-radius:8px;font-weight:600;color:#d97706;cursor:pointer;font-size:12px;">Hơi mệt</button>
+        <button onclick="startCheckin('very_tired','initial',true)" style="flex:1;padding:8px;border:2px solid #ef4444;background:#fef2f2;border-radius:8px;font-weight:600;color:#dc2626;cursor:pointer;font-size:12px;">Rất mệt</button>
+      </div>
+      <div style="font-size:11px;color:#666;font-weight:600;margin-top:4px;">FOLLOW-UP (sau check-in trước đó)</div>
+      <div style="display:flex;gap:6px;">
+        <button onclick="startFollowup('đã đỡ nhiều')" style="flex:1;padding:8px;border:2px solid #22c55e;background:#f0fdf4;border-radius:8px;font-weight:600;color:#16a34a;cursor:pointer;font-size:11px;">FU: Đã đỡ</button>
+        <button onclick="startFollowup('vẫn như cũ')" style="flex:1;padding:8px;border:2px solid #f59e0b;background:#fffbeb;border-radius:8px;font-weight:600;color:#d97706;cursor:pointer;font-size:11px;">FU: Vẫn vậy</button>
+        <button onclick="startFollowup('mệt hơn trước')" style="flex:1;padding:8px;border:2px solid #ef4444;background:#fef2f2;border-radius:8px;font-weight:600;color:#dc2626;cursor:pointer;font-size:11px;">FU: Nặng hơn</button>
+        <button onclick="startCheckin('tired','followup',true)" style="flex:1;padding:8px;border:2px solid #3b82f6;background:#eff6ff;border-radius:8px;font-weight:600;color:#2563eb;cursor:pointer;font-size:11px;">FU: Tự chọn</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CHAT PANEL -->
+<div class="panel" id="panel-chat">
+  <div class="messages" id="chat-messages"></div>
+  <div class="input-area">
+    <textarea id="chat-input" rows="2" placeholder="Hỏi Asinu bất cứ điều gì..."></textarea>
+    <button onclick="sendChat()" id="chat-send">Gửi</button>
+  </div>
+</div>
+
+<script>
+const API_BASE = window.location.origin;
+const API_KEY = 'YOUR_OPENAI_API_KEY';
+
+const PROFILES = {
+  young_male: { birth_year: 2004, gender: 'Nam', medical_conditions: [], daily_medication: 'Không', height_cm: 172, weight_kg: 65, full_name: 'Nguyễn Minh Tuấn' },
+  mid_female: { birth_year: 1981, gender: 'Nữ', medical_conditions: ['Cao huyết áp'], daily_medication: 'Có', height_cm: 160, weight_kg: 55, full_name: 'Lê Thị Hương' },
+  old_male: { birth_year: 1958, gender: 'Nam', medical_conditions: ['Tiểu đường', 'Cao huyết áp', 'Tim mạch'], daily_medication: 'Có', height_cm: 165, weight_kg: 68, full_name: 'Trần Văn Hùng' },
+  old_female: { birth_year: 1961, gender: 'Nữ', medical_conditions: ['Tiểu đường', 'Cao huyết áp'], daily_medication: 'Có', height_cm: 155, weight_kg: 60, full_name: 'Nguyễn Thị Mai' },
+};
+
+let checkinState = { status: null, phase: 'initial', answers: [], currentQ: null, done: false };
+
+function clearSession() {
+  checkinState = { status: null, phase: 'initial', answers: [], currentQ: null, done: false };
+  chatHistory = [];
+  document.getElementById('checkin-messages').innerHTML = '<div style="background:#fff8e1;color:#e65100;padding:12px;border-radius:8px;text-align:center;margin:16px;">Chọn profile ở trên → bấm "Hơi mệt", "Rất mệt" hoặc "Follow-up" để bắt đầu.</div>';
+  document.getElementById('checkin-options').innerHTML = '';
+  document.getElementById('checkin-input').value = '';
+  document.getElementById('checkin-send').disabled = false;
+  document.getElementById('chat-messages').innerHTML = '';
+  document.getElementById('chat-input').value = '';
+}
+
+function getProfile() { return PROFILES[document.getElementById('profileSelect').value]; }
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.tab[data-tab="${tab}"]`).classList.add('active');
+  document.getElementById('panel-'+tab).classList.add('active');
+}
+
+function addMsg(container, role, text, meta) {
+  const el = document.getElementById(container);
+  const div = document.createElement('div');
+  div.className = 'msg ' + role;
+  div.textContent = text;
+  if (meta) { const m = document.createElement('div'); m.className = 'meta'; m.innerHTML = meta; div.appendChild(m); }
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function showOptions(options, multiSelect) {
+  const container = document.getElementById('checkin-options');
+  container.innerHTML = '';
+  if (!options || !options.length) return;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'options';
+  const selected = new Set();
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.className = 'opt-btn';
+    btn.textContent = opt;
+    btn.onclick = () => {
+      if (multiSelect) {
+        if (selected.has(opt)) { selected.delete(opt); btn.classList.remove('selected'); }
+        else { selected.add(opt); btn.classList.add('selected'); }
+        document.getElementById('checkin-input').value = [...selected].join(', ');
+      } else {
+        document.getElementById('checkin-input').value = opt;
+        sendCheckin();
+      }
+    };
+    wrapper.appendChild(btn);
+  });
+  if (multiSelect) {
+    const sendBtn = document.createElement('button');
+    sendBtn.className = 'opt-btn';
+    sendBtn.textContent = '✓ Xác nhận';
+    sendBtn.style.background = '#08b8a2'; sendBtn.style.color = '#fff'; sendBtn.style.border = 'none';
+    sendBtn.onclick = () => sendCheckin();
+    wrapper.appendChild(sendBtn);
+  }
+  container.appendChild(wrapper);
+}
+
+async function startCheckin(status, phase = 'initial', withHistory = true) {
+  checkinState = { status, phase, answers: [], currentQ: null, done: false, withHistory };
+  document.getElementById('checkin-messages').innerHTML = '';
+  document.getElementById('checkin-options').innerHTML = '';
+  const label = status === 'very_tired' ? 'Rất mệt' : 'Hơi mệt';
+  const mode = !withHistory ? 'Lần đầu' : phase === 'followup' ? 'Follow-up' : 'Đã có history';
+  addMsg('checkin-messages', 'system', `Bắt đầu Check-in: ${label} (${mode})`);
+  await callTriage();
+}
+
+async function startFollowup(autoAnswer) {
+  checkinState = { status: 'tired', phase: 'followup', answers: [], currentQ: null, done: false, withHistory: true, autoAnswer };
+  document.getElementById('checkin-messages').innerHTML = '';
+  document.getElementById('checkin-options').innerHTML = '';
+  addMsg('checkin-messages', 'system', `Follow-up → tự trả lời: "${autoAnswer}"`);
+  await callTriage();
+}
+
+async function callTriage() {
+  addMsg('checkin-messages', 'system', '⏳ AI đang suy nghĩ...');
+  const profile = getProfile();
+  try {
+    const res = await fetch('/api/test/triage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        status: checkinState.status,
+        phase: checkinState.phase,
+        lang: 'vi',
+        profile,
+        healthContext: checkinState.withHistory ? {
+          recentGlucose: [{ value: 195, unit: 'mg/dL', context: 'trước ăn', occurred_at: new Date().toISOString() }],
+          recentBP: [{ systolic: 148, diastolic: 92, pulse: 78, occurred_at: new Date().toISOString() }],
+          previousCheckins: [
+            { session_date: new Date(Date.now()-86400000).toISOString().slice(0,10), initial_status: 'tired', triage_summary: 'mệt mỏi, chóng mặt từ sáng', triage_severity: 'medium' },
+          ],
+          symptomFrequencyContext: '- mệt mỏi: 4 lần/7 ngày (↑ tăng)\n- chóng mặt: 3 lần/7 ngày (↑ tăng)',
+          medicationAdherenceContext: 'Thuốc 7 ngày: 5/7 (bỏ 2 ngày ⚠️)',
+          tookMedicationToday: true,
+        } : {},
+        previousAnswers: checkinState.answers,
+        previousSessionSummary: checkinState.phase === 'followup' ? 'mệt mỏi, chóng mặt từ sáng' : null,
+      }),
+    });
+    // Remove loading msg
+    const msgs = document.getElementById('checkin-messages');
+    const last = msgs.lastChild;
+    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
+
+    const data = await res.json();
+    if (data.isDone) {
+      checkinState.done = true;
+      document.getElementById('checkin-options').innerHTML = '';
+      const sev = data.severity || 'low';
+      addMsg('checkin-messages', 'ai', `✅ Kết luận\n\n📋 ${data.summary || ''}\n\n💊 ${data.recommendation || ''}\n\n${data.closeMessage || ''}`,
+        `<span class="badge ${sev}">${sev.toUpperCase()}</span> | needsDoctor: ${data.needsDoctor?'CÓ':'không'} | familyAlert: ${data.needsFamilyAlert?'CÓ':'không'} | redFlag: ${data.hasRedFlag?'CÓ':'không'}`);
+    } else {
+      checkinState.currentQ = data.question;
+      addMsg('checkin-messages', 'ai', data.question,
+        `multiSelect: ${data.multiSelect?'có':'không'} | allowFreeText: ${data.allowFreeText?'có':'không'} | options: ${(data.options||[]).length}`);
+      showOptions(data.options, data.multiSelect);
+      // Auto-answer for follow-up quick test
+      if (checkinState.autoAnswer && checkinState.answers.length === 0) {
+        const auto = checkinState.autoAnswer;
+        checkinState.autoAnswer = null;
+        setTimeout(() => {
+          document.getElementById('checkin-input').value = auto;
+          sendCheckin();
+        }, 500);
+      }
+    }
+  } catch (err) {
+    const msgs = document.getElementById('checkin-messages');
+    const last = msgs.lastChild;
+    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
+    addMsg('checkin-messages', 'system', '❌ Lỗi: ' + err.message);
+  }
+}
+
+async function sendCheckin() {
+  const input = document.getElementById('checkin-input');
+  const text = input.value.trim();
+  if (!text || checkinState.done) return;
+  input.value = '';
+  document.getElementById('checkin-options').innerHTML = '';
+  addMsg('checkin-messages', 'user', text);
+  checkinState.answers.push({ question: checkinState.currentQ || '', answer: text });
+  await callTriage();
+}
+
+// CHAT
+let chatHistory = [];
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  document.getElementById('chat-send').disabled = true;
+  input.value = '';
+  addMsg('chat-messages', 'user', text);
+  addMsg('chat-messages', 'system', '⏳ AI đang trả lời...');
+
+  try {
+    const res = await fetch('/api/test/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, profile: getProfile(), history: chatHistory }),
+    });
+    const msgs = document.getElementById('chat-messages');
+    const last = msgs.lastChild;
+    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
+
+    const data = await res.json();
+    const reply = data.reply || 'Lỗi';
+    chatHistory.push({ sender: 'user', message: text });
+    chatHistory.push({ sender: 'assistant', message: reply });
+    addMsg('chat-messages', 'ai', reply, `${reply.length} ký tự`);
+  } catch (err) {
+    const msgs = document.getElementById('chat-messages');
+    const last = msgs.lastChild;
+    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
+    addMsg('chat-messages', 'system', '❌ Lỗi: ' + err.message);
+  } finally {
+    document.getElementById('chat-send').disabled = false;
+  }
+}
+
+// Enter key handlers
+let chatSending = false;
+document.getElementById('chat-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    if (!chatSending) { chatSending = true; sendChat().finally(() => { chatSending = false; }); }
+  }
+});
+document.getElementById('checkin-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); sendCheckin(); }
+});
+
+// Init
+addMsg('checkin-messages', 'system', 'Chọn profile ở trên → bấm "Hơi mệt", "Rất mệt" hoặc "Follow-up" để bắt đầu.');
+addMsg('chat-messages', 'system', 'Nhập câu hỏi sức khoẻ để chat với Asinu AI.');
+</script>
+</body>
+</html>

@@ -11,6 +11,7 @@
 const { sendPushNotification } = require('./push.notification.service');
 const { runCheckinFollowUps, runMorningCheckin, runAlertConfirmationFollowUps } = require('../checkin/checkin.service');
 const { t } = require('../../i18n');
+const { getHonorifics } = require('../../lib/honorifics');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
@@ -148,6 +149,7 @@ const USER_SELECT = `
          COALESCE(u.language_preference,'vi') AS lang,
          u.display_name, u.full_name,
          uop.medical_conditions,
+         uop.birth_year, uop.gender,
          (SELECT triage_summary FROM health_checkins hc
           WHERE hc.user_id = u.id AND hc.triage_summary IS NOT NULL
           ORDER BY hc.session_date DESC LIMIT 1) AS last_symptom
@@ -187,6 +189,7 @@ async function runMorningSummary(pool, hour, minute) {
            COALESCE(u.language_preference,'vi') AS lang,
            u.display_name, u.full_name,
            uop.medical_conditions,
+           uop.birth_year, uop.gender,
            (SELECT triage_summary FROM health_checkins hc
             WHERE hc.user_id = u.id AND hc.triage_summary IS NOT NULL
             ORDER BY hc.session_date DESC LIMIT 1) AS last_symptom,
@@ -230,7 +233,7 @@ async function runMorningSummary(pool, hour, minute) {
   let sent = 0;
   for (const user of rows) {
     const name = getUserName(user);
-    const greeting = getGreeting(user.lang, hour);
+    const { honorific, selfRef, callName, Honorific } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
     const isEn = user.lang === 'en';
 
@@ -255,18 +258,18 @@ async function runMorningSummary(pool, hour, minute) {
     if (tasks.length === 0) continue;
 
     const title = isEn
-      ? `☀️ ${greeting}${name ? ' ' + name : ''}!`
-      : `☀️ ${greeting}${name ? ' ' + name : ''}!`;
+      ? `☀️ Good morning${name ? ' ' + name : ''}!`
+      : `☀️ ${Honorific} ơi, ${selfRef} ghé hỏi thăm buổi sáng!`;
 
     let body;
     if (user.last_symptom) {
       body = isEn
-        ? `Yesterday you mentioned ${user.last_symptom} — how are you feeling today? Don't forget: ${tasks.join(', ')}. Asinu is here for you 💙`
-        : `Hôm qua bạn có nói bị ${user.last_symptom} — hôm nay thấy đỡ hơn chưa? Nhớ ${tasks.join(', ')} nha. Asinu luôn bên bạn 💙`;
+        ? `Yesterday you mentioned ${user.last_symptom} — how are you feeling today? Don't forget: ${tasks.join(', ')}. I'm here for you 💙`
+        : `Hôm qua ${honorific} có bị ${user.last_symptom} — hôm nay ${honorific} thấy đỡ hơn chưa? Nhớ ${tasks.join(', ')} nha. ${Honorific} có ${selfRef} ở đây cùng 💙`;
     } else {
       body = isEn
         ? `A new day begins! Let's take care of your health together: ${tasks.join(', ')}. You're doing great 💪`
-        : `Ngày mới rồi! Mình cùng chăm sóc sức khoẻ nhé: ${tasks.join(', ')}. Bạn đang làm rất tốt 💪`;
+        : `Ngày mới rồi! ${selfRef} cùng ${honorific} chăm sóc sức khoẻ nhé: ${tasks.join(', ')} 💪`;
     }
 
     // Build missing types for deep link
@@ -296,24 +299,25 @@ async function runAfternoon(pool, hour, minute) {
   let sent = 0;
   for (const user of rows) {
     const name = getUserName(user);
+    const { honorific, selfRef, callName, Honorific } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
     const isEn = user.lang === 'en';
     const title = isEn
       ? `🌤️ Hey${name ? ' ' + name : ''}, afternoon check-in`
-      : `🌤️ Chiều rồi${name ? ' ' + name + ' ơi' : ''}!`;
+      : `🌤️ ${Honorific} ơi, ${selfRef} ghé thăm buổi chiều!`;
     let body;
     if (conditions.hasDiabetes) {
       body = isEn
-        ? `How are you feeling this afternoon? Remember to drink water and check your blood sugar if you haven't yet. Your body will thank you 😊`
-        : `Chiều nay bạn thấy thế nào? Nhớ uống nước đều đặn và kiểm tra đường huyết nếu chưa nha. Cơ thể bạn sẽ cảm ơn vì điều đó 😊`;
+        ? `How are you feeling this afternoon? Remember to drink water and check your blood sugar if you haven't yet 😊`
+        : `Chiều nay ${honorific} thấy thế nào? Nhớ uống nước và kiểm tra đường huyết nếu chưa nha. ${selfRef} luôn theo dõi cùng ${honorific} 😊`;
     } else if (conditions.hasHypertension) {
       body = isEn
         ? `Take a little break if you can — rest is just as important as medicine. Have you had enough water today? 💧`
-        : `Nghỉ tay chút đi nha — nghỉ ngơi cũng quan trọng như uống thuốc vậy. Hôm nay bạn uống đủ nước chưa? 💧`;
+        : `${Honorific} nghỉ tay chút đi nha — nghỉ ngơi cũng quan trọng như uống thuốc vậy. Hôm nay ${honorific} uống đủ nước chưa? 💧`;
     } else {
       body = isEn
-        ? `How's your afternoon going? Take a moment to stretch, drink some water, and breathe. Small habits make a big difference 🌿`
-        : `Buổi chiều của bạn thế nào rồi? Đứng dậy vươn vai tí, uống ngụm nước, hít thở sâu nha. Những thói quen nhỏ tạo thay đổi lớn lắm 🌿`;
+        ? `How's your afternoon going? Take a moment to stretch, drink some water, and breathe 🌿`
+        : `Buổi chiều của ${honorific} thế nào rồi? Vươn vai tí, uống ngụm nước nha. ${selfRef} ở đây cùng ${honorific} 🌿`;
     }
     const target = conditions.hasDiabetes ? 'glucose' : conditions.hasHypertension ? 'blood_pressure' : 'home';
     if (await sendAndSave(pool, user, 'reminder_afternoon', title, body, {
@@ -332,6 +336,7 @@ async function runEveningSummary(pool, hour, minute) {
            COALESCE(u.language_preference,'vi') AS lang,
            u.display_name, u.full_name,
            uop.medical_conditions,
+           uop.birth_year, uop.gender,
            (SELECT triage_summary FROM health_checkins hc
             WHERE hc.user_id = u.id AND hc.triage_summary IS NOT NULL
             ORDER BY hc.session_date DESC LIMIT 1) AS last_symptom,
@@ -362,6 +367,7 @@ async function runEveningSummary(pool, hour, minute) {
   let sent = 0;
   for (const user of rows) {
     const name = getUserName(user);
+    const { honorific, selfRef, callName, Honorific } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
     const isEn = user.lang === 'en';
 
@@ -377,17 +383,17 @@ async function runEveningSummary(pool, hour, minute) {
 
     const title = isEn
       ? `🌙 Good evening${name ? ' ' + name : ''}!`
-      : `🌙 Tối rồi${name ? ' ' + name + ' ơi' : ''}!`;
+      : `🌙 ${Honorific} ơi, tối rồi!`;
 
     let body;
     if (user.last_symptom) {
       body = isEn
         ? `Before you rest tonight: ${tasks.join(', ')}. You mentioned ${user.last_symptom} recently — hope you're feeling better. Sleep well 💙`
-        : `Trước khi nghỉ ngơi tối nay nhớ: ${tasks.join(', ')} nha. Gần đây bạn có bị ${user.last_symptom} — mong bạn đã đỡ hơn rồi. Ngủ ngon 💙`;
+        : `Trước khi nghỉ ${honorific} nhớ: ${tasks.join(', ')} nha. Gần đây ${honorific} có bị ${user.last_symptom} — ${selfRef} mong ${honorific} đã đỡ hơn. Ngủ ngon 💙`;
     } else {
       body = isEn
         ? `You did great today! Before bed, just remember: ${tasks.join(', ')}. Rest well, tomorrow is a new day 🌟`
-        : `Hôm nay bạn đã rất giỏi rồi! Trước khi ngủ nhớ: ${tasks.join(', ')} nha. Nghỉ ngơi thật ngon, ngày mai lại là ngày mới 🌟`;
+        : `Hôm nay ${honorific} giỏi lắm! Trước khi ngủ nhớ: ${tasks.join(', ')} nha. ${selfRef} chúc ${honorific} ngủ ngon 🌟`;
     }
 
     const missingTypes = [];

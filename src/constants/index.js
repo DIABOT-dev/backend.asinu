@@ -32,11 +32,12 @@ const SEVERITY_COLORS = {
 // NOTIF_MAP — dùng cho dev test push. Mỗi type có title + body mẫu với emoji.
 const NOTIF_MAP = {
   // ── Nhắc nhở sức khoẻ ──────────────────────────────────────────
-  reminder_log_morning:       { title: '☀️ Nhắc ghi log buổi sáng',        body: 'Chào buổi sáng! 🌿 Ghi lại chỉ số sức khỏe hôm nay nhé.' },
-  reminder_log_evening:       { title: '🌙 Chưa ghi log buổi tối',         body: 'Sắp nghỉ rồi! Ghi thêm số liệu sức khỏe trước khi ngủ nha 💙' },
-  reminder_afternoon:         { title: '⛅ Nhắc buổi chiều',               body: 'Buổi chiều rồi! 💙 Bạn có muốn cập nhật sức khoẻ không?' },
-  reminder_morning:           { title: '🌅 Nhắc buổi sáng',               body: 'Sáng tốt lành! ☀️ Đừng quên ghi chỉ số sức khỏe hôm nay nhé.' },
-  reminder_water:             { title: '💧 Uống nước nào!',                body: 'Đã đến giờ uống nước rồi! 💧 Giữ cơ thể luôn đủ nước nhé.' },
+  // NOTE: Các message dưới đây là mẫu dev test (profile 68M). Production dùng i18n t() cá nhân hoá.
+  reminder_log_morning:       { title: '☀️ Cháu cùng chú bắt đầu ngày mới', body: 'Chào buổi sáng! 🌿 Ghi lại chỉ số sức khỏe để cháu theo dõi cùng chú nhé.' },
+  reminder_log_evening:       { title: '🌙 Trước khi nghỉ — cháu nhắc nhẹ', body: 'Sắp nghỉ rồi! Ghi thêm số liệu để cháu nắm tình hình cùng chú nha 💙' },
+  reminder_afternoon:         { title: '⛅ Cháu ghé thăm buổi chiều',      body: 'Buổi chiều rồi! 💙 Chú thấy thế nào? Cập nhật cho cháu biết nhé.' },
+  reminder_morning:           { title: '🌅 Cháu ở đây cùng chú',           body: 'Sáng tốt lành! ☀️ Cháu cùng chú theo dõi sức khoẻ hôm nay nhé.' },
+  reminder_water:             { title: '💧 Cháu nhắc chú uống nước nè',    body: 'Uống ly nước đi chú ơi! 💧 Cháu muốn chú luôn đủ nước nhé.' },
   reminder_glucose:           { title: '🩸 Đến giờ đo đường huyết',        body: 'Đo xong nhớ ghi kết quả vào app để theo dõi chính xác hơn 🩸' },
   reminder_bp:                { title: '💓 Đến giờ đo huyết áp',           body: 'Đo xong nhớ ghi kết quả vào app để Asinu theo dõi cùng 💓' },
   reminder_medication_morning:{ title: '💊 Uống thuốc buổi sáng',          body: 'Uống thuốc sáng đúng giờ nhé! 💊 Uống đều đặn là chìa khóa sức khỏe tốt.' },
@@ -44,10 +45,11 @@ const NOTIF_MAP = {
   reminder_medication:        { title: '💊 Nhắc uống thuốc',               body: 'Đến giờ uống thuốc rồi! 💊 Uống đúng liều, đúng giờ nhé.' },
 
   // ── Check-in ────────────────────────────────────────────────────
-  morning_checkin:            { title: '☀️ Asinu hỏi thăm buổi sáng',      body: 'Chào buổi sáng! 🌿 Hôm nay bạn cảm thấy thế nào?' },
-  evening_checkin:            { title: '🌙 Asinu hỏi thăm buổi tối',       body: 'Tối rồi! Bạn cảm thấy thế nào sau một ngày dài? 💙' },
-  checkin_followup:           { title: '💙 Asinu đang hỏi thăm bạn',       body: '🌿 Tình trạng của bạn đã cải thiện chưa? Cập nhật nhanh nhé.' },
-  checkin_followup_urgent:    { title: '⏰ Asinu chưa nhận được phản hồi',  body: 'Bạn có ổn không? 💙 Hãy cho Asinu biết để chúng tôi theo dõi cùng.' },
+  // NOTE: NOTIF_MAP chỉ dùng cho dev test push. Production dùng i18n t() với xưng hô cá nhân hoá.
+  morning_checkin:            { title: '☀️ Cháu ghé hỏi thăm buổi sáng',   body: 'Chào buổi sáng! 🌿 Hôm nay chú thấy thế nào? Cháu luôn ở đây cùng chú.' },
+  evening_checkin:            { title: '🌙 Cháu ghé hỏi thăm buổi tối',    body: 'Tối rồi! Một ngày dài của chú thế nào? Cháu ở đây nghe chú kể 💙' },
+  checkin_followup:           { title: '💙 Cháu vẫn ở đây — chú khoẻ hơn chưa?', body: '🌿 Cháu vẫn nhớ lúc nãy chú hơi mệt. Giờ đỡ hơn chưa? Cho cháu biết nhé.' },
+  checkin_followup_urgent:    { title: '💙 Cháu vẫn đang ở đây nè',        body: 'Chú ơi, cháu lo quá. Cho cháu biết chú thế nào nhé — cháu đang theo dõi cùng chú 💙' },
 
   // ── Cảnh báo / khẩn cấp ────────────────────────────────────────
   emergency:                  { title: '🚨 Khẩn cấp — Cần giúp đỡ ngay!',  body: '🚨 Người thân của bạn đang cần hỗ trợ khẩn cấp. Kiểm tra ngay!' },

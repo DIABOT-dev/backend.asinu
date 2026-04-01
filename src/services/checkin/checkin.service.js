@@ -25,6 +25,7 @@ const { dispatch: dispatchNotification } = require('../notification/notification
 const { trackEvent } = require('../profile/engagement.service');
 const { updateMissionProgress } = require('../missions/missions.service');
 const { t } = require('../../i18n');
+const { getHonorifics } = require('../../lib/honorifics');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
 
 // ─── Priority map ────────────────────────────────────────────────
@@ -430,11 +431,12 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     'blurred vision', 'chest tightness',
   ];
 
-  const allAnswerText = previousAnswers.map(a => a.answer.toLowerCase()).join(' ');
+  const _safeAns = (v) => (Array.isArray(v) ? v.join(', ') : String(v || ''));
+  const allAnswerText = previousAnswers.map(a => _safeAns(a.answer).toLowerCase()).join(' ');
   const hasRedFlagInAnswers = RED_FLAG_KEYWORDS.some(kw => allAnswerText.includes(kw));
 
   if (hasRedFlagInAnswers) {
-    const allSymptoms = previousAnswers.map(a => a.answer).join(', ');
+    const allSymptoms = previousAnswers.map(a => _safeAns(a.answer)).join(', ');
     const urgentResult = {
       ok: true,
       isDone: true,
@@ -503,7 +505,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
   // Follow-up: allow early conclusion if user says "improved" in layer 1
   const IMPROVED_KEYWORDS = ['đã đỡ', 'đỡ nhiều', 'đỡ rồi', 'hết rồi', 'ổn rồi', 'better', 'improved', 'đang đỡ'];
   const userImproved = isFollowUp && previousAnswers.some(a =>
-    IMPROVED_KEYWORDS.some(kw => a.answer.toLowerCase().includes(kw))
+    IMPROVED_KEYWORDS.some(kw => _safeAns(a.answer).toLowerCase().includes(kw))
   );
   console.log(`[Triage] enforcement check: isDone=${result.isDone}, answers=${previousAnswers.length}, min=${minQForPhase}, hasRedFlag=${result.hasRedFlag}, isFollowUp=${isFollowUp}, userImproved=${userImproved}`);
   if (result.isDone && previousAnswers.length < minQForPhase && !result.hasRedFlag && !userImproved) {
@@ -535,7 +537,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     });
 
     if (isDuplicate) {
-      const allSymptoms = previousAnswers.map(a => a.answer).join(', ');
+      const allSymptoms = previousAnswers.map(a => _safeAns(a.answer)).join(', ');
       result = {
         isDone: true,
         summary: allSymptoms,
@@ -868,7 +870,9 @@ async function runCheckinFollowUps(pool) {
        AND health_checkins.flow_state != 'resolved'
      RETURNING health_checkins.*, u.push_token, u.display_name, u.full_name,
                COALESCE(u.language_preference,'vi') as lang,
-               (SELECT uop.risk_score FROM user_onboarding_profiles uop WHERE uop.user_id = u.id) as risk_score`,
+               (SELECT uop.risk_score FROM user_onboarding_profiles uop WHERE uop.user_id = u.id) as risk_score,
+               (SELECT uop.birth_year FROM user_onboarding_profiles uop WHERE uop.user_id = u.id) as birth_year,
+               (SELECT uop.gender FROM user_onboarding_profiles uop WHERE uop.user_id = u.id) as gender`,
     [now, checkinDateVN()]
   );
 
@@ -881,14 +885,16 @@ async function runCheckinFollowUps(pool) {
     if (newMissCount === 1) {
       // First miss → push + in-app nhắc
       const sLang = session.lang || 'vi';
+      const h = getHonorifics(session);
+      const hParams = { honorific: h.honorific, selfRef: h.selfRef, callName: h.callName, Honorific: h.Honorific };
       const msg = session.flow_state === 'high_alert'
-        ? t('checkin.followup_high_alert', sLang)
-        : t('checkin.followup_normal', sLang);
+        ? t('checkin.followup_high_alert', sLang, hParams)
+        : t('checkin.followup_normal', sLang, hParams);
 
       await sendCheckinNotification(
         pool, session.user_id, session.push_token,
         'checkin_followup',
-        t('checkin.followup_title', sLang),
+        t('checkin.followup_title', sLang, hParams),
         msg,
         { checkinId: String(session.id) }
       );
@@ -914,11 +920,13 @@ async function runCheckinFollowUps(pool) {
 
       // Still push + in-app user one more time
       const sLang2 = session.lang || 'vi';
+      const h2 = getHonorifics(session);
+      const hParams2 = { honorific: h2.honorific, selfRef: h2.selfRef, callName: h2.callName, Honorific: h2.Honorific, name: getShortName(session.display_name || session.full_name) || '' };
       await sendCheckinNotification(
         pool, session.user_id, session.push_token,
         'checkin_followup_urgent',
-        t('checkin.no_response_title', sLang2, { name: getShortName(session.display_name || session.full_name) || '' }),
-        t('checkin.no_response_body', sLang2),
+        t('checkin.no_response_title', sLang2, hParams2),
+        t('checkin.no_response_body', sLang2, hParams2),
         { checkinId: String(session.id) }
       );
       sent++;
@@ -1169,7 +1177,8 @@ async function runMorningCheckin(pool, hour) {
   if (hour !== 7) return { type: 'morning_checkin', total: 0, sent: 0 };
 
   const { rows } = await pool.query(
-    `SELECT u.id, u.push_token, COALESCE(u.language_preference,'vi') AS lang
+    `SELECT u.id, u.push_token, COALESCE(u.language_preference,'vi') AS lang,
+            u.display_name, u.full_name, uop.birth_year, uop.gender
      FROM users u
      JOIN user_onboarding_profiles uop ON uop.user_id = u.id
      LEFT JOIN user_notification_preferences np ON np.user_id = u.id
@@ -1191,11 +1200,13 @@ async function runMorningCheckin(pool, hour) {
 
   let sent = 0;
   for (const user of rows) {
+    const h = getHonorifics(user);
+    const hParams = { honorific: h.honorific, selfRef: h.selfRef, callName: h.callName, Honorific: h.Honorific };
     await sendCheckinNotification(
       pool, user.id, user.push_token,
       'morning_checkin',
-      t('checkin.morning_title', user.lang),
-      t('checkin.morning_body', user.lang),
+      t('checkin.morning_title', user.lang, hParams),
+      t('checkin.morning_body', user.lang, hParams),
       { type: 'morning_checkin' }
     );
     sent++;

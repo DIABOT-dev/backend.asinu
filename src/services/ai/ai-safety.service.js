@@ -38,7 +38,7 @@ function filterAiOutput(text, severity = 'low') {
   if (severity === 'high') {
     const hasDocRef = REQUIRED_HIGH_SEVERITY.some(p => filtered.toLowerCase().includes(p));
     if (!hasDocRef) {
-      filtered += '\n\nNếu tình trạng không cải thiện, bạn nên liên hệ bác sĩ để được tư vấn.';
+      filtered += '\n\nNếu tình trạng không cải thiện, nên liên hệ bác sĩ để được tư vấn.';
       warnings.push('Added doctor recommendation for high severity');
     }
   }

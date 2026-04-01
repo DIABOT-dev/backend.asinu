@@ -29,7 +29,17 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(helmet());
+// Disable CSP for test UI, keep helmet for other routes
+app.use('/api/test/chat-ui', (req, res, next) => next());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+      'script-src': ["'self'", "'unsafe-inline'"],
+      'script-src-attr': ["'self'", "'unsafe-inline'"],
+    },
+  },
+}));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- OPS HEALTH CHECK (INJECTED) ---
