@@ -204,7 +204,7 @@ NGUYÊN TẮC:
         ? existingMemories.map(m => `- [${m.category}] ${m.content}`).join('\n')
         : 'Chưa có.';
 
-      const prompt = `Phân tích đoạn chat và trích xuất điều QUAN TRỌNG cần nhớ về người dùng.
+      const prompt = `Phân tích đoạn chat và trích xuất ONLY điều quan trọng cần nhớ về người dùng.
 
 ĐÃ NHỚ:
 ${existingText}
@@ -212,17 +212,22 @@ ${existingText}
 CHAT:
 ${conversation}
 
-RULES:
-- Chỉ điều THỰC SỰ quan trọng, hữu ích cho lần chat sau
-- KHÔNG lặp lại điều đã nhớ trừ khi cần cập nhật
-- Mỗi memory 1 dòng ngắn gọn
-- Categories: health, preference, concern, habit, medication, general
-- Không có gì mới → trả []
+CHỈ LƯU:
+- Triệu chứng MỚI hoặc THAY ĐỔI
+- Thuốc đang dùng hoặc thay đổi thuốc
+- Dị ứng, thực phẩm kiêng cữ
+- Lo lắng cụ thể về bệnh
+- Thói quen ảnh hưởng sức khoẻ
 
-JSON array:
-[{"content":"...","category":"health","action":"add"}]
-hoặc update: [{"content":"...","category":"health","action":"update","old_content":"..."}]
-hoặc: []
+KHÔNG LƯU:
+- Lời chào, cảm ơn, hỏi thăm chung
+- Điều đã nhớ rồi và không đổi
+- Lời khuyên AI đưa ra
+- Câu hỏi kiến thức chung
+
+Không có gì mới → [].
+[{"content":"ngắn gọn","category":"health|medication|concern|habit|preference","action":"add"}]
+Cập nhật: [{"content":"mới","category":"...","action":"update","old_content":"cũ"}]
 CHỈ JSON.`;
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {

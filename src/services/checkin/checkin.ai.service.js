@@ -291,7 +291,7 @@ async function getNextTriageQuestion({
     // Fallback: detect TYPE from answer content (what user replied)
     if (!usedTypes.has(4) && (ans.includes('vừa mới') || ans.includes('vài giờ') || ans.includes('từ sáng') || ans.includes('từ hôm qua') || ans.includes('vài ngày'))) usedTypes.add(4);
     if (!usedTypes.has(5) && (ans.includes('đỡ dần') || ans.includes('đỡ hơn') || ans.includes('vẫn như cũ') || ans.includes('vẫn vậy') || ans.includes('nặng hơn'))) usedTypes.add(5);
-    if (!usedTypes.has(7) && (ans.includes('ngủ ít') || ans.includes('bỏ bữa') || ans.includes('căng thẳng') || ans.includes('quên thuốc'))) usedTypes.add(7);
+    if (!usedTypes.has(7) && (ans.includes('ngủ ít') || ans.includes('bỏ bữa') || ans.includes('căng thẳng') || ans.includes('quên thuốc') || ans.includes('vận động') || ans.includes('sai tư thế') || ans.includes('bê vác') || ans.includes('ngã') || ans.includes('đứng dậy nhanh') || ans.includes('trời nóng') || ans.includes('làm việc nhiều'))) usedTypes.add(7);
     if (!usedTypes.has(8) && (ans.includes('nghỉ ngơi') || ans.includes('uống nước') || ans.includes('chưa làm gì') || ans.includes('uống thuốc'))) usedTypes.add(8);
 
     // Extract symptoms from answers to TYPE 3 / TYPE 6
@@ -622,13 +622,37 @@ TYPE 1 (Chief Complaint) đã biết — KHÔNG hỏi lại "${Honorific} cảm 
 ${contextBlock}
 
 ═══ TƯ DUY LÂM SÀNG ═══
+🔴 NGUYÊN TẮC SỐ 1: Mọi câu hỏi PHẢI LIÊN QUAN TRỰC TIẾP đến triệu chứng ${honorific} vừa nói.
+- ${honorific} nói "đau vai" → hỏi về VAI: đau chỗ nào, từ khi nào, cử động có đau hơn không.
+  KHÔNG hỏi stress, KHÔNG hỏi ngủ, KHÔNG hỏi ăn uống — trừ khi ${honorific} tự đề cập.
+- ${honorific} nói "chóng mặt" → hỏi: khi nào bị, khi đứng dậy hay lúc nào, có buồn nôn không.
+  KHÔNG hỏi căng thẳng, KHÔNG hỏi bỏ bữa — trừ khi có bệnh nền liên quan (tiểu đường → hỏi ăn uống OK).
+
 Câu hỏi sau PHẢI nối tiếp tự nhiên từ câu trả lời trước:
-- ${honorific} chọn 1 triệu chứng → hỏi onset: "${Honorific} bị [triệu chứng] từ lúc nào vậy?"
+- ${honorific} chọn 1 triệu chứng → hỏi chi tiết về ĐÚNG triệu chứng đó: vị trí, mức độ, onset.
 - ${honorific} chọn NHIỀU triệu chứng → hỏi onset CHUNG: "${Honorific} bị các triệu chứng trên từ lúc nào vậy?"
 - ${honorific} nói "từ sáng" → hỏi diễn tiến (CHỈ 1 CÂU): "Từ sáng đến giờ ${honorific} thấy đỡ hơn chưa, hay vẫn vậy?"
-- ${honorific} nói "nặng hơn" → hỏi red flag: "${Honorific} có thêm triệu chứng gì không — đau ngực, khó thở?"
+- ${honorific} nói "nặng hơn" → hỏi red flag PHÙ HỢP VỚI TRIỆU CHỨNG:
+  + Đau bụng → "nôn ra máu, phân đen, sốt cao, bụng cứng, đau dữ dội, không có"
+  + Đau đầu/chóng mặt → "đau ngực, khó thở, hoa mắt, vã mồ hôi, ngất, không có"
+  + Đau vai/khớp/cơ → "tê liệt, yếu cơ, sưng đỏ nóng, sốt, không có"
+  + Mệt mỏi chung → "đau ngực, khó thở, hoa mắt, vã mồ hôi, ngất, không có"
+  KHÔNG dùng red flag tim mạch cho triệu chứng tiêu hóa/cơ xương khớp.
 - ${honorific} nói "đang đỡ" → cân nhắc kết luận sớm
+
 ⚠️ Mỗi bước chỉ sinh 1 câu hỏi. KHÔNG ghép 2 câu hỏi cùng ý vào 1 lượt.
+⚠️ KHÔNG HỎI VÔ TRI: không hỏi stress/căng thẳng khi người dùng nói đau cơ thể, không hỏi ăn uống khi nói đau khớp, không hỏi ngủ khi nói đau bụng. Chỉ hỏi khi CÓ LOGIC Y KHOA RÕ RÀNG.
+
+🩺 TRIỆU CHỨNG ĐI KÈM (BẮT BUỘC):
+Sau khi biết triệu chứng chính, câu hỏi tiếp theo PHẢI hỏi về CÁC TRIỆU CHỨNG ĐI KÈM đặc trưng cho triệu chứng đó để khoanh vùng nguyên nhân. Giống bác sĩ khám bệnh:
+- đau đầu → hỏi buồn nôn, cứng cổ, mờ mắt
+- đau bụng → hỏi sốt, nôn, tiêu chảy
+- chóng mặt → hỏi ù tai, đi không vững, yếu tay chân
+- đau ngực → hỏi khó thở, lan ra tay/hàm, vã mồ hôi
+- khó thở → hỏi sốt, ho, đau ngực, sưng chân
+- đau lưng → hỏi tê chân, yếu chân, tiểu khó
+- tê tay chân → hỏi yếu nửa người, méo miệng, nói ngọng
+- mệt mỏi → hỏi sốt, sụt cân, khó thở, đau ngực
 ${userSaidGettingBetter ? `\n🟢 ${honorific} nói ĐANG ĐỠ → cân nhắc kết luận sớm, severity=low.` : ''}
 ${userSaidGettingWorse ? `\n🔴 ${honorific} nói NẶNG HƠN → BẮT BUỘC hỏi red flag trước khi kết luận.` : ''}
 
@@ -650,11 +674,19 @@ ${isSpecificConcern ? `
 │ ① TYPE 3 — Triệu chứng (multiSelect=true, allowFreeText=true)   │
 │   "${Honorific} đang gặp triệu chứng nào?"                        │
 │   Options: mệt mỏi / chóng mặt / đau đầu / buồn nôn             │
-│            / tức ngực / khó thở / hoa mắt / vã mồ hôi / không rõ │
+│            / tức ngực / khó thở / hoa mắt / vã mồ hôi            │
+│            / ngất hoặc gần ngất / không rõ                         │
 │ ② TYPE 6 — Red flag (multiSelect=true):                           │
 │   "Ngoài [triệu chứng đã khai], ${honorific} có thêm dấu hiệu?" │
-│   Options: khó thở / đau ngực / tức ngực / hoa mắt / vã mồ hôi  │
-│            / ngất / không có                                       │
+│   Options PHẢI PHÙ HỢP VỚI TRIỆU CHỨNG CHÍNH:                   │
+│   - đau đầu → yếu nửa người / nói ngọng / mờ mắt đột ngột / cứng cổ / sốt cao / không có │
+│   - đau bụng → nôn ra máu / phân đen / sốt cao / bụng cứng / đau dữ dội / không có │
+│   - chóng mặt → yếu nửa người / nói ngọng / nhìn đôi / đi không vững / không có │
+│   - đau ngực → lan ra tay hoặc hàm / khó thở / vã mồ hôi / buồn nôn / không có │
+│   - đau lưng → tê liệt / yếu chân / mất kiểm soát tiểu tiện / không có │
+│   - tê tay chân → yếu nửa người / méo miệng / nói ngọng (FAST stroke) / không có │
+│   - khó thở → đau ngực / sưng chân / sốt cao kèm ho / không có │
+│   - mệt mỏi → đau ngực / khó thở / sốt / sụt cân / không có    │
 │   ⚡ Chọn bất kỳ (trừ "không có") → isDone=true, hasRedFlag=true │
 │ ③ TYPE 2 — Severity (multiSelect=false):                          │
 │   Options BẮT BUỘC: trung bình / khá nặng / rất nặng             │
@@ -669,6 +701,7 @@ ${isSpecificConcern ? `
 │ ① TYPE 3 — Triệu chứng (multiSelect=true, allowFreeText=true)   │
 │   "${Honorific} đang gặp triệu chứng nào?"                        │
 │   Options: mệt mỏi / chóng mặt / đau đầu / buồn nôn             │
+│            / sốt / tim đập nhanh / đau nhức cơ thể                │
 │            / khát nước / ăn không ngon / không rõ                  │
 │ ② TYPE 4 — Onset (multiSelect=false, allowFreeText=true)          │
 │   Nhiều triệu chứng → hỏi chung "các triệu chứng trên"           │
@@ -679,7 +712,13 @@ ${isSpecificConcern ? `
 │   → "nặng hơn": BẮT BUỘC hỏi TYPE 6 trước kết luận               │
 │   → "đang đỡ dần": cân nhắc kết luận sớm                          │
 │ ④ TYPE 7 — Nguyên nhân (multiSelect=true, allowFreeText=true)    │
-│   Options: ngủ ít / bỏ bữa / căng thẳng / quên thuốc / không rõ │
+│   Options PHẢI phù hợp với triệu chứng đã khai. VD:              │
+│   - Đau vai/lưng/khớp → vận động nặng / ngồi sai tư thế / bê vác / ngã │
+│   - Đau bụng → ăn đồ lạ / đồ cay / uống thuốc lúc đói / ăn không sạch / uống rượu bia / ăn quá no hoặc ăn khuya │
+│   - Đau đầu → ngủ ít / quên thuốc huyết áp / nhìn màn hình lâu / mất nước / thay đổi thời tiết / uống nhiều caffeine │
+│   - Mệt mỏi → ngủ ít / bỏ bữa / quên thuốc / làm việc nhiều   │
+│   - Chóng mặt → đứng dậy nhanh / bỏ ăn / quên thuốc / nóng / quay đầu nhanh (BPPV) / mất nước │
+│   KHÔNG đưa options không liên quan đến triệu chứng.             │
 │ ⑤ TYPE 8 — Hành động (multiSelect=true)                           │
 │   Options: nghỉ ngơi / ăn uống / uống nước / uống thuốc          │
 │            / chưa làm gì                                           │
@@ -978,11 +1017,38 @@ Trả lời JSON only.`;
                opts: lang === 'en' ? ['getting better', 'about the same', 'getting worse']
                 : ['đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn'],
                multi: false, freeText: false },
-          7: { q: lang === 'en' ? 'What might have caused this?'
-                : `${Honorific} có nhớ gần đây ngủ ít, bỏ bữa hay căng thẳng gì không? 🤔`,
-               opts: lang === 'en' ? ['lack of sleep', 'skipped meals', 'stress', 'missed medication', 'not sure']
-                : ['ngủ ít', 'bỏ bữa', 'căng thẳng', 'quên uống thuốc', 'không rõ'],
-               multi: true, freeText: true },
+          7: (() => {
+            const sym = (primarySymptom || '').toLowerCase();
+            const isPain = sym.includes('đau') || sym.includes('nhức');
+            const isMuscle = sym.includes('vai') || sym.includes('lưng') || sym.includes('cổ') || sym.includes('tay') || sym.includes('chân') || sym.includes('khớp');
+            const isStomach = sym.includes('bụng') || sym.includes('dạ dày') || sym.includes('buồn nôn') || sym.includes('tiêu chảy');
+            const isHeadache = sym.includes('đầu');
+            const isDizzy = sym.includes('chóng mặt') || sym.includes('hoa mắt');
+            const isFatigue = sym.includes('mệt') || sym.includes('uể oải');
+            let q7, o7;
+            if (isStomach) {
+              q7 = `${Honorific} có ăn gì lạ, đồ cay, hay uống thuốc lúc bụng đói không? 🤔`;
+              o7 = ['ăn đồ lạ', 'ăn đồ cay/nóng', 'uống thuốc lúc đói', 'ăn không sạch', 'không rõ'];
+            } else if (isHeadache) {
+              q7 = `${Honorific} có nhớ gần đây ngủ ít, quên thuốc hay làm việc căng thẳng không? 🤔`;
+              o7 = ['ngủ ít', 'quên thuốc huyết áp', 'nhìn màn hình lâu', 'căng thẳng', 'không rõ'];
+            } else if (isPain && isMuscle) {
+              q7 = `${Honorific} có nhớ gần đây vận động nặng, ngồi sai tư thế hay bê vác gì không? 🤔`;
+              o7 = ['vận động nặng', 'ngồi sai tư thế', 'bê vác', 'ngã', 'không rõ'];
+            } else if (isDizzy) {
+              q7 = `${Honorific} có nhớ gần đây bỏ ăn, đứng dậy nhanh hay quên thuốc không? 🤔`;
+              o7 = ['bỏ ăn', 'đứng dậy nhanh', 'quên thuốc', 'trời nóng', 'không rõ'];
+            } else if (isFatigue) {
+              q7 = `${Honorific} có nhớ gần đây ngủ ít, bỏ bữa hay làm việc nhiều không? 🤔`;
+              o7 = ['ngủ ít', 'bỏ bữa', 'làm việc nhiều', 'quên thuốc', 'không rõ'];
+            } else {
+              q7 = `${Honorific} có nhớ gần đây có gì bất thường không? 🤔`;
+              o7 = ['ngủ ít', 'bỏ bữa', 'quên thuốc', 'vận động nặng', 'không rõ'];
+            }
+            return { q: lang === 'en' ? 'What might have caused this?' : q7,
+              opts: lang === 'en' ? ['lack of sleep', 'skipped meals', 'heavy activity', 'missed medication', 'not sure'] : o7,
+              multi: true, freeText: true };
+          })(),
           8: { q: lang === 'en' ? 'Have you done anything to feel better?'
                 : `${Honorific} có nghỉ ngơi hay uống thuốc gì chưa? 💊`,
                opts: lang === 'en' ? ['rested', 'ate something', 'drank water', 'took medication', 'nothing yet']
@@ -993,11 +1059,21 @@ Trả lời JSON only.`;
                opts: lang === 'en' ? ['mild', 'moderate', 'quite severe']
                 : ['nhẹ', 'trung bình', 'khá nặng'],
                multi: false, freeText: false },
-          6: { q: lang === 'en' ? 'Do you have any of these warning signs?'
-                : `Ngoài ra ${honorific} có thấy dấu hiệu nào dưới đây không? 🩺`,
-               opts: lang === 'en' ? ['chest pain', 'shortness of breath', 'fainting', 'cold sweat', 'none']
-                : ['đau ngực', 'khó thở', 'hoa mắt', 'vã mồ hôi', 'không có'],
-               multi: true, freeText: false },
+          6: (() => {
+            const sym = (primarySymptom || '').toLowerCase();
+            const isGI = sym.includes('bụng') || sym.includes('dạ dày') || sym.includes('buồn nôn') || sym.includes('tiêu chảy');
+            let q6, o6;
+            if (isGI) {
+              q6 = `Ngoài ra ${honorific} có dấu hiệu nào dưới đây không? 🩺`;
+              o6 = ['nôn ra máu', 'đi ngoài phân đen', 'sốt cao', 'bụng cứng/chướng', 'đau dữ dội', 'không có'];
+            } else {
+              q6 = `Ngoài ra ${honorific} có thấy dấu hiệu nào dưới đây không? 🩺`;
+              o6 = ['đau ngực', 'khó thở', 'hoa mắt', 'vã mồ hôi', 'ngất', 'không có'];
+            }
+            return { q: lang === 'en' ? 'Do you have any of these warning signs?' : q6,
+              opts: lang === 'en' ? ['chest pain', 'shortness of breath', 'fainting', 'cold sweat', 'none'] : o6,
+              multi: true, freeText: false };
+          })(),
           10: { q: lang === 'en' ? 'Does this happen often?'
                 : `Tình trạng này ${honorific} có hay bị không? 🤔`,
                opts: lang === 'en' ? ['first time', 'occasionally', 'often', 'more often recently']
@@ -1010,20 +1086,62 @@ Trả lời JSON only.`;
     }
 
     // ── Red flag symptoms in answers → force TYPE 6 if not yet asked ──
-    const RED_FLAG_IN_ANSWERS = ['tức ngực', 'đau ngực', 'khó thở', 'hoa mắt', 'vã mồ hôi', 'ngất', 'chest pain', 'shortness of breath'];
+    const RED_FLAG_IN_ANSWERS = [
+      // Cardiac
+      'tức ngực', 'đau ngực', 'khó thở', 'hoa mắt', 'vã mồ hôi', 'ngất',
+      'chest pain', 'shortness of breath',
+      // GI
+      'nôn ra máu', 'phân đen', 'bụng cứng', 'vomiting blood', 'black stool',
+      // Neurological
+      'yếu nửa người', 'nói ngọng', 'méo miệng', 'tê liệt',
+      'facial droop', 'slurred speech', 'weakness one side',
+      // MSK
+      'yếu cơ', 'muscle weakness',
+      // Fever-related
+      'cứng cổ', 'stiff neck',
+    ];
     const answersHaveRedFlag = previousAnswers.some(a => RED_FLAG_IN_ANSWERS.some(rf => safeAns(a.answer).includes(rf)));
     const shouldForceRedFlag = !parsed.isDone && !usedTypes.has(6) && (userSaidGettingWorse || answersHaveRedFlag);
     if (shouldForceRedFlag) {
       const q = (parsed.question || '').toLowerCase();
       const isRedFlagQ = q.includes('dấu hiệu') || q.includes('nguy hiểm') || q.includes('đau ngực') || q.includes('khó thở') || q.includes('red flag');
       if (!isRedFlagQ) {
-        console.log(`[TriageAI] ⚠️ User said "nặng hơn" but AI didn't ask TYPE 6 → forcing red flag question`);
+        // Detect primary symptom category to choose appropriate red flag set
+        const allAnswersText = previousAnswers.map(a => safeAns(a.answer)).join(' ');
+        const isGISymptom = /đau bụng|đau dạ dày|tiêu chảy|nôn|buồn nôn|stomach|abdominal|nausea|vomit/.test(allAnswersText);
+        const isNeuroSymptom = /đau đầu|chóng mặt|tê|numbness|headache|dizziness|tê bì/.test(allAnswersText);
+        const isMSKSymptom = /đau vai|đau lưng|đau khớp|đau cơ|đau chân|đau tay|back pain|joint|muscle/.test(allAnswersText);
+        const hasFeverSymptom = /sốt|fever/.test(allAnswersText);
+
+        let redFlagOpts, redFlagOptsEn, category;
+        if (isGISymptom) {
+          category = 'GI';
+          redFlagOpts = ['nôn ra máu', 'phân đen', 'sốt cao', 'bụng cứng', 'đau dữ dội', 'không có'];
+          redFlagOptsEn = ['vomiting blood', 'black stool', 'high fever', 'rigid abdomen', 'severe pain', 'none'];
+        } else if (isNeuroSymptom) {
+          category = 'neuro';
+          redFlagOpts = ['yếu nửa người', 'nói ngọng', 'méo miệng', 'tê liệt', 'cứng cổ', 'không có'];
+          redFlagOptsEn = ['weakness one side', 'slurred speech', 'facial droop', 'numbness/paralysis', 'stiff neck', 'none'];
+        } else if (isMSKSymptom) {
+          category = 'MSK';
+          redFlagOpts = ['tê liệt', 'yếu cơ', 'sưng đỏ nóng', 'sốt', 'mất kiểm soát tiểu tiện', 'không có'];
+          redFlagOptsEn = ['numbness/paralysis', 'muscle weakness', 'redness/swelling/warmth', 'fever', 'loss of bladder control', 'none'];
+        } else if (hasFeverSymptom) {
+          category = 'fever';
+          redFlagOpts = ['cứng cổ', 'phát ban', 'khó thở', 'lú lẫn', 'co giật', 'không có'];
+          redFlagOptsEn = ['stiff neck', 'rash', 'shortness of breath', 'confusion', 'seizure', 'none'];
+        } else {
+          category = 'cardiac/general';
+          redFlagOpts = ['đau ngực', 'khó thở', 'hoa mắt', 'vã mồ hôi', 'ngất', 'không có'];
+          redFlagOptsEn = ['chest pain', 'shortness of breath', 'blurred vision', 'cold sweat', 'fainting', 'none'];
+        }
+
+        console.log(`[TriageAI] ⚠️ Forcing TYPE 6 red flag question (category: ${category})`);
         parsed = {
           isDone: false,
           question: lang === 'en' ? `Do you have any of these warning signs?`
             : `Ngoài ra ${honorific} có thấy dấu hiệu nào dưới đây không? 🩺`,
-          options: lang === 'en' ? ['chest pain', 'shortness of breath', 'blurred vision', 'cold sweat', 'fainting', 'none']
-            : ['đau ngực', 'khó thở', 'hoa mắt', 'vã mồ hôi', 'ngất', 'không có'],
+          options: lang === 'en' ? redFlagOptsEn : redFlagOpts,
           multiSelect: true,
           allowFreeText: false,
         };
@@ -1053,6 +1171,33 @@ Trả lời JSON only.`;
       if (knownSymptoms.size > 0 && isSymptomQ) {
         const filtered = parsed.options.filter(o => !knownSymptoms.has(o.toLowerCase().trim()));
         if (filtered.length >= 2) parsed.options = filtered;
+      }
+    }
+
+    // ── TYPE 6 options override: if AI asked red flag but used wrong set for the symptom ──
+    if (!parsed.isDone && parsed.options && parsed.question) {
+      const q = parsed.question.toLowerCase();
+      const isRedFlagQ = q.includes('dấu hiệu') || q.includes('nguy hiểm') || q.includes('warning') || (q.includes('đau ngực') && q.includes('khó thở'));
+      if (isRedFlagQ && parsed.options.some(o => o.includes('không có') || o.includes('none'))) {
+        const allAnswersText = previousAnswers.map(a => safeAns(a.answer)).join(' ');
+        const isGI = /đau bụng|dạ dày|tiêu chảy|nôn|buồn nôn/.test(allAnswersText);
+        const isNeuro = /đau đầu|chóng mặt|tê|tê bì|tê tay/.test(allAnswersText);
+        const isMSK = /đau vai|đau lưng|đau khớp|đau cổ|đau chân|đau tay/.test(allAnswersText);
+        const isFever = /sốt/.test(allAnswersText);
+
+        if (isGI && !parsed.options.some(o => o.includes('nôn ra máu') || o.includes('phân đen'))) {
+          console.log('[TriageAI] Override red flag options → GI set');
+          parsed.options = ['nôn ra máu', 'phân đen', 'sốt cao', 'bụng cứng', 'đau dữ dội', 'không có'];
+        } else if (isNeuro && !parsed.options.some(o => o.includes('yếu nửa') || o.includes('nói ngọng') || o.includes('méo miệng'))) {
+          console.log('[TriageAI] Override red flag options → Neuro set');
+          parsed.options = ['yếu nửa người', 'nói ngọng', 'méo miệng', 'mờ mắt đột ngột', 'cứng cổ + sốt', 'không có'];
+        } else if (isMSK && !parsed.options.some(o => o.includes('tê liệt') || o.includes('yếu cơ') || o.includes('tiểu tiện'))) {
+          console.log('[TriageAI] Override red flag options → MSK set');
+          parsed.options = ['tê liệt', 'yếu cơ', 'sưng đỏ nóng', 'sốt', 'mất kiểm soát tiểu tiện', 'không có'];
+        } else if (isFever && !parsed.options.some(o => o.includes('cứng cổ') || o.includes('phát ban') || o.includes('co giật'))) {
+          console.log('[TriageAI] Override red flag options → Fever set');
+          parsed.options = ['cứng cổ', 'phát ban', 'khó thở', 'lú lẫn', 'co giật', 'không có'];
+        }
       }
     }
 
@@ -1271,6 +1416,82 @@ Trả lời JSON only.`;
         parsed.needsDoctor = true;
       }
 
+      // ══ RULE 8b: Elderly + bệnh nền + severity medium trở lên → luôn needsDoctor ══
+      if (isElderly && hasAnyCondition && (parsed.severity === 'medium' || parsed.severity === 'high')) {
+        if (!parsed.needsDoctor) {
+          console.log(`[Clinical] ⚠️ Elderly + conditions + medium/high severity → needsDoctor`);
+          parsed.needsDoctor = true;
+        }
+      }
+
+      // ══ RULE 8c: Elderly + fever + chronic conditions → at least medium + needsDoctor ══
+      if (isElderly && hasFever && hasAnyCondition) {
+        if (parsed.severity === 'low') {
+          console.log(`[Clinical] ⚠️ Elderly + fever + chronic conditions → medium, needsDoctor`);
+          parsed.severity = 'medium';
+        }
+        parsed.needsDoctor = true;
+      }
+
+      // ══ RULE 8d: Dangerous symptom COMBINATIONS → severity=high ══
+      const hasStomachPain = /đau bụng|đau dạ dày|stomach|abdominal/.test(answersJoined);
+      const hasBackPain = /đau lưng|back pain/.test(answersJoined);
+      const hasLegSwelling = /sưng chân|sưng cẳng chân|phù chân|leg swell|swollen leg/.test(answersJoined);
+      const hasStiffNeck = /cứng cổ|stiff neck/.test(answersJoined);
+      const hasHemiplegia = /yếu nửa người|liệt nửa người|tê nửa người|weakness one side|hemiplegia/.test(answersJoined);
+      const hasSlurredSpeech = /nói ngọng|méo miệng|slurred speech|facial droop/.test(answersJoined);
+      const hasBladderLoss = /mất kiểm soát tiểu|không kiểm soát.*tiểu|tiểu không tự chủ|loss of bladder|incontinence/.test(answersJoined);
+      const hasSyncope = /ngất|bất tỉnh|syncope|passed out/.test(answersJoined);
+
+      // 8d-1: đau ngực + buồn nôn + vã mồ hôi → MI (myocardial infarction)
+      if (hasChestPain && hasNausea && hasSweating && parsed.severity !== 'high') {
+        console.log(`[Clinical] 🚨 Chest pain + nausea + sweating → possible MI → severity=high`);
+        parsed.severity = 'high';
+        parsed.needsDoctor = true;
+        parsed.hasRedFlag = true;
+        parsed.needsFamilyAlert = true;
+      }
+      // 8d-2: đau đầu + sốt + cứng cổ → meningitis
+      if (hasHeadacheDizziness && hasFever && hasStiffNeck && parsed.severity !== 'high') {
+        console.log(`[Clinical] 🚨 Headache + fever + stiff neck → possible meningitis → severity=high`);
+        parsed.severity = 'high';
+        parsed.needsDoctor = true;
+        parsed.hasRedFlag = true;
+        parsed.needsFamilyAlert = true;
+      }
+      // 8d-3: khó thở + sưng chân → PE (pulmonary embolism)
+      if (hasBreathingIssue && hasLegSwelling && parsed.severity !== 'high') {
+        console.log(`[Clinical] 🚨 Shortness of breath + leg swelling → possible PE → severity=high`);
+        parsed.severity = 'high';
+        parsed.needsDoctor = true;
+        parsed.hasRedFlag = true;
+        parsed.needsFamilyAlert = true;
+      }
+      // 8d-4: đau lưng + mất kiểm soát tiểu tiện → cauda equina syndrome
+      if (hasBackPain && hasBladderLoss && parsed.severity !== 'high') {
+        console.log(`[Clinical] 🚨 Back pain + loss of bladder control → possible cauda equina → severity=high`);
+        parsed.severity = 'high';
+        parsed.needsDoctor = true;
+        parsed.hasRedFlag = true;
+        parsed.needsFamilyAlert = true;
+      }
+      // 8d-5: tê/yếu nửa người + nói ngọng → stroke
+      if (hasHemiplegia && hasSlurredSpeech && parsed.severity !== 'high') {
+        console.log(`[Clinical] 🚨 Hemiplegia + slurred speech → possible stroke → severity=high`);
+        parsed.severity = 'high';
+        parsed.needsDoctor = true;
+        parsed.hasRedFlag = true;
+        parsed.needsFamilyAlert = true;
+      }
+      // 8d-6: đau bụng + ngất → internal hemorrhage
+      if (hasStomachPain && hasSyncope && parsed.severity !== 'high') {
+        console.log(`[Clinical] 🚨 Abdominal pain + syncope → possible internal hemorrhage → severity=high`);
+        parsed.severity = 'high';
+        parsed.needsDoctor = true;
+        parsed.hasRedFlag = true;
+        parsed.needsFamilyAlert = true;
+      }
+
       // ══ RULE 9: very_tired status → severity tối thiểu medium ══
       if (isVeryUnwell && parsed.severity === 'low') {
         console.log(`[Clinical] ⚠️ Status very_tired but severity=low → bumped to medium`);
@@ -1324,6 +1545,13 @@ Trả lời JSON only.`;
       // Nặng hơn → max 3h
       if (isWorsening && parsed.followUpHours > 3) {
         parsed.followUpHours = 3;
+      }
+
+      // ══ Fix closeMessage khớp followUpHours ══
+      if (parsed.closeMessage && parsed.followUpHours) {
+        const h = parsed.followUpHours;
+        parsed.closeMessage = parsed.closeMessage.replace(/sau\s+\d+\s+tiếng/g, `sau ${h} tiếng`);
+        parsed.closeMessage = parsed.closeMessage.replace(/sau khoảng\s+\d+\s+tiếng/g, `sau ${h} tiếng`);
       }
     }
     // Apply AI safety filter

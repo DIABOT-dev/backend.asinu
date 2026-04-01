@@ -37,8 +37,8 @@ function formatMemoriesForPrompt(memories) {
  * Chạy background, không block response.
  */
 async function extractAndSaveMemories(pool, userId, recentMessages) {
-  // Cần ít nhất 4 tin nhắn (2 lượt qua lại) mới trích xuất
-  if (!recentMessages || recentMessages.length < 4) return;
+  // Cần ít nhất 6 tin nhắn (3 lượt qua lại) mới trích xuất
+  if (!recentMessages || recentMessages.length < 6) return;
 
   // Lấy 10 tin nhắn gần nhất để phân tích
   const last10 = recentMessages.slice(-10);
@@ -52,28 +52,33 @@ async function extractAndSaveMemories(pool, userId, recentMessages) {
     ? existing.map(m => `- [${m.category}] ${m.content}`).join('\n')
     : 'Chưa có memory nào.';
 
-  const prompt = `Phân tích đoạn chat sau và trích xuất những ĐIỀU QUAN TRỌNG cần nhớ về người dùng.
+  const prompt = `Phân tích đoạn chat và trích xuất ONLY điều quan trọng cần nhớ về người dùng.
 
 ĐÃ NHỚ:
 ${existingText}
 
-ĐOẠN CHAT MỚI:
+CHAT:
 ${conversation}
 
-RULES:
-- Chỉ trích xuất điều THỰC SỰ quan trọng, hữu ích cho lần chat sau
-- KHÔNG lặp lại điều đã nhớ (trừ khi cần CẬP NHẬT vì thông tin mới)
-- Mỗi memory ngắn gọn, 1 dòng
-- Categories: health (triệu chứng, bệnh), preference (sở thích ăn uống, thói quen), concern (lo lắng), habit (thói quen sinh hoạt), medication (thuốc), general
-- Nếu không có gì mới cần nhớ → trả về mảng rỗng
+CHỈ LƯU những điều sau (nếu có):
+- Triệu chứng MỚI hoặc triệu chứng THAY ĐỔI (VD: "bị tê tay từ tuần trước")
+- Thuốc đang dùng hoặc THAY ĐỔI thuốc
+- Dị ứng, thực phẩm kiêng cữ
+- Lo lắng cụ thể về bệnh (VD: "sợ biến chứng mắt")
+- Thói quen ảnh hưởng sức khoẻ (VD: "hay quên thuốc tối", "không uống đủ nước")
 
-Trả về JSON array:
-[{"content": "nội dung", "category": "health", "action": "add"}]
-hoặc cập nhật memory cũ:
-[{"content": "nội dung mới", "category": "health", "action": "update", "old_content": "nội dung cũ cần thay"}]
-hoặc mảng rỗng: []
+KHÔNG LƯU:
+- Lời chào, cảm ơn, hỏi thăm chung chung
+- Điều đã có trong profile (tuổi, bệnh nền, chiều cao...)
+- Điều đã nhớ rồi và không thay đổi
+- Lời khuyên AI đưa ra
+- Câu hỏi kiến thức chung (VD: "tiểu đường ăn gì")
 
-CHỈ trả JSON, không giải thích.`;
+Trả JSON array. Không có gì mới → trả [].
+[{"content":"ngắn gọn 1 dòng","category":"health|medication|concern|habit|preference","action":"add"}]
+Cập nhật: [{"content":"mới","category":"...","action":"update","old_content":"cũ"}]
+
+CHỈ JSON.`;
 
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
