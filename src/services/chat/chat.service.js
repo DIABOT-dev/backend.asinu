@@ -8,6 +8,7 @@
 const { t } = require('../../i18n');
 const { filterChatResponse } = require('../ai/ai-safety.service');
 const { logAiInteraction } = require('../ai/ai-logger.service');
+const { getUserMemories, formatMemoriesForPrompt, extractAndSaveMemories } = require('./memory.service');
 
 // =====================================================
 // CONSTANTS
@@ -200,7 +201,7 @@ const countConsecutiveAiQuestions = (history = []) => {
  * @param {Array} history - Full conversation history (for loop detection)
  * @returns {string} - System prompt
  */
-const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, history = [], lang = 'vi') => {
+const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, history = [], lang = 'vi', memories = []) => {
   const isEn = lang === 'en';
   const lines = [];
 
@@ -247,18 +248,45 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
     lines.push('Structure: empathy (2-3 sentences) → questions (2-3) → explanation (2-3) → detailed advice (4-6) → encouragement + follow-up question (2).');
     lines.push('Use emoji naturally throughout: 😊 🤗 💪 ❤️ 🌿 💧 — 3-5 emoji per message, placed where they feel natural.');
   } else {
-    lines.push('Bạn là Asinu — người đồng hành sức khỏe thân thiết, như người thân trong gia đình luôn quan tâm, lắng nghe và thấu hiểu.');
+    lines.push('Bạn là Asinu — trợ lý sức khỏe, nói chuyện thân thiện và thẳng thắn. Biết nhiều, nhớ chi tiết người dùng kể, giải thích bằng ngôn ngữ đời thường.');
     lines.push('Nói chuyện tự nhiên như nhắn tin với người thân yêu. KHÔNG máy móc, KHÔNG sáo rỗng, KHÔNG kiểu chatbot.');
     lines.push(honorificNote);
-    lines.push('LUÔN đồng cảm SÂU SẮC trước (2-3 câu mô tả cảm giác của họ) rồi mới tư vấn. Hỏi thêm 2-3 câu để thể hiện sự quan tâm thật sự.');
+
+    // ── PHONG CÁCH TẠO GẮN KẾT ──
+    lines.push('');
+    lines.push('NGUYÊN TẮC GẮN KẾT:');
+    lines.push('');
+    lines.push('1. CÁ NHÂN HÓA SÂU:');
+    lines.push('- Nếu có MEMORY → nhắc lại tự nhiên: "Hôm trước ${honorific} có nói bị mệt sau ăn trưa, hôm nay còn không?"');
+    lines.push('- So sánh hôm nay vs trước đó khi có thể: "Lần trước đường huyết 195, lần này thế nào?"');
+    lines.push('- Cho thấy mình đang THEO DÕI thật, không phải trả lời máy móc.');
+    lines.push('');
+    lines.push('2. MỖI CÂU TRẢ LỜI PHẢI CÓ:');
+    lines.push('- 1 HÀNH ĐỘNG LÀM NGAY hôm nay (today action) — cụ thể, dễ làm. VD: "Chiều nay ${honorific} thử đi bộ 15 phút sau ăn xem."');
+    lines.push('- 1 THỨ CẦN THEO DÕI — để lần sau hỏi lại. VD: "Ngày mai ${honorific} đo lại huyết áp rồi cho ${selfRef} biết nha."');
+    lines.push('- KHÔNG nói chung chung kiểu "nên tập thể dục" — phải nói RÕ tập gì, bao lâu, lúc nào.');
+    lines.push('');
+    lines.push('3. TẠO CẢM GIÁC TIẾN BỘ:');
+    lines.push('- Khi người dùng làm tốt → công nhận thẳng: "Đo đều vậy là tốt rồi ${honorific}.", "So với tuần trước thì ${honorific} đang đi đúng hướng."');
+    lines.push('- Dùng từ ngữ tích cực: "đang cải thiện", "tốt hơn rồi", "đi đúng hướng" khi phù hợp.');
+    lines.push('- KHÔNG khen lố, KHÔNG sến. Chỉ công nhận khi có cơ sở.');
+    lines.push('');
+    lines.push('4. ĐỒNG HÀNH THẬT SỰ:');
+    lines.push('- Nói chuyện như mình thật sự QUAN TÂM, tìm mọi cách giúp họ tốt hơn.');
+    lines.push('- Giải thích bằng so sánh đời thường thay vì thuật ngữ y khoa.');
+    lines.push('- Kết tin nhắn bằng 1 câu gợi mở tự nhiên — khiến người dùng muốn quay lại chat.');
+    lines.push('- KHÔNG sến, KHÔNG quá ngọt. Giọng bình thường, thẳng thắn, đáng tin.');
+    lines.push('');
+
+    lines.push('LUÔN đồng cảm SÂU SẮC trước (2-3 câu mô tả cảm giác của họ) rồi mới tư vấn.');
     lines.push('TỐI THIỂU 10 câu mỗi tin nhắn. KHÔNG BAO GIỜ trả lời ít hơn 10 câu cho câu hỏi sức khỏe. Phải CHI TIẾT và ĐẦY ĐỦ.');
     lines.push('Cấu trúc BẮT BUỘC mỗi tin nhắn:');
-    lines.push('  1️⃣ Đồng cảm sâu (2-3 câu) — mô tả lại cảm giác của họ, cho thấy mình THẬT SỰ hiểu');
-    lines.push('  2️⃣ Hỏi thêm (2-3 câu) — hỏi cụ thể để hiểu rõ hơn, thể hiện quan tâm');
-    lines.push('  3️⃣ Giải thích (2-3 câu) — tại sao lại bị vậy, bằng ngôn ngữ dễ hiểu');
-    lines.push('  4️⃣ Lời khuyên chi tiết (4-6 câu) — từng bước cụ thể, dễ làm ngay');
-    lines.push('  5️⃣ Động viên + câu hỏi mở (2 câu) — kết bằng lời ấm áp và hỏi thêm');
-    lines.push('Dùng emoji tự nhiên xuyên suốt tin nhắn: 😊 🤗 💪 ❤️ 🌿 💧 😟 — khoảng 3-5 emoji mỗi tin, đặt ở chỗ phù hợp.');
+    lines.push('  1️⃣ Đồng cảm ngắn (1-2 câu) — cho thấy hiểu vấn đề, không dài dòng');
+    lines.push('  2️⃣ Giải thích dễ hiểu (2-3 câu) — so sánh đời thường, ví dụ cụ thể');
+    lines.push('  3️⃣ Lời khuyên cụ thể (4-6 câu) — từng bước dễ làm ngay');
+    lines.push('  4️⃣ Gợi mở (1-2 câu) — 1 câu hỏi hoặc gợi ý khiến muốn chat tiếp');
+    lines.push('Emoji: dùng ít, đúng chỗ. Tối đa 2-3 emoji mỗi tin. KHÔNG rải emoji khắp nơi.');
+    lines.push('GIỌNG VĂN: bình thường, thân thiện, thẳng thắn. Như nói chuyện với bạn bè. KHÔNG sến, KHÔNG quá ngọt.');
     lines.push('CẤM TUYỆT ĐỐI: "Chăm sóc sức khỏe thật tốt nhé!", "Chắc chắn rồi!", "Duy trì lối sống lành mạnh", hoặc bất kỳ câu sáo rỗng nào kiểu poster y tế.');
   }
 
@@ -405,6 +433,15 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
   }
 
   if (profile || logsSummary) lines.push('');
+
+  // ── USER MEMORIES (từ các cuộc chat trước) ─────────────
+  if (memories && memories.length > 0) {
+    lines.push('');
+    lines.push(formatMemoriesForPrompt(memories));
+    lines.push(isEn
+      ? 'Use memories naturally: reference past conversations, compare today vs before, show you remember them. Do NOT list memories back.'
+      : 'Dùng memory tự nhiên: nhắc lại cuộc chat trước, so sánh hôm nay vs trước đó, cho thấy mình nhớ họ. KHÔNG liệt kê memory ra.');
+  }
 
   // ── CONVERSATION STYLE ──────────────────────────────────
   if (historyLength === 0) {
@@ -671,12 +708,14 @@ async function processChat(pool, userId, message, context = {}) {
       // Gemini/other: fetch history + profile + health logs BEFORE saving current message
       try {
         const historyLimit = userIsPremium ? HISTORY_LIMIT_PREMIUM : HISTORY_LIMIT_FREE;
-        [onboardingProfile, conversationHistory, logsSummary] = await Promise.all([
+        let userMemories = [];
+        [onboardingProfile, conversationHistory, logsSummary, userMemories] = await Promise.all([
           getOnboardingProfile(pool, userId),
           getRecentHistory(pool, userId, historyLimit, retentionDays),
           getHealthLogsSummary(pool, userId),
+          getUserMemories(pool, userId).catch(() => []),
         ]);
-        systemPrompt = buildSystemPrompt(onboardingProfile, conversationHistory.length, logsSummary, conversationHistory, userLang);
+        systemPrompt = buildSystemPrompt(onboardingProfile, conversationHistory.length, logsSummary, conversationHistory, userLang, userMemories);
       } catch (err) {
 
       }
@@ -724,6 +763,14 @@ async function processChat(pool, userId, message, context = {}) {
 
     // Save assistant reply
     const assistantRow = await saveAssistantReply(pool, userId, reply, now);
+
+    // Extract memories in background (fire-and-forget)
+    if (conversationHistory && conversationHistory.length >= 4) {
+      const allMessages = [...conversationHistory, { message, sender: 'user' }, { message: reply, sender: 'assistant' }];
+      extractAndSaveMemories(pool, userId, allMessages).catch(err =>
+        console.error('[Memory] Background extract failed:', err.message)
+      );
+    }
 
     return {
       ok: true,

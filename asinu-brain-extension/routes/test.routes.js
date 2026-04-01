@@ -107,14 +107,71 @@ function testRoutes(pool) {
     }
   });
 
-  // ─── Test Chat AI ───
+  // ─── Test Free Triage (no strict rules) ───
+  router.post('/free-triage', async (req, res) => {
+    try {
+      const { getHonorifics } = require('../../src/lib/honorifics');
+      const { message, profile, history = [] } = req.body;
+      const h = getHonorifics({
+        birth_year: profile.birth_year,
+        gender: profile.gender,
+        full_name: profile.full_name,
+        lang: 'vi',
+      });
+      const systemPrompt = `Bạn là Asinu — trợ lý sức khoẻ AI bằng tiếng Việt.
+
+CÁCH XƯNG HÔ:
+- Gọi người dùng: "${h.callName}" (${h.honorific})
+- Tự xưng: "${h.selfRef}"
+
+THÔNG TIN NGƯỜI DÙNG:
+- Tên: ${profile.full_name}
+- Năm sinh: ${profile.birth_year} (${new Date().getFullYear() - profile.birth_year} tuổi)
+- Giới tính: ${profile.gender}
+- Bệnh nền: ${(profile.medical_conditions || []).join(', ') || 'Không'}
+- Dùng thuốc hàng ngày: ${profile.daily_medication || 'Không'}
+- Chiều cao: ${profile.height_cm}cm, Cân nặng: ${profile.weight_kg}kg
+
+NHIỆM VỤ:
+Bạn cần hiểu tình trạng sức khoẻ hiện tại của người dùng và đặt câu hỏi giúp làm rõ vấn đề nhanh nhất.
+
+NGUYÊN TẮC:
+- Hỏi ngắn gọn, tự nhiên, thân thiện
+- Mỗi lần chỉ hỏi 1 câu
+- Dựa vào câu trả lời trước để hỏi tiếp, không hỏi lại điều đã biết
+- Khi đã đủ thông tin → đưa ra nhận định và lời khuyên
+- Nói chuyện như người thật, không máy móc
+- Xưng hô nhất quán: "${h.selfRef}" và "${h.honorific}"`;
+
+      const messages = [{ role: 'system', content: systemPrompt }];
+      for (const turn of history) {
+        messages.push({ role: turn.role, content: turn.content });
+      }
+      messages.push({ role: 'user', content: message });
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+        body: JSON.stringify({ model: 'gpt-4o', messages, max_completion_tokens: 1024, temperature: 0.8 }),
+      });
+      const data = await response.json();
+      const reply = (data.choices?.[0]?.message?.content || 'Lỗi').trim();
+      res.json({ reply });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── Test Chat AI (with memory support) ───
   router.post('/chat', async (req, res) => {
     try {
       const { buildSystemPrompt } = require('../../src/services/chat/chat.service');
-      const { message, profile, history = [] } = req.body;
+      const { formatMemoriesForPrompt } = require('../../src/services/chat/memory.service');
+      const { message, profile, history = [], memories = [] } = req.body;
+      const formattedMemories = memories.map(m => ({ content: m.content, category: m.category, updated_at: m.updated_at || '' }));
       const systemPrompt = buildSystemPrompt(profile, history.length,
         { latest_glucose: { value: 195, unit: 'mg/dL' }, latest_bp: { systolic: 148, diastolic: 92, pulse: 78 } },
-        history, 'vi');
+        history, 'vi', formattedMemories);
       const messages = [{ role: 'system', content: systemPrompt }];
       for (const turn of history) messages.push({ role: turn.sender === 'user' ? 'user' : 'assistant', content: turn.message });
       messages.push({ role: 'user', content: message });
@@ -130,6 +187,57 @@ function testRoutes(pool) {
       res.json({ reply });
     } catch (err) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ─── Test Extract Memories (for test-chat localStorage) ───
+  router.post('/extract-memories', async (req, res) => {
+    try {
+      const { messages = [], existingMemories = [] } = req.body;
+      if (messages.length < 4) return res.json({ memories: [] });
+
+      const conversation = messages.slice(-10).map(m =>
+        `${m.sender === 'user' ? 'User' : 'AI'}: ${m.message}`
+      ).join('\n');
+
+      const existingText = existingMemories.length
+        ? existingMemories.map(m => `- [${m.category}] ${m.content}`).join('\n')
+        : 'Chưa có.';
+
+      const prompt = `Phân tích đoạn chat và trích xuất điều QUAN TRỌNG cần nhớ về người dùng.
+
+ĐÃ NHỚ:
+${existingText}
+
+CHAT:
+${conversation}
+
+RULES:
+- Chỉ điều THỰC SỰ quan trọng, hữu ích cho lần chat sau
+- KHÔNG lặp lại điều đã nhớ trừ khi cần cập nhật
+- Mỗi memory 1 dòng ngắn gọn
+- Categories: health, preference, concern, habit, medication, general
+- Không có gì mới → trả []
+
+JSON array:
+[{"content":"...","category":"health","action":"add"}]
+hoặc update: [{"content":"...","category":"health","action":"update","old_content":"..."}]
+hoặc: []
+CHỈ JSON.`;
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+        body: JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_completion_tokens: 512, temperature: 0.3 }),
+      });
+      const data = await response.json();
+      const raw = (data.choices?.[0]?.message?.content || '').trim();
+      const jsonMatch = raw.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) return res.json({ memories: [] });
+      const items = JSON.parse(jsonMatch[0]);
+      res.json({ memories: Array.isArray(items) ? items : [] });
+    } catch (err) {
+      res.status(500).json({ error: err.message, memories: [] });
     }
   });
 

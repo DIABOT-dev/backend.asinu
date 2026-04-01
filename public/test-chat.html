@@ -74,10 +74,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
     <option value="old_female">65F Tiểu đường+HA — Cô/Cháu</option>
   </select>
   <button onclick="resetAll()" style="padding:6px 14px;border:2px solid #ef4444;background:#fef2f2;border-radius:8px;font-weight:600;color:#dc2626;cursor:pointer;font-size:12px;">Reset session</button>
+  <button onclick="clearMemory()" style="padding:6px 14px;border:2px solid #f59e0b;background:#fffbeb;border-radius:8px;font-weight:600;color:#d97706;cursor:pointer;font-size:12px;">Xóa memory</button>
 </div>
 
 <div class="tabs">
   <div class="tab active" data-tab="checkin" onclick="switchTab('checkin')">Check-in</div>
+  <div class="tab" data-tab="free" onclick="switchTab('free')">AI Tự do</div>
   <div class="tab" data-tab="chat" onclick="switchTab('chat')">Chat AI</div>
 </div>
 
@@ -96,8 +98,29 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <div class="checkin-buttons" id="checkin-buttons"></div>
 </div>
 
+<!-- AI TỰ DO PANEL -->
+<div class="panel" id="panel-free">
+  <div class="messages" id="free-messages"></div>
+  <div class="input-area">
+    <textarea id="free-input" rows="2" placeholder="Nói tình trạng của bạn... VD: Tôi hơi mệt từ sáng"></textarea>
+    <button onclick="sendFree()" id="free-send">Gửi</button>
+  </div>
+  <div style="padding:6px 16px;background:#f9f9f9;border-top:1px solid #eee;display:flex;gap:8px;align-items:center;">
+    <span style="font-size:11px;color:#999;">Gợi ý:</span>
+    <button onclick="document.getElementById('free-input').value='Tôi hơi mệt từ sáng';sendFree()" style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;font-size:11px;cursor:pointer;color:#555;">Tôi hơi mệt</button>
+    <button onclick="document.getElementById('free-input').value='Tôi bị chóng mặt và buồn nôn';sendFree()" style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;font-size:11px;cursor:pointer;color:#555;">Chóng mặt</button>
+    <button onclick="document.getElementById('free-input').value='Hôm nay tôi khoẻ';sendFree()" style="padding:4px 10px;border:1px solid #ddd;border-radius:12px;background:#fff;font-size:11px;cursor:pointer;color:#555;">Tôi khoẻ</button>
+  </div>
+</div>
+
 <!-- CHAT PANEL -->
 <div class="panel" id="panel-chat">
+  <div id="chat-welcome" style="padding:20px 16px;text-align:center;">
+    <div style="font-size:40px;margin-bottom:8px;">👋</div>
+    <div id="chat-greeting" style="font-size:16px;font-weight:600;color:#333;margin-bottom:4px;"></div>
+    <div style="font-size:13px;color:#888;margin-bottom:16px;">Asinu luôn ở đây lắng nghe. Hỏi bất cứ điều gì nhé!</div>
+    <div id="chat-chips" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;"></div>
+  </div>
   <div class="messages" id="chat-messages"></div>
   <div class="input-area">
     <textarea id="chat-input" rows="2" placeholder="Hỏi Asinu bất cứ điều gì..."></textarea>
@@ -231,10 +254,16 @@ function resetAll() {
   document.getElementById('checkin-input').value = '';
   document.getElementById('chat-messages').innerHTML = '';
   document.getElementById('chat-input').value = '';
+  const chatWelcome = document.getElementById('chat-welcome');
+  if (chatWelcome) chatWelcome.style.display = 'block';
+  freeHistory = [];
+  document.getElementById('free-messages').innerHTML = '';
+  document.getElementById('free-input').value = '';
   updateStatusBar();
   updateButtons();
+  updateChatWelcome();
   addMsg('checkin-messages', 'system', 'Session mới. Chọn profile rồi check-in.');
-  addMsg('chat-messages', 'system', 'Nhập câu hỏi sức khoẻ để chat với Asinu AI.');
+  addMsg('free-messages', 'system', 'Nói tình trạng sức khoẻ của bạn. AI sẽ hỏi thêm để hiểu rõ vấn đề.');
 }
 
 // ─── Initial check-in (buổi sáng) ───
@@ -432,11 +461,192 @@ async function sendCheckin() {
   await callTriage();
 }
 
+// ─── Chat welcome + chips ───
+function updateChatWelcome() {
+  const profile = getProfile();
+  const age = new Date().getFullYear() - profile.birth_year;
+  const isMale = profile.gender.includes('Nam');
+  let hon = 'bạn';
+  if (age >= 60) hon = isMale ? 'chú' : 'cô';
+  else if (age >= 40) hon = isMale ? 'anh' : 'chị';
+  const name = profile.full_name.trim().split(/\s+/).pop();
+  const hour = new Date().getHours();
+  let timeGreet = 'Chào';
+  if (hour < 12) timeGreet = 'Chào buổi sáng';
+  else if (hour < 18) timeGreet = 'Chào buổi chiều';
+  else timeGreet = 'Chào buổi tối';
+
+  document.getElementById('chat-greeting').textContent = `${timeGreet}, ${hon} ${name}!`;
+
+  const conditions = profile.medical_conditions || [];
+  const chips = [];
+  chips.push({ text: 'Hôm nay tôi nên ăn gì?', icon: '🍽' });
+  chips.push({ text: 'Tôi nên tập gì hôm nay?', icon: '🏃' });
+  chips.push({ text: 'Tôi khó ngủ quá', icon: '😴' });
+  if (conditions.some(c => c.includes('Tiểu đường'))) {
+    chips.push({ text: 'Đường huyết 195 có cao không?', icon: '🩸' });
+    chips.push({ text: 'Tôi quên uống thuốc tiểu đường', icon: '💊' });
+  }
+  if (conditions.some(c => c.includes('huyết áp'))) {
+    chips.push({ text: 'Huyết áp 148/92 có nguy hiểm không?', icon: '❤️' });
+    chips.push({ text: 'Cách hạ huyết áp tự nhiên?', icon: '🌿' });
+  }
+  if (conditions.some(c => c.includes('Tim'))) {
+    chips.push({ text: 'Tôi bị đau ngực nhẹ', icon: '💗' });
+  }
+  chips.push({ text: 'Tôi thấy lo lắng về sức khoẻ', icon: '😟' });
+  chips.push({ text: 'Kể chuyện vui cho tôi nghe', icon: '😊' });
+
+  const container = document.getElementById('chat-chips');
+  container.innerHTML = chips.map(c =>
+    `<button onclick="document.getElementById('chat-input').value='${c.text}';sendChat()" style="padding:8px 14px;border:1.5px solid #e0e0e0;border-radius:20px;background:#fff;font-size:13px;cursor:pointer;color:#555;display:flex;align-items:center;gap:4px;transition:all 0.2s;" onmouseover="this.style.borderColor='#08b8a2';this.style.color='#08b8a2'" onmouseout="this.style.borderColor='#e0e0e0';this.style.color='#555'">${c.icon} ${c.text}</button>`
+  ).join('');
+}
+
+document.getElementById('profileSelect').addEventListener('change', () => {
+  updateChatWelcome();
+});
+
+// ─── AI TỰ DO ───
+let freeHistory = [];
+let freeSending = false;
+
+async function sendFree() {
+  const input = document.getElementById('free-input');
+  const text = input.value.trim();
+  if (!text || freeSending) return;
+  freeSending = true;
+  document.getElementById('free-send').disabled = true;
+  input.value = '';
+  addMsg('free-messages', 'user', text);
+  addMsg('free-messages', 'system', 'AI đang trả lời...');
+  try {
+    const res = await fetch('/api/test/free-triage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, profile: getProfile(), history: freeHistory }),
+    });
+    const msgs = document.getElementById('free-messages');
+    const last = msgs.lastChild;
+    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
+    const data = await res.json();
+    const reply = data.reply || data.error || 'Lỗi';
+    freeHistory.push({ role: 'user', content: text });
+    freeHistory.push({ role: 'assistant', content: reply });
+    addMsg('free-messages', 'ai', reply);
+  } catch (err) {
+    const msgs = document.getElementById('free-messages');
+    const last = msgs.lastChild;
+    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
+    addMsg('free-messages', 'system', 'Lỗi: ' + err.message);
+  } finally {
+    freeSending = false;
+    document.getElementById('free-send').disabled = false;
+  }
+}
+
+// ─── CHAT MEMORY (localStorage per profile) ───
+function getMemoryKey() {
+  return 'asinu_memories_' + document.getElementById('profileSelect').value;
+}
+function loadMemories() {
+  try { return JSON.parse(localStorage.getItem(getMemoryKey()) || '[]'); } catch { return []; }
+}
+function saveMemories(memories) {
+  localStorage.setItem(getMemoryKey(), JSON.stringify(memories.slice(0, 20)));
+}
+function clearMemory() {
+  localStorage.removeItem(getMemoryKey());
+  addMsg('chat-messages', 'system', 'Memory đã xóa cho profile này.');
+}
+async function extractMemories(allMessages) {
+  if (allMessages.length < 4) return;
+  try {
+    const res = await fetch('/api/test/extract-memories', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: allMessages, existingMemories: loadMemories() }),
+    });
+    const data = await res.json();
+    if (!data.memories || !data.memories.length) return;
+    const existing = loadMemories();
+    for (const item of data.memories) {
+      if (!item.content || !item.category) continue;
+      if (item.action === 'update' && item.old_content) {
+        const idx = existing.findIndex(m => m.content === item.old_content);
+        if (idx >= 0) existing[idx] = { content: item.content, category: item.category };
+        else existing.push({ content: item.content, category: item.category });
+      } else {
+        existing.push({ content: item.content, category: item.category });
+      }
+    }
+    saveMemories(existing);
+    console.log('[Memory] Saved', data.memories.length, 'new memories. Total:', existing.length);
+  } catch (err) {
+    console.error('[Memory] Extract failed:', err.message);
+  }
+}
+
 // ─── CHAT ───
+function showChatFollowUpChips(reply) {
+  // Gợi ý câu hỏi tiếp theo dựa trên nội dung AI vừa trả lời
+  const chips = [];
+  const r = reply.toLowerCase();
+  if (r.includes('đường huyết') || r.includes('tiểu đường') || r.includes('glucose')) {
+    chips.push('Nên đo đường huyết lúc nào?');
+    chips.push('Thực đơn cho người tiểu đường?');
+  }
+  if (r.includes('huyết áp') || r.includes('tăng huyết áp')) {
+    chips.push('Cách đo huyết áp đúng?');
+    chips.push('Thức ăn nào hạ huyết áp?');
+  }
+  if (r.includes('ngủ') || r.includes('mất ngủ') || r.includes('giấc ngủ')) {
+    chips.push('Bài tập thở trước khi ngủ?');
+    chips.push('Nên uống gì để dễ ngủ?');
+  }
+  if (r.includes('tập') || r.includes('vận động') || r.includes('đi bộ')) {
+    chips.push('Tập bao lâu mỗi ngày?');
+    chips.push('Bài tập nào phù hợp tuổi tôi?');
+  }
+  if (r.includes('thuốc') || r.includes('medication')) {
+    chips.push('Quên thuốc thì làm sao?');
+    chips.push('Tác dụng phụ của thuốc?');
+  }
+  if (r.includes('lo lắng') || r.includes('stress') || r.includes('căng thẳng')) {
+    chips.push('Cách giảm stress nhanh?');
+    chips.push('Bài tập thư giãn?');
+  }
+  // Luôn có chip chung
+  if (chips.length === 0) {
+    chips.push('Kể thêm đi');
+    chips.push('Tôi nên làm gì tiếp?');
+  }
+  chips.push('Cảm ơn Asinu!');
+
+  const container = document.createElement('div');
+  container.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding:4px 0;margin-top:8px;';
+  chips.slice(0, 3).forEach(c => {
+    const btn = document.createElement('button');
+    btn.textContent = c;
+    btn.style.cssText = 'padding:6px 12px;border:1.5px solid #08b8a2;border-radius:16px;background:#f0fdfa;font-size:12px;cursor:pointer;color:#08b8a2;font-weight:600;transition:all 0.2s;';
+    btn.onmouseover = () => { btn.style.background = '#08b8a2'; btn.style.color = '#fff'; };
+    btn.onmouseout = () => { btn.style.background = '#f0fdfa'; btn.style.color = '#08b8a2'; };
+    btn.onclick = () => { document.getElementById('chat-input').value = c; sendChat(); };
+    container.appendChild(btn);
+  });
+  const el = document.getElementById('chat-messages');
+  el.appendChild(container);
+  el.scrollTop = el.scrollHeight;
+}
+
 async function sendChat() {
   const input = document.getElementById('chat-input');
   const text = input.value.trim();
   if (!text) return;
+  // Ẩn welcome screen khi bắt đầu chat
+  const welcome = document.getElementById('chat-welcome');
+  if (welcome) welcome.style.display = 'none';
+
   document.getElementById('chat-send').disabled = true;
   input.value = '';
   addMsg('chat-messages', 'user', text);
@@ -445,7 +655,7 @@ async function sendChat() {
     const res = await fetch('/api/test/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, profile: getProfile(), history: chatHistory }),
+      body: JSON.stringify({ message: text, profile: getProfile(), history: chatHistory, memories: loadMemories() }),
     });
     const msgs = document.getElementById('chat-messages');
     const last = msgs.lastChild;
@@ -455,6 +665,9 @@ async function sendChat() {
     chatHistory.push({ sender: 'user', message: text });
     chatHistory.push({ sender: 'assistant', message: reply });
     addMsg('chat-messages', 'ai', reply, `${reply.length} ký tự`);
+    showChatFollowUpChips(reply);
+    // Extract memories in background
+    extractMemories(chatHistory);
   } catch (err) {
     const msgs = document.getElementById('chat-messages');
     const last = msgs.lastChild;
@@ -476,12 +689,19 @@ document.getElementById('chat-input').addEventListener('keydown', function(e) {
 document.getElementById('checkin-input').addEventListener('keydown', function(e) {
   if (e.key === 'Enter') { e.preventDefault(); sendCheckin(); }
 });
+document.getElementById('free-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendFree();
+  }
+});
 
 // ─── Init ───
 updateStatusBar();
 updateButtons();
+updateChatWelcome();
 addMsg('checkin-messages', 'system', 'Chọn profile rồi check-in.');
-addMsg('chat-messages', 'system', 'Nhập câu hỏi sức khoẻ để chat với Asinu AI.');
+addMsg('free-messages', 'system', 'Nói tình trạng sức khoẻ của bạn. AI sẽ hỏi thêm để hiểu rõ vấn đề.');
 </script>
 </body>
 </html>
