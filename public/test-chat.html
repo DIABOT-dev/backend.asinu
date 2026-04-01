@@ -81,6 +81,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <div class="tab active" data-tab="checkin" onclick="switchTab('checkin')">Check-in</div>
   <div class="tab" data-tab="free" onclick="switchTab('free')">AI Tự do</div>
   <div class="tab" data-tab="chat" onclick="switchTab('chat')">Chat AI</div>
+  <div class="tab" data-tab="live" onclick="switchTab('live')">Live Chat</div>
 </div>
 
 <!-- CHECK-IN PANEL -->
@@ -125,6 +126,30 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <div class="input-area">
     <textarea id="chat-input" rows="2" placeholder="Hỏi Asinu bất cứ điều gì..."></textarea>
     <button onclick="sendChat()" id="chat-send">Gửi</button>
+  </div>
+</div>
+
+<!-- LIVE CHAT PANEL (user thật) -->
+<div class="panel" id="panel-live">
+  <!-- Login form -->
+  <div id="live-login" style="padding:24px 16px;max-width:360px;margin:0 auto;">
+    <div style="font-size:15px;font-weight:600;color:#333;margin-bottom:12px;">Đăng nhập tài khoản thật</div>
+    <input id="live-identifier" placeholder="Email hoặc số điện thoại" style="width:100%;padding:10px 14px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px;margin-bottom:8px;outline:none;">
+    <input id="live-password" type="password" placeholder="Mật khẩu" style="width:100%;padding:10px 14px;border:2px solid #e0e0e0;border-radius:10px;font-size:14px;margin-bottom:12px;outline:none;">
+    <button onclick="liveLogin()" id="live-login-btn" style="width:100%;padding:12px;background:#08b8a2;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">Đăng nhập</button>
+    <div id="live-login-error" style="color:#dc2626;font-size:12px;margin-top:8px;display:none;"></div>
+  </div>
+  <!-- Chat area (hidden until login) -->
+  <div id="live-chat-area" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+    <div style="padding:8px 16px;background:#f0fdfa;border-bottom:1px solid #e0f2f1;display:flex;justify-content:space-between;align-items:center;">
+      <span id="live-user-info" style="font-size:12px;color:#08b8a2;font-weight:600;"></span>
+      <button onclick="liveLogout()" style="padding:4px 10px;border:1px solid #ef4444;border-radius:6px;background:#fff;color:#dc2626;font-size:11px;cursor:pointer;font-weight:600;">Đăng xuất</button>
+    </div>
+    <div class="messages" id="live-messages" style="flex:1;overflow-y:auto;"></div>
+    <div class="input-area">
+      <textarea id="live-input" rows="2" placeholder="Nhắn tin với Asinu..."></textarea>
+      <button onclick="sendLive()" id="live-send">Gửi</button>
+    </div>
   </div>
 </div>
 
@@ -695,6 +720,122 @@ document.getElementById('free-input').addEventListener('keydown', function(e) {
     sendFree();
   }
 });
+
+// ─── LIVE CHAT (user thật) ───
+let liveToken = localStorage.getItem('asinu_live_token') || null;
+let liveUser = null;
+let liveSending = false;
+
+async function liveLogin() {
+  const identifier = document.getElementById('live-identifier').value.trim();
+  const password = document.getElementById('live-password').value.trim();
+  const errEl = document.getElementById('live-login-error');
+  if (!identifier || !password) { errEl.textContent = 'Nhập đủ thông tin.'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  document.getElementById('live-login-btn').disabled = true;
+  try {
+    const res = await fetch('/api/auth/email/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, password }),
+    });
+    const data = await res.json();
+    if (!data.ok || !data.token) {
+      errEl.textContent = data.error || 'Sai tài khoản hoặc mật khẩu.';
+      errEl.style.display = 'block';
+      return;
+    }
+    liveToken = data.token;
+    localStorage.setItem('asinu_live_token', liveToken);
+    await liveInit();
+  } catch (err) {
+    errEl.textContent = 'Lỗi kết nối: ' + err.message;
+    errEl.style.display = 'block';
+  } finally {
+    document.getElementById('live-login-btn').disabled = false;
+  }
+}
+
+function liveLogout() {
+  liveToken = null;
+  liveUser = null;
+  localStorage.removeItem('asinu_live_token');
+  document.getElementById('live-login').style.display = 'block';
+  document.getElementById('live-chat-area').style.display = 'none';
+  document.getElementById('live-messages').innerHTML = '';
+}
+
+async function liveInit() {
+  if (!liveToken) return;
+  try {
+    // Lấy thông tin user
+    const meRes = await fetch('/api/auth/me', { headers: { 'Authorization': 'Bearer ' + liveToken } });
+    const meData = await meRes.json();
+    if (!meData.ok) { liveLogout(); return; }
+    liveUser = meData.user;
+    document.getElementById('live-user-info').textContent = `${liveUser.email || liveUser.phone || 'User #' + liveUser.id}`;
+    document.getElementById('live-login').style.display = 'none';
+    document.getElementById('live-chat-area').style.display = 'flex';
+
+    // Load chat history
+    const histRes = await fetch('/api/mobile/chat/history', { headers: { 'Authorization': 'Bearer ' + liveToken } });
+    const histData = await histRes.json();
+    document.getElementById('live-messages').innerHTML = '';
+    if (histData.ok && histData.history) {
+      for (const msg of histData.history.slice(-50)) {
+        addMsg('live-messages', msg.role === 'user' ? 'user' : 'ai', msg.text);
+      }
+    }
+    if (!histData.history || histData.history.length === 0) {
+      addMsg('live-messages', 'system', 'Bắt đầu chat với Asinu. Tin nhắn sẽ được lưu vào tài khoản thật.');
+    }
+  } catch (err) {
+    console.error('[Live] Init error:', err);
+    liveLogout();
+  }
+}
+
+async function sendLive() {
+  const input = document.getElementById('live-input');
+  const text = input.value.trim();
+  if (!text || liveSending || !liveToken) return;
+  liveSending = true;
+  document.getElementById('live-send').disabled = true;
+  input.value = '';
+  addMsg('live-messages', 'user', text);
+  addMsg('live-messages', 'system', 'AI đang trả lời...');
+  try {
+    const res = await fetch('/api/mobile/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + liveToken },
+      body: JSON.stringify({ message: text }),
+    });
+    const msgs = document.getElementById('live-messages');
+    const last = msgs.lastChild;
+    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
+    const data = await res.json();
+    if (data.ok) {
+      addMsg('live-messages', 'ai', data.reply);
+    } else {
+      addMsg('live-messages', 'system', 'Lỗi: ' + (data.error || 'Không rõ'));
+    }
+  } catch (err) {
+    const msgs = document.getElementById('live-messages');
+    const last = msgs.lastChild;
+    if (last && last.textContent.includes('AI đang')) msgs.removeChild(last);
+    addMsg('live-messages', 'system', 'Lỗi: ' + err.message);
+  } finally {
+    liveSending = false;
+    document.getElementById('live-send').disabled = false;
+  }
+}
+
+document.getElementById('live-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendLive(); }
+});
+
+// Auto-login nếu có token cũ
+if (liveToken) liveInit();
 
 // ─── Init ───
 updateStatusBar();
