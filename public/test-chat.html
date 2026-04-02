@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Asinu AI Test Console</title>
+<title>Test Chat AI ASINU</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f0e8; height: 100vh; display: flex; flex-direction: column; }
@@ -100,19 +100,32 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <div class="tab" data-tab="chat" onclick="switchTab('chat')">Chat AI</div>
 </div>
 
-<!-- CHECK-IN PANEL -->
+<!-- CHECK-IN PANEL (Chat-based triage) -->
 <div class="panel active" id="panel-checkin">
   <div class="messages" id="checkin-messages"></div>
-  <div id="checkin-options"></div>
+  <div id="checkin-start" style="padding:20px;text-align:center;">
+    <button onclick="startTriageChat()" style="padding:14px 32px;background:#08b8a2;color:#fff;border:none;border-radius:12px;font-weight:700;font-size:16px;cursor:pointer;">Bắt đầu check-in</button>
+  </div>
+  <div id="checkin-status-buttons" style="display:none;padding:12px 16px;background:#f9f9f9;border-top:1px solid #eee;">
+    <div id="checkin-status-label" style="font-size:13px;color:#555;font-weight:600;margin-bottom:8px;">Hôm nay bạn thấy thế nào?</div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="selectStatus('fine')" id="btn-fine" style="flex:1;padding:12px;border:2px solid #22c55e;background:#f0fdf4;color:#16a34a;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">Tôi ổn</button>
+      <button onclick="selectStatus('tired')" id="btn-tired" style="flex:1;padding:12px;border:2px solid #f59e0b;background:#fffbeb;color:#d97706;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">Hơi mệt</button>
+      <button onclick="selectStatus('very_tired')" id="btn-very-tired" style="flex:1;padding:12px;border:2px solid #ef4444;background:#fef2f2;color:#dc2626;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">Rất mệt</button>
+    </div>
+  </div>
   <div class="input-area" id="checkin-input-area" style="display:none;">
-    <input id="checkin-input" placeholder="Nhập triệu chứng hoặc chọn ở trên...">
-    <button onclick="sendCheckin()" id="checkin-send">Gửi</button>
+    <input id="checkin-input" placeholder="Nhập tin nhắn...">
+    <button onclick="sendTriageChat()" id="checkin-send">Gửi</button>
+  </div>
+  <div id="checkin-conclusion" style="display:none;padding:16px;background:#f8fafc;border-top:1px solid #e5e5e5;">
+    <div id="checkin-conclusion-content"></div>
+    <div style="margin-top:12px;text-align:center;display:flex;gap:8px;justify-content:center;" id="checkin-conclusion-buttons"></div>
   </div>
   <div id="status-bar" class="status-bar" style="display:none;">
     <span class="dot"></span>
     <span id="status-text"></span>
   </div>
-  <div class="checkin-buttons" id="checkin-buttons"></div>
 </div>
 
 <!-- AI TỰ DO PANEL -->
@@ -139,6 +152,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 // ─── AUTH ───
 let authToken = localStorage.getItem('asinu_token') || null;
 let authUser = null;
+let authProfile = null; // onboarding profile (birth_year, gender, medical_conditions...)
 
 async function doLogin() {
   const id = document.getElementById('login-id').value.trim();
@@ -182,6 +196,27 @@ async function initApp() {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app-screen').style.display = 'flex';
 
+    // Load onboarding profile for triage — map to engine format
+    try {
+      const pRes = await fetch('/api/mobile/profile', { headers: apiHeaders() });
+      const pData = await pRes.json();
+      if (pData.ok && pData.profile) {
+        const p = pData.profile;
+        authProfile = {
+          full_name: p.name || authUser.full_name || authUser.email,
+          birth_year: p.dateOfBirth ? new Date(p.dateOfBirth).getFullYear() : (p.age ? new Date().getFullYear() - p.age : null),
+          gender: p.gender || null,
+          medical_conditions: p.chronicDiseases || [],
+          height_cm: p.heightCm ? parseFloat(p.heightCm) : null,
+          weight_kg: p.weightKg ? parseFloat(p.weightKg) : null,
+          daily_medication: p.chronicDiseases?.length > 0 ? 'Có' : 'Không',
+        };
+      } else {
+        authProfile = { full_name: authUser.email, birth_year: null, gender: null, medical_conditions: [] };
+      }
+    } catch { authProfile = { full_name: authUser.email, birth_year: null, gender: null, medical_conditions: [] }; }
+    console.log('[Profile]', authProfile);
+
     // Load chat history
     try {
       const hRes = await fetch('/api/mobile/chat/history', { headers: apiHeaders() });
@@ -218,120 +253,276 @@ function addMsg(container, role, text, meta) {
   el.scrollTop = el.scrollHeight;
 }
 
-// ─── CHECK-IN (giống app thật) ───
-let session = { flowState: null, initialStatus: null, currentStatus: null, triageSummary: null, triageSeverity: null, followUpCount: 0, followUpHours: null };
-let checkinState = { status: null, phase: 'initial', answers: [], currentQ: null, done: false };
-
-function updateStatusBar() {
-  const bar = document.getElementById('status-bar');
-  const text = document.getElementById('status-text');
-  if (!session.flowState) { bar.style.display = 'none'; return; }
-  bar.style.display = 'flex';
-  bar.className = 'status-bar ' + session.flowState;
-  const labels = { monitoring: 'Monitoring — follow-up lúc 21h', follow_up: `Follow-up sau ${session.followUpHours||3}h`, high_alert: `High Alert sau ${session.followUpHours||1}h`, resolved: 'Resolved' };
-  text.textContent = `${labels[session.flowState]} | #${session.followUpCount}`;
-}
-
-function updateButtons() {
-  const c = document.getElementById('checkin-buttons');
-  const ia = document.getElementById('checkin-input-area');
-  const btn = (fn, label, color, bg) => `<button onclick="${fn}" style="border:2px solid ${color};background:${bg};color:${color};">${label}</button>`;
-  if (!session.flowState) {
-    ia.style.display = 'none';
-    c.innerHTML = `<div class="label">Hôm nay bạn thế nào?</div><div class="btn-row">${btn("doInitCheckin('fine')","Tôi ổn","#22c55e","#f0fdf4")}${btn("doInitCheckin('tired')","Hơi mệt","#d97706","#fffbeb")}${btn("doInitCheckin('very_tired')","Rất mệt","#dc2626","#fef2f2")}</div>`;
-  } else if (session.flowState === 'monitoring') {
-    ia.style.display = 'none';
-    c.innerHTML = `<div class="label">Follow-up buổi tối</div><div class="btn-row">${btn("doFollowUp('fine')","Tôi ổn","#22c55e","#f0fdf4")}${btn("doFollowUp('tired')","Hơi mệt","#d97706","#fffbeb")}${btn("doFollowUp('very_tired')","Rất mệt","#dc2626","#fef2f2")}</div>`;
-  } else if (session.flowState === 'follow_up' || session.flowState === 'high_alert') {
-    ia.style.display = 'none';
-    c.innerHTML = `<div class="label">Follow-up ${session.flowState==='high_alert'?'(KHẨN)':''}</div><div class="sub-label">Trước: "${session.triageSummary||''}"</div><div class="btn-row">${btn("doFollowUp('fine')","Đã đỡ","#22c55e","#f0fdf4")}${btn("doFollowUp('tired')","Vẫn vậy","#d97706","#fffbeb")}${btn("doFollowUp('very_tired')","Nặng hơn","#dc2626","#fef2f2")}</div>`;
-  } else if (session.flowState === 'resolved') {
-    ia.style.display = 'none';
-    c.innerHTML = `<div class="label" style="color:#2563eb;">Hoàn tất!</div><div class="btn-row"><button onclick="resetSession()" style="border:2px solid #3b82f6;background:#eff6ff;color:#2563eb;">Session mới</button></div>`;
-    setTimeout(() => resetSession(), 5000);
-  }
-}
+// ─── CHECK-IN (Chat-based triage) ───
+let triageChatHistory = []; // [{role:'user'|'assistant', content:string}]
+let triageChatDone = false;
+let triageChatSending = false;
 
 function resetSession() {
-  session = { flowState: null, initialStatus: null, currentStatus: null, triageSummary: null, triageSeverity: null, followUpCount: 0, followUpHours: null };
-  checkinState = { status: null, phase: 'initial', answers: [], currentQ: null, done: false };
+  triageChatHistory = [];
+  triageChatDone = false;
+  triageChatSending = false;
+  triageInitialStatus = null;
   document.getElementById('checkin-messages').innerHTML = '';
-  document.getElementById('checkin-options').innerHTML = '';
   document.getElementById('checkin-input').value = '';
+  document.getElementById('checkin-start').style.display = 'block';
+  document.getElementById('checkin-status-buttons').style.display = 'none';
+  document.getElementById('checkin-input-area').style.display = 'none';
+  document.getElementById('checkin-conclusion').style.display = 'none';
+  document.getElementById('status-bar').style.display = 'none';
   document.getElementById('free-messages').innerHTML = '';
   document.getElementById('free-input').value = '';
   freeHistory = [];
-  updateStatusBar(); updateButtons();
-  addMsg('checkin-messages', 'system', 'Chọn trạng thái để check-in.');
   addMsg('free-messages', 'system', 'Nói tình trạng sức khoẻ. AI sẽ hỏi thêm để hiểu rõ.');
 }
 
-function doInitCheckin(status) {
-  session.initialStatus = status; session.currentStatus = status;
-  if (status === 'fine') { session.flowState = 'monitoring'; addMsg('checkin-messages','ai','Tuyệt! Asinu sẽ hỏi thăm lại lúc 21h tối nay.'); updateStatusBar(); updateButtons(); return; }
-  session.flowState = status === 'tired' ? 'follow_up' : 'high_alert';
-  checkinState = { status, phase: 'initial', answers: [], currentQ: null, done: false, withHistory: false };
+function resetTriageChat() {
+  triageChatHistory = [];
+  triageChatDone = false;
+  triageChatSending = false;
+  triageInitialStatus = null;
+  lastTriageResult = null;
+  followUpCount = 0;
   document.getElementById('checkin-messages').innerHTML = '';
-  document.getElementById('checkin-options').innerHTML = '';
-  document.getElementById('checkin-input-area').style.display = 'flex';
-  document.getElementById('checkin-buttons').innerHTML = '';
-  addMsg('checkin-messages','system',`Check-in: ${status==='very_tired'?'Rất mệt':'Hơi mệt'}`);
-  updateStatusBar(); callTriage();
+  document.getElementById('checkin-input').value = '';
+  document.getElementById('checkin-start').style.display = 'block';
+  document.getElementById('checkin-status-buttons').style.display = 'none';
+  document.getElementById('checkin-input-area').style.display = 'none';
+  document.getElementById('checkin-conclusion').style.display = 'none';
+  document.getElementById('status-bar').style.display = 'none';
 }
 
-function doFollowUp(newStatus) {
-  session.followUpCount++;
-  const prev = session.flowState;
-  if (newStatus === 'fine') {
-    if (prev === 'monitoring') { session.flowState = 'resolved'; addMsg('checkin-messages','ai','Hôm nay khoẻ cả ngày. Chúc ngủ ngon!'); }
-    else { session.flowState = 'monitoring'; addMsg('checkin-messages','ai','Đã đỡ rồi. Asinu sẽ hỏi lại lúc 21h.'); }
-    session.currentStatus = 'fine'; updateStatusBar(); updateButtons(); return;
+let triageInitialStatus = null; // 'fine' | 'tired' | 'very_tired'
+
+async function startTriageChat() {
+  document.getElementById('checkin-start').style.display = 'none';
+  document.getElementById('checkin-conclusion').style.display = 'none';
+  document.getElementById('checkin-messages').innerHTML = '';
+  triageChatHistory = [];
+  triageChatDone = false;
+  triageInitialStatus = null;
+  lastTriageResult = null;
+  followUpCount = 0;
+  window._simulatedHour = null;
+  // Reset button labels
+  document.getElementById('checkin-status-label').textContent = 'Hôm nay bạn thấy thế nào?';
+  document.getElementById('btn-fine').textContent = 'Tôi ổn';
+  document.getElementById('btn-tired').textContent = 'Hơi mệt';
+  document.getElementById('btn-very-tired').textContent = 'Rất mệt';
+  // Send empty message to trigger AI greeting
+  await callTriageChat('');
+  // Show status buttons after greeting
+  document.getElementById('checkin-status-buttons').style.display = 'block';
+  document.getElementById('checkin-input-area').style.display = 'none';
+}
+
+function selectStatus(status) {
+  triageInitialStatus = status;
+  document.getElementById('checkin-status-buttons').style.display = 'none';
+
+  const labels = { fine: 'Tôi ổn', tired: 'Hơi mệt', very_tired: 'Rất mệt' };
+  const label = labels[status] || status;
+  addMsg('checkin-messages', 'user', label);
+
+  if (status === 'fine') {
+    // "Tôi ổn" → gửi message rõ ràng cho AI, AI tự kết luận
+    const prevSummary = lastTriageResult ? lastTriageResult.summary : null;
+    callTriageChatWithSummary('Tôi cảm thấy ổn, không có triệu chứng gì bất thường', prevSummary);
+    return;
   }
-  session.flowState = (newStatus === 'very_tired' || prev === 'high_alert') ? 'high_alert' : 'follow_up';
-  session.currentStatus = newStatus;
-  checkinState = { status: newStatus, phase: 'followup', answers: [], currentQ: null, done: false, withHistory: true, autoAnswer: newStatus === 'very_tired' ? 'mệt hơn trước' : 'vẫn như cũ' };
-  document.getElementById('checkin-messages').innerHTML = '';
-  document.getElementById('checkin-options').innerHTML = '';
+
+  if (false) {
+
+    addMsg('checkin-messages', 'ai', reply);
+    triageChatDone = true;
+    lastTriageResult = { summary: 'Cảm thấy ổn', severity: 'low', followUpHours };
+    document.getElementById('checkin-input-area').style.display = 'none';
+    showTriageConclusion({
+      severity: 'low', summary: 'Cảm thấy ổn',
+      recommendation: 'Tiếp tục nghỉ ngơi, uống đủ nước.',
+      needsDoctor: false, needsFamilyAlert: false, hasRedFlag: false, followUpHours,
+    });
+    return;
+  }
+
+  // Hơi mệt / Rất mệt → gửi cho AI hỏi tiếp
   document.getElementById('checkin-input-area').style.display = 'flex';
-  document.getElementById('checkin-buttons').innerHTML = '';
-  addMsg('checkin-messages','system',`Follow-up #${session.followUpCount}`);
-  updateStatusBar(); callTriage();
+  const prevSummary = lastTriageResult ? lastTriageResult.summary : null;
+  callTriageChatWithSummary(label, prevSummary);
+  document.getElementById('checkin-input').focus();
 }
 
-async function callTriage() {
-  addMsg('checkin-messages','system','AI đang suy nghĩ...');
+async function sendTriageChat() {
+  const input = document.getElementById('checkin-input');
+  const text = input.value.trim();
+  if (!text || triageChatDone || triageChatSending) return;
+  input.value = '';
+  addMsg('checkin-messages', 'user', text);
+  const prevSummary = lastTriageResult ? lastTriageResult.summary : null;
+  await callTriageChatWithSummary(text, prevSummary);
+}
+
+// callTriageChat dùng cho initial greeting (không có prevSummary)
+async function callTriageChat(userMessage) {
+  await callTriageChatWithSummary(userMessage, null);
+}
+
+let lastTriageResult = null; // lưu kết quả check-in trước cho follow-up
+let followUpCount = 0;
+
+function showTriageConclusion(data) {
+  const sev = data.severity || 'low';
+  const container = document.getElementById('checkin-conclusion-content');
+  const buttons = document.getElementById('checkin-conclusion-buttons');
+
+  // Lưu kết quả cho follow-up
+  lastTriageResult = {
+    summary: data.summary || '',
+    severity: sev,
+    needsDoctor: data.needsDoctor,
+    followUpHours: data.followUpHours,
+  };
+
+  let html = `<div style="font-weight:700;font-size:15px;margin-bottom:10px;">Kết luận Check-in</div>`;
+  html += `<div style="margin-bottom:8px;"><span class="badge ${sev}">${sev.toUpperCase()}</span></div>`;
+  if (data.summary) html += `<div style="font-size:14px;color:#333;margin-bottom:6px;"><strong>Tóm tắt:</strong> ${data.summary}</div>`;
+  if (data.recommendation) html += `<div style="font-size:14px;color:#333;margin-bottom:6px;"><strong>Khuyến nghị:</strong> ${data.recommendation}</div>`;
+
+  let indicators = [];
+  if (data.needsDoctor != null) indicators.push(`Cần gặp bác sĩ: ${data.needsDoctor ? '<span style="color:#dc2626;font-weight:700;">CÓ</span>' : 'Không'}`);
+  if (data.needsFamilyAlert != null) indicators.push(`Cảnh báo gia đình: ${data.needsFamilyAlert ? '<span style="color:#dc2626;font-weight:700;">CÓ</span>' : 'Không'}`);
+  if (data.hasRedFlag != null) indicators.push(`Red flag: ${data.hasRedFlag ? '<span style="color:#dc2626;font-weight:700;">CÓ</span>' : 'Không'}`);
+  if (data.followUpHours) indicators.push(`Follow-up sau: ${data.followUpHours}h`);
+  if (indicators.length) html += `<div style="font-size:12px;color:#666;margin-top:8px;line-height:1.8;">${indicators.join('<br>')}</div>`;
+
+  container.innerHTML = html;
+  document.getElementById('checkin-conclusion').style.display = 'block';
+
+  // Buttons: Follow-up luôn có (trừ khi follow-up "Tôi ổn" lần 2 = resolved hoàn toàn)
+  const isFullyResolved = followUpCount > 0 && sev === 'low' && !data.needsDoctor;
+  const followUpLabel = triageInitialStatus === 'fine'
+    ? 'Follow-up buổi tối (9h tối)'
+    : `Follow-up (${data.followUpHours}h sau)`;
+
+  if (isFullyResolved) {
+    buttons.innerHTML = `
+      <div style="color:#16a34a;font-weight:600;font-size:14px;margin-bottom:8px;">Session hoàn tất — Chúc ngủ ngon!</div>
+      <button onclick="resetTriageChat()" style="padding:10px 24px;background:#3b82f6;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">Check-in mới</button>
+    `;
+  } else {
+    buttons.innerHTML = `
+      <button onclick="startFollowUp()" style="padding:10px 24px;background:#08b8a2;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">${followUpLabel}</button>
+      <button onclick="resetTriageChat()" style="padding:10px 24px;background:#94a3b8;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;">Reset</button>
+    `;
+  }
+
+  // Status bar
+  const bar = document.getElementById('status-bar');
+  const statusText = document.getElementById('status-text');
+  bar.style.display = 'flex';
+  const stateClass = sev === 'high' || sev === 'critical' ? 'high_alert' : sev === 'medium' ? 'follow_up' : isFullyResolved ? 'resolved' : 'monitoring';
+  bar.className = 'status-bar ' + stateClass;
+  let statusLabel = `Severity: ${sev.toUpperCase()}`;
+  if (data.followUpHours) statusLabel += ` | Follow-up: ${data.followUpHours}h`;
+  statusText.textContent = statusLabel;
+}
+
+async function startFollowUp() {
+  followUpCount++;
+  const prevSummary = lastTriageResult ? lastTriageResult.summary : null;
+  const prevSeverity = lastTriageResult ? lastTriageResult.severity : 'low';
+
+  // Tính giờ giả lập cho follow-up — cộng dồn từ giả lập trước
+  const baseHour = window._simulatedHour || parseInt(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour: 'numeric', hour12: false }));
+  const fupHours = lastTriageResult ? lastTriageResult.followUpHours : 3;
+  let simulatedHour = baseHour + fupHours;
+  if (simulatedHour >= 24) simulatedHour -= 24;
+  // Nếu follow-up buổi tối cho "Tôi ổn" lần đầu → giả lập 21h
+  if (triageInitialStatus === 'fine' && followUpCount === 1) simulatedHour = 21;
+  window._simulatedHour = simulatedHour;
+
+  // UI cho follow-up — giữ history cũ, chỉ clear UI
+  document.getElementById('checkin-conclusion').style.display = 'none';
+  document.getElementById('checkin-messages').innerHTML = '';
+  document.getElementById('checkin-status-buttons').style.display = 'none';
+  triageChatDone = false;
+
+  // Cập nhật label và nút cho follow-up context
+  const isEvening = triageInitialStatus === 'fine' && followUpCount === 1;
+  if (isEvening) {
+    document.getElementById('checkin-status-label').textContent = 'Buổi tối — Chú thấy thế nào?';
+    document.getElementById('btn-fine').textContent = 'Vẫn ổn';
+    document.getElementById('btn-tired').textContent = 'Hơi mệt';
+    document.getElementById('btn-very-tired').textContent = 'Rất mệt';
+  } else {
+    document.getElementById('checkin-status-label').textContent = `Follow-up lần ${followUpCount} — So với lần trước?`;
+    document.getElementById('btn-fine').textContent = 'Đã đỡ';
+    document.getElementById('btn-tired').textContent = 'Vẫn vậy';
+    document.getElementById('btn-very-tired').textContent = 'Nặng hơn';
+  }
+
+  const tod = simulatedHour < 12 ? 'sáng' : simulatedHour < 18 ? 'chiều' : 'tối';
+  addMsg('checkin-messages', 'system', `Follow-up lần ${followUpCount} — Giả lập ${simulatedHour}:00 (buổi ${tod})`);
+
+  // Gọi AI với previousSessionSummary
+  await callTriageChatWithSummary('', prevSummary);
+  // Hiện 3 nút sau greeting
+  document.getElementById('checkin-status-buttons').style.display = 'block';
+  document.getElementById('checkin-input-area').style.display = 'none';
+}
+
+async function callTriageChatWithSummary(userMessage, prevSummary) {
+  triageChatSending = true;
+  document.getElementById('checkin-send').disabled = true;
+
+  if (userMessage) {
+    triageChatHistory.push({ role: 'user', content: userMessage });
+  }
+
+  addMsg('checkin-messages', 'system', 'AI đang suy nghĩ...');
+
   try {
-    const hc = session.followUpCount > 0 ? {
-      recentGlucose: [{ value: 195, unit: 'mg/dL', context: 'trước ăn', occurred_at: new Date().toISOString() }],
-      recentBP: [{ systolic: 148, diastolic: 92, pulse: 78, occurred_at: new Date().toISOString() }],
-      previousCheckins: session.triageSummary ? [{ session_date: new Date().toISOString().slice(0,10), initial_status: session.initialStatus, triage_summary: session.triageSummary, triage_severity: session.triageSeverity }] : [],
-      medicationAdherenceContext: 'Thuốc 7 ngày: 5/7', tookMedicationToday: true,
-    } : {};
-    const res = await fetch('/api/test/triage', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: checkinState.status, phase: checkinState.phase, lang: 'vi', profile: {}, healthContext: hc, previousAnswers: checkinState.answers, previousSessionSummary: checkinState.phase==='followup' ? session.triageSummary : null }),
+    const res = await fetch('/api/test/triage-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: userMessage,
+        profile: authProfile || {},
+        history: triageChatHistory,
+        healthContext: {},
+        previousSessionSummary: prevSummary,
+        initialStatus: triageInitialStatus,
+        simulatedHour: window._simulatedHour || null,
+      }),
     });
-    removeLast('checkin-messages','AI đang');
+    removeLast('checkin-messages', 'AI đang');
     const data = await res.json();
-    if (data.isDone) {
-      checkinState.done = true;
-      document.getElementById('checkin-options').innerHTML = '';
-      const sev = data.severity || 'low';
-      session.triageSummary = data.summary || ''; session.triageSeverity = sev;
-      if (data.followUpHours) session.followUpHours = data.followUpHours;
-      addMsg('checkin-messages','ai',`Kết luận\n\n${data.summary||''}\n\n${data.recommendation||''}\n\n${data.closeMessage||''}`,
-        `<span class="badge ${sev}">${sev.toUpperCase()}</span> | needsDoctor: ${data.needsDoctor?'CÓ':'không'} | redFlag: ${data.hasRedFlag?'CÓ':'không'}`);
-      updateStatusBar(); updateButtons();
-    } else {
-      checkinState.currentQ = data.question;
-      addMsg('checkin-messages','ai',data.question,`options: ${(data.options||[]).length}`);
-      showOptions(data.options, data.multiSelect);
-      if (checkinState.autoAnswer && checkinState.answers.length === 0) {
-        const a = checkinState.autoAnswer; checkinState.autoAnswer = null;
-        setTimeout(() => { document.getElementById('checkin-input').value = a; sendCheckin(); }, 500);
-      }
+
+    if (data.error) {
+      addMsg('checkin-messages', 'system', 'Lỗi:' + data.error);
+      triageChatSending = false;
+      document.getElementById('checkin-send').disabled = false;
+      return;
     }
-  } catch (e) { removeLast('checkin-messages','AI đang'); addMsg('checkin-messages','system','Lỗi: '+e.message); }
+
+    const reply = data.reply || '';
+    triageChatHistory.push({ role: 'assistant', content: reply });
+
+    if (data.isDone) {
+      triageChatDone = true;
+      addMsg('checkin-messages', 'ai', reply);
+      document.getElementById('checkin-input-area').style.display = 'none';
+      showTriageConclusion(data);
+    } else {
+      addMsg('checkin-messages', 'ai', reply);
+    }
+  } catch (e) {
+    removeLast('checkin-messages', 'AI đang');
+    addMsg('checkin-messages', 'system', 'Lỗi:' + e.message);
+  }
+
+  triageChatSending = false;
+  document.getElementById('checkin-send').disabled = false;
 }
 
 function removeLast(container, keyword) {
@@ -340,41 +531,20 @@ function removeLast(container, keyword) {
   if (last && last.textContent.includes(keyword)) el.removeChild(last);
 }
 
-function showOptions(options, multi) {
-  const c = document.getElementById('checkin-options'); c.innerHTML = '';
-  if (!options || !options.length) return;
-  const w = document.createElement('div'); w.className = 'options';
-  const sel = new Set();
-  options.forEach(opt => {
-    const b = document.createElement('button'); b.className = 'opt-btn'; b.textContent = opt;
-    b.onclick = () => { if (multi) { sel.has(opt)?sel.delete(opt):sel.add(opt); b.classList.toggle('selected'); document.getElementById('checkin-input').value=[...sel].join(', '); } else { document.getElementById('checkin-input').value=opt; sendCheckin(); } };
-    w.appendChild(b);
-  });
-  c.appendChild(w);
-}
-
-async function sendCheckin() {
-  const input = document.getElementById('checkin-input');
-  const text = input.value.trim();
-  if (!text || checkinState.done) return;
-  input.value = ''; document.getElementById('checkin-options').innerHTML = '';
-  addMsg('checkin-messages','user',text);
-  checkinState.answers.push({ question: checkinState.currentQ||'', answer: text });
-  await callTriage();
-}
-
 // ─── AI TỰ DO ───
 let freeHistory = [];
+let freeSending = false;
 async function sendFree() {
   const input = document.getElementById('free-input');
-  const text = input.value.trim(); if (!text) return;
+  const text = input.value.trim(); if (!text || freeSending) return;
+  freeSending = true;
   document.getElementById('free-send').disabled = true; input.value = '';
   addMsg('free-messages','user',text);
   addMsg('free-messages','system','AI đang trả lời...');
   try {
     const res = await fetch('/api/test/free-triage', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, profile: {}, history: freeHistory }),
+      body: JSON.stringify({ message: text, profile: authProfile || {}, history: freeHistory }),
     });
     removeLast('free-messages','AI đang');
     const data = await res.json();
@@ -383,7 +553,7 @@ async function sendFree() {
     freeHistory.push({ role: 'assistant', content: reply });
     addMsg('free-messages','ai',reply);
   } catch (e) { removeLast('free-messages','AI đang'); addMsg('free-messages','system','Lỗi: '+e.message); }
-  finally { document.getElementById('free-send').disabled = false; }
+  finally { freeSending = false; document.getElementById('free-send').disabled = false; }
 }
 
 // ─── CHAT AI (dùng API thật /api/mobile/chat) ───
@@ -409,7 +579,7 @@ async function sendChat() {
 }
 
 // ─── Enter key handlers ───
-document.getElementById('checkin-input').addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); sendCheckin(); } });
+document.getElementById('checkin-input').addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); sendTriageChat(); } });
 document.getElementById('free-input').addEventListener('keydown', e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); sendFree(); } });
 document.getElementById('chat-input').addEventListener('keydown', e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); sendChat(); } });
 

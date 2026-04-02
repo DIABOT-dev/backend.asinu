@@ -107,6 +107,17 @@ function testRoutes(pool) {
     }
   });
 
+  // ─── Test Triage Chat (conversational check-in) ───
+  router.post('/triage-chat', async (req, res) => {
+    try {
+      const { processTriageChat } = require('../../src/services/checkin/triage-chat');
+      const result = await processTriageChat(req.body);
+      res.json(result);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ─── Test Free Triage (no strict rules) ───
   router.post('/free-triage', async (req, res) => {
     try {

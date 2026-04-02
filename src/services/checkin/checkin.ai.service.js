@@ -23,6 +23,7 @@ const OpenAI = require('openai');
 const { t } = require('../../i18n');
 const { filterTriageResult } = require('../ai/ai-safety.service');
 const { logAiInteraction } = require('../ai/ai-logger.service');
+const triageV2 = require('./checkin.triage.v2');
 
 // Normalize answer: array → string, null-safe
 const safeAns = (answer) => (Array.isArray(answer) ? answer.join(', ') : String(answer || '')).toLowerCase();
@@ -194,8 +195,17 @@ function getFallbackQuestion(status, phase, lang, previousAnswers = [], profile 
 
 /**
  * Sinh câu hỏi triage kế tiếp, phase-aware.
+ * V2: delegates to the new modular triage pipeline.
  */
-async function getNextTriageQuestion({
+async function getNextTriageQuestion(input) {
+  return triageV2.getNextTriageQuestion(input);
+}
+
+/**
+ * [LEGACY] Original getNextTriageQuestion — kept for rollback.
+ * Renamed from getNextTriageQuestion → getNextTriageQuestionLegacy.
+ */
+async function getNextTriageQuestionLegacy({
   status,
   phase = 'initial',
   lang = 'vi',
@@ -1576,4 +1586,4 @@ Trả lời JSON only.`;
   }
 }
 
-module.exports = { getNextTriageQuestion, buildContinuityMessage, calcFollowUpHours, getFallbackQuestion };
+module.exports = { getNextTriageQuestion, buildContinuityMessage, calcFollowUpHours, getFallbackQuestion, getNextTriageQuestionLegacy };
