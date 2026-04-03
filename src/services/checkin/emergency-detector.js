@@ -337,17 +337,25 @@ function detectEmergency(symptoms, profile = {}) {
     conditions.includes('tim') ||
     conditions.includes('heart') ||
     conditions.includes('bệnh tim') ||
-    conditions.includes('suy tim');
+    conditions.includes('benh tim') ||
+    conditions.includes('suy tim') ||
+    conditions.includes('tim mach');
   const hasHTN =
     conditions.includes('huyết áp') ||
+    conditions.includes('huyet ap') ||
     conditions.includes('hypertension') ||
     conditions.includes('cao huyết áp') ||
-    conditions.includes('tăng huyết áp');
+    conditions.includes('cao huyet ap') ||
+    conditions.includes('tăng huyết áp') ||
+    conditions.includes('tang huyet ap');
   const hasDM =
     conditions.includes('tiểu đường') ||
+    conditions.includes('tieu duong') ||
     conditions.includes('diabetes') ||
     conditions.includes('đái tháo đường') ||
-    conditions.includes('đường huyết');
+    conditions.includes('dai thao duong') ||
+    conditions.includes('đường huyết') ||
+    conditions.includes('duong huyet');
 
   // 1. STROKE — any single keyword is enough
   if (matchesAny(text, STROKE_KW)) {
@@ -411,9 +419,9 @@ function detectEmergency(symptoms, profile = {}) {
     return result(true, 'DKA', 'critical', true, true, 0);
   }
 
-  // 10. SEIZURE — any seizure keyword
+  // 10. SEIZURE — any seizure keyword (critical — active seizure is life-threatening)
   if (matchesAny(text, SEIZURE_KW)) {
-    return result(true, 'SEIZURE', 'high', true, true, 1);
+    return result(true, 'SEIZURE', 'critical', true, true, 0);
   }
 
   // ---- Sub-critical but still concerning combinations ---------------------
