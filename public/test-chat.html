@@ -445,6 +445,8 @@ async function startFollowUp() {
   document.getElementById('checkin-conclusion').style.display = 'none';
   document.getElementById('checkin-messages').innerHTML = '';
   document.getElementById('checkin-status-buttons').style.display = 'none';
+  document.getElementById('status-bar').style.display = 'none';
+  removeCheckinOptions();
   triageChatDone = false;
 
   // Cập nhật label và nút cho follow-up context
@@ -464,8 +466,14 @@ async function startFollowUp() {
   const tod = simulatedHour < 12 ? 'sáng' : simulatedHour < 18 ? 'chiều' : 'tối';
   addMsg('checkin-messages', 'system', `Follow-up lần ${followUpCount} — Giả lập ${simulatedHour}:00 (buổi ${tod})`);
 
-  // Gọi AI với previousSessionSummary
+  // Gọi AI greeting — nhưng KHÔNG cho isDone=true ở greeting (force ignore)
+  const savedDone = triageChatDone;
   await callTriageChatWithSummary('', prevSummary);
+  // Nếu greeting isDone=true (heuristic sai) → revert, vẫn hiện nút
+  if (triageChatDone && !savedDone) {
+    triageChatDone = false;
+    document.getElementById('checkin-conclusion').style.display = 'none';
+  }
   // Hiện 3 nút sau greeting
   document.getElementById('checkin-status-buttons').style.display = 'block';
   document.getElementById('checkin-input-area').style.display = 'none';
@@ -512,9 +520,18 @@ async function callTriageChatWithSummary(userMessage, prevSummary) {
       triageChatDone = true;
       addMsg('checkin-messages', 'ai', reply);
       document.getElementById('checkin-input-area').style.display = 'none';
+      removeCheckinOptions();
+      console.log('[DEBUG] Conclusion data from API:', JSON.stringify({severity:data.severity, needsDoctor:data.needsDoctor, summary:data.summary}));
+      console.log('[DEBUG] Profile sent:', JSON.stringify(authProfile));
       showTriageConclusion(data);
     } else {
       addMsg('checkin-messages', 'ai', reply);
+      // Hiện options chỉ khi đã chọn trạng thái (không hiện ở greeting)
+      if (triageInitialStatus && data.options && data.options.length > 0) {
+        showCheckinOptions(data.options);
+      } else {
+        removeCheckinOptions();
+      }
     }
   } catch (e) {
     removeLast('checkin-messages', 'AI đang');
@@ -523,6 +540,37 @@ async function callTriageChatWithSummary(userMessage, prevSummary) {
 
   triageChatSending = false;
   document.getElementById('checkin-send').disabled = false;
+}
+
+function showCheckinOptions(options) {
+  removeCheckinOptions();
+  const container = document.createElement('div');
+  container.id = 'checkin-quick-options';
+  container.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px;padding:8px 16px;';
+  options.forEach(opt => {
+    const btn = document.createElement('button');
+    btn.textContent = opt;
+    btn.style.cssText = 'padding:8px 14px;border:1.5px solid #08b8a2;border-radius:16px;background:#f0fdfa;font-size:13px;cursor:pointer;color:#08b8a2;font-weight:600;transition:all 0.2s;';
+    btn.onmouseover = () => { btn.style.background = '#08b8a2'; btn.style.color = '#fff'; };
+    btn.onmouseout = () => { btn.style.background = '#f0fdfa'; btn.style.color = '#08b8a2'; };
+    btn.onclick = () => {
+      document.getElementById('checkin-input').value = opt;
+      sendTriageChat();
+    };
+    container.appendChild(btn);
+  });
+  // Thêm nút "Khác..." để user gõ tự do
+  const otherBtn = document.createElement('button');
+  otherBtn.textContent = 'Khác...';
+  otherBtn.style.cssText = 'padding:8px 14px;border:1.5px dashed #ccc;border-radius:16px;background:#fff;font-size:13px;cursor:pointer;color:#999;font-weight:600;';
+  otherBtn.onclick = () => { removeCheckinOptions(); document.getElementById('checkin-input').focus(); };
+  container.appendChild(otherBtn);
+  document.getElementById('checkin-messages').parentNode.insertBefore(container, document.getElementById('checkin-input-area'));
+}
+
+function removeCheckinOptions() {
+  const old = document.getElementById('checkin-quick-options');
+  if (old) old.remove();
 }
 
 function removeLast(container, keyword) {
