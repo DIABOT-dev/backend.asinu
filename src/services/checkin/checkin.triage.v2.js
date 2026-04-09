@@ -13,8 +13,8 @@
  */
 
 const { detectEmergency } = require('./emergency-detector');
-const { getNextStep, calculateConclusion, buildState } = require('./triage-engine');
-const { formatQuestion, generateConclusion, generateMappingForSymptom } = require('./triage-ai-layer');
+const { getNextStep, calculateConclusion, buildState } = require('../../core/checkin/triage-engine');
+const { formatQuestion, generateConclusion, generateMappingForSymptom } = require('../../core/checkin/triage-ai-layer');
 const { resolveComplaint } = require('./clinical-mapping');
 
 // ─── Emergency type mapping ─────────────────────────────────────────────────

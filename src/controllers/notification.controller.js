@@ -20,10 +20,7 @@ async function testNotificationHandler(pool, req, res) {
   if (!type) return res.status(400).json({ ok: false, error: 'type required' });
 
   try {
-    const { rows } = await pool.query(
-      'SELECT push_token FROM users WHERE id = $1', [req.user.id]
-    );
-    const token = rows[0]?.push_token;
+    const token = await notificationService.getUserPushToken(pool, req.user.id);
     if (!token) return res.json({ ok: false, error: 'No push_token saved for this user' });
 
     const notif = NOTIF_MAP[type];
@@ -34,10 +31,7 @@ async function testNotificationHandler(pool, req, res) {
     );
 
     // Also save to in-app notifications
-    await pool.query(
-      `INSERT INTO notifications (user_id, type, title, message, data) VALUES ($1,$2,$3,$4,$5)`,
-      [req.user.id, type, notif.title, notif.body, JSON.stringify({ type, test: true })]
-    );
+    await notificationService.saveInAppNotification(pool, req.user.id, type, notif.title, notif.body, { type, test: true });
 
     return res.json({ ok: true, type, title: notif.title, body: notif.body, pushResult: result });
   } catch (err) {
@@ -158,21 +152,28 @@ async function previewEngagement(pool, req, res) {
   }
 }
 
+let _basicRunning = false;
+let _engagementRunning = false;
+
 /**
  * POST /api/notifications/engagement/run
  * Run AI-driven engagement notifications for inactive users (cron)
  */
 async function runEngagement(pool, req, res) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers['x-cron-secret'] !== secret) {
-    return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
-  }
-
+  if (_engagementRunning) return res.status(429).json({ error: 'Engagement cron already running' });
+  _engagementRunning = true;
   try {
+    const secret = process.env.CRON_SECRET;
+    if (!secret || req.headers['x-cron-secret'] !== secret) {
+      return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
+    }
+
     const result = await runEngagementNotifications(pool);
     return res.status(200).json(result);
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    _engagementRunning = false;
   }
 }
 
@@ -181,24 +182,28 @@ async function runEngagement(pool, req, res) {
  * Run basic scheduled notifications (cron)
  */
 async function runBasic(pool, req, res) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers['x-cron-secret'] !== secret) {
-    return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
-  }
-
-  const forceHour   = req.body?.hour   !== undefined ? Number(req.body.hour)   : null;
-  const forceMinute = req.body?.minute !== undefined ? Number(req.body.minute) : null;
+  if (_basicRunning) return res.status(429).json({ error: 'Basic cron already running' });
+  _basicRunning = true;
   try {
+    const secret = process.env.CRON_SECRET;
+    if (!secret || req.headers['x-cron-secret'] !== secret) {
+      return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
+    }
+
+    const forceHour   = req.body?.hour   !== undefined ? Number(req.body.hour)   : null;
+    const forceMinute = req.body?.minute !== undefined ? Number(req.body.minute) : null;
     const result = await runBasicNotifications(pool, forceHour, forceMinute);
     return res.status(200).json(result);
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    _basicRunning = false;
   }
 }
 
 async function deleteOne(pool, req, res) {
   try {
-    await pool.query('DELETE FROM notifications WHERE id = $1 AND user_id = $2', [req.params.id, req.user.id]);
+    await notificationService.deleteNotification(pool, req.params.id, req.user.id);
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
@@ -207,7 +212,7 @@ async function deleteOne(pool, req, res) {
 
 async function deleteAll(pool, req, res) {
   try {
-    await pool.query('DELETE FROM notifications WHERE user_id = $1', [req.user.id]);
+    await notificationService.deleteAllNotifications(pool, req.user.id);
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

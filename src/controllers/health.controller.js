@@ -4,6 +4,7 @@
  */
 
 const { t, getLang } = require('../i18n');
+const { getActiveConnections, getUserName, insertAlertNotifications } = require('../services/health/health-alert.service');
 
 /**
  * POST /api/health/alert-care-circle
@@ -14,26 +15,9 @@ async function alertCareCircle(pool, req, res) {
   const { alertData } = req.body;
 
   try {
-    // Tìm tất cả care-circle connections của user
-    const connectionsQuery = `
-      SELECT
-        CASE
-          WHEN requester_id = $1 THEN addressee_id
-          WHEN addressee_id = $1 THEN requester_id
-        END as care_member_id,
-        u.full_name as care_member_name
-      FROM user_connections uc
-      JOIN users u ON (
-        (uc.requester_id = $1 AND u.id = uc.addressee_id) OR
-        (uc.addressee_id = $1 AND u.id = uc.requester_id)
-      )
-      WHERE uc.status = 'accepted'
-      AND (uc.requester_id = $1 OR uc.addressee_id = $1)
-    `;
+    const connections = await getActiveConnections(pool, userId);
 
-    const connections = await pool.query(connectionsQuery, [userId]);
-
-    if (connections.rows.length === 0) {
+    if (connections.length === 0) {
       return res.status(200).json({
         ok: true,
         message: t('careCircle.no_care_circle', getLang(req)),
@@ -41,57 +25,29 @@ async function alertCareCircle(pool, req, res) {
       });
     }
 
-    // Lấy thông tin user gửi cảnh báo
-    const userQuery = 'SELECT full_name FROM users WHERE id = $1';
-    const userResult = await pool.query(userQuery, [userId]);
-    const userName = userResult.rows[0]?.full_name || `User ${userId}`;
+    const userName = await getUserName(pool, userId);
 
-    // Tạo notification cho từng thành viên care-circle
-    const notifications = [];
-    for (const connection of connections.rows) {
-      const notificationData = {
-        user_id: connection.care_member_id,
+    const notificationTemplate = {
+      type: 'health_alert',
+      title: t('health.alert_from_user', getLang(req), { name: userName }),
+      message: alertData.message,
+      data: {
         type: 'health_alert',
-        title: t('health.alert_from_user', getLang(req), { name: userName }),
-        message: alertData.message,
-        data: {
-          type: 'health_alert',
-          alertType: alertData.alertType,
-          severity: alertData.severity,
-          icon: alertData.icon || (alertData.severity === 'critical' ? 'alert-circle' : 'warning'),
-          sourceUserId: userId,
-          sourceUserName: userName,
-          ...alertData
-        },
-        is_read: false,
-        created_at: new Date(),
-        updated_at: new Date()
-      };
+        alertType: alertData.alertType,
+        severity: alertData.severity,
+        icon: alertData.icon || (alertData.severity === 'critical' ? 'alert-circle' : 'warning'),
+        sourceUserId: userId,
+        sourceUserName: userName,
+        ...alertData
+      },
+    };
 
-      notifications.push(notificationData);
-    }
-
-    // Insert tất cả notifications
-    if (notifications.length > 0) {
-      const insertQuery = `
-        INSERT INTO notifications (user_id, type, title, message, data, is_read, created_at, updated_at)
-        VALUES ${notifications.map((_, index) =>
-          `($${index * 8 + 1}, $${index * 8 + 2}, $${index * 8 + 3}, $${index * 8 + 4}, $${index * 8 + 5}, $${index * 8 + 6}, $${index * 8 + 7}, $${index * 8 + 8})`
-        ).join(', ')}
-      `;
-
-      const insertValues = notifications.flatMap(n => [
-        n.user_id, n.type, n.title, n.message,
-        JSON.stringify(n.data), n.is_read, n.created_at, n.updated_at
-      ]);
-
-      await pool.query(insertQuery, insertValues);
-    }
+    await insertAlertNotifications(pool, connections, notificationTemplate);
 
     return res.status(200).json({
       ok: true,
-      message: t('health.alert_sent_count', getLang(req), { count: connections.rows.length }),
-      notified: connections.rows.length,
+      message: t('health.alert_sent_count', getLang(req), { count: connections.length }),
+      notified: connections.length,
       alertType: alertData.alertType,
       severity: alertData.severity
     });

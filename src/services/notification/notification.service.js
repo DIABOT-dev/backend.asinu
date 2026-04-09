@@ -103,8 +103,70 @@ async function markAllAsRead(pool, userId) {
   }
 }
 
+/**
+ * Get user's push token
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @returns {Promise<string|null>} - Push token or null
+ */
+async function getUserPushToken(pool, userId) {
+  const { rows } = await pool.query(
+    'SELECT push_token FROM users WHERE id = $1',
+    [userId]
+  );
+  return rows[0]?.push_token || null;
+}
+
+/**
+ * Save an in-app notification
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @param {string} type - Notification type
+ * @param {string} title - Notification title
+ * @param {string} message - Notification body
+ * @param {Object} data - JSON data payload
+ * @returns {Promise<void>}
+ */
+async function saveInAppNotification(pool, userId, type, title, message, data) {
+  await pool.query(
+    `INSERT INTO notifications (user_id, type, title, message, data) VALUES ($1,$2,$3,$4,$5)`,
+    [userId, type, title, message, JSON.stringify(data)]
+  );
+}
+
+/**
+ * Delete a single notification
+ * @param {Object} pool - Database pool
+ * @param {number} notificationId - Notification ID
+ * @param {number} userId - User ID (ownership check)
+ * @returns {Promise<void>}
+ */
+async function deleteNotification(pool, notificationId, userId) {
+  await pool.query(
+    'DELETE FROM notifications WHERE id = $1 AND user_id = $2',
+    [notificationId, userId]
+  );
+}
+
+/**
+ * Delete all notifications for a user
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @returns {Promise<void>}
+ */
+async function deleteAllNotifications(pool, userId) {
+  await pool.query(
+    'DELETE FROM notifications WHERE user_id = $1',
+    [userId]
+  );
+}
+
 module.exports = {
   getNotifications,
   markAsRead,
-  markAllAsRead
+  markAllAsRead,
+  getUserPushToken,
+  saveInAppNotification,
+  deleteNotification,
+  deleteAllNotifications,
 };

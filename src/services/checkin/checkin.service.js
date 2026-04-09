@@ -21,7 +21,7 @@
 const { sendPushNotification } = require('../notification/push.notification.service');
 const { getNextTriageQuestion, buildContinuityMessage, calcFollowUpHours } = require('./checkin.ai.service');
 const { saveSymptomLogs } = require('./symptom-tracker.service');
-const { dispatch: dispatchNotification } = require('../notification/notification.orchestrator');
+const { dispatch: dispatchNotification } = require('../../core/notification/notification.orchestrator');
 const { trackEvent } = require('../profile/engagement.service');
 const { updateMissionProgress } = require('../missions/missions.service');
 const { t } = require('../../i18n');
@@ -1453,6 +1453,38 @@ async function getHealthScore(pool, userId) {
   return result;
 }
 
+/**
+ * DEV ONLY — Simulate time passing by setting next_checkin_at to past
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @returns {Promise<Object|null>} - Updated session row or null
+ */
+async function simulateTimePassing(pool, userId) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const { rows } = await pool.query(
+    `UPDATE health_checkins
+     SET next_checkin_at = NOW() - INTERVAL '1 minute', updated_at = NOW()
+     WHERE user_id = $1 AND session_date = $2 AND resolved_at IS NULL
+     RETURNING id, next_checkin_at, flow_state, current_status`,
+    [userId, today]
+  );
+  return rows[0] || null;
+}
+
+/**
+ * DEV ONLY — Reset today's checkin session for testing
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @returns {Promise<void>}
+ */
+async function resetTodayCheckin(pool, userId) {
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  await pool.query(
+    `DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2`,
+    [userId, today]
+  );
+}
+
 module.exports = {
   getTodayCheckin,
   getYesterdaySession,
@@ -1467,4 +1499,6 @@ module.exports = {
   runAlertConfirmationFollowUps,
   getHealthReport,
   getHealthScore,
+  simulateTimePassing,
+  resetTodayCheckin,
 };

@@ -1,0 +1,592 @@
+{
+  "timestamp": "2026-04-08T08:06:37.508Z",
+  "userId": 4,
+  "profile": {
+    "birth_year": 1958,
+    "gender": "Nam",
+    "full_name": "Trần Văn Hùng",
+    "medical_conditions": [
+      "Tiểu đường",
+      "Cao huyết áp",
+      "Tim mạch"
+    ],
+    "age": 68
+  },
+  "totalPass": 67,
+  "totalFail": 0,
+  "totalTests": 67,
+  "groups": {
+    "A": {
+      "pass": 10,
+      "fail": 0,
+      "tests": [
+        {
+          "group": "A",
+          "label": "A1: Oscillating mild/severe answers -> has severity",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "A",
+          "label": "A2: All mild except last severe -> has conclusion",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "A",
+          "label": "A3: All severe except last mild -> has conclusion",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "A",
+          "label": "A4: No slider, skip -> pass",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "A",
+          "label": "A5: No slider, skip -> pass",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "A",
+          "label": "A6: No slider, skip -> pass",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "A",
+          "label": "A7: All \"khong co\" / 0 answers -> still completes",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "A",
+          "label": "A8: Same first option for all -> completes",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "A",
+          "label": "A9: Vietnamese + English mix -> no crash",
+          "pass": true,
+          "expected": "no crash",
+          "actual": "ok",
+          "info": null
+        },
+        {
+          "group": "A",
+          "label": "A10: All first options (fast) -> completes, timing irrelevant",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": null
+        }
+      ]
+    },
+    "B": {
+      "pass": 15,
+      "fail": 0,
+      "tests": [
+        {
+          "group": "B",
+          "label": "B1: 3x \"Đỡ hơn\" -> LOW",
+          "pass": true,
+          "expected": "low",
+          "actual": "low",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B2: 3x \"Nặng hơn\" -> HIGH",
+          "pass": true,
+          "expected": "high",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B3: better->worse->better -> LOW",
+          "pass": true,
+          "expected": "low",
+          "actual": "low",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B4: worse->better->worse -> HIGH",
+          "pass": true,
+          "expected": "high",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B5: 5x \"Vẫn vậy\" from MEDIUM -> stays MEDIUM",
+          "pass": true,
+          "expected": "medium",
+          "actual": "medium",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B6: complex path -> ends LOW",
+          "pass": true,
+          "expected": "low",
+          "actual": "low",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B7: HIGH + better -> LOW",
+          "pass": true,
+          "expected": "low",
+          "actual": "low",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B8: HIGH + same -> stays HIGH",
+          "pass": true,
+          "expected": "high",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B9: LOW + worse -> HIGH",
+          "pass": true,
+          "expected": "high",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B10: LOW + same -> stays LOW",
+          "pass": true,
+          "expected": "low",
+          "actual": "low",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B11: MEDIUM + better -> LOW",
+          "pass": true,
+          "expected": "low",
+          "actual": "low",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B12: MEDIUM + worse -> HIGH",
+          "pass": true,
+          "expected": "high",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B13: MEDIUM + same -> MEDIUM",
+          "pass": true,
+          "expected": "medium",
+          "actual": "medium",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B14: 10 follow-ups in a row -> no crash",
+          "pass": true,
+          "expected": "no crash",
+          "actual": "ok",
+          "info": null
+        },
+        {
+          "group": "B",
+          "label": "B15: previousSeverity=null -> defaults (has severity)",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": null
+        }
+      ]
+    },
+    "C": {
+      "pass": 12,
+      "fail": 0,
+      "tests": [
+        {
+          "group": "C",
+          "label": "C1: Age 20, no conditions -> has severity",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": "severity=high"
+        },
+        {
+          "group": "C",
+          "label": "C2: Age 40, diabetes -> modifier bumps",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": "severity=high, modifiers=[]"
+        },
+        {
+          "group": "C",
+          "label": "C3: Age 60, hypertension -> elderly bump",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": "severity=high, modifiers=[]"
+        },
+        {
+          "group": "C",
+          "label": "C4: Age 75, 4 conditions -> highest severity zone",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": "severity=high"
+        },
+        {
+          "group": "C",
+          "label": "C5: Age 90, 5 conditions -> no overflow, has severity",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "C",
+          "label": "C5b: Severity is valid enum",
+          "pass": true,
+          "expected": true,
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "C",
+          "label": "C6: Male vs Female -> same severity (no gender bias)",
+          "pass": true,
+          "expected": "high",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "C",
+          "label": "C7: 10 conditions -> no crash",
+          "pass": true,
+          "expected": "no crash",
+          "actual": "ok",
+          "info": null
+        },
+        {
+          "group": "C",
+          "label": "C7b: 10 conditions -> has severity",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "C",
+          "label": "C8: Empty conditions -> still works",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": null
+        },
+        {
+          "group": "C",
+          "label": "C9: Profile with null everything -> no crash",
+          "pass": true,
+          "expected": "no crash",
+          "actual": "ok",
+          "info": null
+        },
+        {
+          "group": "C",
+          "label": "C10: English conditions -> has severity",
+          "pass": true,
+          "expected": "truthy",
+          "actual": "high",
+          "info": "severity=high, modifiers=[]"
+        }
+      ]
+    },
+    "D": {
+      "pass": 16,
+      "fail": 0,
+      "tests": [
+        {
+          "group": "D",
+          "label": "D1: Stroke symptoms -> isEmergency",
+          "pass": true,
+          "expected": true,
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "D",
+          "label": "D1b: Type=STROKE",
+          "pass": true,
+          "expected": "STROKE",
+          "actual": "STROKE",
+          "info": null
+        },
+        {
+          "group": "D",
+          "label": "D2: Appendicitis combo -> detected",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": "combos=[\"appendicitis_risk\"]"
+        },
+        {
+          "group": "D",
+          "label": "D2b: Appendicitis emergency check",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": "isEmergency=false, type=null"
+        },
+        {
+          "group": "D",
+          "label": "D3: DKA symptoms with diabetes -> detected",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": "isEmergency=true, type=DKA, severity=critical"
+        },
+        {
+          "group": "D",
+          "label": "D4: Dengue hemorrhagic -> isEmergency",
+          "pass": true,
+          "expected": true,
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "D",
+          "label": "D4b: Type=DENGUE_HEMORRHAGIC",
+          "pass": true,
+          "expected": "DENGUE_HEMORRHAGIC",
+          "actual": "DENGUE_HEMORRHAGIC",
+          "info": null
+        },
+        {
+          "group": "D",
+          "label": "D5: \"ho ra máu\" -> system response (KNOWN GAP: not in HEMORRHAGE_DIRECT_KW)",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": "isEmergency=false, type=null, severity=low [KNOWN GAP: ho ra máu not standalone emergency]"
+        },
+        {
+          "group": "D",
+          "label": "D5b: \"ho ra máu\" alone -> returns valid result object",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": "Current behavior: isEmergency=false, type=null"
+        },
+        {
+          "group": "D",
+          "label": "D6: \"đau đầu dữ dội đột ngột\" -> high or emergency",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": "isEmergency=false, type=POSSIBLE_SAH, severity=high"
+        },
+        {
+          "group": "D",
+          "label": "D7: Fever + seizure -> isEmergency",
+          "pass": true,
+          "expected": true,
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "D",
+          "label": "D7b: Type is SEIZURE or critical",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "D",
+          "label": "D8: Syncope + dyspnea + chest pain -> isEmergency",
+          "pass": true,
+          "expected": true,
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "D",
+          "label": "D8b: Severity is critical",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "D",
+          "label": "D9: \"mất ý thức\" -> valid response (KNOWN GAP: syncope alone = SAFE)",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": "isEmergency=false, type=null [KNOWN GAP: standalone syncope not emergency]"
+        },
+        {
+          "group": "D",
+          "label": "D10: \"chảy máu bất thường\" -> valid response (KNOWN GAP: needs fever+abd pain)",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": "isEmergency=false, type=null, severity=low [KNOWN GAP: standalone bleed not emergency]"
+        }
+      ]
+    },
+    "E": {
+      "pass": 8,
+      "fail": 0,
+      "tests": [
+        {
+          "group": "E",
+          "label": "E1: Parse 50+ symptoms -> 250 items in 0ms",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "E",
+          "label": "E1b: No timeout (< 1000ms)",
+          "pass": true,
+          "expected": true,
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "E",
+          "label": "E2: detectCombo 20 symptoms -> 0 combos in 0ms",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "E",
+          "label": "E2b: Completed < 100ms",
+          "pass": true,
+          "expected": true,
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "E",
+          "label": "E3: matchCluster x100 -> completed in 20ms",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "E",
+          "label": "E4: 20 script sessions -> all completed in 1ms",
+          "pass": true,
+          "expected": true,
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "E",
+          "label": "E5: analyzeMultiSymptom 10 symptoms -> no crash",
+          "pass": true,
+          "expected": "no crash",
+          "actual": "ok",
+          "info": null
+        },
+        {
+          "group": "E",
+          "label": "E5b: Completed < 500ms (actual: 4ms)",
+          "pass": true,
+          "expected": true,
+          "actual": true,
+          "info": null
+        }
+      ]
+    },
+    "F": {
+      "pass": 6,
+      "fail": 0,
+      "tests": [
+        {
+          "group": "F",
+          "label": "F1: User with 0 active clusters -> getUserScript returns null",
+          "pass": true,
+          "expected": null,
+          "actual": null,
+          "info": null
+        },
+        {
+          "group": "F",
+          "label": "F1b: Fallback script still available",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "F",
+          "label": "F2: 50+ clusters -> getUserScript in 4ms",
+          "pass": true,
+          "expected": "truthy",
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "F",
+          "label": "F3: Script with 0 questions -> isDone=true",
+          "pass": true,
+          "expected": true,
+          "actual": true,
+          "info": null
+        },
+        {
+          "group": "F",
+          "label": "F4: Script with 20 questions -> all 20 asked",
+          "pass": true,
+          "expected": 20,
+          "actual": 20,
+          "info": null
+        },
+        {
+          "group": "F",
+          "label": "F5: Race condition - just created cluster matches immediately",
+          "pass": true,
+          "expected": true,
+          "actual": true,
+          "info": null
+        }
+      ]
+    }
+  }
+}

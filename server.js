@@ -21,6 +21,7 @@ const testRoutes = require('./asinu-brain-extension/routes/test.routes');
 const langMiddleware = require('./src/middleware/lang.middleware');
 const { getRedis } = require('./src/lib/redis');
 const { runBasicNotifications } = require('./src/services/notification/basic.notification.service');
+const { runNightlyCycle } = require('./src/services/checkin/rnd-cycle.service');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -141,3 +142,23 @@ setInterval(async () => {
     console.warn('[cleanup] Chat history cleanup failed:', err?.message);
   }
 }, 24 * 60 * 60 * 1000);
+
+// R&D Cycle — runs at 2:00 AM Vietnam time (UTC+7 = 19:00 UTC previous day)
+// Processes fallback logs, updates clusters, optimizes scripts
+function scheduleRndCycle() {
+  const checkAndRun = async () => {
+    const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    if (vnNow.getHours() === 2 && vnNow.getMinutes() < 5) {
+      try {
+        console.log('[R&D] Starting nightly cycle...');
+        const stats = await runNightlyCycle(pool);
+        console.log('[R&D] Cycle completed:', stats);
+      } catch (err) {
+        console.error('[R&D] Cycle failed:', err?.message);
+      }
+    }
+  };
+  // Check every 5 minutes
+  setInterval(checkAndRun, 5 * 60 * 1000);
+}
+scheduleRndCycle();

@@ -88,7 +88,7 @@ async function clearPushToken(pool, req, res) {
   if (!req.user?.id) {
     return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
-  await pool.query('UPDATE users SET push_token = NULL WHERE id = $1', [req.user.id]);
+  await profileService.clearPushToken(pool, req.user.id);
   return res.status(200).json({ ok: true });
 }
 
@@ -103,6 +103,17 @@ async function getBasicProfile(pool, req, res) {
   return res.status(200).json(result);
 }
 
+async function featureFlagsHandler(pool, req, res) {
+  return res.json({
+    FEATURE_MOOD_TRACKER: false,
+    FEATURE_JOURNAL: false,
+    FEATURE_AUDIO: false,
+    FEATURE_DAILY_CHECKIN: true,
+    FEATURE_AI_FEED: false,
+    FEATURE_AI_CHAT: true
+  });
+}
+
 module.exports = {
   getProfile,
   getBasicProfile,
@@ -110,4 +121,5 @@ module.exports = {
   deleteAccount,
   updatePushToken,
   clearPushToken,
+  featureFlagsHandler,
 };

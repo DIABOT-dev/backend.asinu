@@ -2,6 +2,7 @@ const { t, getLang } = require('../i18n');
 const { onboardingRequestSchema } = require('../validation/validation.schemas');
 const onboardingService = require('../services/onboarding/onboarding.service');
 const onboardingAiService = require('../services/onboarding/onboarding.ai.service');
+const { createClustersFromOnboarding } = require('../services/checkin/script.service');
 
 async function upsertOnboardingProfile(pool, req, res) {
   const parsed = onboardingRequestSchema.safeParse(req.body);
@@ -72,15 +73,24 @@ async function onboardingCompleteV2(pool, req, res) {
     if (phone && phone.trim().length >= 9) {
       const { normalizePhoneNumber, getPhoneVariants } = require('../services/auth/auth.service');
       const variants = getPhoneVariants(normalizePhoneNumber(phone.trim()));
-      const dup = await pool.query(
-        'SELECT id FROM users WHERE phone_number = ANY($1::text[]) AND id != $2',
-        [variants, req.user.id]
-      );
-      if (dup.rows.length > 0) {
+      const isDuplicate = await onboardingService.checkPhoneDuplicate(pool, variants, req.user.id);
+      if (isDuplicate) {
         return res.status(409).json({ ok: false, error: t('auth.phone_already_used', getLang(req)) });
       }
     }
     const saved = await onboardingService.upsertProfileV2(pool, req.user.id, req.body);
+
+    // Auto-create problem clusters + scripts from chronic symptoms
+    const symptoms = [
+      ...(Array.isArray(req.body.chronic_symptoms) ? req.body.chronic_symptoms : []),
+      ...(Array.isArray(req.body.medical_conditions) ? req.body.medical_conditions : []),
+    ].filter(Boolean);
+    if (symptoms.length > 0) {
+      createClustersFromOnboarding(pool, req.user.id, symptoms).catch(err =>
+        console.error('[Onboarding] Failed to create clusters:', err.message)
+      );
+    }
+
     return res.json({ ok: true, profile: saved });
   } catch (err) {
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });

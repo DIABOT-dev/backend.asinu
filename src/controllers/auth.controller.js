@@ -531,6 +531,16 @@ async function loginByFacebookToken(pool, req, res) {
   }
 }
 
+async function logoutHandler(pool, req, res) {
+  try {
+    const { logout } = require('../services/auth/auth.service');
+    await logout(pool, req.user.id).catch(() => {});
+    return res.json({ ok: true, message: t('success.logged_out', getLang(req)) });
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
 module.exports = {
   registerByEmail,
   loginByEmail,
@@ -544,5 +554,6 @@ module.exports = {
   googleCallback,
   getMe,
   searchUsers,
-  verifyToken
+  verifyToken,
+  logoutHandler
 };

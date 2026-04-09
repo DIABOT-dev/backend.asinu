@@ -472,6 +472,21 @@ async function upsertProfileV2(pool, userId, data) {
 // EXPORTS
 // =====================================================
 
+/**
+ * Check if a phone number is already used by another user
+ * @param {Object} pool - Database pool
+ * @param {string[]} phoneVariants - Array of normalized phone variants
+ * @param {number} excludeUserId - User ID to exclude from check
+ * @returns {Promise<boolean>} - true if duplicate exists
+ */
+async function checkPhoneDuplicate(pool, phoneVariants, excludeUserId) {
+  const { rows } = await pool.query(
+    'SELECT id FROM users WHERE phone_number = ANY($1::text[]) AND id != $2',
+    [phoneVariants, excludeUserId]
+  );
+  return rows.length > 0;
+}
+
 module.exports = {
   // Helpers
   normalizeText,
@@ -484,4 +499,5 @@ module.exports = {
   upsertProfileFromAI,
   upsertProfileV2,
   getProfile,
+  checkPhoneDuplicate,
 };

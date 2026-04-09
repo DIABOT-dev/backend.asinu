@@ -1,0 +1,1299 @@
+{
+  "timestamp": "2026-04-08T08:06:36.975Z",
+  "userId": 4,
+  "profile": {
+    "birth_year": 1958,
+    "gender": "Nam",
+    "full_name": "Tran Van Hung",
+    "medical_conditions": [
+      "Tieu duong",
+      "Cao huyet ap",
+      "Tim mach"
+    ],
+    "age": 68
+  },
+  "summary": {
+    "totalPass": 155,
+    "totalFail": 0,
+    "total": 155,
+    "groupStats": {
+      "A": {
+        "pass": 40,
+        "fail": 0,
+        "total": 40
+      },
+      "B": {
+        "pass": 40,
+        "fail": 0,
+        "total": 40
+      },
+      "C": {
+        "pass": 15,
+        "fail": 0,
+        "total": 15
+      },
+      "D": {
+        "pass": 30,
+        "fail": 0,
+        "total": 30
+      },
+      "E": {
+        "pass": 15,
+        "fail": 0,
+        "total": 15
+      },
+      "F": {
+        "pass": 10,
+        "fail": 0,
+        "total": 10
+      },
+      "G": {
+        "pass": 5,
+        "fail": 0,
+        "total": 5
+      }
+    }
+  },
+  "results": [
+    {
+      "group": "A",
+      "testName": "matchCluster(\"no diacritics headache\")",
+      "input": "dau dau",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=headache",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"no diacritics headache\")",
+      "input": "dau dau",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"wrong diacritics headache\")",
+      "input": "dau dau",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=headache",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"wrong diacritics headache\")",
+      "input": "dau dau",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"no diacritics abdominal\")",
+      "input": "dau bung",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=abdominal_pain",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"no diacritics abdominal\")",
+      "input": "dau bung",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"no diacritics dizziness\")",
+      "input": "chong mat",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=dizziness",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"no diacritics dizziness\")",
+      "input": "chong mat",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"no diacritics fatigue\")",
+      "input": "met moi",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=fatigue",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"no diacritics fatigue\")",
+      "input": "met moi",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"emergency no diacritics\")",
+      "input": "dau nguc kho tho",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=chest_pain",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"emergency no diacritics\")",
+      "input": "dau nguc kho tho",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=true, type=MI",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"stroke no diacritics\")",
+      "input": "yeu nua nguoi",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=false, cluster=none",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"stroke no diacritics\")",
+      "input": "yeu nua nguoi",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=true, type=STROKE",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"seizure no diacritics\")",
+      "input": "co giat",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=false, cluster=none",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"seizure no diacritics\")",
+      "input": "co giat",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=true, type=SEIZURE",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"doubled vowel\")",
+      "input": "dau daau",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=false, cluster=none",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"doubled vowel\")",
+      "input": "dau daau",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"dots between\")",
+      "input": "d.a.u d.a.u",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=false, cluster=none",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"dots between\")",
+      "input": "d.a.u d.a.u",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"all caps\")",
+      "input": "DAU DAU",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=headache",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"all caps\")",
+      "input": "DAU DAU",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"title case\")",
+      "input": "Dau Dau",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=headache",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"title case\")",
+      "input": "Dau Dau",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"extra spaces\")",
+      "input": "  dau   dau  ",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=false, cluster=none",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"extra spaces\")",
+      "input": "  dau   dau  ",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"hyphen\")",
+      "input": "dau-dau",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=false, cluster=none",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"hyphen\")",
+      "input": "dau-dau",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"underscore\")",
+      "input": "dau_dau",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=false, cluster=none",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"underscore\")",
+      "input": "dau_dau",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"no space\")",
+      "input": "daudau",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=false, cluster=none",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"no space\")",
+      "input": "daudau",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"no diacritics + extra word\")",
+      "input": "dau dau nhe",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=headache",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"no diacritics + extra word\")",
+      "input": "dau dau nhe",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"no diacritics + slang\")",
+      "input": "bi dau bung qua",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=abdominal_pain",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"no diacritics + slang\")",
+      "input": "bi dau bung qua",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"repeated chars\")",
+      "input": "chong matttt",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=dizziness",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"repeated chars\")",
+      "input": "chong matttt",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "matchCluster(\"English\")",
+      "input": "headache",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=headache",
+      "status": "PASS"
+    },
+    {
+      "group": "A",
+      "testName": "detectEmergency(\"English\")",
+      "input": "headache",
+      "expectedBehavior": "no crash",
+      "actualResult": "isEmergency=false, type=null",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"met vai\")",
+      "input": "met vai",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=fatigue",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"met vai\")",
+      "input": "met vai",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"dau qua troi\")",
+      "input": "dau qua troi",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=false, cluster=none",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"dau qua troi\")",
+      "input": "dau qua troi",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"chong mat xiu luon\")",
+      "input": "chong mat xiu luon",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=dizziness",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"chong mat xiu luon\")",
+      "input": "chong mat xiu luon",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"bung dau dien\")",
+      "input": "bung dau dien",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=abdominal_pain",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"bung dau dien\")",
+      "input": "bung dau dien",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"nhuc dau kinh khung\")",
+      "input": "nhuc dau kinh khung",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=headache",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"nhuc dau kinh khung\")",
+      "input": "nhuc dau kinh khung",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"nguoi yeu xiu\")",
+      "input": "nguoi yeu xiu",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=dizziness",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"nguoi yeu xiu\")",
+      "input": "nguoi yeu xiu",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"hoa mat chong mat muon xiu\")",
+      "input": "hoa mat chong mat muon xiu",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=dizziness",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"hoa mat chong mat muon xiu\")",
+      "input": "hoa mat chong mat muon xiu",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"dau bung di ngoai lien tuc\")",
+      "input": "dau bung di ngoai lien tuc",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=abdominal_pain",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"dau bung di ngoai lien tuc\")",
+      "input": "dau bung di ngoai lien tuc",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"ho sac sua ca dem\")",
+      "input": "ho sac sua ca dem",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=cough",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"ho sac sua ca dem\")",
+      "input": "ho sac sua ca dem",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"sot run nguoi\")",
+      "input": "sot run nguoi",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=fever",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"sot run nguoi\")",
+      "input": "sot run nguoi",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"tay chan te ran ran\")",
+      "input": "tay chan te ran ran",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=tê_tay_chân",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"tay chan te ran ran\")",
+      "input": "tay chan te ran ran",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"dau nang triu\")",
+      "input": "dau nang triu",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=false, cluster=none",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"dau nang triu\")",
+      "input": "dau nang triu",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"mat mo mo ao ao\")",
+      "input": "mat mo mo ao ao",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=dizziness",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"mat mo mo ao ao\")",
+      "input": "mat mo mo ao ao",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"tim dap thinh thich\")",
+      "input": "tim dap thinh thich",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=false, cluster=none",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"tim dap thinh thich\")",
+      "input": "tim dap thinh thich",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"tho ko noi\")",
+      "input": "tho ko noi",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=dyspnea",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"tho ko noi\")",
+      "input": "tho ko noi",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"ngu ko duoc may dem roi\")",
+      "input": "ngu ko duoc may dem roi",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=insomnia",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"ngu ko duoc may dem roi\")",
+      "input": "ngu ko duoc may dem roi",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"an vo la oi\")",
+      "input": "an vo la oi",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=nausea",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"an vo la oi\")",
+      "input": "an vo la oi",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"di dung lao dao\")",
+      "input": "di dung lao dao",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=false, cluster=none",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"di dung lao dao\")",
+      "input": "di dung lao dao",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"ngat xiu hoi sang\")",
+      "input": "ngat xiu hoi sang",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=dizziness",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"ngat xiu hoi sang\")",
+      "input": "ngat xiu hoi sang",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "matchCluster(\"kho chiu toan than\")",
+      "input": "kho chiu toan than",
+      "expectedBehavior": "no crash",
+      "actualResult": "matched=true, cluster=dyspnea",
+      "status": "PASS"
+    },
+    {
+      "group": "B",
+      "testName": "fallback(\"kho chiu toan than\")",
+      "input": "kho chiu toan than",
+      "expectedBehavior": "no crash",
+      "actualResult": "questions=3",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(text \"nam\" for slider)",
+      "input": "nam",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(text \"nhieu lam\" for slider)",
+      "input": "nhieu lam",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(emoji for slider)",
+      "input": "😫😫😫",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(text not in options)",
+      "input": "toi khong biet",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(number for choice)",
+      "input": "3",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(empty string)",
+      "input": "",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(just spaces)",
+      "input": "   ",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(null)",
+      "input": "null",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(undefined)",
+      "input": "undefined",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(boolean true)",
+      "input": "true",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(object {pain:5})",
+      "input": "[object Object]",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(array [1,2,3])",
+      "input": "1,2,3",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(very long text (1000 chars))",
+      "input": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(HTML tags)",
+      "input": "<b>dau</b>",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "C",
+      "testName": "wrongAnswer(newlines)",
+      "input": "dau\ndau\nnhieu",
+      "expectedBehavior": "no crash + has severity",
+      "actualResult": "severity=medium, followUp=3h, done=true",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(no separator)",
+      "input": "dau dau chong mat buon non",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=1 items: [dau dau chong mat buon non]",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(no separator)",
+      "input": "dau dau chong mat buon non",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=1, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(extra commas)",
+      "input": "dau dau, , , chong mat, , ",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=2 items: [dau dau, chong mat]",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(extra commas)",
+      "input": "dau dau, , , chong mat, , ",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=2, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(extra plus)",
+      "input": "dau dau + + + chong mat",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=2 items: [dau dau, chong mat]",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(extra plus)",
+      "input": "dau dau + + + chong mat",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=2, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(leading/trailing commas)",
+      "input": ",,,dau dau,,,",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=1 items: [dau dau]",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(leading/trailing commas)",
+      "input": ",,,dau dau,,,",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=1, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(repeated connector)",
+      "input": "dau dau va va va chong mat",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=1 items: [dau dau va va va chong mat]",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(repeated connector)",
+      "input": "dau dau va va va chong mat",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=1, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(newlines as separator)",
+      "input": "dau dau\nchong mat\nbuon non",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=1 items: [dau dau\nchong mat\nbuon non]",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(newlines as separator)",
+      "input": "dau dau\nchong mat\nbuon non",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=1, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(semicolons)",
+      "input": "dau dau; chong mat; buon non",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=1 items: [dau dau; chong mat; buon non]",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(semicolons)",
+      "input": "dau dau; chong mat; buon non",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=1, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(numbered list)",
+      "input": "1. dau dau 2. chong mat 3. buon non",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=1 items: [1. dau dau 2. chong mat 3. buon non]",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(numbered list)",
+      "input": "1. dau dau 2. chong mat 3. buon non",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=1, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(bullet list)",
+      "input": "- dau dau\n- chong mat",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=1 items: [- dau dau\n- chong mat]",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(bullet list)",
+      "input": "- dau dau\n- chong mat",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=1, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(natural sentence)",
+      "input": "toi bi dau dau, kem theo chong mat, va buon non nua",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=3 items: [toi bi dau dau, kem theo chong mat, va buon non nua]",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(natural sentence)",
+      "input": "toi bi dau dau, kem theo chong mat, va buon non nua",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=3, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(empty)",
+      "input": "",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=0 items: []",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(empty)",
+      "input": "",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=0, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(spaces only)",
+      "input": "   ",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=0 items: []",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(spaces only)",
+      "input": "   ",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=0, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(null)",
+      "input": "null",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=0 items: []",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(null)",
+      "input": "null",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=0, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(number)",
+      "input": "12345",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=0 items: []",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(number)",
+      "input": "12345",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=0, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "parseSymptoms(repeated 50x)",
+      "input": "dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau ",
+      "expectedBehavior": "no crash",
+      "actualResult": "parsed=1 items: [dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau",
+      "status": "PASS"
+    },
+    {
+      "group": "D",
+      "testName": "analyzeMulti(repeated 50x)",
+      "input": "dau dau dau dau dau dau dau dau dau dau dau dau dau dau dau ",
+      "expectedBehavior": "no crash",
+      "actualResult": "emergency=false, matched=1, unmatched=0",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(chest pain but NOT dyspnea (nhung khong))",
+      "input": "dau nguc nhung khong kho tho",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=CHEST_PAIN_HIGH_RISK, severity=high",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(yesterday dyspnea now fine)",
+      "input": "hom qua kho tho nhung hom nay het roi",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=DYSPNEA_HIGH_RISK, severity=high",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(mom has seizure not me)",
+      "input": "me toi bi co giat khong phai toi",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=true, type=SEIZURE, severity=critical",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(heard chest pain is dangerous)",
+      "input": "toi nghe noi dau nguc la nguy hiem",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=CHEST_PAIN_HIGH_RISK, severity=high",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(NOT weak half body)",
+      "input": "khong bi yeu nua nguoi",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=null, severity=low",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(getting better chest pain)",
+      "input": "bot dau nguc roi",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=null, severity=low",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(mild chest pain)",
+      "input": "dau nguc it thoi",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=CHEST_PAIN_HIGH_RISK, severity=high",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(CAPS dyspnea)",
+      "input": "KHO THO QUA",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=DYSPNEA_HIGH_RISK, severity=high",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(dots in kho tho)",
+      "input": "k.h.o t.h.o",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=null, severity=low",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(no spaces no diacritics)",
+      "input": "khothohehe",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=null, severity=low",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(English chest pain)",
+      "input": "chest pain cant breathe",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=null, severity=low",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(emoji mixed)",
+      "input": "dau nguc kho tho",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=true, type=MI, severity=critical",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(trailing dots)",
+      "input": "dau nguc................",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=CHEST_PAIN_HIGH_RISK, severity=high",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(exclamation marks)",
+      "input": "!!!dau nguc!!!",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=CHEST_PAIN_HIGH_RISK, severity=high",
+      "status": "PASS"
+    },
+    {
+      "group": "E",
+      "testName": "emergency(empty string)",
+      "input": "",
+      "expectedBehavior": "no crash + correct detection",
+      "actualResult": "isEmergency=false, type=null, severity=low",
+      "status": "PASS"
+    },
+    {
+      "group": "F",
+      "testName": "followUp(lowercase do hon)",
+      "input": "do hon",
+      "expectedBehavior": "no crash + has action",
+      "actualResult": "severity=high, action=escalate, needsDoctor=true",
+      "status": "PASS"
+    },
+    {
+      "group": "F",
+      "testName": "followUp(caps no diacritics DO HON)",
+      "input": "DO HON",
+      "expectedBehavior": "no crash + has action",
+      "actualResult": "severity=high, action=escalate, needsDoctor=true",
+      "status": "PASS"
+    },
+    {
+      "group": "F",
+      "testName": "followUp(synonym tot hon roi)",
+      "input": "tot hon roi",
+      "expectedBehavior": "no crash + has action",
+      "actualResult": "severity=high, action=escalate, needsDoctor=true",
+      "status": "PASS"
+    },
+    {
+      "group": "F",
+      "testName": "followUp(synonym van dau)",
+      "input": "van dau",
+      "expectedBehavior": "no crash + has action",
+      "actualResult": "severity=high, action=escalate, needsDoctor=true",
+      "status": "PASS"
+    },
+    {
+      "group": "F",
+      "testName": "followUp(synonym nang lam)",
+      "input": "nang lam",
+      "expectedBehavior": "no crash + has action",
+      "actualResult": "severity=high, action=escalate, needsDoctor=true",
+      "status": "PASS"
+    },
+    {
+      "group": "F",
+      "testName": "followUp(unclear 50/50)",
+      "input": "50/50",
+      "expectedBehavior": "no crash + has action",
+      "actualResult": "severity=high, action=escalate, needsDoctor=true",
+      "status": "PASS"
+    },
+    {
+      "group": "F",
+      "testName": "followUp(empty)",
+      "input": "",
+      "expectedBehavior": "no crash + has action",
+      "actualResult": "severity=high, action=escalate, needsDoctor=true",
+      "status": "PASS"
+    },
+    {
+      "group": "F",
+      "testName": "followUp(emoji only)",
+      "input": "🤗",
+      "expectedBehavior": "no crash + has action",
+      "actualResult": "severity=high, action=escalate, needsDoctor=true",
+      "status": "PASS"
+    },
+    {
+      "group": "F",
+      "testName": "followUp(khong biet)",
+      "input": "khong biet",
+      "expectedBehavior": "no crash + has action",
+      "actualResult": "severity=high, action=escalate, needsDoctor=true",
+      "status": "PASS"
+    },
+    {
+      "group": "F",
+      "testName": "followUp(mixed better+same)",
+      "input": "hoi do nhung van dau",
+      "expectedBehavior": "no crash + has action",
+      "actualResult": "severity=high, action=escalate, needsDoctor=true",
+      "status": "PASS"
+    },
+    {
+      "group": "G",
+      "testName": "50x matchCluster rapid",
+      "input": "50 calls",
+      "expectedBehavior": "no crash, consistent",
+      "actualResult": "all completed, results: 50 matched / 50 total",
+      "status": "PASS"
+    },
+    {
+      "group": "G",
+      "testName": "20x full script sessions",
+      "input": "20 sessions",
+      "expectedBehavior": "all complete",
+      "actualResult": "20/20 completed with valid severity",
+      "status": "PASS"
+    },
+    {
+      "group": "G",
+      "testName": "100x parseSymptoms",
+      "input": "100 calls",
+      "expectedBehavior": "no crash, consistent",
+      "actualResult": "all completed, total parsed items: 200",
+      "status": "PASS"
+    },
+    {
+      "group": "G",
+      "testName": "100x detectEmergency same input",
+      "input": "100 calls",
+      "expectedBehavior": "always same result",
+      "actualResult": "all=true, consistent=true",
+      "status": "PASS"
+    },
+    {
+      "group": "G",
+      "testName": "100x evaluateScript random sliders",
+      "input": "100 calls",
+      "expectedBehavior": "all valid severity",
+      "actualResult": "100/100 returned valid severity",
+      "status": "PASS"
+    }
+  ]
+}

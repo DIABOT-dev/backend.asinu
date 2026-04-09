@@ -288,16 +288,11 @@ async function deleteAccount(pool, userId) {
     await client.query('DELETE FROM medication_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
     await client.query('DELETE FROM care_pulse_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
     await client.query('DELETE FROM logs_common WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM health_logs WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM logs WHERE user_id = $1', [userId]);
 
     // 2. Chat & AI
     await client.query('DELETE FROM chat_logs WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM chat_histories WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM asinu_brain_outcomes WHERE session_id IN (SELECT id FROM asinu_brain_sessions WHERE user_id = $1)', [userId]);
-    await client.query('DELETE FROM asinu_brain_events WHERE session_id IN (SELECT id FROM asinu_brain_sessions WHERE user_id = $1)', [userId]);
-    await client.query('DELETE FROM asinu_brain_sessions WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM asinu_brain_context_snapshots WHERE user_id = $1', [userId]);
 
     // 3. Missions
     await client.query('DELETE FROM mission_history WHERE user_id = $1', [userId]);
@@ -317,24 +312,19 @@ async function deleteAccount(pool, userId) {
     await client.query('DELETE FROM daily_wellness_summary WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM prompt_history WHERE user_id = $1', [userId]);
 
-    // 6. Risk Engine & Alerts (used by asinu-brain-extension)
-    await client.query('DELETE FROM alert_decision_audit WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM asinu_trackers WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM risk_persistence WHERE user_id = $1', [userId]);
-
-    // 7. Care Circle & Connections
+    // 6. Care Circle & Connections
     await client.query('DELETE FROM care_circle WHERE patient_id = $1 OR guardian_id = $1', [userId]);
     await client.query('DELETE FROM user_connections WHERE requester_id = $1 OR addressee_id = $1', [userId]);
     await client.query('DELETE FROM user_baselines WHERE user_id = $1', [userId]);
 
-    // 8. Notifications
+    // 7. Notifications
     await client.query('DELETE FROM notifications WHERE user_id = $1', [userId]);
 
-    // 9. Auth & Profile
+    // 8. Auth & Profile
     await client.query('DELETE FROM auth WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM user_onboarding_profiles WHERE user_id = $1', [userId]);
 
-    // 10. Cuối cùng xóa user
+    // 9. Cuối cùng xóa user
     await client.query('DELETE FROM users WHERE id = $1', [userId]);
 
     // Commit transaction
@@ -427,10 +417,21 @@ async function getBasicProfile(pool, userId) {
   }
 }
 
+/**
+ * Clear push token for a user (e.g. on logout)
+ * @param {Object} pool - Database pool
+ * @param {number} userId - User ID
+ * @returns {Promise<void>}
+ */
+async function clearPushToken(pool, userId) {
+  await pool.query('UPDATE users SET push_token = NULL WHERE id = $1', [userId]);
+}
+
 module.exports = {
   getProfile,
   getBasicProfile,
   updateProfile,
   deleteAccount,
-  updatePushToken
+  updatePushToken,
+  clearPushToken,
 };

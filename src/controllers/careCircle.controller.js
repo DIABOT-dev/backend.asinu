@@ -15,7 +15,11 @@ const {
   getConnections: serviceGetConnections,
   deleteConnection: serviceDeleteConnection,
   updateConnection: serviceUpdateConnection,
-  updateConnectionPermissions: serviceUpdateConnectionPermissions
+  updateConnectionPermissions: serviceUpdateConnectionPermissions,
+  verifyCaregiverAccess,
+  getCaregiverLogs: serviceGetCaregiverLogs,
+  getCaregiverCheckins: serviceGetCaregiverCheckins,
+  getPatientName,
 } = require('../services/care-circle/careCircle.service');
 
 // =====================================================
@@ -191,34 +195,13 @@ async function getCaregiverLogs(pool, req, res) {
   if (!patientId) return res.status(400).json({ ok: false, error: 'Invalid patient ID' });
 
   try {
-    // Check connection exists and has can_view_logs permission
-    const { rows: connRows } = await pool.query(
-      `SELECT id, permissions FROM user_connections
-       WHERE status = 'accepted'
-         AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))
-         AND COALESCE((permissions->>'can_view_logs')::boolean, false) = true`,
-      [patientId, caregiverId]
-    );
-    if (connRows.length === 0) {
+    const hasAccess = await verifyCaregiverAccess(pool, caregiverId, patientId);
+    if (!hasAccess) {
       return res.status(403).json({ ok: false, error: 'No permission to view logs' });
     }
 
-    // Fetch patient's recent logs (last 7 days, max 50)
-    const { rows: logs } = await pool.query(
-      `SELECT lc.id, lc.log_type, lc.occurred_at, lc.note, lc.metadata
-       FROM logs_common lc
-       WHERE lc.user_id = $1 AND lc.occurred_at > NOW() - INTERVAL '7 days'
-       ORDER BY lc.occurred_at DESC
-       LIMIT 50`,
-      [patientId]
-    );
-
-    // Get patient name
-    const { rows: patientRows } = await pool.query(
-      `SELECT display_name, full_name FROM users WHERE id = $1`,
-      [patientId]
-    );
-    const patientName = patientRows[0]?.display_name || patientRows[0]?.full_name || 'Patient';
+    const logs = await serviceGetCaregiverLogs(pool, patientId, 7);
+    const patientName = await getPatientName(pool, patientId) || 'Patient';
 
     return res.json({ ok: true, patientName, logs });
   } catch (err) {
@@ -236,35 +219,13 @@ async function getCaregiverCheckins(pool, req, res) {
   if (!patientId) return res.status(400).json({ ok: false, error: 'Invalid patient ID' });
 
   try {
-    // Check connection exists and has can_view_logs permission
-    const { rows: connRows } = await pool.query(
-      `SELECT id FROM user_connections
-       WHERE status = 'accepted'
-         AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))
-         AND COALESCE((permissions->>'can_view_logs')::boolean, false) = true`,
-      [patientId, caregiverId]
-    );
-    if (connRows.length === 0) {
+    const hasAccess = await verifyCaregiverAccess(pool, caregiverId, patientId);
+    if (!hasAccess) {
       return res.status(403).json({ ok: false, error: 'No permission to view logs' });
     }
 
-    // Fetch patient's check-in sessions (last 14 days)
-    const { rows: sessions } = await pool.query(
-      `SELECT id, session_date, initial_status, current_status, flow_state,
-              triage_summary, triage_severity, family_alerted, emergency_triggered,
-              resolved_at, created_at
-       FROM health_checkins
-       WHERE user_id = $1 AND session_date >= CURRENT_DATE - INTERVAL '14 days'
-       ORDER BY session_date DESC`,
-      [patientId]
-    );
-
-    // Get patient name
-    const { rows: patientRows } = await pool.query(
-      `SELECT display_name, full_name FROM users WHERE id = $1`,
-      [patientId]
-    );
-    const patientName = patientRows[0]?.display_name || patientRows[0]?.full_name || '';
+    const sessions = await serviceGetCaregiverCheckins(pool, patientId, 14);
+    const patientName = await getPatientName(pool, patientId);
 
     return res.json({ ok: true, patientName, sessions });
   } catch (err) {
@@ -281,15 +242,8 @@ async function getMemberHealthSummary(pool, req, res) {
   const memberId = parseInt(req.params.memberId);
 
   // Verify caregiver has access and can_view_logs permission
-  const accessCheck = await pool.query(
-    `SELECT id FROM user_connections
-     WHERE ((requester_id = $2 AND addressee_id = $1) OR (requester_id = $1 AND addressee_id = $2))
-       AND status = 'accepted'
-       AND COALESCE((permissions->>'can_view_logs')::boolean, false) = true`,
-    [caregiverId, memberId]
-  );
-
-  if (accessCheck.rows.length === 0) {
+  const hasAccess = await verifyCaregiverAccess(pool, caregiverId, memberId);
+  if (!hasAccess) {
     return res.status(403).json({ ok: false, error: 'Không có quyền truy cập' });
   }
 

@@ -1,0 +1,1306 @@
+<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Asinu — Test luồng Check-in</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;color:#1e293b;font-size:13px}
+.header{background:linear-gradient(135deg,#1e40af,#7c3aed);color:#fff;padding:32px 20px;text-align:center}.header h1{font-size:22px;margin-bottom:4px}.header .sub{opacity:.8;font-size:13px}
+.status{display:inline-block;margin-top:12px;padding:6px 20px;border-radius:20px;font-weight:700;font-size:14px;background:rgba(74,222,128,.2);color:#bbf7d0;border:2px solid #4ade80}
+.stats{display:flex;justify-content:center;gap:12px;margin:12px auto 20px;max-width:600px;padding:0 16px;position:relative;z-index:1;flex-wrap:wrap}
+.stat{background:#fff;border-radius:10px;padding:14px;text-align:center;flex:1;min-width:80px;box-shadow:0 1px 4px rgba(0,0,0,.08)}.stat .num{font-size:24px;font-weight:800}.stat .lbl{font-size:10px;color:#64748b;text-transform:uppercase;margin-top:2px}
+.stat.p .num{color:#16a34a}.stat.f .num{color:#dc2626}.stat.t .num{color:#2563eb}
+.section{max-width:900px;margin:20px auto;padding:0 16px}
+.cat-title{font-size:15px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px;padding-bottom:6px;border-bottom:2px solid #e2e8f0}
+.flow{background:#fff;border-radius:10px;margin-bottom:10px;border:1px solid #e2e8f0;overflow:hidden}
+.flow-header{padding:14px 16px;cursor:pointer;display:flex;align-items:center;gap:10px}.flow-header:hover{background:#f8fafc}
+.flow-name{font-weight:700;font-size:14px;flex:1}.flow-desc{font-size:11px;color:#64748b;margin-top:2px}
+.flow-stats{font-size:11px;display:flex;gap:6px;align-items:center}
+.pill{padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;display:inline-block}.pill.g{background:#dcfce7;color:#166534}.pill.r{background:#fee2e2;color:#991b1b}
+.arrow{color:#94a3b8;transition:transform .2s;font-size:11px}.flow.open .arrow{transform:rotate(90deg)}
+.flow-body{display:none;border-top:1px solid #f1f5f9;padding:16px}.flow.open .flow-body{display:block}
+
+/* Timeline */
+.timeline{position:relative;padding-left:28px}
+.timeline::before{content:'';position:absolute;left:11px;top:0;bottom:0;width:2px;background:#e2e8f0}
+.tl-node{position:relative;margin-bottom:0;padding-bottom:16px}
+.tl-node:last-child{padding-bottom:0}
+.tl-dot{position:absolute;left:-28px;top:2px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;z-index:1}
+.tl-dot.pass{background:#dcfce7;border:2px solid #16a34a}
+.tl-dot.fail{background:#fee2e2;border:2px solid #dc2626}
+.tl-dot.info{background:#dbeafe;border:2px solid #3b82f6}
+.tl-connector{position:absolute;left:-18px;top:24px;width:2px;height:calc(100% - 24px);background:#e2e8f0}
+.tl-content{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;font-size:12px}
+.tl-content.clickable{cursor:pointer;transition:all .2s}.tl-content.clickable:hover{border-color:#93c5fd;background:#eff6ff}
+.tl-action{font-weight:700;color:#1e293b;margin-bottom:2px;display:flex;align-items:center;gap:6px}
+.tl-detail{color:#64748b;font-size:11px}
+.tl-result{display:inline-block;margin-top:4px;font-size:11px;padding:2px 8px;border-radius:4px;background:#f1f5f9;color:#64748b}
+.tl-expand{display:none;margin-top:10px;padding:12px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;font-size:12px;line-height:1.9}
+.tl-node.expanded .tl-expand{display:block}
+
+/* Chat bubble style for conversation */
+.chat-msg{margin:6px 0;padding:8px 12px;border-radius:12px;max-width:85%;font-size:12px;line-height:1.5}
+.chat-system{background:#eff6ff;color:#1e40af;border-bottom-left-radius:4px;margin-right:auto}
+.chat-user{background:#f0fdf4;color:#166534;border-bottom-right-radius:4px;margin-left:auto;text-align:right}
+.chat-opts{font-size:10px;color:#94a3b8;margin-top:2px}
+.chat-result{margin-top:8px;padding:10px 14px;border-radius:8px;border-left:4px solid}
+.chat-result.low{background:#f0fdf4;border-color:#16a34a}
+.chat-result.medium{background:#fefce8;border-color:#ca8a04}
+.chat-result.high{background:#fef2f2;border-color:#dc2626}
+.chat-result b{display:block;margin-bottom:4px}
+.chat-fu{margin-top:8px;padding:8px 12px;background:#faf5ff;border-radius:8px;border-left:4px solid #8b5cf6;font-size:12px}
+
+.expand-hint{font-size:10px;color:#93c5fd;margin-left:4px;font-weight:400}
+.tabs{display:flex;gap:4px;margin-top:16px;position:relative;z-index:10}
+.tab{padding:10px 20px;border:none;background:#e2e8f0;border-radius:10px 10px 0 0;cursor:pointer;font-size:13px;font-weight:600;color:#64748b;transition:all .2s}
+.tab.active{background:#fff;color:#1e40af;box-shadow:0 -2px 8px rgba(0,0,0,.06)}
+.tab:hover{color:#1e40af}
+
+.i-msg{margin:6px 0;max-width:85%;animation:fadeUp .3s}.i-bot{margin-right:auto}.i-user{margin-left:auto}
+.i-bubble{padding:8px 12px;border-radius:14px;font-size:12px;line-height:1.5}
+.i-bot .i-bubble{background:#eff6ff;color:#1e40af;border-bottom-left-radius:3px}
+.i-user .i-bubble{background:#f0fdf4;color:#166534;border-bottom-right-radius:3px;text-align:right}
+.i-label{font-size:9px;color:#94a3b8;margin-bottom:1px;padding:0 3px}
+.i-opts{display:flex;flex-wrap:wrap;gap:5px;margin:6px 0}
+.i-opt{padding:6px 12px;border-radius:16px;border:1.5px solid #e2e8f0;background:#fff;cursor:pointer;font-size:11px;color:#334155;transition:all .15s}
+.i-opt:hover{border-color:#3b82f6;color:#3b82f6;background:#eff6ff}
+.i-opt.sel{background:#3b82f6;color:#fff;border-color:#3b82f6}
+.i-slider{margin:6px 0;padding:8px 12px;background:#f8fafc;border-radius:10px}
+.i-slider input{width:100%;accent-color:#3b82f6}
+.i-slider-val{text-align:center;font-size:22px;font-weight:800;color:#1e40af;margin:4px 0}
+.i-slider button{display:block;width:100%;padding:6px;border-radius:8px;border:none;background:#3b82f6;color:#fff;font-weight:600;cursor:pointer;font-size:12px;margin-top:4px}
+.i-free{display:flex;gap:4px;margin:6px 0}
+.i-free input{flex:1;padding:8px 12px;border-radius:16px;border:1.5px solid #e2e8f0;font-size:11px;outline:none}
+.i-free input:focus{border-color:#3b82f6}
+.i-free button{padding:8px 14px;border-radius:16px;border:none;background:#3b82f6;color:#fff;cursor:pointer;font-size:11px}
+.i-result{margin:8px 0;padding:10px;border-radius:10px;border-left:3px solid;font-size:11px}
+.i-result.low{background:#f0fdf4;border-color:#16a34a}.i-result.medium{background:#fefce8;border-color:#ca8a04}
+.i-result.high{background:#fef2f2;border-color:#dc2626}.i-result.critical{background:#450a0a;border-color:#dc2626;color:#fecaca}
+.i-emergency{margin:8px 0;padding:12px;background:#450a0a;border-radius:10px;color:#fecaca;text-align:center;animation:shake .5s}
+.i-restart{display:block;width:100%;margin-top:10px;padding:8px;border-radius:10px;border:1.5px solid #e2e8f0;background:#fff;cursor:pointer;font-size:12px;color:#64748b;font-weight:600}
+.i-restart:hover{border-color:#3b82f6;color:#3b82f6}
+.i-typing{display:inline-block;padding:6px 14px;background:#eff6ff;border-radius:14px;font-size:18px;animation:blink 1s infinite}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+@keyframes blink{0%,100%{opacity:.3}50%{opacity:1}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-3px)}75%{transform:translateX(3px)}}
+
+.replay-btn{background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;border:none;padding:4px 14px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s}
+.replay-btn:hover{transform:scale(1.05);box-shadow:0 2px 8px rgba(59,130,246,.4)}
+
+/* Replay modal */
+.replay-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);z-index:1000;justify-content:center;align-items:center}
+.replay-overlay.active{display:flex}
+.replay-modal{background:#fff;border-radius:16px;width:95%;max-width:480px;max-height:90vh;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.replay-header{background:linear-gradient(135deg,#1e40af,#7c3aed);color:#fff;padding:16px 20px;display:flex;align-items:center;gap:10px}
+.replay-header h3{flex:1;font-size:15px}
+.replay-close{background:rgba(255,255,255,.2);border:none;color:#fff;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:16px}
+.replay-body{padding:16px 20px;overflow-y:auto;max-height:calc(90vh - 120px);min-height:300px}
+.replay-controls{padding:10px 20px;background:#f8fafc;border-top:1px solid #e2e8f0;display:flex;gap:8px;justify-content:center}
+.replay-controls button{padding:6px 16px;border-radius:6px;border:1px solid #e2e8f0;background:#fff;cursor:pointer;font-size:12px;font-weight:600}
+.replay-controls button.primary{background:#3b82f6;color:#fff;border-color:#3b82f6}
+.replay-controls button:hover{opacity:.8}
+
+/* Replay chat items */
+.r-item{opacity:0;transform:translateY(10px);transition:all .4s ease;margin-bottom:8px}
+.r-item.visible{opacity:1;transform:translateY(0)}
+.r-time{font-size:10px;color:#94a3b8;text-align:center;margin:12px 0 4px}
+.r-system{background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px 12px 12px 2px;padding:10px 14px;font-size:12px;color:#1e40af;max-width:85%}
+.r-user{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px 12px 2px 12px;padding:10px 14px;font-size:12px;color:#166534;max-width:75%;margin-left:auto;text-align:right}
+.r-opts{display:flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+.r-opt{padding:3px 10px;border-radius:12px;font-size:10px;background:#e0e7ff;color:#3730a3}
+.r-opt.selected{background:#3b82f6;color:#fff;font-weight:700}
+.r-result{background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:12px 14px;margin-top:4px}
+.r-sev{display:inline-block;padding:3px 12px;border-radius:6px;font-weight:700;font-size:12px}
+.r-sev.low{background:#dcfce7;color:#166534}.r-sev.medium{background:#fef9c3;color:#854d0e}.r-sev.high{background:#fee2e2;color:#991b1b}.r-sev.critical{background:#7f1d1d;color:#fecaca}
+.r-advice{margin-top:6px;font-size:11px;color:#475569;line-height:1.6}
+.r-typing{display:inline-block;padding:8px 14px;background:#eff6ff;border-radius:12px;font-size:20px;animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:.3}50%{opacity:1}}
+
+.footer{text-align:center;padding:30px;color:#94a3b8;font-size:11px;margin-top:20px;border-top:1px solid #e2e8f0}
+</style></head><body>
+<div class="header"><h1>Test toàn bộ luồng Check-in</h1><div class="sub">17 luồng × 58 bước kiểm tra</div>
+<div class="status">✔ TẤT CẢ ĐẠT — 17/17 luồng, 58/58 bước</div></div>
+
+<div style="max-width:900px;margin:0 auto;padding:0 16px">
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('results')">📊 Kết quả test (17 luồng)</button>
+  <button class="tab" onclick="switchTab('interactive')">🎮 Tự test trực tiếp</button>
+</div>
+</div>
+
+<div id="tab-results">
+<div class="stats">
+<div class="stat t"><div class="num">17</div><div class="lbl">Luồng</div></div>
+<div class="stat t"><div class="num">58</div><div class="lbl">Bước</div></div>
+<div class="stat p"><div class="num">58</div><div class="lbl">Đạt</div></div>
+<div class="stat f"><div class="num">0</div><div class="lbl">Lỗi</div></div></div>
+
+
+<div class="section">
+<div class="cat-title"><span>✅</span><span style="color:#16a34a">Luồng bình thường</span>
+<span style="font-size:11px;color:#94a3b8;margin-left:auto">6/6 đạt</span></div>
+
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">A. "Tôi ổn" cả sáng lẫn tối</div><div class="flow-desc">User khỏe mạnh cả ngày, không cần script, không cần AI</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('A')">▶ Tái hiện</button><span class="pill g">3 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" >
+  <div class="tl-dot info">1</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Sáng: User chọn "Tôi ổn"</div>
+    <div class="tl-detail">Không chạy script, hẹn 9h tối</div>
+    <span class="tl-result">fine → monitoring</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">2</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Tối: User xác nhận "Vẫn ổn"</div>
+    <div class="tl-detail">Kết thúc ngày, hẹn sáng mai</div>
+    <span class="tl-result">fine → resolved</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">3</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Kiểm tra: 0 AI call cả ngày</div>
+    <div class="tl-detail">Không gọi AI lần nào</div>
+    <span class="tl-result">0 calls</span>
+  </div>
+  
+</div>
+</div>
+</div></div>
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">B. "Tôi ổn" sáng → "Hơi mệt" tối</div><div class="flow-desc">Sáng khỏe, tối mệt → chạy script</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('B')">▶ Tái hiện</button><span class="pill g">3 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" >
+  <div class="tl-dot info">1</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Sáng: "Tôi ổn"</div>
+    <div class="tl-detail">Hẹn 9h tối</div>
+    <span class="tl-result">monitoring</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">2</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Tối: "Hơi mệt" → chọn "đau đầu"</div>
+    <div class="tl-detail">Chạy script đau đầu</div>
+    <span class="tl-result">follow_up</span>
+  </div>
+  
+</div><div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">3</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Script đau đầu: 4 câu hỏi<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">Trả lời nhẹ nhất → Severity: medium</div>
+    <span class="tl-result">medium</span>
+  </div>
+  <div class="tl-expand">
+      <div class="chat-msg chat-system">🤖 <b>Câu 1:</b> Chú đau đầu ở vị trí nào?<div class="chat-opts">Lựa chọn: một bên đầu · cả hai bên · sau gáy · vùng trán · quanh mắt · toàn bộ đầu</div></div>
+      <div class="chat-msg chat-user">👤 một bên đầu</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 2:</b> Chú thấy kiểu đau như thế nào?<div class="chat-opts">Lựa chọn: nhức âm ỉ · đau nhói từng cơn · đau như bóp chặt · đau giật theo nhịp tim</div></div>
+      <div class="chat-msg chat-user">👤 nhức âm ỉ</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 3:</b> Chú có thêm triệu chứng nào đi kèm?<div class="chat-opts">Lựa chọn: buồn nôn · chóng mặt · sợ ánh sáng · mờ mắt · cứng cổ · sốt · không có</div></div>
+      <div class="chat-msg chat-user">👤 không có</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 4:</b> Chú thấy mức độ đau đầu hiện tại?<div class="chat-opts">Lựa chọn: nhẹ, vẫn sinh hoạt được · trung bình, khó tập trung · nặng, phải nằm nghỉ</div></div>
+      <div class="chat-msg chat-user">👤 nhẹ, vẫn sinh hoạt được</div>
+    <div class="chat-result medium">
+      <b>📊 Kết quả: <span style="color:#ca8a04">Trung bình</span> · Hẹn 3h · Bác sĩ: Không · Gia đình: Không</b>
+      <div style="margin-top:4px"><b>Tóm tắt:</b> Chú bị đau đầu mức trung bình, cần theo dõi thêm.</div>
+      <div><b>Lời khuyên:</b> Uống thuốc giảm đau (paracetamol) nếu có, nằm nghỉ nơi yên tĩnh, tránh ánh sáng mạnh. Nếu không đỡ sau 24h hoặc đau tăng → đi khám.</div>
+      <div><b>Lời nhắn:</b> cháu sẽ hỏi lại chú sau 3 tiếng nhé.</div>
+    </div></div>
+</div>
+</div>
+</div></div>
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">C. "Hơi mệt" → nhẹ → đỡ → resolved</div><div class="flow-desc">Case phổ biến nhất: mệt nhẹ, đỡ sau vài giờ</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('C')">▶ Tái hiện</button><span class="pill g">2 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">1</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Sáng: "Hơi mệt" → chọn "đau đầu" → trả lời nhẹ<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">4 câu → medium</div>
+    <span class="tl-result">medium</span>
+  </div>
+  <div class="tl-expand">
+      <div class="chat-msg chat-system">🤖 <b>Câu 1:</b> Chú đau đầu ở vị trí nào?<div class="chat-opts">Lựa chọn: một bên đầu · cả hai bên · sau gáy · vùng trán · quanh mắt · toàn bộ đầu</div></div>
+      <div class="chat-msg chat-user">👤 một bên đầu</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 2:</b> Chú thấy kiểu đau như thế nào?<div class="chat-opts">Lựa chọn: nhức âm ỉ · đau nhói từng cơn · đau như bóp chặt · đau giật theo nhịp tim</div></div>
+      <div class="chat-msg chat-user">👤 nhức âm ỉ</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 3:</b> Chú có thêm triệu chứng nào đi kèm?<div class="chat-opts">Lựa chọn: buồn nôn · chóng mặt · sợ ánh sáng · mờ mắt · cứng cổ · sốt · không có</div></div>
+      <div class="chat-msg chat-user">👤 không có</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 4:</b> Chú thấy mức độ đau đầu hiện tại?<div class="chat-opts">Lựa chọn: nhẹ, vẫn sinh hoạt được · trung bình, khó tập trung · nặng, phải nằm nghỉ</div></div>
+      <div class="chat-msg chat-user">👤 nhẹ, vẫn sinh hoạt được</div>
+    <div class="chat-result medium">
+      <b>📊 Kết quả: <span style="color:#ca8a04">Trung bình</span> · Hẹn 3h · Bác sĩ: Không · Gia đình: Không</b>
+      <div style="margin-top:4px"><b>Tóm tắt:</b> Chú bị đau đầu mức trung bình, cần theo dõi thêm.</div>
+      <div><b>Lời khuyên:</b> Uống thuốc giảm đau (paracetamol) nếu có, nằm nghỉ nơi yên tĩnh, tránh ánh sáng mạnh. Nếu không đỡ sau 24h hoặc đau tăng → đi khám.</div>
+      <div><b>Lời nhắn:</b> cháu sẽ hỏi lại chú sau 3 tiếng nhé.</div>
+    </div></div>
+</div><div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">2</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Follow-up sau 3h: "Đỡ hơn" + không triệu chứng mới<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">→ low → monitoring → hẹn tối</div>
+    <span class="tl-result">{"severity":"low","followUpHours":6,"needsDoctor":</span>
+  </div>
+  <div class="tl-expand"><div class="chat-msg chat-system">🤖 So với lúc trước, thấy thế nào?</div>
+      <div class="chat-msg chat-user">👤 Đỡ hơn</div>
+      <div class="chat-msg chat-system">🤖 Có triệu chứng mới không?</div>
+      <div class="chat-msg chat-user">👤 Không</div>
+      <div class="chat-fu">
+        <b>Kết quả:</b> <span style="color:#16a34a;font-weight:700">Nhẹ</span> · ✅ Theo dõi → hẹn tối · Bác sĩ: Không
+      </div></div>
+</div>
+</div>
+</div></div>
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">D. "Hơi mệt" → trung bình → "Vẫn vậy" → tiếp tục</div><div class="flow-desc">Không đỡ cũng không nặng hơn, hệ thống tiếp tục theo dõi</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('D')">▶ Tái hiện</button><span class="pill g">4 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">1</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Sáng: "Hơi mệt" → chọn "chóng mặt" → trả lời vừa<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">4 câu → high</div>
+    <span class="tl-result">high</span>
+  </div>
+  <div class="tl-expand">
+      <div class="chat-msg chat-system">🤖 <b>Câu 1:</b> Chú chóng mặt kiểu nào?<div class="chat-opts">Lựa chọn: quay cuồng (phòng quay) · lâng lâng, lơ lửng · tối sầm mắt · mất thăng bằng, loạng choạng</div></div>
+      <div class="chat-msg chat-user">👤 tối sầm mắt</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 2:</b> Chú chóng mặt xuất hiện khi nào?<div class="chat-opts">Lựa chọn: khi đứng dậy · khi xoay đầu · liên tục không ngừng · khi nằm nghiêng · bất kỳ lúc nào</div></div>
+      <div class="chat-msg chat-user">👤 liên tục không ngừng</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 3:</b> Chú có thêm triệu chứng nào?<div class="chat-opts">Lựa chọn: buồn nôn · ù tai · hoa mắt · tim đập nhanh · vã mồ hôi · đau đầu · không có</div></div>
+      <div class="chat-msg chat-user">👤 tim đập nhanh</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 4:</b> Chú có đang dùng thuốc huyết áp hoặc thuốc mới không?<div class="chat-opts">Lựa chọn: có, thuốc huyết áp · có, thuốc mới kê gần đây · không dùng thuốc gì · không rõ</div></div>
+      <div class="chat-msg chat-user">👤 không dùng thuốc gì</div>
+    <div class="chat-result high">
+      <b>📊 Kết quả: <span style="color:#dc2626">Nặng</span> · Hẹn 1h · Bác sĩ: CÓ · Gia đình: CÓ</b>
+      <div style="margin-top:4px"><b>Tóm tắt:</b> Chú bị chóng mặt nặng, cần được bác sĩ đánh giá.</div>
+      <div><b>Lời khuyên:</b> 🏥 Chú nên đi khám bác sĩ hôm nay. Chóng mặt nặng cần đo huyết áp và kiểm tra tai trong. Trong khi chờ: NẰM YÊN, không đi lại một mình.</div>
+      <div><b>Lời nhắn:</b> cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé.</div>
+    </div></div>
+</div><div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">2</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Follow-up 1: "Vẫn vậy" + không triệu chứng mới<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">→ tiếp tục theo dõi</div>
+    <span class="tl-result">{"severity":"high","followUpHours":1,"needsDoctor"</span>
+  </div>
+  <div class="tl-expand"><div class="chat-msg chat-system">🤖 So với lúc trước, thấy thế nào?</div>
+      <div class="chat-msg chat-user">👤 Vẫn vậy</div>
+      <div class="chat-msg chat-system">🤖 Có triệu chứng mới không?</div>
+      <div class="chat-msg chat-user">👤 Không</div>
+      <div class="chat-fu">
+        <b>Kết quả:</b> <span style="color:#dc2626;font-weight:700">Nặng</span> · 🔄 Tiếp tục follow-up · Bác sĩ: CÓ
+      </div></div>
+</div><div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">3</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Follow-up 2: vẫn "Vẫn vậy"<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">→ tiếp tục theo dõi</div>
+    <span class="tl-result">{"severity":"high","followUpHours":1,"needsDoctor"</span>
+  </div>
+  <div class="tl-expand"><div class="chat-msg chat-system">🤖 So với lúc trước, thấy thế nào?</div>
+      <div class="chat-msg chat-user">👤 Vẫn vậy</div>
+      <div class="chat-msg chat-system">🤖 Có triệu chứng mới không?</div>
+      <div class="chat-msg chat-user">👤 Không</div>
+      <div class="chat-fu">
+        <b>Kết quả:</b> <span style="color:#dc2626;font-weight:700">Nặng</span> · 🔄 Tiếp tục follow-up · Bác sĩ: CÓ
+      </div></div>
+</div><div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">4</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Follow-up 3: "Đỡ hơn" → kết thúc theo dõi<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">→ monitoring → hẹn tối</div>
+    <span class="tl-result">{"severity":"low","followUpHours":6,"needsDoctor":</span>
+  </div>
+  <div class="tl-expand"><div class="chat-msg chat-system">🤖 So với lúc trước, thấy thế nào?</div>
+      <div class="chat-msg chat-user">👤 Đỡ hơn</div>
+      <div class="chat-msg chat-system">🤖 Có triệu chứng mới không?</div>
+      <div class="chat-msg chat-user">👤 Không</div>
+      <div class="chat-fu">
+        <b>Kết quả:</b> <span style="color:#16a34a;font-weight:700">Nhẹ</span> · ✅ Theo dõi → hẹn tối · Bác sĩ: Không
+      </div></div>
+</div>
+</div>
+</div></div>
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">F. "Rất mệt" → HIGH → follow-up nhanh → đỡ</div><div class="flow-desc">User rất mệt nhưng hồi phục nhanh</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('F')">▶ Tái hiện</button><span class="pill g">2 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">1</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Sáng: "Rất mệt" → chọn "mệt mỏi" → trả lời nặng<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">4 câu → high</div>
+    <span class="tl-result">high</span>
+  </div>
+  <div class="tl-expand">
+      <div class="chat-msg chat-system">🤖 <b>Câu 1:</b> Chú mệt mỏi kéo dài bao lâu rồi?<div class="chat-opts">Lựa chọn: hôm nay mới thấy · vài ngày nay · 1-2 tuần · trên 2 tuần</div></div>
+      <div class="chat-msg chat-user">👤 trên 2 tuần</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 2:</b> Chú mệt mỏi ảnh hưởng thế nào?<div class="chat-opts">Lựa chọn: vẫn sinh hoạt bình thường · phải nghỉ ngơi nhiều hơn · khó làm việc nhà · hầu như nằm cả ngày</div></div>
+      <div class="chat-msg chat-user">👤 hầu như nằm cả ngày</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 3:</b> Chú có thêm triệu chứng nào?<div class="chat-opts">Lựa chọn: mất ngủ · ăn kém · sốt nhẹ · sụt cân · buồn bã · khó thở · không có</div></div>
+      <div class="chat-msg chat-user">👤 không có</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 4:</b> Chú giấc ngủ của chú gần đây thế nào?<div class="chat-opts">Lựa chọn: ngủ đủ 6-8 tiếng · ngủ ít hơn 5 tiếng · ngủ chập chờn · thức dậy nhiều lần trong đêm</div></div>
+      <div class="chat-msg chat-user">👤 thức dậy nhiều lần trong đêm</div>
+    <div class="chat-result high">
+      <b>📊 Kết quả: <span style="color:#dc2626">Nặng</span> · Hẹn 1h · Bác sĩ: CÓ · Gia đình: CÓ</b>
+      <div style="margin-top:4px"><b>Tóm tắt:</b> Chú bị mệt mỏi nặng, cần được bác sĩ đánh giá.</div>
+      <div><b>Lời khuyên:</b> 🏥 Chú nên đi khám bác sĩ hôm nay. Mệt mỏi nặng cần xét nghiệm máu kiểm tra thiếu máu, đường huyết, tuyến giáp. Nằm nghỉ, không gắng sức.</div>
+      <div><b>Lời nhắn:</b> cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé.</div>
+    </div></div>
+</div><div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">2</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Follow-up sau 1h: "Đỡ hơn" → monitoring<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">→ low → hẹn tối</div>
+    <span class="tl-result">{"severity":"low","followUpHours":6,"needsDoctor":</span>
+  </div>
+  <div class="tl-expand"><div class="chat-msg chat-system">🤖 So với lúc trước, thấy thế nào?</div>
+      <div class="chat-msg chat-user">👤 Đỡ hơn</div>
+      <div class="chat-msg chat-system">🤖 Có triệu chứng mới không?</div>
+      <div class="chat-msg chat-user">👤 Không</div>
+      <div class="chat-fu">
+        <b>Kết quả:</b> <span style="color:#16a34a;font-weight:700">Nhẹ</span> · ✅ Theo dõi → hẹn tối · Bác sĩ: Không
+      </div></div>
+</div>
+</div>
+</div></div>
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">K. Đổi triệu chứng: sáng đau đầu, chiều chóng mặt</div><div class="flow-desc">User có nhiều vấn đề, mỗi lần check-in khác nhau</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('K')">▶ Tái hiện</button><span class="pill g">4 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" >
+  <div class="tl-dot info">1</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Sáng: đau đầu nhẹ</div>
+    <div class="tl-detail">Severity: medium</div>
+    <span class="tl-result">medium</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">2</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Follow-up đau đầu: "Đỡ hơn"</div>
+    <div class="tl-detail">→ low</div>
+    <span class="tl-result">{"severity":"low","followUpHours":6,"needsDoctor":</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">3</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Chiều: chóng mặt (triệu chứng khác)</div>
+    <div class="tl-detail">Severity: high</div>
+    <span class="tl-result">high</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">4</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Kiểm tra: 2 sessions khác cluster</div>
+    <div class="tl-detail">headache + dizziness</div>
+    <span class="tl-result">2 clusters</span>
+  </div>
+  
+</div>
+</div>
+</div></div>
+</div>
+<div class="section">
+<div class="cat-title"><span>🔥</span><span style="color:#dc2626">Luồng nghiêm trọng</span>
+<span style="font-size:11px;color:#94a3b8;margin-left:auto">3/3 đạt</span></div>
+
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">E. "Hơi mệt" → nặng → "Nặng hơn" → escalate</div><div class="flow-desc">Triệu chứng nặng dần, hệ thống phải cảnh báo mạnh</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('E')">▶ Tái hiện</button><span class="pill g">2 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">1</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Sáng: "Hơi mệt" → chọn "đau đầu" → trả lời nặng nhất<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">4 câu → high</div>
+    <span class="tl-result">high</span>
+  </div>
+  <div class="tl-expand">
+      <div class="chat-msg chat-system">🤖 <b>Câu 1:</b> Chú đau đầu ở vị trí nào?<div class="chat-opts">Lựa chọn: một bên đầu · cả hai bên · sau gáy · vùng trán · quanh mắt · toàn bộ đầu</div></div>
+      <div class="chat-msg chat-user">👤 toàn bộ đầu</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 2:</b> Chú thấy kiểu đau như thế nào?<div class="chat-opts">Lựa chọn: nhức âm ỉ · đau nhói từng cơn · đau như bóp chặt · đau giật theo nhịp tim</div></div>
+      <div class="chat-msg chat-user">👤 đau giật theo nhịp tim</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 3:</b> Chú có thêm triệu chứng nào đi kèm?<div class="chat-opts">Lựa chọn: buồn nôn · chóng mặt · sợ ánh sáng · mờ mắt · cứng cổ · sốt · không có</div></div>
+      <div class="chat-msg chat-user">👤 không có</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 4:</b> Chú thấy mức độ đau đầu hiện tại?<div class="chat-opts">Lựa chọn: nhẹ, vẫn sinh hoạt được · trung bình, khó tập trung · nặng, phải nằm nghỉ</div></div>
+      <div class="chat-msg chat-user">👤 nặng, phải nằm nghỉ</div>
+    <div class="chat-result high">
+      <b>📊 Kết quả: <span style="color:#dc2626">Nặng</span> · Hẹn 1h · Bác sĩ: CÓ · Gia đình: CÓ</b>
+      <div style="margin-top:4px"><b>Tóm tắt:</b> Chú bị đau đầu nặng, cần được bác sĩ đánh giá.</div>
+      <div><b>Lời khuyên:</b> 🏥 Chú nên đi khám bác sĩ hôm nay. Đau đầu dữ dội có thể cần kiểm tra huyết áp hoặc chụp chiếu. Trong khi chờ: nằm nghỉ, tránh gắng sức.</div>
+      <div><b>Lời nhắn:</b> cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé.</div>
+    </div></div>
+</div><div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">2</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Follow-up: "Nặng hơn" + CÓ triệu chứng mới → escalate + bác sĩ<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">Severity: high, needsDoctor: true</div>
+    <span class="tl-result">{"severity":"high","followUpHours":1,"needsDoctor"</span>
+  </div>
+  <div class="tl-expand"><div class="chat-msg chat-system">🤖 So với lúc trước, thấy thế nào?</div>
+      <div class="chat-msg chat-user">👤 Nặng hơn</div>
+      <div class="chat-msg chat-system">🤖 Có triệu chứng mới không?</div>
+      <div class="chat-msg chat-user">👤 Có</div>
+      <div class="chat-fu">
+        <b>Kết quả:</b> <span style="color:#dc2626;font-weight:700">Nặng</span> · 🚨 Cảnh báo + khuyên bác sĩ · Bác sĩ: CÓ
+      </div></div>
+</div>
+</div>
+</div></div>
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">G. "Rất mệt" → liên tục nặng hơn → escalate</div><div class="flow-desc">User không cải thiện, hệ thống phải báo gia đình</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('G')">▶ Tái hiện</button><span class="pill g">3 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">1</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Sáng: "Rất mệt" → chọn "đau đầu" → trả lời nặng<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">4 câu → high</div>
+    <span class="tl-result">high</span>
+  </div>
+  <div class="tl-expand">
+      <div class="chat-msg chat-system">🤖 <b>Câu 1:</b> Chú đau đầu ở vị trí nào?<div class="chat-opts">Lựa chọn: một bên đầu · cả hai bên · sau gáy · vùng trán · quanh mắt · toàn bộ đầu</div></div>
+      <div class="chat-msg chat-user">👤 toàn bộ đầu</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 2:</b> Chú thấy kiểu đau như thế nào?<div class="chat-opts">Lựa chọn: nhức âm ỉ · đau nhói từng cơn · đau như bóp chặt · đau giật theo nhịp tim</div></div>
+      <div class="chat-msg chat-user">👤 đau giật theo nhịp tim</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 3:</b> Chú có thêm triệu chứng nào đi kèm?<div class="chat-opts">Lựa chọn: buồn nôn · chóng mặt · sợ ánh sáng · mờ mắt · cứng cổ · sốt · không có</div></div>
+      <div class="chat-msg chat-user">👤 không có</div>
+    
+      <div class="chat-msg chat-system">🤖 <b>Câu 4:</b> Chú thấy mức độ đau đầu hiện tại?<div class="chat-opts">Lựa chọn: nhẹ, vẫn sinh hoạt được · trung bình, khó tập trung · nặng, phải nằm nghỉ</div></div>
+      <div class="chat-msg chat-user">👤 nặng, phải nằm nghỉ</div>
+    <div class="chat-result high">
+      <b>📊 Kết quả: <span style="color:#dc2626">Nặng</span> · Hẹn 1h · Bác sĩ: CÓ · Gia đình: CÓ</b>
+      <div style="margin-top:4px"><b>Tóm tắt:</b> Chú bị đau đầu nặng, cần được bác sĩ đánh giá.</div>
+      <div><b>Lời khuyên:</b> 🏥 Chú nên đi khám bác sĩ hôm nay. Đau đầu dữ dội có thể cần kiểm tra huyết áp hoặc chụp chiếu. Trong khi chờ: nằm nghỉ, tránh gắng sức.</div>
+      <div><b>Lời nhắn:</b> cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé.</div>
+    </div></div>
+</div><div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">2</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Follow-up 1: "Nặng hơn" → cần bác sĩ<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">high, needsDoctor: true</div>
+    <span class="tl-result">{"severity":"high","followUpHours":1,"needsDoctor"</span>
+  </div>
+  <div class="tl-expand"><div class="chat-msg chat-system">🤖 So với lúc trước, thấy thế nào?</div>
+      <div class="chat-msg chat-user">👤 Nặng hơn</div>
+      <div class="chat-msg chat-system">🤖 Có triệu chứng mới không?</div>
+      <div class="chat-msg chat-user">👤 Không</div>
+      <div class="chat-fu">
+        <b>Kết quả:</b> <span style="color:#dc2626;font-weight:700">Nặng</span> · 🚨 Cảnh báo + khuyên bác sĩ · Bác sĩ: CÓ
+      </div></div>
+</div><div class="tl-node" onclick="this.classList.toggle('expanded')">
+  <div class="tl-dot pass">3</div>
+  <div class="tl-content clickable">
+    <div class="tl-action">✅ Follow-up 2: "Nặng hơn" + triệu chứng mới → escalate<span class="expand-hint">▼ chi tiết</span></div>
+    <div class="tl-detail">high, báo gia đình</div>
+    <span class="tl-result">{"severity":"high","followUpHours":1,"needsDoctor"</span>
+  </div>
+  <div class="tl-expand"><div class="chat-msg chat-system">🤖 So với lúc trước, thấy thế nào?</div>
+      <div class="chat-msg chat-user">👤 Nặng hơn</div>
+      <div class="chat-msg chat-system">🤖 Có triệu chứng mới không?</div>
+      <div class="chat-msg chat-user">👤 Có</div>
+      <div class="chat-fu">
+        <b>Kết quả:</b> <span style="color:#dc2626;font-weight:700">Nặng</span> · 🚨 Cảnh báo + khuyên bác sĩ · Bác sĩ: CÓ
+      </div></div>
+</div>
+</div>
+</div></div>
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">M. Follow-up chuỗi dài: đỡ → vậy → nặng</div><div class="flow-desc">Theo dõi nhiều lần trong ngày, tình trạng thay đổi</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('M')">▶ Tái hiện</button><span class="pill g">5 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" >
+  <div class="tl-dot info">1</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Check-in ban đầu: trung bình</div>
+    <div class="tl-detail">Severity: medium</div>
+    <span class="tl-result">medium</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">2</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Follow-up 1: "Đỡ hơn"</div>
+    <div class="tl-detail">low → monitoring</div>
+    <span class="tl-result">{"severity":"low","followUpHours":6,"needsDoctor":</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">3</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Follow-up 2: "Vẫn vậy" (từ low)</div>
+    <div class="tl-detail">low</div>
+    <span class="tl-result">{"severity":"low","followUpHours":6,"needsDoctor":</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">4</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Follow-up 3: "Nặng hơn" + triệu chứng mới!</div>
+    <div class="tl-detail">high → escalate</div>
+    <span class="tl-result">{"severity":"high","followUpHours":1,"needsDoctor"</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">5</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Kiểm tra: phải khuyên đi bác sĩ</div>
+    <div class="tl-detail">needsDoctor: true</div>
+    <span class="tl-result">true</span>
+  </div>
+  
+</div>
+</div>
+</div></div>
+</div>
+<div class="section">
+<div class="cat-title"><span>🚨</span><span style="color:#7f1d1d">Cấp cứu</span>
+<span style="font-size:11px;color:#94a3b8;margin-left:auto">4/4 đạt</span></div>
+
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">H. Emergency ngay từ đầu</div><div class="flow-desc">User nói "đau ngực khó thở" → bypass script, cấp cứu ngay</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('H')">▶ Tái hiện</button><span class="pill g">3 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" >
+  <div class="tl-dot info">1</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ User nhập: "đau ngực, khó thở, vã mồ hôi"</div>
+    <div class="tl-detail">isEmergency: true, type: MI</div>
+    <span class="tl-result">{"isEmergency":true,"type":"MI","severity":"critic</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">2</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Kiểm tra: loại cấp cứu</div>
+    <div class="tl-detail">Type: MI</div>
+    <span class="tl-result">MI</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">3</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Kiểm tra: không chạy script, không chạy scoring</div>
+    <div class="tl-detail">Bypass hoàn toàn</div>
+    <span class="tl-result">bypassed</span>
+  </div>
+  
+</div>
+</div>
+</div></div>
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">I. Emergency giữa session</div><div class="flow-desc">Đang trả lời script, đột nhiên nhập triệu chứng nguy hiểm</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('I')">▶ Tái hiện</button><span class="pill g">3 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" >
+  <div class="tl-dot info">1</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Bắt đầu script đau đầu bình thường</div>
+    <div class="tl-detail">Câu 1 trả lời OK</div>
+    <span class="tl-result">q1 answered</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">2</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Câu 2: user gõ "yếu nửa người, nói ngọng"</div>
+    <div class="tl-detail">isEmergency: true, type: STROKE</div>
+    <span class="tl-result">{"isEmergency":true,"type":"STROKE","severity":"cr</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">3</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Kiểm tra: dừng script, chuyển cấp cứu</div>
+    <div class="tl-detail">Type: STROKE</div>
+    <span class="tl-result">STROKE</span>
+  </div>
+  
+</div>
+</div>
+</div></div>
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">L. "Tôi ổn" sáng → emergency tối</div><div class="flow-desc">Sáng khỏe nhưng tối đột ngột nguy hiểm</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('L')">▶ Tái hiện</button><span class="pill g">3 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" >
+  <div class="tl-dot info">1</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Sáng: "Tôi ổn" → monitoring</div>
+    <div class="tl-detail">Hẹn 9h tối</div>
+    <span class="tl-result">fine</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">2</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Tối: "co giật" → EMERGENCY</div>
+    <div class="tl-detail">isEmergency: true, type: SEIZURE</div>
+    <span class="tl-result">{"isEmergency":true,"type":"SEIZURE","severity":"c</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">3</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Kiểm tra: bypass evening check</div>
+    <div class="tl-detail">Emergency > evening review</div>
+    <span class="tl-result">bypassed</span>
+  </div>
+  
+</div>
+</div>
+</div></div>
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">N. Phủ định: "không đau ngực" → không phải emergency</div><div class="flow-desc">User nói KHÔNG bị, hệ thống phải hiểu phủ định</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('N')">▶ Tái hiện</button><span class="pill g">3 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" >
+  <div class="tl-dot info">1</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ "không đau ngực"</div>
+    <div class="tl-detail">isEmergency: false</div>
+    <span class="tl-result">{"isEmergency":false,"type":null,"severity":"low",</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">2</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ "hết khó thở rồi"</div>
+    <div class="tl-detail">isEmergency: false</div>
+    <span class="tl-result">{"isEmergency":false,"type":null,"severity":"low",</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">3</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ "không co giật"</div>
+    <div class="tl-detail">isEmergency: false</div>
+    <span class="tl-result">{"isEmergency":false,"type":null,"severity":"low",</span>
+  </div>
+  
+</div>
+</div>
+</div></div>
+</div>
+<div class="section">
+<div class="cat-title"><span>❓</span><span style="color:#ca8a04">Triệu chứng lạ</span>
+<span style="font-size:11px;color:#94a3b8;margin-left:auto">3/3 đạt</span></div>
+
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">J. Triệu chứng mới → fallback → R&D → script</div><div class="flow-desc">User nói "đau dạ dày" lần đầu, hệ thống học dần</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('J')">▶ Tái hiện</button><span class="pill g">6 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" >
+  <div class="tl-dot info">1</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Ngày 1: "đau dạ dày" → tìm trong DB</div>
+    <div class="tl-detail">Matched: false</div>
+    <span class="tl-result">{"matched":false}</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">2</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Fallback: 3 câu cơ bản</div>
+    <div class="tl-detail">3 câu → severity: high</div>
+    <span class="tl-result">high</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">3</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Log fallback → chờ R&D đêm</div>
+    <div class="tl-detail">Saved to fallback_logs</div>
+    <span class="tl-result">pending</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">4</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ R&D đêm: tạo cluster "đau dạ dày"</div>
+    <div class="tl-detail">Cluster: gastric_pain</div>
+    <span class="tl-result">gastric_pain</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">5</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Ngày 2: "đau dạ dày" → tìm lại</div>
+    <div class="tl-detail">Matched: true → gastric_pain</div>
+    <span class="tl-result">{"matched":true,"cluster":{"id":"1675","user_id":4</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">6</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Ngày 2: có script riêng</div>
+    <div class="tl-detail">4 câu chuyên sâu</div>
+    <span class="tl-result">4</span>
+  </div>
+  
+</div>
+</div>
+</div></div>
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">P. Biến thể triệu chứng → token matching</div><div class="flow-desc">User nói khác nhau nhưng cùng 1 bệnh</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('P')">▶ Tái hiện</button><span class="pill g">4 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" >
+  <div class="tl-dot info">1</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ "chóng mặt buổi sáng" → tìm cluster</div>
+    <div class="tl-detail">Matched: true → dizziness</div>
+    <span class="tl-result">{"matched":true,"cluster":{"id":"1673","user_id":4</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">2</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ "bị mệt quá" → tìm cluster (token "mệt")</div>
+    <div class="tl-detail">Matched: true → fatigue</div>
+    <span class="tl-result">{"matched":true,"cluster":{"id":"1674","user_id":4</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">3</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ "nhức đầu ghê" → tìm cluster (token "đầu")</div>
+    <div class="tl-detail">Matched: true</div>
+    <span class="tl-result">{"matched":true,"cluster":{"id":"1672","user_id":4</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">4</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ "đau lưng dưới" → KHÔNG có cluster</div>
+    <div class="tl-detail">Matched: false</div>
+    <span class="tl-result">{"matched":false}</span>
+  </div>
+  
+</div>
+</div>
+</div></div>
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">Q. "Hơi mệt" + nhập tự do → fallback</div><div class="flow-desc">User không chọn cluster sẵn, gõ triệu chứng tự do</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('Q')">▶ Tái hiện</button><span class="pill g">4 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" >
+  <div class="tl-dot info">1</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ "đau tai trái" → không match</div>
+    <div class="tl-detail">Matched: false</div>
+    <span class="tl-result">{"matched":false}</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">2</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Fallback 3 câu, trả lời nặng</div>
+    <div class="tl-detail">Severity: high</div>
+    <span class="tl-result">high</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">3</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Kiểm tra: fallback vẫn cho kết quả</div>
+    <div class="tl-detail">Summary: Chú có triệu chứng nặng, cần đ</div>
+    <span class="tl-result">Chú có triệu chứng nặng, cần được bác sĩ đánh giá.</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">4</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Follow-up fallback: "Nặng hơn"</div>
+    <div class="tl-detail">high → escalate</div>
+    <span class="tl-result">{"severity":"high","followUpHours":1,"needsDoctor"</span>
+  </div>
+  
+</div>
+</div>
+</div></div>
+</div>
+<div class="section">
+<div class="cat-title"><span>🛡️</span><span style="color:#2563eb">An toàn y khoa</span>
+<span style="font-size:11px;color:#94a3b8;margin-left:auto">1/1 đạt</span></div>
+
+<div class="flow">
+<div class="flow-header">
+<span style="font-size:16px">✅</span>
+<div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">O. Người cao tuổi: dù nhẹ cũng phải theo dõi kỹ</div><div class="flow-desc">Bà Lan 75t, 4 bệnh nền — không được bỏ qua</div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('O')">▶ Tái hiện</button><span class="pill g">4 đạt</span><span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-body">
+<div class="timeline">
+<div class="tl-node" >
+  <div class="tl-dot info">1</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Bà Lan trả lời nhẹ nhất</div>
+    <div class="tl-detail">Severity: medium</div>
+    <span class="tl-result">medium</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">2</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Kiểm tra: KHÔNG ĐƯỢC xếp Nhẹ</div>
+    <div class="tl-detail">medium (phải >= Trung bình)</div>
+    <span class="tl-result">medium</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">3</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ Anh An (30t khỏe) cùng câu trả lời</div>
+    <div class="tl-detail">Severity: low</div>
+    <span class="tl-result">low</span>
+  </div>
+  
+</div><div class="tl-node" >
+  <div class="tl-dot info">4</div>
+  <div class="tl-content">
+    <div class="tl-action">✅ So sánh: Bà Lan phải >= Anh An</div>
+    <div class="tl-detail">medium >= low</div>
+    <span class="tl-result">true</span>
+  </div>
+  
+</div>
+</div>
+</div></div>
+</div>
+
+</div><!-- end tab-results -->
+
+<div id="tab-interactive" style="display:none">
+<div style="max-width:900px;margin:20px auto;padding:0 16px;display:flex;gap:20px;flex-wrap:wrap;justify-content:center">
+  <div style="width:375px;min-height:650px;background:#fff;border-radius:32px;box-shadow:0 12px 40px rgba(0,0,0,.12);overflow:hidden;border:6px solid #1a1a2e">
+    <div style="width:120px;height:20px;background:#1a1a2e;border-radius:0 0 12px 12px;margin:0 auto"></div>
+    <div style="padding:14px;min-height:580px;display:flex;flex-direction:column">
+      <div id="iChatArea" style="flex:1;overflow-y:auto;padding-bottom:10px"></div>
+    </div>
+  </div>
+  <div style="width:280px">
+    <div style="background:#fff;border-radius:10px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+      <h3 style="font-size:13px;margin-bottom:6px">📋 Hồ sơ test</h3>
+      <div style="font-size:11px;color:#64748b;line-height:1.6"><b>Tên:</b> Trần Văn Hùng<br><b>Tuổi:</b> 68 | <b>Giới:</b> Nam<br><b>Bệnh nền:</b> Tiểu đường, Cao huyết áp, Tim mạch</div>
+    </div>
+    <div style="background:#fff;border-radius:10px;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+      <h3 style="font-size:13px;margin-bottom:6px">🔍 Log hệ thống</h3>
+      <div id="iSysLog" style="max-height:250px;overflow-y:auto;font-size:11px;color:#475569"></div>
+    </div>
+    <div style="background:#fff;border-radius:10px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+      <h3 style="font-size:13px;margin-bottom:6px">📊 Kết quả</h3>
+      <div id="iResult" style="font-size:11px;color:#64748b">Chờ bắt đầu...</div>
+    </div>
+  </div>
+</div>
+</div><!-- end tab-interactive -->
+
+<div class="footer">Asinu Health — Test luồng Check-in | 15:06:52 8/4/2026 | 0 AI call</div>
+
+<div class="replay-overlay" id="replayOverlay">
+  <div class="replay-modal">
+    <div class="replay-header">
+      <h3 id="replayTitle">Tái hiện luồng</h3>
+      <button class="replay-close" onclick="closeReplay()">✕</button>
+    </div>
+    <div class="replay-body" id="replayBody"></div>
+    <div class="replay-controls">
+      <button onclick="replaySpeed='slow';restartReplay()">🐢 Chậm</button>
+      <button class="primary" onclick="replaySpeed='normal';restartReplay()">▶ Bình thường</button>
+      <button onclick="replaySpeed='fast';restartReplay()">⚡ Nhanh</button>
+      <button onclick="closeReplay()">✕ Đóng</button>
+    </div>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.flow').forEach(f=>{if(f.querySelector('.tl-dot.fail'))f.classList.add('open')});
+
+const ALL_FLOWS = [{"id":"A","name":"\"Tôi ổn\" cả sáng lẫn tối","desc":"User khỏe mạnh cả ngày, không cần script, không cần AI","category":"normal","steps":[{"action":"Sáng: User chọn \"Tôi ổn\"","detail":"Không chạy script, hẹn 9h tối","result":"fine → monitoring","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Tối: User xác nhận \"Vẫn ổn\"","detail":"Kết thúc ngày, hẹn sáng mai","result":"fine → resolved","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Kiểm tra: 0 AI call cả ngày","detail":"Không gọi AI lần nào","result":"0 calls","passed":true,"convo":null,"conclusion":null,"followUp":null}]},{"id":"B","name":"\"Tôi ổn\" sáng → \"Hơi mệt\" tối","desc":"Sáng khỏe, tối mệt → chạy script","category":"normal","steps":[{"action":"Sáng: \"Tôi ổn\"","detail":"Hẹn 9h tối","result":"monitoring","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Tối: \"Hơi mệt\" → chọn \"đau đầu\"","detail":"Chạy script đau đầu","result":"follow_up","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Script đau đầu: 4 câu hỏi","detail":"Trả lời nhẹ nhất → Severity: medium","result":"medium","passed":true,"convo":[{"q":"Chú đau đầu ở vị trí nào?","type":"single_choice","options":["một bên đầu","cả hai bên","sau gáy","vùng trán","quanh mắt","toàn bộ đầu"],"a":"một bên đầu"},{"q":"Chú thấy kiểu đau như thế nào?","type":"single_choice","options":["nhức âm ỉ","đau nhói từng cơn","đau như bóp chặt","đau giật theo nhịp tim"],"a":"nhức âm ỉ"},{"q":"Chú có thêm triệu chứng nào đi kèm?","type":"multi_choice","options":["buồn nôn","chóng mặt","sợ ánh sáng","mờ mắt","cứng cổ","sốt","không có"],"a":"không có"},{"q":"Chú thấy mức độ đau đầu hiện tại?","type":"single_choice","options":["nhẹ, vẫn sinh hoạt được","trung bình, khó tập trung","nặng, phải nằm nghỉ"],"a":"nhẹ, vẫn sinh hoạt được"}],"conclusion":{"severity":"medium","followUpHours":3,"needsDoctor":false,"needsFamilyAlert":false,"hasRedFlag":false,"matchedRuleIndex":-1,"modifiersApplied":["elderly+conditions → medium (safety)"],"summary":"Chú bị đau đầu mức trung bình, cần theo dõi thêm.","recommendation":"Uống thuốc giảm đau (paracetamol) nếu có, nằm nghỉ nơi yên tĩnh, tránh ánh sáng mạnh. Nếu không đỡ sau 24h hoặc đau tăng → đi khám.","closeMessage":"cháu sẽ hỏi lại chú sau 3 tiếng nhé."},"followUp":null}]},{"id":"C","name":"\"Hơi mệt\" → nhẹ → đỡ → resolved","desc":"Case phổ biến nhất: mệt nhẹ, đỡ sau vài giờ","category":"normal","steps":[{"action":"Sáng: \"Hơi mệt\" → chọn \"đau đầu\" → trả lời nhẹ","detail":"4 câu → medium","result":"medium","passed":true,"convo":[{"q":"Chú đau đầu ở vị trí nào?","type":"single_choice","options":["một bên đầu","cả hai bên","sau gáy","vùng trán","quanh mắt","toàn bộ đầu"],"a":"một bên đầu"},{"q":"Chú thấy kiểu đau như thế nào?","type":"single_choice","options":["nhức âm ỉ","đau nhói từng cơn","đau như bóp chặt","đau giật theo nhịp tim"],"a":"nhức âm ỉ"},{"q":"Chú có thêm triệu chứng nào đi kèm?","type":"multi_choice","options":["buồn nôn","chóng mặt","sợ ánh sáng","mờ mắt","cứng cổ","sốt","không có"],"a":"không có"},{"q":"Chú thấy mức độ đau đầu hiện tại?","type":"single_choice","options":["nhẹ, vẫn sinh hoạt được","trung bình, khó tập trung","nặng, phải nằm nghỉ"],"a":"nhẹ, vẫn sinh hoạt được"}],"conclusion":{"severity":"medium","followUpHours":3,"needsDoctor":false,"needsFamilyAlert":false,"hasRedFlag":false,"matchedRuleIndex":-1,"modifiersApplied":["elderly+conditions → medium (safety)"],"summary":"Chú bị đau đầu mức trung bình, cần theo dõi thêm.","recommendation":"Uống thuốc giảm đau (paracetamol) nếu có, nằm nghỉ nơi yên tĩnh, tránh ánh sáng mạnh. Nếu không đỡ sau 24h hoặc đau tăng → đi khám.","closeMessage":"cháu sẽ hỏi lại chú sau 3 tiếng nhé."},"followUp":null},{"action":"Follow-up sau 3h: \"Đỡ hơn\" + không triệu chứng mới","detail":"→ low → monitoring → hẹn tối","result":"{\"severity\":\"low\",\"followUpHours\":6,\"needsDoctor\":false,\"needsFamilyAlert\":false,\"action\":\"monitoring\"}","passed":true,"convo":null,"conclusion":null,"followUp":{"status":"Đỡ hơn","newSymptoms":false,"result":{"severity":"low","followUpHours":6,"needsDoctor":false,"needsFamilyAlert":false,"action":"monitoring"}}}]},{"id":"D","name":"\"Hơi mệt\" → trung bình → \"Vẫn vậy\" → tiếp tục","desc":"Không đỡ cũng không nặng hơn, hệ thống tiếp tục theo dõi","category":"normal","steps":[{"action":"Sáng: \"Hơi mệt\" → chọn \"chóng mặt\" → trả lời vừa","detail":"4 câu → high","result":"high","passed":true,"convo":[{"q":"Chú chóng mặt kiểu nào?","type":"single_choice","options":["quay cuồng (phòng quay)","lâng lâng, lơ lửng","tối sầm mắt","mất thăng bằng, loạng choạng"],"a":"tối sầm mắt"},{"q":"Chú chóng mặt xuất hiện khi nào?","type":"multi_choice","options":["khi đứng dậy","khi xoay đầu","liên tục không ngừng","khi nằm nghiêng","bất kỳ lúc nào"],"a":"liên tục không ngừng"},{"q":"Chú có thêm triệu chứng nào?","type":"multi_choice","options":["buồn nôn","ù tai","hoa mắt","tim đập nhanh","vã mồ hôi","đau đầu","không có"],"a":"tim đập nhanh"},{"q":"Chú có đang dùng thuốc huyết áp hoặc thuốc mới không?","type":"single_choice","options":["có, thuốc huyết áp","có, thuốc mới kê gần đây","không dùng thuốc gì","không rõ"],"a":"không dùng thuốc gì"}],"conclusion":{"severity":"high","followUpHours":1,"needsDoctor":true,"needsFamilyAlert":true,"hasRedFlag":false,"matchedRuleIndex":4,"modifiersApplied":["elderly+conditions → high"],"summary":"Chú bị chóng mặt nặng, cần được bác sĩ đánh giá.","recommendation":"🏥 Chú nên đi khám bác sĩ hôm nay. Chóng mặt nặng cần đo huyết áp và kiểm tra tai trong. Trong khi chờ: NẰM YÊN, không đi lại một mình.","closeMessage":"cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé."},"followUp":null},{"action":"Follow-up 1: \"Vẫn vậy\" + không triệu chứng mới","detail":"→ tiếp tục theo dõi","result":"{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":false,\"action\":\"continue_followup\"}","passed":true,"convo":null,"conclusion":null,"followUp":{"status":"Vẫn vậy","newSymptoms":false,"result":{"severity":"high","followUpHours":1,"needsDoctor":true,"needsFamilyAlert":false,"action":"continue_followup"}}},{"action":"Follow-up 2: vẫn \"Vẫn vậy\"","detail":"→ tiếp tục theo dõi","result":"{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":false,\"action\":\"continue_followup\"}","passed":true,"convo":null,"conclusion":null,"followUp":{"status":"Vẫn vậy","newSymptoms":false,"result":{"severity":"high","followUpHours":1,"needsDoctor":true,"needsFamilyAlert":false,"action":"continue_followup"}}},{"action":"Follow-up 3: \"Đỡ hơn\" → kết thúc theo dõi","detail":"→ monitoring → hẹn tối","result":"{\"severity\":\"low\",\"followUpHours\":6,\"needsDoctor\":false,\"needsFamilyAlert\":false,\"action\":\"monitoring\"}","passed":true,"convo":null,"conclusion":null,"followUp":{"status":"Đỡ hơn","newSymptoms":false,"result":{"severity":"low","followUpHours":6,"needsDoctor":false,"needsFamilyAlert":false,"action":"monitoring"}}}]},{"id":"E","name":"\"Hơi mệt\" → nặng → \"Nặng hơn\" → escalate","desc":"Triệu chứng nặng dần, hệ thống phải cảnh báo mạnh","category":"critical","steps":[{"action":"Sáng: \"Hơi mệt\" → chọn \"đau đầu\" → trả lời nặng nhất","detail":"4 câu → high","result":"high","passed":true,"convo":[{"q":"Chú đau đầu ở vị trí nào?","type":"single_choice","options":["một bên đầu","cả hai bên","sau gáy","vùng trán","quanh mắt","toàn bộ đầu"],"a":"toàn bộ đầu"},{"q":"Chú thấy kiểu đau như thế nào?","type":"single_choice","options":["nhức âm ỉ","đau nhói từng cơn","đau như bóp chặt","đau giật theo nhịp tim"],"a":"đau giật theo nhịp tim"},{"q":"Chú có thêm triệu chứng nào đi kèm?","type":"multi_choice","options":["buồn nôn","chóng mặt","sợ ánh sáng","mờ mắt","cứng cổ","sốt","không có"],"a":"không có"},{"q":"Chú thấy mức độ đau đầu hiện tại?","type":"single_choice","options":["nhẹ, vẫn sinh hoạt được","trung bình, khó tập trung","nặng, phải nằm nghỉ"],"a":"nặng, phải nằm nghỉ"}],"conclusion":{"severity":"high","followUpHours":1,"needsDoctor":true,"needsFamilyAlert":true,"hasRedFlag":true,"matchedRuleIndex":0,"modifiersApplied":[],"summary":"Chú bị đau đầu nặng, cần được bác sĩ đánh giá.","recommendation":"🏥 Chú nên đi khám bác sĩ hôm nay. Đau đầu dữ dội có thể cần kiểm tra huyết áp hoặc chụp chiếu. Trong khi chờ: nằm nghỉ, tránh gắng sức.","closeMessage":"cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé."},"followUp":null},{"action":"Follow-up: \"Nặng hơn\" + CÓ triệu chứng mới → escalate + bác sĩ","detail":"Severity: high, needsDoctor: true","result":"{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":true,\"action\":\"escalate\"}","passed":true,"convo":null,"conclusion":null,"followUp":{"status":"Nặng hơn","newSymptoms":true,"result":{"severity":"high","followUpHours":1,"needsDoctor":true,"needsFamilyAlert":true,"action":"escalate"}}}]},{"id":"F","name":"\"Rất mệt\" → HIGH → follow-up nhanh → đỡ","desc":"User rất mệt nhưng hồi phục nhanh","category":"normal","steps":[{"action":"Sáng: \"Rất mệt\" → chọn \"mệt mỏi\" → trả lời nặng","detail":"4 câu → high","result":"high","passed":true,"convo":[{"q":"Chú mệt mỏi kéo dài bao lâu rồi?","type":"single_choice","options":["hôm nay mới thấy","vài ngày nay","1-2 tuần","trên 2 tuần"],"a":"trên 2 tuần"},{"q":"Chú mệt mỏi ảnh hưởng thế nào?","type":"single_choice","options":["vẫn sinh hoạt bình thường","phải nghỉ ngơi nhiều hơn","khó làm việc nhà","hầu như nằm cả ngày"],"a":"hầu như nằm cả ngày"},{"q":"Chú có thêm triệu chứng nào?","type":"multi_choice","options":["mất ngủ","ăn kém","sốt nhẹ","sụt cân","buồn bã","khó thở","không có"],"a":"không có"},{"q":"Chú giấc ngủ của chú gần đây thế nào?","type":"single_choice","options":["ngủ đủ 6-8 tiếng","ngủ ít hơn 5 tiếng","ngủ chập chờn","thức dậy nhiều lần trong đêm"],"a":"thức dậy nhiều lần trong đêm"}],"conclusion":{"severity":"high","followUpHours":1,"needsDoctor":true,"needsFamilyAlert":true,"hasRedFlag":false,"matchedRuleIndex":3,"modifiersApplied":["elderly+conditions → high"],"summary":"Chú bị mệt mỏi nặng, cần được bác sĩ đánh giá.","recommendation":"🏥 Chú nên đi khám bác sĩ hôm nay. Mệt mỏi nặng cần xét nghiệm máu kiểm tra thiếu máu, đường huyết, tuyến giáp. Nằm nghỉ, không gắng sức.","closeMessage":"cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé."},"followUp":null},{"action":"Follow-up sau 1h: \"Đỡ hơn\" → monitoring","detail":"→ low → hẹn tối","result":"{\"severity\":\"low\",\"followUpHours\":6,\"needsDoctor\":false,\"needsFamilyAlert\":false,\"action\":\"monitoring\"}","passed":true,"convo":null,"conclusion":null,"followUp":{"status":"Đỡ hơn","newSymptoms":false,"result":{"severity":"low","followUpHours":6,"needsDoctor":false,"needsFamilyAlert":false,"action":"monitoring"}}}]},{"id":"G","name":"\"Rất mệt\" → liên tục nặng hơn → escalate","desc":"User không cải thiện, hệ thống phải báo gia đình","category":"critical","steps":[{"action":"Sáng: \"Rất mệt\" → chọn \"đau đầu\" → trả lời nặng","detail":"4 câu → high","result":"high","passed":true,"convo":[{"q":"Chú đau đầu ở vị trí nào?","type":"single_choice","options":["một bên đầu","cả hai bên","sau gáy","vùng trán","quanh mắt","toàn bộ đầu"],"a":"toàn bộ đầu"},{"q":"Chú thấy kiểu đau như thế nào?","type":"single_choice","options":["nhức âm ỉ","đau nhói từng cơn","đau như bóp chặt","đau giật theo nhịp tim"],"a":"đau giật theo nhịp tim"},{"q":"Chú có thêm triệu chứng nào đi kèm?","type":"multi_choice","options":["buồn nôn","chóng mặt","sợ ánh sáng","mờ mắt","cứng cổ","sốt","không có"],"a":"không có"},{"q":"Chú thấy mức độ đau đầu hiện tại?","type":"single_choice","options":["nhẹ, vẫn sinh hoạt được","trung bình, khó tập trung","nặng, phải nằm nghỉ"],"a":"nặng, phải nằm nghỉ"}],"conclusion":{"severity":"high","followUpHours":1,"needsDoctor":true,"needsFamilyAlert":true,"hasRedFlag":true,"matchedRuleIndex":0,"modifiersApplied":[],"summary":"Chú bị đau đầu nặng, cần được bác sĩ đánh giá.","recommendation":"🏥 Chú nên đi khám bác sĩ hôm nay. Đau đầu dữ dội có thể cần kiểm tra huyết áp hoặc chụp chiếu. Trong khi chờ: nằm nghỉ, tránh gắng sức.","closeMessage":"cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé."},"followUp":null},{"action":"Follow-up 1: \"Nặng hơn\" → cần bác sĩ","detail":"high, needsDoctor: true","result":"{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":true,\"action\":\"escalate\"}","passed":true,"convo":null,"conclusion":null,"followUp":{"status":"Nặng hơn","newSymptoms":false,"result":{"severity":"high","followUpHours":1,"needsDoctor":true,"needsFamilyAlert":true,"action":"escalate"}}},{"action":"Follow-up 2: \"Nặng hơn\" + triệu chứng mới → escalate","detail":"high, báo gia đình","result":"{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":true,\"action\":\"escalate\"}","passed":true,"convo":null,"conclusion":null,"followUp":{"status":"Nặng hơn","newSymptoms":true,"result":{"severity":"high","followUpHours":1,"needsDoctor":true,"needsFamilyAlert":true,"action":"escalate"}}}]},{"id":"H","name":"Emergency ngay từ đầu","desc":"User nói \"đau ngực khó thở\" → bypass script, cấp cứu ngay","category":"emergency","steps":[{"action":"User nhập: \"đau ngực, khó thở, vã mồ hôi\"","detail":"isEmergency: true, type: MI","result":"{\"isEmergency\":true,\"type\":\"MI\",\"severity\":\"critical\",\"needsDoctor\":true,\"needsFamilyAlert\":true,\"followUpHours\":0}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Kiểm tra: loại cấp cứu","detail":"Type: MI","result":"MI","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Kiểm tra: không chạy script, không chạy scoring","detail":"Bypass hoàn toàn","result":"bypassed","passed":true,"convo":null,"conclusion":null,"followUp":null}]},{"id":"I","name":"Emergency giữa session","desc":"Đang trả lời script, đột nhiên nhập triệu chứng nguy hiểm","category":"emergency","steps":[{"action":"Bắt đầu script đau đầu bình thường","detail":"Câu 1 trả lời OK","result":"q1 answered","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Câu 2: user gõ \"yếu nửa người, nói ngọng\"","detail":"isEmergency: true, type: STROKE","result":"{\"isEmergency\":true,\"type\":\"STROKE\",\"severity\":\"critical\",\"needsDoctor\":true,\"needsFamilyAlert\":true,\"followUpHours\":0}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Kiểm tra: dừng script, chuyển cấp cứu","detail":"Type: STROKE","result":"STROKE","passed":true,"convo":null,"conclusion":null,"followUp":null}]},{"id":"J","name":"Triệu chứng mới → fallback → R&D → script","desc":"User nói \"đau dạ dày\" lần đầu, hệ thống học dần","category":"fallback","steps":[{"action":"Ngày 1: \"đau dạ dày\" → tìm trong DB","detail":"Matched: false","result":"{\"matched\":false}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Fallback: 3 câu cơ bản","detail":"3 câu → severity: high","result":"high","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Log fallback → chờ R&D đêm","detail":"Saved to fallback_logs","result":"pending","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"R&D đêm: tạo cluster \"đau dạ dày\"","detail":"Cluster: gastric_pain","result":"gastric_pain","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Ngày 2: \"đau dạ dày\" → tìm lại","detail":"Matched: true → gastric_pain","result":"{\"matched\":true,\"cluster\":{\"id\":\"1675\",\"user_id\":4,\"cluster_key\":\"gastric_pain\",\"display_name\":\"đau dạ dày\",\"source\":\"rnd_cycle\",\"count_7d\":0,\"count_30d\":0,\"trend\":\"stable\",\"priority\":0,\"is_active\":true,\"last_triggered_at\":null,\"created_at\":\"2026-04-08T08:06:52.027Z\",\"updated_at\":\"2026-04-08T08:06:52.027Z\"}}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Ngày 2: có script riêng","detail":"4 câu chuyên sâu","result":"4","passed":true,"convo":null,"conclusion":null,"followUp":null}]},{"id":"K","name":"Đổi triệu chứng: sáng đau đầu, chiều chóng mặt","desc":"User có nhiều vấn đề, mỗi lần check-in khác nhau","category":"normal","steps":[{"action":"Sáng: đau đầu nhẹ","detail":"Severity: medium","result":"medium","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Follow-up đau đầu: \"Đỡ hơn\"","detail":"→ low","result":"{\"severity\":\"low\",\"followUpHours\":6,\"needsDoctor\":false,\"needsFamilyAlert\":false,\"action\":\"monitoring\"}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Chiều: chóng mặt (triệu chứng khác)","detail":"Severity: high","result":"high","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Kiểm tra: 2 sessions khác cluster","detail":"headache + dizziness","result":"2 clusters","passed":true,"convo":null,"conclusion":null,"followUp":null}]},{"id":"L","name":"\"Tôi ổn\" sáng → emergency tối","desc":"Sáng khỏe nhưng tối đột ngột nguy hiểm","category":"emergency","steps":[{"action":"Sáng: \"Tôi ổn\" → monitoring","detail":"Hẹn 9h tối","result":"fine","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Tối: \"co giật\" → EMERGENCY","detail":"isEmergency: true, type: SEIZURE","result":"{\"isEmergency\":true,\"type\":\"SEIZURE\",\"severity\":\"critical\",\"needsDoctor\":true,\"needsFamilyAlert\":true,\"followUpHours\":0}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Kiểm tra: bypass evening check","detail":"Emergency > evening review","result":"bypassed","passed":true,"convo":null,"conclusion":null,"followUp":null}]},{"id":"M","name":"Follow-up chuỗi dài: đỡ → vậy → nặng","desc":"Theo dõi nhiều lần trong ngày, tình trạng thay đổi","category":"critical","steps":[{"action":"Check-in ban đầu: trung bình","detail":"Severity: medium","result":"medium","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Follow-up 1: \"Đỡ hơn\"","detail":"low → monitoring","result":"{\"severity\":\"low\",\"followUpHours\":6,\"needsDoctor\":false,\"needsFamilyAlert\":false,\"action\":\"monitoring\"}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Follow-up 2: \"Vẫn vậy\" (từ low)","detail":"low","result":"{\"severity\":\"low\",\"followUpHours\":6,\"needsDoctor\":false,\"needsFamilyAlert\":false,\"action\":\"continue_followup\"}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Follow-up 3: \"Nặng hơn\" + triệu chứng mới!","detail":"high → escalate","result":"{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":false,\"action\":\"escalate\"}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Kiểm tra: phải khuyên đi bác sĩ","detail":"needsDoctor: true","result":"true","passed":true,"convo":null,"conclusion":null,"followUp":null}]},{"id":"N","name":"Phủ định: \"không đau ngực\" → không phải emergency","desc":"User nói KHÔNG bị, hệ thống phải hiểu phủ định","category":"emergency","steps":[{"action":"\"không đau ngực\"","detail":"isEmergency: false","result":"{\"isEmergency\":false,\"type\":null,\"severity\":\"low\",\"needsDoctor\":false,\"needsFamilyAlert\":false,\"followUpHours\":72}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"\"hết khó thở rồi\"","detail":"isEmergency: false","result":"{\"isEmergency\":false,\"type\":null,\"severity\":\"low\",\"needsDoctor\":false,\"needsFamilyAlert\":false,\"followUpHours\":72}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"\"không co giật\"","detail":"isEmergency: false","result":"{\"isEmergency\":false,\"type\":null,\"severity\":\"low\",\"needsDoctor\":false,\"needsFamilyAlert\":false,\"followUpHours\":72}","passed":true,"convo":null,"conclusion":null,"followUp":null}]},{"id":"O","name":"Người cao tuổi: dù nhẹ cũng phải theo dõi kỹ","desc":"Bà Lan 75t, 4 bệnh nền — không được bỏ qua","category":"safety","steps":[{"action":"Bà Lan trả lời nhẹ nhất","detail":"Severity: medium","result":"medium","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Kiểm tra: KHÔNG ĐƯỢC xếp Nhẹ","detail":"medium (phải >= Trung bình)","result":"medium","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Anh An (30t khỏe) cùng câu trả lời","detail":"Severity: low","result":"low","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"So sánh: Bà Lan phải >= Anh An","detail":"medium >= low","result":"true","passed":true,"convo":null,"conclusion":null,"followUp":null}]},{"id":"P","name":"Biến thể triệu chứng → token matching","desc":"User nói khác nhau nhưng cùng 1 bệnh","category":"fallback","steps":[{"action":"\"chóng mặt buổi sáng\" → tìm cluster","detail":"Matched: true → dizziness","result":"{\"matched\":true,\"cluster\":{\"id\":\"1673\",\"user_id\":4,\"cluster_key\":\"dizziness\",\"display_name\":\"chóng mặt\",\"source\":\"onboarding\",\"count_7d\":0,\"count_30d\":0,\"trend\":\"stable\",\"priority\":2,\"is_active\":true,\"last_triggered_at\":null,\"created_at\":\"2026-04-08T08:06:52.014Z\",\"updated_at\":\"2026-04-08T08:06:52.014Z\"}}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"\"bị mệt quá\" → tìm cluster (token \"mệt\")","detail":"Matched: true → fatigue","result":"{\"matched\":true,\"cluster\":{\"id\":\"1674\",\"user_id\":4,\"cluster_key\":\"fatigue\",\"display_name\":\"mệt mỏi\",\"source\":\"onboarding\",\"count_7d\":0,\"count_30d\":0,\"trend\":\"stable\",\"priority\":1,\"is_active\":true,\"last_triggered_at\":null,\"created_at\":\"2026-04-08T08:06:52.015Z\",\"updated_at\":\"2026-04-08T08:06:52.015Z\"}}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"\"nhức đầu ghê\" → tìm cluster (token \"đầu\")","detail":"Matched: true","result":"{\"matched\":true,\"cluster\":{\"id\":\"1672\",\"user_id\":4,\"cluster_key\":\"headache\",\"display_name\":\"đau đầu\",\"source\":\"onboarding\",\"count_7d\":0,\"count_30d\":0,\"trend\":\"stable\",\"priority\":3,\"is_active\":true,\"last_triggered_at\":null,\"created_at\":\"2026-04-08T08:06:52.012Z\",\"updated_at\":\"2026-04-08T08:06:52.012Z\"}}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"\"đau lưng dưới\" → KHÔNG có cluster","detail":"Matched: false","result":"{\"matched\":false}","passed":true,"convo":null,"conclusion":null,"followUp":null}]},{"id":"Q","name":"\"Hơi mệt\" + nhập tự do → fallback","desc":"User không chọn cluster sẵn, gõ triệu chứng tự do","category":"fallback","steps":[{"action":"\"đau tai trái\" → không match","detail":"Matched: false","result":"{\"matched\":false}","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Fallback 3 câu, trả lời nặng","detail":"Severity: high","result":"high","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Kiểm tra: fallback vẫn cho kết quả","detail":"Summary: Chú có triệu chứng nặng, cần đ","result":"Chú có triệu chứng nặng, cần được bác sĩ đánh giá.","passed":true,"convo":null,"conclusion":null,"followUp":null},{"action":"Follow-up fallback: \"Nặng hơn\"","detail":"high → escalate","result":"{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":true,\"action\":\"escalate\"}","passed":true,"convo":null,"conclusion":null,"followUp":null}]}];
+let replaySpeed = 'normal';
+let replayTimeout = null;
+let currentFlowId = null;
+
+const SPEEDS = { slow: 1200, normal: 600, fast: 200 };
+const sevVN = {low:'Nhẹ',medium:'Trung bình',high:'Nặng',critical:'Nguy kịch'};
+const sevClass = {low:'low',medium:'medium',high:'high',critical:'critical'};
+
+function closeReplay() {
+  document.getElementById('replayOverlay').classList.remove('active');
+  if (replayTimeout) clearTimeout(replayTimeout);
+}
+
+function restartReplay() {
+  if (currentFlowId) replayFlow(currentFlowId);
+}
+
+function replayFlow(flowId) {
+  currentFlowId = flowId;
+  const flow = ALL_FLOWS.find(f => f.id === flowId);
+  if (!flow) return;
+
+  const overlay = document.getElementById('replayOverlay');
+  const body = document.getElementById('replayBody');
+  const title = document.getElementById('replayTitle');
+
+  overlay.classList.add('active');
+  title.textContent = flow.id + '. ' + flow.name;
+  body.innerHTML = '';
+  body.scrollTop = 0;
+
+  const items = [];
+  const delay = SPEEDS[replaySpeed] || 600;
+
+  // Build all replay items from steps
+  flow.steps.forEach((st, si) => {
+    // Step header
+    items.push({ type: 'time', text: 'Bước ' + (si+1) });
+    items.push({ type: 'system', html: '<b>' + st.action + '</b><br><span style="color:#64748b">' + st.detail + '</span>' });
+
+    // Conversation detail
+    if (st.convo) {
+      st.convo.forEach((c, ci) => {
+        let qHTML = '🤖 <b>Câu ' + (ci+1) + ':</b> ' + c.q;
+        if (c.options) {
+          qHTML += '<div class="r-opts">' + c.options.map(o => '<span class="r-opt' + (o===c.a?' selected':'') + '">' + o + '</span>').join('') + '</div>';
+        }
+        items.push({ type: 'system', html: qHTML });
+        items.push({ type: 'typing' });
+        items.push({ type: 'user', html: '👤 ' + c.a });
+      });
+    }
+
+    // Follow-up detail
+    if (st.followUp) {
+      const fu = st.followUp;
+      items.push({ type: 'system', html: '🤖 So với lúc trước, thấy thế nào?' });
+      items.push({ type: 'typing' });
+      items.push({ type: 'user', html: '👤 ' + fu.status });
+      items.push({ type: 'system', html: '🤖 Có triệu chứng mới không?' });
+      items.push({ type: 'typing' });
+      items.push({ type: 'user', html: '👤 ' + (fu.newSymptoms ? 'Có' : 'Không') });
+
+      const r = fu.result;
+      const actionVN = r.action==='monitoring'?'✅ Theo dõi → hẹn tối':r.action==='escalate'?'🚨 Cảnh báo + khuyên bác sĩ':r.action==='continue_followup'?'🔄 Tiếp tục theo dõi':r.action;
+      items.push({ type: 'result', severity: r.severity, html: '<span class="r-sev ' + sevClass[r.severity] + '">' + sevVN[r.severity] + '</span> · ' + actionVN + ' · Bác sĩ: ' + (r.needsDoctor?'CÓ':'Không') });
+    }
+
+    // Conclusion
+    if (st.conclusion) {
+      const c = st.conclusion;
+      let cHTML = '<span class="r-sev ' + sevClass[c.severity] + '">' + (sevVN[c.severity]||c.severity) + '</span>';
+      cHTML += ' · Hẹn ' + (c.followUpHours||'?') + 'h · Bác sĩ: ' + (c.needsDoctor?'CÓ':'Không');
+      if (c.summary) cHTML += '<div class="r-advice"><b>Tóm tắt:</b> ' + c.summary + '</div>';
+      if (c.recommendation) cHTML += '<div class="r-advice"><b>Lời khuyên:</b> ' + c.recommendation + '</div>';
+      if (c.closeMessage) cHTML += '<div class="r-advice"><b>Lời nhắn:</b> ' + c.closeMessage + '</div>';
+      items.push({ type: 'result', severity: c.severity, html: cHTML });
+    }
+
+    // Step result badge
+    items.push({ type: 'badge', passed: st.passed, text: st.result ? st.result.substring(0,60) : '' });
+  });
+
+  // Animate items one by one
+  let idx = 0;
+  function showNext() {
+    if (idx >= items.length) return;
+    const item = items[idx];
+    const el = document.createElement('div');
+    el.className = 'r-item';
+
+    if (item.type === 'time') {
+      el.className += ' r-time';
+      el.innerHTML = '⏱ ' + item.text;
+    } else if (item.type === 'system') {
+      el.innerHTML = '<div class="r-system">' + item.html + '</div>';
+    } else if (item.type === 'user') {
+      el.innerHTML = '<div class="r-user">' + item.html + '</div>';
+    } else if (item.type === 'typing') {
+      el.innerHTML = '<div class="r-typing">···</div>';
+      body.appendChild(el);
+      setTimeout(() => { el.classList.add('visible'); }, 10);
+      body.scrollTop = body.scrollHeight;
+      idx++;
+      replayTimeout = setTimeout(() => { el.remove(); showNext(); }, delay * 0.6);
+      return;
+    } else if (item.type === 'result') {
+      el.innerHTML = '<div class="r-result">' + item.html + '</div>';
+    } else if (item.type === 'badge') {
+      el.innerHTML = '<div style="text-align:center;margin:4px 0"><span style="display:inline-block;padding:3px 12px;border-radius:6px;font-size:11px;font-weight:600;' + (item.passed?'background:#dcfce7;color:#166534':'background:#fee2e2;color:#991b1b') + '">' + (item.passed?'✅':'❌') + ' ' + item.text + '</span></div>';
+    }
+
+    body.appendChild(el);
+    setTimeout(() => { el.classList.add('visible'); }, 10);
+    body.scrollTop = body.scrollHeight;
+    idx++;
+    replayTimeout = setTimeout(showNext, item.type === 'result' ? delay * 2 : delay);
+  }
+
+  if (replayTimeout) clearTimeout(replayTimeout);
+  replayTimeout = setTimeout(showNext, 300);
+}
+
+// ─── Tab switching ───
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-results').style.display = tab==='results'?'block':'none';
+  document.getElementById('tab-interactive').style.display = tab==='interactive'?'block':'none';
+  event.target.classList.add('active');
+  if (tab==='interactive' && !window._iStarted) { window._iStarted=true; iStart(); }
+}
+
+// ─── Interactive test (calls REAL API backend) ───
+const API_TOKEN = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NCwiaWF0IjoxNzc1NjM1NjEyLCJleHAiOjE3NzYyNDA0MTJ9.Jy1s9EEEbNiVlmaK0hAauK8qjn-mio6geY4FeqfpxmQ';
+const API_BASE = window.location.origin + '/api/mobile';
+const iChat=document.getElementById('iChatArea'),iLog=document.getElementById('iSysLog'),iRes=document.getElementById('iResult');
+let iSessionId=null, iCurrentStatus=null;
+const iSevVN={low:'Nhẹ',medium:'Trung bình',high:'Nặng',critical:'Nguy kịch'};
+const iSevE={low:'🟢',medium:'🟡',high:'🔴',critical:'🚨'};
+
+async function api(path, body=null) {
+  const opts = { headers: {'Content-Type':'application/json','Authorization':'Bearer '+API_TOKEN} };
+  if (body) { opts.method='POST'; opts.body=JSON.stringify(body); }
+  const r = await fetch(API_BASE+path, opts);
+  return r.json();
+}
+
+function ilog(m){const t=new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});iLog.innerHTML+='<div style="padding:2px 0;border-bottom:1px solid #f1f5f9"><span style="color:#94a3b8;font-size:9px">'+t+'</span> '+m+'</div>';iLog.scrollTop=iLog.scrollHeight}
+function iBot(html,delay){return new Promise(r=>{const d=document.createElement('div');d.className='i-msg i-bot';d.innerHTML='<div class="i-label">🤖 Asinu</div><div class="i-typing">···</div>';iChat.appendChild(d);iChat.scrollTop=iChat.scrollHeight;setTimeout(()=>{d.innerHTML='<div class="i-label">🤖 Asinu</div><div class="i-bubble">'+html+'</div>';iChat.scrollTop=iChat.scrollHeight;r()},delay||400)})}
+function iUser(t){const d=document.createElement('div');d.className='i-msg i-user';d.innerHTML='<div class="i-label">👤 Chú Hùng</div><div class="i-bubble">'+t+'</div>';iChat.appendChild(d);iChat.scrollTop=iChat.scrollHeight}
+function iOpts(opts,cb){const w=document.createElement('div');w.className='i-opts';opts.forEach(o=>{const b=document.createElement('button');b.className='i-opt';b.textContent=typeof o==='object'?o.label:o;b.onclick=()=>{w.querySelectorAll('.i-opt').forEach(x=>{x.disabled=true;x.style.opacity='.5'});b.classList.add('sel');b.style.opacity='1';iUser(typeof o==='object'?o.label:o);setTimeout(()=>cb(typeof o==='object'?o.value:o),250)};w.appendChild(b)});iChat.appendChild(w);iChat.scrollTop=iChat.scrollHeight}
+function iSlider(min,max,cb){const w=document.createElement('div');w.className='i-slider';w.innerHTML='<div style="display:flex;justify-content:space-between;font-size:10px;color:#94a3b8"><span>'+min+'</span><span>'+max+'</span></div><input type=range min='+min+' max='+max+' value=5><div class="i-slider-val">5</div><button>Xác nhận</button>';const inp=w.querySelector('input');inp.oninput=()=>w.querySelector('.i-slider-val').textContent=inp.value;w.querySelector('button').onclick=()=>{const v=+inp.value;inp.disabled=true;w.querySelector('button').disabled=true;iUser(v+'/'+max);setTimeout(()=>cb(v),250)};iChat.appendChild(w);iChat.scrollTop=iChat.scrollHeight}
+function iFree(cb){const w=document.createElement('div');w.className='i-free';w.innerHTML='<input placeholder="Nhập bất kỳ triệu chứng nào..."><button>Gửi</button>';const inp=w.querySelector('input');const go=()=>{const v=inp.value.trim();if(!v)return;inp.disabled=true;w.querySelector('button').disabled=true;iUser(v);setTimeout(()=>cb(v),250)};w.querySelector('button').onclick=go;inp.onkeydown=e=>{if(e.key==='Enter')go()};iChat.appendChild(w);inp.focus();iChat.scrollTop=iChat.scrollHeight}
+function iShowEm(em){const d=document.createElement('div');d.className='i-emergency';d.innerHTML='<h3 style="color:#f87171;font-size:16px">🚨 CẤP CỨU'+(em.type?' — '+em.type:'')+'</h3><div>'+(em.action||'Gọi 115 hoặc đến bệnh viện ngay')+'</div>';iChat.appendChild(d);iChat.scrollTop=iChat.scrollHeight;ilog('🚨 EMERGENCY');iRes.innerHTML='<div style="color:#dc2626;font-weight:700">🚨 CẤP CỨU</div>';iRestart()}
+function iShowRes(r){const sev=r.severity||'medium';const d=document.createElement('div');d.className='i-result '+sev;d.innerHTML='<b>'+iSevE[sev]+' '+iSevVN[sev]+'</b> · Hẹn '+(r.followUpHours||r.follow_up_hours||'?')+'h · Bác sĩ: '+(r.needsDoctor||r.needs_doctor?'CÓ':'Không');iChat.appendChild(d);iChat.scrollTop=iChat.scrollHeight;iRes.innerHTML='<b>'+iSevE[sev]+' '+iSevVN[sev]+'</b><br>Hẹn: '+(r.followUpHours||r.follow_up_hours||'?')+'h | Bác sĩ: '+(r.needsDoctor||r.needs_doctor?'CÓ':'Không')}
+function iRestart(){const b=document.createElement('button');b.className='i-restart';b.textContent='🔄 Test lại từ đầu';b.onclick=iStart;iChat.appendChild(b);iChat.scrollTop=iChat.scrollHeight}
+
+async function iStart(){
+  iChat.innerHTML='';iSessionId=null;iCurrentStatus=null;iLog.innerHTML='';iRes.innerHTML='Chờ bắt đầu...';
+  ilog('Bắt đầu phiên check-in');
+
+  // Get script from API
+  ilog('Gọi API: GET /checkin/script');
+  const scriptRes = await api('/checkin/script').catch(e=>({ok:false,error:e.message}));
+  if(scriptRes.ok && scriptRes.greeting){
+    await iBot(scriptRes.greeting);
+  } else {
+    await iBot('Chào chú Hùng! Hôm nay chú thế nào? 💙');
+  }
+  ilog('Hiển thị lựa chọn trạng thái');
+  iOpts([{label:'😊 Tôi ổn',value:'fine'},{label:'😐 Hơi mệt',value:'tired'},{label:'😫 Rất mệt',value:'very_tired'}],iStatus);
+}
+
+async function iStatus(s){
+  ilog('User chọn: '+s);
+  iCurrentStatus=s;
+  if(s==='fine'){
+    ilog('Gọi API: POST /checkin/script/start {status:fine}');
+    const r=await api('/checkin/script/start',{status:'fine'}).catch(e=>({ok:false}));
+    await iBot(r.message||'Tốt quá! Cháu hẹn chú tối nay nhé 💙');
+    ilog('Ổn → hẹn tối');iShowRes({severity:'low',followUpHours:6,needsDoctor:false});iRestart();return;
+  }
+  await iBot('Chú đang gặp vấn đề gì?');
+
+  // Get clusters from API
+  ilog('Gọi API: GET /checkin/script → lấy danh sách triệu chứng');
+  const scriptRes = await api('/checkin/script').catch(e=>({ok:false}));
+  const clusters = (scriptRes.clusters||[]).filter(c=>c.has_script).slice(0,8);
+
+  if(clusters.length > 0){
+    ilog(clusters.length + ' triệu chứng có sẵn');
+    iOpts(clusters.map(c=>({label:c.display_name, value:c.cluster_key})), v=>{
+      ilog('Chọn cluster: '+v);
+      iInputSymptom(null, s, v);
+    });
+    const or=document.createElement('div');
+    or.style.cssText='text-align:center;font-size:10px;color:#94a3b8;margin:6px 0';
+    or.textContent='— hoặc nhập triệu chứng bất kỳ —';
+    iChat.appendChild(or);
+  }
+  iFree(v=>iInputSymptom(v, s, null));
+}
+
+async function iInputSymptom(input, status, clusterKey){
+  const body = { status: status };
+  if(clusterKey) {
+    body.cluster_key = clusterKey;
+    ilog('Chọn cluster: '+clusterKey);
+    ilog('Gọi API: POST /checkin/script/start {status:'+status+', cluster_key:"'+clusterKey+'"}');
+  } else {
+    body.symptom_input = input;
+    ilog('Nhập: "'+input+'"');
+    ilog('Gọi API: POST /checkin/script/start {status:'+status+', symptom_input:"'+input+'"}');
+  }
+  await iBot('Đang phân tích...', 200);
+
+  try {
+    const r = await api('/checkin/script/start', body);
+    ilog('API trả về: ' + JSON.stringify({ok:r.ok, is_emergency:r.is_emergency, is_fallback:r.is_fallback, session_id:r.session_id}).substring(0,100));
+
+    if(r.is_emergency){
+      iShowEm(r.emergency||{});
+      return;
+    }
+
+    if(!r.ok){
+      await iBot('Lỗi: '+(r.error||'Không rõ'));iRestart();return;
+    }
+
+    iSessionId = r.session_id;
+
+    if(r.is_fallback){
+      ilog('⚠️ Triệu chứng mới → '+(r.ai_generated?'AI đang tạo câu hỏi...':'Fallback'));
+      if(r.ai_generated) await iBot('🤖 AI đã phân tích: "'+input+'" → tạo câu hỏi chuyên sâu');
+    } else {
+      ilog('✅ Match cluster: '+r.cluster_key);
+    }
+
+    // Show first question from API
+    if(r.question){
+      iShowQuestion(r.question);
+    } else if(r.isDone){
+      iShowConclusion(r);
+    }
+  } catch(e) {
+    ilog('❌ API error: '+e.message);
+    await iBot('Lỗi kết nối backend. Kiểm tra server.');
+    iRestart();
+  }
+}
+
+function iShowQuestion(q){
+  ilog('Q: '+q.text+' ('+q.type+')');
+  iBot(q.text).then(()=>{
+    if(q.type==='slider'){
+      iSlider(q.min||0,q.max||10,v=>iAnswer(q.id,v));
+    } else if(q.options && q.options.length>0){
+      iOpts(q.options,v=>iAnswer(q.id,v));
+    } else {
+      iFree(v=>iAnswer(q.id,v));
+    }
+  });
+}
+
+async function iAnswer(questionId,answer){
+  ilog('→ '+answer);
+  ilog('Gọi API: POST /checkin/script/answer');
+
+  try {
+    const r = await api('/checkin/script/answer', { session_id:iSessionId, question_id:questionId, answer:answer });
+
+    if(r.is_emergency){
+      iShowEm(r.emergency||{});
+      return;
+    }
+
+    if(r.isDone){
+      iShowConclusion(r);
+    } else if(r.question){
+      iShowQuestion(r.question);
+    }
+  } catch(e){
+    ilog('❌ API error: '+e.message);
+    await iBot('Lỗi kết nối.');iRestart();
+  }
+}
+
+async function iShowConclusion(r){
+  const c = r.conclusion || r;
+  const sev = c.severity || r.severity || 'medium';
+  ilog('Kết quả: '+iSevVN[sev]);
+
+  if(c.summary) await iBot(c.summary);
+  if(c.recommendation) await iBot(c.recommendation);
+  if(c.closeMessage) await iBot(c.closeMessage);
+
+  iShowRes({severity:sev, followUpHours:c.followUpHours||c.follow_up_hours, needsDoctor:c.needsDoctor||c.needs_doctor});
+
+  // Follow-up
+  await new Promise(x=>setTimeout(x,600));
+  await iBot('--- Giả lập '+(c.followUpHours||c.follow_up_hours||3)+'h sau ---<br>So với lúc trước, chú thấy thế nào?');
+  iOpts(['Đỡ hơn','Vẫn vậy','Nặng hơn'],async v=>{
+    ilog('Follow-up: '+v);
+    const fs=v==='Đỡ hơn'?'low':v==='Nặng hơn'?'high':sev;
+    const fa=v==='Đỡ hơn'?'Theo dõi → hẹn tối':v==='Nặng hơn'?'🚨 Khuyên bác sĩ':'Tiếp tục theo dõi';
+    await iBot(iSevE[fs]+' <b>'+iSevVN[fs]+'</b> → '+fa);
+    iShowRes({severity:fs,followUpHours:fs==='high'?1:6,needsDoctor:fs==='high'});
+    iRestart();
+  });
+}
+</script>
+</body></html>

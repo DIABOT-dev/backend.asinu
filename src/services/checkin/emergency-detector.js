@@ -142,14 +142,19 @@ const CAUDA_COMPANION_KW = [
   'tê hai chân', 'te hai chan',
 ];
 
+// HEMORRHAGE_DIRECT_KW — CHỈ giữ những cái CHẮC CHẮN cấp cứu
+// Các triệu chứng ra máu khác (đi ỉa ra máu, tiểu ra máu, ho ra máu...)
+// → để AI đánh giá vì có thể là trĩ, viêm nhiễm, không nhất thiết cấp cứu
 const HEMORRHAGE_DIRECT_KW = [
+  // Nôn ra máu → luôn cấp cứu (xuất huyết tiêu hóa trên)
   'nôn ra máu', 'non ra mau',
   'ói ra máu', 'oi ra mau',
+  // Phân đen → luôn cấp cứu (dấu hiệu xuất huyết tiêu hóa)
   'phân đen', 'phan den',
   'đi ngoài phân đen',
-  'đại tiện ra máu', 'dai tien ra mau',
-  'đi cầu ra máu', 'di cau ra mau',
-  'tiêu ra máu', 'tieu ra mau',
+  // Chảy máu ồ ạt
+  'chảy máu không cầm', 'chay mau khong cam',
+  'xuất huyết nặng',
   'chảy máu trực tràng',
 ];
 
@@ -327,6 +332,8 @@ const SAFE = result(false, null, 'low', false, false, 72);
  * }}
  */
 function detectEmergency(symptoms, profile = {}) {
+  // Guard against explicit null/undefined
+  profile = profile || {};
   if (!symptoms || symptoms.length === 0) return SAFE;
 
   const text = symptoms.join(' ').toLowerCase();

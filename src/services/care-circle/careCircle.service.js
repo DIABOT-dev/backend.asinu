@@ -511,6 +511,81 @@ async function updateConnectionPermissions(pool, connectionId, userId, newPermis
 // EXPORTS
 // =====================================================
 
+// =====================================================
+// CAREGIVER DATA ACCESS
+// =====================================================
+
+/**
+ * Verify caregiver has can_view_logs permission for a patient
+ * @param {Object} pool - Database pool
+ * @param {number} caregiverId - Caregiver user ID
+ * @param {number} patientId - Patient user ID
+ * @returns {Promise<boolean>} - true if access granted
+ */
+async function verifyCaregiverAccess(pool, caregiverId, patientId) {
+  const { rows } = await pool.query(
+    `SELECT id FROM user_connections
+     WHERE status = 'accepted'
+       AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))
+       AND COALESCE((permissions->>'can_view_logs')::boolean, false) = true`,
+    [patientId, caregiverId]
+  );
+  return rows.length > 0;
+}
+
+/**
+ * Get patient's recent logs visible to caregiver
+ * @param {Object} pool - Database pool
+ * @param {number} patientId - Patient user ID
+ * @param {number} days - Number of days to look back
+ * @returns {Promise<Array>} - Log rows
+ */
+async function getCaregiverLogs(pool, patientId, days = 7) {
+  const { rows } = await pool.query(
+    `SELECT lc.id, lc.log_type, lc.occurred_at, lc.note, lc.metadata
+     FROM logs_common lc
+     WHERE lc.user_id = $1 AND lc.occurred_at > NOW() - INTERVAL '${days} days'
+     ORDER BY lc.occurred_at DESC
+     LIMIT 50`,
+    [patientId]
+  );
+  return rows;
+}
+
+/**
+ * Get patient's recent check-in sessions visible to caregiver
+ * @param {Object} pool - Database pool
+ * @param {number} patientId - Patient user ID
+ * @param {number} days - Number of days to look back
+ * @returns {Promise<Array>} - Session rows
+ */
+async function getCaregiverCheckins(pool, patientId, days = 14) {
+  const { rows } = await pool.query(
+    `SELECT id, session_date, initial_status, current_status, flow_state,
+            triage_summary, triage_severity, family_alerted, emergency_triggered,
+            resolved_at, created_at
+     FROM health_checkins
+     WHERE user_id = $1 AND session_date >= CURRENT_DATE - INTERVAL '${days} days'
+     ORDER BY session_date DESC`,
+    [patientId]
+  );
+  return rows;
+}
+
+/**
+ * Get patient display name
+ * @param {Object} pool - Database pool
+ * @param {number} patientId - Patient user ID
+ * @returns {Promise<string>} - Display name
+ */
+async function getPatientName(pool, patientId) {
+  const { rows } = await pool.query(
+    `SELECT display_name, full_name FROM users WHERE id = $1`,
+    [patientId]
+  );
+  return rows[0]?.display_name || rows[0]?.full_name || '';
+}
+
 module.exports = {
   // Helpers
   normalizePermissions,
@@ -527,5 +602,11 @@ module.exports = {
   getConnections,
   deleteConnection,
   updateConnection,
-  updateConnectionPermissions
+  updateConnectionPermissions,
+
+  // Caregiver data access
+  verifyCaregiverAccess,
+  getCaregiverLogs,
+  getCaregiverCheckins,
+  getPatientName,
 };

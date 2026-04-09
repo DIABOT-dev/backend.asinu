@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asinu — Tự test Check-in</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:#f0f4f8; min-height:100vh; display:flex; justify-content:center; align-items:flex-start; padding:20px; }
+
+.phone {
+  width:375px; min-height:700px; background:#fff; border-radius:40px; box-shadow:0 20px 60px rgba(0,0,0,.15);
+  overflow:hidden; position:relative; border:8px solid #1a1a2e;
+}
+.phone-notch { width:150px; height:24px; background:#1a1a2e; border-radius:0 0 16px 16px; margin:0 auto; }
+.phone-screen { padding:16px; min-height:620px; display:flex; flex-direction:column; }
+
+/* Chat area */
+.chat-area { flex:1; overflow-y:auto; padding-bottom:10px; }
+.msg { margin:8px 0; max-width:85%; animation:fadeUp .3s ease; }
+.msg-bot { margin-right:auto; }
+.msg-user { margin-left:auto; }
+.msg-bubble { padding:10px 14px; border-radius:16px; font-size:13px; line-height:1.5; }
+.msg-bot .msg-bubble { background:#eff6ff; color:#1e40af; border-bottom-left-radius:4px; }
+.msg-user .msg-bubble { background:#f0fdf4; color:#166534; border-bottom-right-radius:4px; text-align:right; }
+.msg-label { font-size:9px; color:#94a3b8; margin-bottom:2px; padding:0 4px; }
+.msg-bot .msg-label { text-align:left; }
+.msg-user .msg-label { text-align:right; }
+
+/* Options */
+.options { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; }
+.opt-btn { padding:8px 14px; border-radius:20px; border:1.5px solid #e2e8f0; background:#fff; cursor:pointer;
+  font-size:12px; color:#334155; transition:all .15s; }
+.opt-btn:hover { border-color:#3b82f6; color:#3b82f6; background:#eff6ff; }
+.opt-btn.selected { background:#3b82f6; color:#fff; border-color:#3b82f6; }
+.opt-btn.status-fine { border-color:#16a34a; color:#16a34a; }
+.opt-btn.status-fine:hover,.opt-btn.status-fine.selected { background:#16a34a; color:#fff; }
+.opt-btn.status-tired { border-color:#ca8a04; color:#ca8a04; }
+.opt-btn.status-tired:hover,.opt-btn.status-tired.selected { background:#ca8a04; color:#fff; }
+.opt-btn.status-very { border-color:#dc2626; color:#dc2626; }
+.opt-btn.status-very:hover,.opt-btn.status-very.selected { background:#dc2626; color:#fff; }
+
+/* Slider */
+.slider-wrap { margin:8px 0; padding:10px 14px; background:#f8fafc; border-radius:12px; }
+.slider-label { display:flex; justify-content:space-between; font-size:11px; color:#64748b; margin-bottom:4px; }
+.slider-input { width:100%; accent-color:#3b82f6; }
+.slider-value { text-align:center; font-size:24px; font-weight:800; color:#1e40af; margin-top:4px; }
+.slider-submit { display:block; width:100%; margin-top:8px; padding:8px; border-radius:10px; border:none;
+  background:#3b82f6; color:#fff; font-weight:600; cursor:pointer; font-size:13px; }
+.slider-submit:hover { background:#2563eb; }
+
+/* Free text */
+.free-input { display:flex; gap:6px; margin:8px 0; }
+.free-input input { flex:1; padding:10px 14px; border-radius:20px; border:1.5px solid #e2e8f0; font-size:12px; outline:none; }
+.free-input input:focus { border-color:#3b82f6; }
+.free-input button { padding:10px 16px; border-radius:20px; border:none; background:#3b82f6; color:#fff; cursor:pointer; font-size:12px; }
+
+/* Result card */
+.result-card { margin:10px 0; padding:14px; border-radius:12px; border-left:4px solid; animation:fadeUp .4s ease; }
+.result-card.low { background:#f0fdf4; border-color:#16a34a; }
+.result-card.medium { background:#fefce8; border-color:#ca8a04; }
+.result-card.high { background:#fef2f2; border-color:#dc2626; }
+.result-card.critical { background:#450a0a; border-color:#dc2626; color:#fecaca; }
+.result-sev { font-weight:800; font-size:16px; }
+.result-detail { font-size:11px; margin-top:6px; line-height:1.6; color:#475569; }
+.result-card.critical .result-detail { color:#fca5a5; }
+
+/* Emergency */
+.emergency-card { margin:10px 0; padding:16px; background:#450a0a; border-radius:12px; color:#fecaca; text-align:center; animation:shake .5s ease; }
+.emergency-card h3 { color:#f87171; font-size:18px; margin-bottom:6px; }
+
+/* Typing */
+.typing { padding:10px 18px; background:#eff6ff; border-radius:16px; display:inline-block; margin:6px 0; }
+.typing span { display:inline-block; width:6px; height:6px; background:#3b82f6; border-radius:50%; margin:0 2px;
+  animation:bounce .6s infinite; }
+.typing span:nth-child(2) { animation-delay:.1s; }
+.typing span:nth-child(3) { animation-delay:.2s; }
+
+/* Restart */
+.restart-btn { display:block; width:100%; margin-top:12px; padding:10px; border-radius:12px; border:2px solid #e2e8f0;
+  background:#fff; cursor:pointer; font-size:13px; color:#64748b; font-weight:600; }
+.restart-btn:hover { border-color:#3b82f6; color:#3b82f6; }
+
+/* Side panel */
+.side-panel { width:320px; margin-left:20px; }
+.panel-card { background:#fff; border-radius:12px; padding:16px; margin-bottom:12px; box-shadow:0 1px 4px rgba(0,0,0,.06); }
+.panel-card h3 { font-size:14px; margin-bottom:8px; color:#334155; }
+.panel-card .info { font-size:11px; color:#64748b; line-height:1.6; }
+.log-item { padding:4px 0; font-size:11px; color:#475569; border-bottom:1px solid #f1f5f9; }
+.log-item:last-child { border:none; }
+.log-time { color:#94a3b8; font-size:9px; }
+
+.wrapper { display:flex; align-items:flex-start; gap:20px; max-width:750px; }
+
+@keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+@keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+@keyframes shake { 0%,100%{transform:translateX(0)} 10%,30%,50%,70%,90%{transform:translateX(-4px)} 20%,40%,60%,80%{transform:translateX(4px)} }
+
+@media(max-width:768px) { .wrapper{flex-direction:column;align-items:center} .side-panel{width:100%;max-width:375px;margin:0} }
+</style>
+</head>
+<body>
+
+<div class="wrapper">
+  <div class="phone">
+    <div class="phone-notch"></div>
+    <div class="phone-screen">
+      <div class="chat-area" id="chatArea"></div>
+    </div>
+  </div>
+
+  <div class="side-panel">
+    <div class="panel-card">
+      <h3>📋 Hồ sơ người dùng test</h3>
+      <div class="info">
+        <b>Tên:</b> Trần Văn Hùng<br>
+        <b>Tuổi:</b> 68 | <b>Giới:</b> Nam<br>
+        <b>Bệnh nền:</b> Tiểu đường, Cao huyết áp, Tim mạch<br>
+        <b>Nhóm:</b> Cần theo dõi (monitoring)
+      </div>
+    </div>
+    <div class="panel-card">
+      <h3>🔍 Log hệ thống</h3>
+      <div id="sysLog" style="max-height:300px;overflow-y:auto">
+        <div class="log-item"><span class="log-time">--:--</span> Chờ bắt đầu check-in...</div>
+      </div>
+    </div>
+    <div class="panel-card">
+      <h3>📊 Kết quả scoring</h3>
+      <div id="scoringLog" class="info">Chưa có kết quả</div>
+    </div>
+    <div class="panel-card">
+      <h3>ℹ️ Hướng dẫn</h3>
+      <div class="info">
+        Đây là mô phỏng luồng check-in Asinu.<br>
+        • Chọn trạng thái sức khỏe<br>
+        • Chọn/nhập triệu chứng<br>
+        • Trả lời câu hỏi<br>
+        • Xem kết quả đánh giá<br><br>
+        <b>Tất cả chạy offline — 0 AI call.</b>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── Data ────────────────────────────────────────────────
+const SCRIPTS = {"headache":{"displayName":"đau đầu","clusterKey":"headache","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về đau đầu nhé 💙","metadata":{"red_flags_count":11,"associated_count":13,"source_complaint":"đau đầu"},"questions":[{"id":"q1","text":"Đau đầu ở vị trí nào?","type":"single_choice","cluster":"headache","options":["một bên đầu","cả hai bên","sau gáy","vùng trán","quanh mắt","toàn bộ đầu"]},{"id":"q2","text":"Kiểu đau như thế nào?","type":"single_choice","cluster":"headache","options":["nhức âm ỉ","đau nhói từng cơn","đau như bóp chặt","đau giật theo nhịp tim"]},{"id":"q3","text":"Bạn có thêm triệu chứng nào đi kèm?","type":"multi_choice","cluster":"headache","options":["buồn nôn","chóng mặt","sợ ánh sáng","mờ mắt","cứng cổ","sốt","không có"]},{"id":"q4","text":"Mức độ đau đầu hiện tại?","type":"single_choice","cluster":"headache","options":["nhẹ, vẫn sinh hoạt được","trung bình, khó tập trung","nặng, phải nằm nghỉ"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"eq","field":"q4","value":"nặng, phải nằm nghỉ"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q3","value":"cứng cổ, khó cúi đầu"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q3","value":"mờ mắt hoặc nhìn đôi"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q3","value":"tê hoặc yếu nửa người"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q1","value":"toàn bộ đầu"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q2","value":"đau giật theo nhịp tim"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị đau đầu nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Nghỉ ngơi, tránh nhìn màn hình lâu, uống đủ nước. Nếu hay đau đầu, nên ghi lại thời điểm và tần suất."},"high":{"summary":"{Honorific} bị đau đầu nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} nên đi khám bác sĩ hôm nay. Đau đầu dữ dội có thể cần kiểm tra huyết áp hoặc chụp chiếu. Trong khi chờ: nằm nghỉ, tránh gắng sức."},"medium":{"summary":"{Honorific} bị đau đầu mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Uống thuốc giảm đau (paracetamol) nếu có, nằm nghỉ nơi yên tĩnh, tránh ánh sáng mạnh. Nếu không đỡ sau 24h hoặc đau tăng → đi khám."}}}},"abdominal_pain":{"displayName":"đau bụng","clusterKey":"abdominal_pain","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về đau bụng nhé 💙","metadata":{"red_flags_count":10,"associated_count":13,"source_complaint":"đau bụng"},"questions":[{"id":"q1","text":"Đau bụng ở vị trí nào?","type":"single_choice","cluster":"abdominal_pain","options":["vùng thượng vị (trên rốn)","quanh rốn","bụng dưới bên phải","bụng dưới bên trái","bụng dưới giữa","lan khắp bụng"]},{"id":"q2","text":"Kiểu đau như thế nào?","type":"single_choice","cluster":"abdominal_pain","options":["đau âm ỉ liên tục","đau quặn từng cơn","đau rát, nóng bỏng","đau tức, căng chướng"]},{"id":"q3","text":"Đau có liên quan đến ăn uống không?","type":"single_choice","cluster":"abdominal_pain","options":["đau nhiều khi đói","đau sau khi ăn","không liên quan đến ăn uống","không rõ"]},{"id":"q4","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"abdominal_pain","options":["buồn nôn","tiêu chảy","táo bón","sốt","chướng bụng","tiểu buốt","không có"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q4","value":"đi ngoài ra máu"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q4","value":"nôn ra máu"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q4","value":"không trung tiện hoặc đi ngoài được"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q1","value":"lan khắp bụng"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q2","value":"đau tức, căng chướng"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị đau bụng nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Ăn nhẹ, tránh đồ cay nóng và dầu mỡ, uống nước ấm. Nếu đau sau ăn thường xuyên, nên ghi lại thực đơn."},"high":{"summary":"{Honorific} bị đau bụng nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} nên đi khám bác sĩ hôm nay. Đau bụng nặng có thể cần siêu âm. Trong khi chờ: không ăn, chỉ uống nước, nằm nghiêng trái."},"medium":{"summary":"{Honorific} bị đau bụng mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Ăn cháo loãng hoặc thức ăn mềm, tránh rượu bia và thuốc lá. Nếu đau kèm sốt hoặc nôn → đi khám sớm."}}}},"dizziness":{"displayName":"chóng mặt","clusterKey":"dizziness","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về chóng mặt nhé 💙","metadata":{"red_flags_count":10,"associated_count":13,"source_complaint":"chóng mặt"},"questions":[{"id":"q1","text":"Chóng mặt kiểu nào?","type":"single_choice","cluster":"dizziness","options":["quay cuồng (phòng quay)","lâng lâng, lơ lửng","tối sầm mắt","mất thăng bằng, loạng choạng"]},{"id":"q2","text":"Chóng mặt xuất hiện khi nào?","type":"multi_choice","cluster":"dizziness","options":["khi đứng dậy","khi xoay đầu","liên tục không ngừng","khi nằm nghiêng","bất kỳ lúc nào"]},{"id":"q3","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"dizziness","options":["buồn nôn","ù tai","hoa mắt","tim đập nhanh","vã mồ hôi","đau đầu","không có"]},{"id":"q4","text":"Bạn có đang dùng thuốc huyết áp hoặc thuốc mới không?","type":"single_choice","cluster":"dizziness","options":["có, thuốc huyết áp","có, thuốc mới kê gần đây","không dùng thuốc gì","không rõ"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q2","value":"ngất hoặc suýt ngất"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q2","value":"nhìn đôi"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q2","value":"yếu hoặc tê một bên cơ thể"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q1","value":"mất thăng bằng, loạng choạng"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q3","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị chóng mặt nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Ngồi hoặc nằm nghỉ, tránh đứng dậy nhanh, uống đủ nước. Nếu hay bị khi đứng lên → kiểm tra huyết áp."},"high":{"summary":"{Honorific} bị chóng mặt nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} nên đi khám bác sĩ hôm nay. Chóng mặt nặng cần đo huyết áp và kiểm tra tai trong. Trong khi chờ: NẰM YÊN, không đi lại một mình."},"medium":{"summary":"{Honorific} bị chóng mặt mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Nằm nghỉ, đầu hơi cao, uống nước từng ngụm nhỏ. Tránh lái xe và leo cầu thang. Nếu kèm ù tai hoặc buồn nôn → đi khám."}}}},"fatigue":{"displayName":"mệt mỏi","clusterKey":"fatigue","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về mệt mỏi nhé 💙","metadata":{"red_flags_count":10,"associated_count":13,"source_complaint":"mệt mỏi"},"questions":[{"id":"q1","text":"Mệt mỏi kéo dài bao lâu rồi?","type":"single_choice","cluster":"fatigue","options":["hôm nay mới thấy","vài ngày nay","1-2 tuần","trên 2 tuần"]},{"id":"q2","text":"Mệt mỏi ảnh hưởng thế nào?","type":"single_choice","cluster":"fatigue","options":["vẫn sinh hoạt bình thường","phải nghỉ ngơi nhiều hơn","khó làm việc nhà","hầu như nằm cả ngày"]},{"id":"q3","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"fatigue","options":["mất ngủ","ăn kém","sốt nhẹ","sụt cân","buồn bã","khó thở","không có"]},{"id":"q4","text":"Giấc ngủ của bạn gần đây thế nào?","type":"single_choice","cluster":"fatigue","options":["ngủ đủ 6-8 tiếng","ngủ ít hơn 5 tiếng","ngủ chập chờn","thức dậy nhiều lần trong đêm"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q3","value":"hạch to ở cổ, nách, bẹn"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q3","value":"ho kéo dài trên 2 tuần"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q3","value":"sốt về chiều, đổ mồ hôi đêm"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q1","value":"trên 2 tuần"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q2","value":"hầu như nằm cả ngày"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q4","value":"thức dậy nhiều lần trong đêm"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị mệt mỏi nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Nghỉ ngơi đầy đủ, ăn uống điều độ, uống đủ 2 lít nước/ngày. Nếu mệt kéo dài hơn 1 tuần, nên xét nghiệm máu."},"high":{"summary":"{Honorific} bị mệt mỏi nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} nên đi khám bác sĩ hôm nay. Mệt mỏi nặng cần xét nghiệm máu kiểm tra thiếu máu, đường huyết, tuyến giáp. Nằm nghỉ, không gắng sức."},"medium":{"summary":"{Honorific} bị mệt mỏi mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Nghỉ ngơi tuyệt đối hôm nay, ăn thức ăn giàu sắt và vitamin. Đo đường huyết nếu có máy. Nếu kèm sụt cân hoặc sốt → đi khám."}}}},"chest_pain":{"displayName":"đau ngực","clusterKey":"chest_pain","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về đau ngực nhé 💙","metadata":{"red_flags_count":10,"associated_count":12,"source_complaint":"đau ngực"},"questions":[{"id":"q1","text":"Đau ngực kiểu nào?","type":"single_choice","cluster":"chest_pain","options":["đau thắt, bóp chặt","đau nhói như kim đâm","đau tức nặng","đau rát, nóng bỏng","đau âm ỉ"]},{"id":"q2","text":"Đau ngực có lan ra chỗ khác không?","type":"multi_choice","cluster":"chest_pain","options":["lan ra cánh tay trái","lan lên hàm hoặc cổ","lan ra sau lưng","chỉ đau tại chỗ","không rõ"]},{"id":"q3","text":"Đau ngực xuất hiện khi nào?","type":"multi_choice","cluster":"chest_pain","options":["khi nghỉ ngơi","khi gắng sức","sau khi ăn","khi nằm","bất kỳ lúc nào"]},{"id":"q4","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"chest_pain","options":["khó thở","vã mồ hôi","tim đập nhanh","chóng mặt","buồn nôn","không có"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"eq","field":"q1","value":"đau tức nặng"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q2","value":"khó thở"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q2","value":"đau lan ra cánh tay trái hoặc hàm"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q2","value":"vã mồ hôi lạnh"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q3","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q4","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị đau ngực nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Nghỉ ngơi, hít thở sâu và chậm, tránh gắng sức. Nếu đau khi hít sâu có thể do cơ — chườm ấm nhẹ."},"high":{"summary":"{Honorific} bị đau ngực nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 GỌI CẤP CỨU 115 hoặc đến phòng cấp cứu NGAY. Trong khi chờ: ngồi nghỉ, nới lỏng quần áo, nhai 1 viên aspirin nếu có."},"medium":{"summary":"{Honorific} bị đau ngực mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Nằm nghỉ, nới lỏng quần áo, tránh hoạt động. Đo huyết áp nếu có máy. Nếu đau lan ra tay trái hoặc hàm → gọi cấp cứu."}}}},"dyspnea":{"displayName":"khó thở","clusterKey":"dyspnea","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về khó thở nhé 💙","metadata":{"red_flags_count":11,"associated_count":12,"source_complaint":"khó thở"},"questions":[{"id":"q1","text":"Khó thở xuất hiện khi nào?","type":"multi_choice","cluster":"dyspnea","options":["khi gắng sức (đi bộ, leo cầu thang)","khi nghỉ ngơi","khi nằm","về đêm","liên tục"]},{"id":"q2","text":"Mức độ khó thở?","type":"single_choice","cluster":"dyspnea","options":["hơi khó thở khi hoạt động","khó thở khi làm việc nhẹ","khó thở ngay khi nghỉ","không nói được hết câu"]},{"id":"q3","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"dyspnea","options":["ho","đau ngực","sốt","phù chân","thở khò khè","tim đập nhanh","không có"]},{"id":"q4","text":"Bạn có tiền sử bệnh phổi hoặc tim không?","type":"multi_choice","cluster":"dyspnea","options":["hen suyễn","COPD (phổi tắc nghẽn)","suy tim","không có bệnh nền","không rõ"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q1","value":"đau ngực hoặc tức ngực"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q1","value":"ho ra đờm có máu"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q1","value":"tím môi hoặc đầu ngón tay"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q3","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q4","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị khó thở nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Ngồi thẳng lưng, hít thở chậm và sâu. Mở cửa sổ cho thoáng. Tránh nằm ngay khi khó thở."},"high":{"summary":"{Honorific} bị khó thở nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} cần đi khám NGAY. Khó thở nặng có thể nguy hiểm. Trong khi chờ: ngồi thẳng, không nằm, nới lỏng quần áo."},"medium":{"summary":"{Honorific} bị khó thở mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Ngồi nghỉ, không nằm. Tránh gắng sức. Nếu có bình xịt hen → dùng ngay. Nếu không đỡ sau 30 phút → đi khám."}}}},"shoulder_pain":{"displayName":"đau vai","clusterKey":"shoulder_pain","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về đau vai nhé 💙","metadata":{"red_flags_count":10,"associated_count":10,"source_complaint":"đau vai"},"questions":[{"id":"q1","text":"Đau ở vị trí nào?","type":"multi_choice","cluster":"shoulder_pain","options":["vai","cổ","lưng trên","thắt lưng","khớp gối","khớp tay","hông","nhiều khớp"]},{"id":"q2","text":"Đau tăng khi nào?","type":"multi_choice","cluster":"shoulder_pain","options":["khi vận động","khi nghỉ ngơi","buổi sáng khi mới dậy","về đêm","khi thay đổi thời tiết"]},{"id":"q3","text":"Khớp có sưng hoặc đỏ không?","type":"multi_choice","cluster":"shoulder_pain","options":["có sưng","có đỏ nóng","cứng khớp buổi sáng","không sưng đỏ"]},{"id":"q4","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"shoulder_pain","options":["tê tay chân","yếu cơ","sốt","đau lan xuống chân","không có"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q1","value":"sốt kèm đau khớp"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q1","value":"không kiểm soát tiểu tiện"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q2","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q3","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q4","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị đau vai nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Nghỉ ngơi, uống đủ nước. Theo dõi trong 24h."},"high":{"summary":"{Honorific} bị đau vai nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} nên đi khám bác sĩ hôm nay. Trong khi chờ, nghỉ ngơi và uống nhiều nước."},"medium":{"summary":"{Honorific} bị đau vai mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Nghỉ ngơi, uống thuốc nếu có. Nếu không đỡ sau 24h nên đi khám."}}}},"tê_tay_chân":{"displayName":"tê tay chân","clusterKey":"tê_tay_chân","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về tê tay chân nhé 💙","metadata":{"red_flags_count":9,"associated_count":12,"source_complaint":"tê tay chân"},"questions":[{"id":"q1","text":"Tê ở vị trí nào?","type":"multi_choice","cluster":"tê_tay_chân","options":["bàn tay, ngón tay","cánh tay","bàn chân, ngón chân","cả chân","một bên cơ thể","cả hai bên"]},{"id":"q2","text":"Tê xuất hiện kiểu nào?","type":"single_choice","cluster":"tê_tay_chân","options":["tê liên tục","tê từng lúc rồi hết","tê tăng khi nghỉ ngơi","tê khi vận động"]},{"id":"q3","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"tê_tay_chân","options":["yếu cơ","đau nhức","chuột rút","run tay","khó đi lại","không có"]},{"id":"q4","text":"Bạn có bệnh nền nào sau đây?","type":"multi_choice","cluster":"tê_tay_chân","options":["tiểu đường","huyết áp cao","bệnh tuyến giáp","không có bệnh nền","không rõ"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q1","value":"tê một bên cơ thể"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q1","value":"nói ngọng, khó nói"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q1","value":"mờ mắt đột ngột"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q2","value":"tê khi vận động"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q3","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q4","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị tê tay chân nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Nghỉ ngơi, uống đủ nước. Theo dõi trong 24h."},"high":{"summary":"{Honorific} bị tê tay chân nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} nên đi khám bác sĩ hôm nay. Trong khi chờ, nghỉ ngơi và uống nhiều nước."},"medium":{"summary":"{Honorific} bị tê tay chân mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Nghỉ ngơi, uống thuốc nếu có. Nếu không đỡ sau 24h nên đi khám."}}}},"nausea":{"displayName":"buồn nôn","clusterKey":"nausea","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về buồn nôn nhé 💙","metadata":{"red_flags_count":10,"associated_count":13,"source_complaint":"buồn nôn"},"questions":[{"id":"q1","text":"Bạn đã nôn bao nhiêu lần?","type":"single_choice","cluster":"nausea","options":["chỉ buồn nôn, chưa nôn","1-2 lần","3-5 lần","trên 5 lần"]},{"id":"q2","text":"Chất nôn ra như thế nào?","type":"single_choice","cluster":"nausea","options":["thức ăn","nước trong hoặc vàng","có lẫn máu hoặc nâu đen","không rõ"]},{"id":"q3","text":"Bạn có uống được nước không?","type":"single_choice","cluster":"nausea","options":["uống bình thường","uống ít, hay nôn lại","không uống được gì"]},{"id":"q4","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"nausea","options":["đau bụng","tiêu chảy","sốt","đau đầu","chóng mặt","không có"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q4","value":"nôn ra máu"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q4","value":"nôn ra chất nâu đen"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q4","value":"đau ngực"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q1","value":"trên 5 lần"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị buồn nôn nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Ăn nhẹ (bánh mì, cháo), uống nước gừng ấm, tránh mùi nặng. Ăn ít nhưng nhiều bữa."},"high":{"summary":"{Honorific} bị buồn nôn nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} nên đi khám bác sĩ. Buồn nôn/nôn liên tục có thể gây mất nước nguy hiểm. Uống oresol, không ăn đồ cứng."},"medium":{"summary":"{Honorific} bị buồn nôn mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Không ăn 1-2h, uống nước từng ngụm nhỏ. Nếu nôn nhiều → uống oresol bù nước. Nếu kèm đau bụng dữ → đi khám."}}}},"fever":{"displayName":"sốt","clusterKey":"fever","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về sốt nhé 💙","metadata":{"red_flags_count":12,"associated_count":15,"source_complaint":"sốt"},"questions":[{"id":"q1","text":"Nhiệt độ đo được bao nhiêu?","type":"single_choice","cluster":"fever","options":["37.5-38°C (sốt nhẹ)","38-39°C (sốt vừa)","39-40°C (sốt cao)","trên 40°C","chưa đo được"]},{"id":"q2","text":"Sốt từ khi nào?","type":"single_choice","cluster":"fever","options":["hôm nay","từ hôm qua","2-3 ngày nay","trên 3 ngày","trên 1 tuần"]},{"id":"q3","text":"Sốt kiểu nào?","type":"single_choice","cluster":"fever","options":["sốt liên tục","sốt rồi hạ rồi sốt lại","sốt về chiều/tối","sốt cao đột ngột"]},{"id":"q4","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"fever","options":["ho","đau họng","sổ mũi","đau đầu","phát ban","đau sau mắt","tiểu buốt","không có"]},{"id":"q5","text":"Bạn đã uống thuốc hạ sốt chưa?","type":"single_choice","cluster":"fever","options":["đã uống paracetamol","đã uống thuốc khác","chưa uống gì","uống rồi nhưng không hạ"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q4","value":"phát ban, nổi chấm đỏ"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q4","value":"xuất huyết (chảy máu nướu, bầm tím)"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q4","value":"cứng cổ"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q1","value":"chưa đo được"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q2","value":"trên 1 tuần"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q3","value":"sốt cao đột ngột"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị sốt nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Uống nhiều nước, mặc đồ thoáng, lau mát. Uống paracetamol nếu sốt > 38.5°C. Theo dõi nhiệt độ mỗi 4h."},"high":{"summary":"{Honorific} bị sốt nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} cần đi khám NGAY. Sốt cao kéo dài có thể là dấu hiệu nhiễm trùng nặng. Uống hạ sốt, lau mát, uống nhiều nước trong khi chờ."},"medium":{"summary":"{Honorific} bị sốt mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Uống paracetamol đúng liều, uống nhiều nước, lau mát cổ và nách. Nếu sốt > 39°C hoặc kéo dài > 3 ngày → đi khám."}}}},"cough":{"displayName":"ho","clusterKey":"cough","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về ho nhé 💙","metadata":{"red_flags_count":10,"associated_count":12,"source_complaint":"ho"},"questions":[{"id":"q1","text":"Ho kiểu nào?","type":"single_choice","cluster":"cough","options":["ho khan, không đờm","ho có đờm trắng","ho đờm xanh/vàng","ho có lẫn máu"]},{"id":"q2","text":"Ho kéo dài bao lâu?","type":"single_choice","cluster":"cough","options":["1-3 ngày","4-7 ngày","1-2 tuần","trên 2 tuần","trên 1 tháng"]},{"id":"q3","text":"Ho nặng hơn khi nào?","type":"multi_choice","cluster":"cough","options":["về đêm","buổi sáng","khi nằm","khi gắng sức","sau khi ăn","suốt ngày"]},{"id":"q4","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"cough","options":["sốt","đau họng","khó thở","sổ mũi","đau ngực","sụt cân","không có"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q3","value":"khó thở"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q3","value":"ho ra máu"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q3","value":"sụt cân"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q1","value":"ho có lẫn máu"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q2","value":"trên 1 tháng"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q4","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị ho nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Uống nước ấm pha mật ong, súc miệng nước muối, tránh khói bụi. Nếu ho khan kéo dài > 1 tuần → đi khám."},"high":{"summary":"{Honorific} bị ho nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} nên đi khám bác sĩ hôm nay. Ho nặng kèm khó thở hoặc ho ra máu cần chụp X-quang phổi ngay."},"medium":{"summary":"{Honorific} bị ho mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Uống thuốc ho nếu có, uống nước ấm thường xuyên, tránh lạnh. Nếu ho ra đờm vàng/xanh hoặc kèm sốt → đi khám."}}}},"insomnia":{"displayName":"mất ngủ","clusterKey":"insomnia","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về mất ngủ nhé 💙","metadata":{"red_flags_count":7,"associated_count":12,"source_complaint":"mất ngủ"},"questions":[{"id":"q1","text":"Mất ngủ kiểu nào?","type":"multi_choice","cluster":"insomnia","options":["khó đi vào giấc ngủ","ngủ được nhưng hay thức dậy giữa đêm","thức dậy quá sớm","ngủ không sâu"]},{"id":"q2","text":"Mất ngủ kéo dài bao lâu?","type":"single_choice","cluster":"insomnia","options":["vài hôm nay","1-2 tuần","trên 1 tháng","đã lâu rồi"]},{"id":"q3","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"insomnia","options":["lo lắng nhiều","buồn bã","mệt mỏi ban ngày","đau đầu","đau nhức","tiểu đêm","không có"]},{"id":"q4","text":"Bạn đã thử gì để ngủ tốt hơn?","type":"multi_choice","cluster":"insomnia","options":["uống thuốc ngủ","uống trà thảo mộc","tập thể dục","hạn chế cà phê","chưa thử gì"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q1","value":"khó thở khi nằm"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q1","value":"muốn tự làm hại bản thân"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q2","value":"đã lâu rồi"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q3","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"neq","field":"q4","value":"không có"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị mất ngủ nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Tránh caffeine sau 2h chiều, tắt màn hình 1h trước ngủ, phòng tối và mát. Thử thư giãn bằng hít thở sâu."},"high":{"summary":"{Honorific} bị mất ngủ nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} nên đi khám bác sĩ. Mất ngủ kéo dài ảnh hưởng sức khỏe nghiêm trọng, có thể cần thuốc hỗ trợ."},"medium":{"summary":"{Honorific} bị mất ngủ mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Giữ giờ ngủ cố định, tránh ngủ trưa quá 30 phút. Tắm nước ấm trước ngủ. Nếu mất ngủ > 2 tuần liên tục → đi khám."}}}},"đau_họng":{"displayName":"đau họng","clusterKey":"đau_họng","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về đau họng nhé 💙","metadata":{"red_flags_count":9,"associated_count":12,"source_complaint":"đau họng"},"questions":[{"id":"q1","text":"Mức độ đau họng?","type":"single_choice","cluster":"đau_họng","options":["ngứa rát nhẹ","đau khi nuốt","đau nhiều, khó ăn uống","không nuốt được"]},{"id":"q2","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"đau_họng","options":["sốt","ho","sổ mũi","sưng hạch cổ","khàn tiếng","khó thở","không có"]},{"id":"q3","text":"Đau họng kéo dài bao lâu?","type":"single_choice","cluster":"đau_họng","options":["1-2 ngày","3-5 ngày","1-2 tuần","trên 2 tuần"]},{"id":"q4","text":"Bạn đã đo nhiệt độ chưa?","type":"single_choice","cluster":"đau_họng","options":["không sốt","sốt nhẹ (37.5-38°C)","sốt vừa (38-39°C)","sốt cao (trên 39°C)","chưa đo"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q2","value":"không nuốt được nước bọt"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q2","value":"khó thở"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q2","value":"khó há miệng"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q3","value":"trên 2 tuần"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q4","value":"chưa đo"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị đau họng nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Nghỉ ngơi, uống đủ nước. Theo dõi trong 24h."},"high":{"summary":"{Honorific} bị đau họng nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} nên đi khám bác sĩ hôm nay. Trong khi chờ, nghỉ ngơi và uống nhiều nước."},"medium":{"summary":"{Honorific} bị đau họng mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Nghỉ ngơi, uống thuốc nếu có. Nếu không đỡ sau 24h nên đi khám."}}}},"diarrhea":{"displayName":"tiêu chảy","clusterKey":"diarrhea","scriptData":{"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} về tiêu chảy nhé 💙","metadata":{"red_flags_count":10,"associated_count":12,"source_complaint":"tiêu chảy"},"questions":[{"id":"q1","text":"Đi ngoài bao nhiêu lần trong ngày?","type":"single_choice","cluster":"diarrhea","options":["2-3 lần","4-5 lần","6-10 lần","trên 10 lần"]},{"id":"q2","text":"Phân như thế nào?","type":"single_choice","cluster":"diarrhea","options":["lỏng nước","sệt, không thành khuôn","có nhầy","có máu hoặc nâu đen","không rõ"]},{"id":"q3","text":"Bạn có uống đủ nước không?","type":"single_choice","cluster":"diarrhea","options":["uống bình thường","uống ít vì buồn nôn","không uống được gì","đang uống oresol"]},{"id":"q4","text":"Bạn có thêm triệu chứng nào?","type":"multi_choice","cluster":"diarrhea","options":["đau bụng","sốt","buồn nôn","chóng mặt","tiểu ít","mệt lả","không có"]},{"id":"q5","text":"Bạn có ăn gì lạ gần đây không?","type":"single_choice","cluster":"diarrhea","options":["có, ăn ngoài hàng quán","có, thức ăn để qua đêm","không, ăn uống bình thường","không rõ"]}],"scoring_rules":[{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q4","value":"phân có máu hoặc nhầy máu"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q4","value":"phân đen"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"high","conditions":[{"op":"contains","field":"q4","value":"ngất xỉu"}],"needs_doctor":true,"follow_up_hours":1,"needs_family_alert":true},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q1","value":"trên 10 lần"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"medium","conditions":[{"op":"eq","field":"q3","value":"đang uống oresol"}],"needs_doctor":false,"follow_up_hours":3,"needs_family_alert":false},{"combine":"and","severity":"low","conditions":[],"needs_doctor":false,"follow_up_hours":6,"needs_family_alert":false}],"fallback_questions":[{"id":"fb1","max":10,"min":0,"text":"Đau mức nào?","type":"slider"},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"condition_modifiers":[{"to":"high","action":"bump_severity","user_condition":"tim mạch","extra_conditions":[]}],"conclusion_templates":{"low":{"summary":"{Honorific} bị tiêu chảy nhẹ, không đáng lo.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙","recommendation":"Uống nhiều nước và oresol bù điện giải, ăn cháo trắng, tránh sữa và đồ dầu mỡ. Rửa tay thường xuyên."},"high":{"summary":"{Honorific} bị tiêu chảy nặng, cần được bác sĩ đánh giá.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.","recommendation":"🏥 {Honorific} cần đi khám NGAY. Tiêu chảy nặng gây mất nước nguy hiểm, đặc biệt với người có bệnh nền. Uống oresol liên tục."},"medium":{"summary":"{Honorific} bị tiêu chảy mức trung bình, cần theo dõi thêm.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.","recommendation":"Uống oresol đều đặn, ăn cháo muối. Nếu tiêu chảy > 5 lần/ngày hoặc kèm sốt cao → đi khám ngay."}}}}};
+const FALLBACK = {"greeting":"{CallName} ơi, {selfRef} hỏi thăm {honorific} thêm nhé 💙","questions":[{"id":"fb1","text":"Đau mức nào?","type":"slider","min":0,"max":10},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}],"scoring_rules":[{"conditions":[{"field":"fb1","op":"gte","value":7}],"combine":"and","severity":"high","follow_up_hours":1,"needs_doctor":true,"needs_family_alert":true},{"conditions":[{"field":"fb3","op":"eq","value":"Nặng hơn"}],"combine":"and","severity":"high","follow_up_hours":1,"needs_doctor":true,"needs_family_alert":false},{"conditions":[{"field":"fb1","op":"gte","value":4}],"combine":"and","severity":"medium","follow_up_hours":3,"needs_doctor":false,"needs_family_alert":false},{"conditions":[{"field":"fb1","op":"lt","value":4}],"combine":"and","severity":"low","follow_up_hours":6,"needs_doctor":false,"needs_family_alert":false}],"condition_modifiers":[{"user_condition":"tiểu đường","extra_conditions":[{"field":"fb1","op":"gte","value":5}],"action":"bump_severity","to":"high"}],"conclusion_templates":{"low":{"summary":"{Honorific} có triệu chứng nhẹ.","recommendation":"Nghỉ ngơi, uống đủ nước. Theo dõi trong 24h.","close_message":"{selfRef} sẽ hỏi lại {honorific} tối nay nhé 💙"},"medium":{"summary":"{Honorific} có triệu chứng mức trung bình, cần theo dõi.","recommendation":"Nghỉ ngơi, uống thuốc nếu có. Nếu không đỡ sau 24h nên đi khám.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé."},"high":{"summary":"{Honorific} có triệu chứng nặng, cần được bác sĩ đánh giá.","recommendation":"🏥 {Honorific} nên đi khám bác sĩ hôm nay.","close_message":"{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé."}},"followup_questions":[{"id":"fu1","text":"So với lúc trước, {honorific} thấy thế nào?","type":"single_choice","options":["Đỡ hơn","Vẫn vậy","Nặng hơn"]},{"id":"fu2","text":"Có triệu chứng mới không?","type":"single_choice","options":["Không","Có"]}],"fallback_questions":[{"id":"fb1","text":"Đau mức nào?","type":"slider","min":0,"max":10},{"id":"fb2","text":"Từ khi nào?","type":"single_choice","options":["Vừa mới","Vài giờ trước","Từ sáng","Từ hôm qua","Vài ngày"]},{"id":"fb3","text":"Nặng hơn không?","type":"single_choice","options":["Đang đỡ","Vẫn vậy","Nặng hơn"]}]};
+const EMERGENCIES = [{"words":["đau ngực","khó thở"],"type":"Nhồi máu cơ tim","action":"🚨 GỌI 115 NGAY"},{"words":["yếu nửa người"],"type":"Đột quỵ","action":"🚨 GỌI 115 NGAY"},{"words":["nói ngọng"],"type":"Đột quỵ","action":"🚨 GỌI 115 NGAY"},{"words":["co giật"],"type":"Co giật","action":"🚨 GỌI 115"},{"words":["nôn ra máu"],"type":"Xuất huyết","action":"🚨 ĐẾN BỆNH VIỆN"},{"words":["sốt cao","cứng cổ"],"type":"Viêm màng não","action":"🚨 ĐẾN BỆNH VIỆN"}];
+const COMBOS = [{"id":"stroke","name":"Nghi đột quỵ","groups":[["đau đầu","nhức đầu"],["mờ mắt","mắt mờ"]],"severity":"critical"},{"id":"appendicitis","name":"Nghi viêm ruột thừa","groups":[["đau bụng"],["sốt"]],"severity":"high"},{"id":"hypertension","name":"Cơn tăng huyết áp","groups":[["đau đầu"],["chóng mặt"],["buồn nôn"]],"severity":"high"},{"id":"respiratory","name":"Nhiễm trùng hô hấp","groups":[["ho"],["sốt"],["đau họng"]],"severity":"medium"},{"id":"dehydration","name":"Mất nước nặng","groups":[["tiêu chảy"],["nôn","buồn nôn"],["sốt"]],"severity":"high"}];
+
+const CLUSTER_NAMES = Object.entries(SCRIPTS).map(([k,v]) => ({ key: k, name: v.displayName }));
+const sevVN = { low:'Nhẹ', medium:'Trung bình', high:'Nặng', critical:'Nguy kịch' };
+const sevEmoji = { low:'🟢', medium:'🟡', high:'🔴', critical:'🚨' };
+
+const chat = document.getElementById('chatArea');
+const sysLog = document.getElementById('sysLog');
+const scoringLog = document.getElementById('scoringLog');
+
+let currentScript = null;
+let currentQuestionIdx = 0;
+let answers = [];
+let sessionCluster = null;
+
+// ─── Helpers ─────────────────────────────────────────────
+function log(msg) {
+  const t = new Date().toLocaleTimeString('vi-VN',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  sysLog.innerHTML += '<div class="log-item"><span class="log-time">'+t+'</span> '+msg+'</div>';
+  sysLog.scrollTop = sysLog.scrollHeight;
+}
+
+function addBot(html, delay) {
+  return new Promise(r => {
+    const typing = document.createElement('div');
+    typing.className = 'msg msg-bot';
+    typing.innerHTML = '<div class="msg-label">🤖 Asinu</div><div class="typing"><span></span><span></span><span></span></div>';
+    chat.appendChild(typing);
+    chat.scrollTop = chat.scrollHeight;
+    setTimeout(() => {
+      typing.innerHTML = '<div class="msg-label">🤖 Asinu</div><div class="msg-bubble">'+html+'</div>';
+      chat.scrollTop = chat.scrollHeight;
+      r();
+    }, delay || 500);
+  });
+}
+
+function addUser(text) {
+  const el = document.createElement('div');
+  el.className = 'msg msg-user';
+  el.innerHTML = '<div class="msg-label">👤 Chú Hùng</div><div class="msg-bubble">'+text+'</div>';
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function addOptions(opts, callback, extraClass) {
+  const wrap = document.createElement('div');
+  wrap.className = 'options';
+  opts.forEach(o => {
+    const btn = document.createElement('button');
+    btn.className = 'opt-btn' + (extraClass ? ' '+extraClass : '');
+    btn.textContent = typeof o === 'object' ? o.label : o;
+    btn.onclick = () => {
+      wrap.querySelectorAll('.opt-btn').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      wrap.querySelectorAll('.opt-btn').forEach(b => { b.disabled = true; b.style.opacity='.6'; });
+      btn.style.opacity = '1';
+      const val = typeof o === 'object' ? o.value : o;
+      addUser(typeof o === 'object' ? o.label : o);
+      setTimeout(() => callback(val), 300);
+    };
+    wrap.appendChild(btn);
+  });
+  chat.appendChild(wrap);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function addSlider(min, max, callback) {
+  const wrap = document.createElement('div');
+  wrap.className = 'slider-wrap';
+  wrap.innerHTML = '<div class="slider-label"><span>'+min+' (không đau)</span><span>(rất đau) '+max+'</span></div>'
+    + '<input type="range" class="slider-input" min="'+min+'" max="'+max+'" value="5">'
+    + '<div class="slider-value">5</div>'
+    + '<button class="slider-submit">Xác nhận</button>';
+  const input = wrap.querySelector('input');
+  const display = wrap.querySelector('.slider-value');
+  input.oninput = () => { display.textContent = input.value; };
+  wrap.querySelector('button').onclick = () => {
+    const val = parseInt(input.value);
+    input.disabled = true;
+    wrap.querySelector('button').disabled = true;
+    wrap.querySelector('button').style.opacity = '.5';
+    addUser(val + '/'+max);
+    setTimeout(() => callback(val), 300);
+  };
+  chat.appendChild(wrap);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function addFreeText(callback) {
+  const wrap = document.createElement('div');
+  wrap.className = 'free-input';
+  wrap.innerHTML = '<input type="text" placeholder="Nhập triệu chứng..."><button>Gửi</button>';
+  const input = wrap.querySelector('input');
+  const submit = () => {
+    const val = input.value.trim();
+    if (!val) return;
+    input.disabled = true;
+    wrap.querySelector('button').disabled = true;
+    addUser(val);
+    setTimeout(() => callback(val), 300);
+  };
+  wrap.querySelector('button').onclick = submit;
+  input.onkeydown = e => { if(e.key==='Enter') submit(); };
+  chat.appendChild(wrap);
+  input.focus();
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function checkEmergency(text) {
+  const lower = text.toLowerCase();
+  if (lower.includes('không') || lower.includes('hết') || lower.includes('chưa')) return null;
+  for (const em of EMERGENCIES) {
+    if (em.words.every(w => lower.includes(w))) return em;
+  }
+  return null;
+}
+
+function checkCombo(symptoms) {
+  const found = [];
+  for (const combo of COMBOS) {
+    const allMatch = combo.groups.every(g => g.some(w => symptoms.some(s => s.includes(w))));
+    if (allMatch) found.push(combo);
+  }
+  return found;
+}
+
+function evaluate(scriptData, answers) {
+  const map = {};
+  answers.forEach(a => { map[a.qid] = a.value; });
+  const rules = scriptData.scoring_rules || [];
+
+  for (const rule of rules) {
+    if (!rule.conditions || rule.conditions.length === 0) continue;
+    const match = rule.conditions.every(c => {
+      const v = map[c.field];
+      if (v === undefined) return false;
+      switch(c.op) {
+        case 'gte': return Number(v) >= Number(c.value);
+        case 'gt': return Number(v) > Number(c.value);
+        case 'lt': return Number(v) < Number(c.value);
+        case 'eq': return v === c.value;
+        case 'contains': return String(v).includes(c.value);
+        default: return false;
+      }
+    });
+    if (match) return { severity: rule.severity, followUpHours: rule.follow_up_hours, needsDoctor: rule.needs_doctor, needsFamilyAlert: rule.needs_family_alert };
+  }
+
+  // Default + elderly modifier
+  let sev = 'low', fuh = 6, nd = false, nfa = false;
+  if (answers.length > 0) { sev = 'medium'; fuh = 3; } // elderly default safety
+  return { severity: sev, followUpHours: fuh, needsDoctor: nd, needsFamilyAlert: nfa };
+}
+
+// ─── Flow ────────────────────────────────────────────────
+async function startCheckin() {
+  chat.innerHTML = '';
+  answers = [];
+  currentQuestionIdx = 0;
+  currentScript = null;
+  sessionCluster = null;
+  scoringLog.innerHTML = 'Chưa có kết quả';
+  sysLog.innerHTML = '';
+  log('Bắt đầu phiên check-in mới');
+
+  await addBot('Chào chú Hùng! Hôm nay chú thế nào? 💙', 600);
+  log('Hiển thị 3 lựa chọn trạng thái');
+
+  addOptions([
+    { label: '😊 Tôi ổn', value: 'fine' },
+    { label: '😐 Hơi mệt', value: 'tired' },
+    { label: '😫 Rất mệt', value: 'very_tired' },
+  ], handleStatus, 'status-fine');
+}
+
+async function handleStatus(status) {
+  log('User chọn: ' + status);
+
+  if (status === 'fine') {
+    await addBot('Tốt quá! Cháu hẹn chú tối nay nhé 💙');
+    log('Status=fine → không chạy script, hẹn 21:00');
+    showResult({ severity:'low', followUpHours:6, needsDoctor:false, summary:'Chú khỏe, không cần theo dõi đặc biệt.', recommendation:'Nghỉ ngơi, uống đủ nước. Hẹn tối nay.' });
+    addRestartButton();
+    return;
+  }
+
+  await addBot('Chú đang gặp vấn đề gì? Chọn hoặc nhập triệu chứng:', 500);
+  log('Hiển thị danh sách clusters + ô nhập tự do');
+
+  // Show cluster options + free text
+  const clusterOpts = CLUSTER_NAMES.slice(0, 8).map(c => c.name);
+  addOptions(clusterOpts, val => handleSymptomSelect(val, status));
+
+  await new Promise(r => setTimeout(r, 100));
+  const orEl = document.createElement('div');
+  orEl.style.cssText = 'text-align:center;font-size:11px;color:#94a3b8;margin:4px 0';
+  orEl.textContent = '— hoặc nhập triệu chứng —';
+  chat.appendChild(orEl);
+  addFreeText(val => handleSymptomInput(val, status));
+}
+
+async function handleSymptomSelect(symptom, status) {
+  log('User chọn cluster: ' + symptom);
+  const key = Object.keys(SCRIPTS).find(k => SCRIPTS[k].displayName === symptom);
+  if (key && SCRIPTS[key]) {
+    sessionCluster = key;
+    currentScript = SCRIPTS[key].scriptData;
+    log('Loaded script: ' + key + ' (' + currentScript.questions.length + ' câu hỏi)');
+    await runScript();
+  } else {
+    await runFallback(symptom);
+  }
+}
+
+async function handleSymptomInput(input, status) {
+  log('User nhập tự do: "' + input + '"');
+
+  // Check emergency
+  const em = checkEmergency(input);
+  if (em) {
+    log('🚨 EMERGENCY DETECTED: ' + em.type);
+    showEmergency(em);
+    return;
+  }
+
+  // Check combo
+  const parts = input.split(/[,+]|và|kèm|với/).map(s => s.trim()).filter(Boolean);
+  if (parts.length > 1) {
+    const combos = checkCombo(parts);
+    if (combos.length > 0) {
+      log('⚠️ COMBO DETECTED: ' + combos.map(c=>c.name).join(', '));
+      await addBot('⚠️ <b>Cảnh báo:</b> Tổ hợp triệu chứng "' + parts.join(' + ') + '" có thể nguy hiểm: <b>' + combos[0].name + '</b>');
+    }
+  }
+
+  // Try match cluster
+  const lower = input.toLowerCase();
+  const matched = CLUSTER_NAMES.find(c => lower.includes(c.name) || c.name.includes(lower));
+  if (matched && SCRIPTS[matched.key]) {
+    log('Matched cluster: ' + matched.key);
+    sessionCluster = matched.key;
+    currentScript = SCRIPTS[matched.key].scriptData;
+    await runScript();
+  } else {
+    log('Không match cluster → FALLBACK');
+    await runFallback(input);
+  }
+}
+
+async function runFallback(symptom) {
+  sessionCluster = 'fallback';
+  currentScript = FALLBACK;
+  log('Chạy fallback script (3 câu cơ bản)');
+  await addBot('Cháu chưa có kịch bản cho "' + symptom + '", nhưng cháu sẽ hỏi thêm để đánh giá nhé.');
+  await runScript();
+}
+
+async function runScript() {
+  const questions = currentScript.questions || [];
+  if (currentQuestionIdx >= questions.length) {
+    finishScript();
+    return;
+  }
+
+  const q = questions[currentQuestionIdx];
+  log('Câu ' + (currentQuestionIdx+1) + '/' + questions.length + ': ' + q.text);
+
+  await addBot(q.text, 400);
+
+  if (q.type === 'slider') {
+    addSlider(q.min || 0, q.max || 10, val => {
+      answers.push({ qid: q.id, value: val, text: q.text });
+      log('→ Trả lời: ' + val + '/' + (q.max||10));
+
+      // Check emergency in answer
+      const em = checkEmergency(String(val));
+      if (em) { showEmergency(em); return; }
+
+      currentQuestionIdx++;
+      setTimeout(() => runScript(), 300);
+    });
+  } else if (q.type === 'single_choice' || q.type === 'multi_choice') {
+    addOptions(q.options || [], val => {
+      answers.push({ qid: q.id, value: val, text: q.text });
+      log('→ Trả lời: ' + val);
+
+      const em = checkEmergency(val);
+      if (em) { showEmergency(em); return; }
+
+      currentQuestionIdx++;
+      setTimeout(() => runScript(), 300);
+    });
+  } else {
+    addFreeText(val => {
+      answers.push({ qid: q.id, value: val, text: q.text });
+      log('→ Trả lời: ' + val);
+
+      const em = checkEmergency(val);
+      if (em) { showEmergency(em); return; }
+
+      currentQuestionIdx++;
+      setTimeout(() => runScript(), 300);
+    });
+  }
+}
+
+async function finishScript() {
+  log('Script hoàn thành. Đang chấm điểm...');
+  const result = evaluate(currentScript, answers);
+
+  // Get conclusion template
+  const templates = currentScript.conclusion_templates || {};
+  const tpl = templates[result.severity] || {};
+
+  result.summary = tpl.summary || 'Đã thu thập đủ thông tin.';
+  result.recommendation = tpl.recommendation || 'Nghỉ ngơi, theo dõi thêm.';
+  result.closeMessage = tpl.close_message || 'Cháu sẽ hỏi lại chú sau.';
+
+  // Personalize
+  result.summary = result.summary.replace(/\{Honorific\}/g,'Chú').replace(/\{honorific\}/g,'chú').replace(/\{selfRef\}/g,'cháu').replace(/\{callName\}/g,'chú Hùng').replace(/\{CallName\}/g,'Chú Hùng');
+  result.recommendation = result.recommendation.replace(/\{Honorific\}/g,'Chú').replace(/\{honorific\}/g,'chú').replace(/\{selfRef\}/g,'cháu');
+  result.closeMessage = result.closeMessage.replace(/\{Honorific\}/g,'Chú').replace(/\{honorific\}/g,'chú').replace(/\{selfRef\}/g,'cháu');
+
+  log('Kết quả: ' + sevVN[result.severity] + ' | Hẹn ' + result.followUpHours + 'h');
+
+  await addBot(result.summary, 500);
+  await addBot(result.recommendation, 400);
+  await addBot(result.closeMessage, 300);
+
+  showResult(result);
+
+  // Follow-up prompt
+  await new Promise(r => setTimeout(r, 800));
+  await addBot('--- Giả lập ' + result.followUpHours + 'h sau ---<br>So với lúc trước, chú thấy thế nào?', 600);
+  log('Follow-up sau ' + result.followUpHours + 'h');
+  addOptions(['Đỡ hơn', 'Vẫn vậy', 'Nặng hơn'], async (val) => {
+    log('Follow-up: ' + val);
+    const fuSev = val === 'Đỡ hơn' ? 'low' : val === 'Nặng hơn' ? 'high' : result.severity;
+    const fuAction = val === 'Đỡ hơn' ? 'Theo dõi → hẹn tối' : val === 'Nặng hơn' ? '🚨 Cảnh báo + khuyên bác sĩ' : 'Tiếp tục follow-up';
+    await addBot(sevEmoji[fuSev] + ' <b>' + sevVN[fuSev] + '</b> → ' + fuAction);
+    log('Follow-up result: ' + fuSev + ' → ' + fuAction);
+    showResult({ severity: fuSev, followUpHours: fuSev==='high'?1:fuSev==='low'?6:3, needsDoctor: fuSev==='high', summary: 'Follow-up: ' + val, recommendation: fuAction });
+    addRestartButton();
+  });
+}
+
+function showEmergency(em) {
+  const el = document.createElement('div');
+  el.className = 'emergency-card';
+  el.innerHTML = '<h3>🚨 CẤP CỨU: ' + em.type + '</h3><div>' + em.action + '</div><div style="margin-top:8px;font-size:12px">Đã thông báo cho người thân</div>';
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+  log('🚨 EMERGENCY: ' + em.type + ' — ' + em.action);
+  scoringLog.innerHTML = '<div style="color:#dc2626;font-weight:700">🚨 CẤP CỨU: ' + em.type + '</div><div style="font-size:11px;margin-top:4px">' + em.action + '</div>';
+  addRestartButton();
+}
+
+function showResult(result) {
+  const el = document.createElement('div');
+  el.className = 'result-card ' + result.severity;
+  el.innerHTML = '<div class="result-sev">' + sevEmoji[result.severity] + ' ' + sevVN[result.severity] + '</div>'
+    + '<div class="result-detail">'
+    + 'Hẹn lại: <b>' + (result.followUpHours||'?') + 'h</b> · Bác sĩ: <b>' + (result.needsDoctor?'CÓ':'Không') + '</b>'
+    + (result.summary ? '<br>' + result.summary : '')
+    + '</div>';
+  chat.appendChild(el);
+  chat.scrollTop = chat.scrollHeight;
+
+  scoringLog.innerHTML = '<div style="font-weight:700">' + sevEmoji[result.severity] + ' ' + sevVN[result.severity] + '</div>'
+    + '<div style="font-size:11px;margin-top:4px">Hẹn: ' + (result.followUpHours||'?') + 'h | Bác sĩ: ' + (result.needsDoctor?'CÓ':'Không') + '</div>'
+    + (result.recommendation ? '<div style="font-size:11px;margin-top:4px;color:#475569">' + result.recommendation + '</div>' : '');
+}
+
+function addRestartButton() {
+  const btn = document.createElement('button');
+  btn.className = 'restart-btn';
+  btn.textContent = '🔄 Test lại từ đầu';
+  btn.onclick = startCheckin;
+  chat.appendChild(btn);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+// ─── Start ───────────────────────────────────────────────
+startCheckin();
+</script>
+</body>
+</html>

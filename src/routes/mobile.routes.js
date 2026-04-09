@@ -1,8 +1,8 @@
 const express = require('express');
-const multer = require('multer');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { requirePremium } = require('../middleware/subscription.middleware');
-const { t, getLang } = require('../i18n');
+const { audioUpload, handleUpload } = require('../middleware/upload.middleware');
+const { loginByEmail, logoutHandler } = require('../controllers/auth.controller');
 const { createMobileLog, getRecentLogs, getTodayLogs } = require('../controllers/mobile.controller');
 const {
   postChat, getChatHistoryHandler, transcribeAudio,
@@ -10,7 +10,7 @@ const {
 } = require('../controllers/chat.controller');
 const { getMissionsHandler, getMissionHistoryHandler, getMissionStatsHandler } = require('../controllers/missions.controller');
 const { upsertOnboardingProfile, onboardingNext, onboardingComplete, onboardingCompleteV2 } = require('../controllers/onboarding.controller');
-const { getProfile, getBasicProfile, updateProfile, deleteAccount, updatePushToken, clearPushToken } = require('../controllers/profile.controller');
+const { getProfile, getBasicProfile, updateProfile, deleteAccount, updatePushToken, clearPushToken, featureFlagsHandler } = require('../controllers/profile.controller');
 const { getTreeSummary, getTreeHistory } = require('../controllers/tree.controller');
 const {
   startCheckinHandler, followUpHandler, triageHandler,
@@ -21,6 +21,10 @@ const {
 } = require('../controllers/checkin.controller');
 const { getCaregiverLogs, getCaregiverCheckins, getMemberHealthSummary } = require('../controllers/careCircle.controller');
 const { testNotificationHandler } = require('../controllers/notification.controller');
+const {
+  getScriptHandler, startScriptHandler, answerScriptHandler,
+  getSessionHandler, createClustersHandler,
+} = require('../controllers/script-checkin.controller');
 
 function mobileRoutes(pool) {
   const router = express.Router();
@@ -36,23 +40,10 @@ function mobileRoutes(pool) {
   router.get('/caregiver/checkins/:patientId', requireAuth, (req, res) => getCaregiverCheckins(pool, req, res));
 
   // Chat
-  const audioUpload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 25 * 1024 * 1024 },
-    fileFilter: (req, file, cb) => {
-      cb(null, /\.(m4a|mp3|mp4|wav|webm)$/i.test(file.originalname));
-    }
-  });
-
   router.post(
     '/chat/transcribe',
     requireAuth,
-    (req, res, next) => {
-      audioUpload.single('audio')(req, res, (err) => {
-        if (err) return res.status(400).json({ ok: false, error: err.message });
-        next();
-      });
-    },
+    handleUpload(audioUpload.single('audio')),
     requirePremium(pool),
     (req, res) => transcribeAudio(pool, req, res)
   );
@@ -108,6 +99,13 @@ function mobileRoutes(pool) {
     router.post('/test-notification',     requireAuth, (req, res) => testNotificationHandler(pool, req, res));
   }
 
+  // Script-driven Check-in (new system — 0 AI calls per check-in)
+  router.get ('/checkin/script',          requireAuth, (req, res) => getScriptHandler(pool, req, res));
+  router.post('/checkin/script/start',    requireAuth, (req, res) => startScriptHandler(pool, req, res));
+  router.post('/checkin/script/answer',   requireAuth, (req, res) => answerScriptHandler(pool, req, res));
+  router.get ('/checkin/script/session',  requireAuth, (req, res) => getSessionHandler(pool, req, res));
+  router.post('/checkin/script/clusters', requireAuth, (req, res) => createClustersHandler(pool, req, res));
+
   // Health Score
   router.get('/health-score', requireAuth, (req, res) => healthScoreHandler(pool, req, res));
 
@@ -123,27 +121,11 @@ function mobileRoutes(pool) {
   router.get('/tree/history', requireAuth, (req, res) => getTreeHistory(pool, req, res));
 
   // Feature Flags (static for now)
-  router.get('/flags', requireAuth, (req, res) => {
-    return res.status(200).json({
-      FEATURE_MOOD_TRACKER: false,
-      FEATURE_JOURNAL: false,
-      FEATURE_AUDIO: false,
-      FEATURE_DAILY_CHECKIN: true,
-      FEATURE_AI_FEED: false,
-      FEATURE_AI_CHAT: true
-    });
-  });
+  router.get('/flags', requireAuth, (req, res) => featureFlagsHandler(pool, req, res));
 
-  // Auth shortcuts (redirect to main auth routes pattern)
-  router.post('/auth/login', (req, res) => {
-    const { loginByEmail } = require('../controllers/auth.controller');
-    return loginByEmail(pool, req, res);
-  });
-  router.post('/auth/logout', requireAuth, async (req, res) => {
-    const { logout } = require('../services/auth/auth.service');
-    await logout(pool, req.user.id).catch(() => {});
-    return res.status(200).json({ ok: true, message: t('success.logged_out', getLang(req)) });
-  });
+  // Auth shortcuts
+  router.post('/auth/login', (req, res) => loginByEmail(pool, req, res));
+  router.post('/auth/logout', requireAuth, (req, res) => logoutHandler(pool, req, res));
 
   return router;
 }

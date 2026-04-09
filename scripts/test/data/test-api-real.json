@@ -1,0 +1,401 @@
+{
+  "generatedAt": "2026-04-08T08:22:09.089Z",
+  "summary": {
+    "total": 65,
+    "pass": 65,
+    "fail": 0,
+    "rate": "100.0%"
+  },
+  "results": [
+    {
+      "group": "1",
+      "name": "\"Tôi ổn\" → không hỏi thêm",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "group": "1",
+      "name": "\"Hơi mệt\" + đau đầu → có session",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "group": "1",
+      "name": "\"Rất mệt\" + chóng mặt → có session",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "group": "2",
+      "name": "Greeting có tên \"Hùng\"",
+      "passed": true,
+      "detail": "Chào Chú Hùng! Hôm nay chú thế nào?"
+    },
+    {
+      "group": "2",
+      "name": "Greeting xưng \"chú\" (68 tuổi)",
+      "passed": true,
+      "detail": "Chào Chú Hùng! Hôm nay chú thế nào?"
+    },
+    {
+      "group": "2",
+      "name": "Greeting KHÔNG xưng \"Bạn\"",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "group": "2",
+      "name": "Câu hỏi xưng \"Chú\"",
+      "passed": true,
+      "detail": "Chú đau đầu ở vị trí nào?"
+    },
+    {
+      "group": "2",
+      "name": "Câu hỏi KHÔNG xưng \"Bạn\"",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "group": "3",
+      "name": "\"đau đầu\" → nhận diện",
+      "passed": true,
+      "detail": "headache"
+    },
+    {
+      "group": "3",
+      "name": "\"đau bụng\" → nhận diện",
+      "passed": true,
+      "detail": "abdominal_pain"
+    },
+    {
+      "group": "3",
+      "name": "\"chóng mặt\" → nhận diện",
+      "passed": true,
+      "detail": "dizziness"
+    },
+    {
+      "group": "3",
+      "name": "\"mệt mỏi\" → nhận diện",
+      "passed": true,
+      "detail": "fatigue"
+    },
+    {
+      "group": "3",
+      "name": "\"ho\" → nhận diện",
+      "passed": true,
+      "detail": "dizziness"
+    },
+    {
+      "group": "3",
+      "name": "\"sốt\" → nhận diện",
+      "passed": true,
+      "detail": "fever"
+    },
+    {
+      "group": "3",
+      "name": "\"đau ngực\" → nhận diện",
+      "passed": true,
+      "detail": "chest_pain"
+    },
+    {
+      "group": "3",
+      "name": "\"khó thở\" → nhận diện",
+      "passed": true,
+      "detail": "dyspnea"
+    },
+    {
+      "group": "4",
+      "name": "\"dau dau\" (không dấu) → nhận diện",
+      "passed": true,
+      "detail": "headache"
+    },
+    {
+      "group": "4",
+      "name": "\"dau bung\" (không dấu) → nhận diện",
+      "passed": true,
+      "detail": "abdominal_pain"
+    },
+    {
+      "group": "4",
+      "name": "\"chong mat\" (không dấu) → nhận diện",
+      "passed": true,
+      "detail": "dizziness"
+    },
+    {
+      "group": "4",
+      "name": "\"met moi\" (không dấu) → nhận diện",
+      "passed": true,
+      "detail": "fatigue"
+    },
+    {
+      "group": "4",
+      "name": "\"ho\" (không dấu) → nhận diện",
+      "passed": true,
+      "detail": "dizziness"
+    },
+    {
+      "group": "4",
+      "name": "\"sot\" (không dấu) → nhận diện",
+      "passed": true,
+      "detail": "fever"
+    },
+    {
+      "group": "4",
+      "name": "\"kho tho\" (không dấu) → nhận diện",
+      "passed": true,
+      "detail": "dyspnea"
+    },
+    {
+      "group": "4",
+      "name": "\"buon non\" (không dấu) → nhận diện",
+      "passed": true,
+      "detail": "nausea"
+    },
+    {
+      "group": "5",
+      "name": "\"mệt vãi luôn\" → có phản hồi",
+      "passed": true,
+      "detail": "fatigue"
+    },
+    {
+      "group": "5",
+      "name": "\"đau quá trời đi\" → có phản hồi",
+      "passed": true,
+      "detail": "pain"
+    },
+    {
+      "group": "5",
+      "name": "\"nhức đầu kinh khủng\" → có phản hồi",
+      "passed": true,
+      "detail": "headache"
+    },
+    {
+      "group": "5",
+      "name": "\"bụng đau điên luôn\" → có phản hồi",
+      "passed": true,
+      "detail": "abdominal_pain"
+    },
+    {
+      "group": "5",
+      "name": "\"ho sặc sụa cả đêm\" → có phản hồi",
+      "passed": true,
+      "detail": "cough"
+    },
+    {
+      "group": "5",
+      "name": "\"chóng mặt muốn xỉu\" → có phản hồi",
+      "passed": true,
+      "detail": "dizziness"
+    },
+    {
+      "group": "5",
+      "name": "\"sốt run người\" → có phản hồi",
+      "passed": true,
+      "detail": "fever"
+    },
+    {
+      "group": "5",
+      "name": "\"thở không nổi\" → có phản hồi",
+      "passed": true,
+      "detail": "dyspnea"
+    },
+    {
+      "group": "5",
+      "name": "\"ói mửa hoài\" → có phản hồi",
+      "passed": true,
+      "detail": "nausea"
+    },
+    {
+      "group": "5",
+      "name": "\"tay chân tê rần rần\" → có phản hồi",
+      "passed": true,
+      "detail": "tê_tay_chân"
+    },
+    {
+      "group": "6",
+      "name": "\"đau ngực khó thở\" → EMERGENCY",
+      "passed": true,
+      "detail": "🚨 MI"
+    },
+    {
+      "group": "6",
+      "name": "\"yếu nửa người\" → EMERGENCY",
+      "passed": true,
+      "detail": "🚨 STROKE"
+    },
+    {
+      "group": "6",
+      "name": "\"co giật\" → EMERGENCY",
+      "passed": true,
+      "detail": "🚨 SEIZURE"
+    },
+    {
+      "group": "6",
+      "name": "\"nôn ra máu\" → EMERGENCY",
+      "passed": true,
+      "detail": "🚨 INTERNAL_HEMORRHAGE"
+    },
+    {
+      "group": "6",
+      "name": "\"hơi mệt\" → an toàn",
+      "passed": true,
+      "detail": "an toàn"
+    },
+    {
+      "group": "6",
+      "name": "\"đau đầu nhẹ\" → an toàn",
+      "passed": true,
+      "detail": "an toàn"
+    },
+    {
+      "group": "6",
+      "name": "\"không đau ngực\" → an toàn",
+      "passed": true,
+      "detail": "an toàn"
+    },
+    {
+      "group": "6",
+      "name": "\"hết khó thở rồi\" → an toàn",
+      "passed": true,
+      "detail": "an toàn"
+    },
+    {
+      "group": "7",
+      "name": "Đau đầu: session hoàn thành",
+      "passed": true,
+      "detail": "high"
+    },
+    {
+      "group": "7",
+      "name": "Đau đầu + câu dài: session hoàn thành",
+      "passed": true,
+      "detail": "high"
+    },
+    {
+      "group": "7",
+      "name": "Đau đầu + câu dài: severity >= medium",
+      "passed": true,
+      "detail": "high"
+    },
+    {
+      "group": "7",
+      "name": "Chóng mặt không dấu: hoàn thành",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "group": "7",
+      "name": "Mệt + tiếng lóng: hoàn thành",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "group": "8",
+      "name": "\"đau gót chân\" (mới) → có session + câu hỏi",
+      "passed": true,
+      "detail": "tê_tay_chân"
+    },
+    {
+      "group": "8",
+      "name": "\"ngứa da khắp người\" (mới) → có session + câu hỏi",
+      "passed": true,
+      "detail": "itchy_skin"
+    },
+    {
+      "group": "8",
+      "name": "\"ợ nóng sau ăn\" (mới) → có session + câu hỏi",
+      "passed": true,
+      "detail": "heartburn_after_meal"
+    },
+    {
+      "group": "8",
+      "name": "\"đau tai trái\" (mới) → có session + câu hỏi",
+      "passed": true,
+      "detail": "pain"
+    },
+    {
+      "group": "8",
+      "name": "\"tê mặt bên phải\" (mới) → có session + câu hỏi",
+      "passed": true,
+      "detail": "dizziness"
+    },
+    {
+      "group": "9",
+      "name": "Đau nhẹ → KHÔNG khuyên bác sĩ ngay",
+      "passed": true,
+      "detail": "needsDoctor=false"
+    },
+    {
+      "group": "9",
+      "name": "Đau nhẹ → KHÔNG báo gia đình",
+      "passed": true,
+      "detail": "needsFamilyAlert=false"
+    },
+    {
+      "group": "9",
+      "name": "Đau TB → CHƯA khuyên bác sĩ (theo dõi trước)",
+      "passed": true,
+      "detail": "severity=high"
+    },
+    {
+      "group": "9",
+      "name": "Đau TB → KHÔNG báo gia đình",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "group": "9",
+      "name": "Đau nặng + mờ mắt → khuyên bác sĩ",
+      "passed": true,
+      "detail": "severity=high"
+    },
+    {
+      "group": "9",
+      "name": "Đau nặng lần đầu → CHƯA báo gia đình",
+      "passed": true,
+      "detail": "needsFamilyAlert=false"
+    },
+    {
+      "group": "9",
+      "name": "Logic: \"Nặng hơn\" lần đầu → theo dõi sát, CHƯA bác sĩ",
+      "passed": true,
+      "detail": "rule: chỉ bác sĩ khi đã HIGH + nặng thêm"
+    },
+    {
+      "group": "9",
+      "name": "Logic: Báo gia đình CHỈ KHI đã HIGH + nặng hơn + triệu chứng mới",
+      "passed": true,
+      "detail": "rule: needsFamilyAlert rất hạn chế"
+    },
+    {
+      "group": "10",
+      "name": "\"sáng nay dậy thấy đầu nặng trĩu, đi ra n...\" → phản hồi",
+      "passed": true,
+      "detail": "headache"
+    },
+    {
+      "group": "10",
+      "name": "\"mấy hôm nay ăn cơm xong là đầy bụng ợ ch...\" → phản hồi",
+      "passed": true,
+      "detail": "abdominal_pain"
+    },
+    {
+      "group": "10",
+      "name": "\"đêm qua ho suốt đêm không ngủ được, sáng...\" → phản hồi",
+      "passed": true,
+      "detail": "cough"
+    },
+    {
+      "group": "10",
+      "name": "\"hai ngày nay đi tiểu nhiều lần khát nước...\" → phản hồi",
+      "passed": true,
+      "detail": "emergency"
+    },
+    {
+      "group": "10",
+      "name": "\"bàn tay trái tê bì từ hôm qua cầm đồ hay...\" → phản hồi",
+      "passed": true,
+      "detail": "tê_tay_chân"
+    }
+  ]
+}

@@ -1,0 +1,1186 @@
+{
+  "generatedAt": "2026-04-08T08:06:52.033Z",
+  "summary": {
+    "totalFlows": 17,
+    "passFlows": 17,
+    "failFlows": 0,
+    "totalSteps": 58,
+    "passSteps": 58,
+    "failSteps": 0
+  },
+  "flows": [
+    {
+      "id": "A",
+      "name": "\"Tôi ổn\" cả sáng lẫn tối",
+      "desc": "User khỏe mạnh cả ngày, không cần script, không cần AI",
+      "steps": [
+        {
+          "action": "Sáng: User chọn \"Tôi ổn\"",
+          "detail": "Không chạy script, hẹn 9h tối",
+          "result": "fine → monitoring",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Tối: User xác nhận \"Vẫn ổn\"",
+          "detail": "Kết thúc ngày, hẹn sáng mai",
+          "result": "fine → resolved",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Kiểm tra: 0 AI call cả ngày",
+          "detail": "Không gọi AI lần nào",
+          "result": "0 calls",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        }
+      ],
+      "category": "normal",
+      "pass": true,
+      "issues": [],
+      "passCount": 3,
+      "failCount": 0
+    },
+    {
+      "id": "B",
+      "name": "\"Tôi ổn\" sáng → \"Hơi mệt\" tối",
+      "desc": "Sáng khỏe, tối mệt → chạy script",
+      "steps": [
+        {
+          "action": "Sáng: \"Tôi ổn\"",
+          "detail": "Hẹn 9h tối",
+          "result": "monitoring",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Tối: \"Hơi mệt\" → chọn \"đau đầu\"",
+          "detail": "Chạy script đau đầu",
+          "result": "follow_up",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Script đau đầu: 4 câu hỏi",
+          "detail": "Trả lời nhẹ nhất → Severity: medium",
+          "result": "medium",
+          "passed": true,
+          "convo": [
+            {
+              "q": "Chú đau đầu ở vị trí nào?",
+              "type": "single_choice",
+              "options": [
+                "một bên đầu",
+                "cả hai bên",
+                "sau gáy",
+                "vùng trán",
+                "quanh mắt",
+                "toàn bộ đầu"
+              ],
+              "a": "một bên đầu"
+            },
+            {
+              "q": "Chú thấy kiểu đau như thế nào?",
+              "type": "single_choice",
+              "options": [
+                "nhức âm ỉ",
+                "đau nhói từng cơn",
+                "đau như bóp chặt",
+                "đau giật theo nhịp tim"
+              ],
+              "a": "nhức âm ỉ"
+            },
+            {
+              "q": "Chú có thêm triệu chứng nào đi kèm?",
+              "type": "multi_choice",
+              "options": [
+                "buồn nôn",
+                "chóng mặt",
+                "sợ ánh sáng",
+                "mờ mắt",
+                "cứng cổ",
+                "sốt",
+                "không có"
+              ],
+              "a": "không có"
+            },
+            {
+              "q": "Chú thấy mức độ đau đầu hiện tại?",
+              "type": "single_choice",
+              "options": [
+                "nhẹ, vẫn sinh hoạt được",
+                "trung bình, khó tập trung",
+                "nặng, phải nằm nghỉ"
+              ],
+              "a": "nhẹ, vẫn sinh hoạt được"
+            }
+          ],
+          "conclusion": {
+            "severity": "medium",
+            "followUpHours": 3,
+            "needsDoctor": false,
+            "needsFamilyAlert": false,
+            "hasRedFlag": false,
+            "matchedRuleIndex": -1,
+            "modifiersApplied": [
+              "elderly+conditions → medium (safety)"
+            ],
+            "summary": "Chú bị đau đầu mức trung bình, cần theo dõi thêm.",
+            "recommendation": "Uống thuốc giảm đau (paracetamol) nếu có, nằm nghỉ nơi yên tĩnh, tránh ánh sáng mạnh. Nếu không đỡ sau 24h hoặc đau tăng → đi khám.",
+            "closeMessage": "cháu sẽ hỏi lại chú sau 3 tiếng nhé."
+          },
+          "followUp": null
+        }
+      ],
+      "category": "normal",
+      "pass": true,
+      "issues": [],
+      "passCount": 3,
+      "failCount": 0
+    },
+    {
+      "id": "C",
+      "name": "\"Hơi mệt\" → nhẹ → đỡ → resolved",
+      "desc": "Case phổ biến nhất: mệt nhẹ, đỡ sau vài giờ",
+      "steps": [
+        {
+          "action": "Sáng: \"Hơi mệt\" → chọn \"đau đầu\" → trả lời nhẹ",
+          "detail": "4 câu → medium",
+          "result": "medium",
+          "passed": true,
+          "convo": [
+            {
+              "q": "Chú đau đầu ở vị trí nào?",
+              "type": "single_choice",
+              "options": [
+                "một bên đầu",
+                "cả hai bên",
+                "sau gáy",
+                "vùng trán",
+                "quanh mắt",
+                "toàn bộ đầu"
+              ],
+              "a": "một bên đầu"
+            },
+            {
+              "q": "Chú thấy kiểu đau như thế nào?",
+              "type": "single_choice",
+              "options": [
+                "nhức âm ỉ",
+                "đau nhói từng cơn",
+                "đau như bóp chặt",
+                "đau giật theo nhịp tim"
+              ],
+              "a": "nhức âm ỉ"
+            },
+            {
+              "q": "Chú có thêm triệu chứng nào đi kèm?",
+              "type": "multi_choice",
+              "options": [
+                "buồn nôn",
+                "chóng mặt",
+                "sợ ánh sáng",
+                "mờ mắt",
+                "cứng cổ",
+                "sốt",
+                "không có"
+              ],
+              "a": "không có"
+            },
+            {
+              "q": "Chú thấy mức độ đau đầu hiện tại?",
+              "type": "single_choice",
+              "options": [
+                "nhẹ, vẫn sinh hoạt được",
+                "trung bình, khó tập trung",
+                "nặng, phải nằm nghỉ"
+              ],
+              "a": "nhẹ, vẫn sinh hoạt được"
+            }
+          ],
+          "conclusion": {
+            "severity": "medium",
+            "followUpHours": 3,
+            "needsDoctor": false,
+            "needsFamilyAlert": false,
+            "hasRedFlag": false,
+            "matchedRuleIndex": -1,
+            "modifiersApplied": [
+              "elderly+conditions → medium (safety)"
+            ],
+            "summary": "Chú bị đau đầu mức trung bình, cần theo dõi thêm.",
+            "recommendation": "Uống thuốc giảm đau (paracetamol) nếu có, nằm nghỉ nơi yên tĩnh, tránh ánh sáng mạnh. Nếu không đỡ sau 24h hoặc đau tăng → đi khám.",
+            "closeMessage": "cháu sẽ hỏi lại chú sau 3 tiếng nhé."
+          },
+          "followUp": null
+        },
+        {
+          "action": "Follow-up sau 3h: \"Đỡ hơn\" + không triệu chứng mới",
+          "detail": "→ low → monitoring → hẹn tối",
+          "result": "{\"severity\":\"low\",\"followUpHours\":6,\"needsDoctor\":false,\"needsFamilyAlert\":false,\"action\":\"monitoring\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": {
+            "status": "Đỡ hơn",
+            "newSymptoms": false,
+            "result": {
+              "severity": "low",
+              "followUpHours": 6,
+              "needsDoctor": false,
+              "needsFamilyAlert": false,
+              "action": "monitoring"
+            }
+          }
+        }
+      ],
+      "category": "normal",
+      "pass": true,
+      "issues": [],
+      "passCount": 2,
+      "failCount": 0
+    },
+    {
+      "id": "D",
+      "name": "\"Hơi mệt\" → trung bình → \"Vẫn vậy\" → tiếp tục",
+      "desc": "Không đỡ cũng không nặng hơn, hệ thống tiếp tục theo dõi",
+      "steps": [
+        {
+          "action": "Sáng: \"Hơi mệt\" → chọn \"chóng mặt\" → trả lời vừa",
+          "detail": "4 câu → high",
+          "result": "high",
+          "passed": true,
+          "convo": [
+            {
+              "q": "Chú chóng mặt kiểu nào?",
+              "type": "single_choice",
+              "options": [
+                "quay cuồng (phòng quay)",
+                "lâng lâng, lơ lửng",
+                "tối sầm mắt",
+                "mất thăng bằng, loạng choạng"
+              ],
+              "a": "tối sầm mắt"
+            },
+            {
+              "q": "Chú chóng mặt xuất hiện khi nào?",
+              "type": "multi_choice",
+              "options": [
+                "khi đứng dậy",
+                "khi xoay đầu",
+                "liên tục không ngừng",
+                "khi nằm nghiêng",
+                "bất kỳ lúc nào"
+              ],
+              "a": "liên tục không ngừng"
+            },
+            {
+              "q": "Chú có thêm triệu chứng nào?",
+              "type": "multi_choice",
+              "options": [
+                "buồn nôn",
+                "ù tai",
+                "hoa mắt",
+                "tim đập nhanh",
+                "vã mồ hôi",
+                "đau đầu",
+                "không có"
+              ],
+              "a": "tim đập nhanh"
+            },
+            {
+              "q": "Chú có đang dùng thuốc huyết áp hoặc thuốc mới không?",
+              "type": "single_choice",
+              "options": [
+                "có, thuốc huyết áp",
+                "có, thuốc mới kê gần đây",
+                "không dùng thuốc gì",
+                "không rõ"
+              ],
+              "a": "không dùng thuốc gì"
+            }
+          ],
+          "conclusion": {
+            "severity": "high",
+            "followUpHours": 1,
+            "needsDoctor": true,
+            "needsFamilyAlert": true,
+            "hasRedFlag": false,
+            "matchedRuleIndex": 4,
+            "modifiersApplied": [
+              "elderly+conditions → high"
+            ],
+            "summary": "Chú bị chóng mặt nặng, cần được bác sĩ đánh giá.",
+            "recommendation": "🏥 Chú nên đi khám bác sĩ hôm nay. Chóng mặt nặng cần đo huyết áp và kiểm tra tai trong. Trong khi chờ: NẰM YÊN, không đi lại một mình.",
+            "closeMessage": "cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé."
+          },
+          "followUp": null
+        },
+        {
+          "action": "Follow-up 1: \"Vẫn vậy\" + không triệu chứng mới",
+          "detail": "→ tiếp tục theo dõi",
+          "result": "{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":false,\"action\":\"continue_followup\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": {
+            "status": "Vẫn vậy",
+            "newSymptoms": false,
+            "result": {
+              "severity": "high",
+              "followUpHours": 1,
+              "needsDoctor": true,
+              "needsFamilyAlert": false,
+              "action": "continue_followup"
+            }
+          }
+        },
+        {
+          "action": "Follow-up 2: vẫn \"Vẫn vậy\"",
+          "detail": "→ tiếp tục theo dõi",
+          "result": "{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":false,\"action\":\"continue_followup\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": {
+            "status": "Vẫn vậy",
+            "newSymptoms": false,
+            "result": {
+              "severity": "high",
+              "followUpHours": 1,
+              "needsDoctor": true,
+              "needsFamilyAlert": false,
+              "action": "continue_followup"
+            }
+          }
+        },
+        {
+          "action": "Follow-up 3: \"Đỡ hơn\" → kết thúc theo dõi",
+          "detail": "→ monitoring → hẹn tối",
+          "result": "{\"severity\":\"low\",\"followUpHours\":6,\"needsDoctor\":false,\"needsFamilyAlert\":false,\"action\":\"monitoring\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": {
+            "status": "Đỡ hơn",
+            "newSymptoms": false,
+            "result": {
+              "severity": "low",
+              "followUpHours": 6,
+              "needsDoctor": false,
+              "needsFamilyAlert": false,
+              "action": "monitoring"
+            }
+          }
+        }
+      ],
+      "category": "normal",
+      "pass": true,
+      "issues": [],
+      "passCount": 4,
+      "failCount": 0
+    },
+    {
+      "id": "E",
+      "name": "\"Hơi mệt\" → nặng → \"Nặng hơn\" → escalate",
+      "desc": "Triệu chứng nặng dần, hệ thống phải cảnh báo mạnh",
+      "steps": [
+        {
+          "action": "Sáng: \"Hơi mệt\" → chọn \"đau đầu\" → trả lời nặng nhất",
+          "detail": "4 câu → high",
+          "result": "high",
+          "passed": true,
+          "convo": [
+            {
+              "q": "Chú đau đầu ở vị trí nào?",
+              "type": "single_choice",
+              "options": [
+                "một bên đầu",
+                "cả hai bên",
+                "sau gáy",
+                "vùng trán",
+                "quanh mắt",
+                "toàn bộ đầu"
+              ],
+              "a": "toàn bộ đầu"
+            },
+            {
+              "q": "Chú thấy kiểu đau như thế nào?",
+              "type": "single_choice",
+              "options": [
+                "nhức âm ỉ",
+                "đau nhói từng cơn",
+                "đau như bóp chặt",
+                "đau giật theo nhịp tim"
+              ],
+              "a": "đau giật theo nhịp tim"
+            },
+            {
+              "q": "Chú có thêm triệu chứng nào đi kèm?",
+              "type": "multi_choice",
+              "options": [
+                "buồn nôn",
+                "chóng mặt",
+                "sợ ánh sáng",
+                "mờ mắt",
+                "cứng cổ",
+                "sốt",
+                "không có"
+              ],
+              "a": "không có"
+            },
+            {
+              "q": "Chú thấy mức độ đau đầu hiện tại?",
+              "type": "single_choice",
+              "options": [
+                "nhẹ, vẫn sinh hoạt được",
+                "trung bình, khó tập trung",
+                "nặng, phải nằm nghỉ"
+              ],
+              "a": "nặng, phải nằm nghỉ"
+            }
+          ],
+          "conclusion": {
+            "severity": "high",
+            "followUpHours": 1,
+            "needsDoctor": true,
+            "needsFamilyAlert": true,
+            "hasRedFlag": true,
+            "matchedRuleIndex": 0,
+            "modifiersApplied": [],
+            "summary": "Chú bị đau đầu nặng, cần được bác sĩ đánh giá.",
+            "recommendation": "🏥 Chú nên đi khám bác sĩ hôm nay. Đau đầu dữ dội có thể cần kiểm tra huyết áp hoặc chụp chiếu. Trong khi chờ: nằm nghỉ, tránh gắng sức.",
+            "closeMessage": "cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé."
+          },
+          "followUp": null
+        },
+        {
+          "action": "Follow-up: \"Nặng hơn\" + CÓ triệu chứng mới → escalate + bác sĩ",
+          "detail": "Severity: high, needsDoctor: true",
+          "result": "{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":true,\"action\":\"escalate\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": {
+            "status": "Nặng hơn",
+            "newSymptoms": true,
+            "result": {
+              "severity": "high",
+              "followUpHours": 1,
+              "needsDoctor": true,
+              "needsFamilyAlert": true,
+              "action": "escalate"
+            }
+          }
+        }
+      ],
+      "category": "critical",
+      "pass": true,
+      "issues": [],
+      "passCount": 2,
+      "failCount": 0
+    },
+    {
+      "id": "F",
+      "name": "\"Rất mệt\" → HIGH → follow-up nhanh → đỡ",
+      "desc": "User rất mệt nhưng hồi phục nhanh",
+      "steps": [
+        {
+          "action": "Sáng: \"Rất mệt\" → chọn \"mệt mỏi\" → trả lời nặng",
+          "detail": "4 câu → high",
+          "result": "high",
+          "passed": true,
+          "convo": [
+            {
+              "q": "Chú mệt mỏi kéo dài bao lâu rồi?",
+              "type": "single_choice",
+              "options": [
+                "hôm nay mới thấy",
+                "vài ngày nay",
+                "1-2 tuần",
+                "trên 2 tuần"
+              ],
+              "a": "trên 2 tuần"
+            },
+            {
+              "q": "Chú mệt mỏi ảnh hưởng thế nào?",
+              "type": "single_choice",
+              "options": [
+                "vẫn sinh hoạt bình thường",
+                "phải nghỉ ngơi nhiều hơn",
+                "khó làm việc nhà",
+                "hầu như nằm cả ngày"
+              ],
+              "a": "hầu như nằm cả ngày"
+            },
+            {
+              "q": "Chú có thêm triệu chứng nào?",
+              "type": "multi_choice",
+              "options": [
+                "mất ngủ",
+                "ăn kém",
+                "sốt nhẹ",
+                "sụt cân",
+                "buồn bã",
+                "khó thở",
+                "không có"
+              ],
+              "a": "không có"
+            },
+            {
+              "q": "Chú giấc ngủ của chú gần đây thế nào?",
+              "type": "single_choice",
+              "options": [
+                "ngủ đủ 6-8 tiếng",
+                "ngủ ít hơn 5 tiếng",
+                "ngủ chập chờn",
+                "thức dậy nhiều lần trong đêm"
+              ],
+              "a": "thức dậy nhiều lần trong đêm"
+            }
+          ],
+          "conclusion": {
+            "severity": "high",
+            "followUpHours": 1,
+            "needsDoctor": true,
+            "needsFamilyAlert": true,
+            "hasRedFlag": false,
+            "matchedRuleIndex": 3,
+            "modifiersApplied": [
+              "elderly+conditions → high"
+            ],
+            "summary": "Chú bị mệt mỏi nặng, cần được bác sĩ đánh giá.",
+            "recommendation": "🏥 Chú nên đi khám bác sĩ hôm nay. Mệt mỏi nặng cần xét nghiệm máu kiểm tra thiếu máu, đường huyết, tuyến giáp. Nằm nghỉ, không gắng sức.",
+            "closeMessage": "cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé."
+          },
+          "followUp": null
+        },
+        {
+          "action": "Follow-up sau 1h: \"Đỡ hơn\" → monitoring",
+          "detail": "→ low → hẹn tối",
+          "result": "{\"severity\":\"low\",\"followUpHours\":6,\"needsDoctor\":false,\"needsFamilyAlert\":false,\"action\":\"monitoring\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": {
+            "status": "Đỡ hơn",
+            "newSymptoms": false,
+            "result": {
+              "severity": "low",
+              "followUpHours": 6,
+              "needsDoctor": false,
+              "needsFamilyAlert": false,
+              "action": "monitoring"
+            }
+          }
+        }
+      ],
+      "category": "normal",
+      "pass": true,
+      "issues": [],
+      "passCount": 2,
+      "failCount": 0
+    },
+    {
+      "id": "G",
+      "name": "\"Rất mệt\" → liên tục nặng hơn → escalate",
+      "desc": "User không cải thiện, hệ thống phải báo gia đình",
+      "steps": [
+        {
+          "action": "Sáng: \"Rất mệt\" → chọn \"đau đầu\" → trả lời nặng",
+          "detail": "4 câu → high",
+          "result": "high",
+          "passed": true,
+          "convo": [
+            {
+              "q": "Chú đau đầu ở vị trí nào?",
+              "type": "single_choice",
+              "options": [
+                "một bên đầu",
+                "cả hai bên",
+                "sau gáy",
+                "vùng trán",
+                "quanh mắt",
+                "toàn bộ đầu"
+              ],
+              "a": "toàn bộ đầu"
+            },
+            {
+              "q": "Chú thấy kiểu đau như thế nào?",
+              "type": "single_choice",
+              "options": [
+                "nhức âm ỉ",
+                "đau nhói từng cơn",
+                "đau như bóp chặt",
+                "đau giật theo nhịp tim"
+              ],
+              "a": "đau giật theo nhịp tim"
+            },
+            {
+              "q": "Chú có thêm triệu chứng nào đi kèm?",
+              "type": "multi_choice",
+              "options": [
+                "buồn nôn",
+                "chóng mặt",
+                "sợ ánh sáng",
+                "mờ mắt",
+                "cứng cổ",
+                "sốt",
+                "không có"
+              ],
+              "a": "không có"
+            },
+            {
+              "q": "Chú thấy mức độ đau đầu hiện tại?",
+              "type": "single_choice",
+              "options": [
+                "nhẹ, vẫn sinh hoạt được",
+                "trung bình, khó tập trung",
+                "nặng, phải nằm nghỉ"
+              ],
+              "a": "nặng, phải nằm nghỉ"
+            }
+          ],
+          "conclusion": {
+            "severity": "high",
+            "followUpHours": 1,
+            "needsDoctor": true,
+            "needsFamilyAlert": true,
+            "hasRedFlag": true,
+            "matchedRuleIndex": 0,
+            "modifiersApplied": [],
+            "summary": "Chú bị đau đầu nặng, cần được bác sĩ đánh giá.",
+            "recommendation": "🏥 Chú nên đi khám bác sĩ hôm nay. Đau đầu dữ dội có thể cần kiểm tra huyết áp hoặc chụp chiếu. Trong khi chờ: nằm nghỉ, tránh gắng sức.",
+            "closeMessage": "cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé."
+          },
+          "followUp": null
+        },
+        {
+          "action": "Follow-up 1: \"Nặng hơn\" → cần bác sĩ",
+          "detail": "high, needsDoctor: true",
+          "result": "{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":true,\"action\":\"escalate\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": {
+            "status": "Nặng hơn",
+            "newSymptoms": false,
+            "result": {
+              "severity": "high",
+              "followUpHours": 1,
+              "needsDoctor": true,
+              "needsFamilyAlert": true,
+              "action": "escalate"
+            }
+          }
+        },
+        {
+          "action": "Follow-up 2: \"Nặng hơn\" + triệu chứng mới → escalate",
+          "detail": "high, báo gia đình",
+          "result": "{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":true,\"action\":\"escalate\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": {
+            "status": "Nặng hơn",
+            "newSymptoms": true,
+            "result": {
+              "severity": "high",
+              "followUpHours": 1,
+              "needsDoctor": true,
+              "needsFamilyAlert": true,
+              "action": "escalate"
+            }
+          }
+        }
+      ],
+      "category": "critical",
+      "pass": true,
+      "issues": [],
+      "passCount": 3,
+      "failCount": 0
+    },
+    {
+      "id": "H",
+      "name": "Emergency ngay từ đầu",
+      "desc": "User nói \"đau ngực khó thở\" → bypass script, cấp cứu ngay",
+      "steps": [
+        {
+          "action": "User nhập: \"đau ngực, khó thở, vã mồ hôi\"",
+          "detail": "isEmergency: true, type: MI",
+          "result": "{\"isEmergency\":true,\"type\":\"MI\",\"severity\":\"critical\",\"needsDoctor\":true,\"needsFamilyAlert\":true,\"followUpHours\":0}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Kiểm tra: loại cấp cứu",
+          "detail": "Type: MI",
+          "result": "MI",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Kiểm tra: không chạy script, không chạy scoring",
+          "detail": "Bypass hoàn toàn",
+          "result": "bypassed",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        }
+      ],
+      "category": "emergency",
+      "pass": true,
+      "issues": [],
+      "passCount": 3,
+      "failCount": 0
+    },
+    {
+      "id": "I",
+      "name": "Emergency giữa session",
+      "desc": "Đang trả lời script, đột nhiên nhập triệu chứng nguy hiểm",
+      "steps": [
+        {
+          "action": "Bắt đầu script đau đầu bình thường",
+          "detail": "Câu 1 trả lời OK",
+          "result": "q1 answered",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Câu 2: user gõ \"yếu nửa người, nói ngọng\"",
+          "detail": "isEmergency: true, type: STROKE",
+          "result": "{\"isEmergency\":true,\"type\":\"STROKE\",\"severity\":\"critical\",\"needsDoctor\":true,\"needsFamilyAlert\":true,\"followUpHours\":0}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Kiểm tra: dừng script, chuyển cấp cứu",
+          "detail": "Type: STROKE",
+          "result": "STROKE",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        }
+      ],
+      "category": "emergency",
+      "pass": true,
+      "issues": [],
+      "passCount": 3,
+      "failCount": 0
+    },
+    {
+      "id": "J",
+      "name": "Triệu chứng mới → fallback → R&D → script",
+      "desc": "User nói \"đau dạ dày\" lần đầu, hệ thống học dần",
+      "steps": [
+        {
+          "action": "Ngày 1: \"đau dạ dày\" → tìm trong DB",
+          "detail": "Matched: false",
+          "result": "{\"matched\":false}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Fallback: 3 câu cơ bản",
+          "detail": "3 câu → severity: high",
+          "result": "high",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Log fallback → chờ R&D đêm",
+          "detail": "Saved to fallback_logs",
+          "result": "pending",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "R&D đêm: tạo cluster \"đau dạ dày\"",
+          "detail": "Cluster: gastric_pain",
+          "result": "gastric_pain",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Ngày 2: \"đau dạ dày\" → tìm lại",
+          "detail": "Matched: true → gastric_pain",
+          "result": "{\"matched\":true,\"cluster\":{\"id\":\"1675\",\"user_id\":4,\"cluster_key\":\"gastric_pain\",\"display_name\":\"đau dạ dày\",\"source\":\"rnd_cycle\",\"count_7d\":0,\"count_30d\":0,\"trend\":\"stable\",\"priority\":0,\"is_active\":true,\"last_triggered_at\":null,\"created_at\":\"2026-04-08T08:06:52.027Z\",\"updated_at\":\"2026-04-08T08:06:52.027Z\"}}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Ngày 2: có script riêng",
+          "detail": "4 câu chuyên sâu",
+          "result": "4",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        }
+      ],
+      "category": "fallback",
+      "pass": true,
+      "issues": [],
+      "passCount": 6,
+      "failCount": 0
+    },
+    {
+      "id": "K",
+      "name": "Đổi triệu chứng: sáng đau đầu, chiều chóng mặt",
+      "desc": "User có nhiều vấn đề, mỗi lần check-in khác nhau",
+      "steps": [
+        {
+          "action": "Sáng: đau đầu nhẹ",
+          "detail": "Severity: medium",
+          "result": "medium",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Follow-up đau đầu: \"Đỡ hơn\"",
+          "detail": "→ low",
+          "result": "{\"severity\":\"low\",\"followUpHours\":6,\"needsDoctor\":false,\"needsFamilyAlert\":false,\"action\":\"monitoring\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Chiều: chóng mặt (triệu chứng khác)",
+          "detail": "Severity: high",
+          "result": "high",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Kiểm tra: 2 sessions khác cluster",
+          "detail": "headache + dizziness",
+          "result": "2 clusters",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        }
+      ],
+      "category": "normal",
+      "pass": true,
+      "issues": [],
+      "passCount": 4,
+      "failCount": 0
+    },
+    {
+      "id": "L",
+      "name": "\"Tôi ổn\" sáng → emergency tối",
+      "desc": "Sáng khỏe nhưng tối đột ngột nguy hiểm",
+      "steps": [
+        {
+          "action": "Sáng: \"Tôi ổn\" → monitoring",
+          "detail": "Hẹn 9h tối",
+          "result": "fine",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Tối: \"co giật\" → EMERGENCY",
+          "detail": "isEmergency: true, type: SEIZURE",
+          "result": "{\"isEmergency\":true,\"type\":\"SEIZURE\",\"severity\":\"critical\",\"needsDoctor\":true,\"needsFamilyAlert\":true,\"followUpHours\":0}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Kiểm tra: bypass evening check",
+          "detail": "Emergency > evening review",
+          "result": "bypassed",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        }
+      ],
+      "category": "emergency",
+      "pass": true,
+      "issues": [],
+      "passCount": 3,
+      "failCount": 0
+    },
+    {
+      "id": "M",
+      "name": "Follow-up chuỗi dài: đỡ → vậy → nặng",
+      "desc": "Theo dõi nhiều lần trong ngày, tình trạng thay đổi",
+      "steps": [
+        {
+          "action": "Check-in ban đầu: trung bình",
+          "detail": "Severity: medium",
+          "result": "medium",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Follow-up 1: \"Đỡ hơn\"",
+          "detail": "low → monitoring",
+          "result": "{\"severity\":\"low\",\"followUpHours\":6,\"needsDoctor\":false,\"needsFamilyAlert\":false,\"action\":\"monitoring\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Follow-up 2: \"Vẫn vậy\" (từ low)",
+          "detail": "low",
+          "result": "{\"severity\":\"low\",\"followUpHours\":6,\"needsDoctor\":false,\"needsFamilyAlert\":false,\"action\":\"continue_followup\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Follow-up 3: \"Nặng hơn\" + triệu chứng mới!",
+          "detail": "high → escalate",
+          "result": "{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":false,\"action\":\"escalate\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Kiểm tra: phải khuyên đi bác sĩ",
+          "detail": "needsDoctor: true",
+          "result": "true",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        }
+      ],
+      "category": "critical",
+      "pass": true,
+      "issues": [],
+      "passCount": 5,
+      "failCount": 0
+    },
+    {
+      "id": "N",
+      "name": "Phủ định: \"không đau ngực\" → không phải emergency",
+      "desc": "User nói KHÔNG bị, hệ thống phải hiểu phủ định",
+      "steps": [
+        {
+          "action": "\"không đau ngực\"",
+          "detail": "isEmergency: false",
+          "result": "{\"isEmergency\":false,\"type\":null,\"severity\":\"low\",\"needsDoctor\":false,\"needsFamilyAlert\":false,\"followUpHours\":72}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "\"hết khó thở rồi\"",
+          "detail": "isEmergency: false",
+          "result": "{\"isEmergency\":false,\"type\":null,\"severity\":\"low\",\"needsDoctor\":false,\"needsFamilyAlert\":false,\"followUpHours\":72}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "\"không co giật\"",
+          "detail": "isEmergency: false",
+          "result": "{\"isEmergency\":false,\"type\":null,\"severity\":\"low\",\"needsDoctor\":false,\"needsFamilyAlert\":false,\"followUpHours\":72}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        }
+      ],
+      "category": "emergency",
+      "pass": true,
+      "issues": [],
+      "passCount": 3,
+      "failCount": 0
+    },
+    {
+      "id": "O",
+      "name": "Người cao tuổi: dù nhẹ cũng phải theo dõi kỹ",
+      "desc": "Bà Lan 75t, 4 bệnh nền — không được bỏ qua",
+      "steps": [
+        {
+          "action": "Bà Lan trả lời nhẹ nhất",
+          "detail": "Severity: medium",
+          "result": "medium",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Kiểm tra: KHÔNG ĐƯỢC xếp Nhẹ",
+          "detail": "medium (phải >= Trung bình)",
+          "result": "medium",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Anh An (30t khỏe) cùng câu trả lời",
+          "detail": "Severity: low",
+          "result": "low",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "So sánh: Bà Lan phải >= Anh An",
+          "detail": "medium >= low",
+          "result": "true",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        }
+      ],
+      "category": "safety",
+      "pass": true,
+      "issues": [],
+      "passCount": 4,
+      "failCount": 0
+    },
+    {
+      "id": "P",
+      "name": "Biến thể triệu chứng → token matching",
+      "desc": "User nói khác nhau nhưng cùng 1 bệnh",
+      "steps": [
+        {
+          "action": "\"chóng mặt buổi sáng\" → tìm cluster",
+          "detail": "Matched: true → dizziness",
+          "result": "{\"matched\":true,\"cluster\":{\"id\":\"1673\",\"user_id\":4,\"cluster_key\":\"dizziness\",\"display_name\":\"chóng mặt\",\"source\":\"onboarding\",\"count_7d\":0,\"count_30d\":0,\"trend\":\"stable\",\"priority\":2,\"is_active\":true,\"last_triggered_at\":null,\"created_at\":\"2026-04-08T08:06:52.014Z\",\"updated_at\":\"2026-04-08T08:06:52.014Z\"}}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "\"bị mệt quá\" → tìm cluster (token \"mệt\")",
+          "detail": "Matched: true → fatigue",
+          "result": "{\"matched\":true,\"cluster\":{\"id\":\"1674\",\"user_id\":4,\"cluster_key\":\"fatigue\",\"display_name\":\"mệt mỏi\",\"source\":\"onboarding\",\"count_7d\":0,\"count_30d\":0,\"trend\":\"stable\",\"priority\":1,\"is_active\":true,\"last_triggered_at\":null,\"created_at\":\"2026-04-08T08:06:52.015Z\",\"updated_at\":\"2026-04-08T08:06:52.015Z\"}}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "\"nhức đầu ghê\" → tìm cluster (token \"đầu\")",
+          "detail": "Matched: true",
+          "result": "{\"matched\":true,\"cluster\":{\"id\":\"1672\",\"user_id\":4,\"cluster_key\":\"headache\",\"display_name\":\"đau đầu\",\"source\":\"onboarding\",\"count_7d\":0,\"count_30d\":0,\"trend\":\"stable\",\"priority\":3,\"is_active\":true,\"last_triggered_at\":null,\"created_at\":\"2026-04-08T08:06:52.012Z\",\"updated_at\":\"2026-04-08T08:06:52.012Z\"}}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "\"đau lưng dưới\" → KHÔNG có cluster",
+          "detail": "Matched: false",
+          "result": "{\"matched\":false}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        }
+      ],
+      "category": "fallback",
+      "pass": true,
+      "issues": [],
+      "passCount": 4,
+      "failCount": 0
+    },
+    {
+      "id": "Q",
+      "name": "\"Hơi mệt\" + nhập tự do → fallback",
+      "desc": "User không chọn cluster sẵn, gõ triệu chứng tự do",
+      "steps": [
+        {
+          "action": "\"đau tai trái\" → không match",
+          "detail": "Matched: false",
+          "result": "{\"matched\":false}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Fallback 3 câu, trả lời nặng",
+          "detail": "Severity: high",
+          "result": "high",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Kiểm tra: fallback vẫn cho kết quả",
+          "detail": "Summary: Chú có triệu chứng nặng, cần đ",
+          "result": "Chú có triệu chứng nặng, cần được bác sĩ đánh giá.",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        },
+        {
+          "action": "Follow-up fallback: \"Nặng hơn\"",
+          "detail": "high → escalate",
+          "result": "{\"severity\":\"high\",\"followUpHours\":1,\"needsDoctor\":true,\"needsFamilyAlert\":true,\"action\":\"escalate\"}",
+          "passed": true,
+          "convo": null,
+          "conclusion": null,
+          "followUp": null
+        }
+      ],
+      "category": "fallback",
+      "pass": true,
+      "issues": [],
+      "passCount": 4,
+      "failCount": 0
+    }
+  ]
+}
