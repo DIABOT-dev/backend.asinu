@@ -12,6 +12,8 @@ const { sendPushNotification } = require('./push.notification.service');
 const { runCheckinFollowUps, runMorningCheckin, runAlertConfirmationFollowUps } = require('../checkin/checkin.service');
 const { t } = require('../../i18n');
 const { getHonorifics } = require('../../lib/honorifics');
+const { generateMessage } = require('./notification-intelligence.service');
+const { runReengagement } = require('./reengagement.service');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
@@ -22,6 +24,7 @@ const TYPE_PRIORITY = {
   health_alert: 'high',
   caregiver_alert: 'high',
   checkin_followup: 'high',
+  reengagement: 'medium',
   morning_checkin: 'medium',
   care_circle_invitation: 'medium',
   care_circle_accepted: 'medium',
@@ -261,15 +264,22 @@ async function runMorningSummary(pool, hour, minute) {
       ? `☀️ Good morning${name ? ' ' + name : ''}!`
       : `☀️ ${Honorific} ơi, ${selfRef} ghé hỏi thăm buổi sáng!`;
 
+    // Personalized body from Intelligence Layer
     let body;
-    if (user.last_symptom) {
-      body = isEn
-        ? `Yesterday you mentioned ${user.last_symptom} — how are you feeling today? Don't forget: ${tasks.join(', ')}. I'm here for you 💙`
-        : `Hôm qua ${honorific} có bị ${user.last_symptom} — hôm nay ${honorific} thấy đỡ hơn chưa? Nhớ ${tasks.join(', ')} nha. ${Honorific} có ${selfRef} ở đây cùng 💙`;
-    } else {
-      body = isEn
-        ? `A new day begins! Let's take care of your health together: ${tasks.join(', ')}. You're doing great 💪`
-        : `Ngày mới rồi! ${selfRef} cùng ${honorific} chăm sóc sức khoẻ nhé: ${tasks.join(', ')} 💪`;
+    try {
+      const msg = await generateMessage(pool, user.id, 'morning', user, { tasks: tasks.join(', ') });
+      body = msg.text + (tasks.length > 0 ? (isEn ? `. Don't forget: ${tasks.join(', ')} 💙` : `. Nhớ ${tasks.join(', ')} nha 💙`) : ' 💙');
+    } catch {
+      // Fallback to original logic
+      if (user.last_symptom) {
+        body = isEn
+          ? `Yesterday you mentioned ${user.last_symptom} — how are you feeling today? Don't forget: ${tasks.join(', ')}. I'm here for you 💙`
+          : `Hôm qua ${honorific} có bị ${user.last_symptom} — hôm nay ${honorific} thấy đỡ hơn chưa? Nhớ ${tasks.join(', ')} nha. ${Honorific} có ${selfRef} ở đây cùng 💙`;
+      } else {
+        body = isEn
+          ? `A new day begins! Let's take care of your health together: ${tasks.join(', ')}. You're doing great 💪`
+          : `Ngày mới rồi! ${selfRef} cùng ${honorific} chăm sóc sức khoẻ nhé: ${tasks.join(', ')} 💪`;
+      }
     }
 
     // Build missing types for deep link
@@ -305,19 +315,26 @@ async function runAfternoon(pool, hour, minute) {
     const title = isEn
       ? `🌤️ Hey${name ? ' ' + name : ''}, afternoon check-in`
       : `🌤️ ${Honorific} ơi, ${selfRef} ghé thăm buổi chiều!`;
+    // Personalized body from Intelligence Layer
     let body;
-    if (conditions.hasDiabetes) {
-      body = isEn
-        ? `How are you feeling this afternoon? Remember to drink water and check your blood sugar if you haven't yet 😊`
-        : `Chiều nay ${honorific} thấy thế nào? Nhớ uống nước và kiểm tra đường huyết nếu chưa nha. ${selfRef} luôn theo dõi cùng ${honorific} 😊`;
-    } else if (conditions.hasHypertension) {
-      body = isEn
-        ? `Take a little break if you can — rest is just as important as medicine. Have you had enough water today? 💧`
-        : `${Honorific} nghỉ tay chút đi nha — nghỉ ngơi cũng quan trọng như uống thuốc vậy. Hôm nay ${honorific} uống đủ nước chưa? 💧`;
-    } else {
-      body = isEn
-        ? `How's your afternoon going? Take a moment to stretch, drink some water, and breathe 🌿`
-        : `Buổi chiều của ${honorific} thế nào rồi? Vươn vai tí, uống ngụm nước nha. ${selfRef} ở đây cùng ${honorific} 🌿`;
+    try {
+      const msg = await generateMessage(pool, user.id, 'afternoon', user);
+      body = msg.text + ' 😊';
+    } catch {
+      // Fallback to original logic
+      if (conditions.hasDiabetes) {
+        body = isEn
+          ? `How are you feeling this afternoon? Remember to drink water and check your blood sugar if you haven't yet 😊`
+          : `Chiều nay ${honorific} thấy thế nào? Nhớ uống nước và kiểm tra đường huyết nếu chưa nha. ${selfRef} luôn theo dõi cùng ${honorific} 😊`;
+      } else if (conditions.hasHypertension) {
+        body = isEn
+          ? `Take a little break if you can — rest is just as important as medicine. Have you had enough water today? 💧`
+          : `${Honorific} nghỉ tay chút đi nha — nghỉ ngơi cũng quan trọng như uống thuốc vậy. Hôm nay ${honorific} uống đủ nước chưa? 💧`;
+      } else {
+        body = isEn
+          ? `How's your afternoon going? Take a moment to stretch, drink some water, and breathe 🌿`
+          : `Buổi chiều của ${honorific} thế nào rồi? Vươn vai tí, uống ngụm nước nha. ${selfRef} ở đây cùng ${honorific} 🌿`;
+      }
     }
     const target = conditions.hasDiabetes ? 'glucose' : conditions.hasHypertension ? 'blood_pressure' : 'home';
     if (await sendAndSave(pool, user, 'reminder_afternoon', title, body, {
@@ -385,15 +402,22 @@ async function runEveningSummary(pool, hour, minute) {
       ? `🌙 Good evening${name ? ' ' + name : ''}!`
       : `🌙 ${Honorific} ơi, tối rồi!`;
 
+    // Personalized body from Intelligence Layer
     let body;
-    if (user.last_symptom) {
-      body = isEn
-        ? `Before you rest tonight: ${tasks.join(', ')}. You mentioned ${user.last_symptom} recently — hope you're feeling better. Sleep well 💙`
-        : `Trước khi nghỉ ${honorific} nhớ: ${tasks.join(', ')} nha. Gần đây ${honorific} có bị ${user.last_symptom} — ${selfRef} mong ${honorific} đã đỡ hơn. Ngủ ngon 💙`;
-    } else {
-      body = isEn
-        ? `You did great today! Before bed, just remember: ${tasks.join(', ')}. Rest well, tomorrow is a new day 🌟`
-        : `Hôm nay ${honorific} giỏi lắm! Trước khi ngủ nhớ: ${tasks.join(', ')} nha. ${selfRef} chúc ${honorific} ngủ ngon 🌟`;
+    try {
+      const msg = await generateMessage(pool, user.id, 'evening', user, { tasks: tasks.join(', ') });
+      body = msg.text + ' 🌙';
+    } catch {
+      // Fallback to original logic
+      if (user.last_symptom) {
+        body = isEn
+          ? `Before you rest tonight: ${tasks.join(', ')}. You mentioned ${user.last_symptom} recently — hope you're feeling better. Sleep well 💙`
+          : `Trước khi nghỉ ${honorific} nhớ: ${tasks.join(', ')} nha. Gần đây ${honorific} có bị ${user.last_symptom} — ${selfRef} mong ${honorific} đã đỡ hơn. Ngủ ngon 💙`;
+      } else {
+        body = isEn
+          ? `You did great today! Before bed, just remember: ${tasks.join(', ')}. Rest well, tomorrow is a new day 🌟`
+          : `Hôm nay ${honorific} giỏi lắm! Trước khi ngủ nhớ: ${tasks.join(', ')} nha. ${selfRef} chúc ${honorific} ngủ ngon 🌟`;
+      }
     }
 
     const missingTypes = [];
@@ -563,6 +587,10 @@ async function runBasicNotifications(pool, forceHour = null, forceMinute = null)
   results.push(await runEveningSummary(pool, hour, minute));
   results.push(await runStreakMilestones(pool, hour, minute));
   if (hour === 20 && minute === 0 && dow === 0) results.push(await runWeeklyRecap(pool));
+  // Re-engagement: chạy 1 lần/ngày vào 9:00 sáng VN
+  if (hour === 9 && minute === 0) results.push(await runReengagement(pool, sendAndSave));
+  // Context-based alerts (severity high, trend worsening)
+  results.push(await runContextAlerts(pool));
   // Checkin follow-ups are urgent — run independently (not subject to reminder gap)
   const [followUps, alertFollowUps] = await Promise.all([
     runCheckinFollowUps(pool),
@@ -576,4 +604,57 @@ async function runBasicNotifications(pool, forceHour = null, forceMinute = null)
   return { ok: true, hour, minute, results, totalSent, totalEligible };
 }
 
-module.exports = { runBasicNotifications, sendAndSave, getPreferredHour };
+// ─── 9. Context-based alerts (event-triggered, not time-based) ───
+
+const { checkAlertTriggers, generateMessage: genAlertMsg } = require('./notification-intelligence.service');
+
+async function runContextAlerts(pool) {
+  // Query active users with recent check-in activity
+  const { rows: users } = await pool.query(`
+    SELECT u.id, u.push_token,
+           COALESCE(u.language_preference,'vi') AS lang,
+           u.display_name, u.full_name,
+           uop.birth_year, uop.gender
+    FROM users u
+    JOIN user_onboarding_profiles uop ON uop.user_id = u.id
+    JOIN user_lifecycle ul ON ul.user_id = u.id
+    WHERE u.push_token IS NOT NULL
+      AND u.deleted_at IS NULL
+      AND ul.segment IN ('active', 'semi_active')
+  `);
+
+  let sent = 0;
+  for (const user of users) {
+    try {
+      const result = await checkAlertTriggers(pool, user.id);
+      if (!result) continue;
+
+      const notifType = result.trigger === 'alert_severity' ? 'health_alert' : 'health_alert';
+
+      // Dedup: skip if same alert sent in last 12 hours
+      const { rows: recent } = await pool.query(
+        `SELECT 1 FROM notifications WHERE user_id = $1 AND type = $2
+         AND created_at >= NOW() - INTERVAL '12 hours' LIMIT 1`,
+        [user.id, notifType]
+      );
+      if (recent.length > 0) continue;
+
+      const msg = await genAlertMsg(pool, user.id, result.trigger, user);
+      const { Honorific } = getHonorifics(user);
+      const title = user.lang === 'en'
+        ? `Health Alert`
+        : `${Honorific} ơi, cần chú ý`;
+
+      if (await sendAndSave(pool, user, notifType, title, msg.text, {
+        type: notifType,
+        templateId: msg.templateId,
+        trigger: result.trigger,
+      })) sent++;
+    } catch (err) {
+      console.warn(`[ContextAlert] Failed for user ${user.id}:`, err.message);
+    }
+  }
+  return { type: 'context_alerts', total: users.length, sent };
+}
+
+module.exports = { runBasicNotifications, sendAndSave, getPreferredHour, runContextAlerts, runReengagement };

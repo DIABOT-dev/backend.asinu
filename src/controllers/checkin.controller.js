@@ -1,5 +1,6 @@
 const checkinService = require('../services/checkin/checkin.service');
 const engagementService = require('../services/profile/engagement.service');
+const { markActive } = require('../services/profile/lifecycle.service');
 const { t, getLang } = require('../i18n');
 
 async function startCheckinHandler(pool, req, res) {
@@ -9,6 +10,10 @@ async function startCheckinHandler(pool, req, res) {
   }
   try {
     const session = await checkinService.startCheckin(pool, req.user.id, status);
+    // Update lifecycle → active khi user check-in
+    markActive(pool, req.user.id).catch(err =>
+      console.warn('[Lifecycle] markActive failed:', err.message)
+    );
     return res.json({ ok: true, session });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

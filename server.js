@@ -22,6 +22,7 @@ const langMiddleware = require('./src/middleware/lang.middleware');
 const { getRedis } = require('./src/lib/redis');
 const { runBasicNotifications } = require('./src/services/notification/basic.notification.service');
 const { runNightlyCycle } = require('./src/services/checkin/rnd-cycle.service');
+const { updateAllSegments } = require('./src/services/profile/lifecycle.service');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -142,6 +143,24 @@ setInterval(async () => {
     console.warn('[cleanup] Chat history cleanup failed:', err?.message);
   }
 }, 24 * 60 * 60 * 1000);
+
+// Lifecycle segment update — runs at 1:00 AM Vietnam time (before R&D cycle)
+function scheduleLifecycleUpdate() {
+  const checkAndRun = async () => {
+    const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    if (vnNow.getHours() === 1 && vnNow.getMinutes() < 5) {
+      try {
+        console.log('[Lifecycle] Running daily segment update...');
+        const stats = await updateAllSegments(pool);
+        console.log('[Lifecycle] Update completed:', stats);
+      } catch (err) {
+        console.error('[Lifecycle] Update failed:', err?.message);
+      }
+    }
+  };
+  setInterval(checkAndRun, 5 * 60 * 1000);
+}
+scheduleLifecycleUpdate();
 
 // R&D Cycle — runs at 2:00 AM Vietnam time (UTC+7 = 19:00 UTC previous day)
 // Processes fallback logs, updates clusters, optimizes scripts

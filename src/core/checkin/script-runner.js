@@ -15,6 +15,7 @@
 
 const { evaluateScript, evaluateFollowUp } = require('./scoring-engine');
 const { getHonorifics } = require('../../lib/honorifics');
+const { applyIllusion } = require('./illusion-layer');
 
 // ─── Get next question from script ─────────────────────────────────────────
 
@@ -249,7 +250,39 @@ function validateScript(scriptData) {
 
 // ─── Exports ────────────────────────────────────────────────────────────────
 
+// ─── Illusion-enhanced question getter ────────────────────────────────────
+
+/**
+ * Get next question WITH illusion layer applied.
+ * Falls back to plain getNextQuestion if illusion fails.
+ *
+ * @param {object} scriptData
+ * @param {Array} answers
+ * @param {object} options - same as getNextQuestion + { illusionContext, user }
+ * @returns {object} Enhanced output
+ */
+function getNextQuestionWithIllusion(scriptData, answers, options = {}) {
+  const { illusionContext, user, lastAnswer, ...baseOptions } = options;
+
+  // Get base result
+  const result = getNextQuestion(scriptData, answers, baseOptions);
+
+  // Apply illusion if context + user provided
+  if (illusionContext && user) {
+    try {
+      return applyIllusion(result, scriptData, illusionContext, user, { lastAnswer });
+    } catch (err) {
+      console.warn('[IllusionLayer] Failed, using original:', err.message);
+      result._illusion = { applied: false, reason: 'error', error: err.message };
+      return result;
+    }
+  }
+
+  return result;
+}
+
 module.exports = {
   getNextQuestion,
+  getNextQuestionWithIllusion,
   validateScript,
 };

@@ -18,6 +18,10 @@ const OpenAI = require('openai');
 const { getPendingFallbacks, markFallbackProcessed } = require('./fallback.service');
 const { addCluster, updateClusterStats, generateScriptForCluster, toClusterKey } = require('./script.service');
 const { updateSymptomFrequency } = require('./symptom-tracker.service');
+const { getActiveUserIds, updateAllSegments, getUsersBySegment } = require('../profile/lifecycle.service');
+
+// Phase 6 #16: Priority compute — timeout limit để tránh cycle chạy quá lâu
+const MAX_CYCLE_MS = parseInt(process.env.RND_MAX_CYCLE_MS || '1800000', 10); // default 30 phút
 
 let _client = null;
 function getClient() {
@@ -49,29 +53,72 @@ async function runNightlyCycle(pool) {
 
     const stats = {
       usersProcessed: 0,
+      usersSkipped: 0,
+      activeProcessed: 0,
+      semiActiveProcessed: 0,
+      semiActiveSkippedTimeout: 0,
       fallbacksProcessed: 0,
       clustersCreated: 0,
       clustersUpdated: 0,
       scriptsRegenerated: 0,
+      scriptsReused: 0,
       aiCallsMade: 0,
+      elapsedMs: 0,
     };
 
-    // Step 1: Process fallback logs (unknown symptoms → label → cluster)
-    const fallbackStats = await processFallbackLogs(pool);
-    stats.fallbacksProcessed = fallbackStats.processed;
-    stats.clustersCreated = fallbackStats.clustersCreated;
-    stats.aiCallsMade += fallbackStats.aiCalls;
+    // Step 0: Update lifecycle segments
+    const lifecycleStats = await updateAllSegments(pool);
+    stats.usersSkipped = (lifecycleStats.inactive || 0) + (lifecycleStats.churned || 0);
 
-    // Step 2: Update cluster frequencies for all active users
-    const clusterStats = await updateAllClusterFrequencies(pool);
-    stats.usersProcessed = clusterStats.usersProcessed;
-    stats.clustersUpdated = clusterStats.clustersUpdated;
+    // Phase 6 #16: Get active vs semi_active separately for priority processing
+    const [activeUsers, semiActiveUsers] = await Promise.all([
+      getUsersBySegment(pool, 'active'),
+      getUsersBySegment(pool, 'semi_active'),
+    ]);
+    const activeIds = activeUsers.map(u => u.user_id);
+    const semiActiveIds = semiActiveUsers.map(u => u.user_id);
 
-    // Step 3: Optimize scripts for clusters with trend changes
-    const scriptStats = await optimizeScripts(pool);
-    stats.scriptsRegenerated = scriptStats.regenerated;
+    console.log(`[R&D] Priority: ${activeIds.length} active, ${semiActiveIds.length} semi_active, ${stats.usersSkipped} skipped`);
 
-    // Update cycle log
+    // ─── PRIORITY 1: Active users (full processing, no timeout) ──────────
+    const activeFallback = await processFallbackLogs(pool, activeIds);
+    stats.fallbacksProcessed += activeFallback.processed;
+    stats.clustersCreated += activeFallback.clustersCreated;
+    stats.aiCallsMade += activeFallback.aiCalls;
+
+    const activeCluster = await updateAllClusterFrequencies(pool, activeIds);
+    stats.activeProcessed = activeCluster.usersProcessed;
+    stats.clustersUpdated += activeCluster.clustersUpdated;
+
+    const activeScript = await optimizeScripts(pool, activeIds);
+    stats.scriptsRegenerated += activeScript.regenerated;
+
+    // ─── PRIORITY 2: Semi-active users (only if time remaining) ──────────
+    const elapsedAfterActive = Date.now() - cycleStart.getTime();
+    if (elapsedAfterActive < MAX_CYCLE_MS) {
+      const remainingMs = MAX_CYCLE_MS - elapsedAfterActive;
+      console.log(`[R&D] Active done in ${elapsedAfterActive}ms — ${Math.round(remainingMs/1000)}s remaining for semi_active`);
+
+      // Process semi_active with periodic timeout check
+      const semiResult = await processSemiActiveWithTimeout(
+        pool, semiActiveIds, cycleStart
+      );
+      stats.semiActiveProcessed = semiResult.usersProcessed;
+      stats.semiActiveSkippedTimeout = semiResult.skipped;
+      stats.fallbacksProcessed += semiResult.fallbacksProcessed;
+      stats.clustersCreated += semiResult.clustersCreated;
+      stats.clustersUpdated += semiResult.clustersUpdated;
+      stats.scriptsRegenerated += semiResult.scriptsRegenerated;
+      stats.aiCallsMade += semiResult.aiCalls;
+    } else {
+      console.log(`[R&D] ⚠️ TIMEOUT after active processing — skipping all ${semiActiveIds.length} semi_active users`);
+      stats.semiActiveSkippedTimeout = semiActiveIds.length;
+    }
+
+    stats.usersProcessed = stats.activeProcessed + stats.semiActiveProcessed;
+    stats.elapsedMs = Date.now() - cycleStart.getTime();
+
+    // Update cycle log với metrics chi tiết
     await pool.query(
       `UPDATE rnd_cycle_logs SET
          completed_at = NOW(),
@@ -81,15 +128,21 @@ async function runNightlyCycle(pool) {
          clusters_created = $4,
          clusters_updated = $5,
          scripts_regenerated = $6,
-         ai_calls_made = $7
+         ai_calls_made = $7,
+         active_processed = $8,
+         semi_active_processed = $9,
+         semi_active_skipped_timeout = $10,
+         scripts_reused = $11,
+         elapsed_ms = $12
        WHERE id = $1`,
       [cycleLogId, stats.usersProcessed, stats.fallbacksProcessed,
        stats.clustersCreated, stats.clustersUpdated,
-       stats.scriptsRegenerated, stats.aiCallsMade]
+       stats.scriptsRegenerated, stats.aiCallsMade,
+       stats.activeProcessed, stats.semiActiveProcessed,
+       stats.semiActiveSkippedTimeout, stats.scriptsReused, stats.elapsedMs]
     );
 
-    const elapsed = Date.now() - cycleStart.getTime();
-    console.log(`[R&D Cycle] Completed in ${elapsed}ms:`, stats);
+    console.log(`[R&D Cycle] Completed in ${stats.elapsedMs}ms:`, stats);
     return stats;
   } catch (err) {
     console.error('[R&D Cycle] Failed:', err.message);
@@ -107,6 +160,58 @@ async function runNightlyCycle(pool) {
   }
 }
 
+// ─── Phase 6 #16: Process semi-active with timeout check ────────────────────
+
+/**
+ * Process semi-active users batch-by-batch, checking timeout between batches.
+ * Skip remaining users if MAX_CYCLE_MS exceeded.
+ */
+async function processSemiActiveWithTimeout(pool, semiActiveIds, cycleStart) {
+  const result = {
+    usersProcessed: 0,
+    skipped: 0,
+    fallbacksProcessed: 0,
+    clustersCreated: 0,
+    clustersUpdated: 0,
+    scriptsRegenerated: 0,
+    aiCalls: 0,
+  };
+
+  if (!semiActiveIds || semiActiveIds.length === 0) return result;
+
+  // Process in small batches so timeout check is responsive
+  const BATCH_SIZE = 5;
+  for (let i = 0; i < semiActiveIds.length; i += BATCH_SIZE) {
+    // Check timeout before each batch
+    if (Date.now() - cycleStart.getTime() >= MAX_CYCLE_MS) {
+      result.skipped = semiActiveIds.length - i;
+      console.log(`[R&D] ⏱️ Timeout reached — skipping remaining ${result.skipped} semi_active users`);
+      break;
+    }
+
+    const batch = semiActiveIds.slice(i, i + BATCH_SIZE);
+
+    try {
+      // Run pipeline on this batch
+      const fb = await processFallbackLogs(pool, batch);
+      result.fallbacksProcessed += fb.processed;
+      result.clustersCreated += fb.clustersCreated;
+      result.aiCalls += fb.aiCalls;
+
+      const cl = await updateAllClusterFrequencies(pool, batch);
+      result.usersProcessed += cl.usersProcessed;
+      result.clustersUpdated += cl.clustersUpdated;
+
+      const sc = await optimizeScripts(pool, batch);
+      result.scriptsRegenerated += sc.regenerated;
+    } catch (err) {
+      console.warn(`[R&D] Batch failed (semi_active ${i}-${i + BATCH_SIZE}):`, err.message);
+    }
+  }
+
+  return result;
+}
+
 // ─── Step 1: Process fallback logs ──────────────────────────────────────────
 
 /**
@@ -116,7 +221,12 @@ async function runNightlyCycle(pool) {
  *   - Create new cluster or merge into existing
  *   - Generate script for new cluster
  */
-async function processFallbackLogs(pool) {
+async function processFallbackLogs(pool, activeUserIds = null) {
+  // If activeUserIds is explicitly empty → skip
+  if (Array.isArray(activeUserIds) && activeUserIds.length === 0) {
+    return { processed: 0, clustersCreated: 0, aiCalls: 0 };
+  }
+
   const fallbacks = await getPendingFallbacks(pool, 200);
   let processed = 0;
   let clustersCreated = 0;
@@ -130,6 +240,11 @@ async function processFallbackLogs(pool) {
   }
 
   for (const [userId, userFallbacks] of Object.entries(byUser)) {
+    // Skip inactive/churned users
+    if (activeUserIds && !activeUserIds.includes(parseInt(userId))) {
+      console.log(`[R&D] Skipping fallback processing for inactive user ${userId}`);
+      continue;
+    }
     // Get user's existing clusters
     const { rows: existingClusters } = await pool.query(
       `SELECT cluster_key, display_name FROM problem_clusters
@@ -235,14 +350,23 @@ CHỈ JSON.`;
 /**
  * Update frequency stats for all active clusters across all users.
  */
-async function updateAllClusterFrequencies(pool) {
+async function updateAllClusterFrequencies(pool, activeUserIds = null) {
   let usersProcessed = 0;
   let clustersUpdated = 0;
 
-  // Get all users with active clusters
-  const { rows: users } = await pool.query(
-    `SELECT DISTINCT user_id FROM problem_clusters WHERE is_active = TRUE`
-  );
+  // If activeUserIds is explicitly an empty array → no users to process
+  if (Array.isArray(activeUserIds) && activeUserIds.length === 0) {
+    return { usersProcessed: 0, clustersUpdated: 0 };
+  }
+
+  // Get users with active clusters (filtered by lifecycle)
+  let query = `SELECT DISTINCT user_id FROM problem_clusters WHERE is_active = TRUE`;
+  const params = [];
+  if (activeUserIds && activeUserIds.length > 0) {
+    query += ` AND user_id = ANY($1)`;
+    params.push(activeUserIds);
+  }
+  const { rows: users } = await pool.query(query, params);
 
   for (const { user_id } of users) {
     try {
@@ -309,12 +433,16 @@ async function updateAllClusterFrequencies(pool) {
  *   - Cluster trend = 'decreasing' → reduce questions (don't over-ask)
  *   - Cluster inactive for 30+ days → deactivate
  */
-async function optimizeScripts(pool) {
+async function optimizeScripts(pool, activeUserIds = null) {
   let regenerated = 0;
 
-  // Find clusters that need optimization
-  const { rows: clusters } = await pool.query(
-    `SELECT pc.*, ts.version, ts.id as script_id
+  // If activeUserIds is explicitly empty → skip
+  if (Array.isArray(activeUserIds) && activeUserIds.length === 0) {
+    return { regenerated: 0 };
+  }
+
+  // Find clusters that need optimization (filtered by lifecycle)
+  let query = `SELECT pc.*, ts.version, ts.id as script_id
      FROM problem_clusters pc
      LEFT JOIN triage_scripts ts ON ts.cluster_id = pc.id AND ts.is_active = TRUE AND ts.script_type = 'initial'
      WHERE pc.is_active = TRUE
@@ -322,8 +450,13 @@ async function optimizeScripts(pool) {
          pc.trend = 'increasing' AND pc.count_7d >= 3
          OR pc.trend = 'decreasing' AND pc.count_30d = 0
          OR ts.id IS NULL
-       )`
-  );
+       )`;
+  const params = [];
+  if (activeUserIds && activeUserIds.length > 0) {
+    query += ` AND pc.user_id = ANY($1)`;
+    params.push(activeUserIds);
+  }
+  const { rows: clusters } = await pool.query(query, params);
 
   for (const cluster of clusters) {
     try {
@@ -355,4 +488,6 @@ module.exports = {
   updateAllClusterFrequencies,
   optimizeScripts,
   labelSymptom,
+  processSemiActiveWithTimeout,
+  MAX_CYCLE_MS,
 };
