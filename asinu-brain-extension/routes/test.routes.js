@@ -110,7 +110,7 @@ function testRoutes(pool) {
   // ─── Test Triage Chat (conversational check-in) ───
   router.post('/triage-chat', async (req, res) => {
     try {
-      const { processTriageChat } = require('../../src/services/checkin/triage-chat');
+      const { processTriageChat } = require('../../src/core/checkin/triage-chat');
       const result = await processTriageChat(req.body);
       res.json(result);
     } catch (err) {

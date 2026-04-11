@@ -27,6 +27,7 @@ const { updateMissionProgress } = require('../missions/missions.service');
 const { t } = require('../../i18n');
 const { getHonorifics } = require('../../lib/honorifics');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
+const { buildCheckinContext, applyIllusion } = require('../../core/checkin/illusion-layer');
 
 // ─── Priority map ────────────────────────────────────────────────
 const TYPE_PRIORITY = {
@@ -551,6 +552,33 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
         followUpHours: calcFollowUpHours(isVeryUnwell ? 'high' : 'medium', previousAnswers.length),
       };
     }
+  }
+
+  // ── Illusion Layer: enhance response with continuity/empathy/progress ──
+  try {
+    const illusionCtx = await buildCheckinContext(pool, userId);
+    const lastAnswer = previousAnswers.length > 0 ? previousAnswers[previousAnswers.length - 1] : null;
+    const illusionUser = { id: userId, ...profile, lang: profile.lang || 'vi' };
+
+    if (result.isDone) {
+      // Conclusion: add progress feedback
+      const enhanced = applyIllusion(
+        { isDone: true, conclusion: { severity: result.severity }, currentStep: previousAnswers.length, totalSteps: previousAnswers.length },
+        {}, illusionCtx, illusionUser, {}
+      );
+      if (enhanced._progress) result._progress = enhanced._progress;
+    } else if (result.question) {
+      // Question: add empathy + continuity
+      const enhanced = applyIllusion(
+        { isDone: false, question: { id: `q${previousAnswers.length}`, text: result.question, type: 'single_choice' }, currentStep: previousAnswers.length, totalSteps: 8 },
+        { greeting: null }, illusionCtx, illusionUser, { lastAnswer }
+      );
+      if (enhanced._empathy) result._empathy = enhanced._empathy;
+      if (enhanced._continuity) result._continuity = enhanced._continuity;
+      if (enhanced._greeting) result._greeting = enhanced._greeting;
+    }
+  } catch (err) {
+    console.warn('[Illusion] Failed in triage, using original:', err.message);
   }
 
   // Save latest triage messages

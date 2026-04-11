@@ -1,0 +1,1076 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asinu Health - Check-in Test</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f5f0e8;
+    color: #333;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ─── Header ─── */
+  .header { background: linear-gradient(135deg, #08b8a2, #069b87); color: #fff; padding: 16px 20px; display: flex; align-items: center; gap: 12px; }
+  .header h1 { font-size: 18px; font-weight: 700; }
+  .header .user-info { font-size: 12px; opacity: 0.8; flex: 1; }
+  .header .logout-link {
+    padding: 6px 14px; border: 2px solid #fca5a5; background: rgba(255,255,255,0.1);
+    border-radius: 8px; font-weight: 600; color: #fef2f2; cursor: pointer; font-size: 12px;
+  }
+  .header .logout-link:hover { background: rgba(255,255,255,0.2); }
+
+  /* ─── Tabs ─── */
+  .tabs { display: flex; background: #fff; border-bottom: 2px solid #e5e5e5; }
+  .tab-btn {
+    flex: 1; padding: 12px 4px; text-align: center; font-weight: 600; font-size: 13px;
+    cursor: pointer; border: none; border-bottom: 3px solid transparent; color: #666;
+    background: transparent; transition: all 0.2s; white-space: nowrap;
+  }
+  .tab-btn.active { color: #08b8a2; border-bottom-color: #08b8a2; }
+
+  .tab-content { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .tab-content.active { display: flex; }
+
+  /* ─── Login Screen ─── */
+  .login-screen { display: flex; flex: 1; align-items: center; justify-content: center; }
+  .login-box {
+    width: 340px; padding: 32px 24px; background: #fff;
+    border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  }
+  .login-box h2 { font-size: 20px; color: #333; margin-bottom: 4px; }
+  .login-box .sub { font-size: 13px; color: #999; margin-bottom: 20px; }
+  .login-box label { display: block; font-size: 13px; font-weight: 600; color: #666; margin-bottom: 6px; }
+  .login-box .input-group { margin-bottom: 12px; }
+  .login-box input {
+    width: 100%; padding: 12px 14px; border: 2px solid #e0e0e0;
+    border-radius: 10px; font-size: 14px; outline: none;
+  }
+  .login-box input:focus { border-color: #08b8a2; }
+  .login-box button {
+    width: 100%; padding: 14px; background: #08b8a2; color: #fff;
+    border: none; border-radius: 10px; font-weight: 700; font-size: 15px; cursor: pointer;
+  }
+  .login-box button:disabled { opacity: 0.5; }
+  .login-box .error { color: #dc2626; font-size: 12px; margin-top: 8px; }
+
+  /* ─── Card (used inside scrollable panels) ─── */
+  .card {
+    background: #fff; border-radius: 16px; padding: 20px;
+    margin: 12px 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  .card h2 { font-size: 17px; margin-bottom: 14px; color: #1a1a1a; }
+  .card h3 { font-size: 15px; margin-bottom: 12px; color: #555; }
+
+  /* ─── Scrollable panel content ─── */
+  .panel-scroll { flex: 1; overflow-y: auto; padding: 0; }
+
+  /* ─── Status buttons (check-in) ─── */
+  .status-grid { display: flex; flex-direction: column; gap: 10px; }
+  .status-btn {
+    display: flex; align-items: center; gap: 12px; padding: 14px 18px;
+    border: 2px solid #e0e0e0; border-radius: 14px; background: #fff;
+    font-size: 15px; font-weight: 500; cursor: pointer; transition: all .2s;
+  }
+  .status-btn:hover { border-color: #08b8a2; background: #f0fdfa; }
+  .status-btn .emoji { font-size: 26px; }
+
+  .symptom-input-area { margin-top: 14px; padding-top: 14px; border-top: 1px solid #f0f0f0; }
+  .symptom-input-area label { font-size: 13px; color: #999; display: block; margin-bottom: 6px; }
+  .symptom-input-area input {
+    width: 100%; padding: 10px 14px; border: 2px solid #e0e0e0;
+    border-radius: 10px; font-size: 14px; outline: none;
+  }
+  .symptom-input-area input:focus { border-color: #08b8a2; }
+
+  /* ─── Chat bubbles (matching test-chat.html) ─── */
+  .chat-history { max-height: none; overflow-y: auto; padding: 4px 0; }
+
+  .bubble { padding: 12px 16px; border-radius: 16px; margin-bottom: 10px; font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; }
+  .bubble-greeting {
+    background: #fff; color: #333; border: 1px solid #e0e0e0;
+    border-bottom-left-radius: 4px; max-width: 85%; align-self: flex-start;
+  }
+  .bubble-continuity {
+    background: #fff; color: #333; border: 1px solid #e0e0e0;
+    border-bottom-left-radius: 4px; max-width: 85%;
+  }
+  .bubble-empathy {
+    background: #fef3c7; color: #92400e;
+    border-bottom-left-radius: 4px; max-width: 85%;
+  }
+  .bubble-progress {
+    background: #dcfce7; color: #16a34a;
+    border-bottom-left-radius: 4px; font-weight: 500; max-width: 85%;
+  }
+  .bubble-question {
+    background: #fff; border: 1px solid #e0e0e0; color: #333;
+    border-bottom-left-radius: 4px; max-width: 85%;
+  }
+  .bubble-answer {
+    background: #08b8a2; color: #fff; margin-left: 40px;
+    border-bottom-right-radius: 4px; border-bottom-left-radius: 16px;
+    max-width: 85%; align-self: flex-end;
+  }
+
+  /* ─── Options (pill style from test-chat.html) ─── */
+  .options-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .option-btn {
+    padding: 8px 16px; border-radius: 20px; border: 2px solid #08b8a2;
+    background: #fff; color: #08b8a2; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: all 0.2s; text-align: left;
+  }
+  .option-btn:hover { background: #08b8a2; color: #fff; }
+  .option-btn.selected { background: #08b8a2; color: #fff; }
+  .option-btn.multi.selected { background: #08b8a2; color: #fff; }
+
+  /* ─── Buttons ─── */
+  .btn {
+    display: inline-block; padding: 12px 24px; border: none; border-radius: 12px;
+    font-size: 15px; font-weight: 700; cursor: pointer; transition: all .2s; text-align: center;
+  }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .btn-primary { background: #08b8a2; color: #fff; width: 100%; }
+  .btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(8,184,162,0.4); }
+  .btn-secondary { background: #f0f0f0; color: #333; }
+  .btn-danger { background: linear-gradient(135deg, #F44336, #d32f2f); color: #fff; }
+
+  /* ─── Input group ─── */
+  .input-group { margin-bottom: 14px; }
+  .input-group label { display: block; font-size: 13px; font-weight: 600; color: #666; margin-bottom: 6px; }
+  .input-group input, .input-group textarea {
+    width: 100%; padding: 10px 14px; border: 2px solid #e0e0e0;
+    border-radius: 12px; font-size: 14px; font-family: inherit; outline: none; resize: none;
+  }
+  .input-group input:focus, .input-group textarea:focus { border-color: #08b8a2; }
+
+  /* ─── Slider ─── */
+  .slider-container { margin: 16px 0; text-align: center; }
+  .slider-container input[type=range] { width: 100%; margin: 8px 0; accent-color: #08b8a2; }
+  .slider-value { font-size: 28px; font-weight: 700; color: #08b8a2; }
+  .slider-labels { display: flex; justify-content: space-between; font-size: 12px; color: #999; }
+
+  /* ─── Severity badges (matching test-chat.html) ─── */
+  .severity-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+  }
+  .severity-low { background: #dcfce7; color: #16a34a; }
+  .severity-medium { background: #fef3c7; color: #d97706; }
+  .severity-high { background: #fecaca; color: #dc2626; }
+  .severity-critical { background: #dc2626; color: #fff; }
+
+  /* ─── Conclusion card ─── */
+  .conclusion-card { text-align: center; }
+  .conclusion-card .summary { font-size: 15px; color: #555; margin: 16px 0; line-height: 1.6; }
+  .conclusion-card .recommendation {
+    background: #fef3c7; padding: 12px 16px; border-radius: 12px;
+    font-size: 14px; color: #92400e; margin: 12px 0; line-height: 1.5;
+  }
+
+  /* ─── Status bar (bottom, matching test-chat.html) ─── */
+  .status-bar {
+    padding: 8px 16px; font-size: 12px; font-weight: 600;
+    border-top: 1px solid #e0f2f1; display: flex; align-items: center; gap: 8px;
+  }
+  .status-bar .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .status-bar.monitoring { background: #f0fdf4; color: #16a34a; }
+  .status-bar.monitoring .dot { background: #22c55e; }
+  .status-bar.follow_up { background: #fffbeb; color: #d97706; }
+  .status-bar.follow_up .dot { background: #f59e0b; }
+  .status-bar.high_alert { background: #fef2f2; color: #dc2626; }
+  .status-bar.high_alert .dot { background: #ef4444; }
+  .status-bar.resolved { background: #f0f9ff; color: #2563eb; }
+  .status-bar.resolved .dot { background: #3b82f6; }
+
+  /* ─── Spinner ─── */
+  .spinner {
+    display: inline-block; width: 20px; height: 20px;
+    border: 2.5px solid #e0e0e0; border-top-color: #08b8a2;
+    border-radius: 50%; animation: spin .6s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-overlay { display: flex; align-items: center; justify-content: center; padding: 24px; color: #999; font-size: 14px; }
+
+  /* ─── Error ─── */
+  .error-box {
+    background: #fef2f2; border: 1px solid #fecaca; color: #dc2626;
+    padding: 12px 16px; border-radius: 12px; font-size: 13px; margin-bottom: 12px;
+  }
+
+  /* ─── Info panel ─── */
+  .info-panel { margin-top: 8px; }
+  .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
+  .info-row:last-child { border-bottom: none; }
+  .info-label { color: #999; }
+  .info-value { font-weight: 600; color: #333; text-align: right; max-width: 60%; word-break: break-word; }
+
+  /* ─── Preview sections ─── */
+  .preview-section { margin-bottom: 20px; }
+  .preview-section h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #999; margin-bottom: 8px; }
+  .compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .compare-col { padding: 10px; border-radius: 10px; font-size: 13px; line-height: 1.5; }
+  .compare-col.original { background: #f5f0e8; color: #666; }
+  .compare-col.illusion { background: #e0f2f1; color: #047857; }
+  .compare-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; opacity: 0.7; }
+
+  /* ─── Notification cards ─── */
+  .notif-card {
+    border-left: 3px solid #08b8a2; padding: 10px 14px; margin-bottom: 10px;
+    background: #fff; border-radius: 0 10px 10px 0;
+  }
+  .notif-card .time-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: #08b8a2; margin-bottom: 4px; }
+  .notif-card .notif-text { font-size: 14px; line-height: 1.5; }
+  .notif-card .template-id { font-size: 11px; color: #999; margin-top: 4px; }
+
+  /* ─── JSON block ─── */
+  .json-block {
+    background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 10px;
+    font-size: 12px; font-family: 'SF Mono', Consolas, monospace;
+    overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+    max-height: 300px; overflow-y: auto;
+  }
+
+  .hidden { display: none !important; }
+
+  /* ─── Scrollbar ─── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<!-- =============== LOGIN SCREEN =============== -->
+<div id="screen-login" class="login-screen">
+  <div class="login-box">
+    <h2>Asinu AI</h2>
+    <div class="sub">Check-in Test UI</div>
+    <div class="input-group">
+      <label>User ID</label>
+      <input type="number" id="input-userid" value="4" min="1">
+    </div>
+    <div class="input-group">
+      <label>JWT Token (neu can)</label>
+      <input type="text" id="input-token" placeholder="De trong neu dung test endpoints">
+    </div>
+    <div id="login-error" class="error-box hidden"></div>
+    <button id="btn-login">Dang nhap</button>
+  </div>
+</div>
+
+<!-- =============== MAIN SCREEN (after login) =============== -->
+<div id="screen-main" class="hidden" style="flex:1;display:flex;flex-direction:column;">
+
+  <div class="header">
+    <h1>Asinu AI</h1>
+    <span class="user-info" id="user-info-text">User #4</span>
+    <span class="logout-link" id="btn-logout">Dang xuat</span>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="checkin">Check-in</button>
+    <button class="tab-btn" data-tab="illusion">Illusion</button>
+    <button class="tab-btn" data-tab="notif">Thong bao</button>
+    <button class="tab-btn" data-tab="reengage">Tai tiep can</button>
+    <button class="tab-btn" data-tab="info">Thong tin</button>
+  </div>
+
+  <!-- TAB: Check-in -->
+  <div class="tab-content active" id="tab-checkin">
+    <div class="panel-scroll">
+
+      <!-- Status selection -->
+      <div id="checkin-status" class="card">
+        <h2>Hom nay ban the nao?</h2>
+        <div class="status-grid">
+          <button class="status-btn" data-status="fine">
+            <span class="emoji">&#x1F60A;</span>
+            <span>Toi on</span>
+          </button>
+          <button class="status-btn" data-status="tired">
+            <span class="emoji">&#x1F610;</span>
+            <span>Hoi met</span>
+          </button>
+          <button class="status-btn" data-status="very_tired">
+            <span class="emoji">&#x1F630;</span>
+            <span>Rat met</span>
+          </button>
+        </div>
+        <div class="symptom-input-area">
+          <label>Mo ta trieu chung (tuy chon)</label>
+          <input type="text" id="input-symptom" placeholder="VD: dau dau, chong mat...">
+        </div>
+      </div>
+
+      <!-- Question area -->
+      <div id="checkin-questions" class="card hidden">
+        <div class="chat-history" id="chat-history"></div>
+        <div id="question-area"></div>
+        <div id="question-loading" class="loading-overlay hidden">
+          <span class="spinner"></span> Dang xu ly...
+        </div>
+      </div>
+
+      <!-- Conclusion -->
+      <div id="checkin-conclusion" class="card hidden">
+        <div class="conclusion-card" id="conclusion-content"></div>
+        <button class="btn btn-primary" id="btn-finish" style="margin-top: 16px;">Ket thuc</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- TAB: Illusion Preview -->
+  <div class="tab-content" id="tab-illusion">
+    <div class="panel-scroll">
+      <div class="card">
+        <h2>Illusion Layer Preview</h2>
+        <button class="btn btn-primary" id="btn-load-illusion" style="margin-bottom: 16px;">Tai Illusion Preview</button>
+        <div id="illusion-loading" class="loading-overlay hidden">
+          <span class="spinner"></span> Dang tai...
+        </div>
+        <div id="illusion-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Notification Preview -->
+  <div class="tab-content" id="tab-notif">
+    <div class="panel-scroll">
+      <div class="card">
+        <h2>Thong bao Preview</h2>
+        <button class="btn btn-primary" id="btn-load-notif" style="margin-bottom: 16px;">Tai Thong bao</button>
+        <div id="notif-loading" class="loading-overlay hidden">
+          <span class="spinner"></span> Dang tai...
+        </div>
+        <div id="notif-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Re-engagement Preview -->
+  <div class="tab-content" id="tab-reengage">
+    <div class="panel-scroll">
+      <div class="card">
+        <h2>Tai Tiep Can Preview</h2>
+        <button class="btn btn-primary" id="btn-load-reengage" style="margin-bottom: 16px;">Tai Re-engagement</button>
+        <div id="reengage-loading" class="loading-overlay hidden">
+          <span class="spinner"></span> Dang tai...
+        </div>
+        <div id="reengage-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Info Panel -->
+  <div class="tab-content" id="tab-info">
+    <div class="panel-scroll">
+      <div class="card">
+        <h2>Thong tin He thong</h2>
+        <button class="btn btn-primary" id="btn-load-info" style="margin-bottom: 16px;">Tai Thong tin</button>
+        <div id="info-loading" class="loading-overlay hidden">
+          <span class="spinner"></span> Dang tai...
+        </div>
+        <div id="info-content"></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /screen-main -->
+
+<script>
+(function() {
+  'use strict';
+
+  const BASE = window.location.origin;
+  let userId = parseInt(localStorage.getItem('asinu_userId')) || 4;
+  let token = localStorage.getItem('asinu_token') || '';
+  let sessionId = null;
+  let answers = [];
+  let currentQuestion = null;
+  let selectedOptions = [];
+
+  // ─── Helpers ──────────────────────────────────────────────────────
+
+  function $(sel) { return document.querySelector(sel); }
+  function $$(sel) { return document.querySelectorAll(sel); }
+
+  function show(el) { if (typeof el === 'string') el = $(el); el?.classList.remove('hidden'); }
+  function hide(el) { if (typeof el === 'string') el = $(el); el?.classList.add('hidden'); }
+
+  function headers() {
+    const h = { 'Content-Type': 'application/json' };
+    if (token) h['Authorization'] = 'Bearer ' + token;
+    return h;
+  }
+
+  async function api(method, path, body) {
+    const opts = { method, headers: headers() };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(BASE + path, opts);
+    const data = await res.json();
+    if (!res.ok && !data.ok) throw new Error(data.error || 'API error ' + res.status);
+    return data;
+  }
+
+  function showError(containerId, msg) {
+    const el = $(containerId);
+    if (el) { el.textContent = msg; show(el); }
+  }
+  function hideError(containerId) { hide(containerId); }
+
+  function escHtml(s) {
+    if (s == null) return '';
+    const d = document.createElement('div');
+    d.textContent = String(s);
+    return d.innerHTML;
+  }
+
+  function severityClass(sev) {
+    if (!sev) return 'severity-low';
+    const s = sev.toLowerCase();
+    if (s === 'critical') return 'severity-critical';
+    if (s === 'high') return 'severity-high';
+    if (s === 'medium') return 'severity-medium';
+    return 'severity-low';
+  }
+
+  function formatJson(obj) {
+    return '<div class="json-block">' + escHtml(JSON.stringify(obj, null, 2)) + '</div>';
+  }
+
+  // ─── Tabs ─────────────────────────────────────────────────────────
+
+  $$('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      $$('.tab-btn').forEach(b => b.classList.remove('active'));
+      $$('.tab-content').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      $('#tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ─── Login ────────────────────────────────────────────────────────
+
+  $('#btn-login').addEventListener('click', async () => {
+    userId = parseInt($('#input-userid').value) || 4;
+    token = $('#input-token').value.trim();
+    hideError('#login-error');
+    $('#btn-login').disabled = true;
+    $('#btn-login').innerHTML = '<span class="spinner"></span> Dang kiem tra...';
+
+    try {
+      const data = await api('GET', '/api/health/lifecycle/' + userId);
+      if (!data.ok) throw new Error(data.error || 'User khong ton tai');
+
+      localStorage.setItem('asinu_userId', userId);
+      if (token) localStorage.setItem('asinu_token', token);
+
+      $('#user-info-text').textContent = 'User #' + userId;
+      hide('#screen-login');
+      show('#screen-main');
+      // Fix: ensure flex display is restored
+      $('#screen-main').style.display = 'flex';
+      resetCheckin();
+    } catch (err) {
+      showError('#login-error', 'Loi: ' + err.message);
+    } finally {
+      $('#btn-login').disabled = false;
+      $('#btn-login').textContent = 'Dang nhap';
+    }
+  });
+
+  $('#btn-logout').addEventListener('click', () => {
+    localStorage.removeItem('asinu_token');
+    hide('#screen-main');
+    $('#screen-main').style.display = 'none';
+    show('#screen-login');
+    $('#screen-login').style.display = 'flex';
+  });
+
+  // ─── Check-in Flow ────────────────────────────────────────────────
+
+  function resetCheckin() {
+    sessionId = null;
+    answers = [];
+    currentQuestion = null;
+    selectedOptions = [];
+    $('#chat-history').innerHTML = '';
+    show('#checkin-status');
+    hide('#checkin-questions');
+    hide('#checkin-conclusion');
+  }
+
+  // Status buttons
+  $$('.status-btn').forEach(btn => {
+    btn.addEventListener('click', () => startCheckin(btn.dataset.status));
+  });
+
+  async function startCheckin(status) {
+    hide('#checkin-status');
+    show('#checkin-questions');
+    show('#question-loading');
+    $('#question-area').innerHTML = '';
+    $('#chat-history').innerHTML = '';
+    answers = [];
+
+    const symptomInput = $('#input-symptom').value.trim();
+
+    try {
+      // Use the illusion preview endpoint for the test flow
+      // since mobile endpoints require auth
+      const illusionData = await api('GET', '/api/health/illusion-preview/' + userId).catch(() => null);
+
+      // Try calling the script start endpoint (requires auth)
+      let data;
+      try {
+        const body = { status };
+        if (symptomInput) body.symptom_input = symptomInput;
+        data = await api('POST', '/api/mobile/checkin/script/start', body);
+      } catch (authErr) {
+        // If auth fails, use illusion preview data to simulate
+        if (illusionData && illusionData.ok && illusionData.illusion) {
+          data = {
+            ok: true,
+            session_id: 'preview_' + Date.now(),
+            cluster_key: illusionData.clusterKey || 'preview',
+            is_fallback: false,
+            isDone: false,
+            question: illusionData.illusion.question || illusionData.original?.question,
+            _greeting: illusionData.illusion?.greeting,
+            _continuity: illusionData.illusion?.continuity,
+            _illusion: illusionData.illusion?._illusion,
+          };
+        } else {
+          // Generate a fallback demo question set
+          data = {
+            ok: true,
+            session_id: 'demo_' + Date.now(),
+            cluster_key: 'demo',
+            is_fallback: true,
+            isDone: false,
+            question: {
+              id: 'demo_q1',
+              text: 'Ban co the mo ta them ve tinh trang cua minh khong?',
+              type: 'single_choice',
+              options: [
+                { label: 'Dau nhe', value: 1 },
+                { label: 'Dau vua', value: 2 },
+                { label: 'Dau nhieu', value: 3 },
+              ],
+            },
+          };
+        }
+      }
+
+      if (!data.ok) throw new Error(data.error || 'Khong the bat dau check-in');
+
+      sessionId = data.session_id;
+
+      // Handle "fine" status
+      if (data.needs_script === false) {
+        hide('#question-loading');
+        hide('#checkin-questions');
+        show('#checkin-conclusion');
+        $('#conclusion-content').innerHTML = `
+          <span class="severity-badge severity-low">Tot</span>
+          <p class="summary" style="margin-top:16px">${escHtml(data.message || 'Tot qua! Hen toi nay nhe.')}</p>
+        `;
+        return;
+      }
+
+      // Show greeting
+      if (data._greeting) {
+        addChatBubble('greeting', data._greeting);
+      }
+      if (data._continuity) {
+        addChatBubble('continuity', data._continuity);
+      }
+
+      hide('#question-loading');
+      renderQuestion(data);
+
+    } catch (err) {
+      hide('#question-loading');
+      $('#question-area').innerHTML = '<div class="error-box">' + escHtml(err.message) + '</div>';
+    }
+  }
+
+  function addChatBubble(type, text) {
+    const el = document.createElement('div');
+    el.className = 'bubble bubble-' + type;
+    el.textContent = text;
+    $('#chat-history').appendChild(el);
+    scrollChat();
+  }
+
+  function scrollChat() {
+    const ch = $('#chat-history');
+    ch.scrollTop = ch.scrollHeight;
+  }
+
+  function renderQuestion(data) {
+    if (data.isDone) {
+      showConclusion(data);
+      return;
+    }
+
+    const q = data.question;
+    if (!q) {
+      $('#question-area').innerHTML = '<div class="error-box">Khong co cau hoi tiep theo</div>';
+      return;
+    }
+
+    currentQuestion = q;
+    selectedOptions = [];
+
+    // Show empathy if present
+    if (data._empathy) {
+      addChatBubble('empathy', data._empathy);
+    }
+
+    let html = '';
+
+    // Question text
+    html += '<div class="bubble bubble-question">' + escHtml(q.text) + '</div>';
+
+    // Options
+    if (q.type === 'slider' || q.type === 'scale') {
+      const min = q.min || 0;
+      const max = q.max || 10;
+      const mid = Math.floor((min + max) / 2);
+      html += `
+        <div class="slider-container">
+          <div class="slider-value" id="slider-val">${mid}</div>
+          <input type="range" id="slider-input" min="${min}" max="${max}" value="${mid}">
+          <div class="slider-labels">
+            <span>${escHtml(q.min_label || min)}</span>
+            <span>${escHtml(q.max_label || max)}</span>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="btn-submit-answer">Tiep tuc</button>
+      `;
+    } else if (q.type === 'multi_choice') {
+      html += '<div class="options-list" id="options-list">';
+      (q.options || []).forEach((opt, i) => {
+        const label = typeof opt === 'string' ? opt : (opt.label || opt.text || opt);
+        const val = typeof opt === 'string' ? opt : (opt.value != null ? opt.value : opt.label || opt);
+        html += `<button class="option-btn multi" data-index="${i}" data-value="${escHtml(String(val))}">${escHtml(String(label))}</button>`;
+      });
+      html += '</div>';
+      html += '<button class="btn btn-primary" id="btn-submit-answer">Tiep tuc</button>';
+    } else if (q.type === 'free_text' || q.type === 'text') {
+      html += `
+        <div class="input-group" style="margin-top:12px">
+          <textarea id="free-text-input" rows="3" placeholder="Nhap cau tra loi..."></textarea>
+        </div>
+        <button class="btn btn-primary" id="btn-submit-answer">Tiep tuc</button>
+      `;
+    } else {
+      // single_choice or default
+      html += '<div class="options-list" id="options-list">';
+      (q.options || []).forEach((opt, i) => {
+        const label = typeof opt === 'string' ? opt : (opt.label || opt.text || opt);
+        const val = typeof opt === 'string' ? opt : (opt.value != null ? opt.value : opt.label || opt);
+        html += `<button class="option-btn single" data-index="${i}" data-value="${escHtml(String(val))}">${escHtml(String(label))}</button>`;
+      });
+      html += '</div>';
+    }
+
+    $('#question-area').innerHTML = html;
+
+    // Bind events
+    if (q.type === 'slider' || q.type === 'scale') {
+      const slider = $('#slider-input');
+      const valEl = $('#slider-val');
+      slider?.addEventListener('input', () => { valEl.textContent = slider.value; });
+      $('#btn-submit-answer')?.addEventListener('click', () => submitAnswer(parseInt(slider.value)));
+    } else if (q.type === 'multi_choice') {
+      $$('#options-list .option-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          btn.classList.toggle('selected');
+          const val = btn.dataset.value;
+          if (btn.classList.contains('selected')) {
+            selectedOptions.push(val);
+          } else {
+            selectedOptions = selectedOptions.filter(v => v !== val);
+          }
+        });
+      });
+      $('#btn-submit-answer')?.addEventListener('click', () => submitAnswer(selectedOptions));
+    } else if (q.type === 'free_text' || q.type === 'text') {
+      $('#btn-submit-answer')?.addEventListener('click', () => {
+        const text = $('#free-text-input')?.value?.trim();
+        if (text) submitAnswer(text);
+      });
+    } else {
+      // single choice — click to submit
+      $$('#options-list .option-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          $$('#options-list .option-btn').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          const val = btn.dataset.value;
+          // Auto-submit for single choice
+          setTimeout(() => submitAnswer(isNaN(val) ? val : Number(val)), 200);
+        });
+      });
+    }
+
+    scrollChat();
+  }
+
+  async function submitAnswer(answer) {
+    if (!currentQuestion) return;
+
+    // Show answered bubble
+    const answerText = Array.isArray(answer) ? answer.join(', ') : String(answer);
+    addChatBubble('answer', answerText);
+
+    answers.push({ question_id: currentQuestion.id, answer });
+
+    show('#question-loading');
+    $('#question-area').innerHTML = '';
+
+    try {
+      let data;
+      // Try the real API first
+      try {
+        data = await api('POST', '/api/mobile/checkin/script/answer', {
+          session_id: sessionId,
+          question_id: currentQuestion.id,
+          answer,
+        });
+      } catch (authErr) {
+        // Simulate: if we've answered 3+ questions, show conclusion
+        if (answers.length >= 3) {
+          data = {
+            ok: true,
+            isDone: true,
+            conclusion: {
+              severity: 'low',
+              summary: 'Tinh trang cua ban o muc nhe. Hay nghi ngoi va theo doi them.',
+              recommendation: 'Uong nhieu nuoc, nghi ngoi du giac. Neu trieu chung nang hon, hay lien he bac si.',
+              followUpHours: 24,
+              needsDoctor: false,
+            },
+          };
+        } else {
+          // Generate next demo question
+          const demoQuestions = [
+            { id: 'demo_q2', text: 'Trieu chung nay keo dai bao lau roi?', type: 'single_choice', options: ['Moi hom nay', '2-3 ngay', 'Hon 1 tuan', 'Hon 1 thang'] },
+            { id: 'demo_q3', text: 'Muc do dau tu 1-10?', type: 'slider', min: 1, max: 10, min_label: 'Nhe', max_label: 'Rat nang' },
+            { id: 'demo_q4', text: 'Ban co trieu chung nao khac khong?', type: 'multi_choice', options: ['Buon non', 'Chong mat', 'Met moi', 'Kho ngu', 'Khong co'] },
+          ];
+          const nextQ = demoQuestions[answers.length - 1] || demoQuestions[0];
+          data = { ok: true, isDone: false, question: nextQ };
+        }
+      }
+
+      if (!data.ok) throw new Error(data.error || 'Loi xu ly cau tra loi');
+
+      hide('#question-loading');
+      renderQuestion(data);
+
+    } catch (err) {
+      hide('#question-loading');
+      $('#question-area').innerHTML = '<div class="error-box">' + escHtml(err.message) + '</div>';
+    }
+  }
+
+  function showConclusion(data) {
+    hide('#checkin-questions');
+    show('#checkin-conclusion');
+
+    const c = data.conclusion || data;
+    const severity = c.severity || 'low';
+
+    let html = `<span class="severity-badge ${severityClass(severity)}">${escHtml(severity)}</span>`;
+
+    if (data._progress) {
+      html += `<div class="bubble bubble-progress" style="margin-top:16px;text-align:left">${escHtml(data._progress)}</div>`;
+    }
+
+    if (c.summary) {
+      html += `<p class="summary">${escHtml(c.summary)}</p>`;
+    }
+
+    if (c.recommendation) {
+      html += `<div class="recommendation">${escHtml(c.recommendation)}</div>`;
+    }
+
+    if (c.close_message) {
+      html += `<p class="summary" style="font-style:italic;color:#999">${escHtml(c.close_message)}</p>`;
+    }
+
+    if (c.needsDoctor) {
+      html += `<div class="error-box" style="margin-top:12px;text-align:left">Ban nen gap bac si som.</div>`;
+    }
+
+    if (c.followUpHours) {
+      html += `<p style="font-size:12px;color:#999;margin-top:8px">Theo doi lai sau ${c.followUpHours} gio</p>`;
+    }
+
+    $('#conclusion-content').innerHTML = html;
+  }
+
+  $('#btn-finish').addEventListener('click', resetCheckin);
+
+  // ─── Illusion Preview Tab ─────────────────────────────────────────
+
+  $('#btn-load-illusion').addEventListener('click', async () => {
+    show('#illusion-loading');
+    $('#illusion-content').innerHTML = '';
+
+    try {
+      const data = await api('GET', '/api/health/illusion-preview/' + userId);
+      hide('#illusion-loading');
+
+      if (!data.ok) throw new Error(data.error);
+
+      if (!data.illusion) {
+        $('#illusion-content').innerHTML = '<div class="error-box">' + escHtml(data.message || 'Khong co script active') + '</div>';
+        return;
+      }
+
+      let html = '';
+
+      // Context info
+      html += '<div class="preview-section"><h4>Context</h4>';
+      html += '<div class="info-panel">';
+      if (data.context) {
+        html += infoRow('Checkin count', data.context.checkin_count);
+        html += infoRow('Last severity', data.context.last_severity);
+        html += infoRow('Days since', data.context.days_since_last);
+        html += infoRow('Streak', data.context.streak);
+        html += infoRow('Time of day', data.context.time_of_day);
+      }
+      html += '</div></div>';
+
+      // Greeting comparison
+      html += '<div class="preview-section"><h4>Greeting</h4>';
+      html += '<div class="compare-grid">';
+      html += '<div class="compare-col original"><div class="compare-label">Original</div>' + escHtml(data.original?.greeting || '(none)') + '</div>';
+      html += '<div class="compare-col illusion"><div class="compare-label">Illusion</div>' + escHtml(data.illusion?.greeting || '(none)') + '</div>';
+      html += '</div></div>';
+
+      // Question comparison
+      html += '<div class="preview-section"><h4>Question</h4>';
+      html += '<div class="compare-grid">';
+      html += '<div class="compare-col original"><div class="compare-label">Original</div>' + escHtml(data.original?.question?.text || '(none)') + '</div>';
+      html += '<div class="compare-col illusion"><div class="compare-label">Illusion</div>' + escHtml(data.illusion?.question?.text || '(none)') + '</div>';
+      html += '</div></div>';
+
+      // Continuity
+      if (data.illusion?.continuity) {
+        html += '<div class="preview-section"><h4>Continuity</h4>';
+        html += '<div class="bubble bubble-continuity">' + escHtml(data.illusion.continuity) + '</div></div>';
+      }
+
+      // Empathy (step 1)
+      if (data.step1_empathy) {
+        html += '<div class="preview-section"><h4>Empathy (step 1)</h4>';
+        html += '<div class="bubble bubble-empathy">' + escHtml(data.step1_empathy) + '</div></div>';
+      }
+
+      // Progress (conclusion)
+      if (data.conclusion_progress) {
+        html += '<div class="preview-section"><h4>Progress (conclusion)</h4>';
+        html += '<div class="bubble bubble-progress">' + escHtml(data.conclusion_progress) + '</div></div>';
+      }
+
+      // Illusion metadata
+      if (data.illusion?._illusion) {
+        html += '<div class="preview-section"><h4>Illusion Meta</h4>';
+        html += formatJson(data.illusion._illusion);
+        html += '</div>';
+      }
+
+      // Cluster key
+      if (data.clusterKey) {
+        html += '<div class="preview-section"><h4>Cluster Key</h4>';
+        html += '<div style="font-size:13px;color:#666;font-family:monospace">' + escHtml(data.clusterKey) + '</div></div>';
+      }
+
+      $('#illusion-content').innerHTML = html;
+
+    } catch (err) {
+      hide('#illusion-loading');
+      $('#illusion-content').innerHTML = '<div class="error-box">' + escHtml(err.message) + '</div>';
+    }
+  });
+
+  // ─── Notification Preview Tab ─────────────────────────────────────
+
+  $('#btn-load-notif').addEventListener('click', async () => {
+    show('#notif-loading');
+    $('#notif-content').innerHTML = '';
+
+    const times = ['morning', 'afternoon', 'evening'];
+    const labels = { morning: 'Sang', afternoon: 'Chieu', evening: 'Toi' };
+    let html = '';
+
+    for (const t of times) {
+      try {
+        const data = await api('GET', '/api/health/notif-preview/' + userId + '/' + t);
+        html += `
+          <div class="notif-card">
+            <div class="time-label">${labels[t]}</div>
+            <div class="notif-text">${escHtml(data.message || '(khong co)')}</div>
+            <div class="template-id">Template: ${escHtml(data.templateId || 'N/A')}</div>
+          </div>
+        `;
+      } catch (err) {
+        html += `
+          <div class="notif-card">
+            <div class="time-label">${labels[t]}</div>
+            <div class="notif-text" style="color:#dc2626">${escHtml(err.message)}</div>
+          </div>
+        `;
+      }
+    }
+
+    hide('#notif-loading');
+    $('#notif-content').innerHTML = html;
+  });
+
+  // ─── Re-engagement Preview Tab ────────────────────────────────────
+
+  $('#btn-load-reengage').addEventListener('click', async () => {
+    show('#reengage-loading');
+    $('#reengage-content').innerHTML = '';
+
+    try {
+      const data = await api('GET', '/api/health/reengagement-preview/' + userId);
+      hide('#reengage-loading');
+
+      let html = '';
+
+      if (data.escalation) {
+        html += '<div class="preview-section"><h4>Escalation Level</h4>';
+        html += `<span class="severity-badge ${severityClass(data.escalation.level || 'low')}">${escHtml(data.escalation.level || data.escalation.name || 'N/A')}</span>`;
+        html += '</div>';
+      } else {
+        html += '<div class="bubble bubble-progress">User dang active, khong can re-engagement</div>';
+      }
+
+      if (data.message) {
+        html += '<div class="preview-section"><h4>Message</h4>';
+        html += '<div class="bubble bubble-greeting">' + escHtml(typeof data.message === 'string' ? data.message : data.message.text || JSON.stringify(data.message)) + '</div>';
+        html += '</div>';
+      }
+
+      if (data.lifecycle) {
+        html += '<div class="preview-section"><h4>Lifecycle</h4>';
+        html += '<div class="info-panel">';
+        html += infoRow('Segment', data.lifecycle.segment);
+        html += infoRow('Inactive days', data.lifecycle.inactive_days);
+        html += infoRow('Total checkins', data.lifecycle.total_checkins);
+        html += infoRow('Last checkin', data.lifecycle.last_checkin_at);
+        html += '</div></div>';
+      }
+
+      if (data.context) {
+        html += '<div class="preview-section"><h4>Raw Context</h4>';
+        html += formatJson(data.context);
+        html += '</div>';
+      }
+
+      if (data.reason) {
+        html += '<div style="font-size:12px;color:#999;margin-top:8px">' + escHtml(data.reason) + '</div>';
+      }
+
+      $('#reengage-content').innerHTML = html;
+
+    } catch (err) {
+      hide('#reengage-loading');
+      $('#reengage-content').innerHTML = '<div class="error-box">' + escHtml(err.message) + '</div>';
+    }
+  });
+
+  // ─── Info Tab ─────────────────────────────────────────────────────
+
+  $('#btn-load-info').addEventListener('click', async () => {
+    show('#info-loading');
+    $('#info-content').innerHTML = '';
+
+    let html = '';
+
+    // Lifecycle
+    try {
+      const data = await api('GET', '/api/health/lifecycle/' + userId);
+      html += '<div class="preview-section"><h4>Lifecycle</h4><div class="info-panel">';
+      if (data.lifecycle) {
+        html += infoRow('Segment', data.lifecycle.segment);
+        html += infoRow('Total checkins', data.lifecycle.total_checkins);
+        html += infoRow('Streak', data.lifecycle.current_streak);
+        html += infoRow('Last checkin', data.lifecycle.last_checkin_at);
+        html += infoRow('Inactive days', data.lifecycle.inactive_days);
+      }
+      html += '</div></div>';
+    } catch (err) {
+      html += '<div class="error-box">Lifecycle: ' + escHtml(err.message) + '</div>';
+    }
+
+    // Cache stats
+    try {
+      const data = await api('GET', '/api/health/cache/user/' + userId);
+      html += '<div class="preview-section"><h4>Script Cache</h4><div class="info-panel">';
+      if (data.stats) {
+        const s = data.stats;
+        html += infoRow('Total scripts', s.total_scripts);
+        html += infoRow('Active scripts', s.active_scripts);
+        html += infoRow('Total reuses', s.total_reuses);
+        html += infoRow('Clusters', s.cluster_count);
+      }
+      html += '</div></div>';
+    } catch (err) {
+      html += '<div class="error-box">Cache: ' + escHtml(err.message) + '</div>';
+    }
+
+    // Model route stats
+    try {
+      const data = await api('GET', '/api/health/ai/route-stats');
+      html += '<div class="preview-section"><h4>Model Router</h4>';
+      html += formatJson(data.stats || data);
+      html += '</div>';
+    } catch (err) {
+      html += '<div class="error-box">Route stats: ' + escHtml(err.message) + '</div>';
+    }
+
+    // AI cache stats
+    try {
+      const data = await api('GET', '/api/health/ai/cache-stats');
+      html += '<div class="preview-section"><h4>AI Context Cache</h4>';
+      html += formatJson(data.stats || data);
+      html += '</div>';
+    } catch (err) {
+      html += '<div class="error-box">AI cache: ' + escHtml(err.message) + '</div>';
+    }
+
+    hide('#info-loading');
+    $('#info-content').innerHTML = html;
+  });
+
+  function infoRow(label, value) {
+    return '<div class="info-row"><span class="info-label">' + escHtml(label) + '</span><span class="info-value">' + escHtml(value ?? 'N/A') + '</span></div>';
+  }
+
+  // ─── Auto-login if saved ──────────────────────────────────────────
+
+  if (localStorage.getItem('asinu_userId')) {
+    $('#input-userid').value = userId;
+    if (token) $('#input-token').value = token;
+  }
+
+})();
+</script>
+</body>
+</html>

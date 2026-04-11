@@ -18,6 +18,7 @@
 const { symptomMap, resolveComplaint, listComplaints } = require('./clinical-mapping');
 const { validateScript } = require('../../core/checkin/script-runner');
 const { getHonorifics } = require('../../lib/honorifics');
+const { reuseScript } = require('./script-cache.service');
 
 // ─── Cluster key mapping ────────────────────────────────────────────────────
 // Maps Vietnamese display names to cluster keys
@@ -891,6 +892,11 @@ async function getUserScript(pool, userId) {
     script_id: scriptMap[c.cluster_key]?.id || null,
     has_script: !!scriptMap[c.cluster_key],
   }));
+
+  // Phase 6: Track script reuse
+  for (const script of scripts) {
+    reuseScript(pool, userId, script.cluster_key).catch(() => {});
+  }
 
   return {
     greeting,

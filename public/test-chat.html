@@ -98,6 +98,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <div class="tab active" data-tab="checkin" onclick="switchTab('checkin')">Check-in</div>
   <div class="tab" data-tab="free" onclick="switchTab('free')">AI Tự do</div>
   <div class="tab" data-tab="chat" onclick="switchTab('chat')">Chat AI</div>
+  <div class="tab" data-tab="test" onclick="switchTab('test');loadTestData()">Test</div>
 </div>
 
 <!-- CHECK-IN PANEL (Chat-based triage) -->
@@ -143,6 +144,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
   <div class="input-area">
     <textarea id="chat-input" rows="2" placeholder="Hỏi Asinu bất cứ điều gì..."></textarea>
     <button onclick="sendChat()" id="chat-send">Gửi</button>
+  </div>
+</div>
+
+<!-- TEST PANEL — Dashboard tổng hợp, auto-load -->
+<div class="panel" id="panel-test">
+  <div class="messages" id="test-messages" style="padding:16px;">
+    <div class="msg system">Đang tải thông tin hệ thống...</div>
   </div>
 </div>
 
@@ -630,6 +638,57 @@ async function sendChat() {
 document.getElementById('checkin-input').addEventListener('keydown', e => { if (e.key==='Enter') { e.preventDefault(); sendTriageChat(); } });
 document.getElementById('free-input').addEventListener('keydown', e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); sendFree(); } });
 document.getElementById('chat-input').addEventListener('keydown', e => { if (e.key==='Enter'&&!e.shiftKey) { e.preventDefault(); sendChat(); } });
+
+// ─── TEST PANEL — Auto-load dashboard ───
+function addTestMsg(role, text, meta) { addMsg('test-messages', role, text, meta); }
+function clearTest() { document.getElementById('test-messages').innerHTML = ''; }
+async function testFetch(url) { try { return await (await fetch(url)).json(); } catch (e) { return { error: e.message }; } }
+
+async function loadTestData() {
+  if (!authUser) return;
+  clearTest();
+  const uid = authUser.id;
+
+  // Lifecycle
+  const lc = await testFetch('/api/health/lifecycle');
+  if (lc.ok) {
+    addTestMsg('ai', '👥 Lifecycle', `Active: ${lc.stats.active} | Semi: ${lc.stats.semi_active} | Inactive: ${lc.stats.inactive} | Churned: ${lc.stats.churned}`);
+  }
+
+  // Notification preview
+  const notif = await testFetch(`/api/health/notif-preview/${uid}/morning`);
+  if (notif.ok) {
+    addTestMsg('ai', '🔔 ' + notif.message, `template: ${notif.templateId}`);
+  }
+
+  // Re-engagement
+  const re = await testFetch(`/api/health/reengagement-preview/${uid}`);
+  if (re.ok) {
+    if (re.escalation) {
+      addTestMsg('ai', '🔄 Re-engagement: ' + re.message?.text, `level: ${re.escalation.level}`);
+    } else {
+      addTestMsg('system', '✅ Active — không cần re-engagement');
+    }
+  }
+
+  // Cache
+  const cache = await testFetch('/api/health/cache/global');
+  if (cache.ok) {
+    addTestMsg('system', `💾 Cache: ${cache.stats.total_active_scripts} scripts | ${cache.stats.total_reuses} reuses`);
+  }
+
+  // AI cache + Router
+  const aiCache = await testFetch('/api/health/ai/cache-stats');
+  const router = await testFetch('/api/health/ai/route-stats');
+  if (aiCache.ok) addTestMsg('system', `🧠 AI Cache: hits=${aiCache.stats.hits} | misses=${aiCache.stats.misses} | rate=${aiCache.stats.hitRate}%`);
+  if (router.ok) addTestMsg('system', `🔀 Router: small=${router.stats.smallCalls} | big=${router.stats.bigCalls} | saving=${router.stats.smallPct}%`);
+
+  // Last cycle
+  const rnd = await testFetch('/api/health/rnd-cycle/last');
+  if (rnd.ok && rnd.log) {
+    addTestMsg('system', `⚙️ R&D: ${rnd.log.status} | active=${rnd.log.active_processed} | semi=${rnd.log.semi_active_processed} | ${rnd.log.elapsed_ms}ms`);
+  }
+}
 
 // ─── Init ───
 if (authToken) initApp();
