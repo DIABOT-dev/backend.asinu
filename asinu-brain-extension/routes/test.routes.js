@@ -257,6 +257,177 @@ CHỈ JSON.`;
     }
   });
 
+  // ─── SSE Auto Check-in + Chat AI Demo ───
+  router.get('/auto-checkin', async (req, res) => {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+
+    const send = (event, data) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const { processTriageChat } = require('../../src/core/checkin/triage-chat');
+    const { buildSystemPrompt } = require('../../src/services/chat/chat.service');
+
+    const PROFILE = {
+      full_name: 'Chú Hùng', birth_year: 1960, gender: 'nam',
+      medical_conditions: ['tiểu đường', 'cao huyết áp'],
+    };
+
+    const LOGS_SUMMARY = {
+      latest_glucose: { value: 195, unit: 'mg/dL' },
+      latest_bp: { systolic: 148, diastolic: 92, pulse: 78 },
+    };
+
+    // ─── Helper: gọi Chat AI ───
+    async function chatAI(message) {
+      const systemPrompt = buildSystemPrompt(PROFILE, 0, LOGS_SUMMARY, [], 'vi', []);
+      const messages = [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: message },
+      ];
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + process.env.OPENAI_API_KEY },
+        body: JSON.stringify({ model: 'gpt-4o', messages, max_completion_tokens: 4096, temperature: 0.75 }),
+      });
+      const data = await response.json();
+      return (data.choices?.[0]?.message?.content || 'Lỗi')
+        .replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1')
+        .replace(/^#{1,6}\s+/gm, '').replace(/__(.+?)__/g, '$1').replace(/_(.+?)_/g, '$1').trim();
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PHẦN 1: CHECK-IN FLOWS
+    // ═══════════════════════════════════════════════════════════
+    const CHECKIN_SCENARIOS = [
+      {
+        name: '🏥 Luồng 1: Tôi ổn (fine)',
+        steps: [
+          { msg: '', label: 'Greeting' },
+          { msg: 'Tôi cảm thấy ổn, không có triệu chứng gì', label: 'Status: fine', extra: { initialStatus: 'fine' } },
+        ],
+      },
+      {
+        name: '🏥 Luồng 2: Hơi mệt → Triage đầy đủ',
+        steps: [
+          { msg: '', label: 'Greeting' },
+          { msg: 'Hơi mệt', label: 'Status: tired', extra: { initialStatus: 'tired' } },
+          { msg: 'đau đầu', label: 'Triệu chứng', extra: { initialStatus: 'tired' } },
+          { msg: 'Đau vùng trước trán, vẫn vậy không đỡ', label: 'Chi tiết + diễn tiến', extra: { initialStatus: 'tired' } },
+          { msg: 'Từ sáng, khoảng 4 tiếng', label: 'Thời gian', extra: { initialStatus: 'tired' } },
+          { msg: 'Chưa uống gì, chỉ nghỉ ngơi', label: 'Hành động', extra: { initialStatus: 'tired' } },
+        ],
+      },
+      {
+        name: '🚨 Luồng 3: Rất mệt → Red flag (cấp cứu)',
+        steps: [
+          { msg: '', label: 'Greeting' },
+          { msg: 'Rất mệt', label: 'Status: very_tired', extra: { initialStatus: 'very_tired' } },
+          { msg: 'Tôi bị đau ngực bên trái và khó thở', label: '🚨 Red flag', extra: { initialStatus: 'very_tired' } },
+        ],
+      },
+      {
+        name: '🔄 Luồng 4: Follow-up — đỡ hơn (3h sau)',
+        steps: [
+          { msg: '', label: 'Follow-up greeting', extra: { initialStatus: 'tired', previousSessionSummary: 'Đau đầu trước trán từ sáng, chưa uống thuốc', simulatedHour: 15 } },
+          { msg: 'Đỡ nhiều rồi', label: 'Đỡ hơn', extra: { initialStatus: 'tired', previousSessionSummary: 'Đau đầu trước trán', simulatedHour: 15 } },
+        ],
+      },
+      {
+        name: '⚠️ Luồng 5: Follow-up — nặng hơn',
+        steps: [
+          { msg: '', label: 'Follow-up greeting', extra: { initialStatus: 'tired', previousSessionSummary: 'Đau đầu nặng, huyết áp 160/95', simulatedHour: 18 } },
+          { msg: 'Nặng hơn, thêm chóng mặt và buồn nôn', label: 'Nặng hơn + triệu chứng mới', extra: { initialStatus: 'very_tired', previousSessionSummary: 'Đau đầu nặng', simulatedHour: 18 } },
+        ],
+      },
+      {
+        name: '🌙 Luồng 6: Check-in buổi tối (21h)',
+        steps: [
+          { msg: '', label: 'Evening greeting', extra: { initialStatus: 'fine', simulatedHour: 21 } },
+          { msg: 'Tôi ổn rồi, đỡ nhiều', label: 'Ổn buổi tối', extra: { initialStatus: 'fine', simulatedHour: 21 } },
+        ],
+      },
+    ];
+
+    // ═══════════════════════════════════════════════════════════
+    // PHẦN 2: CHAT AI QUESTIONS
+    // ═══════════════════════════════════════════════════════════
+    const CHAT_QUESTIONS = [
+      { category: '🍽️ Ăn uống', q: 'Tôi bị tiểu đường, ăn chuối mỗi ngày được không?' },
+      { category: '🍽️ Ăn uống', q: 'Buổi tối hay ăn mì gói vì tiện, có sao không?' },
+      { category: '🍽️ Ăn uống', q: 'Gợi ý bữa trưa ngon mà an toàn cho tôi' },
+      { category: '💊 Thuốc', q: 'Metformin 850mg uống ngày mấy lần, trước hay sau ăn?' },
+      { category: '💊 Thuốc', q: 'Uống thuốc huyết áp xong bị chóng mặt có sao không?' },
+      { category: '🩺 Sức khỏe', q: 'Đường huyết sáng nay 210, cao quá phải không?' },
+      { category: '🩺 Sức khỏe', q: 'Tôi hay bị tê bàn chân, nhất là buổi tối' },
+      { category: '🩺 Sức khỏe', q: 'Mắt tôi mờ dần, có phải do tiểu đường không?' },
+      { category: '🧠 Tâm lý', q: 'Tôi chán nản không muốn đo đường huyết nữa' },
+      { category: '🏃 Sinh hoạt', q: 'Đêm nào cũng đi tiểu 4-5 lần, ngủ không yên' },
+      { category: '🏃 Sinh hoạt', q: 'Uống bia mỗi tối 1 lon có được không?' },
+      { category: '🏃 Sinh hoạt', q: 'Uống cà phê có ảnh hưởng huyết áp không?' },
+    ];
+
+    const totalItems = CHECKIN_SCENARIOS.length + CHAT_QUESTIONS.length;
+    send('start', { totalScenarios: totalItems, profile: PROFILE, sections: ['Check-in Flows', 'Chat AI'] });
+
+    // ─── RUN CHECK-IN FLOWS ───
+    send('section', { name: '═══ PHẦN 1: CHECK-IN FLOWS ═══', count: CHECKIN_SCENARIOS.length });
+
+    for (const scenario of CHECKIN_SCENARIOS) {
+      send('scenario', { name: scenario.name });
+      let history = [];
+
+      for (const step of scenario.steps) {
+        send('user', { label: step.label, message: step.msg || '(greeting)' });
+
+        try {
+          const result = await processTriageChat({
+            message: step.msg, profile: PROFILE, history, ...(step.extra || {}),
+          });
+          history.push(
+            ...(step.msg ? [{ role: 'user', content: step.msg }] : []),
+            { role: 'assistant', content: result.reply || '' }
+          );
+          send('ai', {
+            reply: result.reply, isDone: result.isDone || false,
+            severity: result.severity, options: result.options,
+            summary: result.summary, recommendation: result.recommendation,
+            needsDoctor: result.needsDoctor, hasRedFlag: result.hasRedFlag,
+            followUpHours: result.followUpHours,
+          });
+        } catch (err) {
+          send('error', { step: step.label, error: err.message });
+        }
+      }
+      send('scenario_done', { name: scenario.name });
+    }
+
+    // ─── RUN CHAT AI ───
+    send('section', { name: '═══ PHẦN 2: CHAT AI ═══', count: CHAT_QUESTIONS.length });
+
+    for (const item of CHAT_QUESTIONS) {
+      send('scenario', { name: item.category });
+      send('user', { label: item.category, message: item.q });
+
+      try {
+        const reply = await chatAI(item.q);
+        const sentences = reply.split(/[.!?]/).filter(s => s.trim()).length;
+        send('ai', { reply, isDone: true, meta: `${sentences} câu | ${reply.length} ký tự` });
+      } catch (err) {
+        send('error', { step: item.category, error: err.message });
+      }
+      send('scenario_done', { name: item.category });
+    }
+
+    send('done', { message: 'Hoàn tất! ' + totalItems + ' tests (6 check-in + 12 chat AI)' });
+    res.end();
+  });
+
   return router;
 }
 
