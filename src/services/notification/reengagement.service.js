@@ -30,33 +30,33 @@ const REENGAGEMENT_TEMPLATES = {
   d2_gentle_with_symptom: {
     id: 'reengage_d2_gentle_symptom',
     level: 'gentle',
-    vi: '{callName} ơi, hôm trước {honorific} có bị {symptom}. Hôm nay {honorific} thế nào rồi?',
-    en: '{callName}, you had {symptom} recently. How are you feeling today?',
+    vi: '💬 {callName} ơi, hôm trước {honorific} có bị {symptom}. Hôm nay {honorific} thế nào rồi?',
+    en: '💬 {callName}, you had {symptom} recently. How are you feeling today?',
   },
   d2_gentle_no_symptom: {
     id: 'reengage_d2_gentle',
     level: 'gentle',
-    vi: '{callName} ơi, {selfRef} chưa thấy {honorific} check-in. Mọi thứ ổn chứ ạ?',
-    en: '{callName}, I haven\'t seen you check in today. Is everything okay?',
+    vi: '👋 {callName} ơi, {selfRef} chưa thấy {honorific} check-in. Mọi thứ ổn chứ ạ?',
+    en: '👋 {callName}, I haven\'t seen you check in today. Is everything okay?',
   },
 
   // D3-4: concerned, mention symptom + previous severity
   d4_concerned_with_symptom: {
     id: 'reengage_d4_concerned_symptom',
     level: 'concerned',
-    vi: '{callName} ơi, mấy hôm nay {honorific} chưa cập nhật. {symptom} có đỡ hơn không ạ? {selfRef} hơi lo',
+    vi: '😟 {callName} ơi, mấy hôm nay {honorific} chưa cập nhật. {symptom} có đỡ hơn không ạ? {selfRef} hơi lo',
     en: '{callName}, you haven\'t updated for a few days. Has your {symptom} improved?',
   },
   d4_concerned_was_severe: {
     id: 'reengage_d4_concerned_severe',
     level: 'concerned',
-    vi: '{callName} ơi, lần trước {honorific} có triệu chứng nặng. {selfRef} hơi lo, {honorific} ổn không?',
+    vi: '🩺 {callName} ơi, lần trước {honorific} có triệu chứng nặng. {selfRef} hơi lo, {honorific} ổn không?',
     en: '{callName}, you had severe symptoms last time. I\'m concerned, are you okay?',
   },
   d4_concerned_default: {
     id: 'reengage_d4_concerned',
     level: 'concerned',
-    vi: '{callName} ơi, {days} ngày nay {honorific} chưa check-in. {selfRef} muốn nghe tin {honorific}',
+    vi: '📋 {callName} ơi, {days} ngày nay {honorific} chưa check-in. {selfRef} muốn nghe tin {honorific}',
     en: '{callName}, it\'s been {days} days. I\'d like to hear from you',
   },
 
@@ -64,13 +64,13 @@ const REENGAGEMENT_TEMPLATES = {
   d7_worried_with_symptom: {
     id: 'reengage_d7_worried_symptom',
     level: 'worried',
-    vi: '{callName} ơi, đã {days} ngày rồi. Nếu {honorific} vẫn còn {symptom}, mình nên kiểm tra lại sớm nhé',
+    vi: '⚠️ {callName} ơi, đã {days} ngày rồi. Nếu {honorific} vẫn còn {symptom}, mình nên kiểm tra lại sớm nhé',
     en: '{callName}, it\'s been {days} days. If your {symptom} persists, please check in soon',
   },
   d7_worried_default: {
     id: 'reengage_d7_worried',
     level: 'worried',
-    vi: '{callName} ơi, {days} ngày rồi {honorific} chưa quay lại. {selfRef} mong {honorific} ổn',
+    vi: '😔 {callName} ơi, {days} ngày rồi {honorific} chưa quay lại. {selfRef} mong {honorific} ổn',
     en: '{callName}, {days} days without you. I hope you\'re okay',
   },
 
@@ -78,7 +78,7 @@ const REENGAGEMENT_TEMPLATES = {
   d8_urgent: {
     id: 'reengage_d8_urgent',
     level: 'urgent',
-    vi: '{callName} ơi, {selfRef} rất lo cho {honorific}. Đã {days} ngày rồi. {honorific} vào check-in ngay nhé',
+    vi: '🚨 {callName} ơi, {selfRef} rất lo cho {honorific}. Đã {days} ngày rồi. {honorific} vào check-in ngay nhé',
     en: '{callName}, I\'m really worried. It\'s been {days} days. Please check in now',
   },
 
@@ -86,7 +86,7 @@ const REENGAGEMENT_TEMPLATES = {
   care_circle_alert: {
     id: 'reengage_care_circle',
     level: 'family',
-    vi: 'Người thân của bạn ({patientName}) đã không check-in {days} ngày. Vui lòng liên hệ kiểm tra giúp',
+    vi: '👨‍👩‍👦 Người thân của bạn ({patientName}) đã không check-in {days} ngày. Vui lòng liên hệ kiểm tra giúp',
     en: 'Your family member ({patientName}) hasn\'t checked in for {days} days. Please reach out',
   },
 };

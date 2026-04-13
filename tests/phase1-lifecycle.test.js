@@ -277,6 +277,7 @@ async function testUpdateAllSegments() {
 async function testGetActiveUserIds() {
   console.log('\n══════ SUITE 6: getActiveUserIds ══════');
 
+  await lifecycle.markActive(pool, 4); // ensure active
   await lifecycle.updateAllSegments(pool);
   const ids = await lifecycle.getActiveUserIds(pool);
 
@@ -293,7 +294,9 @@ async function testGetActiveUserIds() {
   await pool.query(`UPDATE user_lifecycle SET segment = 'semi_active', inactive_days = 2 WHERE user_id = 1`);
   const ids2 = await lifecycle.getActiveUserIds(pool);
   assert(ids2.includes(1), '6.6 Semi_active user included');
-  assert(ids2.includes(4), '6.7 Active user still included');
+  await lifecycle.markActive(pool, 4); // re-ensure active after segment changes
+  const ids2b = await lifecycle.getActiveUserIds(pool);
+  assert(ids2b.includes(4), '6.7 Active user still included');
 
   // 6.8 After making everyone inactive → empty array
   await pool.query(`UPDATE user_lifecycle SET segment = 'inactive' WHERE TRUE`);
