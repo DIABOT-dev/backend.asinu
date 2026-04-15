@@ -1,0 +1,677 @@
+═══════════════════════════════════════════════════════════════════════════
+  ASINU AI — TEST 50 CÂU HỎI & ĐÁNH GIÁ
+  Profile: Chú Hùng, 65 tuổi, tiểu đường + cao huyết áp
+  Ngày: 15/4/2026 14:40:24
+  Prompt version: Optimized 5-layer + few-shot
+═══════════════════════════════════════════════════════════════════════════
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ĂN UỐNG
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Câu 1.
+👤 Ăn xôi buổi sáng có sao không?
+
+🤖 Được chứ chú, ăn xôi buổi sáng không sao đâu, nhưng chú chỉ nên ăn khoảng nửa bát nhỏ thôi nha. Ăn cùng vài miếng rau, trứng hoặc một ít cá để cân bằng dinh dưỡng và tránh tăng đường huyết quá nhanh. Sau khi ăn, chú nhớ đo lại đường huyết để xem cơ thể phản ứng thế nào nhé.
+
+Đường huyết gần đây của chú là 195 mg/dL, hơi cao so với ngưỡng sau ăn cho người tiểu đường. Vì vậy, theo dõi kỹ và điều chỉnh chế độ ăn uống sẽ giúp tình hình tốt hơn. Có thắc mắc gì thêm về dinh dưỡng không chú? 😊
+
+📏 6 câu | 492 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 2.
+👤 Tôi thèm ăn phở quá, ăn được không?
+
+🤖 Chú ăn phở được, nhưng nhớ điều chỉnh một chút để hợp với tình trạng sức khỏe nhé. 
+
+Phở có thể làm đường huyết tăng nếu không kiểm soát lượng tinh bột. Chú nên ăn khoảng 1/2 bát phở thôi, và chọn loại có nhiều rau và thịt nạc. Tránh thêm quá nhiều nước dùng vì nó có thể chứa nhiều muối, không tốt cho huyết áp của chú đâu.
+
+Hôm nay, chú thử ăn theo cách đó và sau 1-2 giờ đo đường huyết xem sao nhé. Nếu thấy ổn, lần sau mình vẫn có thể tiếp tục cách này. 
+
+Có món nào khác chú muốn thử điều chỉnh không? 🍜
+
+📏 7 câu | 509 ký tự | Điểm: 8/10 | ⚠️ CỨng nhắc
+───────────────────────────────────────────────────────────────────────
+
+Câu 3.
+👤 Uống sữa đậu nành có tốt cho tiểu đường không?
+
+🤖 Chú ơi, uống sữa đậu nành vẫn ổn cho người tiểu đường, nhưng cần chú ý lượng và không thêm đường vào nha. 
+
+Sữa đậu nành có chất xơ và protein, giúp kiểm soát đường huyết tốt hơn. Nhưng nếu uống quá nhiều hoặc sữa có thêm đường thì có thể làm đường huyết tăng cao. Với chỉ số đường huyết của chú gần đây là 195 mg/dL (từ hồ sơ), chú nên kiểm soát kỹ. 
+
+Hôm nay, chú thử uống một ly nhỏ sữa đậu nành không đường thôi nhé. Sau khi uống khoảng 1-2 tiếng, chú đo lại đường huyết xem phản ứng của cơ thể ra sao. Có gì cứ hỏi, cháu ở đây giúp chú! 😊
+
+📏 7 câu | 544 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 4.
+👤 Ăn khoai lang thay cơm được không?
+
+🤖 Chú ơi, khoai lang là lựa chọn khá tốt nếu muốn thay cơm, nhất là cho người tiểu đường như chú. Khoai lang có chỉ số đường huyết thấp hơn cơm trắng, giúp kiểm soát đường huyết tốt hơn đấy.
+
+Mỗi bữa, chú có thể ăn khoảng 1-2 củ khoai lang nhỏ, kết hợp với rau xanh và protein như cá hoặc đậu phụ để đảm bảo đủ dinh dưỡng. Chú cũng nên đo lại đường huyết sau bữa ăn để xem cơ thể phản ứng thế nào nhé.
+
+Hôm nay chú thử làm món khoai lang hấp với một chút muối ít và rau luộc đi. Sau đó nhớ theo dõi xem đường huyết có ổn định không nha. Có gì cần hỏi thêm chú cứ nhắn cháu nhé! 😊
+
+📏 7 câu | 578 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 5.
+👤 Trái bưởi ăn nhiều có tốt không?
+
+🤖 Chú ơi, trái bưởi là một lựa chọn tốt cho sức khỏe, nhưng ăn nhiều quá cũng không ổn đâu. Bưởi chứa nhiều vitamin C và chất xơ, giúp tăng cường miễn dịch và hỗ trợ tiêu hóa. Tuy nhiên, chú cũng biết đấy, cái gì nhiều quá cũng không tốt — ăn quá nhiều bưởi có thể gây khó chịu dạ dày hoặc thậm chí ảnh hưởng đến việc hấp thụ một số loại thuốc.
+
+Hôm nay chú ăn khoảng một nửa trái bưởi thôi, kèm theo bữa ăn chính để tránh việc đường huyết tăng nhanh. Đồng thời, theo dõi xem có dấu hiệu đau bụng hay khó tiêu không nhé. Nếu có vấn đề gì, nhắn cháu liền nha! 😊
+
+📏 6 câu | 559 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 6.
+👤 Nước ép cam uống hàng ngày được không?
+
+🤖 Chú ơi, nước ép cam thì bổ sung vitamin C tốt đấy, nhưng với tiểu đường thì không nên uống quá nhiều đâu. Nước cam có đường tự nhiên, uống nhiều dễ làm đường huyết tăng cao. 
+
+Chú có thể uống một cốc nhỏ, khoảng 100-150ml mỗi ngày, nhưng nhớ ăn kèm bữa ăn có protein và chất xơ để giảm tốc độ hấp thu nha. Đo đường huyết sau đó để xem cơ thể phản ứng thế nào nhé. 🧃
+
+Hôm nay chú thử uống 100ml nước cam kèm một bữa sáng đầy đủ protein và rau, rồi đo lại đường huyết sau ăn xem sao. Có gì không ổn thì nói cháu biết nha!
+
+📏 6 câu | 520 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 7.
+👤 Ăn trứng mỗi ngày 2 quả có sao không?
+
+🤖 Chú ơi, ăn trứng mỗi ngày 2 quả cũng được, nhưng cần chú ý đến tổng lượng cholesterol trong ngày. Trứng cung cấp nhiều chất dinh dưỡng tốt, nhưng lòng đỏ chứa nhiều cholesterol, có thể ảnh hưởng đến huyết áp và tim mạch.
+
+Với người tiểu đường và cao huyết áp như chú, nên ăn tối đa 3-4 quả trứng mỗi tuần thôi. Nên kết hợp ăn kèm rau xanh, trái cây ít ngọt và hạn chế các thức ăn giàu chất béo bão hòa khác để giữ mọi thứ cân bằng.
+
+Hôm nay, nếu đã ăn trứng rồi thì chú nên chọn các món nhẹ nhàng như salad hoặc canh rau trong bữa tiếp theo. Và nhớ theo dõi huyết áp thường xuyên nhé.
+
+Nếu có thắc mắc gì thêm về chế độ ăn uống thì cứ nhắn cháu nha! 😊
+
+📏 7 câu | 652 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 8.
+👤 Mắm tôm, mắm nêm có ảnh hưởng huyết áp không?
+
+🤖 Chú ơi, đúng là mắm tôm và mắm nêm có thể ảnh hưởng đến huyết áp của mình. Chúng thường chứa khá nhiều muối, mà muối thì dễ làm tăng huyết áp. Điều này không tốt cho mình khi đã bị cao huyết áp rồi.
+
+Hôm nay chú thử ăn nhạt hơn một chút, tránh mắm mặn, rồi tối đo lại huyết áp xem có tiến triển gì không nhé. Chú cũng nên theo dõi chỉ số huyết áp thường xuyên để biết cách điều chỉnh chế độ ăn uống cho phù hợp.
+
+Nếu cần thêm gợi ý món ăn nào khác an toàn cho sức khỏe, chú cứ nhắn cháu nha! 😊
+
+📏 6 câu | 494 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 9.
+👤 Tôi hay ăn cháo trắng buổi sáng, có tốt không?
+
+🤖 Chú ơi, cháo trắng thì dễ ăn nhưng không có nhiều dinh dưỡng đâu. Với tiểu đường và huyết áp, chú nên ăn thêm một chút protein và rau xanh để cân bằng lượng đường hấp thu vào cơ thể. Ví dụ, chú có thể ăn cháo kèm một quả trứng luộc và một chút rau cải luộc để bữa sáng giàu dinh dưỡng hơn.
+
+Hôm nay, chú thử thêm trứng luộc vào cháo nhé, rồi ghi nhận cảm giác no và mức đường huyết sau bữa ăn xem sao. Nếu thấy ổn định thì tiếp tục cách này. 😊
+
+Nếu cần thêm ý tưởng cho bữa sáng thì nhắn cháu nha!
+
+📏 6 câu | 498 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 10.
+👤 Gợi ý cho tôi 3 món ăn tối phù hợp
+
+🤖 Chú ơi, để bữa tối ngon miệng mà vẫn giữ được sức khỏe, cháu gợi ý cho chú mấy món này nha:
+
+1. Cá hấp cuốn bánh tráng: Cá chứa nhiều omega-3 tốt cho tim mạch. Chú có thể chọn cá hồi hoặc cá basa, hấp cùng ít gừng và hành. Ăn kèm rau sống và bánh tráng là tuyệt vời.
+
+2. Gà luộc với khoai lang: Gà luộc ngon, ít dầu mỡ, kết hợp với khoai lang nướng sẽ cung cấp đủ năng lượng mà không làm tăng đường huyết nhanh chóng. Chú nhớ hạn chế muối khi luộc gà nhé.
+
+3. Canh chua cá lóc: Món này vừa dễ ăn lại giàu dinh dưỡng. Nấu canh chua cá lóc với cà chua, dọc mùng và giá đỗ là đủ chất rồi.
+
+Chú thử xem món nào hợp khẩu vị nhất để chế biến tối nay nhé! 🍽️
+
+📏 9 câu | 652 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 11.
+👤 Uống trà sữa có ảnh hưởng gì không?
+
+🤖 Chú ơi, với bệnh tiểu đường như của chú, trà sữa có thể làm tăng đường huyết khá nhanh đấy. Trà sữa thường chứa nhiều đường và calo, không tốt cho sức khỏe của chú chút nào đâu.
+
+Thay vì uống trà sữa, chú có thể thử uống trà xanh không đường hoặc nước chanh ít đường để vừa giải khát vừa không ảnh hưởng nhiều đến đường huyết. Nếu thèm quá, thì chỉ nên uống một tí thôi và theo dõi đường huyết sau đó xem cơ thể phản ứng ra sao nhé.
+
+Hôm nay, chú thử pha một cốc trà xanh không đường xem cảm giác thế nào nha. Đường huyết hiện tại của chú là 195 mg/dL (nguồn từ hồ sơ), cần chú ý kiểm soát hơn chút nhé. Có thắc mắc gì thêm về ăn uống hay sức khỏe không, cứ hỏi cháu nhen! 😊
+
+📏 7 câu | 675 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 12.
+👤 Buổi tối hay ăn mì gói vì tiện, có sao không?
+
+🤖 Chú ơi, ăn mì gói thường xuyên thì không ổn lắm đâu, nhất là với huyết áp cao của chú. Mì gói chứa nhiều muối, mà mình cần hạn chế muối để giữ huyết áp ổn định. 
+
+Thay vì ăn mì gói, chú thử nấu nhanh món súp rau củ với chút thịt hoặc trứng. Vừa ngon, vừa tốt cho sức khỏe hơn. Hôm nay thử nấu một bát súp rau củ nhỏ xem sao, nhé? Rồi theo dõi huyết áp ngày mai coi có thay đổi không. 
+
+Có gì hay hoặc chưa ổn cứ nhắn cháu, mình cùng tìm cách cải thiện nha! 😊
+
+📏 7 câu | 459 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  THUỐC
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Câu 13.
+👤 Metformin 850mg uống ngày mấy lần, trước hay sau ăn?
+
+🤖 Chú ơi, Metformin 850mg thường uống 2-3 lần mỗi ngày, tùy theo chỉ định của bác sĩ. Chú nên uống ngay sau bữa ăn để giảm tác dụng phụ lên đường tiêu hóa như buồn nôn hay tiêu chảy. 🍽️
+
+Hôm nay chú hãy thử uống ngay sau bữa trưa và bữa tối nhé, nhớ ghi lại xem có thấy khó chịu gì không. Nếu thấy vẫn khó chịu hoặc không chắc chắn về liều dùng, chú nên trao đổi với bác sĩ điều trị để có hướng dẫn cụ thể hơn.
+
+Có điều gì khác cháu có thể giúp không chú?
+
+📏 5 câu | 454 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 14.
+👤 Uống Losartan buổi tối hay buổi sáng tốt hơn?
+
+🤖 Chú ơi, Losartan có thể uống vào buổi sáng hay buổi tối đều được, nhưng nên uống cùng một thời điểm mỗi ngày để duy trì hiệu quả ổn định. Uống vào buổi sáng thì có thể giúp kiểm soát huyết áp trong suốt cả ngày, nhưng nếu chú hay quên thì chọn giờ nào dễ nhớ nhất cũng tốt. 
+
+Hôm nay, chú thử chọn một thời điểm cụ thể mà mình thấy tiện nhất để uống Losartan hàng ngày nhé. Sau khi ổn định giờ uống, chú nhớ theo dõi huyết áp thường xuyên để xem thuốc có tác dụng tốt chưa. Nếu thấy huyết áp vẫn cao hoặc có vấn đề gì, chú nên trao đổi thêm với bác sĩ.
+
+Có lúc nào chú thấy mình chán ăn không?
+
+📏 6 câu | 593 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 15.
+👤 Uống thuốc huyết áp xong bị chóng mặt có sao không?
+
+🤖 Chú ơi, sau khi uống thuốc huyết áp mà bị chóng mặt thì có thể là tác dụng phụ của thuốc đấy. Khi thuốc làm giảm huyết áp mạnh quá, nó có thể khiến mình thấy chóng mặt, nhất là khi đứng dậy nhanh.
+
+Nhưng cũng không nên chủ quan nha. Chú thử ngồi nghỉ ngơi một lúc ở chỗ thoáng mát, uống miếng nước ấm, rồi từ từ đứng lên xem thế nào. Nếu vẫn chóng mặt, chú nên liên hệ bác sĩ để kiểm tra lại liều dùng hoặc đổi thuốc phù hợp hơn.
+
+Hôm nay chú nhớ đo huyết áp thêm vài lần để theo dõi xem có ổn định không nhé. Nếu triệu chứng không giảm hoặc tái phát nhiều lần, chú nên đi khám sớm nha.
+
+Nếu có gì cần hỏi thêm, chú cứ nhắn cháu nhé!
+
+📏 8 câu | 633 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 16.
+👤 Tôi uống thuốc tiểu đường xong hay bị đầy bụng khó chịu
+
+🤖 Chú ơi, nghe chú nói bị đầy bụng sau khi uống thuốc tiểu đường thì cháu nghĩ có thể là tác dụng phụ của thuốc đó rồi. Nhiều loại thuốc tiểu đường đôi khi gây khó chịu cho dạ dày, nhất là khi dùng lúc bụng đói hoặc ăn uống không đúng cách.
+
+Hôm nay chú thử ăn một bữa nhẹ trước khi uống thuốc xem sao, như một miếng bánh mì ngũ cốc hoặc một ít trái cây ít ngọt. Chú cũng nên theo dõi xem triệu chứng này có kéo dài không, nếu còn tiếp tục thì cần trao đổi với bác sĩ để điều chỉnh thuốc.
+
+Uống thêm một chút nước ấm sau khi ăn cũng giúp giảm cảm giác đầy bụng đấy. Chú thấy mình như thế nào rồi?
+
+📏 6 câu | 594 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 17.
+👤 Tôi quên uống thuốc huyết áp 3 ngày rồi
+
+🤖 Chú ơi, quên thuốc huyết áp 3 ngày là hơi lâu đấy, huyết áp có thể đã tăng cao. Hôm nay chú uống lại liều bình thường ngay nhé, không cần uống bù. 
+
+Huyết áp gần nhất của chú là 148/92 mmHg (theo hồ sơ), hơi cao so với mức khuyến nghị. Tối nay chú nhớ ăn nhạt hơn chút, tránh đồ chiên mặn và uống nhiều nước. Mai đo lại huyết áp để xem tình hình thế nào nha.
+
+Có gì chú nhắn cháu biết nhé!
+
+📏 6 câu | 389 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 18.
+👤 Uống Metformin bị tiêu chảy quá, làm sao?
+
+🤖 Chú ơi, tiêu chảy khi uống Metformin là một tác dụng phụ khá phổ biến, không chỉ mình chú gặp đâu. Nó có thể xảy ra khi cơ thể chưa quen với thuốc hoặc do liều dùng hơi cao.
+
+Một cách đơn giản để giảm triệu chứng này là uống thuốc sau bữa ăn, giúp dạ dày dễ chịu hơn. Chú cũng có thể nói chuyện với bác sĩ về việc điều chỉnh liều hoặc chuyển sang loại Metformin phóng thích chậm nếu cần thiết. Hôm nay, chú nhớ uống nhiều nước hơn để tránh mất nước do tiêu chảy nhé. Theo dõi xem tình hình có cải thiện sau vài ngày không nha.
+
+Nếu tình trạng này kéo dài hoặc nặng hơn, chú nên trao đổi với bác sĩ để được tư vấn cụ thể. Đừng ngại hỏi thêm nếu cần chú nhé!
+
+📏 8 câu | 656 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 19.
+👤 Tôi tự ý giảm liều thuốc vì thấy ổn rồi
+
+🤖 Chú ơi, việc tự ý giảm liều thuốc có thể làm tình trạng sức khỏe không ổn định trở lại. Đặc biệt với bệnh tiểu đường và cao huyết áp, việc duy trì liều thuốc đều đặn cực kỳ quan trọng để kiểm soát bệnh. 
+
+Hôm nay chú uống lại liều bình thường ngay nhé, không cần điều chỉnh gì thêm. Tối nay ăn nhạt hơn chút và hạn chế đường. Mai đo lại huyết áp và đường huyết rồi xem thế nào, ghi lại kết quả để theo dõi. 🤔
+
+Nếu chú thấy lấn cấn hay có triệu chứng gì mới, cứ nói cháu biết nha!
+
+📏 6 câu | 480 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 20.
+👤 Uống thuốc nam trị tiểu đường có tốt không?
+
+🤖 Chú ơi, cháu hiểu đôi khi mình muốn thử thuốc nam để hỗ trợ điều trị tiểu đường, nhưng cần cẩn thận nhé. Một số loại thảo dược có thể giúp hạ đường huyết, nhưng chúng không thay thế được thuốc điều trị chính thống và có thể tương tác với thuốc chú đang dùng.
+
+Nếu chú thật sự muốn thử, trước tiên hãy trao đổi với bác sĩ của mình để đảm bảo không gây ảnh hưởng xấu đến sức khỏe. Hôm nay, chú có thể tìm hiểu thêm về loại thảo dược mà chú đang quan tâm và ghi lại những câu hỏi để hỏi bác sĩ. Đồng thời, theo dõi chặt chẽ đường huyết của mình, nhất là khi có thay đổi gì trong cách điều trị.
+
+Chú có thấy phương pháp nào khác hữu ích không? Hãy chia sẻ với cháu nhé!
+
+📏 7 câu | 665 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SỨC KHỎE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Câu 21.
+👤 Đường huyết sáng nay 210, cao quá phải không?
+
+🤖 Đúng rồi chú, đường huyết 210 mg/dL là cao so với ngưỡng an toàn cho người tiểu đường, ngay cả sau khi ăn cũng nên dưới 180 mg/dL. Đường huyết cao có thể làm cơ thể mệt mỏi, khát nước và đi tiểu nhiều hơn.
+
+Hôm nay chú thử xem lại chế độ ăn uống nhé, hạn chế tinh bột và thực phẩm có đường. Tốt nhất là ăn nhiều rau xanh, cá hoặc đậu phụ. Chú uống thêm chút nước ấm để giúp cơ thể thải độc tốt hơn. Sau đó, chú nhớ đo lại đường huyết vào buổi chiều hoặc tối để xem có cải thiện không nha.
+
+Nếu cảm thấy không ổn, chú nên trao đổi với bác sĩ để điều chỉnh thuốc hoặc chế độ ăn phù hợp hơn. Có gì khó chịu hay cần hỏi thêm thì cứ nhắn cháu nhé! 😊
+
+📏 8 câu | 645 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 22.
+👤 Huyết áp 160/95 có nguy hiểm không?
+
+🤖 Chú ơi, huyết áp của chú cao hơn mức bình thường rồi đấy. Với người có tiền sử cao huyết áp như chú, chỉ số này cho thấy có thể cần điều chỉnh thuốc hoặc cách sống.
+
+Khi huyết áp cao như vậy, tim phải làm việc vất vả hơn, dễ dẫn đến nguy cơ đột quỵ hoặc các bệnh tim mạch khác. Hôm nay chú nên nghỉ ngơi, tránh căng thẳng và ăn nhạt một chút nhé. Uống thêm nước cũng là cách tốt để giúp cơ thể ổn định.
+
+Chú đo lại huyết áp vào chiều nay hoặc sáng mai xem có cải thiện không. Nếu vẫn cao, chú nên đi khám sớm để bác sĩ kịp thời điều chỉnh thuốc cho mình.
+
+Chú thấy sao? Có cần cháu hỗ trợ gì thêm không? 😊
+
+📏 9 câu | 606 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 23.
+👤 Tôi hay bị tê bàn chân, nhất là buổi tối
+
+🤖 Chú ơi, tình trạng tê bàn chân buổi tối có thể liên quan đến biến chứng thần kinh từ bệnh tiểu đường đó. Nguyên nhân là do đường huyết cao lâu ngày gây tổn thương dây thần kinh ngoại vi, nhất là ở chân. 
+
+Hôm nay chú nên ngâm chân với nước ấm khoảng 15-20 phút trước khi đi ngủ để cải thiện tuần hoàn máu nhé. Đồng thời, theo dõi đường huyết đều đặn và ghi lại để bác sĩ dễ đánh giá. 
+
+Nếu tình trạng không cải thiện hoặc nặng hơn, chú nên đi khám sớm để kiểm tra kỹ hơn nha. Chú có hay đo đường huyết vào buổi tối không?
+
+📏 6 câu | 521 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 24.
+👤 Mắt tôi mờ dần, có phải do tiểu đường không?
+
+🤖 Chú ơi, mắt mờ dần có thể liên quan đến tiểu đường đó. Tiểu đường có thể gây ra các vấn đề về mắt như bệnh võng mạc tiểu đường, do ảnh hưởng lên các mạch máu nhỏ trong mắt. 
+
+Chuyện này cần chú ý ngay vì nếu không điều trị kịp thời, có thể dẫn đến những biến chứng nghiêm trọng hơn. Hôm nay, chú nên đi khám mắt sớm để bác sĩ kiểm tra kỹ hơn và đưa ra hướng điều trị phù hợp nhé. Trước khi đi, nhớ mang theo hồ sơ bệnh án và các thông tin về chỉ số đường huyết gần đây của mình.
+
+Bên cạnh đó, chú có thể thử uống một chút trà xanh hay nước ấm để cơ thể thư giãn hơn. Có gì chú kể cháu nghe với nha.
+
+📏 7 câu | 598 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 25.
+👤 Vết thương ở chân tôi lâu lành quá, 2 tuần rồi
+
+🤖 Chú ơi, vết thương ở chân mà 2 tuần chưa lành thì hơi lâu đấy. Người bị tiểu đường như chú thường có quá trình lành vết thương chậm hơn bình thường, dễ nhiễm trùng nếu không chăm sóc kỹ. Chú nên đi khám sớm để bác sĩ kiểm tra và xem xét điều trị thêm cho an toàn nha.
+
+Tạm thời, chú hãy rửa sạch vết thương bằng nước muối sinh lý hàng ngày, rồi bôi một lớp mỏng kem kháng khuẩn như Neosporin để ngăn ngừa nhiễm trùng. Cố gắng tránh để vết thương tiếp xúc với bụi bẩn hoặc cọ xát quá nhiều. Đồng thời, theo dõi xem có dấu hiệu sưng đỏ, đau nhức hay chảy mủ không nhé.
+
+Chú thử làm theo rồi cho cháu biết tình hình thế nào nha!
+
+📏 7 câu | 625 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 26.
+👤 Đường huyết lúc đói 165, thế nào?
+
+🤖 Chú ơi, đường huyết lúc đói mà 165 là hơi cao đấy, theo ADA thì chỉ nên dưới 130 thôi. Điều này có nghĩa là cơ thể chú đang không kiểm soát đường huyết tốt vào ban đêm và sáng sớm. 🩸
+
+Chú có thể thử điều chỉnh bữa tối lại một chút: ăn ít tinh bột hơn, tăng cường rau xanh và protein như thịt gà hoặc cá. Hôm nay chú thử đi bộ nhẹ nhàng khoảng 30 phút vào buổi chiều xem có cải thiện không nhé. Theo dõi đường huyết vào sáng mai để xem có thay đổi gì không.
+
+Chú thấy thế nào? Có gì thắc mắc thêm cứ hỏi cháu nha!
+
+📏 7 câu | 513 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 27.
+👤 Huyết áp 175/100, tôi nên làm gì?
+
+🤖 Chú ơi, huyết áp của chú đang khá cao so với mức an toàn đấy. Đã uống thuốc mà vẫn cao thế này thì cần đi khám sớm để bác sĩ điều chỉnh liều thuốc nhé.
+
+Trong lúc này, chú uống lại thuốc huyết áp theo liều đã được kê và nghỉ ngơi chút. Hôm nay chú cố gắng ăn nhạt, tránh đồ chiên xào nhiều dầu mỡ. Uống miếng nước ấm đi nha, giúp thư giãn hơn chút đó.
+
+Mình cũng nên đo lại huyết áp sau vài giờ để xem tình hình có cải thiện không. Có gì cần hỏi thêm, cứ nhắn cháu.
+
+📏 7 câu | 465 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 28.
+👤 Tôi bị phù 2 chân từ hôm qua
+
+🤖 Chú ơi, phù chân có thể là dấu hiệu báo động cho tim hoặc thận đấy. Với tiểu đường và cao huyết áp của chú, cần chú ý kỹ. Đôi khi phù chân cũng có thể do đứng nhiều hoặc ăn mặn quá.
+
+Chú nên đo lại huyết áp hôm nay, nếu vẫn cao thì cần khám sớm để kiểm tra xem có liên quan đến bệnh lý tim mạch không nhé. Tạm thời hôm nay chú nằm nâng chân lên một chút và tránh ăn muối nhiều. Theo dõi xem phù có giảm không.
+
+Nếu ngày mai vẫn còn phù hoặc có triệu chứng khác như khó thở, đau ngực thì đi khám ngay nhé. Chú có thấy gì khác thường nữa không?
+
+📏 8 câu | 542 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 29.
+👤 Hay bị chuột rút bắp chân ban đêm
+
+🤖 Chuột rút bắp chân ban đêm có thể do nhiều nguyên nhân, nhưng thường liên quan đến thiếu hụt khoáng chất như kali, magiê hoặc canxi. Cơ thể mất nhiều chất này khi mình không uống đủ nước hoặc ăn uống thiếu cân bằng.
+
+Chú nên uống thêm nước vào ban ngày và cân nhắc bổ sung thực phẩm giàu kali như chuối, khoai lang, hoặc rau xanh. Ngoài ra, nhớ duỗi cơ bắp chân nhẹ nhàng trước khi đi ngủ để giảm nguy cơ chuột rút. 
+
+Tối nay thử trước khi ngủ, kéo duỗi cơ bắp chân vài lần, mỗi lần giữ khoảng 15 giây. Và theo dõi xem có giảm đi không nhé. Nếu tình trạng này không cải thiện, chú nên đi khám để loại trừ các nguyên nhân khác.
+
+Chú thấy thế nào, có cần cháu giải thích thêm về cách duỗi cơ không?
+
+📏 8 câu | 696 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 30.
+👤 Da bị ngứa nhiều, có phải do đường huyết không?
+
+🤖 Chú ơi, ngứa da có thể liên quan đến đường huyết cao, nhưng còn nhiều nguyên nhân khác nữa. Đường huyết của chú gần đây là 195 mg/dL, vượt ngưỡng sau ăn cho người tiểu đường (theo hồ sơ). Khi đường huyết cao, da có thể bị khô và ngứa.
+
+Hôm nay chú hãy uống đủ nước, khoảng 1.5-2 lít nước để giúp cơ thể giữ ẩm từ bên trong. Ngoài ra, chú có thể thoa kem dưỡng ẩm không mùi sau khi tắm để giảm khô ngứa. Chú thử theo dõi và ghi nhận xem tình trạng ngứa có giảm không nhé.
+
+Nếu sau vài ngày không đỡ hoặc ngứa nhiều hơn, chú nên đi khám da liễu để bác sĩ kiểm tra kỹ hơn nha. Có gì cần thêm cứ nhắn cháu biết nhé!
+
+📏 9 câu | 611 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 31.
+👤 Tôi đi tiểu có bọt, có sao không?
+
+🤖 Chú ơi, đi tiểu có bọt có thể là dấu hiệu bình thường nếu chỉ thi thoảng xảy ra, nhưng nếu đều đặn thì cần chú ý đấy. Đôi khi, nó do nước tiểu mạnh hoặc lượng protein trong nước tiểu cao hơn bình thường.
+
+Điều này có thể liên quan đến tình trạng sức khỏe của thận, đặc biệt với người có tiểu đường như chú, vì tiểu đường có thể ảnh hưởng đến chức năng thận. Hôm nay, chú thử uống thêm nước để xem có cải thiện không nhé. Kiểm tra xem hiện tượng này kéo dài bao lâu và có thay đổi gì không.
+
+Nếu tình trạng bọt nhiều và kéo dài, chú nên đi khám để kiểm tra chức năng thận cho chắc chắn. Chú thấy còn gì khác lạ nữa không? 🍵
+
+📏 7 câu | 623 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 32.
+👤 Tim hay đập nhanh, hồi hộp
+
+🤖 Chú ơi, nhịp tim của chú gần đây là 78 bpm, nằm trong mức bình thường. Tuy nhiên, cảm giác hồi hộp và tim đập nhanh có thể do nhiều nguyên nhân. Có thể do căng thẳng, mệt mỏi, hoặc ảnh hưởng từ thuốc mà chú đang dùng.
+
+Trước hết, chú thử uống một cốc nước ấm và ngồi thư giãn một chút xem sao. Hôm nay chú nên tránh cà phê và các đồ uống kích thích khác nhé. Theo dõi xem khi nào hiện tượng này xảy ra và có liên quan gì đến hoạt động hay thức ăn không nha.
+
+Nếu tình trạng này kéo dài hoặc thấy không yên tâm, tốt nhất chú nên đi khám sớm để kiểm tra kỹ càng hơn. Chú thấy sao?
+
+📏 8 câu | 578 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 33.
+👤 Tay tôi hay run, có phải do thuốc không?
+
+🤖 Chú ơi, tay run có thể là tác dụng phụ của một số loại thuốc, đặc biệt là khi mình đang điều trị tiểu đường và cao huyết áp. Nhưng cũng có thể là do nhiều nguyên nhân khác, như căng thẳng hay vấn đề thần kinh.
+
+Thuốc điều trị tiểu đường hay huyết áp đôi khi có thể gây run tay, nhưng không phải lúc nào cũng đúng với mọi người. Chú có đang sử dụng thuốc mới nào không? Nếu có, có thể đó là lý do chú thấy như vậy. Cũng không loại trừ khả năng là do hạ đường huyết hoặc một số vấn đề khác nữa.
+
+Hôm nay chú thử nghỉ ngơi một chút, uống miếng nước ấm để thư giãn. Theo dõi xem tay run có giảm bớt không nhé. Nếu tình trạng này kéo dài hoặc làm mình khó chịu quá, chú nên đi khám sớm để bác sĩ kiểm tra kỹ hơn.
+
+Nếu cần thêm thông tin hay hỗ trợ gì nữa, cứ nhắn cháu liền nhé!
+
+📏 10 câu | 773 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 34.
+👤 Tôi bị tức ngực và khó thở
+
+🤖 Chú ơi, tình trạng này rất nghiêm trọng và có thể liên quan đến tim mạch, nhất là khi chú có tiền sử cao huyết áp. Chú cần gọi 115 hoặc đến bệnh viện ngay lập tức nhé 🚑. Trong lúc chờ, chú nên ngồi thẳng lưng và uống miếng nước ấm nếu có thể. Đừng cố gắng tự điều trị tại nhà. An toàn của chú là trên hết!
+
+📏 5 câu | 306 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 35.
+👤 Đêm nào cũng đi tiểu 4-5 lần, ngủ không yên
+
+🤖 Chú ơi, đêm nào cũng phải dậy đi tiểu nhiều lần thì không ổn chút nào. 😟 Có thể do tiểu đường ảnh hưởng làm cơ thể chú khó kiểm soát nước, hoặc có vấn đề về thận hoặc bàng quang.
+
+Cái này không chỉ làm mất ngủ mà còn gây mệt mỏi vào ban ngày. Trước mắt, hôm nay chú thử giảm uống nước sau 7 giờ tối xem sao nhé. Theo dõi xem có thay đổi gì không. Đừng quên ghi lại số lần đi tiểu và lượng nước uống mỗi ngày để dễ theo dõi tình hình.
+
+Nếu tình hình không cải thiện, cháu nghĩ tốt nhất là chú nên đi khám sớm để tìm ra nguyên nhân chính xác. Có thể nói chuyện với bác sĩ để kiểm tra thêm về thận hoặc hệ tiết niệu. Chú có thấy có triệu chứng gì khác không?
+
+📏 9 câu | 656 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  TÂM LÝ
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Câu 36.
+👤 Tôi chán nản không muốn đo đường huyết nữa
+
+🤖 Chú ơi, cảm giác chán nản với việc theo dõi sức khỏe mỗi ngày là điều dễ hiểu mà nhiều người gặp phải. Đo đường huyết liên tục không dễ chịu gì, nhưng mỗi lần đo nghĩa là chú đang chăm sóc và hiểu rõ hơn về cơ thể mình đấy. 🌟
+
+Thử thay đổi cách đo xem sao nhé, chú có thể thử đo cách ngày hoặc chọn một thời điểm thoải mái nhất trong ngày để bớt áp lực. Cũng có thể nhờ ai đó cùng mình kiểm tra cho vui hơn. Quan trọng là chú vẫn cần theo dõi và ghi lại để biết đường huyết có ổn định không.
+
+Nếu có điều gì làm chú lo lắng hay cần động viên thêm, cứ nhắn cháu nhé!
+
+📏 6 câu | 566 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 37.
+👤 Dạo này tôi hay lo lắng, sợ bệnh nặng thêm
+
+🤖 Chú ơi, lo lắng là điều dễ hiểu khi phải đối mặt với bệnh tật, nhưng chú cần bình tĩnh để chăm sóc sức khỏe tốt hơn. Căng thẳng có thể làm ảnh hưởng đến đường huyết và huyết áp, không tốt cho bệnh tiểu đường và cao huyết áp của chú đâu.
+
+Hôm nay, chú thử dành 10-15 phút để tập thở sâu hoặc thiền nhẹ nhàng xem sao. Thở sâu giúp thư giãn tâm trí và giảm căng thẳng. Mỗi ngày chú chỉ cần dành chút thời gian cho bản thân thôi. Chú cũng nên theo dõi đường huyết và huyết áp thường xuyên để yên tâm hơn. Nếu thấy chỉ số nào không ổn, chú có thể điều chỉnh ăn uống hoặc tập luyện kịp thời mà.
+
+Cố gắng tập trung vào những hoạt động yêu thích hoặc gặp gỡ bạn bè để giảm bớt lo âu nha, chú!
+
+📏 8 câu | 684 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 38.
+👤 Dạo này hay cáu gắt, không kiểm soát được
+
+🤖 Chú ơi, dạo này thấy mình dễ cáu gắt hả? Có khi do đường huyết không ổn định hoặc huyết áp cao đấy. 🤔 Đường huyết gần nhất của chú là 195 mg/dL, hơi cao so với ngưỡng sau ăn cho người tiểu đường. Huyết áp cũng ở mức cao một chút.
+
+Căng thẳng có thể làm mọi thứ rối tung lên. Chú thử tìm cách thư giãn xem sao: đi bộ nhẹ nhàng khoảng 20-30 phút mỗi ngày, hoặc tập thở sâu để giảm stress. Còn hôm nay, chú nên uống miếng nước ấm và thử ngồi thiền hay nằm nghỉ ngơi một chút. Đo lại huyết áp và đường huyết vào chiều tối để xem có giảm không nhé.
+
+Nếu tình trạng này kéo dài, có khi cần trao đổi với bác sĩ để điều chỉnh thuốc hoặc chế độ ăn uống. Chú thấy sao?
+
+📏 10 câu | 659 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 39.
+👤 Tôi sợ phải tiêm insulin
+
+🤖 Chú ơi, cháu hiểu cảm giác lo lắng của chú khi phải tiêm insulin. Nhiều người cũng cảm thấy ngại ngùng với việc này, nhưng tiêm insulin có thể giúp kiểm soát đường huyết tốt hơn và giảm nguy cơ biến chứng.
+
+Việc tiêm insulin không đáng sợ như mình nghĩ đâu. Kim tiêm rất nhỏ và thường không gây đau quá nhiều. Hơn nữa, dùng insulin đúng cách sẽ giúp đường huyết ổn định hơn, tránh các biến chứng nguy hiểm cho tim, mắt và thận.
+
+Hôm nay chú thử tập dần bằng cách xem video hướng dẫn tiêm insulin trên mạng để quen trước. Sau đó mình có thể thử tập động tác tiêm mà không có kim để giảm căng thẳng. Chú cần theo dõi đường huyết và ghi chép lại để biết hiệu quả của việc điều trị nhé.
+
+Có gì thắc mắc hay cần hỗ trợ thêm thì cứ nói với cháu nha! 😊
+
+📏 9 câu | 746 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 40.
+👤 Vợ tôi cứ cằn nhằn chuyện ăn uống, tôi bực lắm
+
+🤖 Chú ơi, cháu hiểu cảm giác đó, nhưng bà nhà chỉ lo cho sức khỏe của chú thôi mà. Với bệnh tiểu đường và cao huyết áp, chế độ ăn uống thực sự quan trọng để giữ sức khỏe ổn định.
+
+Chú nên thử ăn uống lành mạnh hơn một chút để cải thiện sức khỏe. Ví dụ, hạn chế muối, tránh đồ chiên nhiều dầu mỡ, và thêm vào bữa ăn nhiều rau xanh, cá và trái cây ít ngọt. Điều này không chỉ giúp cân bằng đường huyết mà còn hỗ trợ giữ huyết áp ổn định.
+
+Hôm nay, chú có thể bắt đầu bằng cách nấu một bữa tối với cá hấp hoặc luộc kèm rau xanh nhỉ? Đo lại đường huyết trước bữa ăn để xem phản ứng cơ thể thế nào nhé.
+
+Hãy thử nghĩ rằng những lời nhắc nhở của vợ cũng là một cách yêu thương đấy! 😊
+
+📏 8 câu | 676 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 41.
+👤 Tôi thấy mình là gánh nặng cho gia đình
+
+🤖 Chú ơi, nghe chú nói cháu thấy lo quá. Ai cũng có những lúc cảm thấy như vậy, nhưng sự hiện diện của chú chắc chắn mang lại giá trị lớn cho gia đình. Đừng quên rằng sự quan tâm và kinh nghiệm của chú là tài sản vô giá đối với mọi người xung quanh.
+
+Đôi khi, cảm giác này xuất phát từ việc sức khỏe không được tốt như ý muốn. Cố gắng chăm sóc bản thân tốt hơn cũng là cách để cải thiện tâm trạng. Hôm nay, thử đi dạo nhẹ nhàng khoảng 15-20 phút ngoài trời xem sao? Không cần phải tập mạnh đâu, chỉ là để thư giãn đầu óc thôi. Đồng thời, chú có thể theo dõi cảm giác của mình sau khi đi bộ, xem nó có giúp giảm bớt những suy nghĩ tiêu cực không.
+
+Nếu vẫn thấy buồn nhiều, có lẽ nên chia sẻ với ai đó chú tin tưởng hoặc tìm sự hỗ trợ từ chuyên gia tâm lý nhé. Cuộc sống luôn có những thăng trầm, nhưng cháu tin rằng chú sẽ vượt qua được! 🌿
+
+📏 10 câu | 837 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 42.
+👤 Tôi muốn bỏ thuốc vì uống mãi không khỏi
+
+🤖 Chú ơi, cháu hiểu khi uống thuốc lâu mà không thấy tiến triển thì cũng nản lòng lắm. Nhưng bỏ thuốc đột ngột có thể làm tình trạng bệnh của chú xấu đi, nhất là với bệnh tiểu đường và cao huyết áp.
+
+Với những bệnh này, việc kiểm soát bệnh cần thời gian và sự kiên nhẫn. Thuốc giúp giữ cho đường huyết và huyết áp ổn định, giảm nguy cơ biến chứng. Việc ngừng thuốc đột ngột có thể khiến hai chỉ số này tăng vọt, gây ra những vấn đề nghiêm trọng cho sức khỏe.
+
+Hôm nay chú hãy tiếp tục uống thuốc theo chỉ định của bác sĩ. Đồng thời, thử ghi lại các thông tin về đường huyết và huyết áp hàng ngày trong một cuốn sổ nhỏ. Điều này giúp bác sĩ điều chỉnh thuốc nếu cần thiết.
+
+Chú có thể thử nói chuyện với bác sĩ để tìm ra phương pháp điều trị hiệu quả hơn nhé. Có khi chỉ cần điều chỉnh liều lượng một chút thôi cũng đủ cải thiện tình hình rồi đó.
+
+📏 10 câu | 843 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 43.
+👤 Con cái ở xa, tôi ở một mình hay buồn
+
+🤖 Cháu nghe chú nói mà thấy lo quá. Ở một mình đôi khi dễ cảm thấy buồn thật đấy, nhất là khi con cái ở xa. Nhưng không sao, có nhiều cách để chú cảm thấy vui vẻ hơn hàng ngày.
+
+Chú có thể thử tham gia một lớp học nào đó như yoga hay thiền. Những hoạt động này không chỉ giúp thư giãn mà còn tốt cho sức khỏe nữa. Ngoài ra, chú cũng có thể liên lạc với bạn bè hoặc hàng xóm để cùng nhau uống trà, trò chuyện, chia sẻ cuộc sống. 
+
+Hôm nay chú thử gọi điện cho một người bạn lâu rồi chưa gặp xem sao nha, biết đâu lại có những câu chuyện thú vị để chia sẻ với nhau. Và nếu có thể, mỗi ngày chú nên dành ra ít nhất 15 phút để đi bộ nhẹ nhàng ngoài trời cho thoáng đãng.
+
+Chú nghĩ sao nếu thỉnh thoảng cháu sang thăm chú và cùng làm gì đó vui vẻ? 😊
+
+📏 9 câu | 743 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  SINH HOẠT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Câu 44.
+👤 Tôi có nên tập yoga không?
+
+🤖 Chú ơi, tập yoga là một lựa chọn tốt cho sức khỏe đó. Với bệnh tiểu đường và cao huyết áp, yoga nhẹ nhàng giúp giảm căng thẳng và cải thiện tuần hoàn máu.
+
+Yoga còn giúp cơ thể dẻo dai, giảm nguy cơ chấn thương và hỗ trợ kiểm soát đường huyết. Chú có thể bắt đầu với những bài tập đơn giản như hít thở sâu và các động tác kéo giãn nhẹ nhàng trong khoảng 15-20 phút mỗi ngày. 🧘‍♂️
+
+Hôm nay chú thử tìm một video hướng dẫn yoga dành cho người mới bắt đầu và tập theo vào buổi sáng hoặc tối sẽ rất tốt. Sau khi tập, chú nhớ theo dõi xem mình cảm thấy thế nào nhé!
+
+Có khi nào chú đã thử tập yoga trước đây chưa?
+
+📏 7 câu | 609 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 45.
+👤 Tôi bị đau khớp gối, có nên đi bộ không?
+
+🤖 Chú ơi, đau khớp gối mà đi bộ nhiều thì có thể làm tình trạng nặng hơn đấy. Khi mình bị đau, đi bộ có thể tạo thêm áp lực lên khớp và khiến nó tổn thương thêm. 
+
+Chú thử thay bằng những bài tập nhẹ nhàng như bơi lội hoặc đạp xe để giảm tải áp lực lên khớp gối nha. Đồng thời, chú cũng nên theo dõi xem cơn đau có giảm không khi thay đổi hoạt động. Nếu đau không giảm, thì mình nên cân nhắc đi khám sớm để tìm nguyên nhân và điều trị kịp thời.
+
+Hôm nay chú thử ngâm chân với nước ấm pha chút muối để giúp thư giãn cơ bắp và khớp, rồi quan sát xem cảm giác thế nào nhé. Có cần chia sẻ thêm gì về thuốc giảm đau không?
+
+📏 7 câu | 615 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 46.
+👤 Uống bia mỗi tối 1 lon có được không?
+
+🤖 Chú ơi, uống bia mỗi tối không phải là lựa chọn tốt nhất cho sức khỏe của chú đâu, nhất là khi chú có tiểu đường và cao huyết áp. 🍺
+
+Bia chứa cồn và calo, có thể làm tăng đường huyết và huyết áp. Dù chỉ một lon cũng có thể ảnh hưởng nếu uống thường xuyên. Với bệnh nền của chú, việc kiểm soát đường huyết và huyết áp là rất quan trọng để tránh các biến chứng.
+
+Hôm nay thử thay bia bằng nước lọc hoặc trà thảo mộc xem sao nhé. Mà chú nên theo dõi đường huyết hàng ngày để kiểm tra xem có sự thay đổi gì không.
+
+Có gì khó khăn hay thắc mắc cứ nói với cháu nha!
+
+📏 7 câu | 560 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 47.
+👤 Uống cà phê có ảnh hưởng huyết áp không?
+
+🤖 Chú ơi, cà phê có thể khiến huyết áp tăng tạm thời đấy. Cà phê chứa caffeine, một chất kích thích có thể làm tim đập nhanh hơn và co thắt mạch máu, dẫn đến tăng huyết áp trong thời gian ngắn.
+
+Với tình trạng huyết áp của chú đã là 148/92 mmHg (theo hồ sơ), thì nên cẩn thận với việc uống cà phê thường xuyên. Tốt nhất là giảm lượng hoặc chọn loại decaf không chứa caffeine. Để kiểm tra tác động, sau khi uống cà phê khoảng 30 phút, chú thử đo lại huyết áp xem nhé.
+
+Hôm nay, chú hãy thử đổi sang trà thảo dược hoặc nước lọc với chút chanh xem sao. Cũng nhớ theo dõi cảm giác trong người sau đó nha. Nếu có gì khác thường thì mình tính tiếp cách khác!
+
+📏 8 câu | 650 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 48.
+👤 Tôi sắp đi du lịch xa, cần chuẩn bị gì cho bệnh?
+
+🤖 Chú ơi, đi du lịch là dịp vui nhưng cũng cần chuẩn bị kỹ chút để sức khỏe ổn định. Đầu tiên, chú nên mang đủ các loại thuốc mà mình đang dùng hàng ngày, nhớ đóng gói cẩn thận trong hành lý xách tay nhé. Với tình trạng tiểu đường và cao huyết áp, kiểm soát chế độ ăn uống là rất quan trọng. Nên mang theo ít đồ ăn nhẹ lành mạnh như hạt dẻ, trái cây ít ngọt hoặc bánh gạo lứt phòng khi không tìm được đồ ăn phù hợp.
+
+Trước khi đi, chú đo lại huyết áp và đường huyết để biết mức độ hiện tại. Mang theo máy đo đường huyết để theo dõi suốt chuyến đi nhé. Nếu có bất kỳ triệu chứng gì như mắt mờ hoặc đau ngực, chú nên đến cơ sở y tế gần nhất ngay.
+
+Chú có dự định đến đâu mà vui thế?
+
+📏 8 câu | 678 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 49.
+👤 Tôi bị cảm cúm, uống thuốc gì được?
+
+🤖 Chú ơi, cảm cúm thì khó chịu lắm nhỉ. Với tình trạng bệnh nền của chú, chú có thể dùng paracetamol để giảm đau và hạ sốt, liều thông thường là 500mg mỗi 4-6 giờ nếu cần, nhưng không quá 4g một ngày nhé. Nên uống sau ăn để tránh ảnh hưởng dạ dày.
+
+Ngoài ra, uống thêm nước ấm và nghỉ ngơi nhiều sẽ giúp hồi phục nhanh hơn. Theo dõi xem có triệu chứng nào bất thường như khó thở hay đau ngực không, nếu có thì nên đi khám ngay.
+
+Chú đã thử uống nước chanh ấm với mật ong chưa? Cũng hiệu quả lắm đó! 😊
+
+📏 7 câu | 499 ký tự | Điểm: 9.5/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+Câu 50.
+👤 Cho tôi lịch sinh hoạt cả ngày phù hợp với bệnh của tôi
+
+🤖 Chú ơi, với tiểu đường và cao huyết áp, mình cần có một lịch sinh hoạt cân đối để kiểm soát tốt sức khỏe nha. Cháu gợi ý một lịch như sau:
+
+Buổi sáng:
+- 6:30 - 7:00 sáng: Thức dậy, uống một ly nước ấm. Đi bộ hoặc tập thể dục nhẹ nhàng khoảng 20-30 phút.
+- 7:30 sáng: Ăn sáng với cháo yến mạch hoặc bánh mì nguyên cám, kèm trứng luộc và rau sống.
+
+Buổi trưa:
+- 12:00 trưa: Ăn cơm gạo lứt với thịt gà hấp/luộc, nhiều rau xanh. Tránh các món chiên xào nhiều dầu mỡ và hạn chế muối.
+- 13:00 - 13:30: Nghỉ trưa ngắn khoảng 20-30 phút.
+
+Buổi chiều:
+- 15:00: Uống một ly nước lọc hoặc trà thảo mộc không đường, ăn một chút trái cây ít ngọt như táo hay lê.
+- 17:00 - 18:00: Tập thể dục nhẹ nhàng, có thể đi bộ, yoga hoặc đạp xe trong công viên.
+
+Buổi tối:
+- 18:30 - 19:00: Ăn tối với canh rau củ, cá hấp/luộc hoặc đậu phụ. Tránh ăn khuya và giảm tối đa lượng cơm.
+- 20:00: Có thể đọc sách, nghe nhạc thư giãn.
+
+Trước khi ngủ (22:00):
+- Kiểm tra đường huyết và huyết áp nếu cần thiết. Thư giãn bằng cách thở sâu hoặc nghe nhạc nhẹ.
+
+Chú nhớ theo dõi chỉ số đường huyết và huyết áp đều đặn nhé. Nếu có khó khăn hay thắc mắc gì thì cứ hỏi cháu nha! 😊
+
+📏 16 câu | 1140 ký tự | Điểm: 10/10 | ✅ OK
+───────────────────────────────────────────────────────────────────────
+
+═══════════════════════════════════════════════════════════════════════════
+  TỔNG KẾT
+═══════════════════════════════════════════════════════════════════════════
+Tổng: 50 câu | Lỗi: 0 | TB: 8 câu, 607 ký tự
+Điểm trung bình: 9.7/10
+
+CÂU CÓ VẤN ĐỀ (1/50):
+  Câu 2: Tôi thèm ăn phở quá, ăn được không? → CỨng nhắc (8/10)
+
+PHÂN BỐ ĐIỂM:
+  10/10: 49 câu | 9/10: 0 câu | 8/10: 1 câu | <8: 0 câu
+
+═══════════════════════════════════════════════════════════════════════════
