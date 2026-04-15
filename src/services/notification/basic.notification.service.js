@@ -261,8 +261,8 @@ async function runMorningSummary(pool, hour, minute) {
     if (tasks.length === 0) continue;
 
     const title = isEn
-      ? `☀️ Good morning${name ? ' ' + name : ''}!`
-      : `☀️ ${Honorific} ơi, ${selfRef} ghé hỏi thăm buổi sáng!`;
+      ? `☀️ Good morning${name ? ' ' + name : ''}! How did you sleep?`
+      : `☀️ ${name ? name + ' ơi, ' : ''}sáng rồi! Hôm nay mình cùng chăm sóc sức khỏe nhé`;
 
     // Personalized body from Intelligence Layer
     let body;
@@ -313,8 +313,8 @@ async function runAfternoon(pool, hour, minute) {
     const conditions = parseConditions(user.medical_conditions);
     const isEn = user.lang === 'en';
     const title = isEn
-      ? `🌤️ Hey${name ? ' ' + name : ''}, afternoon check-in`
-      : `🌤️ ${Honorific} ơi, ${selfRef} ghé thăm buổi chiều!`;
+      ? `🌤️ Hey${name ? ' ' + name : ''}, how's your afternoon going?`
+      : `🌤️ ${name ? name + ' ơi, ' : ''}chiều rồi! Nghỉ tay chút, để mình hỏi thăm nha`;
     // Personalized body from Intelligence Layer
     let body;
     try {
@@ -399,8 +399,8 @@ async function runEveningSummary(pool, hour, minute) {
     if (tasks.length === 0) continue;
 
     const title = isEn
-      ? `🌙 Good evening${name ? ' ' + name : ''}!`
-      : `🌙 ${Honorific} ơi, tối rồi!`;
+      ? `🌙 Evening${name ? ' ' + name : ''}! Time to wind down`
+      : `🌙 ${name ? name + ' ơi, ' : ''}tối rồi! Trước khi nghỉ, nhớ mấy việc này nha`;
 
     // Personalized body from Intelligence Layer
     let body;
