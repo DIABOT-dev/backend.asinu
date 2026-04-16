@@ -20,23 +20,24 @@ const APP_CALLBACK_URI = ZALO_CALLBACK_URI;
 // =====================================================
 
 async function registerByEmail(pool, req, res) {
-  // Validate request
-  const parsed = registerSchema.safeParse(req.body || {});
-  if (!parsed.success) {
-    const errorMessages = parsed.error.issues.map(issue => issue.message).join(', ');
-    return res.status(400).json({ ok: false, error: errorMessages });
-  }
+  try {
+    const parsed = registerSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      const errorMessages = parsed.error.issues.map(issue => issue.message).join(', ');
+      return res.status(400).json({ ok: false, error: errorMessages });
+    }
 
-  const { email, phone_number, password, full_name, display_name } = parsed.data;
+    const { email, phone_number, password, full_name, display_name } = parsed.data;
+    const result = await serviceRegister(pool, email, password, phone_number, full_name, display_name);
 
-  // Call service
-  const result = await serviceRegister(pool, email, password, phone_number, full_name, display_name);
-  
-  if (!result.ok) {
-    return res.status(400).json(result);
+    if (!result.ok) {
+      return res.status(400).json(result);
+    }
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('[Auth] registerByEmail error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Đăng ký thất bại, vui lòng thử lại.' });
   }
-  
-  return res.status(200).json(result);
 }
 
 // =====================================================
@@ -44,23 +45,24 @@ async function registerByEmail(pool, req, res) {
 // =====================================================
 
 async function loginByEmail(pool, req, res) {
-  // Validate request
-  const parsed = loginSchema.safeParse(req.body || {});
-  if (!parsed.success) {
-    const errorMessages = parsed.error.issues.map(issue => issue.message).join(', ');
-    return res.status(400).json({ ok: false, error: errorMessages });
-  }
+  try {
+    const parsed = loginSchema.safeParse(req.body || {});
+    if (!parsed.success) {
+      const errorMessages = parsed.error.issues.map(issue => issue.message).join(', ');
+      return res.status(400).json({ ok: false, error: errorMessages });
+    }
 
-  const { identifier, password } = parsed.data;
+    const { identifier, password } = parsed.data;
+    const result = await serviceLogin(pool, identifier, password);
 
-  // Call service
-  const result = await serviceLogin(pool, identifier, password);
-  
-  if (!result.ok) {
-    return res.status(401).json(result);
+    if (!result.ok) {
+      return res.status(401).json(result);
+    }
+    return res.status(200).json(result);
+  } catch (err) {
+    console.error('[Auth] loginByEmail error:', err.message);
+    return res.status(500).json({ ok: false, error: 'Đăng nhập thất bại, vui lòng thử lại.' });
   }
-  
-  return res.status(200).json(result);
 }
 
 // =====================================================
@@ -334,7 +336,6 @@ async function verifyToken(pool, req, res) {
     
     return res.status(200).json({
       ok: true,
-      token: req.headers.authorization?.replace('Bearer ', ''),
       profile: user
     });
   } catch (err) {
@@ -443,7 +444,7 @@ async function loginByFacebookToken(pool, req, res) {
 
     if (id_token) {
       // iOS SDK v16+ Limited Login: verify JWT via Facebook JWKS
-      console.log('[FB token] iOS id_token flow, user_id:', user_id);
+      console.log('[FB token] iOS id_token flow');
 
       // Decode JWT header để xác định issuer → đúng JWKS endpoint
       const [headerB64Pre] = id_token.split('.');
@@ -482,7 +483,7 @@ async function loginByFacebookToken(pool, req, res) {
 
       // Decode payload
       const payload = JSON.parse(Buffer.from(pB64, 'base64').toString());
-      console.log('[FB token] JWT payload:', JSON.stringify({ sub: payload.sub, aud: payload.aud, iss: payload.iss }));
+      console.log('[FB token] JWT payload verified');
 
       const validIssuers = ['https://www.facebook.com', 'https://limited.facebook.com'];
       if (payload.aud !== appId || !validIssuers.includes(payload.iss)) {

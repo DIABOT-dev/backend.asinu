@@ -57,7 +57,13 @@ const eveningMatch = (defH = 21) => `
 const remindersEnabled = () => `COALESCE(np.reminders_enabled, true) = true`;
 
 function nowVN() {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: TZ }));
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
+  const parts = {};
+  for (const { type, value } of fmt.formatToParts(new Date())) parts[type] = value;
+  return new Date(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`);
 }
 
 // ─── Core dispatch ─────────────────────────────────────────────────

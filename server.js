@@ -95,7 +95,10 @@ app.use('/api/subscriptions', subscriptionRoutes(pool));
 app.use('/api/voice', voiceRoutes(pool));
 app.use('/api/logs', logsRoutes(pool));
 app.use('/api/asinu-brain', asinuBrainRoutes(pool));
-app.use('/api/test', testRoutes(pool)); // Public test API - no auth required
+// Test routes — chỉ enable khi không phải production
+if (process.env.NODE_ENV !== 'production') {
+  app.use('/api/test', testRoutes(pool));
+}
 
 // Connect Redis then start server
 getRedis().connect().catch((err) => {

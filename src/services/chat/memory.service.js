@@ -116,10 +116,13 @@ CHỈ JSON.`;
           [item.content, item.category, userId, item.old_content]
         );
       } else {
-        // Thêm memory mới
+        // Thêm memory mới (skip nếu nội dung đã tồn tại)
         await pool.query(
           `INSERT INTO user_memories (user_id, content, category)
-           VALUES ($1, $2, $3)`,
+           SELECT $1, $2, $3
+           WHERE NOT EXISTS (
+             SELECT 1 FROM user_memories WHERE user_id = $1 AND content = $2
+           )`,
           [userId, item.content, item.category]
         );
       }
