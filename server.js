@@ -100,6 +100,13 @@ if (process.env.NODE_ENV !== 'production') {
   app.use('/api/test', testRoutes(pool));
 }
 
+// Global error handler — suppress client-aborted requests
+app.use((err, req, res, next) => {
+  if (err.type === 'request.aborted' || err.code === 'ECONNRESET') return;
+  console.error('[Server]', err.message);
+  if (!res.headersSent) res.status(500).json({ ok: false, error: 'Internal server error' });
+});
+
 // Connect Redis then start server
 getRedis().connect().catch((err) => {
   console.warn('[Redis] Could not connect — running without cache:', err.message);
