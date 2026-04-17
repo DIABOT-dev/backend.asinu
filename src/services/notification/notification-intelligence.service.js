@@ -41,12 +41,12 @@ async function buildUserContext(pool, userId) {
        ORDER BY created_at DESC LIMIT 1`,
       [userId]
     ),
-    // Last few check-ins
+    // Last few check-ins (chỉ trong 7 ngày gần nhất để tránh nhắc triệu chứng cũ)
     pool.query(
       `SELECT session_date, initial_status, flow_state, triage_summary
        FROM health_checkins
-       WHERE user_id = $1
-       ORDER BY session_date DESC LIMIT 3`,
+       WHERE user_id = $1 AND session_date >= NOW() - INTERVAL '7 days'
+       ORDER BY session_date DESC LIMIT 5`,
       [userId]
     ),
     // Lifecycle
@@ -70,9 +70,15 @@ async function buildUserContext(pool, userId) {
   // Derive context
   const topSymptom = topClusters[0] || null;
   const lastCheckin = recentCheckins[0] || null;
-  const consecutiveTiredDays = recentCheckins.filter(c =>
-    c.initial_status === 'tired' || c.initial_status === 'very_tired'
-  ).length;
+  // Đếm số ngày LIÊN TIẾP gần nhất mà user tired/very_tired (từ mới → cũ)
+  let consecutiveTiredDays = 0;
+  for (const c of recentCheckins) {
+    if (c.initial_status === 'tired' || c.initial_status === 'very_tired') {
+      consecutiveTiredDays++;
+    } else {
+      break; // gặp ngày không tired → dừng đếm
+    }
+  }
 
   return {
     topSymptom,           // { cluster_key, display_name, trend, count_7d }
@@ -189,9 +195,14 @@ const ALERT_TEMPLATES = {
  * Trả về: { template, variables }
  */
 function selectMorningTemplate(ctx) {
-  // Priority 1: High severity gần đây
+  // Priority 1: High severity gần đây (chỉ trong 48h, tránh nhắc mãi)
   if (ctx.lastSession && ctx.lastSession.severity === 'high') {
-    return { template: MORNING_TEMPLATES.high_severity, variables: {} };
+    const sessionAge = ctx.lastSession.created_at
+      ? (Date.now() - new Date(ctx.lastSession.created_at).getTime()) / 3600000
+      : 999;
+    if (sessionAge <= 48) {
+      return { template: MORNING_TEMPLATES.high_severity, variables: {} };
+    }
   }
 
   // Priority 2: Nhiều ngày tired liên tiếp
@@ -202,33 +213,24 @@ function selectMorningTemplate(ctx) {
     };
   }
 
-  // Priority 3: Có triệu chứng + trend
-  if (ctx.topSymptom) {
-    const trend = ctx.topSymptom.trend || 'stable';
-    if (trend === 'increasing') {
-      return {
-        template: MORNING_TEMPLATES.has_symptom_worsening,
-        variables: { symptom: ctx.topSymptom.display_name },
-      };
-    }
-    if (trend === 'decreasing') {
-      return {
-        template: MORNING_TEMPLATES.has_symptom_improving,
-        variables: { symptom: ctx.topSymptom.display_name },
-      };
-    }
-    return {
-      template: MORNING_TEMPLATES.has_symptom_stable,
-      variables: { symptom: ctx.topSymptom.display_name },
-    };
-  }
-
-  // Priority 4: Streak tốt
+  // Priority 3: Streak tốt (ưu tiên hơn symptom stable — user đang tốt thì nên khen)
   if (ctx.streakOkDays >= 3) {
     return {
       template: MORNING_TEMPLATES.streak_good,
       variables: { streakDays: ctx.streakOkDays },
     };
+  }
+
+  // Priority 4: Có triệu chứng + trend
+  if (ctx.topSymptom) {
+    const trend = ctx.topSymptom.trend || 'stable';
+    if (trend === 'increasing') {
+      return { template: MORNING_TEMPLATES.has_symptom_worsening, variables: { symptom: ctx.topSymptom.display_name } };
+    }
+    if (trend === 'decreasing') {
+      return { template: MORNING_TEMPLATES.has_symptom_improving, variables: { symptom: ctx.topSymptom.display_name } };
+    }
+    return { template: MORNING_TEMPLATES.has_symptom_stable, variables: { symptom: ctx.topSymptom.display_name } };
   }
 
   // Default
@@ -327,7 +329,7 @@ async function generateMessage(pool, userId, triggerType, user, extraVars = {}) 
     case 'alert_severity':
       selection = {
         template: ALERT_TEMPLATES.severity_high,
-        variables: { symptom: ctx.topSymptom?.display_name || 'triệu chứng' },
+        variables: { symptom: ctx.lastSession?.cluster_key || ctx.topSymptom?.display_name || 'triệu chứng' },
       };
       break;
     case 'alert_trend':

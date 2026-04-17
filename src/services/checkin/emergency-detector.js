@@ -440,7 +440,7 @@ function detectEmergency(symptoms, profile = {}) {
 
   // Isolated chest pain, no risk factors
   if (matchesAny(text, CHEST_PAIN_KW)) {
-    return result(false, 'CHEST_PAIN', 'moderate', true, false, 6);
+    return result(false, 'CHEST_PAIN', 'medium', true, false, 6);
   }
 
   // Fever + altered consciousness
@@ -466,7 +466,7 @@ function detectEmergency(symptoms, profile = {}) {
 
   // High fever in elderly
   if (matchesAny(text, FEVER_KW) && age !== null && age > 70) {
-    return result(false, 'FEVER_ELDERLY', 'moderate', true, false, 6);
+    return result(false, 'FEVER_ELDERLY', 'medium', true, false, 6);
   }
 
   return SAFE;

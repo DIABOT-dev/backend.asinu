@@ -47,7 +47,7 @@ async function postChat(pool, req, res) {
 async function getChatHistoryHandler(pool, req, res) {
   try {
     const userId = req.user.id;
-    const isPremium = req.user.subscription_tier === 'premium';
+    const isPremium = await require('../services/payment/subscription.service').isPremium(pool, userId);
     const retentionDays = isPremium ? RETENTION_DAYS_PREMIUM : RETENTION_DAYS_FREE;
     const messages = await getChatHistory(pool, userId, 200, retentionDays);
 

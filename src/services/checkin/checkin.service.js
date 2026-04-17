@@ -157,8 +157,10 @@ function calcNextCheckin(flowState, currentStatus, followUpCount = 0, followUpHo
  * Lấy session ngày hôm qua (dùng cho Continuity Check).
  */
 async function getYesterdaySession(pool, userId) {
-  const vn = new Date(new Date().toLocaleString('en-US', { timeZone: TZ }));
-  vn.setDate(vn.getDate() - 1);
+  // Dùng cùng logic 5AM boundary như checkinDateVN, rồi trừ 1 ngày
+  const vn = nowVN();
+  if (vn.getHours() < 5) vn.setDate(vn.getDate() - 1); // adjust for 5AM boundary
+  vn.setDate(vn.getDate() - 1); // yesterday relative to checkin date
   const yesterday = vn.toISOString().slice(0, 10);
   const { rows } = await pool.query(
     `SELECT session_date, initial_status, triage_summary, triage_severity, flow_state
@@ -212,9 +214,12 @@ async function startCheckin(pool, userId, status) {
         next_checkin_at, last_response_at, no_response_count, updated_at)
      VALUES ($1,$2,$3,$3,$4,$5,NOW(),0,NOW())
      ON CONFLICT (user_id, session_date) DO UPDATE SET
-       current_status   = $3,
-       flow_state       = $4,
-       next_checkin_at  = $5,
+       current_status   = CASE WHEN health_checkins.flow_state = 'high_alert' AND $3 = 'fine'
+                               THEN health_checkins.current_status ELSE $3 END,
+       flow_state       = CASE WHEN health_checkins.flow_state = 'high_alert' AND $4 IN ('monitoring', 'follow_up')
+                               THEN 'high_alert' ELSE $4 END,
+       next_checkin_at  = CASE WHEN health_checkins.flow_state = 'high_alert' AND $4 IN ('monitoring', 'follow_up')
+                               THEN health_checkins.next_checkin_at ELSE $5 END,
        last_response_at = NOW(),
        no_response_count= 0,
        resolved_at      = CASE WHEN $3 = 'fine' AND health_checkins.flow_state = 'monitoring'
@@ -273,8 +278,9 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
     flowState = 'follow_up';
   }
 
-  // Count how many follow-ups so far for this session
-  const followUpCount = session.no_response_count + 1;
+  // Count how many follow-up responses so far (dựa trên triage_messages đã có)
+  const triageMessages = session.triage_messages || [];
+  const followUpCount = triageMessages.filter(m => m.role === 'user').length;
 
   const nextAt = calcNextCheckin(flowState, newStatus, followUpCount);
 
@@ -392,12 +398,9 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
   if (!rows.length) throw new Error(t('error.session_not_found'));
   const session = rows[0];
 
-  // Xác định phase: follow-up nếu:
-  // 1. triage_completed_at đã set (initial triage đã xong), HOẶC
-  // 2. triage_messages đã có data (initial triage đã hỏi nhưng chưa kết luận), HOẶC
-  // 3. triage_summary đã có (tóm tắt đã lưu từ lần trước)
-  const hasPriorTriage = Array.isArray(session.triage_messages) && session.triage_messages.length > 0;
-  const isFollowUpPhase = session.triage_completed_at != null || (hasPriorTriage && previousAnswers.length === 0);
+  // Follow-up phase = triage đã hoàn thành ít nhất 1 lần (triage_completed_at đã set)
+  // Nếu triage_completed_at = null → chưa bao giờ hoàn thành → vẫn là initial triage (dù có triage_messages từ lần bỏ dở)
+  const isFollowUpPhase = session.triage_completed_at != null;
 
   const [profile, healthContext] = await Promise.all([
     getUserProfile(pool, userId),

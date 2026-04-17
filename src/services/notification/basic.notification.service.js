@@ -59,7 +59,7 @@ const remindersEnabled = () => `COALESCE(np.reminders_enabled, true) = true`;
 function nowVN() {
   const fmt = new Intl.DateTimeFormat('en-US', {
     timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, hourCycle: 'h23',
   });
   const parts = {};
   for (const { type, value } of fmt.formatToParts(new Date())) parts[type] = value;
@@ -217,7 +217,7 @@ async function runMorningSummary(pool, hour, minute) {
                AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
            ) AS no_glucose_today,
            NOT EXISTS (
-             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id AND lc.log_type = 'blood_pressure'
+             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id AND lc.log_type = 'bp'
                AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
            ) AS no_bp_today,
            NOT EXISTS (
@@ -482,9 +482,10 @@ async function runStreakMilestones(pool, hour, minute) {
     const title = user.lang === 'en'
       ? `${streak}-day streak${name ? ', ' + name : ''}! 🎉`
       : `Chuỗi ${streak} ngày${name ? ' ' + name : ''}! 🎉`;
+    const { honorific } = getHonorifics(user);
     const body = user.lang === 'en'
       ? `Amazing! You've logged health data for ${streak} days in a row. Keep it up!`
-      : `Tuyệt vời! Bạn đã ghi log ${streak} ngày liên tục. Hãy tiếp tục phát huy!`;
+      : `Tuyệt vời! ${honorific} đã ghi log ${streak} ngày liên tục. Tiếp tục phát huy nhé!`;
     if (await sendAndSave(pool, user, type, title, body, { streak })) sent++;
   }
   return { type: 'streak', total: activeUsers.length, sent };
@@ -514,23 +515,24 @@ async function runWeeklyRecap(pool) {
     const title = user.lang === 'en'
       ? `Weekly health summary${name ? ', ' + name : ''}`
       : `Tổng kết tuần${name ? ' ' + name : ''}`;
+    const { honorific: h } = getHonorifics(user);
     let body;
     if (days === 7) {
       body = user.lang === 'en'
         ? `Perfect week! You logged health data all 7 days. Outstanding commitment!`
-        : `Tuần hoàn hảo! Bạn đã ghi log đủ 7/7 ngày. Tuyệt vời!`;
+        : `Tuần hoàn hảo! ${h} đã ghi log đủ 7/7 ngày. Tuyệt vời!`;
     } else if (days >= 5) {
       body = user.lang === 'en'
         ? `Great week! ${days}/7 days logged. Almost perfect!`
-        : `Tuần tốt! ${days}/7 ngày đã ghi log. Gần hoàn hảo!`;
+        : `Tuần tốt! ${h} ghi log ${days}/7 ngày. Gần hoàn hảo rồi!`;
     } else if (days >= 3) {
       body = user.lang === 'en'
         ? `${days}/7 days logged this week. Try to log a bit more next week!`
-        : `${days}/7 ngày đã ghi log tuần này. Cố gắng thêm tuần sau nhé!`;
+        : `${h} ghi log ${days}/7 ngày tuần này. Cố gắng thêm tuần sau nhé!`;
     } else {
       body = user.lang === 'en'
         ? `Only ${days}/7 days logged. Your health matters — let's do better next week!`
-        : `Mới ${days}/7 ngày ghi log. Sức khỏe của bạn quan trọng — tuần sau cố gắng hơn nhé!`;
+        : `Mới ${days}/7 ngày ghi log. Sức khỏe ${h} quan trọng — tuần sau cố gắng hơn nhé!`;
     }
     if (await sendAndSave(pool, user, 'weekly_recap', title, body, { days_logged: days })) sent++;
   }
@@ -553,7 +555,7 @@ function parseConditions(medicalConditions) {
 async function getPreferredHour(pool, userId, defaultHour) {
   try {
     const res = await pool.query(
-      `SELECT EXTRACT(HOUR FROM created_at) as hour, COUNT(*) as cnt
+      `SELECT EXTRACT(HOUR FROM created_at AT TIME ZONE '${TZ}') as hour, COUNT(*) as cnt
        FROM health_checkins
        WHERE user_id = $1 AND created_at >= NOW() - INTERVAL '14 days'
          AND no_response_count = 0
@@ -592,9 +594,9 @@ async function runBasicNotifications(pool, forceHour = null, forceMinute = null)
   results.push(await runAfternoon(pool, hour, minute));
   results.push(await runEveningSummary(pool, hour, minute));
   results.push(await runStreakMilestones(pool, hour, minute));
-  if (hour === 20 && minute === 0 && dow === 0) results.push(await runWeeklyRecap(pool));
+  if (hour === 20 && minute < 5 && dow === 0) results.push(await runWeeklyRecap(pool));
   // Re-engagement: chạy 1 lần/ngày vào 9:00 sáng VN
-  if (hour === 9 && minute === 0) results.push(await runReengagement(pool, sendAndSave));
+  if (hour === 9 && minute < 5) results.push(await runReengagement(pool, sendAndSave));
   // Context-based alerts (severity high, trend worsening)
   results.push(await runContextAlerts(pool));
   // Checkin follow-ups are urgent — run independently (not subject to reminder gap)
@@ -624,8 +626,11 @@ async function runContextAlerts(pool) {
     FROM users u
     JOIN user_onboarding_profiles uop ON uop.user_id = u.id
     JOIN user_lifecycle ul ON ul.user_id = u.id
+    LEFT JOIN user_notification_preferences np ON np.user_id = u.id
     WHERE u.push_token IS NOT NULL
       AND u.deleted_at IS NULL
+      AND uop.onboarding_completed_at IS NOT NULL
+      AND COALESCE(np.reminders_enabled, true) = true
       AND ul.segment IN ('active', 'semi_active')
   `);
 
@@ -635,7 +640,7 @@ async function runContextAlerts(pool) {
       const result = await checkAlertTriggers(pool, user.id);
       if (!result) continue;
 
-      const notifType = result.trigger === 'alert_severity' ? 'health_alert' : 'health_alert';
+      const notifType = 'health_alert';
 
       // Dedup: skip if same alert sent in last 12 hours
       const { rows: recent } = await pool.query(

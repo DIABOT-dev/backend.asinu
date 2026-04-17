@@ -203,7 +203,10 @@ async function runBasic(pool, req, res) {
 
 async function deleteOne(pool, req, res) {
   try {
-    await notificationService.deleteNotification(pool, req.params.id, req.user.id);
+    const id = parseInt(req.params.id);
+    if (!id || isNaN(id)) return res.status(400).json({ ok: false, error: 'Invalid ID' });
+    const result = await notificationService.deleteNotification(pool, id, req.user.id);
+    if (!result.deleted) return res.status(404).json({ ok: false, error: 'Not found' });
     return res.json({ ok: true });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

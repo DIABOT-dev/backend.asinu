@@ -101,7 +101,7 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
  * @param {string} senderName - Name of the person who sent the invitation
  * @param {number} invitationId - ID of the invitation
  */
-async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitationId) {
+async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitationId, senderId = null) {
   try {
     // Get addressee's push token from database
     // Note: You need to add a push_token column to the users table
@@ -125,7 +125,7 @@ async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitat
       {
         type: 'care_circle_invitation',
         invitationId: String(invitationId),
-        senderId: String(addresseeId),
+        senderId: String(senderId || addresseeId),
         senderName: senderName,
       }
     );
@@ -141,7 +141,7 @@ async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitat
  * @param {number} requesterId - User ID who sent the original invitation
  * @param {string} accepterName - Name of person who accepted
  */
-async function notifyCareCircleAccepted(pool, requesterId, accepterName) {
+async function notifyCareCircleAccepted(pool, requesterId, accepterName, accepterId = null) {
   try {
     const result = await pool.query(
       'SELECT push_token, language_preference FROM users WHERE id = $1 AND push_token IS NOT NULL',
@@ -162,7 +162,7 @@ async function notifyCareCircleAccepted(pool, requesterId, accepterName) {
       t('push.accepted_body', lang, { name: accepterName }),
       {
         type: 'care_circle_accepted',
-        accepterId: String(requesterId),
+        accepterId: String(accepterId || requesterId),
         accepterName: accepterName,
       }
     );

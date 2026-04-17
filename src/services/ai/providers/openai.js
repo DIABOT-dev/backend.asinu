@@ -188,7 +188,7 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
     }
 
     const data = await response.json();
-    const reply = data.choices[0].message.content;
+    const reply = data.choices[0]?.message?.content || '';
 
     return {
       reply: reply.trim(),

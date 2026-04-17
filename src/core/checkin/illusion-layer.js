@@ -367,7 +367,7 @@ async function buildCheckinContext(pool, userId) {
     pool.query(
       `SELECT session_date, initial_status, triage_summary, triage_severity
        FROM health_checkins
-       WHERE user_id = $1
+       WHERE user_id = $1 AND session_date < CURRENT_DATE
        ORDER BY session_date DESC LIMIT 3`,
       [userId]
     ),

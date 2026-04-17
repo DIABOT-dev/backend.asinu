@@ -96,8 +96,8 @@ async function getBatchContexts(pool, userIds) {
       `SELECT user_id, log_type
        FROM logs_common
        WHERE user_id = ANY($1::int[])
-         AND occurred_at >= CURRENT_DATE
-         AND occurred_at < CURRENT_DATE + INTERVAL '1 day'
+         AND occurred_at >= (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
+         AND occurred_at < (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date + INTERVAL '1 day'
        GROUP BY user_id, log_type`,
       [ids]
     ),
@@ -309,7 +309,8 @@ Chỉ trả về JSON thuần (không có text thừa):
     temperature: 0.9,
   });
 
-  const text = aiResponse.reply.trim();
+  const text = (aiResponse?.reply || '').trim();
+  if (!text) return null;
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) {
 

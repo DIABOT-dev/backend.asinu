@@ -181,7 +181,8 @@ function renderReengagementMessage(template, ctx, user, escalation) {
   text = text.replace(/\{selfRef\}/g, h.selfRef);
 
   // Context replacements
-  text = text.replace(/\{symptom\}/g, ctx.topSymptom?.display_name || 'triệu chứng');
+  const symptomFallback = lang === 'en' ? 'symptoms' : 'triệu chứng';
+  text = text.replace(/\{symptom\}/g, ctx.topSymptom?.display_name || symptomFallback);
   text = text.replace(/\{days\}/g, String(ctx.lifecycle.inactive_days || 0));
 
   return { text, templateId: template.id, level: template.level };

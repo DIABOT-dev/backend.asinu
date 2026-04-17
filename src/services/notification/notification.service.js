@@ -142,10 +142,11 @@ async function saveInAppNotification(pool, userId, type, title, message, data) {
  * @returns {Promise<void>}
  */
 async function deleteNotification(pool, notificationId, userId) {
-  await pool.query(
+  const result = await pool.query(
     'DELETE FROM notifications WHERE id = $1 AND user_id = $2',
     [notificationId, userId]
   );
+  return { deleted: result.rowCount > 0 };
 }
 
 /**

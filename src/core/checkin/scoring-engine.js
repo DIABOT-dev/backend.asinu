@@ -177,7 +177,7 @@ function evaluateScript(scriptData, answers, profile = {}) {
       result.severity = severity;
       result.modifiersApplied = modifiersApplied;
       result.followUpHours = _defaultFollowUp(severity);
-      result.hasRedFlag = severity === 'critical';
+      result.hasRedFlag = severity === 'high' || severity === 'critical';
       // needsDoctor chỉ khi CRITICAL hoặc rule gốc đã set
       // Modifier bump MEDIUM→HIGH không tự động khuyên bác sĩ
       // Chỉ khuyên khi: rule gốc set needsDoctor, hoặc severity=critical
