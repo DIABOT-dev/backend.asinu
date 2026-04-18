@@ -29,8 +29,10 @@ function getHonorifics(user) {
 
   const callName = name ? `${honorific} ${name}` : honorific;
   const Honorific = honorific.charAt(0).toUpperCase() + honorific.slice(1);
+  const CallName = name ? `${Honorific} ${name}` : Honorific;
+  const SelfRef = selfRef.charAt(0).toUpperCase() + selfRef.slice(1);
 
-  return { honorific, selfRef, callName, Honorific };
+  return { honorific, selfRef, callName, Honorific, CallName, SelfRef };
 }
 
 module.exports = { getHonorifics };

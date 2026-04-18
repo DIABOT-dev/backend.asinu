@@ -242,7 +242,7 @@ async function runMorningSummary(pool, hour, minute) {
   let sent = 0;
   for (const user of rows) {
     const name = getUserName(user);
-    const { honorific, selfRef, callName, Honorific } = getHonorifics(user);
+    const { honorific, selfRef, callName, Honorific, CallName, SelfRef } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
     const isEn = user.lang === 'en';
 
@@ -267,8 +267,8 @@ async function runMorningSummary(pool, hour, minute) {
     if (tasks.length === 0) continue;
 
     const title = isEn
-      ? `☀️ Good morning${name ? ' ' + name : ''}! How did you sleep?`
-      : `☀️ ${name ? name + ' ơi, ' : ''}sáng rồi! Hôm nay mình cùng chăm sóc sức khỏe nhé`;
+      ? `☀️ Good morning${name ? ' ' + name : ''}!`
+      : `☀️ ${CallName} ơi, sáng rồi!`;
 
     // Personalized body from Intelligence Layer
     let body;
@@ -276,15 +276,15 @@ async function runMorningSummary(pool, hour, minute) {
       const msg = await generateMessage(pool, user.id, 'morning', user, { tasks: tasks.join(', ') });
       body = msg.text + (tasks.length > 0 ? (isEn ? `. Don't forget: ${tasks.join(', ')} 💙` : `. Nhớ ${tasks.join(', ')} nha 💙`) : ' 💙');
     } catch {
-      // Fallback to original logic
+      // Fallback
       if (user.last_symptom) {
         body = isEn
-          ? `Yesterday you mentioned ${user.last_symptom} — how are you feeling today? Don't forget: ${tasks.join(', ')}. I'm here for you 💙`
-          : `Hôm qua ${honorific} có bị ${user.last_symptom} — hôm nay ${honorific} thấy đỡ hơn chưa? Nhớ ${tasks.join(', ')} nha. ${Honorific} có ${selfRef} ở đây cùng 💙`;
+          ? `Yesterday you mentioned ${user.last_symptom} — hope you're feeling better today. Remember: ${tasks.join(', ')}. ${selfRef} is keeping track with you 💙`
+          : `Hôm qua ${honorific} có bị ${user.last_symptom}, ${selfRef} vẫn nhớ nha. Hôm nay ${honorific} nhớ ${tasks.join(', ')} nhé, ${selfRef} theo dõi cùng ${honorific} 💙`;
       } else {
         body = isEn
-          ? `A new day begins! Let's take care of your health together: ${tasks.join(', ')}. You're doing great 💪`
-          : `Ngày mới rồi! ${selfRef} cùng ${honorific} chăm sóc sức khoẻ nhé: ${tasks.join(', ')} 💪`;
+          ? `A new day is here! Today remember: ${tasks.join(', ')}. Small steps every day make a big difference 💪`
+          : `Ngày mới rồi ${honorific} ơi! Hôm nay ${honorific} nhớ ${tasks.join(', ')} nhé. Mỗi ngày một chút, ${selfRef} tin ${honorific} làm được 💪`;
       }
     }
 
@@ -315,31 +315,31 @@ async function runAfternoon(pool, hour, minute) {
   let sent = 0;
   for (const user of rows) {
     const name = getUserName(user);
-    const { honorific, selfRef, callName, Honorific } = getHonorifics(user);
+    const { honorific, selfRef, callName, Honorific, CallName, SelfRef } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
     const isEn = user.lang === 'en';
     const title = isEn
-      ? `🌤️ Hey${name ? ' ' + name : ''}, how's your afternoon going?`
-      : `🌤️ ${name ? name + ' ơi, ' : ''}chiều rồi! Nghỉ tay chút, để mình hỏi thăm nha`;
+      ? `🌤️ Hey${name ? ' ' + name : ''}, afternoon check!`
+      : `🌤️ ${CallName} ơi, chiều rồi!`;
     // Personalized body from Intelligence Layer
     let body;
     try {
       const msg = await generateMessage(pool, user.id, 'afternoon', user);
       body = msg.text + ' 😊';
     } catch {
-      // Fallback to original logic
+      // Fallback
       if (conditions.hasDiabetes) {
         body = isEn
-          ? `How are you feeling this afternoon? Remember to drink water and check your blood sugar if you haven't yet 😊`
-          : `Chiều nay ${honorific} thấy thế nào? Nhớ uống nước và kiểm tra đường huyết nếu chưa nha. ${selfRef} luôn theo dõi cùng ${honorific} 😊`;
+          ? `How's your afternoon going? Don't forget to drink water and check your blood sugar if you haven't yet. ${selfRef} is here with you 😊`
+          : `Chiều nay ${honorific} thấy thế nào? Nhớ uống đủ nước và đo đường huyết nếu chưa nhé. ${selfRef} đang theo dõi cùng ${honorific} đây 😊`;
       } else if (conditions.hasHypertension) {
         body = isEn
-          ? `Take a little break if you can — rest is just as important as medicine. Have you had enough water today? 💧`
-          : `${Honorific} nghỉ tay chút đi nha — nghỉ ngơi cũng quan trọng như uống thuốc vậy. Hôm nay ${honorific} uống đủ nước chưa? 💧`;
+          ? `Afternoon already! Rest a bit if you can — rest matters as much as medicine. How's your water intake today? 💧`
+          : `Chiều rồi ${honorific} ơi, nghỉ tay chút nhé — nghỉ ngơi cũng quan trọng như uống thuốc vậy. Hôm nay ${honorific} uống đủ nước chưa? 💧`;
       } else {
         body = isEn
-          ? `How's your afternoon going? Take a moment to stretch, drink some water, and breathe 🌿`
-          : `Buổi chiều của ${honorific} thế nào rồi? Vươn vai tí, uống ngụm nước nha. ${selfRef} ở đây cùng ${honorific} 🌿`;
+          ? `How's your afternoon? Take a moment to stretch and drink some water. Every little bit helps 🌿`
+          : `Chiều nay ${honorific} thế nào rồi? Vươn vai tí, uống ngụm nước nhé. ${selfRef} nhắc ${honorific} vì quan tâm thôi nha 🌿`;
       }
     }
     const target = conditions.hasDiabetes ? 'glucose' : conditions.hasHypertension ? 'blood_pressure' : 'home';
@@ -390,7 +390,7 @@ async function runEveningSummary(pool, hour, minute) {
   let sent = 0;
   for (const user of rows) {
     const name = getUserName(user);
-    const { honorific, selfRef, callName, Honorific } = getHonorifics(user);
+    const { honorific, selfRef, callName, Honorific, CallName, SelfRef } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
     const isEn = user.lang === 'en';
 
@@ -405,8 +405,8 @@ async function runEveningSummary(pool, hour, minute) {
     if (tasks.length === 0) continue;
 
     const title = isEn
-      ? `🌙 Evening${name ? ' ' + name : ''}! Time to wind down`
-      : `🌙 ${name ? name + ' ơi, ' : ''}tối rồi! Trước khi nghỉ, nhớ mấy việc này nha`;
+      ? `🌙 Good evening${name ? ' ' + name : ''}!`
+      : `🌙 ${CallName} ơi, tối rồi!`;
 
     // Personalized body from Intelligence Layer
     let body;
@@ -414,15 +414,15 @@ async function runEveningSummary(pool, hour, minute) {
       const msg = await generateMessage(pool, user.id, 'evening', user, { tasks: tasks.join(', ') });
       body = msg.text + ' 🌙';
     } catch {
-      // Fallback to original logic
+      // Fallback
       if (user.last_symptom) {
         body = isEn
-          ? `Before you rest tonight: ${tasks.join(', ')}. You mentioned ${user.last_symptom} recently — hope you're feeling better. Sleep well 💙`
-          : `Trước khi nghỉ ${honorific} nhớ: ${tasks.join(', ')} nha. Gần đây ${honorific} có bị ${user.last_symptom} — ${selfRef} mong ${honorific} đã đỡ hơn. Ngủ ngon 💙`;
+          ? `Before bed, remember: ${tasks.join(', ')}. Hope your ${user.last_symptom} is getting better — ${selfRef} is thinking of you. Sleep well 💙`
+          : `Trước khi ngủ ${honorific} nhớ ${tasks.join(', ')} nhé. ${selfRef} vẫn nhớ ${honorific} bị ${user.last_symptom}, hy vọng đỡ hơn rồi. ${honorific} ngủ ngon nha 💙`;
       } else {
         body = isEn
-          ? `You did great today! Before bed, just remember: ${tasks.join(', ')}. Rest well, tomorrow is a new day 🌟`
-          : `Hôm nay ${honorific} giỏi lắm! Trước khi ngủ nhớ: ${tasks.join(', ')} nha. ${selfRef} chúc ${honorific} ngủ ngon 🌟`;
+          ? `Before bed, remember: ${tasks.join(', ')}. You did well today — rest up for tomorrow! 🌟`
+          : `Trước khi ngủ ${honorific} nhớ ${tasks.join(', ')} nhé. Hôm nay ${honorific} đã cố gắng rồi, nghỉ ngơi cho ngày mai tiếp tục nha 🌟`;
       }
     }
 
@@ -479,13 +479,13 @@ async function runStreakMilestones(pool, hour, minute) {
     );
     if (already.length) continue;
     const name = getUserName(user);
+    const { honorific, selfRef, CallName, Honorific } = getHonorifics(user);
     const title = user.lang === 'en'
-      ? `${streak}-day streak${name ? ', ' + name : ''}! 🎉`
-      : `Chuỗi ${streak} ngày${name ? ' ' + name : ''}! 🎉`;
-    const { honorific } = getHonorifics(user);
+      ? `🔥 ${streak}-day streak${name ? ', ' + name : ''}!`
+      : `🔥 Chuỗi ${streak} ngày, ${CallName}!`;
     const body = user.lang === 'en'
-      ? `Amazing! You've logged health data for ${streak} days in a row. Keep it up!`
-      : `Tuyệt vời! ${honorific} đã ghi log ${streak} ngày liên tục. Tiếp tục phát huy nhé!`;
+      ? `Amazing! You've logged health data for ${streak} days in a row. I'm so proud of you — keep it up!`
+      : `Tuyệt vời! ${Honorific} đã ghi log ${streak} ngày liên tục rồi. ${selfRef} tự hào về ${honorific} lắm — tiếp tục phát huy nhé!`;
     if (await sendAndSave(pool, user, type, title, body, { streak })) sent++;
   }
   return { type: 'streak', total: activeUsers.length, sent };
@@ -512,27 +512,27 @@ async function runWeeklyRecap(pool) {
     );
     const days = logDays[0]?.days || 0;
     const name = getUserName(user);
+    const { honorific, selfRef, CallName, Honorific, SelfRef } = getHonorifics(user);
     const title = user.lang === 'en'
-      ? `Weekly health summary${name ? ', ' + name : ''}`
-      : `Tổng kết tuần${name ? ' ' + name : ''}`;
-    const { honorific: h } = getHonorifics(user);
+      ? `📊 Weekly summary${name ? ', ' + name : ''}`
+      : `📊 Tổng kết tuần, ${CallName}!`;
     let body;
     if (days === 7) {
       body = user.lang === 'en'
-        ? `Perfect week! You logged health data all 7 days. Outstanding commitment!`
-        : `Tuần hoàn hảo! ${h} đã ghi log đủ 7/7 ngày. Tuyệt vời!`;
+        ? `Perfect week! You logged all 7 days. ${selfRef} is so proud — outstanding commitment!`
+        : `Tuần hoàn hảo! ${Honorific} đã ghi log đủ 7/7 ngày. ${SelfRef} tự hào về ${honorific} lắm — tuyệt vời!`;
     } else if (days >= 5) {
       body = user.lang === 'en'
-        ? `Great week! ${days}/7 days logged. Almost perfect!`
-        : `Tuần tốt! ${h} ghi log ${days}/7 ngày. Gần hoàn hảo rồi!`;
+        ? `Great week! ${days}/7 days logged. Almost perfect — ${selfRef} knows you can do it!`
+        : `Tuần tốt! ${Honorific} ghi log ${days}/7 ngày, gần hoàn hảo rồi! ${SelfRef} tin tuần sau ${honorific} làm được 7/7 💪`;
     } else if (days >= 3) {
       body = user.lang === 'en'
-        ? `${days}/7 days logged this week. Try to log a bit more next week!`
-        : `${h} ghi log ${days}/7 ngày tuần này. Cố gắng thêm tuần sau nhé!`;
+        ? `${days}/7 days logged this week. Not bad! Let's aim higher next week — ${selfRef} is here with you.`
+        : `${Honorific} ghi log ${days}/7 ngày tuần này. Không tệ đâu! Tuần sau ${honorific} cố thêm chút nhé, ${selfRef} đồng hành cùng ${honorific} 💙`;
     } else {
       body = user.lang === 'en'
-        ? `Only ${days}/7 days logged. Your health matters — let's do better next week!`
-        : `Mới ${days}/7 ngày ghi log. Sức khỏe ${h} quan trọng — tuần sau cố gắng hơn nhé!`;
+        ? `Only ${days}/7 days logged. Your health matters — ${selfRef} hopes to see more next week!`
+        : `Mới ${days}/7 ngày ghi log tuần này. Sức khỏe ${honorific} quan trọng lắm — tuần sau ${selfRef} mong ${honorific} ghi log thường xuyên hơn nhé 💙`;
     }
     if (await sendAndSave(pool, user, 'weekly_recap', title, body, { days_logged: days })) sent++;
   }

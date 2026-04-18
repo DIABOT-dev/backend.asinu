@@ -100,38 +100,38 @@ async function buildUserContext(pool, userId) {
 const MORNING_TEMPLATES = {
   has_symptom_worsening: {
     id: 'morning_symptom_worsening',
-    vi: 'Mấy hôm nay {honorific} hay bị {symptom}, hôm nay thế nào rồi? {selfRef} muốn theo dõi cùng {honorific} ⚠️',
-    en: 'You\'ve had {symptom} recently and it seems to be getting worse. How are you today?',
+    vi: 'Mấy hôm nay {honorific} hay bị {symptom}, {selfRef} hơi lo. Hôm nay {honorific} thấy thế nào rồi? Vào check-in để {selfRef} theo dõi cùng {honorific} nhé ⚠️',
+    en: 'You\'ve had {symptom} recently and it seems to be getting worse. How are you today? Check in so I can keep track with you.',
   },
   has_symptom_stable: {
     id: 'morning_symptom_stable',
-    vi: 'Hôm qua {honorific} có bị {symptom}, hôm nay đỡ hơn chưa? 💬',
-    en: 'You had {symptom} yesterday. Are you feeling better today?',
+    vi: 'Hôm qua {honorific} có bị {symptom}, hôm nay đỡ hơn chưa? {SelfRef} vẫn đang theo dõi cùng {honorific} nha 💬',
+    en: 'You had {symptom} yesterday — feeling better today? I\'m still keeping track with you.',
   },
   has_symptom_improving: {
     id: 'morning_symptom_improving',
-    vi: '{symptom} mấy hôm nay đang đỡ dần rồi. Hôm nay {honorific} thấy sao? 💪',
-    en: 'Your {symptom} has been improving. How do you feel today?',
+    vi: 'Tình trạng {symptom} đang đỡ dần rồi, tốt quá! Hôm nay {honorific} thấy sao? Giữ đà này nhé 💪',
+    en: 'Your {symptom} has been improving — great progress! How do you feel today? Keep it up!',
   },
   consecutive_tired: {
     id: 'morning_consecutive_tired',
-    vi: '{tiredDays} ngày nay {honorific} đều mệt, {selfRef} hơi lo. Hôm nay thế nào rồi? 😟',
-    en: 'You\'ve been feeling tired for {tiredDays} days. How are you today?',
+    vi: '{tiredDays} ngày nay {honorific} đều mệt, {selfRef} lo cho {honorific} lắm. Hôm nay thế nào rồi? Vào check-in để {selfRef} biết tình hình nhé 😟',
+    en: 'You\'ve been tired for {tiredDays} days — I\'m a bit worried. How are you today? Check in so I know how you\'re doing.',
   },
   streak_good: {
     id: 'morning_streak_good',
-    vi: '{streakDays} ngày nay {honorific} đều khỏe, tốt lắm! Check-in nào 🎉',
-    en: '{streakDays} days feeling good! Keep it up! Time for check-in',
+    vi: '{streakDays} ngày liên tiếp {honorific} đều khỏe, {selfRef} mừng quá! Tiếp tục giữ vậy nhé, {selfRef} luôn đồng hành cùng {honorific} 🎉',
+    en: '{streakDays} days in a row feeling good — amazing! Keep going, I\'m cheering you on!',
   },
   high_severity: {
     id: 'morning_high_severity',
-    vi: 'Lần trước {honorific} có triệu chứng nặng, hôm nay thấy thế nào rồi? 🩺',
-    en: 'Last time you had severe symptoms. How are you feeling now?',
+    vi: 'Lần trước {honorific} có triệu chứng nặng, {selfRef} vẫn nhớ. Hôm nay {honorific} thấy thế nào rồi? Cho {selfRef} biết để theo dõi tiếp nhé 🩺',
+    en: 'You had severe symptoms last time — I haven\'t forgotten. How are you feeling now? Let me know so I can keep checking.',
   },
   default: {
     id: 'morning_default',
-    vi: 'Hôm nay {honorific} thế nào? Vào check-in nhanh để {selfRef} theo dõi nha ☀️',
-    en: 'How are you today? Quick check-in so I can keep track',
+    vi: 'Hôm nay {honorific} thế nào? Vào check-in nhanh để {selfRef} nắm tình hình nhé. Mỗi ngày một chút, {selfRef} đồng hành cùng {honorific} ☀️',
+    en: 'How are you today? Quick check-in so I can stay updated. One day at a time — I\'m here with you ☀️',
   },
 };
 
@@ -141,18 +141,18 @@ const MORNING_TEMPLATES = {
 const EVENING_TEMPLATES = {
   has_symptom: {
     id: 'evening_has_symptom',
-    vi: 'Hôm nay {symptom} thế nào rồi? Trước khi ngủ nhớ {tasks} nha 🌙',
-    en: 'How was your {symptom} today? Before bed, remember to {tasks}',
+    vi: 'Hôm nay {symptom} thế nào rồi {honorific}? Trước khi ngủ {honorific} nhớ {tasks} nhé. {SelfRef} vẫn đang theo dõi cùng {honorific} nha 🌙',
+    en: 'How was your {symptom} today? Before bed, remember to {tasks}. I\'m still keeping track with you 🌙',
   },
   improving: {
     id: 'evening_improving',
-    vi: 'Hôm nay {honorific} đỡ hơn hôm qua rồi, giữ vậy nhé! Nhớ {tasks} nha 🌟',
-    en: 'You\'re doing better today. Keep it up! Remember to {tasks}',
+    vi: 'Hôm nay {honorific} đỡ hơn hôm qua rồi, tốt quá! Trước khi ngủ nhớ {tasks} nhé. Giữ đà này {honorific} nhé 🌟',
+    en: 'You\'re doing better today — great! Before bed, remember to {tasks}. Keep this momentum going! 🌟',
   },
   default: {
     id: 'evening_default',
-    vi: 'Trước khi nghỉ, nhớ {tasks} nha. Chúc {honorific} ngủ ngon 🌙',
-    en: 'Before bed, remember to {tasks}. Sleep well!',
+    vi: 'Trước khi ngủ {honorific} nhớ {tasks} nhé. Hôm nay {honorific} đã cố gắng rồi, nghỉ ngơi cho ngày mai tiếp tục nha. {SelfRef} chúc {honorific} ngủ ngon 🌙',
+    en: 'Before bed, remember to {tasks}. You did well today — rest up for tomorrow. Sleep well! 🌙',
   },
 };
 
@@ -162,13 +162,13 @@ const EVENING_TEMPLATES = {
 const AFTERNOON_TEMPLATES = {
   has_symptom: {
     id: 'afternoon_has_symptom',
-    vi: 'Chiều nay {symptom} thế nào rồi? Nghỉ tay tí, uống nước nhé 🌤️',
-    en: 'How\'s your {symptom} this afternoon? Take a break and drink some water',
+    vi: 'Chiều nay {symptom} thế nào rồi {honorific}? Nghỉ tay chút, uống nước nhé. {SelfRef} vẫn quan tâm {honorific} đây 🌤️',
+    en: 'How\'s your {symptom} this afternoon? Take a break and stay hydrated. I\'m still here for you 🌤️',
   },
   default: {
     id: 'afternoon_default',
-    vi: 'Chiều nay {honorific} thế nào? Nghỉ tay tí, uống nước nhé 💧',
-    en: 'How\'s your afternoon? Take a break and drink some water',
+    vi: 'Chiều nay {honorific} thế nào? Nghỉ tay chút, uống nước nhé. {SelfRef} nhắc {honorific} vì quan tâm thôi nha 💧',
+    en: 'How\'s your afternoon? Take a break, drink some water. Just checking in because I care 💧',
   },
 };
 
@@ -178,12 +178,12 @@ const AFTERNOON_TEMPLATES = {
 const ALERT_TEMPLATES = {
   severity_high: {
     id: 'alert_severity_high',
-    vi: '🚨 {callName} ơi, triệu chứng {symptom} của {honorific} khá nặng. {honorific} nên đi khám bác sĩ nhé',
+    vi: '🚨 {CallName} ơi, triệu chứng {symptom} của {honorific} khá nặng. {Honorific} nên đi khám bác sĩ nhé',
     en: '🚨 {callName}, your {symptom} seems severe. Please consider seeing a doctor',
   },
   trend_worsening: {
     id: 'alert_trend_worsening',
-    vi: '📈 {callName} ơi, {symptom} mấy hôm nay có vẻ nặng hơn. {selfRef} muốn {honorific} theo dõi kỹ nhé',
+    vi: '📈 {CallName} ơi, {symptom} mấy hôm nay có vẻ nặng hơn. {SelfRef} muốn {honorific} theo dõi kỹ nhé',
     en: '📈 {callName}, your {symptom} seems to be getting worse. Please monitor closely',
   },
 };
@@ -282,7 +282,7 @@ function selectAfternoonTemplate(ctx) {
  */
 function renderMessage(template, variables, user) {
   const lang = user.lang || 'vi';
-  const { honorific, selfRef, callName, Honorific } = getHonorifics(user);
+  const { honorific, selfRef, callName, Honorific, CallName, SelfRef } = getHonorifics(user);
 
   let text = lang === 'en' ? template.en : template.vi;
 
@@ -291,6 +291,8 @@ function renderMessage(template, variables, user) {
   text = text.replace(/\{selfRef\}/g, selfRef);
   text = text.replace(/\{callName\}/g, callName);
   text = text.replace(/\{Honorific\}/g, Honorific);
+  text = text.replace(/\{CallName\}/g, CallName);
+  text = text.replace(/\{SelfRef\}/g, SelfRef);
 
   // Replace context vars
   for (const [key, val] of Object.entries(variables)) {
