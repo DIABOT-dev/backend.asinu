@@ -19,6 +19,7 @@
  */
 
 const { sendPushNotification } = require('../notification/push.notification.service');
+const { getPatientRoleForCaregiver } = require('../../lib/relation');
 const { getNextTriageQuestion, buildContinuityMessage, calcFollowUpHours } = require('./checkin.ai.service');
 const { saveSymptomLogs } = require('./symptom-tracker.service');
 const { dispatch: dispatchNotification } = require('../../core/notification/notification.orchestrator');
@@ -764,10 +765,16 @@ async function triggerEmergency(pool, userId, location) {
   const userName = getShortName(fullName) || fullName;
 
   // Get care circle members who can receive alerts (both directions)
+  // relationship_type: vai trò của addressee với requester (VD: requester='con', addressee='Bố')
+  // → nếu patient là requester, caregiver (addressee) thấy patient là "con" (reverse)
+  // → nếu patient là addressee, caregiver (requester) thấy patient theo relationship_type
   const { rows: caregivers } = await pool.query(
     `SELECT u.id, u.push_token,
+            COALESCE(u.language_preference, 'vi') as lang,
             uc.permissions->>'can_receive_alerts' as can_receive_alerts,
-            uc.status
+            uc.status,
+            uc.relationship_type,
+            CASE WHEN uc.requester_id = $1 THEN 'requester' ELSE 'addressee' END as patient_side
      FROM user_connections uc
      JOIN users u ON u.id = CASE
        WHEN uc.requester_id = $1 THEN uc.addressee_id
@@ -783,11 +790,16 @@ async function triggerEmergency(pool, userId, location) {
   const locationStr = location
     ? ` (${location.lat?.toFixed(4)}, ${location.lng?.toFixed(4)})`
     : '';
-  const title = t('checkin.emergency_title', lang);
-  const body  = t('checkin.emergency_body', lang, { name: userName, location: locationStr });
-  const data  = { type: 'emergency', userId: String(userId), location, patientPhone: user.phone_number || '' };
+  const data = { type: 'emergency', userId: String(userId), location, patientPhone: user.phone_number || '' };
 
   for (const cg of caregivers) {
+    const cgLang = cg.lang || 'vi';
+    // Title/body đều bắt đầu bằng {{name}} → viết hoa
+    const patientDisplay = cg.patient_side === 'requester'
+      ? getPatientRoleForCaregiver(cg.relationship_type, userName, cgLang, true)
+      : userName;
+    const title = t('checkin.emergency_title', cgLang, { name: patientDisplay });
+    const body  = t('checkin.emergency_body', cgLang, { name: patientDisplay, location: locationStr });
     // Insert confirmation record so caregiver sees pending alert
     if (checkinId) {
       try {
@@ -997,7 +1009,10 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
   const name = getShortName(fullN) || fullN;
 
   const { rows: caregivers } = await pool.query(
-    `SELECT u.id, u.push_token
+    `SELECT u.id, u.push_token,
+            COALESCE(u.language_preference, 'vi') as lang,
+            uc.relationship_type,
+            CASE WHEN uc.requester_id = $1 THEN 'requester' ELSE 'addressee' END as patient_side
      FROM user_connections uc
      JOIN users u ON u.id = CASE
        WHEN uc.requester_id = $1 THEN uc.addressee_id
@@ -1011,14 +1026,18 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
 
   if (!caregivers.length) return;
 
-  const title = alertType === 'emergency'
-    ? t('checkin.emergency_title', aLang)
-    : t('checkin.health_check_needed_title', aLang);
-  const body = alertType === 'emergency'
-    ? t('checkin.emergency_family_body', aLang, { name })
-    : t('checkin.no_response_family_body', aLang, { name });
-
   for (const cg of caregivers) {
+    const cgLang = cg.lang || 'vi';
+    const patientDisplay = cg.patient_side === 'requester'
+      ? getPatientRoleForCaregiver(cg.relationship_type, name, cgLang, true)
+      : name;
+    const title = alertType === 'emergency'
+      ? t('checkin.emergency_title', cgLang, { name: patientDisplay })
+      : t('checkin.health_check_needed_title', cgLang);
+    const body = alertType === 'emergency'
+      ? t('checkin.emergency_family_body', cgLang, { name: patientDisplay })
+      : t('checkin.no_response_family_body', cgLang, { name: patientDisplay });
+
     // Upsert confirmation record (skip if already confirmed)
     const { rows: existing } = await pool.query(
       `SELECT id, confirmed_at FROM caregiver_alert_confirmations
@@ -1159,10 +1178,16 @@ async function runAlertConfirmationFollowUps(pool) {
   const cutoff = new Date(Date.now() - RESEND_INTERVAL_MS);
   const { rows } = await pool.query(
     `SELECT cac.*, u.push_token,
-            p.display_name AS patient_name, p.full_name AS patient_full_name
+            COALESCE(u.language_preference, 'vi') AS cg_lang,
+            p.display_name AS patient_name, p.full_name AS patient_full_name,
+            uc.relationship_type,
+            CASE WHEN uc.requester_id = cac.patient_id THEN 'requester' ELSE 'addressee' END as patient_side
      FROM caregiver_alert_confirmations cac
      JOIN users u ON u.id = cac.caregiver_id
      JOIN users p ON p.id = cac.patient_id
+     LEFT JOIN user_connections uc ON
+       (uc.requester_id = cac.patient_id AND uc.addressee_id = cac.caregiver_id)
+       OR (uc.requester_id = cac.caregiver_id AND uc.addressee_id = cac.patient_id)
      WHERE cac.confirmed_at IS NULL
        AND cac.resent_count < $1
        AND COALESCE(cac.resent_at, cac.sent_at) <= $2`,
@@ -1177,13 +1202,17 @@ async function runAlertConfirmationFollowUps(pool) {
     );
     if (recentNotif.length > 0) continue;
 
-    const patientFullName = alert.patient_name || alert.patient_full_name || t('brain.relative_fallback');
+    const cgLang = alert.cg_lang || 'vi';
+    const patientFullName = alert.patient_name || alert.patient_full_name || t('brain.relative_fallback', cgLang);
     const patientName = getShortName(patientFullName) || patientFullName;
+    const patientDisplay = alert.patient_side === 'requester'
+      ? getPatientRoleForCaregiver(alert.relationship_type, patientName, cgLang, true)
+      : patientName;
     const resendNum = alert.resent_count + 1;
     const title = alert.alert_type === 'emergency'
-      ? t('checkin.reminder_emergency_title')
-      : t('checkin.reminder_health_check_title');
-    const body = t('checkin.reminder_confirm_body', 'vi', { name: patientName });
+      ? t('checkin.reminder_emergency_title', cgLang)
+      : t('checkin.reminder_health_check_title', cgLang);
+    const body = t('checkin.reminder_confirm_body', cgLang, { name: patientDisplay });
 
     await sendCheckinNotification(
       pool, alert.caregiver_id, alert.push_token || null,

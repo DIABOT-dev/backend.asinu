@@ -222,14 +222,20 @@ async function generateReengagementMessage(pool, userId, user) {
 // ─── Care-circle alert (sent to family members) ─────────────────────────────
 
 async function sendCareCircleAlert(pool, sendAndSave, patientId, patientName, inactiveDays) {
-  // Get active care circle members for this patient
+  // Get active care circle members (user_connections + can_receive_alerts)
   const { rows: guardians } = await pool.query(
     `SELECT u.id, u.push_token, u.display_name,
             COALESCE(u.language_preference, 'vi') AS lang,
-            cc.relationship
-     FROM care_circle cc
-     JOIN users u ON u.id = cc.guardian_id
-     WHERE cc.patient_id = $1 AND cc.status = 'active'
+            uc.relationship_type,
+            CASE WHEN uc.requester_id = $1 THEN 'requester' ELSE 'addressee' END as patient_side
+     FROM user_connections uc
+     JOIN users u ON u.id = CASE
+       WHEN uc.requester_id = $1 THEN uc.addressee_id
+       ELSE uc.requester_id
+     END
+     WHERE (uc.requester_id = $1 OR uc.addressee_id = $1)
+       AND uc.status = 'accepted'
+       AND COALESCE((uc.permissions->>'can_receive_alerts')::boolean, false) = true
        AND u.deleted_at IS NULL`,
     [patientId]
   );
@@ -245,11 +251,16 @@ async function sendCareCircleAlert(pool, sendAndSave, patientId, patientName, in
     );
     if (recent.length > 0) continue;
 
-    // Render message
+    // Render message with relationship
     const lang = guardian.lang || 'vi';
+    const { getPatientRoleForCaregiver } = require('../../lib/relation');
+    const patientDisplay = guardian.patient_side === 'requester'
+      ? getPatientRoleForCaregiver(guardian.relationship_type, patientName || 'người thân', lang, true)
+      : (patientName || 'người thân');
+
     const tmpl = REENGAGEMENT_TEMPLATES.care_circle_alert;
     let text = lang === 'en' ? tmpl.en : tmpl.vi;
-    text = text.replace(/\{patientName\}/g, patientName || 'người thân');
+    text = text.replace(/\{patientName\}/g, patientDisplay);
     text = text.replace(/\{days\}/g, String(inactiveDays));
 
     const title = lang === 'en' ? 'Care Alert' : 'Cảnh báo người thân';

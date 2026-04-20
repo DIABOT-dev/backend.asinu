@@ -239,6 +239,9 @@ async function switchToNextCluster(pool, sessionId, nextClusterKey, nextScriptId
  * Alert family caregivers if needed (checks dedup, sends push, marks alerted).
  */
 async function alertFamilyIfNeeded(pool, userId, checkinId, conclusion) {
+  const { getPatientRoleForCaregiver } = require('../../lib/relation');
+  const { t } = require('../../i18n');
+
   // Check if already alerted today
   const { rows } = await pool.query(
     `SELECT family_alerted FROM health_checkins WHERE id = $1`,
@@ -246,23 +249,44 @@ async function alertFamilyIfNeeded(pool, userId, checkinId, conclusion) {
   );
   if (rows[0]?.family_alerted) return;
 
-  // Get caregiver tokens
+  // Get patient name
+  const { rows: patientRows } = await pool.query(
+    `SELECT display_name, full_name FROM users WHERE id = $1`,
+    [userId]
+  );
+  const patient = patientRows[0] || {};
+  const patientFullName = patient.display_name || patient.full_name || 'Người thân';
+  const patientName = patientFullName.trim().split(/\s+/).pop();
+
+  // Get caregivers từ user_connections (bảng mới, có permission + relationship)
   const { rows: caregivers } = await pool.query(
-    `SELECT cc.caregiver_id, u.push_token, u.display_name
-     FROM care_circle cc
-     JOIN users u ON u.id = cc.caregiver_id
-     WHERE cc.patient_id = $1 AND cc.status = 'active'`,
+    `SELECT u.id as caregiver_id, u.push_token,
+            COALESCE(u.language_preference, 'vi') as cg_lang,
+            uc.relationship_type,
+            CASE WHEN uc.requester_id = $1 THEN 'requester' ELSE 'addressee' END as patient_side
+     FROM user_connections uc
+     JOIN users u ON u.id = CASE
+       WHEN uc.requester_id = $1 THEN uc.addressee_id
+       ELSE uc.requester_id
+     END
+     WHERE (uc.requester_id = $1 OR uc.addressee_id = $1)
+       AND uc.status = 'accepted'
+       AND COALESCE((uc.permissions->>'can_receive_alerts')::boolean, false) = true`,
     [userId]
   );
 
   for (const cg of caregivers) {
     if (!cg.push_token) continue;
+    const cgLang = cg.cg_lang || 'vi';
+    const patientDisplay = cg.patient_side === 'requester'
+      ? getPatientRoleForCaregiver(cg.relationship_type, patientName, cgLang, true)
+      : patientName;
     try {
       await dispatchNotification(pool, {
         userId: cg.caregiver_id,
         type: 'caregiver_alert',
-        title: 'Cảnh báo sức khoẻ',
-        body: conclusion.summary || 'Người thân của bạn cần chú ý.',
+        title: t('checkin.health_check_needed_title', cgLang),
+        body: conclusion.summary || t('checkin.no_response_family_body', cgLang, { name: patientDisplay }),
         data: { patient_id: userId, checkin_id: checkinId, severity: conclusion.severity },
         priority: 'high',
       });
