@@ -28,6 +28,7 @@ const TYPE_PRIORITY = {
   morning_checkin: 'medium',
   care_circle_invitation: 'medium',
   care_circle_accepted: 'medium',
+  care_circle_rejected: 'low',
   reminder_glucose: 'medium',
   reminder_bp: 'medium',
   reminder_medication: 'medium',
@@ -63,7 +64,27 @@ function nowVN() {
   });
   const parts = {};
   for (const { type, value } of fmt.formatToParts(new Date())) parts[type] = value;
-  return new Date(`${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`);
+  // Build from numeric parts to avoid Invalid Date edge-cases (e.g. unexpected "24" hour output).
+  const y = Number(parts.year);
+  const m = Number(parts.month);
+  const d = Number(parts.day);
+  let hh = Number(parts.hour);
+  const mm = Number(parts.minute);
+  const ss = Number(parts.second);
+
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d) ||
+      !Number.isFinite(hh) || !Number.isFinite(mm) || !Number.isFinite(ss)) {
+    return new Date();
+  }
+
+  // Some runtimes can emit hour=24; normalize to 00 of next day.
+  const base = new Date(y, m - 1, d, 0, mm, ss, 0);
+  if (hh === 24) {
+    base.setDate(base.getDate() + 1);
+    return base;
+  }
+
+  return new Date(y, m - 1, d, hh, mm, ss, 0);
 }
 
 // ─── Core dispatch ─────────────────────────────────────────────────
@@ -572,8 +593,14 @@ async function getPreferredHour(pool, userId, defaultHour) {
 
 async function runBasicNotifications(pool, forceHour = null, forceMinute = null) {
   const vn = nowVN();
-  const hour   = forceHour   !== null ? forceHour   : vn.getHours();
-  const minute = forceMinute !== null ? forceMinute : vn.getMinutes();
+  const currentHour = vn.getHours();
+  const currentMinute = vn.getMinutes();
+  const hour = forceHour !== null
+    ? Number(forceHour)
+    : (Number.isFinite(currentHour) ? currentHour : 0);
+  const minute = forceMinute !== null
+    ? Number(forceMinute)
+    : (Number.isFinite(currentMinute) ? currentMinute : 0);
   const dow = vn.getDay(); // 0 = Sunday
 
   // Quiet hours 22:00–05:00 VN: only run urgent jobs, skip all reminders

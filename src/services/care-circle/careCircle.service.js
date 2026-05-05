@@ -290,9 +290,10 @@ async function acceptInvitation(pool, invitationId, userId) {
  */
 async function rejectInvitation(pool, invitationId, userId) {
   try {
+    // DELETE (not UPDATE) so the unique pair index doesn't block a future invite
+    // in either direction between these two users.
     const result = await pool.query(
-      `UPDATE user_connections
-       SET status = 'rejected', updated_at = NOW()
+      `DELETE FROM user_connections
        WHERE id = $1 AND addressee_id = $2 AND status = 'pending'
        RETURNING *`,
       [invitationId, userId]
@@ -302,7 +303,25 @@ async function rejectInvitation(pool, invitationId, userId) {
       return { ok: false, error: t('careCircle.invitation_not_found'), statusCode: 404 };
     }
 
-    return { ok: true, invitation: result.rows[0] };
+    const invitation = result.rows[0];
+
+    // Notify the requester that their invite was declined (non-blocking)
+    const rejecterName = await getUserDisplayName(pool, userId);
+    pool.query('SELECT id, push_token, language_preference FROM users WHERE id = $1', [invitation.requester_id])
+      .then(r => {
+        const requester = r.rows[0];
+        if (!requester) return;
+        const lang = requester.language_preference || 'vi';
+        const title = t('push.rejected_title', lang);
+        const body = t('push.rejected_body', lang, { name: rejecterName });
+        return sendAndSave(pool, { id: requester.id, push_token: requester.push_token }, 'care_circle_rejected', title, body, {
+          rejecterName,
+          invitationId: String(invitation.id),
+        });
+      })
+      .catch(() => {});
+
+    return { ok: true, invitation };
   } catch (err) {
 
     return { ok: false, error: t('error.server') };

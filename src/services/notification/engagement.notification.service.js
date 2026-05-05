@@ -173,8 +173,8 @@ async function getBatchContexts(pool, userIds) {
       profile:           profiles.get(uid)  ?? null,
       todayLogTypes:     types,
       loggedTodayCount:  types.length,
-      hoursSinceLastLog: ll  ? Math.round(parseFloat(ll.hours_since_log))   : null,
-      hoursSinceLastBrain: lb ? Math.round(parseFloat(lb.hours_since_brain)) : null,
+      hoursSinceLastLog: ll && !isNaN(parseFloat(ll.hours_since_log)) ? Math.round(parseFloat(ll.hours_since_log)) : null,
+      hoursSinceLastBrain: lb && !isNaN(parseFloat(lb.hours_since_brain)) ? Math.round(parseFloat(lb.hours_since_brain)) : null,
       latestGlucose:     glucoses.get(uid)  ?? null,
       latestBp:          bps.get(uid)       ?? null,
     });
@@ -211,7 +211,8 @@ async function generateEngagementNotification(user, context, lang = 'vi', { isPr
   } = context;
 
   const name = user.name || 'bạn';
-  const hoursInactive = Math.round(user.hours_inactive || MIN_INACTIVE_HOURS);
+  const rawHoursInactive = parseFloat(user.hours_inactive);
+  const hoursInactive = !isNaN(rawHoursInactive) ? Math.round(rawHoursInactive) : MIN_INACTIVE_HOURS;
   const daysInactive = hoursInactive >= 24 ? Math.round(hoursInactive / 24) : null;
   const goal = profile?.goal || '';
   const conditions = extractConditions(profile?.medical_conditions)

@@ -364,6 +364,8 @@
   "push.invitation_body": "{{name}} wants to connect with you in Care Circle — let's look out for each other!",
   "push.accepted_title": "✅ Invitation accepted",
   "push.accepted_body": "🎉 {{name}} has accepted your Care Circle invitation!",
+  "push.rejected_title": "Invitation declined",
+  "push.rejected_body": "{{name}} declined your Care Circle invitation.",
 
   "validation.update_required": "At least one field is required to update",
 
