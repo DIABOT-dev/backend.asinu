@@ -735,6 +735,27 @@ async function reactToTriageResult(pool, userId, checkinId, result) {
 async function triggerEmergency(pool, userId, location) {
   console.log(`[SOS] triggerEmergency userId=${userId} location=${JSON.stringify(location)}`);
 
+  // Dedup: nếu user vừa kích hoạt emergency trong 5 phút và caregiver chưa
+  // confirm → không gửi lại. Tránh spam khi user nhấn SOS nhiều lần (panic
+  // taps) hoặc FE retry. Resend cron riêng (30 phút) vẫn xử lý được.
+  const { rows: recent } = await pool.query(
+    `SELECT 1 FROM caregiver_alert_confirmations
+     WHERE patient_id = $1 AND alert_type = 'emergency'
+       AND confirmed_at IS NULL
+       AND sent_at >= NOW() - INTERVAL '5 minutes'
+     LIMIT 1`,
+    [userId]
+  );
+  if (recent.length > 0) {
+    console.log(`[SOS] dedup: skip — emergency đã gửi gần đây và chưa confirm`);
+    return {
+      ok: true,
+      caregiversAlerted: 0,
+      deduped: true,
+      message: t('checkin.emergency_already_sent', 'vi'),
+    };
+  }
+
   // Mark session
   const { rows: sessionRows } = await pool.query(
     `INSERT INTO health_checkins

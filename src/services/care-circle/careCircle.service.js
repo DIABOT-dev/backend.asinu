@@ -8,7 +8,7 @@ const { t } = require('../../i18n');
 const { isPremium, PREMIUM_CONNECTION_LIMIT } = require('../payment/subscription.service');
 const { cacheGet, cacheSet } = require('../../lib/redis');
 
-const FREE_TIER_CONNECTION_LIMIT = 3;
+const FREE_TIER_CONNECTION_LIMIT = 1;
 
 // =====================================================
 // CONSTANTS
@@ -79,7 +79,7 @@ async function createInvitation(pool, requesterId, data) {
     return { ok: false, error: t('careCircle.cannot_invite_self') };
   }
 
-  // Check connection limit (3 free, 50 premium)
+  // Check connection limit (1 free, 50 premium)
   const userIsPremium = await isPremium(pool, requesterId);
   const connectionLimit = userIsPremium ? PREMIUM_CONNECTION_LIMIT : FREE_TIER_CONNECTION_LIMIT;
   const { rows: countRows } = await pool.query(

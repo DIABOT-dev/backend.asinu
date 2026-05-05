@@ -439,6 +439,7 @@
   "checkin.emergency_body": "🚨 {{name}} needs urgent help{{location}}. Please check immediately!",
   "checkin.emergency_alerted": "Notified {{count}} people in your care circle.",
   "checkin.emergency_no_caregivers": "No relatives in care circle to notify.",
+  "checkin.emergency_already_sent": "Your SOS was just sent — waiting for caregivers to respond.",
   "checkin.followup_high_alert": "💙 We're worried about you. Are you OK? Tap here to let us know — Asinu is keeping a close eye on you.",
   "checkin.followup_normal": "🌿 Hey, how are you feeling now? Any better? Let Asinu know so we can keep looking after you.",
   "checkin.followup_title": "💙 Asinu misses you — health update?",
@@ -465,8 +466,8 @@
   "voice.invalid_log_type": "Invalid log_type. Must be: {{types}}.",
 
   "careCircle.premium_limit_reached": "Maximum connection limit of {{limit}} reached",
-  "careCircle.upgrade_premium": "Upgrade to Premium for more connections (free: max 3)",
-  "careCircle.upgrade_premium_accept": "Upgrade to Premium to accept more connections (free: max 3)",
+  "careCircle.upgrade_premium": "Free accounts can connect with 1 person only. Upgrade to Premium to connect with more family or caregivers.",
+  "careCircle.upgrade_premium_accept": "Free accounts can connect with 1 person only. Upgrade to Premium to accept more invitations.",
   "careCircle.alert_not_found_or_confirmed": "Not found or already confirmed",
 
   "checkinAi.status_very_unwell": "very unwell",

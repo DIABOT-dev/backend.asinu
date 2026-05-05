@@ -440,6 +440,7 @@
   "checkin.emergency_body": "{{name}} đang cần giúp đỡ khẩn cấp{{location}}. Vui lòng kiểm tra và liên lạc ngay!",
   "checkin.emergency_alerted": "Đã thông báo {{count}} người trong vòng kết nối.",
   "checkin.emergency_no_caregivers": "Không có người thân nào trong vòng kết nối để thông báo.",
+  "checkin.emergency_already_sent": "Lời cầu cứu đã được gửi đi vừa xong, hệ thống đang chờ người thân phản hồi.",
   "checkin.followup_high_alert": "💙 {{selfRef}} vẫn đang ở đây với {{honorific}}. {{Honorific}} thấy thế nào rồi? Cho {{selfRef}} biết nhé — {{selfRef}} lo lắm.",
   "checkin.followup_normal": "🌿 {{selfRef}} vẫn nhớ lúc nãy {{honorific}} hơi mệt. Giờ đỡ hơn chưa? Cho {{selfRef}} biết với nha.",
   "checkin.followup_title": "💙 {{selfRef}} vẫn ở đây — {{honorific}} khoẻ hơn chưa?",
@@ -466,8 +467,8 @@
   "voice.invalid_log_type": "log_type không hợp lệ. Phải là: {{types}}.",
 
   "careCircle.premium_limit_reached": "Đã đạt giới hạn tối đa {{limit}} kết nối",
-  "careCircle.upgrade_premium": "Nâng cấp Premium để thêm nhiều người hơn (miễn phí: tối đa 3)",
-  "careCircle.upgrade_premium_accept": "Nâng cấp Premium để chấp nhận thêm kết nối (miễn phí: tối đa 3)",
+  "careCircle.upgrade_premium": "Tài khoản miễn phí chỉ kết nối được 1 người. Nâng cấp Premium để kết nối nhiều người thân/người chăm sóc hơn.",
+  "careCircle.upgrade_premium_accept": "Tài khoản miễn phí chỉ kết nối được 1 người. Nâng cấp Premium để chấp nhận thêm lời mời.",
   "careCircle.alert_not_found_or_confirmed": "Không tìm thấy hoặc đã xác nhận",
 
   "checkinAi.status_very_unwell": "rất không khoẻ",
