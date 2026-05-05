@@ -30,6 +30,21 @@ const TYPE_PRIORITY = {
   care_circle_accepted: 'medium',
   care_circle_rejected: 'low',
   care_circle_removed: 'medium',
+  care_circle_permission_changed: 'medium',
+  // Subscription / Payment
+  subscription_activated: 'high',
+  subscription_expiring_soon: 'high',
+  subscription_expired: 'high',
+  payment_failed: 'high',
+  wallet_topup_success: 'medium',
+  wallet_low_balance: 'medium',
+  // Auth / security
+  new_device_login: 'high',
+  password_changed: 'high',
+  // Engagement
+  weekly_wellness_summary: 'low',
+  profile_incomplete: 'low',
+  caregiver_viewed_logs: 'low',
   reminder_glucose: 'medium',
   reminder_bp: 'medium',
   reminder_medication: 'medium',

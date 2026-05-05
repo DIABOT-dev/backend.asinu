@@ -10,6 +10,9 @@
 const crypto = require('crypto');
 const subscriptionService = require('./subscription.service');
 const { t } = require('../../i18n');
+const { sendAndSave } = require('../notification/basic.notification.service');
+
+const WALLET_LOW_BALANCE_THRESHOLD = 50000; // 50.000đ
 
 const SEPAY_ACCOUNT = process.env.SEPAY_ACCOUNT_NUMBER;
 const SEPAY_BANK    = process.env.SEPAY_BANK_CODE;
@@ -130,16 +133,48 @@ async function handleWebhook(pool, req) {
       `UPDATE payments SET status = 'failed' WHERE order_code = $1`,
       [orderCode]
     );
+    // Thông báo thanh toán thất bại
+    notifyPaymentFailed(pool, userId, payment.amount).catch(() => {});
     return { ok: false, statusCode: 400, message: t('error.payment_amount_mismatch') };
   }
 
   // 5. Cộng wallet
-  await pool.query(
-    `UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2`,
+  const { rows: balRows } = await pool.query(
+    `UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2 RETURNING wallet_balance, push_token, language_preference`,
     [transferAmount, userId]
   );
 
+  // Notify wallet topup success (non-blocking)
+  if (balRows[0]) {
+    const u = balRows[0];
+    const lang = u.language_preference || 'vi';
+    sendAndSave(pool, { id: userId, push_token: u.push_token }, 'wallet_topup_success',
+      t('push.wallet_topup_title', lang),
+      t('push.wallet_topup_body', lang, {
+        amount: Number(transferAmount).toLocaleString('vi-VN'),
+        balance: Number(u.wallet_balance).toLocaleString('vi-VN'),
+      }),
+      { amount: String(transferAmount), balance: String(u.wallet_balance), orderCode }
+    ).catch(() => {});
+  }
+
   return { ok: true, message: 'completed', userId, amount: transferAmount, orderCode };
+}
+
+// Helper: gửi thông báo thanh toán thất bại
+async function notifyPaymentFailed(pool, userId, amount) {
+  const { rows } = await pool.query(
+    `SELECT push_token, language_preference FROM users WHERE id = $1`,
+    [userId]
+  );
+  if (!rows[0]) return;
+  const u = rows[0];
+  const lang = u.language_preference || 'vi';
+  return sendAndSave(pool, { id: userId, push_token: u.push_token }, 'payment_failed',
+    t('push.payment_failed_title', lang),
+    t('push.payment_failed_body', lang, { amount: Number(amount).toLocaleString('vi-VN') }),
+    { amount: String(amount) }
+  );
 }
 
 // ─── getBalance ─────────────────────────────────────────────────

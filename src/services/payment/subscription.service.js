@@ -24,6 +24,47 @@ const BASE_PRICE = 199000; // VND/tháng
 
 const { t } = require('../../i18n');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
+const { sendAndSave } = require('../notification/basic.notification.service');
+
+const WALLET_LOW_BALANCE_THRESHOLD = 50000; // 50.000đ
+
+// Helper: notify Premium activation
+async function notifyPremiumActivated(pool, userId, expiresAt) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT push_token, language_preference FROM users WHERE id = $1`,
+      [userId]
+    );
+    if (!rows[0]) return;
+    const u = rows[0];
+    const lang = u.language_preference || 'vi';
+    const dateStr = new Date(expiresAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'vi-VN');
+    await sendAndSave(pool, { id: userId, push_token: u.push_token }, 'subscription_activated',
+      t('push.subscription_activated_title', lang),
+      t('push.subscription_activated_body', lang, { date: dateStr }),
+      { expiresAt: new Date(expiresAt).toISOString() }
+    );
+  } catch {}
+}
+
+// Helper: warn nếu wallet thấp sau giao dịch
+async function notifyWalletLowIfNeeded(pool, userId, balance) {
+  if (Number(balance) >= WALLET_LOW_BALANCE_THRESHOLD) return;
+  try {
+    const { rows } = await pool.query(
+      `SELECT push_token, language_preference FROM users WHERE id = $1`,
+      [userId]
+    );
+    if (!rows[0]) return;
+    const u = rows[0];
+    const lang = u.language_preference || 'vi';
+    await sendAndSave(pool, { id: userId, push_token: u.push_token }, 'wallet_low_balance',
+      t('push.wallet_low_title', lang),
+      t('push.wallet_low_body', lang, { balance: Number(balance).toLocaleString('vi-VN') }),
+      { balance: String(balance) }
+    );
+  } catch {}
+}
 
 const PLANS = {
   1:  { months: 1,  labelKey: 'subscription.plan_1',  discount: 0,  price: 199000  },
@@ -224,6 +265,9 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
     // Invalidate subscription cache
     await cacheDel(`subscription:${userId}`);
 
+    // Notify user (non-blocking)
+    notifyPremiumActivated(pool, userId, newExpiry).catch(() => {});
+
     return { ok: true, expiresAt: newExpiry, planMonths };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -304,6 +348,11 @@ async function payWithWallet(pool, userId, months = 1) {
 
     await client.query('COMMIT');
     await cacheDel(`subscription:${userId}`);
+
+    // Notify Premium activated + check low balance after deduction
+    notifyPremiumActivated(pool, userId, newExpiry).catch(() => {});
+    const newBalance = Number(user.wallet_balance) - amount;
+    notifyWalletLowIfNeeded(pool, userId, newBalance).catch(() => {});
 
     return { ok: true, expiresAt: newExpiry, planMonths: plan.months };
   } catch (err) {

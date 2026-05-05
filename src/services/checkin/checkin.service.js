@@ -611,23 +611,39 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
       [result.summary, result.severity, JSON.stringify(previousAnswers), nextAt, checkinId]
     );
 
-    // AI đánh giá cần cảnh báo gia đình ngay → alert luôn không chờ no-response
-    if (result.needsFamilyAlert && !session.family_alerted) {
-      await alertFamily(pool, session);
+    // Safety override: severity=high (red flag, ngất, đau ngực, khó thở...)
+    // → LUÔN cảnh báo người thân, không phụ thuộc vào AI judgment.
+    // AI có thể sai (return notify_caregiver=false dù severity='high'). User
+    // safety > AI confidence.
+    const shouldAlertFamilyNow = (result.needsFamilyAlert || result.severity === 'high')
+      && !session.family_alerted;
+
+    if (shouldAlertFamilyNow) {
+      const caregiversAlerted = await alertFamily(pool, session);
+      // Trả về số caregivers đã alert để FE hiển thị banner đúng
+      result.familyAlertResult = {
+        attempted: true,
+        caregiversNotified: caregiversAlerted || 0,
+      };
       await pool.query(
         `UPDATE health_checkins SET family_alerted=true, family_alerted_at=NOW(), updated_at=NOW() WHERE id=$1`,
         [checkinId]
       );
 
-      // Thông báo in-app cho chính user biết gia đình đã được nhắn
-      const userLang = profile.lang || 'vi';
-      await sendCheckinNotification(
-        pool, userId, null,
-        'caregiver_alert',
-        t('checkin.family_notified_title', userLang),
-        t('checkin.family_notified_body', userLang),
-        { checkinId: String(checkinId) }
-      );
+      // Thông báo in-app cho chính user biết gia đình đã được nhắn (chỉ khi
+      // thực sự có caregiver được notify; nếu 0 caregiver → không spam user).
+      if ((caregiversAlerted || 0) > 0) {
+        const userLang = profile.lang || 'vi';
+        await sendCheckinNotification(
+          pool, userId, null,
+          'caregiver_alert',
+          t('checkin.family_notified_title', userLang),
+          t('checkin.family_notified_body', userLang),
+          { checkinId: String(checkinId) }
+        );
+      }
+    } else if (result.severity === 'high' && session.family_alerted) {
+      result.familyAlertResult = { attempted: false, caregiversNotified: 0, alreadyAlerted: true };
     }
 
     // #2: System reacts to AI findings
@@ -1045,8 +1061,9 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
     [session.user_id]
   );
 
-  if (!caregivers.length) return;
+  if (!caregivers.length) return 0;
 
+  let notifiedCount = 0;
   for (const cg of caregivers) {
     const cgLang = cg.lang || 'vi';
     const patientDisplay = cg.patient_side === 'requester'
@@ -1090,7 +1107,9 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
       alertType, title, body,
       { alertId: String(alertId), patientId: String(session.user_id), checkinId: String(session.id), patientPhone: user.phone_number || '' }
     );
+    notifiedCount++;
   }
+  return notifiedCount;
 }
 
 // ─── Caregiver alert confirmation ────────────────────────────────────────────

@@ -23,6 +23,7 @@ const { getRedis } = require('./src/lib/redis');
 const { runBasicNotifications } = require('./src/services/notification/basic.notification.service');
 const { runNightlyCycle } = require('./src/services/checkin/rnd-cycle.service');
 const { updateAllSegments } = require('./src/services/profile/lifecycle.service');
+const { runDailyLifecycleNotifications } = require('./src/services/notification/lifecycle.notification.service');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -191,3 +192,22 @@ function scheduleRndCycle() {
   setInterval(checkAndRun, 5 * 60 * 1000);
 }
 scheduleRndCycle();
+
+// Daily lifecycle notifications — 7:00 AM Vietnam time
+// (subscription expiring/expired, weekly summary on Sunday, profile incomplete)
+function scheduleLifecycleNotifications() {
+  const checkAndRun = async () => {
+    const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    if (vnNow.getHours() === 7 && vnNow.getMinutes() < 5) {
+      try {
+        console.log('[Lifecycle-Notif] Running daily notifications...');
+        const stats = await runDailyLifecycleNotifications(pool, { dayOfWeek: vnNow.getDay() });
+        console.log('[Lifecycle-Notif] Done:', JSON.stringify(stats));
+      } catch (err) {
+        console.error('[Lifecycle-Notif] Failed:', err?.message);
+      }
+    }
+  };
+  setInterval(checkAndRun, 5 * 60 * 1000);
+}
+scheduleLifecycleNotifications();

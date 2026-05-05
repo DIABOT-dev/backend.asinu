@@ -562,8 +562,28 @@ async function updateConnectionPermissions(pool, connectionId, userId, newPermis
        WHERE uc.id = $1`,
       [result.rows[0].id]
     );
-    return { ok: true, connection: rows[0] };
+    const conn = rows[0];
+
+    // Notify the OTHER user that their permissions changed (non-blocking)
+    const otherUserId = Number(conn.requester_id) === Number(userId)
+      ? conn.addressee_id : conn.requester_id;
+    const changerName = await getUserDisplayName(pool, userId);
+    pool.query('SELECT id, push_token, language_preference FROM users WHERE id = $1', [otherUserId])
+      .then(r => {
+        const other = r.rows[0];
+        if (!other) return;
+        const lang = other.language_preference || 'vi';
+        return sendAndSave(pool, { id: other.id, push_token: other.push_token },
+          'care_circle_permission_changed',
+          t('push.permission_changed_title', lang),
+          t('push.permission_changed_body', lang, { name: changerName }),
+          { changerName, connectionId: String(conn.id) });
+      })
+      .catch(() => {});
+
+    return { ok: true, connection: conn };
   } catch (err) {
+    console.error('[updateConnectionPermissions] failed:', { connectionId, userId, code: err?.code, message: err?.message });
     return { ok: false, error: t('error.server') };
   }
 }
