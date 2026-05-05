@@ -179,10 +179,13 @@ async function getInvitations(pool, userId, direction = 'all') {
     const result = await pool.query(
       `SELECT uc.*,
               COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
-              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
+              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
+              uop1.gender as requester_gender, uop2.gender as addressee_gender
        FROM user_connections uc
        LEFT JOIN users u1 ON uc.requester_id = u1.id
        LEFT JOIN users u2 ON uc.addressee_id = u2.id
+       LEFT JOIN user_onboarding_profiles uop1 ON uop1.user_id = uc.requester_id
+       LEFT JOIN user_onboarding_profiles uop2 ON uop2.user_id = uc.addressee_id
        ${whereClause} ORDER BY uc.created_at DESC`,
       params
     );
@@ -205,11 +208,15 @@ async function acceptInvitation(pool, invitationId, userId) {
   try {
     await client.query('BEGIN');
 
-    // Lock user's connections to prevent concurrent accepts exceeding limit
+    // Lock user's connections to prevent concurrent accepts exceeding limit.
+    // Postgres disallows FOR UPDATE with aggregates, so lock rows in a subselect
+    // and count in the outer query.
     const { rows: addresseeCount } = await client.query(
-      `SELECT COUNT(*) FROM user_connections
-       WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'
-       FOR UPDATE`,
+      `SELECT COUNT(*) AS count FROM (
+         SELECT id FROM user_connections
+         WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'
+         FOR UPDATE
+       ) locked`,
       [userId]
     );
     const addresseeIsPremium = await isPremium(pool, userId);
@@ -245,10 +252,13 @@ async function acceptInvitation(pool, invitationId, userId) {
     const fullResult = await pool.query(
       `SELECT uc.*,
               COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
-              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
+              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
+              uop1.gender as requester_gender, uop2.gender as addressee_gender
        FROM user_connections uc
        LEFT JOIN users u1 ON uc.requester_id = u1.id
        LEFT JOIN users u2 ON uc.addressee_id = u2.id
+       LEFT JOIN user_onboarding_profiles uop1 ON uop1.user_id = uc.requester_id
+       LEFT JOIN user_onboarding_profiles uop2 ON uop2.user_id = uc.addressee_id
        WHERE uc.id = $1`,
       [result.rows[0].id]
     );
@@ -274,6 +284,7 @@ async function acceptInvitation(pool, invitationId, userId) {
 
     return { ok: true, connection };
   } catch (err) {
+    console.error('[acceptInvitation] failed:', { invitationId, userId, code: err?.code, message: err?.message, stack: err?.stack });
     await client.query('ROLLBACK').catch(() => {});
     return { ok: false, error: t('error.server') };
   } finally {
@@ -323,7 +334,7 @@ async function rejectInvitation(pool, invitationId, userId) {
 
     return { ok: true, invitation };
   } catch (err) {
-
+    console.error('[rejectInvitation] failed:', { invitationId, userId, code: err?.code, message: err?.message, stack: err?.stack });
     return { ok: false, error: t('error.server') };
   }
 }
@@ -369,10 +380,13 @@ async function getConnections(pool, userId) {
     const result = await pool.query(
       `SELECT uc.*,
               COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
-              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
+              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
+              uop1.gender as requester_gender, uop2.gender as addressee_gender
        FROM user_connections uc
        LEFT JOIN users u1 ON uc.requester_id = u1.id
        LEFT JOIN users u2 ON uc.addressee_id = u2.id
+       LEFT JOIN user_onboarding_profiles uop1 ON uop1.user_id = uc.requester_id
+       LEFT JOIN user_onboarding_profiles uop2 ON uop2.user_id = uc.addressee_id
        WHERE uc.status = 'accepted'
          AND (uc.requester_id = $1 OR uc.addressee_id = $1)
        ORDER BY uc.updated_at DESC`,
@@ -394,9 +408,10 @@ async function getConnections(pool, userId) {
  */
 async function deleteConnection(pool, connectionId, userId) {
   try {
+    // DELETE (not UPDATE status='removed') so the unique pair index doesn't
+    // block a future invite between these two users.
     const result = await pool.query(
-      `UPDATE user_connections
-       SET status = 'removed', updated_at = NOW()
+      `DELETE FROM user_connections
        WHERE id = $1 AND (requester_id = $2 OR addressee_id = $2)
        RETURNING *`,
       [connectionId, userId]
@@ -406,9 +421,30 @@ async function deleteConnection(pool, connectionId, userId) {
       return { ok: false, error: t('careCircle.connection_not_found'), statusCode: 404 };
     }
 
-    return { ok: true, connection: result.rows[0] };
-  } catch (err) {
+    const connection = result.rows[0];
+    const otherUserId = Number(connection.requester_id) === Number(userId)
+      ? connection.addressee_id
+      : connection.requester_id;
 
+    // Notify the other user that the connection was removed (non-blocking)
+    const removerName = await getUserDisplayName(pool, userId);
+    pool.query('SELECT id, push_token, language_preference FROM users WHERE id = $1', [otherUserId])
+      .then(r => {
+        const other = r.rows[0];
+        if (!other) return;
+        const lang = other.language_preference || 'vi';
+        const title = t('push.removed_title', lang);
+        const body = t('push.removed_body', lang, { name: removerName });
+        return sendAndSave(pool, { id: other.id, push_token: other.push_token }, 'care_circle_removed', title, body, {
+          removerName,
+          connectionId: String(connection.id),
+        });
+      })
+      .catch(() => {});
+
+    return { ok: true, connection };
+  } catch (err) {
+    console.error('[deleteConnection] failed:', { connectionId, userId, code: err?.code, message: err?.message });
     return { ok: false, error: t('error.server') };
   }
 }
@@ -473,10 +509,13 @@ async function updateConnection(pool, connectionId, userId, data) {
     const { rows } = await pool.query(
       `SELECT uc.*,
               COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
-              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
+              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
+              uop1.gender as requester_gender, uop2.gender as addressee_gender
        FROM user_connections uc
        JOIN users u1 ON u1.id = uc.requester_id
        JOIN users u2 ON u2.id = uc.addressee_id
+       LEFT JOIN user_onboarding_profiles uop1 ON uop1.user_id = uc.requester_id
+       LEFT JOIN user_onboarding_profiles uop2 ON uop2.user_id = uc.addressee_id
        WHERE uc.id = $1`,
       [connectionId]
     );
@@ -513,10 +552,13 @@ async function updateConnectionPermissions(pool, connectionId, userId, newPermis
     const { rows } = await pool.query(
       `SELECT uc.*,
               COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
-              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone
+              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
+              uop1.gender as requester_gender, uop2.gender as addressee_gender
        FROM user_connections uc
        JOIN users u1 ON u1.id = uc.requester_id
        JOIN users u2 ON u2.id = uc.addressee_id
+       LEFT JOIN user_onboarding_profiles uop1 ON uop1.user_id = uc.requester_id
+       LEFT JOIN user_onboarding_profiles uop2 ON uop2.user_id = uc.addressee_id
        WHERE uc.id = $1`,
       [result.rows[0].id]
     );

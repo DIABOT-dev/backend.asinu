@@ -367,6 +367,8 @@
   "push.accepted_body": "🎉 {{name}} đã chấp nhận lời mời Care Circle của bạn!",
   "push.rejected_title": "Lời mời bị từ chối",
   "push.rejected_body": "{{name}} đã từ chối lời mời Care Circle của bạn.",
+  "push.removed_title": "Kết nối đã bị huỷ",
+  "push.removed_body": "{{name}} đã huỷ kết nối Care Circle với bạn.",
 
   "validation.update_required": "Phải có ít nhất một trường để cập nhật",
 

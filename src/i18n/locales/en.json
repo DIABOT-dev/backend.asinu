@@ -366,6 +366,8 @@
   "push.accepted_body": "🎉 {{name}} has accepted your Care Circle invitation!",
   "push.rejected_title": "Invitation declined",
   "push.rejected_body": "{{name}} declined your Care Circle invitation.",
+  "push.removed_title": "Connection removed",
+  "push.removed_body": "{{name}} removed your Care Circle connection.",
 
   "validation.update_required": "At least one field is required to update",
 

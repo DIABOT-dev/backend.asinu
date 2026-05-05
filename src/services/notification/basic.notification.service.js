@@ -29,6 +29,7 @@ const TYPE_PRIORITY = {
   care_circle_invitation: 'medium',
   care_circle_accepted: 'medium',
   care_circle_rejected: 'low',
+  care_circle_removed: 'medium',
   reminder_glucose: 'medium',
   reminder_bp: 'medium',
   reminder_medication: 'medium',
