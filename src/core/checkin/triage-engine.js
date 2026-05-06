@@ -19,7 +19,91 @@ const {
   getAssociatedSymptoms,
   getRedFlags,
   getCauses,
+  listComplaints,
 } = require('../../services/checkin/clinical-mapping');
+
+// Common chief complaints để hiển thị options ở step `symptoms`.
+// Lấy từ KB clinical-mapping (14 triệu chứng chính).
+const COMMON_SYMPTOMS_ORDERED = [
+  'mệt mỏi',
+  'đau đầu',
+  'đau bụng',
+  'sốt',
+  'ho',
+  'khó thở',
+  'đau ngực',
+  'chóng mặt',
+  'buồn nôn',
+  'mất ngủ',
+  'đau họng',
+  'tiêu chảy',
+  'đau vai',
+  'tê tay chân',
+];
+const SYMPTOMS_OTHER = 'khác (mô tả thêm)';
+
+// Map bệnh nền → triệu chứng thường gặp (đẩy lên đầu danh sách options
+// ở step `symptoms` để user dễ chọn). Key chứa keyword normalize lowercase.
+const CONDITION_TO_PRIORITY_SYMPTOMS = {
+  'tiểu đường':    ['chóng mặt', 'mệt mỏi', 'buồn nôn', 'tê tay chân', 'khó thở'],
+  'đái tháo đường':['chóng mặt', 'mệt mỏi', 'buồn nôn', 'tê tay chân', 'khó thở'],
+  'cao huyết áp':  ['đau đầu', 'chóng mặt', 'đau ngực', 'khó thở'],
+  'huyết áp':      ['đau đầu', 'chóng mặt', 'đau ngực', 'khó thở'],
+  'tim mạch':      ['đau ngực', 'khó thở', 'mệt mỏi', 'chóng mặt'],
+  'tim':           ['đau ngực', 'khó thở', 'mệt mỏi', 'chóng mặt'],
+  'hen suyễn':     ['khó thở', 'ho', 'đau ngực'],
+  'hen':           ['khó thở', 'ho', 'đau ngực'],
+  'copd':          ['khó thở', 'ho', 'mệt mỏi'],
+  'phổi':          ['khó thở', 'ho', 'đau ngực'],
+  'thoái hoá khớp':['đau vai', 'tê tay chân'],
+  'thoái hóa khớp':['đau vai', 'tê tay chân'],
+  'khớp':          ['đau vai', 'tê tay chân'],
+  'mất ngủ':       ['mất ngủ', 'mệt mỏi', 'đau đầu'],
+  'rối loạn lo âu':['mất ngủ', 'mệt mỏi', 'đau đầu', 'đau ngực'],
+  'trầm cảm':      ['mất ngủ', 'mệt mỏi', 'đau đầu'],
+  'dạ dày':        ['đau bụng', 'buồn nôn', 'tiêu chảy'],
+  'tiêu hoá':      ['đau bụng', 'buồn nôn', 'tiêu chảy'],
+  'gan':           ['đau bụng', 'buồn nôn', 'mệt mỏi'],
+  'thận':          ['đau bụng', 'mệt mỏi', 'buồn nôn'],
+};
+
+/**
+ * Sắp xếp lại COMMON_SYMPTOMS_ORDERED, đẩy các triệu chứng liên quan đến
+ * bệnh nền của user lên đầu (giữ order tương đối).
+ *
+ * KHÔNG append "khác (mô tả thêm)" vì step `symptoms` có allowFreeText=true
+ * → FE đã render sẵn ô input + mic ở dưới. User gõ thẳng vào input nếu
+ * triệu chứng không có trong list (tránh trùng UX, tránh AI nhận chuỗi
+ * "khác (mô tả thêm)" làm primarySymptom).
+ *
+ * @param {string[]} conditions - medical_conditions của user
+ * @returns {string[]} options đã sort
+ */
+function buildPrioritizedSymptomOptions(conditions) {
+  if (!Array.isArray(conditions) || conditions.length === 0) {
+    return [...COMMON_SYMPTOMS_ORDERED];
+  }
+
+  const priority = new Set();
+  for (const cond of conditions) {
+    const normalized = String(cond).toLowerCase().trim();
+    for (const [key, symptoms] of Object.entries(CONDITION_TO_PRIORITY_SYMPTOMS)) {
+      if (normalized.includes(key)) {
+        symptoms.forEach(s => priority.add(s));
+      }
+    }
+  }
+
+  if (priority.size === 0) {
+    return [...COMMON_SYMPTOMS_ORDERED];
+  }
+
+  // Đầu: các triệu chứng ưu tiên (giữ order theo COMMON_SYMPTOMS_ORDERED)
+  const prioritized = COMMON_SYMPTOMS_ORDERED.filter(s => priority.has(s));
+  // Sau: các triệu chứng còn lại (giữ order)
+  const rest = COMMON_SYMPTOMS_ORDERED.filter(s => !priority.has(s));
+  return [...prioritized, ...rest];
+}
 
 // ─── Step sequences ─────────────────────────────────────────────────────────
 
@@ -287,9 +371,12 @@ function buildQuestion(step, state) {
     // ── INITIAL FLOW ──────────────────────────────────────────────────────
 
     case 'symptoms':
+      // Show common chief complaints, đẩy triệu chứng liên quan tới bệnh
+      // nền user lên đầu để dễ chọn. "khác (mô tả thêm)" cuối cùng cho
+      // case ngoài KB. allowFreeText=true để user vẫn gõ thêm khi cần.
       return {
         question: 'Hôm nay bạn cảm thấy thế nào? Triệu chứng chính là gì?',
-        options: [],  // free-text expected; the AI layer can suggest common complaints
+        options: buildPrioritizedSymptomOptions(state.conditions),
         multiSelect: false,
         allowFreeText: true,
       };

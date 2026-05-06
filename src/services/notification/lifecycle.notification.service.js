@@ -92,7 +92,7 @@ async function runSubscriptionExpired(pool) {
 async function runWeeklyWellnessSummary(pool) {
   const { rows } = await pool.query(
     `SELECT u.id, u.push_token,
-            COALESCE(u.display_name, u.full_name, u.email) AS name,
+            COALESCE(u.full_name, u.display_name, u.email) AS name,
             COALESCE(u.language_preference, 'vi') AS lang,
             COALESCE((
               SELECT COUNT(*) FROM logs l

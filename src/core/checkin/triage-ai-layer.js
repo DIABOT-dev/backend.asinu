@@ -170,6 +170,12 @@ const EMERGENCY_CONCLUSIONS = {
       `🚨 GỌI CẤP CỨU 115 NGAY. Nếu có EpiPen, dùng ngay. Nằm ngửa, kê chân cao.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
+  trauma: {
+    summary: (h) => `${h.Honorific} bị chấn thương cần can thiệp y tế ngay.`,
+    recommendation: () =>
+      `🚨 KHÔNG CỬ ĐỘNG vùng bị thương. Gọi cấp cứu 115 hoặc tới bệnh viện ngay. Nếu chảy máu nhiều, dùng vải sạch ép cầm máu.`,
+    closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
+  },
 };
 
 // ─── Conclusion Generator ────────────────────────────────────────────────────
@@ -364,6 +370,98 @@ CHỈ JSON.`;
   }
 }
 
+// ─── AI Safety Classifier — chạy ngay sau khi user khai triệu chứng ─────────
+// Mục đích: backup safety net cho các triệu chứng nặng KHÔNG có trong KB
+// và KHÔNG match emergency-detector keywords. Cover các case "long tail"
+// (khó nuốt, ho ra máu, không tiểu được, mất thị lực, ...).
+//
+// Cost: 1 GPT-4o-mini call ~150 tokens output = ~$0.0001/symptom.
+// Cache theo symptom → mỗi symptom unique chỉ tốn 1 call lifetime.
+
+const _severityCache = new Map();
+
+/**
+ * Classify mức độ nguy hiểm của triệu chứng.
+ * @param {string} symptom - chuỗi triệu chứng user khai
+ * @param {object} profile - { age, medical_conditions[] }
+ * @returns {Promise<{severity: 'emergency'|'urgent'|'moderate'|'mild', reason: string, needsFamilyAlert: boolean, needsDoctor: boolean}>}
+ */
+async function classifySymptomSeverity(symptom, profile = {}) {
+  if (!symptom) return { severity: 'mild', needsFamilyAlert: false, needsDoctor: false };
+
+  const conditions = (profile.medical_conditions || []).join(', ') || 'không';
+  const age = profile.age || (profile.birth_year ? new Date().getFullYear() - profile.birth_year : null);
+  const cacheKey = `${symptom.toLowerCase().trim()}|${conditions}|${age || '?'}`;
+
+  if (_severityCache.has(cacheKey)) return _severityCache.get(cacheKey);
+
+  const prompt = `Bạn là bác sĩ triage. Phân loại mức độ nguy hiểm của triệu chứng sau.
+
+TRIỆU CHỨNG: "${symptom}"
+TUỔI: ${age || 'không rõ'}
+BỆNH NỀN: ${conditions}
+
+Phân loại thành 1 trong 4 mức:
+- "emergency": đe doạ tính mạng, cần cấp cứu 115 NGAY (vd. ngất, khó thở dữ dội, gãy xương lớn, đau ngực + vã mồ hôi, ho ra máu nhiều, không tiểu được 24h, mất thị lực đột ngột, co giật, chấn thương sọ não)
+- "urgent": cần đi viện trong vài giờ (vd. sốt cao kéo dài, đau bụng dữ dội, tiểu ra máu, đau đầu dữ dội)
+- "moderate": cần theo dõi + có thể đi khám trong 1-2 ngày (vd. sốt nhẹ, đau đầu thông thường, mệt mỏi)
+- "mild": có thể tự chăm sóc, theo dõi (vd. mệt nhẹ, đau cơ thông thường)
+
+Trả về JSON:
+{
+  "severity": "emergency|urgent|moderate|mild",
+  "reason": "lý do ngắn 1 câu",
+  "needsFamilyAlert": true|false,
+  "needsDoctor": true|false
+}
+
+QUY TẮC AN TOÀN:
+- Khi nghi ngờ → chọn mức cao hơn
+- emergency → needsFamilyAlert=true, needsDoctor=true
+- urgent → needsDoctor=true, needsFamilyAlert tuỳ tuổi/bệnh nền (>= 60 hoặc có bệnh nền nặng → true)
+- Người >=60 hoặc có tiểu đường/tim mạch/cao HA → ngưỡng thấp hơn (dễ thành emergency/urgent hơn)
+
+CHỈ JSON.`;
+
+  try {
+    const response = await getClient().chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{ role: 'user', content: prompt }],
+      max_completion_tokens: 200,
+      temperature: 0.1,
+    });
+
+    const raw = (response.choices?.[0]?.message?.content || '').trim();
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      // Fail-safe: nếu AI fail → treat as urgent để gọi bác sĩ (không dám
+      // assume mild khi không chắc)
+      return { severity: 'urgent', reason: 'AI unavailable', needsFamilyAlert: false, needsDoctor: true };
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    const validSeverities = ['emergency', 'urgent', 'moderate', 'mild'];
+    if (!validSeverities.includes(parsed.severity)) {
+      return { severity: 'urgent', reason: 'invalid response', needsFamilyAlert: false, needsDoctor: true };
+    }
+
+    const result = {
+      severity: parsed.severity,
+      reason: String(parsed.reason || ''),
+      needsFamilyAlert: !!parsed.needsFamilyAlert,
+      needsDoctor: !!parsed.needsDoctor,
+    };
+
+    _severityCache.set(cacheKey, result);
+    console.log(`[AI Safety] "${symptom}" → ${result.severity} (${result.reason})`);
+    return result;
+  } catch (err) {
+    console.error(`[AI Safety] classify failed for "${symptom}":`, err.message);
+    // Fail-safe: AI down → urgent (bắt user đi khám) thay vì silent miss
+    return { severity: 'urgent', reason: 'AI error fail-safe', needsFamilyAlert: false, needsDoctor: true };
+  }
+}
+
 // ─── Exports ─────────────────────────────────────────────────────────────────
 
 function isEmergency(state) {
@@ -378,6 +476,7 @@ module.exports = {
   formatQuestion,
   generateConclusion,
   generateMappingForSymptom,
+  classifySymptomSeverity,
   isEmergency,
   getEmergencyTypes,
   EMERGENCY_CONCLUSIONS,

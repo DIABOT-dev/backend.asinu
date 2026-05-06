@@ -6,7 +6,8 @@
  * @returns {{ honorific: string, selfRef: string, callName: string, Honorific: string }}
  */
 function getHonorifics(user) {
-  const full = user.display_name || user.full_name || '';
+  // Ưu tiên full_name (canonical) hơn display_name
+  const full = user.full_name || user.display_name || '';
   const name = full ? full.trim().split(/\s+/).pop() : '';
   const lang = user.lang || 'vi';
 

@@ -142,7 +142,14 @@ async function updateProfile(pool, userId, updates) {
     let userParamIndex = 1;
 
     if (name !== undefined) {
+      // Update CẢ full_name VÀ display_name. FE chỉ có 1 field "Họ tên" →
+      // sync 2 fields để notification (đọc display_name trước) không bị stale
+      // với version cũ từ đăng ký ban đầu (vd. user đăng ký "Duc" không dấu,
+      // sau đó edit thành "Dương Anh Đức" → display_name phải update theo).
       userFields.push(`full_name = $${userParamIndex}`);
+      userValues.push(name);
+      userParamIndex++;
+      userFields.push(`display_name = $${userParamIndex}`);
       userValues.push(name);
       userParamIndex++;
     }

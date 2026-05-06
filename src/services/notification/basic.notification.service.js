@@ -38,13 +38,9 @@ const TYPE_PRIORITY = {
   payment_failed: 'high',
   wallet_topup_success: 'medium',
   wallet_low_balance: 'medium',
-  // Auth / security
-  new_device_login: 'high',
-  password_changed: 'high',
   // Engagement
   weekly_wellness_summary: 'low',
   profile_incomplete: 'low',
-  caregiver_viewed_logs: 'low',
   reminder_glucose: 'medium',
   reminder_bp: 'medium',
   reminder_medication: 'medium',
@@ -119,6 +115,18 @@ const REMINDER_TYPES = new Set([
 ]);
 const CROSS_TYPE_GAP_MINUTES = 5;
 
+// Notification chỉ in-app (không push) — vẫn insert DB để hiện trong
+// notification bell, nhưng KHÔNG gửi push tránh spam điện thoại user.
+const IN_APP_ONLY_TYPES = new Set([
+  'wallet_topup_success',         // app đã có UI confirm khi nạp xong
+  'wallet_low_balance',           // nudge nhẹ — chỉ banner trong wallet screen
+  'care_circle_permission_changed', // ít khi xảy ra, in-app badge đủ
+  'profile_incomplete',           // onboarding nudge — show banner trong home
+  'weekly_wellness_summary',      // weekly content — chỉ tạo report card trong /report
+  'reengagement',                 // đã có nhiều reminder routines
+  'engagement',                   // tương tự
+]);
+
 async function sendAndSave(pool, userOrId, type, title, body, data = {}, overridePriority = null) {
   const isObject = typeof userOrId === 'object' && userOrId !== null;
   const userId = isObject ? userOrId.id : userOrId;
@@ -159,6 +167,11 @@ async function sendAndSave(pool, userOrId, type, title, body, data = {}, overrid
   } catch (err) {
     console.error(`[sendAndSave] DB insert failed for ${type} user=${userId}:`, err.message);
     return false;
+  }
+
+  // In-app only types: skip push, chỉ giữ DB record (notification bell)
+  if (IN_APP_ONLY_TYPES.has(type)) {
+    return true;
   }
 
   if (pushToken) {

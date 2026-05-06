@@ -382,16 +382,10 @@
   "push.wallet_topup_body": "{{amount}}đ added. Current balance: {{balance}}đ.",
   "push.wallet_low_title": "⚠️ Low wallet balance",
   "push.wallet_low_body": "Wallet balance is {{balance}}đ. Top up to avoid service interruption.",
-  "push.new_device_login_title": "🔐 New device login",
-  "push.new_device_login_body": "Your account was just signed in from a new device ({{device}}). If this wasn't you, change your password immediately.",
-  "push.password_changed_title": "🔒 Password changed",
-  "push.password_changed_body": "Your account password was changed. If this wasn't you, contact support immediately.",
   "push.weekly_wellness_title": "📊 Your weekly health report",
   "push.weekly_wellness_body": "Hi {{name}}, you logged {{count}} times this week. Tap for the full report.",
   "push.profile_incomplete_title": "👤 Complete your profile",
   "push.profile_incomplete_body": "Finish your profile so Asinu can understand you better and give more accurate advice.",
-  "push.caregiver_viewed_logs_title": "👁️ Caregiver viewed your log",
-  "push.caregiver_viewed_logs_body": "{{name}} just viewed your health log.",
 
   "validation.update_required": "At least one field is required to update",
 

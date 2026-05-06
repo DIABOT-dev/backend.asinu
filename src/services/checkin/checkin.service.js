@@ -798,8 +798,10 @@ async function triggerEmergency(pool, userId, location) {
   );
   const user = userRows[0] || {};
   const lang = user.lang || 'vi';
-  const fullName = user.display_name || user.full_name || t('careCircle.user_label', lang);
-  const userName = getShortName(fullName) || fullName;
+  // Ưu tiên full_name (canonical) hơn display_name (legacy nickname).
+  // FE chỉ có 1 field "Họ tên" → full_name là source of truth.
+  const fullName = user.full_name || user.display_name || t('careCircle.user_label', lang);
+  const userName = fullName;
 
   // Get care circle members who can receive alerts (both directions)
   // relationship_type: vai trò của addressee với requester (VD: requester='con', addressee='Bố')
@@ -1042,8 +1044,9 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
   );
   const user = userRows[0] || {};
   const aLang = user.lang || 'vi';
-  const fullN = user.display_name || user.full_name || t('brain.relative_label', aLang);
-  const name = getShortName(fullN) || fullN;
+  // Ưu tiên full_name hơn display_name (xem comment ở triggerEmergency)
+  const fullN = user.full_name || user.display_name || t('brain.relative_label', aLang);
+  const name = fullN;
 
   const { rows: caregivers } = await pool.query(
     `SELECT u.id, u.push_token,
@@ -1152,31 +1155,33 @@ async function confirmCaregiverAlert(pool, caregiverId, alertId, action) {
     [action, alertId, caregiverId]
   );
 
-  // Thông báo in-app cho user bệnh biết người thân đã xác nhận
-  const { rows: cgRows } = await pool.query(
-    `SELECT display_name, full_name FROM users WHERE id=$1`, [caregiverId]
-  );
-  // Get patient lang for notification
-  const { rows: patientRows } = await pool.query(
-    `SELECT COALESCE(language_preference,'vi') AS lang FROM users WHERE id=$1`,
-    [alert.patient_id]
-  );
-  const pLang = patientRows[0]?.lang || 'vi';
-  const cgFullName = cgRows[0]?.display_name || cgRows[0]?.full_name || t('brain.relative_fallback', pLang);
-  const cgName = getShortName(cgFullName) || cgFullName;
-  const actionKey = action === 'on_my_way' ? 'checkin.action_on_my_way'
-    : action === 'called' ? 'checkin.action_called' : 'checkin.action_seen';
-  const actionLabel = t(actionKey, pLang);
+  // Thông báo in-app cho user bệnh biết người thân đã xác nhận.
+  // Bỏ qua action='called' — caregiver đã gọi điện trực tiếp rồi, push
+  // thêm là thừa (user đang nói chuyện điện thoại với caregiver).
+  if (action !== 'called') {
+    const { rows: cgRows } = await pool.query(
+      `SELECT display_name, full_name FROM users WHERE id=$1`, [caregiverId]
+    );
+    const { rows: patientRows } = await pool.query(
+      `SELECT COALESCE(language_preference,'vi') AS lang, push_token FROM users WHERE id=$1`,
+      [alert.patient_id]
+    );
+    const pLang = patientRows[0]?.lang || 'vi';
+    const cgFullName = cgRows[0]?.display_name || cgRows[0]?.full_name || t('brain.relative_fallback', pLang);
+    const cgName = getShortName(cgFullName) || cgFullName;
+    const actionKey = action === 'on_my_way' ? 'checkin.action_on_my_way' : 'checkin.action_seen';
+    const actionLabel = t(actionKey, pLang);
 
-  await sendCheckinNotification(
-    pool, alert.patient_id, null,
-    'caregiver_confirmed',
-    `${cgName} ${actionLabel}`,
-    t('checkin.caregiver_confirmed_body', pLang, { name: cgName, action: actionLabel }),
-    { alertId: String(alertId), caregiverId: String(caregiverId) }
-  );
+    await sendCheckinNotification(
+      pool, alert.patient_id, patientRows[0]?.push_token || null,
+      'caregiver_confirmed',
+      `${cgName} ${actionLabel}`,
+      t('checkin.caregiver_confirmed_body', pLang, { name: cgName, action: actionLabel }),
+      { alertId: String(alertId), caregiverId: String(caregiverId), action }
+    );
+  }
 
-  return { ok: true };
+  return { ok: true, action };
 }
 
 /**
@@ -1200,7 +1205,7 @@ async function getPendingCaregiverAlerts(pool, caregiverId) {
     alertType:     r.alert_type,
     sentAt:        r.sent_at,
     checkinId:     r.checkin_id,
-    patientName:   getShortName(r.display_name || r.full_name) || r.display_name || r.full_name || t('brain.relative_fallback'),
+    patientName:   r.full_name || r.display_name || t('brain.relative_fallback'),
     currentStatus: r.current_status,
     flowState:     r.flow_state,
   }));

@@ -181,7 +181,7 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
   const { rows: [user] } = await pool.query(
     'SELECT full_name, display_name FROM users WHERE id = $1', [userId]
   );
-  const name = user?.display_name || user?.full_name || `User ${userId}`;
+  const name = user?.full_name || user?.display_name || `User ${userId}`;
 
   // Notify the user themselves
   await sendAndSave(pool, { id: userId, push_token: null }, 'health_alert',

@@ -55,7 +55,7 @@ async function getUserDisplayName(pool, userId) {
     [userId]
   );
   const user = result.rows[0];
-  const name = user?.display_name || user?.full_name || user?.email || t('careCircle.user_label');
+  const name = user?.full_name || user?.display_name || user?.email || t('careCircle.user_label');
   await cacheSet(`user:name:${userId}`, name, 7200); // 2 hours
   return name;
 }
@@ -178,8 +178,8 @@ async function getInvitations(pool, userId, direction = 'all') {
   try {
     const result = await pool.query(
       `SELECT uc.*,
-              COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
-              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
+              COALESCE(u1.full_name, u1.display_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
+              COALESCE(u2.full_name, u2.display_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
               uop1.gender as requester_gender, uop2.gender as addressee_gender
        FROM user_connections uc
        LEFT JOIN users u1 ON uc.requester_id = u1.id
@@ -251,8 +251,8 @@ async function acceptInvitation(pool, invitationId, userId) {
     // Fetch full connection with user names (same shape as getConnections)
     const fullResult = await pool.query(
       `SELECT uc.*,
-              COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
-              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
+              COALESCE(u1.full_name, u1.display_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
+              COALESCE(u2.full_name, u2.display_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
               uop1.gender as requester_gender, uop2.gender as addressee_gender
        FROM user_connections uc
        LEFT JOIN users u1 ON uc.requester_id = u1.id
@@ -379,8 +379,8 @@ async function getConnections(pool, userId) {
   try {
     const result = await pool.query(
       `SELECT uc.*,
-              COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
-              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
+              COALESCE(u1.full_name, u1.display_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
+              COALESCE(u2.full_name, u2.display_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
               uop1.gender as requester_gender, uop2.gender as addressee_gender
        FROM user_connections uc
        LEFT JOIN users u1 ON uc.requester_id = u1.id
@@ -508,8 +508,8 @@ async function updateConnection(pool, connectionId, userId, data) {
     // Re-fetch with user names joined
     const { rows } = await pool.query(
       `SELECT uc.*,
-              COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
-              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
+              COALESCE(u1.full_name, u1.display_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
+              COALESCE(u2.full_name, u2.display_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
               uop1.gender as requester_gender, uop2.gender as addressee_gender
        FROM user_connections uc
        JOIN users u1 ON u1.id = uc.requester_id
@@ -551,8 +551,8 @@ async function updateConnectionPermissions(pool, connectionId, userId, newPermis
     // Re-fetch with user names joined
     const { rows } = await pool.query(
       `SELECT uc.*,
-              COALESCE(u1.display_name, u1.full_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
-              COALESCE(u2.display_name, u2.full_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
+              COALESCE(u1.full_name, u1.display_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
+              COALESCE(u2.full_name, u2.display_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
               uop1.gender as requester_gender, uop2.gender as addressee_gender
        FROM user_connections uc
        JOIN users u1 ON u1.id = uc.requester_id

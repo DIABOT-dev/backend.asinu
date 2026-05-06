@@ -383,16 +383,10 @@
   "push.wallet_topup_body": "Đã cộng {{amount}}đ vào ví. Số dư hiện tại: {{balance}}đ.",
   "push.wallet_low_title": "⚠️ Số dư ví thấp",
   "push.wallet_low_body": "Số dư ví chỉ còn {{balance}}đ. Nạp thêm để tránh gián đoạn dịch vụ.",
-  "push.new_device_login_title": "🔐 Đăng nhập từ thiết bị mới",
-  "push.new_device_login_body": "Tài khoản của bạn vừa đăng nhập từ thiết bị mới ({{device}}). Nếu không phải bạn, hãy đổi mật khẩu ngay.",
-  "push.password_changed_title": "🔒 Mật khẩu đã thay đổi",
-  "push.password_changed_body": "Mật khẩu tài khoản của bạn vừa được thay đổi. Nếu không phải bạn, hãy liên hệ hỗ trợ ngay.",
   "push.weekly_wellness_title": "📊 Báo cáo sức khoẻ tuần qua",
   "push.weekly_wellness_body": "{{name}} ơi, tuần này bạn đã ghi log {{count}} lần. Xem báo cáo chi tiết.",
   "push.profile_incomplete_title": "👤 Hoàn thiện hồ sơ",
   "push.profile_incomplete_body": "Hoàn tất hồ sơ để Asinu hiểu bạn hơn và đưa ra lời khuyên chính xác hơn.",
-  "push.caregiver_viewed_logs_title": "👁️ Người thân vừa xem nhật ký",
-  "push.caregiver_viewed_logs_body": "{{name}} vừa xem nhật ký sức khoẻ của bạn.",
 
   "validation.update_required": "Phải có ít nhất một trường để cập nhật",
 

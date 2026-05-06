@@ -146,7 +146,7 @@ async function buildContext(pool, userId) {
   const age = calcAge(prof.birth_year);
   const conditions = Array.isArray(prof.medical_conditions) ? prof.medical_conditions : [];
   const medications = prof.daily_medication || null;
-  const name = prof.display_name || prof.full_name || null;
+  const name = prof.full_name || prof.display_name || null;
 
   // ── Parse symptoms ─────────────────────────────────────────────────────────
   const symptomRows = symptomsRes.rows;

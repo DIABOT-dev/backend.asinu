@@ -174,6 +174,33 @@ const SYNCOPE_KW = [
   'hôn mê', 'hon me',
 ];
 
+// Trauma — chấn thương / gãy xương / té ngã nặng → emergency, gọi gia đình
+const TRAUMA_KW = [
+  'gãy chân', 'gay chan',
+  'gãy tay', 'gay tay',
+  'gãy xương', 'gay xuong',
+  'gãy cánh tay', 'gay canh tay',
+  'gãy đùi', 'gay dui',
+  'gãy cẳng chân', 'gay cang chan',
+  'gãy cổ tay', 'gay co tay',
+  'gãy hông', 'gay hong',
+  'gãy sườn', 'gay suon',
+  'biến dạng chi', 'bien dang chi',
+  'lệch khớp', 'lech khop',
+  'trật khớp nặng', 'trat khop nang',
+  'không đứng được', 'khong dung duoc',
+  'không cử động được chân', 'khong cu dong duoc chan',
+  'không cử động được tay', 'khong cu dong duoc tay',
+  'chảy máu nhiều sau ngã', 'chay mau nhieu sau nga',
+  'tai nạn giao thông', 'tai nan giao thong',
+  'bị xe đâm', 'bi xe dam',
+  'ngã từ trên cao', 'nga tu tren cao',
+  'ngã cầu thang', 'nga cau thang',
+  'va đập mạnh vào đầu', 'va dap manh vao dau',
+  'chấn thương sọ não', 'chan thuong so nao',
+  'vết thương hở sâu', 'vet thuong ho sau',
+];
+
 const DYSPNEA_KW = [
   'khó thở', 'kho tho',
   'thở khó', 'tho kho',
@@ -429,6 +456,11 @@ function detectEmergency(symptoms, profile = {}) {
   // 10. SEIZURE — any seizure keyword (critical — active seizure is life-threatening)
   if (matchesAny(text, SEIZURE_KW)) {
     return result(true, 'SEIZURE', 'critical', true, true, 0);
+  }
+
+  // 11. TRAUMA — gãy xương, té ngã nặng, tai nạn → critical, gọi gia đình
+  if (matchesAny(text, TRAUMA_KW)) {
+    return result(true, 'TRAUMA', 'critical', true, true, 0);
   }
 
   // ---- Sub-critical but still concerning combinations ---------------------

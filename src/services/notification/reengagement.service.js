@@ -340,7 +340,7 @@ async function runReengagement(pool, sendAndSave) {
 
       // Care-circle alert if escalation level requires it
       if (result.escalation.includeFamily) {
-        const careSent = await sendCareCircleAlert(pool, sendAndSave, user.id, user.display_name || user.full_name, lc.inactive_days);
+        const careSent = await sendCareCircleAlert(pool, sendAndSave, user.id, user.full_name || user.display_name, lc.inactive_days);
         careAlertsSent += careSent;
       }
     } catch (err) {

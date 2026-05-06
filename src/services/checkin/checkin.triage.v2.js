@@ -14,7 +14,7 @@
 
 const { detectEmergency } = require('./emergency-detector');
 const { getNextStep, calculateConclusion, buildState } = require('../../core/checkin/triage-engine');
-const { formatQuestion, generateConclusion, generateMappingForSymptom } = require('../../core/checkin/triage-ai-layer');
+const { formatQuestion, generateConclusion, generateMappingForSymptom, classifySymptomSeverity } = require('../../core/checkin/triage-ai-layer');
 const { resolveComplaint } = require('./clinical-mapping');
 
 // ─── Emergency type mapping ─────────────────────────────────────────────────
@@ -32,6 +32,7 @@ const EMERGENCY_TYPE_MAP = {
   DENGUE_HEMORRHAGIC: 'dengue',
   DKA: 'dka',
   SEIZURE: 'seizure',
+  TRAUMA: 'trauma',
 };
 
 // ─── Emergency result formatter ─────────────────────────────────────────────
@@ -147,6 +148,45 @@ async function getNextTriageQuestion(input) {
   const emergency = detectEmergency(allSymptomTexts, normalizedProfile);
   if (emergency.isEmergency) {
     return formatEmergencyResult(emergency, normalizedProfile);
+  }
+
+  // 2b. AI safety classifier — chạy khi user VỪA khai symptom (chỉ 1 answer).
+  // Backup cho các emergency NGOÀI keyword list (long tail symptoms).
+  // Cost: 1 GPT call ~150 tokens, cache theo symptom.
+  if (normalizedAnswers.length === 1 && normalizedAnswers[0].step === 'symptoms') {
+    const symptomText = Array.isArray(normalizedAnswers[0].answer)
+      ? normalizedAnswers[0].answer.join(' ')
+      : String(normalizedAnswers[0].answer || '');
+    if (symptomText && symptomText.length >= 2) {
+      try {
+        const safety = await classifySymptomSeverity(symptomText, normalizedProfile);
+        if (safety.severity === 'emergency') {
+          // Bypass triage, conclude ngay với severity=high + alert family
+          const aiConclusion = await generateConclusion(
+            { primarySymptom: symptomText, severity: 'high', needsDoctor: true, allSymptoms: [symptomText] },
+            normalizedProfile, lang,
+          );
+          return {
+            isDone: true,
+            summary: aiConclusion.summary || `Triệu chứng "${symptomText}" cần được kiểm tra y tế ngay.`,
+            recommendation: aiConclusion.recommendation || `🚨 Liên hệ bác sĩ hoặc gọi 115 ngay. ${safety.reason}`,
+            closeMessage: aiConclusion.closeMessage,
+            severity: 'high',
+            needsDoctor: true,
+            needsFamilyAlert: true,        // ép alert dù safety.needsFamilyAlert ra sao
+            hasRedFlag: true,
+            followUpHours: 1,
+            _safetyClassifier: { triggered: true, severity: safety.severity, reason: safety.reason },
+          };
+        }
+        if (safety.severity === 'urgent') {
+          // Cho phép tiếp tục triage nhưng đánh dấu để conclusion sau bump severity
+          input._safetyHint = { severity: 'urgent', reason: safety.reason, needsDoctor: true };
+        }
+      } catch (err) {
+        console.error('[Triage V2] safety classifier error:', err.message);
+      }
+    }
   }
 
   // 3. Get next step from the deterministic engine.
