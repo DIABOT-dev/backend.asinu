@@ -512,8 +512,28 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
   const userImproved = isFollowUp && previousAnswers.some(a =>
     IMPROVED_KEYWORDS.some(kw => _safeAns(a.answer).toLowerCase().includes(kw))
   );
-  console.log(`[Triage] enforcement check: isDone=${result.isDone}, answers=${previousAnswers.length}, min=${minQForPhase}, hasRedFlag=${result.hasRedFlag}, isFollowUp=${isFollowUp}, userImproved=${userImproved}`);
-  if (result.isDone && previousAnswers.length < minQForPhase && !result.hasRedFlag && !userImproved) {
+  // Nếu user vừa nói "có thêm triệu chứng mới" → KHÔNG cho conclude, phải hỏi
+  // triệu chứng đó là gì rồi triage thêm. Tránh case: user khai có triệu chứng
+  // mới nhưng AI kết luận "mức độ nhẹ" mà không hỏi gì.
+  const lastAnswerText = _safeAns(previousAnswers[previousAnswers.length - 1]?.answer || '').toLowerCase();
+  const justReportedNewSymptom = /(thêm.*triệu chứng|triệu chứng.*mới|new symptom|another symptom)/i.test(lastAnswerText)
+    && !/(không|không có|nothing|no)/i.test(lastAnswerText);
+  console.log(`[Triage] enforcement check: isDone=${result.isDone}, answers=${previousAnswers.length}, min=${minQForPhase}, hasRedFlag=${result.hasRedFlag}, isFollowUp=${isFollowUp}, userImproved=${userImproved}, newSymptomReported=${justReportedNewSymptom}`);
+
+  if (justReportedNewSymptom && !result.hasRedFlag) {
+    console.log(`[Triage] ⛔ User reported new symptom — force ask "what symptom" instead of concluding.`);
+    const Hon = (profile.honorific || 'bạn');
+    const HonCap = Hon.charAt(0).toUpperCase() + Hon.slice(1);
+    const self = profile.selfRef || 'mình';
+    result = {
+      ok: true,
+      isDone: false,
+      question: `${HonCap} cho ${self} biết triệu chứng mới đó là gì nhé?`,
+      options: [],
+      multiSelect: false,
+      allowFreeText: true,
+    };
+  } else if (result.isDone && previousAnswers.length < minQForPhase && !result.hasRedFlag && !userImproved) {
     console.log(`[Triage] ⛔ Service-level block: isDone at ${previousAnswers.length}/${minQForPhase}. Returning fallback.`);
     const fallbacks = [
       { q: 'Từ lúc bắt đầu đến giờ, tình trạng có thay đổi không?', opts: ['đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn'], multi: false, types: [5] },
@@ -615,8 +635,9 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     // → LUÔN cảnh báo người thân, không phụ thuộc vào AI judgment.
     // AI có thể sai (return notify_caregiver=false dù severity='high'). User
     // safety > AI confidence.
-    const shouldAlertFamilyNow = (result.needsFamilyAlert || result.severity === 'high')
-      && !session.family_alerted;
+    // Cho phép re-alert ngay cả khi family_alerted=true — alertFamily() tự kiểm
+    // tra dedup theo confirmed_at + 30min, escalation, và orchestrator cooldown.
+    const shouldAlertFamilyNow = result.needsFamilyAlert || result.severity === 'high';
 
     if (shouldAlertFamilyNow) {
       const caregiversAlerted = await alertFamily(pool, session);
@@ -624,15 +645,15 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
       result.familyAlertResult = {
         attempted: true,
         caregiversNotified: caregiversAlerted || 0,
+        alreadyAlerted: session.family_alerted && caregiversAlerted === 0,
       };
-      await pool.query(
-        `UPDATE health_checkins SET family_alerted=true, family_alerted_at=NOW(), updated_at=NOW() WHERE id=$1`,
-        [checkinId]
-      );
+      if (caregiversAlerted > 0) {
+        await pool.query(
+          `UPDATE health_checkins SET family_alerted=true, family_alerted_at=NOW(), updated_at=NOW() WHERE id=$1`,
+          [checkinId]
+        );
 
-      // Thông báo in-app cho chính user biết gia đình đã được nhắn (chỉ khi
-      // thực sự có caregiver được notify; nếu 0 caregiver → không spam user).
-      if ((caregiversAlerted || 0) > 0) {
+        // Thông báo in-app cho chính user biết gia đình đã được nhắn
         const userLang = profile.lang || 'vi';
         await sendCheckinNotification(
           pool, userId, null,
@@ -642,8 +663,6 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
           { checkinId: String(checkinId) }
         );
       }
-    } else if (result.severity === 'high' && session.family_alerted) {
-      result.familyAlertResult = { attempted: false, caregiversNotified: 0, alreadyAlerted: true };
     }
 
     // #2: System reacts to AI findings
@@ -1079,13 +1098,23 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
       ? t('checkin.emergency_family_body', cgLang, { name: patientDisplay })
       : t('checkin.no_response_family_body', cgLang, { name: patientDisplay });
 
-    // Upsert confirmation record (skip if already confirmed)
+    // Re-alert policy: cho phép gửi lại NẾU caregiver confirmed >30 phút trước
+    // VÀ event hiện tại là high-severity (state vẫn nguy), HOẶC alertType escalate
+    // (caregiver_alert → emergency). Chống spam thực sự bằng orchestrator cooldown
+    // (30min cho caregiver_alert / 1min cho emergency).
     const { rows: existing } = await pool.query(
-      `SELECT id, confirmed_at FROM caregiver_alert_confirmations
+      `SELECT id, confirmed_at, alert_type,
+              EXTRACT(EPOCH FROM (NOW() - confirmed_at))/60 AS mins_since_confirm
+       FROM caregiver_alert_confirmations
        WHERE checkin_id=$1 AND caregiver_id=$2`,
       [session.id, cg.id]
     );
-    if (existing.length && existing[0].confirmed_at) continue; // đã xác nhận rồi, không gửi lại
+    const isEscalation = existing.length
+      && existing[0].alert_type === 'caregiver_alert' && alertType === 'emergency';
+    if (existing.length && existing[0].confirmed_at) {
+      const minsSince = Number(existing[0].mins_since_confirm) || 0;
+      if (!isEscalation && minsSince < 30) continue;
+    }
 
     let alertId;
     if (!existing.length) {
@@ -1098,10 +1127,17 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
       alertId = ins[0].id;
     } else {
       alertId = existing[0].id;
+      // Reset confirmation cũ → caregiver phải xác nhận lại; cập nhật alertType
+      // nếu escalate (caregiver_alert → emergency).
       await pool.query(
         `UPDATE caregiver_alert_confirmations
-         SET resent_count=resent_count+1, resent_at=NOW() WHERE id=$1`,
-        [alertId]
+         SET confirmed_at = NULL,
+             confirmed_action = NULL,
+             alert_type = $2,
+             resent_count = resent_count + 1,
+             resent_at = NOW()
+         WHERE id = $1`,
+        [alertId, isEscalation ? alertType : existing[0].alert_type]
       );
     }
 

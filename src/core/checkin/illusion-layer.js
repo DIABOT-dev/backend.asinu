@@ -21,6 +21,19 @@
 
 const { getHonorifics } = require('../../lib/honorifics');
 
+// ─── Symptom name sanitizer ────────────────────────────────────────────────
+// Tránh template injection khi display_name từ DB bị rác (chứa text câu hỏi,
+// pronoun, dấu câu). Fallback về null → caller dùng nhánh greeting/empathy default.
+
+function sanitizeSymptomName(name) {
+  if (!name || typeof name !== 'string') return null;
+  const trimmed = name.trim();
+  if (trimmed.length === 0 || trimmed.length > 30) return null;
+  if (/[?{}:.!]/.test(trimmed)) return null;
+  if (/\b(anh|chú|bạn|bác|cô|em|cháu|tôi|mình|mày|ông|bà)\b/i.test(trimmed)) return null;
+  return trimmed;
+}
+
 // ─── Banned keywords — output KHÔNG được chứa ──────────────────────────────
 
 const BANNED_KEYWORDS = [
@@ -134,17 +147,18 @@ const CONTINUITY_PREFIXES = {
 function selectContinuityPrefix(ctx, user) {
   const lang = user.lang || 'vi';
   const h = getHonorifics(user);
+  const symptom = sanitizeSymptomName(ctx.topSymptom?.display_name);
 
-  if (ctx.topSymptom && ctx.consecutiveTiredDays >= 3) {
+  if (symptom && ctx.consecutiveTiredDays >= 3) {
     return {
-      text: _renderTemplate(CONTINUITY_PREFIXES.same_symptom_3d, { symptom: ctx.topSymptom.display_name, days: ctx.consecutiveTiredDays }, h, lang),
+      text: _renderTemplate(CONTINUITY_PREFIXES.same_symptom_3d, { symptom, days: ctx.consecutiveTiredDays }, h, lang),
       templateId: CONTINUITY_PREFIXES.same_symptom_3d.id,
     };
   }
 
-  if (ctx.topSymptom && ctx.topSymptom.trend === 'decreasing') {
+  if (symptom && ctx.topSymptom.trend === 'decreasing') {
     return {
-      text: _renderTemplate(CONTINUITY_PREFIXES.improving, { symptom: ctx.topSymptom.display_name }, h, lang),
+      text: _renderTemplate(CONTINUITY_PREFIXES.improving, { symptom }, h, lang),
       templateId: CONTINUITY_PREFIXES.improving.id,
     };
   }
@@ -156,9 +170,9 @@ function selectContinuityPrefix(ctx, user) {
     };
   }
 
-  if (ctx.topSymptom && ctx.consecutiveTiredDays >= 2) {
+  if (symptom && ctx.consecutiveTiredDays >= 2) {
     return {
-      text: _renderTemplate(CONTINUITY_PREFIXES.same_symptom_2d, { symptom: ctx.topSymptom.display_name }, h, lang),
+      text: _renderTemplate(CONTINUITY_PREFIXES.same_symptom_2d, { symptom }, h, lang),
       templateId: CONTINUITY_PREFIXES.same_symptom_2d.id,
     };
   }
@@ -177,12 +191,12 @@ const EMPATHY_RESPONSES = {
   },
   answer_mild: {
     id: 'empathy_mild',
-    vi: ['Ừ, {selfRef} theo dõi thêm nhé.', '{selfRef} hiểu rồi, mình xem tiếp nhé.', 'Không sao, {selfRef} hỏi thêm chút.'],
+    vi: ['{selfRef} ghi nhận rồi nhé.', '{selfRef} hiểu rồi.', 'Vâng, {selfRef} nắm được rồi.'],
     en: ['I see, let\'s keep monitoring.', 'Understood, let me ask a bit more.', 'Okay, let\'s check a few more things.'],
   },
   answer_severe: {
     id: 'empathy_severe',
-    vi: ['{selfRef} cần hỏi thêm chút nhé.', 'Để {selfRef} hỏi kỹ hơn.', '{selfRef} hơi lo, hỏi thêm nhé.'],
+    vi: ['{selfRef} sẽ theo sát thêm nhé.', 'Để {selfRef} hỏi kỹ hơn.', '{selfRef} hơi lo cho {honorific}.'],
     en: ['Let me ask a few more questions.', 'I\'d like to check more carefully.', 'I\'m a bit concerned, let me ask more.'],
   },
   answer_improving: {
@@ -192,7 +206,7 @@ const EMPATHY_RESPONSES = {
   },
   answer_worsening: {
     id: 'empathy_worsening',
-    vi: ['{selfRef} hơi lo, hỏi thêm nhé.', 'Mình cần theo dõi kỹ hơn.', '{selfRef} muốn hỏi thêm chút.'],
+    vi: ['{selfRef} hơi lo cho {honorific}.', 'Mình cần theo dõi kỹ hơn.', '{selfRef} muốn nắm rõ thêm tình hình.'],
     en: ['I\'m a bit concerned.', 'We should monitor this closely.', 'Let me check further.'],
   },
 };
@@ -320,9 +334,9 @@ function generateProgressFeedback(ctx, currentSeverity, user) {
   }
 
   // Priority 2: Symptom trend
-  if (ctx.topSymptom) {
+  const symptom = sanitizeSymptomName(ctx.topSymptom?.display_name);
+  if (symptom) {
     const trend = ctx.topSymptom.trend || 'stable';
-    const symptom = ctx.topSymptom.display_name;
 
     if (trend === 'decreasing') {
       return {
@@ -401,11 +415,12 @@ function rewriteGreeting(originalGreeting, ctx, user) {
   const h = getHonorifics(user);
   let template;
   let variables = {};
+  const symptom = sanitizeSymptomName(ctx.topSymptom?.display_name);
 
   if (ctx.consecutiveTiredDays >= 2) {
     template = GREETING_REWRITES.consecutive_tired;
     variables.tiredDays = ctx.consecutiveTiredDays;
-  } else if (ctx.topSymptom) {
+  } else if (symptom) {
     const trend = ctx.topSymptom.trend || 'stable';
     if (trend === 'increasing') {
       template = GREETING_REWRITES.symptom_trend_worsening;
@@ -414,7 +429,7 @@ function rewriteGreeting(originalGreeting, ctx, user) {
     } else {
       template = GREETING_REWRITES.has_symptom_yesterday;
     }
-    variables.symptom = ctx.topSymptom.display_name;
+    variables.symptom = symptom;
   } else {
     template = GREETING_REWRITES.default;
   }

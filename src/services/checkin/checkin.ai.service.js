@@ -165,6 +165,23 @@ function getFallbackQuestion(status, phase, lang, previousAnswers = [], profile 
     return text.replace(/bạn/g, hon).replace(/Bạn/g, hon.charAt(0).toUpperCase() + hon.slice(1));
   };
 
+  // [Bug 4 fix] Nếu user vừa nói "có thêm triệu chứng mới" → hỏi triệu chứng gì,
+  // không nhảy sang câu kế tiếp trong array fallback.
+  const lastAnswerStr = String(previousAnswers[previousAnswers.length - 1]?.answer || '').toLowerCase();
+  if (/(thêm.*triệu chứng|triệu chứng.*mới|new symptom|another symptom)/i.test(lastAnswerStr)) {
+    const Hon = hon.charAt(0).toUpperCase() + hon.slice(1);
+    return {
+      isDone: false,
+      question: lang === 'en'
+        ? 'What new symptom are you experiencing? Please describe.'
+        : `${Hon} cho ${self} biết triệu chứng mới đó là gì nhé?`,
+      options: [],
+      multiSelect: false,
+      allowFreeText: true,
+      _fallback: true,
+    };
+  }
+
   if (answerCount < questions.length) {
     return {
       isDone: false,
@@ -386,7 +403,8 @@ async function getNextTriageQuestionLegacy({
       continuityInstruction = `\n\n🔴 CÂU HỎI ĐẦU TIÊN: "${CallName} ơi, ${selfRef} thấy ${honorific} mệt ${consecutiveDays} ngày liên tiếp rồi, hôm nay ${honorific} thấy thế nào? Mệt mỏi, chóng mặt hay có triệu chứng gì khác?"
 Options PHẢI gồm: triệu chứng phổ biến (mệt mỏi, chóng mặt, đau đầu...) + "đã đỡ hơn" + "không rõ". multiSelect=true, allowFreeText=true để user nhập thêm.\n`;
     } else if (consecutiveDays >= 1) {
-      continuityInstruction = `\n\n🔴 CÂU HỎI ĐẦU TIÊN: "${CallName} ơi, hôm qua ${honorific} nói bị [triệu chứng từ lịch sử], hôm nay ${honorific} thấy thế nào?"
+      continuityInstruction = `\n\n🔴 CÂU HỎI ĐẦU TIÊN: "${CallName} ơi, lần trước ${honorific} có nói bị [TÊN TRIỆU CHỨNG NGẮN GỌN ≤4 từ, ví dụ: "đau đầu", "chóng mặt và mệt"], hôm nay ${honorific} thấy thế nào?"
+⚠️ QUY TẮC FILL [TÊN TRIỆU CHỨNG]: chỉ điền 1-3 từ TÊN triệu chứng (vd: "đau đầu", "mệt mỏi"). KHÔNG copy nguyên văn summary/recommendation/template phrase. Nếu lịch sử không có tên triệu chứng rõ → dùng câu chung: "${CallName} ơi, hôm nay ${honorific} thấy thế nào?"
 Options PHẢI gồm: triệu chứng phổ biến + "đã đỡ hơn" + "không rõ". multiSelect=true, allowFreeText=true.\n`;
     }
   }
@@ -745,7 +763,8 @@ ${conditions ? `🏥 Bệnh nền: ${conditions}
 ${prevCheckinsStr ? `📋 Lịch sử gần (BẮT BUỘC ĐỌC VÀ DÙNG):
 ${prevCheckinsStr}
    🔴 BẮT BUỘC: Câu hỏi ĐẦU TIÊN PHẢI nhắc lại triệu chứng từ lần check-in trước.
-   VD: "${CallName} ơi, hôm qua ${honorific} có nói bị [triệu chứng từ lịch sử], hôm nay ${honorific} thấy thế nào?"
+   VD: "${CallName} ơi, lần trước ${honorific} có nói bị [TÊN TRIỆU CHỨNG NGẮN ≤4 từ], hôm nay ${honorific} thấy thế nào?"
+   ⚠️ Chỉ điền TÊN triệu chứng (vd "đau đầu", "chóng mặt"), KHÔNG copy nguyên summary/recommendation/template.
    🔴 Nếu triệu chứng lặp lại nhiều ngày → severity PHẢI tăng 1 bậc + nhắc "${selfRef} thấy ${honorific} bị [triệu chứng] mấy ngày liên tục rồi".
    🔴 Recommendation kết luận PHẢI đề cập pattern nếu có.` : '- Chưa có lịch sử check-in trước.'}
 ${hasSymptomFreq ? `📊 Tần suất triệu chứng (BẮT BUỘC DÙNG trong recommendation):
