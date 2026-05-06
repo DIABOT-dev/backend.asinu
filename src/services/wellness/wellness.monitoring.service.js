@@ -12,6 +12,7 @@
 const { randomUUID } = require('crypto');
 const { t } = require('../../i18n');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
+const { sendAndSave } = require('../notification/basic.notification.service');
 
 // =====================================================
 // DEFAULT CONFIG
@@ -610,6 +611,50 @@ async function shouldAlertCaregiver(client, userId) {
 /**
  * Gửi alert đến người thân
  */
+/**
+ * Fire push notifications cho caregiver alerts đã insert vào DB.
+ * Gọi SAU khi transaction COMMIT để tránh push leak khi rollback.
+ * Non-blocking — lỗi push không ảnh hưởng response chính.
+ *
+ * @param {Object} pool - DB pool
+ * @param {Array} alerts - alert rows từ sendCaregiverAlert (mỗi cái có caregiver_user_id, title, message, alert_type, context_data, id)
+ */
+async function fireCaregiverPushAlerts(pool, alerts) {
+  for (const alert of alerts) {
+    const caregiverId = alert.caregiver_user_id;
+    if (!caregiverId) continue; // pending alert (no caregiver yet) — skip push
+
+    try {
+      const { rows } = await pool.query(
+        `SELECT push_token, COALESCE(language_preference, 'vi') AS lang
+         FROM users WHERE id = $1 AND deleted_at IS NULL`,
+        [caregiverId]
+      );
+      const u = rows[0];
+      if (!u) continue;
+
+      // Dùng type 'caregiver_alert' (high priority, channelId 'alert', sound asinu_alert.wav)
+      // để caregiver nhận banner + âm thanh đặc biệt.
+      await sendAndSave(
+        pool,
+        { id: caregiverId, push_token: u.push_token },
+        'caregiver_alert',
+        alert.title,
+        alert.message,
+        {
+          alertId: String(alert.id),
+          alertType: alert.alert_type,
+          patientId: String(alert.user_id),
+          source: 'wellness',
+          ...(alert.context_data || {}),
+        }
+      );
+    } catch (err) {
+      console.error(`[wellness push] caregiver=${caregiverId} failed:`, err?.message);
+    }
+  }
+}
+
 async function sendCaregiverAlert(client, userId, alertType, title, message, triggeredBy, contextData = {}) {
   // Find caregivers with can_receive_alerts permission
   const caregiversResult = await client.query(
@@ -729,6 +774,16 @@ async function evaluateUserWellness(pool, userId, options = {}) {
     }
 
     await client.query('COMMIT');
+
+    // ── FIX W1: Fire push notification cho caregiver SAU khi commit ──
+    // sendCaregiverAlert chỉ INSERT DB record. Trước đây caregiver KHÔNG nhận
+    // push thật → silent alerts. Giờ fire-and-forget push tới mỗi caregiver
+    // qua sendAndSave (basic.notification.service handles cooldown + DB log).
+    if (Array.isArray(actions.alert) && actions.alert.length > 0) {
+      fireCaregiverPushAlerts(pool, actions.alert).catch((err) =>
+        console.error('[wellness] fireCaregiverPushAlerts failed:', err?.message)
+      );
+    }
 
     return {
       ok: true,

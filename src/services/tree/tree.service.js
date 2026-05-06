@@ -64,7 +64,7 @@ async function getTreeSummary(pool, userId) {
         `SELECT completed_date
          FROM mission_history
          WHERE user_id = $1
-           AND completed_date >= CURRENT_DATE - INTERVAL '31 days'
+           AND completed_date >= (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date - INTERVAL '31 days'
          GROUP BY completed_date
          HAVING COUNT(DISTINCT mission_key) >= $2
          ORDER BY completed_date DESC`,
