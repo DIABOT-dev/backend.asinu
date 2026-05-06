@@ -79,6 +79,49 @@ const CONDITION_TO_PRIORITY_SYMPTOMS = {
  * @param {string[]} conditions - medical_conditions của user
  * @returns {string[]} options đã sort
  */
+/**
+ * Build symptom options for T3 step — phối hợp T2 bodyLocations + condition priority.
+ *
+ * Strategy:
+ *   1. Nếu có bodyLocations (T2 đã pick): options = symptoms theo các vùng đó
+ *      (merge + dedupe). Ưu tiên thứ tự: location[0] symptoms trước, rồi [1]...
+ *      Sau đó: condition-priority symptoms (vd: tiểu đường → "khát nước, đi
+ *      tiểu nhiều") đẩy lên đầu trong từng cluster.
+ *   2. Nếu KHÔNG có bodyLocations (FE cũ chưa update / fallback):
+ *      → dùng buildPrioritizedSymptomOptions(conditions) như cũ.
+ *
+ * @param {string[]|null} bodyLocations - T2 location keys
+ * @param {string[]} conditions - medical_conditions của user
+ * @returns {string[]} options cho T3
+ */
+function buildSymptomOptions(bodyLocations, conditions) {
+  if (!Array.isArray(bodyLocations) || bodyLocations.length === 0) {
+    return buildPrioritizedSymptomOptions(conditions);
+  }
+  const { getSymptomsForLocations } = require('../../services/checkin/body-location');
+  const merged = getSymptomsForLocations(bodyLocations, 'vi');
+  if (merged.length === 0) {
+    return buildPrioritizedSymptomOptions(conditions);
+  }
+  // Optional condition priority boost — nếu user có bệnh nền liên quan,
+  // đẩy symptom đó lên đầu trong list merged (nếu match).
+  if (Array.isArray(conditions) && conditions.length > 0) {
+    const priority = new Set();
+    for (const cond of conditions) {
+      const normalized = String(cond).toLowerCase().trim();
+      for (const [key, symptoms] of Object.entries(CONDITION_TO_PRIORITY_SYMPTOMS)) {
+        if (normalized.includes(key)) symptoms.forEach(s => priority.add(s.toLowerCase()));
+      }
+    }
+    if (priority.size > 0) {
+      const prioritized = merged.filter(s => priority.has(s.toLowerCase()));
+      const rest = merged.filter(s => !priority.has(s.toLowerCase()));
+      return [...prioritized, ...rest];
+    }
+  }
+  return merged;
+}
+
 function buildPrioritizedSymptomOptions(conditions) {
   if (!Array.isArray(conditions) || conditions.length === 0) {
     return [...COMMON_SYMPTOMS_ORDERED];
@@ -370,16 +413,27 @@ function buildQuestion(step, state) {
   switch (step) {
     // ── INITIAL FLOW ──────────────────────────────────────────────────────
 
-    case 'symptoms':
-      // Show common chief complaints, đẩy triệu chứng liên quan tới bệnh
-      // nền user lên đầu để dễ chọn. "khác (mô tả thêm)" cuối cùng cho
-      // case ngoài KB. allowFreeText=true để user vẫn gõ thêm khi cần.
+    case 'symptoms': {
+      // T3 Chief Complaint — options PHẢI logic với T2 location đã pick.
+      // Ưu tiên: symptoms từ bodyLocations (T2) → fallback condition priority
+      // → fallback COMMON_SYMPTOMS_ORDERED. allowFreeText=true để user gõ
+      // triệu chứng ngoài list.
+      const flatOptions = buildSymptomOptions(state.bodyLocations, state.conditions);
+      // optionsGrouped — chỉ emit khi có bodyLocations để FE render section
+      // header theo vùng (tránh user phải tự đoán symptom thuộc vùng nào).
+      let optionsGrouped = null;
+      if (Array.isArray(state.bodyLocations) && state.bodyLocations.length > 0) {
+        const { getGroupedSymptoms } = require('../../services/checkin/body-location');
+        optionsGrouped = getGroupedSymptoms(state.bodyLocations, 'vi');
+      }
       return {
-        question: 'Hôm nay bạn cảm thấy thế nào? Triệu chứng chính là gì?',
-        options: buildPrioritizedSymptomOptions(state.conditions),
-        multiSelect: false,
+        question: 'Cụ thể vấn đề là gì? (chọn 1 hoặc nhiều)',
+        options: flatOptions,
+        optionsGrouped, // null nếu không có T2 — FE fallback render flat
+        multiSelect: true,
         allowFreeText: true,
       };
+    }
 
     case 'associated': {
       // Use clinical-mapping associated symptoms if available.
@@ -505,10 +559,16 @@ function getNextStep(input) {
     healthContext = {},
     previousAnswers = [],
     previousSessionSummary = null,
+    bodyLocation = null,           // legacy single
+    bodyLocations = null,          // new T2 array
+    bodyLocationOther = null,
   } = input;
 
   // 1. Rebuild current state from all previous answers.
   const state = buildState(previousAnswers, profile, healthContext);
+  // Inject T2 location info into state for buildQuestion to use
+  state.bodyLocations = bodyLocations || (bodyLocation ? [bodyLocation] : null);
+  state.bodyLocationOther = bodyLocationOther;
 
   // 2. Pick the right step sequence and apply skip-logic.
   const isFollowUp = phase === 'followup';
@@ -536,6 +596,7 @@ function getNextStep(input) {
     step: nextStep,
     question: questionData.question,
     options: questionData.options,
+    optionsGrouped: questionData.optionsGrouped || null,  // pass through cho FE render section
     multiSelect: questionData.multiSelect,
     allowFreeText: questionData.allowFreeText,
     primarySymptom: state.primarySymptom || null,

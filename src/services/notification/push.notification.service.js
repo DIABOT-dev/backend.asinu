@@ -120,7 +120,7 @@ async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitat
 
     return await sendPushNotification(
       [pushToken],
-      t('push.invitation_title'),
+      t('push.invitation_title', lang),
       t('push.invitation_body', lang, { name: senderName }),
       {
         type: 'care_circle_invitation',
@@ -158,7 +158,7 @@ async function notifyCareCircleAccepted(pool, requesterId, accepterName, accepte
 
     return await sendPushNotification(
       [pushToken],
-      t('push.accepted_title'),
+      t('push.accepted_title', lang),
       t('push.accepted_body', lang, { name: accepterName }),
       {
         type: 'care_circle_accepted',

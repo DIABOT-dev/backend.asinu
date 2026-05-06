@@ -2,14 +2,40 @@ const checkinService = require('../services/checkin/checkin.service');
 const engagementService = require('../services/profile/engagement.service');
 const { markActive } = require('../services/profile/lifecycle.service');
 const { t, getLang } = require('../i18n');
+const { BODY_LOCATIONS, getLocationOptions, getSymptomsForLocation, getSymptomsForLocations } = require('../services/checkin/body-location');
 
 async function startCheckinHandler(pool, req, res) {
-  const { status } = req.body;
+  const { status, body_locations: bodyLocations, body_location_other: bodyLocationOther } = req.body;
+  // Backward compat: nếu FE cũ gửi body_location single → wrap vào array
+  let locations = bodyLocations;
+  if (!locations && req.body.body_location) {
+    locations = [req.body.body_location];
+  }
+
   if (!['fine', 'tired', 'very_tired', 'specific_concern'].includes(status)) {
     return res.status(400).json({ ok: false, error: t('error.invalid_status', getLang(req)) });
   }
+  // Validate locations array (mỗi element phải nằm trong enum)
+  if (locations !== undefined && locations !== null) {
+    if (!Array.isArray(locations)) {
+      return res.status(400).json({ ok: false, error: 'body_locations must be an array' });
+    }
+    const invalid = locations.find(l => !BODY_LOCATIONS.includes(l));
+    if (invalid) {
+      return res.status(400).json({ ok: false, error: `invalid body_location: ${invalid}` });
+    }
+    // Dedupe + giới hạn cứng max 7 (toàn bộ enum) để tránh array bloated
+    locations = [...new Set(locations)].slice(0, 7);
+  }
+  // body_location_other: optional free-text, sanitize length
+  let other = null;
+  if (bodyLocationOther && typeof bodyLocationOther === 'string') {
+    other = bodyLocationOther.trim().slice(0, 200);
+    if (!other) other = null;
+  }
+
   try {
-    const session = await checkinService.startCheckin(pool, req.user.id, status);
+    const session = await checkinService.startCheckin(pool, req.user.id, status, locations, other);
     // Update lifecycle → active khi user check-in
     markActive(pool, req.user.id).catch(err =>
       console.warn('[Lifecycle] markActive failed:', err.message)
@@ -18,6 +44,19 @@ async function startCheckinHandler(pool, req, res) {
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
+}
+
+/**
+ * GET /api/mobile/checkin/locations
+ * Trả về list 7 body locations + symptom suggestions cho FE T2 + T3 screen.
+ */
+async function getLocationsHandler(pool, req, res) {
+  const lang = getLang(req);
+  const locations = getLocationOptions(lang).map(loc => ({
+    ...loc,
+    symptoms: getSymptomsForLocation(loc.key, lang),
+  }));
+  return res.json({ ok: true, locations });
 }
 
 async function followUpHandler(pool, req, res) {
@@ -167,6 +206,7 @@ async function engagementOptimalTimeHandler(pool, req, res) {
 
 module.exports = {
   startCheckinHandler,
+  getLocationsHandler,
   followUpHandler,
   triageHandler,
   todayCheckinHandler,

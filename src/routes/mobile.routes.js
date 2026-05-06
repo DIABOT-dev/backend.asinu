@@ -13,7 +13,7 @@ const { upsertOnboardingProfile, onboardingNext, onboardingComplete, onboardingC
 const { getProfile, getBasicProfile, updateProfile, deleteAccount, updatePushToken, clearPushToken, featureFlagsHandler } = require('../controllers/profile.controller');
 const { getTreeSummary, getTreeHistory } = require('../controllers/tree.controller');
 const {
-  startCheckinHandler, followUpHandler, triageHandler,
+  startCheckinHandler, getLocationsHandler, followUpHandler, triageHandler,
   todayCheckinHandler, emergencyHandler,
   pendingAlertsHandler, confirmAlertHandler,
   healthReportHandler, resetTodayHandler, simulateTimePassHandler,
@@ -85,6 +85,7 @@ function mobileRoutes(pool) {
 
   // Health Check-in
   router.get('/checkin/today',     requireAuth, (req, res) => todayCheckinHandler(pool, req, res));
+  router.get('/checkin/locations', requireAuth, (req, res) => getLocationsHandler(pool, req, res));
   router.post('/checkin/start',    requireAuth, (req, res) => startCheckinHandler(pool, req, res));
   router.post('/checkin/followup', requireAuth, (req, res) => followUpHandler(pool, req, res));
   router.post('/checkin/triage',          requireAuth, (req, res) => triageHandler(pool, req, res));

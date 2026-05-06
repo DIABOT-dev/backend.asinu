@@ -199,7 +199,7 @@ async function getTodayCheckin(pool, userId) {
  * Create or update today's check-in with user's initial status.
  * Called when user responds to morning push or taps "Update sức khoẻ".
  */
-async function startCheckin(pool, userId, status) {
+async function startCheckin(pool, userId, status, bodyLocations = null, bodyLocationOther = null) {
   const date = checkinDateVN();
 
   let flowState;
@@ -209,25 +209,34 @@ async function startCheckin(pool, userId, status) {
 
   const nextAt = calcNextCheckin(flowState, status, 0);
 
+  // bodyLocations là array (mới). Cũng giữ body_location single = locations[0]
+  // cho backward compat với code cũ đang đọc body_location.
+  const locArr = Array.isArray(bodyLocations) && bodyLocations.length > 0 ? bodyLocations : null;
+  const locFirst = locArr ? locArr[0] : null;
+
   const { rows } = await pool.query(
     `INSERT INTO health_checkins
        (user_id, session_date, initial_status, current_status, flow_state,
-        next_checkin_at, last_response_at, no_response_count, updated_at)
-     VALUES ($1,$2,$3,$3,$4,$5,NOW(),0,NOW())
+        next_checkin_at, last_response_at, no_response_count,
+        body_location, body_locations, body_location_other, updated_at)
+     VALUES ($1,$2,$3,$3,$4,$5,NOW(),0,$6,$7,$8,NOW())
      ON CONFLICT (user_id, session_date) DO UPDATE SET
-       current_status   = CASE WHEN health_checkins.flow_state = 'high_alert' AND $3 = 'fine'
-                               THEN health_checkins.current_status ELSE $3 END,
-       flow_state       = CASE WHEN health_checkins.flow_state = 'high_alert' AND $4 IN ('monitoring', 'follow_up')
-                               THEN 'high_alert' ELSE $4 END,
-       next_checkin_at  = CASE WHEN health_checkins.flow_state = 'high_alert' AND $4 IN ('monitoring', 'follow_up')
-                               THEN health_checkins.next_checkin_at ELSE $5 END,
-       last_response_at = NOW(),
-       no_response_count= 0,
-       resolved_at      = CASE WHEN $3 = 'fine' AND health_checkins.flow_state = 'monitoring'
-                               THEN health_checkins.resolved_at ELSE NULL END,
-       updated_at       = NOW()
+       current_status      = CASE WHEN health_checkins.flow_state = 'high_alert' AND $3 = 'fine'
+                                  THEN health_checkins.current_status ELSE $3 END,
+       flow_state          = CASE WHEN health_checkins.flow_state = 'high_alert' AND $4 IN ('monitoring', 'follow_up')
+                                  THEN 'high_alert' ELSE $4 END,
+       next_checkin_at     = CASE WHEN health_checkins.flow_state = 'high_alert' AND $4 IN ('monitoring', 'follow_up')
+                                  THEN health_checkins.next_checkin_at ELSE $5 END,
+       last_response_at    = NOW(),
+       no_response_count   = 0,
+       body_location       = COALESCE($6, health_checkins.body_location),
+       body_locations      = COALESCE($7, health_checkins.body_locations),
+       body_location_other = COALESCE($8, health_checkins.body_location_other),
+       resolved_at         = CASE WHEN $3 = 'fine' AND health_checkins.flow_state = 'monitoring'
+                                  THEN health_checkins.resolved_at ELSE NULL END,
+       updated_at          = NOW()
      RETURNING *`,
-    [userId, date, status, flowState, nextAt]
+    [userId, date, status, flowState, nextAt, locFirst, locArr, bodyLocationOther]
   );
 
   // Track engagement event
@@ -442,33 +451,38 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
 
   if (hasRedFlagInAnswers) {
     const allSymptoms = previousAnswers.map(a => _safeAns(a.answer)).join(', ');
+    // Red-flag = đe doạ tính mạng → escalate severity='emergency' (không phải 'high'),
+    // emergency_triggered=true (auto detect từ AI/triage, không cần SOS button).
     const urgentResult = {
       ok: true,
       isDone: true,
       summary: allSymptoms,
-      severity: 'high',
+      severity: 'emergency',
       recommendation: profile.lang === 'en'
-        ? 'You reported serious symptoms. Please rest and see a doctor as soon as possible.'
-        : 'Bạn có dấu hiệu cần chú ý. Hãy nghỉ ngơi và liên hệ bác sĩ sớm nhất có thể.',
+        ? '🚨 EMERGENCY — Call 115 or emergency services NOW. Family has been notified.'
+        : '🚨 KHẨN CẤP — Gọi 115 hoặc cấp cứu NGAY. Người thân đã được báo.',
       needsDoctor: true,
       needsFamilyAlert: true,
       hasRedFlag: true,
       followUpHours: 1,
+      autoEmergency: true, // Auto-escalated từ red-flag detect (khác user SOS button)
     };
 
     // Save to DB
     await pool.query(
       `UPDATE health_checkins SET
          triage_summary=$1, triage_severity=$2, triage_messages=$3::jsonb,
-         triage_completed_at=NOW(), next_checkin_at=$4, updated_at=NOW()
+         triage_completed_at=NOW(), next_checkin_at=$4,
+         emergency_triggered=true, flow_state='high_alert',
+         updated_at=NOW()
        WHERE id=$5`,
       [urgentResult.summary, urgentResult.severity, JSON.stringify(previousAnswers),
        hoursFromNow(1), checkinId]
     );
 
-    // Alert family immediately
+    // Alert family immediately với alertType='emergency' (priority critical, cooldown 1min)
     if (!session.family_alerted) {
-      await alertFamily(pool, session);
+      await alertFamily(pool, session, 'emergency');
       await pool.query(
         `UPDATE health_checkins SET family_alerted=true, family_alerted_at=NOW() WHERE id=$1`,
         [checkinId]
@@ -501,6 +515,9 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     previousAnswers,
     previousSessionSummary:  session.triage_summary || null,
     previousTriageMessages:  prevTriageMessages,
+    bodyLocation:            session.body_location || null,
+    bodyLocations:           session.body_locations || (session.body_location ? [session.body_location] : null),
+    bodyLocationOther:       session.body_location_other || null,
     pool,
     userId,
   });
@@ -619,6 +636,8 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     const followUpHours = result.followUpHours || calcFollowUpHours(result.severity || 'medium');
     const nextAt = hoursFromNow(followUpHours);
 
+    // Emergency severity → set emergency_triggered=true + flow_state='high_alert'
+    const isEmergencyResult = result.severity === 'emergency';
     await pool.query(
       `UPDATE health_checkins SET
          triage_summary       = $1,
@@ -626,21 +645,23 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
          triage_messages      = $3::jsonb,
          triage_completed_at  = NOW(),
          next_checkin_at      = $4,
+         emergency_triggered  = COALESCE($6, emergency_triggered),
+         flow_state           = CASE WHEN $6 = TRUE THEN 'high_alert' ELSE flow_state END,
          updated_at           = NOW()
        WHERE id = $5`,
-      [result.summary, result.severity, JSON.stringify(previousAnswers), nextAt, checkinId]
+      [result.summary, result.severity, JSON.stringify(previousAnswers), nextAt, checkinId, isEmergencyResult]
     );
 
-    // Safety override: severity=high (red flag, ngất, đau ngực, khó thở...)
-    // → LUÔN cảnh báo người thân, không phụ thuộc vào AI judgment.
-    // AI có thể sai (return notify_caregiver=false dù severity='high'). User
-    // safety > AI confidence.
-    // Cho phép re-alert ngay cả khi family_alerted=true — alertFamily() tự kiểm
-    // tra dedup theo confirmed_at + 30min, escalation, và orchestrator cooldown.
-    const shouldAlertFamilyNow = result.needsFamilyAlert || result.severity === 'high';
+    // Safety override: severity='emergency' / 'high' → LUÔN cảnh báo người thân,
+    // không phụ thuộc vào AI judgment. AI có thể sai. User safety > AI confidence.
+    // Emergency dùng alertType='emergency' (priority critical, cooldown 1min).
+    // High dùng alertType='caregiver_alert' (priority high, cooldown 30min).
+    const shouldAlertFamilyNow = result.needsFamilyAlert
+      || result.severity === 'high' || result.severity === 'emergency';
+    const alertType = result.severity === 'emergency' ? 'emergency' : 'caregiver_alert';
 
     if (shouldAlertFamilyNow) {
-      const caregiversAlerted = await alertFamily(pool, session);
+      const caregiversAlerted = await alertFamily(pool, session, alertType);
       // Trả về số caregivers đã alert để FE hiển thị banner đúng
       result.familyAlertResult = {
         attempted: true,
@@ -783,11 +804,17 @@ async function triggerEmergency(pool, userId, location) {
   );
   if (recent.length > 0) {
     console.log(`[SOS] dedup: skip — emergency đã gửi gần đây và chưa confirm`);
+    // Lấy lang của user để render message theo ngôn ngữ họ chọn (không hardcode 'vi')
+    const { rows: langRows } = await pool.query(
+      `SELECT COALESCE(language_preference, 'vi') AS lang FROM users WHERE id = $1`,
+      [userId]
+    );
+    const userLang = langRows[0]?.lang || 'vi';
     return {
       ok: true,
       caregiversAlerted: 0,
       deduped: true,
-      message: t('checkin.emergency_already_sent', 'vi'),
+      message: t('checkin.emergency_already_sent', userLang),
     };
   }
 
@@ -1576,6 +1603,7 @@ async function getHealthScore(pool, userId) {
 
   // Danger conditions
   if (checkin?.emergency_triggered) { level = 'danger'; factors.push('emergency_triggered'); }
+  if (checkin?.triage_severity === 'emergency') { level = 'danger'; factors.push('triage_severity_emergency'); }
   if (checkin?.triage_severity === 'high') { level = 'danger'; factors.push('triage_severity_high'); }
   if (glucose !== null && glucose > 250) { level = 'danger'; factors.push('glucose_very_high'); }
   if (glucose !== null && glucose < 70) { level = 'danger'; factors.push('glucose_very_low'); }

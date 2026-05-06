@@ -108,6 +108,9 @@ async function getNextTriageQuestion(input) {
     healthContext = {},
     previousAnswers = [],
     previousSessionSummary = null,
+    bodyLocation = null,            // legacy single
+    bodyLocations = null,           // new array
+    bodyLocationOther = null,       // free-text
   } = input;
 
   // ── Normalize profile: ensure age is set ──
@@ -161,21 +164,24 @@ async function getNextTriageQuestion(input) {
       try {
         const safety = await classifySymptomSeverity(symptomText, normalizedProfile);
         if (safety.severity === 'emergency') {
-          // Bypass triage, conclude ngay với severity=high + alert family
+          // Bypass triage, conclude ngay với severity='emergency' (giữ nguyên,
+          // không downgrade về 'high' như trước — emergency là level cao nhất
+          // báo người thân + gợi ý gọi 115 ngay).
           const aiConclusion = await generateConclusion(
-            { primarySymptom: symptomText, severity: 'high', needsDoctor: true, allSymptoms: [symptomText] },
+            { primarySymptom: symptomText, severity: 'emergency', needsDoctor: true, allSymptoms: [symptomText] },
             normalizedProfile, lang,
           );
           return {
             isDone: true,
-            summary: aiConclusion.summary || `Triệu chứng "${symptomText}" cần được kiểm tra y tế ngay.`,
-            recommendation: aiConclusion.recommendation || `🚨 Liên hệ bác sĩ hoặc gọi 115 ngay. ${safety.reason}`,
+            summary: aiConclusion.summary || `Triệu chứng "${symptomText}" có dấu hiệu nguy cấp.`,
+            recommendation: aiConclusion.recommendation || `🚨 Gọi 115 hoặc cấp cứu ngay. ${safety.reason}`,
             closeMessage: aiConclusion.closeMessage,
-            severity: 'high',
+            severity: 'emergency',
             needsDoctor: true,
-            needsFamilyAlert: true,        // ép alert dù safety.needsFamilyAlert ra sao
+            needsFamilyAlert: true,
             hasRedFlag: true,
             followUpHours: 1,
+            autoEmergency: true,
             _safetyClassifier: { triggered: true, severity: safety.severity, reason: safety.reason },
           };
         }
@@ -197,6 +203,9 @@ async function getNextTriageQuestion(input) {
     healthContext: normalizedHC,
     previousAnswers: normalizedAnswers,
     previousSessionSummary,
+    bodyLocation,
+    bodyLocations,
+    bodyLocationOther,
   });
 
   // 4. If the engine says conclude → generate the conclusion via AI layer.
@@ -262,6 +271,9 @@ async function getNextTriageQuestion(input) {
     {
       ...engineResult,
       previousSessionSummary,
+      bodyLocation,
+      bodyLocations,
+      bodyLocationOther,
     },
     normalizedProfile,
     normalizedAnswers,
@@ -271,6 +283,7 @@ async function getNextTriageQuestion(input) {
     isDone: false,
     question: formatted.question,
     options: formatted.options || engineResult.options,
+    optionsGrouped: engineResult.optionsGrouped || null,  // pass T2-grouped symptoms cho FE render section
     multiSelect: formatted.multiSelect,
     allowFreeText: formatted.allowFreeText,
   };

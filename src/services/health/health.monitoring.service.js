@@ -48,7 +48,8 @@ async function checkGlucoseAlerts(pool, userId) {
       return {
         type: 'high_glucose',
         severity: 'high',
-        message: t('health.glucose_high', 'vi', { value: glucose }),
+        messageKey: 'health.glucose_high',
+        messageParams: { value: glucose },
         userId,
         value: glucose
       };
@@ -57,8 +58,9 @@ async function checkGlucoseAlerts(pool, userId) {
     if (glucose < 70) {
       return {
         type: 'low_glucose',
-        severity: 'high', 
-        message: t('health.glucose_low', 'vi', { value: glucose }),
+        severity: 'high',
+        messageKey: 'health.glucose_low',
+        messageParams: { value: glucose },
         userId,
         value: glucose
       };
@@ -66,15 +68,16 @@ async function checkGlucoseAlerts(pool, userId) {
 
     // Kiểm tra xu hướng tăng liên tục
     if (glucoseLogs.length >= 3) {
-      const isIncreasing = glucoseLogs.slice(0, 3).every((log, idx) => 
+      const isIncreasing = glucoseLogs.slice(0, 3).every((log, idx) =>
         idx === 0 || log.value > glucoseLogs[idx - 1].value
       );
-      
+
       if (isIncreasing && glucose > 180) {
         return {
           type: 'glucose_trend_up',
           severity: 'medium',
-          message: t('health.glucose_trending_up', 'vi', { value: glucose }),
+          messageKey: 'health.glucose_trending_up',
+          messageParams: { value: glucose },
           userId,
           value: glucose
         };
@@ -118,7 +121,8 @@ async function checkBloodPressureAlerts(pool, userId) {
       return {
         type: 'high_blood_pressure',
         severity: 'high',
-        message: t('health.bp_high', 'vi', { systolic, diastolic }),
+        messageKey: 'health.bp_high',
+        messageParams: { systolic, diastolic },
         userId,
         systolic,
         diastolic
@@ -128,9 +132,10 @@ async function checkBloodPressureAlerts(pool, userId) {
     // Huyết áp thấp
     if (systolic < 90 || diastolic < 60) {
       return {
-        type: 'low_blood_pressure', 
+        type: 'low_blood_pressure',
         severity: 'medium',
-        message: t('health.bp_low', 'vi', { systolic, diastolic }),
+        messageKey: 'health.bp_low',
+        messageParams: { systolic, diastolic },
         userId,
         systolic,
         diastolic
@@ -165,18 +170,20 @@ async function checkInactivityAlerts(pool, userId) {
       return {
         type: 'no_activity',
         severity: 'medium',
-        message: t('health.no_health_data'),
+        messageKey: 'health.no_health_data',
+        messageParams: {},
         userId
       };
     }
 
     const daysSinceLastLog = (new Date() - new Date(lastLogTime)) / (1000 * 60 * 60 * 24);
-    
+
     if (daysSinceLastLog > 3) {
       return {
         type: 'inactive_user',
         severity: 'medium',
-        message: t('health.no_log_days', 'vi', { days: Math.floor(daysSinceLastLog) }),
+        messageKey: 'health.no_log_days',
+        messageParams: { days: Math.floor(daysSinceLastLog) },
         userId,
         daysSince: Math.floor(daysSinceLastLog)
       };
@@ -230,7 +237,15 @@ async function getCareCircleConnections(pool, userId) {
  */
 async function createHealthNotifications(pool, userIds, alert, patientName) {
   try {
+    // Lấy lang preference của từng recipient để render title đúng ngôn ngữ
+    const { rows: langRows } = await pool.query(
+      `SELECT id, COALESCE(language_preference, 'vi') AS lang FROM users WHERE id = ANY($1::int[])`,
+      [userIds]
+    );
+    const langMap = Object.fromEntries(langRows.map(r => [r.id, r.lang]));
+
     for (const userId of userIds) {
+      const userLang = langMap[userId] || 'vi';
       await pool.query(
         `INSERT INTO notifications (
           user_id,
@@ -244,8 +259,13 @@ async function createHealthNotifications(pool, userIds, alert, patientName) {
         [
           userId,
           'health_alert',
-          t('health.alert_title', 'vi', { name: patientName }),
-          alert.message,
+          t('health.alert_title', userLang, { name: patientName }),
+          // Render message body theo ngôn ngữ của recipient (caregiver). Trước
+          // đây alert.message đã được pre-render hardcode 'vi' ở check*Alerts
+          // → giờ check trả messageKey + params, render lazy ở đây.
+          alert.messageKey
+            ? t(alert.messageKey, userLang, alert.messageParams || {})
+            : (alert.message || ''),
           JSON.stringify({
             alertType: alert.type,
             severity: alert.severity,

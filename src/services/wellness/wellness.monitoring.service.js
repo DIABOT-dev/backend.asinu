@@ -575,33 +575,39 @@ async function shouldAlertCaregiver(client, userId) {
 
   // Rule 1: User explicitly requested help (handled separately)
 
+  // Trả về messageKey + messageParams thay vì pre-render text — caller render
+  // theo lang của RECIPIENT (caregiver) thay vì hardcode 'vi'.
+
   // Rule 2: Multiple no responses
   if (state.consecutive_no_response >= (config.alert_after_no_response || DEFAULT_CONFIG.alert_after_no_response)) {
-    return { 
-      shouldAlert: true, 
-      reason: 'no_response', 
+    return {
+      shouldAlert: true,
+      reason: 'no_response',
       alertType: 'WARNING',
-      message: t('wellness.consecutive_no_response', 'vi', { count: state.consecutive_no_response })
+      messageKey: 'wellness.consecutive_no_response',
+      messageParams: { count: state.consecutive_no_response },
     };
   }
 
   // Rule 3: DANGER status
   if (state.current_status === 'DANGER' && (config.alert_on_danger ?? DEFAULT_CONFIG.alert_on_danger)) {
-    return { 
-      shouldAlert: true, 
-      reason: 'danger_status', 
+    return {
+      shouldAlert: true,
+      reason: 'danger_status',
       alertType: 'URGENT',
-      message: t('wellness.unusual_activity')
+      messageKey: 'wellness.unusual_activity',
+      messageParams: {},
     };
   }
 
   // Rule 4: Multiple consecutive negative mood
   if (state.consecutive_negative_mood >= 3) {
-    return { 
-      shouldAlert: true, 
-      reason: 'negative_mood', 
+    return {
+      shouldAlert: true,
+      reason: 'negative_mood',
       alertType: 'WARNING',
-      message: t('wellness.feeling_unwell')
+      messageKey: 'wellness.feeling_unwell',
+      messageParams: {},
     };
   }
 
@@ -655,12 +661,25 @@ async function fireCaregiverPushAlerts(pool, alerts) {
   }
 }
 
-async function sendCaregiverAlert(client, userId, alertType, title, message, triggeredBy, contextData = {}) {
-  // Find caregivers with can_receive_alerts permission
+async function sendCaregiverAlert(client, userId, alertType, titleSpec, messageSpec, triggeredBy, contextData = {}) {
+  // titleSpec / messageSpec: chấp nhận 2 dạng để backward-compat:
+  //   1. string → render trực tiếp (legacy, sẽ là cùng 1 lang cho mọi CG)
+  //   2. { key, params } → render PER caregiver lang (đa ngôn ngữ đúng)
+  const renderText = (spec, lang) => {
+    if (typeof spec === 'string') return spec;
+    if (spec && typeof spec === 'object' && spec.key) {
+      return t(spec.key, lang || 'vi', spec.params || {});
+    }
+    return '';
+  };
+
+  // Find caregivers with can_receive_alerts permission, kèm lang preference
   const caregiversResult = await client.query(
-    `SELECT uc.id as connection_id, 
-            CASE WHEN uc.requester_id = $1 THEN uc.addressee_id ELSE uc.requester_id END as caregiver_id
+    `SELECT uc.id as connection_id,
+            CASE WHEN uc.requester_id = $1 THEN uc.addressee_id ELSE uc.requester_id END as caregiver_id,
+            COALESCE(u.language_preference, 'vi') AS cg_lang
      FROM user_connections uc
+     JOIN users u ON u.id = CASE WHEN uc.requester_id = $1 THEN uc.addressee_id ELSE uc.requester_id END
      WHERE (uc.requester_id = $1 OR uc.addressee_id = $1)
        AND uc.status = 'accepted'
        AND COALESCE((uc.permissions->>'can_receive_alerts')::boolean, false) = true
@@ -671,24 +690,29 @@ async function sendCaregiverAlert(client, userId, alertType, title, message, tri
   const alerts = [];
 
   for (const caregiver of caregiversResult.rows) {
+    const cgLang = caregiver.cg_lang || 'vi';
+    const localizedTitle = renderText(titleSpec, cgLang);
+    const localizedMessage = renderText(messageSpec, cgLang);
     const result = await client.query(
-      `INSERT INTO caregiver_alerts 
+      `INSERT INTO caregiver_alerts
        (user_id, caregiver_user_id, connection_id, alert_type, title, message, context_data, triggered_by, alert_status, sent_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'sent', NOW())
        RETURNING *`,
-      [userId, caregiver.caregiver_id, caregiver.connection_id, alertType, title, message, JSON.stringify(contextData), triggeredBy]
+      [userId, caregiver.caregiver_id, caregiver.connection_id, alertType, localizedTitle, localizedMessage, JSON.stringify(contextData), triggeredBy]
     );
     alerts.push(result.rows[0]);
   }
 
-  // If no caregivers, create pending alert
+  // If no caregivers, create pending alert (render mặc định 'vi' vì chưa biết recipient)
   if (alerts.length === 0) {
+    const fallbackTitle = renderText(titleSpec, 'vi');
+    const fallbackMessage = renderText(messageSpec, 'vi');
     const result = await client.query(
-      `INSERT INTO caregiver_alerts 
+      `INSERT INTO caregiver_alerts
        (user_id, alert_type, title, message, context_data, triggered_by, alert_status)
        VALUES ($1, $2, $3, $4, $5, $6, 'pending')
        RETURNING *`,
-      [userId, alertType, title, message, JSON.stringify(contextData), triggeredBy]
+      [userId, alertType, fallbackTitle, fallbackMessage, JSON.stringify(contextData), triggeredBy]
     );
     alerts.push(result.rows[0]);
   }
@@ -758,12 +782,21 @@ async function evaluateUserWellness(pool, userId, options = {}) {
         [userId]
       );
       
+      // Pass key+params spec thay vì rendered text → sendCaregiverAlert sẽ
+      // render theo lang của TỪNG caregiver (đa ngôn ngữ).
+      const titleSpec = {
+        key: alertDecision.alertType === 'URGENT' ? 'wellness.attention_needed' : 'wellness.monitoring_alert',
+        params: {},
+      };
+      const messageSpec = alertDecision.messageKey
+        ? { key: alertDecision.messageKey, params: alertDecision.messageParams || {} }
+        : (alertDecision.message || '');
       actions.alert = await sendCaregiverAlert(
         client,
         userId,
         alertDecision.alertType,
-        alertDecision.alertType === 'URGENT' ? t('wellness.attention_needed') : t('wellness.monitoring_alert'),
-        alertDecision.message,
+        titleSpec,
+        messageSpec,
         alertDecision.reason,
         {
           score: scoreResult.score,

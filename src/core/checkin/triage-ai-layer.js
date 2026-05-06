@@ -37,9 +37,31 @@ function formatQuestion(engineResult, profile, previousAnswers = []) {
   const step = engineResult.step;
   let question;
 
+  // Lấy bodyLocations từ engineResult để inject vào greeting (T2 → T3 awareness).
+  // Map enum key → label tiếng Việt.
+  const LOCATION_LABEL_VI = {
+    head: 'đầu', chest: 'ngực', abdomen: 'bụng', limbs: 'tay chân',
+    skin: 'da', whole_body: 'toàn thân', mental: 'tinh thần',
+  };
+  const locKeys = Array.isArray(engineResult.bodyLocations) ? engineResult.bodyLocations : [];
+  const locLabels = locKeys.map(k => LOCATION_LABEL_VI[k] || k).filter(Boolean);
+  const locOther = (engineResult.bodyLocationOther || '').trim();
+  // Build location phrase: "đầu" / "đầu, ngực" / "đầu, ngực, bụng" + " và '<other>'"
+  let locPhrase = '';
+  if (locLabels.length === 1) locPhrase = locLabels[0];
+  else if (locLabels.length === 2) locPhrase = `${locLabels[0]} và ${locLabels[1]}`;
+  else if (locLabels.length >= 3) locPhrase = `${locLabels.slice(0, -1).join(', ')} và ${locLabels[locLabels.length - 1]}`;
+  if (locOther) locPhrase = locPhrase ? `${locPhrase}, ${locOther}` : locOther;
+
   switch (step) {
     case 'symptoms':
-      question = `${CallName} ơi, ${selfRef} nghe ${honorific} đang không khoẻ. ${Honorific} cho ${selfRef} biết ${honorific} đang gặp triệu chứng gì nhé 💙`;
+      // T3 question — aware T2 location nếu có. Nếu không có location (FE cũ) →
+      // dùng template chung như cũ.
+      if (locPhrase) {
+        question = `${CallName} ơi, ${selfRef} biết ${honorific} đang khó chịu ở ${locPhrase}. ${Honorific} chọn (hoặc gõ thêm) triệu chứng cụ thể nhé 💙`;
+      } else {
+        question = `${CallName} ơi, ${selfRef} nghe ${honorific} đang không khoẻ. ${Honorific} cho ${selfRef} biết ${honorific} đang gặp triệu chứng gì nhé 💙`;
+      }
       break;
 
     case 'associated': {
