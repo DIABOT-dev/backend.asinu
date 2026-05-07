@@ -12,7 +12,12 @@ function getHonorifics(user) {
   const lang = user.lang || 'vi';
 
   if (lang === 'en') {
-    return { honorific: 'you', selfRef: 'I', callName: name || 'you', Honorific: 'You' };
+    const callName = name || 'you';
+    const Callname = callName.charAt(0).toUpperCase() + callName.slice(1);
+    return {
+      honorific: 'you', selfRef: 'I', callName,
+      Honorific: 'You', SelfRef: 'I', CallName: Callname,
+    };
   }
 
   const age = user.birth_year ? new Date().getFullYear() - user.birth_year : null;

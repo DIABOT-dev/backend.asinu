@@ -1014,7 +1014,11 @@ async function runCheckinFollowUps(pool) {
       // First miss → push + in-app nhắc
       const sLang = session.lang || 'vi';
       const h = getHonorifics(session);
-      const hParams = { honorific: h.honorific, selfRef: h.selfRef, callName: h.callName, Honorific: h.Honorific };
+      // Spread toàn bộ honorifics object để cover cả lowercase + PascalCase
+      // variants ({{honorific}}, {{Honorific}}, {{selfRef}}, {{SelfRef}},
+      // {{callName}}, {{CallName}}). Trước đây chỉ list 4 → template dùng
+      // {{CallName}} (PascalCase) không được fill → render literal.
+      const hParams = { ...h };
       const msg = session.flow_state === 'high_alert'
         ? t('checkin.followup_high_alert', sLang, hParams)
         : t('checkin.followup_normal', sLang, hParams);
@@ -1049,7 +1053,9 @@ async function runCheckinFollowUps(pool) {
       // Still push + in-app user one more time
       const sLang2 = session.lang || 'vi';
       const h2 = getHonorifics(session);
-      const hParams2 = { honorific: h2.honorific, selfRef: h2.selfRef, callName: h2.callName, Honorific: h2.Honorific, name: getShortName(session.display_name || session.full_name) || '' };
+      // Spread honorifics + thêm name (short name từ full_name) cho templates
+      // có {{name}}. Cover cả PascalCase variants {{CallName}} {{SelfRef}} {{Honorific}}.
+      const hParams2 = { ...h2, name: getShortName(session.display_name || session.full_name) || '' };
       await sendCheckinNotification(
         pool, session.user_id, session.push_token,
         'checkin_followup_urgent',
@@ -1369,7 +1375,8 @@ async function runMorningCheckin(pool, hour) {
   let sent = 0;
   for (const user of rows) {
     const h = getHonorifics(user);
-    const hParams = { honorific: h.honorific, selfRef: h.selfRef, callName: h.callName, Honorific: h.Honorific };
+    // Spread toàn bộ honorifics — cover {{CallName}} {{SelfRef}} {{Honorific}} PascalCase
+    const hParams = { ...h };
     await sendCheckinNotification(
       pool, user.id, user.push_token,
       'morning_checkin',
