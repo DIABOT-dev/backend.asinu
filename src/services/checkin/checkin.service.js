@@ -1254,9 +1254,16 @@ async function confirmCaregiverAlert(pool, caregiverId, alertId, action) {
   );
 
   // Thông báo in-app cho user bệnh biết người thân đã xác nhận.
-  // Bỏ qua action='called' — caregiver đã gọi điện trực tiếp rồi, push
-  // thêm là thừa (user đang nói chuyện điện thoại với caregiver).
-  if (action !== 'called') {
+  // Bỏ qua trong 2 trường hợp:
+  //   1. action='called' — caregiver đã gọi điện trực tiếp rồi, push thêm là thừa
+  //   2. alert đã >1h — caregiver phản hồi muộn hoặc FE auto-confirm "missed"
+  //      (xem CaregiverAlertModal.fetchPendingAlerts) → user đã không còn context,
+  //      push lúc này chỉ làm user confused.
+  const ACK_NOTIFY_TTL_HOURS = 1;
+  const hoursSinceSent = (Date.now() - new Date(alert.sent_at).getTime()) / 3600000;
+  const skipNotify = action === 'called' || hoursSinceSent > ACK_NOTIFY_TTL_HOURS;
+
+  if (!skipNotify) {
     const { rows: cgRows } = await pool.query(
       `SELECT display_name, full_name FROM users WHERE id=$1`, [caregiverId]
     );
