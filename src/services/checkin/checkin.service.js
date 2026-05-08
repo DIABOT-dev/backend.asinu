@@ -1136,7 +1136,7 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
     // (caregiver_alert → emergency). Chống spam thực sự bằng orchestrator cooldown
     // (30min cho caregiver_alert / 1min cho emergency).
     const { rows: existing } = await pool.query(
-      `SELECT id, confirmed_at, alert_type,
+      `SELECT id, confirmed_at, confirmed_action, alert_type,
               EXTRACT(EPOCH FROM (NOW() - confirmed_at))/60 AS mins_since_confirm
        FROM caregiver_alert_confirmations
        WHERE checkin_id=$1 AND caregiver_id=$2`,
@@ -1144,7 +1144,18 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
     );
     const isEscalation = existing.length
       && existing[0].alert_type === 'caregiver_alert' && alertType === 'emergency';
+    // Option B — phân biệt confirmed_action:
+    //   - 'on_my_way' / 'called' = caregiver đã COMMIT hành động → KHÔNG re-alert
+    //     bất kể bao lâu (trừ escalation severity).
+    //   - 'seen' / null = chỉ acknowledge nhẹ → re-alert sau 30 phút nếu patient
+    //     vẫn nguy (push patient mới có action thực sự).
     if (existing.length && existing[0].confirmed_at) {
+      const action = existing[0].confirmed_action;
+      const isCommitted = action === 'on_my_way' || action === 'called';
+      if (isCommitted && !isEscalation) {
+        // Caregiver đã commit, không spam dù bao lâu (trừ escalation)
+        continue;
+      }
       const minsSince = Number(existing[0].mins_since_confirm) || 0;
       if (!isEscalation && minsSince < 30) continue;
     }
@@ -1160,18 +1171,36 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
       alertId = ins[0].id;
     } else {
       alertId = existing[0].id;
-      // Reset confirmation cũ → caregiver phải xác nhận lại; cập nhật alertType
-      // nếu escalate (caregiver_alert → emergency).
-      await pool.query(
-        `UPDATE caregiver_alert_confirmations
-         SET confirmed_at = NULL,
-             confirmed_action = NULL,
-             alert_type = $2,
-             resent_count = resent_count + 1,
-             resent_at = NOW()
-         WHERE id = $1`,
-        [alertId, isEscalation ? alertType : existing[0].alert_type]
-      );
+      const prevAction = existing[0].confirmed_action;
+      const wasCommitted = prevAction === 'on_my_way' || prevAction === 'called';
+      // 3 case:
+      //   1. Escalation severity → RESET confirmed_at (buộc xác nhận lại)
+      //   2. Caregiver acknowledged 'seen' nhẹ + đã 30min → RESET (re-prompt
+      //      với câu hỏi "vẫn cần action thực sự không?")
+      //   3. Caregiver đã commit 'on_my_way'/'called' → KHÔNG reset, chỉ bump
+      //      resent_count (nhưng case này đã filtered ở `continue` phía trên)
+      const shouldResetPending = isEscalation || (!wasCommitted);
+      if (shouldResetPending) {
+        await pool.query(
+          `UPDATE caregiver_alert_confirmations
+           SET confirmed_at = NULL,
+               confirmed_action = NULL,
+               alert_type = $2,
+               resent_count = resent_count + 1,
+               resent_at = NOW()
+           WHERE id = $1`,
+          [alertId, isEscalation ? alertType : existing[0].alert_type]
+        );
+      } else {
+        // Defensive: chỉ bump count, không động pending state
+        await pool.query(
+          `UPDATE caregiver_alert_confirmations
+           SET resent_count = resent_count + 1,
+               resent_at = NOW()
+           WHERE id = $1`,
+          [alertId]
+        );
+      }
     }
 
     await sendCheckinNotification(
@@ -1257,27 +1286,44 @@ async function confirmCaregiverAlert(pool, caregiverId, alertId, action) {
  * Lấy danh sách alerts chưa xác nhận dành cho caregiver hiện tại.
  */
 async function getPendingCaregiverAlerts(pool, caregiverId) {
+  // Filter chia 2 state:
+  //   - 'active'  : sent <1h + session chưa resolved → modal urgent
+  //   - 'missed'  : sent 1-12h, hoặc session đã resolved → soft notification
+  //                 ("Bạn đã lỡ thông báo từ X")
+  //   - >12h     : skip (stale, không show)
+  const ACTIVE_THRESHOLD_HOURS = 1;
+  const STALE_HOURS = 12;
   const { rows } = await pool.query(
     `SELECT cac.id as alert_id, cac.alert_type, cac.sent_at, cac.checkin_id,
             u.display_name, u.full_name,
-            hc.current_status, hc.flow_state
+            hc.current_status, hc.flow_state, hc.resolved_at,
+            EXTRACT(EPOCH FROM (NOW() - cac.sent_at))/3600 AS hours_since_sent
      FROM caregiver_alert_confirmations cac
      JOIN users u ON u.id = cac.patient_id
      JOIN health_checkins hc ON hc.id = cac.checkin_id
      WHERE cac.caregiver_id=$1
        AND cac.confirmed_at IS NULL
+       AND cac.sent_at >= NOW() - make_interval(hours => $2)
      ORDER BY cac.sent_at DESC`,
-    [caregiverId]
+    [caregiverId, STALE_HOURS]
   );
-  return rows.map(r => ({
-    alertId:       r.alert_id,
-    alertType:     r.alert_type,
-    sentAt:        r.sent_at,
-    checkinId:     r.checkin_id,
-    patientName:   r.full_name || r.display_name || t('brain.relative_fallback'),
-    currentStatus: r.current_status,
-    flowState:     r.flow_state,
-  }));
+  return rows.map(r => {
+    const hoursSinceSent = Number(r.hours_since_sent) || 0;
+    const sessionDone = ['resolved', 'monitoring'].includes(r.flow_state) || r.resolved_at;
+    // 'active' nếu fresh + session active. Else 'missed'.
+    const state = (hoursSinceSent < ACTIVE_THRESHOLD_HOURS && !sessionDone)
+      ? 'active' : 'missed';
+    return {
+      alertId:       r.alert_id,
+      alertType:     r.alert_type,
+      sentAt:        r.sent_at,
+      checkinId:     r.checkin_id,
+      patientName:   r.full_name || r.display_name || t('brain.relative_fallback'),
+      currentStatus: r.current_status,
+      flowState:     r.flow_state,
+      state,         // 'active' | 'missed' — FE render UI khác nhau
+    };
+  });
 }
 
 /**
