@@ -17,7 +17,6 @@ const subscriptionRoutes = require('./src/routes/subscription.routes');
 const voiceRoutes = require('./src/routes/voice.routes');
 const logsRoutes = require('./src/routes/logs.routes');
 const asinuBrainRoutes = require('./asinu-brain-extension/routes/asinuBrain.routes');
-const testRoutes = require('./asinu-brain-extension/routes/test.routes');
 const langMiddleware = require('./src/middleware/lang.middleware');
 const { getRedis } = require('./src/lib/redis');
 const { runBasicNotifications } = require('./src/services/notification/basic.notification.service');
@@ -32,8 +31,6 @@ const app = express();
 app.set('trust proxy', 1);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-// Disable CSP for test UI, keep helmet for other routes
-app.use('/api/test/chat-ui', (req, res, next) => next());
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -96,10 +93,6 @@ app.use('/api/subscriptions', subscriptionRoutes(pool));
 app.use('/api/voice', voiceRoutes(pool));
 app.use('/api/logs', logsRoutes(pool));
 app.use('/api/asinu-brain', asinuBrainRoutes(pool));
-// Test routes — chỉ enable khi không phải production
-if (process.env.NODE_ENV !== 'production') {
-  app.use('/api/test', testRoutes(pool));
-}
 
 // Global error handler — suppress client-aborted requests
 app.use((err, req, res, next) => {

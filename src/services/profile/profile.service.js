@@ -19,7 +19,8 @@ async function getProfile(pool, userId) {
     if (cached) return cached;
 
     const userResult = await pool.query(
-      `SELECT id, email, phone_number, display_name, full_name, avatar_url, created_at, language_preference
+      `SELECT id, email, phone_number, display_name, full_name, avatar_url, created_at, language_preference,
+              (password_hash IS NOT NULL) AS has_password
        FROM users
        WHERE id = $1 AND deleted_at IS NULL`,
       [userId]
@@ -107,6 +108,7 @@ async function getProfile(pool, userId) {
       // Care circle
       careCircle: careCircle,
       languagePreference: user.language_preference || 'vi',
+      hasPassword: !!user.has_password,
       onboardingCompleted: !!onboarding?.onboarding_completed_at,
       ...(onboarding && {
         ageRange: onboarding.age,
@@ -393,6 +395,7 @@ async function getBasicProfile(pool, userId) {
     const { rows } = await pool.query(
       `SELECT u.id, u.email, u.phone_number, u.full_name, u.display_name,
               u.avatar_url, u.language_preference,
+              (u.password_hash IS NOT NULL) AS has_password,
               uop.onboarding_completed_at,
               uop.age AS age_range, uop.gender, uop.goal
        FROM users u
@@ -413,6 +416,7 @@ async function getBasicProfile(pool, userId) {
         phone:               r.phone_number || null,
         avatarUrl:           r.avatar_url || null,
         languagePreference:  r.language_preference || 'vi',
+        hasPassword:         !!r.has_password,
         onboardingCompleted: !!r.onboarding_completed_at,
         ageRange:            r.age_range || null,
         gender:              r.gender || null,

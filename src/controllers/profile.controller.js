@@ -5,6 +5,41 @@
 
 const { t, getLang } = require('../i18n');
 const profileService = require('../services/profile/profile.service');
+const { hashPassword, comparePassword } = require('../services/auth/auth.service');
+
+async function changePassword(pool, req, res) {
+  if (!req.user?.id) {
+    return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
+  }
+  const { currentPassword, newPassword } = req.body || {};
+  if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+    return res.status(400).json({ ok: false, error: t('error.password_invalid', getLang(req)) });
+  }
+  if (newPassword.length < 8) {
+    return res.status(400).json({ ok: false, error: t('error.password_too_short', getLang(req)) });
+  }
+  if (newPassword === currentPassword) {
+    return res.status(400).json({ ok: false, error: t('error.password_same_as_old', getLang(req)) });
+  }
+
+  const { rows } = await pool.query(
+    `SELECT password_hash FROM users WHERE id = $1 AND deleted_at IS NULL`,
+    [req.user.id]
+  );
+  if (!rows.length || !rows[0].password_hash) {
+    return res.status(400).json({ ok: false, error: t('error.password_not_set', getLang(req)) });
+  }
+
+  const valid = await comparePassword(currentPassword, rows[0].password_hash);
+  if (!valid) {
+    return res.status(401).json({ ok: false, error: t('error.password_current_wrong', getLang(req)) });
+  }
+
+  const newHash = await hashPassword(newPassword);
+  await pool.query(`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`, [newHash, req.user.id]);
+
+  return res.status(200).json({ ok: true, message: t('success.password_changed', getLang(req)) });
+}
 
 async function getProfile(pool, req, res) {
 
@@ -122,4 +157,5 @@ module.exports = {
   updatePushToken,
   clearPushToken,
   featureFlagsHandler,
+  changePassword,
 };

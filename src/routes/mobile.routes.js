@@ -10,7 +10,7 @@ const {
 } = require('../controllers/chat.controller');
 const { getMissionsHandler, getMissionHistoryHandler, getMissionStatsHandler } = require('../controllers/missions.controller');
 const { upsertOnboardingProfile, onboardingNext, onboardingComplete, onboardingCompleteV2 } = require('../controllers/onboarding.controller');
-const { getProfile, getBasicProfile, updateProfile, deleteAccount, updatePushToken, clearPushToken, featureFlagsHandler } = require('../controllers/profile.controller');
+const { getProfile, getBasicProfile, updateProfile, deleteAccount, updatePushToken, clearPushToken, featureFlagsHandler, changePassword } = require('../controllers/profile.controller');
 const { getTreeSummary, getTreeHistory } = require('../controllers/tree.controller');
 const {
   startCheckinHandler, getLocationsHandler, followUpHandler, triageHandler,
@@ -80,6 +80,7 @@ function mobileRoutes(pool) {
   router.get('/profile', requireAuth, (req, res) => getProfile(pool, req, res));
   router.put('/profile', requireAuth, (req, res) => updateProfile(pool, req, res));
   router.delete('/profile', requireAuth, (req, res) => deleteAccount(pool, req, res));
+  router.post('/auth/change-password', requireAuth, (req, res) => changePassword(pool, req, res));
   router.post('/profile/push-token', requireAuth, (req, res) => updatePushToken(pool, req, res));
   router.delete('/profile/push-token', requireAuth, (req, res) => clearPushToken(pool, req, res));
 
