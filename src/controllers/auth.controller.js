@@ -519,7 +519,13 @@ async function loginByFacebookToken(pool, req, res) {
       return res.status(401).json({ ok: false, error: 'Could not determine Facebook user ID' });
     }
 
-    const result = await serviceLoginProvider(pool, 'facebook_id', String(userId), 'facebook', email, null);
+    // iOS Limited Login → lưu vào facebook_limited_id (khác facebook_id Standard).
+    // Service.loginByProvider sẽ:
+    //   1. Lookup theo facebook_limited_id → match nếu user iOS đã login trước
+    //   2. Lookup theo email → tự link nếu user đã có account từ Android/web
+    //   3. Tạo user mới nếu cả 2 không có
+    const idColumn = id_token ? 'facebook_limited_id' : 'facebook_id';
+    const result = await serviceLoginProvider(pool, idColumn, String(userId), 'facebook', email, null);
     if (!result.ok) {
       return res.status(400).json({ ok: false, error: result.error || 'Login failed' });
     }
