@@ -3,15 +3,19 @@
  * Filters AI output to prevent medical misinformation.
  */
 
-// Words/phrases AI must NEVER say
+// Words/phrases AI must NEVER say.
+//
+// Lưu ý: Các cụm về OTC + liều ("liều dùng", "kê đơn", "nên dùng thuốc") đã GỠ
+// vì system prompt (chat.service.js) cho phép gợi ý OTC kèm disclaimer rõ ràng.
+// Ban các cụm này gây bug strip giữa câu — vd "uống paracetamol 500mg, liều dùng
+// 4-6 tiếng/lần" → bị thay thành "...". Giữ ban cho:
+//   1. Tự khẳng định chẩn đoán (LLM không phải bác sĩ)
+//   2. Trấn an sai ("không cần đi bác sĩ") — nguy hiểm cho user health app
 const BANNED_PHRASES = [
-  // Diagnosis
+  // Diagnosis (LLM không tự khẳng định bệnh)
   'bạn bị', 'bạn mắc', 'chẩn đoán', 'xác định bệnh',
   'you have', 'diagnosed with', 'you are suffering from',
-  // Prescribing
-  'hãy uống thuốc', 'nên dùng thuốc', 'liều dùng', 'kê đơn',
-  'take medication', 'prescribe', 'dosage should be',
-  // Dangerous claims
+  // Dangerous reassurance
   'không cần đi bác sĩ', 'không cần lo', 'chắc chắn không sao',
   'no need to see a doctor', 'definitely fine', 'nothing to worry about',
 ];
