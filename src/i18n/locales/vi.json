@@ -277,6 +277,7 @@
   "chat.goal_only": "Mục tiêu của bạn là {{goals}}.",
   "chat.symptom_only": "Bạn có triệu chứng: {{symptoms}}.",
   "chat.mock_support": "Tôi là Asinu AI. Hiện tại tôi đang trong giai đoạn phát triển. Hãy thử lại sau nhé!",
+  "chat.service_busy": "Asinu đang bận một chút, bạn thử lại sau ít phút nữa nhé.",
   "error.ai_invalid_json": "AI response không chứa JSON hợp lệ",
   "prompt.mood": "Bạn là bác sĩ. Tạo câu hỏi cho bệnh nhân.\n\nTHÔNG TIN:\n{{healthContext}}\n\nQUY TẮC: Câu hỏi PHẢI bắt đầu bằng chỉ số sức khỏe (đường huyết hoặc huyết áp).\n\nVÍ DỤ:\nInput: \"Đường huyết 180 mg/dL hơi cao. Huyết áp 140/90 mmHg.\"\nOutput: \"Đường huyết 180 mg/dL hơi cao, bác có thấy mệt hay chóng mặt không?\"\n\nInput: \"Huyết áp 150/95 mmHg cao.\"\nOutput: \"Huyết áp 150/95 mmHg cao hơn bình thường, bác có đau đầu không?\"\n\nBây giờ tạo câu hỏi dựa trên thông tin trên:",
   "prompt.followup": "Bạn là bác sĩ. Tạo câu hỏi theo dõi.\n\nTHÔNG TIN:\n{{healthContext}}\n\nQUY TẮC: Câu hỏi PHẢI bắt đầu bằng chỉ số.\n\nVÍ DỤ:\nInput: \"Đường huyết 195 mg/dL. Lần trước bệnh nhân mệt.\"\nOutput: \"Đường huyết 195 mg/dL, bác thấy cơn mệt lúc sáng có giảm chưa?\"\n\nTạo câu hỏi:",

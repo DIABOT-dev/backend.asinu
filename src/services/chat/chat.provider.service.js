@@ -10,6 +10,11 @@ const buildMockReply = (message) => {
   return `${prefix}${t('chat.mock_support')}`;
 };
 
+const buildBusyReply = () => ({
+  reply: t('chat.service_busy', 'vi'),
+  provider: 'fallback',
+});
+
 const GEMINI_MAX_RETRIES = 3;
 
 /**
@@ -107,7 +112,7 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
 
   if (provider === 'openai' || provider === '') {
     if (!process.env.OPENAI_API_KEY) {
-
+      // No API key configured — mock reply tells the user we're in dev mode.
       return { reply: buildMockReply(message), provider: 'mock' };
     }
     try {
@@ -115,9 +120,10 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
       const result = await getOpenAIChatReply({ message, userId, context: systemPrompt, history });
       if (result) return result;
     } catch (err) {
-      console.error('[ChatProvider] OpenAI error:', err.message);
+      console.error('[ChatProvider] OpenAI failed after retries:', err.message);
     }
-    return { reply: buildMockReply(message), provider: 'mock' };
+    // API exists but failed (timeout / rate limit / 5xx) — give a friendlier "try again" message.
+    return buildBusyReply();
   }
 
   if (provider === 'gemini') {
@@ -130,9 +136,9 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
         return { reply, provider: 'gemini' };
       }
     } catch (err) {
-
+      console.error('[ChatProvider] Gemini failed after retries:', err.message);
     }
-    return { reply: buildMockReply(message), provider: 'mock' };
+    return buildBusyReply();
   }
 
   return { reply: buildMockReply(message), provider: 'mock' };

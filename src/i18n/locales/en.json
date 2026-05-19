@@ -277,6 +277,7 @@
   "chat.goal_only": "Your goal is {{goals}}.",
   "chat.symptom_only": "You have symptoms: {{symptoms}}.",
   "chat.mock_support": "I am Asinu AI. Currently in development phase. Please try again later!",
+  "chat.service_busy": "Asinu is a bit busy right now, please try again in a few minutes.",
   "error.ai_invalid_json": "AI response does not contain valid JSON",
   "prompt.mood": "You are a doctor. Create a question for the patient.\n\nINFORMATION:\n{{healthContext}}\n\nRULES: Question MUST start with health metrics (glucose or blood pressure).\n\nEXAMPLES:\nInput: \"Glucose 180 mg/dL slightly high. Blood pressure 140/90 mmHg.\"\nOutput: \"Glucose 180 mg/dL slightly high, are you feeling tired or dizzy?\"\n\nInput: \"Blood pressure 150/95 mmHg high.\"\nOutput: \"Blood pressure 150/95 mmHg higher than normal, do you have a headache?\"\n\nNow create a question based on the information above:",
   "prompt.followup": "You are a doctor. Create a follow-up question.\n\nINFORMATION:\n{{healthContext}}\n\nRULES: Question MUST start with health metrics.\n\nEXAMPLES:\nInput: \"Glucose 195 mg/dL. Patient was tired last time.\"\nOutput: \"Glucose 195 mg/dL, has the morning fatigue improved?\"\n\nCreate question:",
