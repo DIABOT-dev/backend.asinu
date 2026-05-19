@@ -2,7 +2,9 @@
 const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const { Pool } = require('pg');
+const logger = require('./src/lib/logger');
+const { createPool } = require('./src/lib/db');
+const { initSentry, sentryRequestHandler, sentryErrorHandler } = require('./src/lib/sentry');
 const { t, getLang } = require('./src/i18n');
 const authRoutes = require('./src/routes/auth.routes');
 const mobileRoutes = require('./src/routes/mobile.routes');
@@ -19,39 +21,59 @@ const logsRoutes = require('./src/routes/logs.routes');
 const asinuBrainRoutes = require('./asinu-brain-extension/routes/asinuBrain.routes');
 const langMiddleware = require('./src/middleware/lang.middleware');
 const { getRedis } = require('./src/lib/redis');
-const { runBasicNotifications } = require('./src/services/notification/basic.notification.service');
-const { runNightlyCycle } = require('./src/services/checkin/rnd-cycle.service');
-const { updateAllSegments } = require('./src/services/profile/lifecycle.service');
-const { runDailyLifecycleNotifications } = require('./src/services/notification/lifecycle.notification.service');
+const { startScheduler } = require('./src/scheduler');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
 const path = require('path');
 const app = express();
 app.set('trust proxy', 1);
+
+// Sentry MUST be initialized before other middleware so it can capture them
+initSentry();
+app.use(sentryRequestHandler());
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      'script-src': ["'self'", "'unsafe-inline'"],
-      'script-src-attr': ["'self'", "'unsafe-inline'"],
+      'script-src': ["'self'"],
+      'script-src-attr': ["'none'"],
     },
   },
 }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// --- OPS HEALTH CHECK (INJECTED) ---
-app.get('/api/healthz', async (req, res) => {
+// --- OPS HEALTH CHECK ---
+// Public endpoints: minimal info to avoid stack fingerprinting
+app.get('/api/healthz', async (_req, res) => {
+  // Still probe redis so container orchestrators get an accurate liveness signal,
+  // but never expose the result to the response body.
+  try { await getRedis().ping(); } catch { /* ignore */ }
+  res.status(200).json({ status: 'ok' });
+});
+app.get('/healthz', (_req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
+// Detailed health requires HEALTH_CHECK_TOKEN header (set as env)
+app.get('/api/healthz/detailed', async (req, res) => {
+  const token = req.headers['x-health-token'];
+  if (!process.env.HEALTH_CHECK_TOKEN || token !== process.env.HEALTH_CHECK_TOKEN) {
+    return res.status(404).json({ status: 'not_found' });
+  }
   let redisOk = false;
   try { redisOk = (await getRedis().ping()) === 'PONG'; } catch { /* ignore */ }
-  res.status(200).json({ status: 'ok', redis: redisOk ? 'connected' : 'disconnected', uptime: process.uptime(), timestamp: new Date().toISOString() });
+  res.status(200).json({
+    status: 'ok',
+    redis: redisOk ? 'connected' : 'disconnected',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
 });
-app.get('/healthz', (req, res) => {
-  res.status(200).json({ status: 'ok', uptime: process.uptime(), timestamp: new Date().toISOString() });
-});
-// ----------------------------------
+// -------------------------
 
 // Rate limiting - relaxed for mobile app usage
 // 1000 requests per 15 minutes per IP (more reasonable for mobile apps with multiple API calls)
@@ -77,8 +99,8 @@ const authLimiter = rateLimit({
 app.use(generalLimiter);
 app.use(langMiddleware);
 
-// Postgres connection pool
-const pool = new Pool({ connectionString: DATABASE_URL });
+// Postgres connection pool (instrumented with slow-query logging)
+const pool = createPool({ connectionString: DATABASE_URL });
 
 app.use('/api/auth', authLimiter, authRoutes(pool));
 app.use('/api/mobile', mobileRoutes(pool));
@@ -94,113 +116,26 @@ app.use('/api/voice', voiceRoutes(pool));
 app.use('/api/logs', logsRoutes(pool));
 app.use('/api/asinu-brain', asinuBrainRoutes(pool));
 
+// Sentry error handler must run BEFORE our custom one
+app.use(sentryErrorHandler());
+
 // Global error handler — suppress client-aborted requests
-app.use((err, req, res, next) => {
+app.use((err, req, res, _next) => {
   if (err.type === 'request.aborted' || err.code === 'ECONNRESET') return;
-  console.error('[Server]', err.message);
-  if (!res.headersSent) res.status(500).json({ ok: false, error: 'Internal server error' });
+  logger.error('unhandled_error', { err, path: req?.path, method: req?.method });
+  if (!res.headersSent) {
+    const code = err.code && typeof err.code === 'string' ? err.code : 'INTERNAL_ERROR';
+    res.status(err.statusCode || 500).json({ ok: false, error: 'Internal server error', code });
+  }
 });
 
 // Connect Redis then start server
 getRedis().connect().catch((err) => {
-  console.warn('[Redis] Could not connect — running without cache:', err.message);
+  logger.warn('redis.connect_failed', { err });
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  logger.info('server.listening', { port: PORT });
 });
 
-// Per-minute notification cron — fires at exact HH:MM configured by each user
-function scheduleNotifications() {
-  let isRunning = false;
-  const now = new Date();
-  const msToNextMinute = (60 - now.getSeconds()) * 1000 - now.getMilliseconds();
-  setTimeout(() => {
-    const tick = async () => {
-      if (isRunning) {
-        console.log('[cron] skipped — previous tick still running');
-        return;
-      }
-      isRunning = true;
-      try {
-        const result = await runBasicNotifications(pool);
-        if (result.totalSent > 0)
-          console.log(`[cron] sent=${result.totalSent} at ${result.hour}:${String(result.minute).padStart(2,'0')}`);
-      } catch (err) {
-        console.warn('[cron] runBasicNotifications failed:', err?.message);
-      } finally {
-        isRunning = false;
-      }
-    };
-    tick();
-    setInterval(tick, 60 * 1000);
-  }, msToNextMinute);
-}
-scheduleNotifications();
-
-// Cleanup old chat histories every 24 hours
-setInterval(async () => {
-  try {
-    await pool.query('SELECT cleanup_chat_histories()');
-    console.log('[cleanup] Chat history cleanup completed');
-  } catch (err) {
-    console.warn('[cleanup] Chat history cleanup failed:', err?.message);
-  }
-}, 24 * 60 * 60 * 1000);
-
-// Lifecycle segment update — runs at 1:00 AM Vietnam time (before R&D cycle)
-function scheduleLifecycleUpdate() {
-  const checkAndRun = async () => {
-    const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
-    if (vnNow.getHours() === 1 && vnNow.getMinutes() < 5) {
-      try {
-        console.log('[Lifecycle] Running daily segment update...');
-        const stats = await updateAllSegments(pool);
-        console.log('[Lifecycle] Update completed:', stats);
-      } catch (err) {
-        console.error('[Lifecycle] Update failed:', err?.message);
-      }
-    }
-  };
-  setInterval(checkAndRun, 5 * 60 * 1000);
-}
-scheduleLifecycleUpdate();
-
-// R&D Cycle — runs at 2:00 AM Vietnam time (UTC+7 = 19:00 UTC previous day)
-// Processes fallback logs, updates clusters, optimizes scripts
-function scheduleRndCycle() {
-  const checkAndRun = async () => {
-    const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
-    if (vnNow.getHours() === 2 && vnNow.getMinutes() < 5) {
-      try {
-        console.log('[R&D] Starting nightly cycle...');
-        const stats = await runNightlyCycle(pool);
-        console.log('[R&D] Cycle completed:', stats);
-      } catch (err) {
-        console.error('[R&D] Cycle failed:', err?.message);
-      }
-    }
-  };
-  // Check every 5 minutes
-  setInterval(checkAndRun, 5 * 60 * 1000);
-}
-scheduleRndCycle();
-
-// Daily lifecycle notifications — 7:00 AM Vietnam time
-// (subscription expiring/expired, weekly summary on Sunday, profile incomplete)
-function scheduleLifecycleNotifications() {
-  const checkAndRun = async () => {
-    const vnNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
-    if (vnNow.getHours() === 7 && vnNow.getMinutes() < 5) {
-      try {
-        console.log('[Lifecycle-Notif] Running daily notifications...');
-        const stats = await runDailyLifecycleNotifications(pool, { dayOfWeek: vnNow.getDay() });
-        console.log('[Lifecycle-Notif] Done:', JSON.stringify(stats));
-      } catch (err) {
-        console.error('[Lifecycle-Notif] Failed:', err?.message);
-      }
-    }
-  };
-  setInterval(checkAndRun, 5 * 60 * 1000);
-}
-scheduleLifecycleNotifications();
+startScheduler(pool);
