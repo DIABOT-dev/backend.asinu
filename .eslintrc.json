@@ -1,0 +1,29 @@
+{
+  "env": {
+    "node": true,
+    "es2022": true,
+    "jest": true
+  },
+  "extends": [
+    "eslint:recommended",
+    "prettier"
+  ],
+  "parserOptions": {
+    "ecmaVersion": 2022,
+    "sourceType": "script"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-console": "off",
+    "no-empty": ["error", { "allowEmptyCatch": true }],
+    "prefer-const": "warn",
+    "eqeqeq": ["warn", "smart"]
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    "coverage/",
+    "public/",
+    "audit_pack_v1_*/",
+    "**/*.min.js"
+  ]
+}

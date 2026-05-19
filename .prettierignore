@@ -1,0 +1,8 @@
+node_modules
+coverage
+public
+audit_pack_v1_*
+db/backup
+*.sql
+*.md
+**/*.min.js

@@ -7,8 +7,15 @@
     "start": "node scripts/migrate.js && node server.js",
     "dev": "node scripts/migrate.js && nodemon server.js",
     "build": "node -c 'require(\"./server.js\")' && echo 'Backend build successful'",
-    "test": "echo \"No tests specified\" && exit 0",
-    "db:reset": "node scripts/reset-db.js"
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "lint": "eslint . --ext .js",
+    "lint:fix": "eslint . --ext .js --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:reset": "node scripts/reset-db.js",
+    "db:backup": "./scripts/backup-db.sh"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -19,11 +26,41 @@
     "ioredis": "^5.10.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.1.0",
+    "node-cron": "^3.0.3",
     "openai": "^6.27.0",
     "pg": "^8.11.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "@sentry/node": "^7.119.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-node": "^11.1.0",
+    "jest": "^29.7.0",
+    "nodemon": "^3.1.14",
+    "prettier": "^3.3.3",
+    "supertest": "^6.3.4"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "<rootDir>/tests/**/*.test.js"
+    ],
+    "testPathIgnorePatterns": [
+      "/node_modules/"
+    ],
+    "collectCoverageFrom": [
+      "src/**/*.js",
+      "server.js",
+      "!src/i18n/locales/**"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 30,
+        "functions": 30,
+        "lines": 40,
+        "statements": 40
+      }
+    }
   }
 }
