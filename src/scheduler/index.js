@@ -22,6 +22,11 @@ const TZ = 'Asia/Ho_Chi_Minh';
 /**
  * Schedule a cron job with a single-flight guard (prevents overlap if a
  * previous tick is still running) and central error capture.
+ *
+ * Successful runs are NOT logged by default — for jobs that tick every
+ * minute that would be ~1.4k log lines/day with no signal. The handler
+ * itself is expected to log when it did meaningful work. Failures are
+ * always logged + sent to Sentry.
  */
 function safeCron(expression, name, handler) {
   let running = false;
@@ -36,9 +41,9 @@ function safeCron(expression, name, handler) {
       const started = Date.now();
       try {
         await handler();
-        logger.info('cron.completed', { job: name, elapsed_ms: Date.now() - started });
+        logger.debug('cron.completed', { job: name, elapsed_ms: Date.now() - started });
       } catch (err) {
-        logger.error('cron.failed', { job: name, err });
+        logger.error('cron.failed', { job: name, err, elapsed_ms: Date.now() - started });
         captureException(err, { job: name });
       } finally {
         running = false;
