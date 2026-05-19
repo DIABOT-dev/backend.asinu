@@ -13,10 +13,29 @@ const { t } = require('../../i18n');
 const { sendAndSave } = require('../notification/basic.notification.service');
 
 const WALLET_LOW_BALANCE_THRESHOLD = 50000; // 50.000đ
+const WEBHOOK_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes — reject older webhooks
 
 const SEPAY_ACCOUNT = process.env.SEPAY_ACCOUNT_NUMBER;
 const SEPAY_BANK    = process.env.SEPAY_BANK_CODE;
 const SEPAY_API_KEY = process.env.SEPAY_API_KEY;
+
+// Timing-safe comparison to defeat timing attacks against the API key.
+function safeEqual(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function hashPayload(body) {
+  try {
+    const json = JSON.stringify(body || {});
+    return crypto.createHash('sha256').update(json).digest('hex');
+  } catch {
+    return null;
+  }
+}
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -75,16 +94,48 @@ async function createQR(pool, userId, amount) {
  * SePay gửi POST với header: Authorization: Apikey {SEPAY_API_KEY}
  */
 async function handleWebhook(pool, req) {
-  // 1. Xác thực API key
+  // 1. Xác thực API key (timing-safe)
   const authHeader = req.headers['authorization'] || '';
   const incoming   = authHeader.replace(/^Apikey\s+/i, '').trim();
-  if (!SEPAY_API_KEY || incoming !== SEPAY_API_KEY) {
+  if (!SEPAY_API_KEY || !safeEqual(incoming, SEPAY_API_KEY)) {
     return { ok: false, statusCode: 401, message: t('error.unauthorized') };
   }
 
-  const body = req.body;
+  const body = req.body || {};
   const transferAmount = Number(body.transferAmount);
   const content        = String(body.content || '');
+
+  // 2. Timestamp check — reject webhooks older than WEBHOOK_MAX_AGE_MS
+  const rawDate = body.transactionDate || body.transaction_date;
+  if (rawDate) {
+    const txTime = Date.parse(rawDate);
+    if (Number.isFinite(txTime) && Date.now() - txTime > WEBHOOK_MAX_AGE_MS) {
+      return { ok: false, statusCode: 400, message: 'webhook_too_old' };
+    }
+  }
+
+  // 3. Idempotency — skip if we've already processed this webhook id
+  const webhookId = body.id != null ? String(body.id) : null;
+  if (webhookId) {
+    try {
+      const insert = await pool.query(
+        `INSERT INTO processed_webhooks (webhook_id, provider, payload_hash)
+         VALUES ($1, 'sepay', $2)
+         ON CONFLICT (webhook_id) DO NOTHING
+         RETURNING webhook_id`,
+        [webhookId, hashPayload(body)]
+      );
+      if (insert.rowCount === 0) {
+        // Already processed — return 200 so SePay does not retry.
+        return { ok: true, message: 'duplicate_ignored' };
+      }
+    } catch (err) {
+      // If the table is missing (migration not yet run), don't block payments.
+      if (err.code !== '42P01') {
+        throw err;
+      }
+    }
+  }
 
   // 2. Kiểm tra loại giao dịch dựa vào nội dung chuyển khoản
   // asinusub → subscription payment
