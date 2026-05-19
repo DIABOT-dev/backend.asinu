@@ -1,7 +1,7 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { requirePremium } = require('../middleware/subscription.middleware');
-const { audioUpload, handleUpload } = require('../middleware/upload.middleware');
+const { audioUpload, handleUpload, verifyAudioMagicBytes } = require('../middleware/upload.middleware');
 const { loginByEmail, logoutHandler } = require('../controllers/auth.controller');
 const { createMobileLog, getRecentLogs, getTodayLogs } = require('../controllers/mobile.controller');
 const {
@@ -44,6 +44,7 @@ function mobileRoutes(pool) {
     '/chat/transcribe',
     requireAuth,
     handleUpload(audioUpload.single('audio')),
+    verifyAudioMagicBytes,
     requirePremium(pool),
     (req, res) => transcribeAudio(pool, req, res)
   );

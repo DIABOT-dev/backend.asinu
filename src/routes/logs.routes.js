@@ -7,7 +7,7 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { requirePremium } = require('../middleware/subscription.middleware');
-const { audioUpload, handleUpload } = require('../middleware/upload.middleware');
+const { audioUpload, handleUpload, verifyAudioMagicBytes } = require('../middleware/upload.middleware');
 const { voiceParse } = require('../controllers/logs.controller');
 
 function logsRoutes(pool) {
@@ -18,6 +18,7 @@ function logsRoutes(pool) {
     requireAuth,
     requirePremium(pool),
     handleUpload(audioUpload.single('audio')),
+    verifyAudioMagicBytes,
     (req, res) => voiceParse(pool, req, res)
   );
 

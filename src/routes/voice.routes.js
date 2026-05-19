@@ -3,7 +3,7 @@ const multer = require('multer');
 const { t, getLang } = require('../i18n');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { requirePremium } = require('../middleware/subscription.middleware');
-const { handleUpload } = require('../middleware/upload.middleware');
+const { handleUpload, verifyAudioMagicBytes } = require('../middleware/upload.middleware');
 const { voiceChat, getVoiceUsage } = require('../controllers/voice.controller');
 
 // Voice-specific upload config (10 MB, mimetype-based filtering)
@@ -23,7 +23,7 @@ const voiceUpload = multer({
 function voiceRoutes(pool) {
   const router = express.Router();
 
-  router.post('/chat', requireAuth, requirePremium(pool), handleUpload(voiceUpload.single('audio')), (req, res) => voiceChat(pool, req, res));
+  router.post('/chat', requireAuth, requirePremium(pool), handleUpload(voiceUpload.single('audio')), verifyAudioMagicBytes, (req, res) => voiceChat(pool, req, res));
   router.get('/usage', requireAuth, requirePremium(pool), (req, res) => getVoiceUsage(pool, req, res));
 
   return router;
