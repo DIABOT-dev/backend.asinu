@@ -7,6 +7,7 @@ const { chatRequestSchema } = require('../validation/validation.schemas');
 const { processChat, getChatHistory, RETENTION_DAYS_FREE, RETENTION_DAYS_PREMIUM } = require('../services/chat/chat.service');
 const { getWhisperTranscription } = require('../services/ai/providers/openai');
 const { VOICE_MONTHLY_LIMIT, getVoiceUsageThisMonth, incrementVoiceUsage } = require('../services/payment/subscription.service');
+const { recordChatbotUse } = require('../services/chat/chatbot-usage.service');
 const { t, getLang } = require('../i18n');
 const feedbackService = require('../services/chat/chat-feedback.service');
 
@@ -29,6 +30,10 @@ async function postChat(pool, req, res) {
   if (!result.ok) {
     return res.status(500).json(result);
   }
+
+  // Account for daily message + monthly token budget. Best-effort.
+  const tokensThisCall = Number(result.tokens_used || result.meta?.tokens_used?.total || 0);
+  recordChatbotUse(pool, req.user.id, tokensThisCall).catch(() => {});
 
   return res.status(200).json({
     ok: true,

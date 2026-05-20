@@ -1,6 +1,7 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { requirePremium } = require('../middleware/subscription.middleware');
+const { chatbotGate } = require('../middleware/chatbot.gate.middleware');
 const { audioUpload, handleUpload, verifyAudioMagicBytes } = require('../middleware/upload.middleware');
 const { loginByEmail, logoutHandler } = require('../controllers/auth.controller');
 const { createMobileLog, getRecentLogs, getTodayLogs } = require('../controllers/mobile.controller');
@@ -39,17 +40,18 @@ function mobileRoutes(pool) {
   router.get('/caregiver/logs/:patientId', requireAuth, (req, res) => getCaregiverLogs(pool, req, res));
   router.get('/caregiver/checkins/:patientId', requireAuth, (req, res) => getCaregiverCheckins(pool, req, res));
 
-  // Chat
+  // Chat — gated by chatbot feature flag + daily/monthly limits (MVP audit #1)
   router.post(
     '/chat/transcribe',
     requireAuth,
+    chatbotGate(pool),
     handleUpload(audioUpload.single('audio')),
     verifyAudioMagicBytes,
     requirePremium(pool),
     (req, res) => transcribeAudio(pool, req, res)
   );
 
-  router.post('/chat', requireAuth, (req, res) => postChat(pool, req, res));
+  router.post('/chat', requireAuth, chatbotGate(pool), (req, res) => postChat(pool, req, res));
   router.get('/chat/history', requireAuth, (req, res) => getChatHistoryHandler(pool, req, res));
 
   // Chat feedback (like / dislike / note)
