@@ -24,9 +24,16 @@ UPDATE ai_logs
  WHERE error IS NOT NULL AND error <> '';
 
 -- Indexes for monthly cost rollups and per-user feature breakdowns.
-CREATE INDEX IF NOT EXISTS idx_ai_logs_feature_month
-  ON ai_logs (feature, DATE_TRUNC('month', created_at));
+-- NOTE: We index plain (feature/provider, created_at) instead of
+-- (feature/provider, DATE_TRUNC('month', created_at)). Postgres rejects
+-- date_trunc(text, timestamptz) inside an index expression because it's
+-- STABLE (not IMMUTABLE) — its output depends on the session timezone.
+-- A plain b-tree on the timestamp is enough: monthly rollups should be
+-- written as `WHERE created_at >= '2026-05-01' AND created_at < '2026-06-01'`
+-- which uses these indexes directly via range scan.
+CREATE INDEX IF NOT EXISTS idx_ai_logs_feature_created
+  ON ai_logs (feature, created_at);
 CREATE INDEX IF NOT EXISTS idx_ai_logs_user_feature
   ON ai_logs (user_id, feature, created_at);
-CREATE INDEX IF NOT EXISTS idx_ai_logs_provider_month
-  ON ai_logs (provider, DATE_TRUNC('month', created_at));
+CREATE INDEX IF NOT EXISTS idx_ai_logs_provider_created
+  ON ai_logs (provider, created_at);
