@@ -594,33 +594,46 @@ async function getCurrentUser(pool, userId) {
  * @param {string|null} query - Search query
  * @returns {Promise<Object[]>} - Array of users
  */
+/**
+ * Normalize a Vietnamese phone number to the local 0xxxxxxxxx form.
+ * Accepts: 0xxxxxxxxx, +84xxxxxxxxx, 84xxxxxxxxx
+ * Returns null if the input is not a valid full phone (no partial matches).
+ */
+function normalizeVietnamesePhone(raw) {
+  const cleaned = String(raw || '').trim().replace(/[\s\-()]/g, '');
+  if (/^0\d{9}$/.test(cleaned)) return cleaned;
+  if (/^\+84\d{9}$/.test(cleaned)) return '0' + cleaned.slice(3);
+  if (/^84\d{9}$/.test(cleaned))  return '0' + cleaned.slice(2);
+  return null;
+}
+
 async function searchUsers(pool, currentUserId, query) {
   try {
-    // Require at least 3 digits to search - phone number only for privacy
-    const phone = (query || '').trim().replace(/[\s\-()]/g, '');
-    if (phone.length < 3) {
+    // Only allow EXACT match against a full Vietnamese phone number.
+    // Partial-match search was a privacy hole: someone could enumerate
+    // health-app users by typing prefixes.
+    const phone = normalizeVietnamesePhone(query);
+    if (!phone) {
       return [];
     }
 
     const result = await pool.query(
       `SELECT id, email, phone_number, display_name, full_name, created_at
-       FROM users
-       WHERE deleted_at IS NULL
-         AND id != $1
-         AND REPLACE(REPLACE(COALESCE(phone_number, ''), ' ', ''), '-', '') LIKE $2
-       ORDER BY created_at DESC
-       LIMIT 10`,
-      [currentUserId, `%${phone}%`]
+         FROM users
+        WHERE deleted_at IS NULL
+          AND id != $1
+          AND REPLACE(REPLACE(COALESCE(phone_number, ''), ' ', ''), '-', '') = $2
+        LIMIT 1`,
+      [currentUserId, phone]
     );
 
     return result.rows.map(user => ({
       id: String(user.id),
       name: user.display_name || user.full_name || (user.email ? user.email.split('@')[0] : `User ${user.id}`),
-      email: null, // Ẩn email vì lý do bảo mật - chỉ tìm bằng SĐT
-      phone: user.phone_number || null
+      email: null,
+      phone: user.phone_number || null,
     }));
   } catch (err) {
-
     return [];
   }
 }

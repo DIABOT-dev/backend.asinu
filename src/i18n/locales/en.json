@@ -378,6 +378,7 @@
   "error.chatbot_daily_limit": "You have reached today's chatbot message limit. Please try again tomorrow.",
   "error.chatbot_daily_limit_zero": "Chatbot is not available on your current plan.",
   "error.chatbot_token_limit": "You have reached this month's chatbot token quota.",
+  "error.phone_search_limit": "You have reached today's phone search limit. Please try again tomorrow.",
   "error.unsupported_log_type": "Unsupported log type",
   "error.invalid_mood_answer": "Invalid mood answer",
   "error.invalid_symptom_answer": "Invalid symptom answer",

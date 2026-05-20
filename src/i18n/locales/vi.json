@@ -378,6 +378,7 @@
   "error.chatbot_daily_limit": "Bạn đã đạt giới hạn tin nhắn chatbot trong ngày. Vui lòng quay lại vào ngày mai.",
   "error.chatbot_daily_limit_zero": "Tính năng chatbot không khả dụng cho gói hiện tại.",
   "error.chatbot_token_limit": "Bạn đã đạt giới hạn token chatbot trong tháng. Hãy quay lại vào tháng sau.",
+  "error.phone_search_limit": "Đã đạt giới hạn tìm kiếm số điện thoại trong ngày. Hãy thử lại vào ngày mai.",
   "error.unsupported_log_type": "Loại log không được hỗ trợ",
   "error.invalid_mood_answer": "Câu trả lời tâm trạng không hợp lệ",
   "error.invalid_symptom_answer": "Câu trả lời triệu chứng không hợp lệ",
