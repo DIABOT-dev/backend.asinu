@@ -1,5 +1,6 @@
 ﻿const { getDiaBrainReply } = require('../ai/providers/diabrain');
 const { getOpenAIChatReply } = require('../ai/providers/openai');
+const { getMedGemmaChatReply, isConfigured: isMedGemmaConfigured } = require('../ai/providers/medgemma');
 const { t } = require('../../i18n');
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
@@ -137,6 +138,20 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
       }
     } catch (err) {
       console.error('[ChatProvider] Gemini failed after retries:', err.message);
+    }
+    return buildBusyReply();
+  }
+
+  if (provider === 'medgemma') {
+    if (!isMedGemmaConfigured()) {
+      return { reply: buildMockReply(message), provider: 'mock' };
+    }
+    try {
+      const userId = context?.user_id ?? context?.userId ?? null;
+      const result = await getMedGemmaChatReply({ message, userId, context: systemPrompt, history });
+      if (result) return result;
+    } catch (err) {
+      console.error('[ChatProvider] MedGemma failed after retries:', err.message);
     }
     return buildBusyReply();
   }
