@@ -153,11 +153,14 @@ const enhanceReplyWithProfile = (reply, profile) => {
 // SYSTEM PROMPT BUILDING
 // =====================================================
 
-const HISTORY_LIMIT_FREE = 50;     // AI context: 50 messages for free users (7 ngày)
-const HISTORY_LIMIT_PREMIUM = 300; // AI context: 300 messages for premium (~128K token window)
+const HISTORY_LIMIT_FREE = Number(process.env.CHAT_HISTORY_LIMIT_FREE || 50);
+const HISTORY_LIMIT_PREMIUM = Number(process.env.CHAT_HISTORY_LIMIT_PREMIUM || 300);
 const HISTORY_LIMIT = HISTORY_LIMIT_FREE; // default export (backward compat)
-const RETENTION_DAYS_FREE = 7;
-const RETENTION_DAYS_PREMIUM = 365;
+// Retention bumped 7 -> 30 days for Free tier to match the MVP pricing
+// card ("Nhật ký dữ liệu sức khỏe / Check-in: 30 ngày gần nhất"). Premium
+// keeps full history. Tunable via env in case product wants to flex it.
+const RETENTION_DAYS_FREE = Number(process.env.CHAT_RETENTION_DAYS_FREE || 30);
+const RETENTION_DAYS_PREMIUM = Number(process.env.CHAT_RETENTION_DAYS_PREMIUM || 365);
 
 /**
  * Kiểm tra một đoạn text có phải câu hỏi không.
