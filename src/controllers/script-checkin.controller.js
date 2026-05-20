@@ -26,6 +26,7 @@ const { parseSymptoms, analyzeMultiSymptom, aggregateSeverity } = require('../se
 const { analyzeSymptom } = require('../core/agent/ai-symptom-analyzer');
 const { parseAnswer } = require('../core/agent/ai-answer-parser');
 const { generateFromAnalysis, saveGeneratedScript } = require('../services/checkin/ai-script-generator');
+const { getScriptRegenStatus, recordRegeneration } = require('../services/checkin/script-quota.service');
 const {
   getProfile,
   createSession,
@@ -159,35 +160,44 @@ async function startScriptHandler(pool, req, res) {
       }
     }
 
-    // No script found → try AI analysis before falling back to generic questions
+    // No script found → try AI analysis before falling back to generic questions.
+    // Monthly quota (MVP audit #2) gates this: once a user has burned through
+    // their regenerate allowance we use the generic fallback instead of
+    // billing more AI tokens. Quota lookup failure-opens (returns allowed=true).
     if (!script && symptom_input) {
-      try {
-        console.log(`[ScriptCheckin] No cached script for "${symptom_input}", trying AI analysis...`);
-        const aiContext = {
-          age: profile.birth_year ? new Date().getFullYear() - profile.birth_year : null,
-          gender: profile.gender,
-          medical_conditions: Array.isArray(profile.medical_conditions) ? profile.medical_conditions : [],
-          medications: profile.daily_medication || null,
-        };
+      const quota = await getScriptRegenStatus(pool, userId);
+      if (!quota.allowed) {
+        console.log(`[ScriptCheckin] Regen quota reached for user=${userId} (${quota.used}/${quota.limit}, tier=${quota.tier}) — using fallback`);
+      } else {
+        try {
+          console.log(`[ScriptCheckin] No cached script for "${symptom_input}", trying AI analysis...`);
+          const aiContext = {
+            age: profile.birth_year ? new Date().getFullYear() - profile.birth_year : null,
+            gender: profile.gender,
+            medical_conditions: Array.isArray(profile.medical_conditions) ? profile.medical_conditions : [],
+            medications: profile.daily_medication || null,
+          };
 
-        const analysis = await analyzeSymptom(symptom_input, aiContext);
+          const analysis = await analyzeSymptom(symptom_input, aiContext);
 
-        if (analysis && analysis.confidence > 0) {
-          // AI understood the symptom — generate and save a real script
-          const scriptData = generateFromAnalysis(analysis, profile);
-          const saved = await saveGeneratedScript(
-            pool, userId,
-            analysis.clusterKey,
-            analysis.displayName,
-            scriptData
-          );
-          script = saved.script;
-          clusterKey = analysis.clusterKey;
-          console.log(`[ScriptCheckin] AI generated script: cluster=${clusterKey}, confidence=${analysis.confidence}`);
+          if (analysis && analysis.confidence > 0) {
+            const scriptData = generateFromAnalysis(analysis, profile);
+            const saved = await saveGeneratedScript(
+              pool, userId,
+              analysis.clusterKey,
+              analysis.displayName,
+              scriptData
+            );
+            script = saved.script;
+            clusterKey = analysis.clusterKey;
+            // Successful AI regeneration counts against monthly quota.
+            recordRegeneration(pool, userId, analysis.clusterKey, 'new_symptom').catch(() => {});
+            console.log(`[ScriptCheckin] AI generated script: cluster=${clusterKey}, confidence=${analysis.confidence}, quota=${quota.used + 1}/${quota.limit}`);
+          }
+        } catch (aiErr) {
+          console.error('[ScriptCheckin] AI analysis failed, using fallback:', aiErr.message);
+          // Fall through to generic fallback below
         }
-      } catch (aiErr) {
-        console.error('[ScriptCheckin] AI analysis failed, using fallback:', aiErr.message);
-        // Fall through to generic fallback below
       }
     }
 
