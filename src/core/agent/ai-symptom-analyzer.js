@@ -17,6 +17,8 @@
 const OpenAI = require('openai');
 const { cacheGet, cacheSet } = require('../../lib/redis');
 const { isRedFlag, detectEmergency } = require('../../services/checkin/emergency-detector');
+const { safeValidate, SymptomAnalysisSchema } = require('../../lib/ai-schemas');
+const logger = require('../../lib/logger');
 
 // ─── Provider config ────────────────────────────────────────────────────────
 
@@ -173,16 +175,21 @@ async function analyzeSymptom(rawInput, context = {}) {
 
     console.log(`[AIAnalyzer] AI call: model=${AI_MODEL}, tokens=${usage.total_tokens || '?'}, duration=${duration}ms, input="${input}"`);
 
-    // Parse response
+    // Parse + validate response against the SymptomAnalysis schema.
+    // We don't trust the raw model output; if the shape is wrong we fall
+    // back to an empty analysis rather than acting on garbage (MVP audit #8).
     const raw = (response.choices?.[0]?.message?.content || '').trim();
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('[AIAnalyzer] AI returned non-JSON:', raw.slice(0, 200));
+    const validated = safeValidate(SymptomAnalysisSchema, raw);
+    if (!validated.ok) {
+      logger.warn('ai.symptom_analyzer.invalid_output', {
+        reason: validated.reason,
+        issues: validated.issues,
+        preview: raw.slice(0, 200),
+      });
       return _emptyAnalysis(rawInput);
     }
 
-    const parsed = JSON.parse(jsonMatch[0]);
-    const result = _normalizeAnalysis(parsed, input);
+    const result = _normalizeAnalysis(validated.data, input);
 
     // 3. Cache the result
     await cacheSet(cacheKey, result, ANALYSIS_CACHE_TTL);
