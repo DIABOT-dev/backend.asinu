@@ -28,6 +28,46 @@ async function createQR(pool, req, res) {
 }
 
 /**
+ * POST /api/subscriptions/qr/gift
+ * body: { months: 1|3|6|12, recipient_user_id: number }
+ *
+ * Allows a paying user to buy Premium for a recipient who is already in
+ * their Care Circle (MVP audit FIX #10). Refuses when the recipient is
+ * not connected, to prevent gifting Premium to arbitrary user IDs.
+ */
+async function createQRForRecipient(pool, req, res) {
+  const payerId = req.user?.id;
+  const requested = parseInt(req.body?.months) || 1;
+  const recipientId = parseInt(req.body?.recipient_user_id);
+
+  if (!Number.isFinite(recipientId) || recipientId <= 0) {
+    return res.status(400).json({
+      ok: false,
+      code: 'INVALID_RECIPIENT',
+      error: t('error.invalid_recipient', getLang(req)) || 'recipient_user_id không hợp lệ',
+    });
+  }
+  if (!VALID_MONTHS.includes(requested)) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_subscription_months', getLang(req)) });
+  }
+
+  try {
+    const result = await subscriptionService.createQRForRecipient(pool, payerId, recipientId, requested);
+    return res.status(200).json({ ok: true, ...result });
+  } catch (err) {
+    if (err.code === 'NOT_IN_CARE_CIRCLE') {
+      return res.status(403).json({
+        ok: false,
+        code: 'NOT_IN_CARE_CIRCLE',
+        error: t('error.not_in_care_circle', getLang(req)) ||
+               'Bạn chỉ có thể mua Premium cho người đã kết nối trong Care Circle.',
+      });
+    }
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
+/**
  * GET /api/subscriptions/status
  * Get current subscription status
  */
@@ -88,6 +128,7 @@ async function payWithWallet(pool, req, res) {
 
 module.exports = {
   createQR,
+  createQRForRecipient,
   getStatus,
   getPlans,
   getHistory,

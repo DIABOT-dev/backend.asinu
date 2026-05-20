@@ -179,17 +179,56 @@ async function incrementVoiceUsage(pool, userId) {
  * @returns {{ order_code, qr_url, amount, description, expires_at, plan_months, discount }}
  */
 async function createQR(pool, userId, months = 1) {
+  // Self-purchase — payer === recipient.
+  return createQRInternal(pool, { payerId: userId, recipientId: userId, months, isGift: false });
+}
+
+/**
+ * Buy Premium for someone else in your Care Circle (MVP audit FIX #10).
+ * The recipient must be an ACCEPTED connection of the payer; otherwise
+ * we refuse so people cannot gift Premium to random user IDs.
+ *
+ * @throws Error('not_in_care_circle') if recipient is not connected.
+ */
+async function createQRForRecipient(pool, payerId, recipientId, months = 1) {
+  if (Number(payerId) === Number(recipientId)) {
+    return createQR(pool, payerId, months);
+  }
+
+  const { rows } = await pool.query(
+    `SELECT 1
+       FROM user_connections
+      WHERE status = 'accepted'
+        AND (
+          (requester_id = $1 AND addressee_id = $2) OR
+          (requester_id = $2 AND addressee_id = $1)
+        )
+      LIMIT 1`,
+    [payerId, recipientId]
+  );
+  if (rows.length === 0) {
+    const err = new Error('not_in_care_circle');
+    err.code = 'NOT_IN_CARE_CIRCLE';
+    throw err;
+  }
+
+  return createQRInternal(pool, { payerId, recipientId, months, isGift: true });
+}
+
+async function createQRInternal(pool, { payerId, recipientId, months, isGift }) {
   const plan = PLANS[months] || PLANS[1];
   const amount = plan.price;
   const orderCode = generateOrderCode();
-  const description = buildDescription(userId, orderCode);
+  // Description encodes the BENEFICIARY (recipient) so the existing
+  // webhook -> activateSubscription path activates the right account.
+  const description = buildDescription(recipientId, orderCode);
   const qrUrl = `https://qr.sepay.vn/img?acc=${SEPAY_ACCOUNT}&bank=${SEPAY_BANK}&amount=${amount}&des=${description}`;
 
   const { rows } = await pool.query(
-    `INSERT INTO subscriptions (user_id, order_code, amount, qr_url, status, plan_months, qr_expires_at)
-     VALUES ($1, $2, $3, $4, 'pending', $5, NOW() + INTERVAL '30 minutes')
+    `INSERT INTO subscriptions (user_id, payer_user_id, is_gift, order_code, amount, qr_url, status, plan_months, qr_expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, NOW() + INTERVAL '30 minutes')
      RETURNING qr_expires_at`,
-    [userId, orderCode, amount, qrUrl, plan.months]
+    [recipientId, payerId, isGift, orderCode, amount, qrUrl, plan.months]
   );
 
   return {
@@ -201,6 +240,9 @@ async function createQR(pool, userId, months = 1) {
     plan_months: plan.months,
     discount:    plan.discount,
     label:       t(plan.labelKey),
+    is_gift:    isGift,
+    payer_user_id: payerId,
+    recipient_user_id: recipientId,
   };
 }
 
@@ -268,10 +310,14 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
     // Invalidate subscription cache
     await cacheDel(`subscription:${userId}`);
 
-    // Notify user (non-blocking)
+    // Notify the recipient (always) and the payer separately if this was
+    // a gift purchase (Tùng buys for Đức).
     notifyPremiumActivated(pool, userId, newExpiry).catch(() => {});
+    if (sub.is_gift && sub.payer_user_id && sub.payer_user_id !== userId) {
+      notifyGiftConfirmed(pool, sub.payer_user_id, userId, newExpiry).catch(() => {});
+    }
 
-    return { ok: true, expiresAt: newExpiry, planMonths };
+    return { ok: true, expiresAt: newExpiry, planMonths, isGift: !!sub.is_gift, payerUserId: sub.payer_user_id };
   } catch (err) {
     await client.query('ROLLBACK');
 
@@ -279,6 +325,32 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
   } finally {
     client.release();
   }
+}
+
+// Helper: tell the payer "your gift was activated"
+async function notifyGiftConfirmed(pool, payerId, recipientId, expiresAt) {
+  try {
+    const { rows } = await pool.query(
+      `SELECT u.push_token, u.language_preference,
+              COALESCE(r.full_name, r.display_name, r.email) AS recipient_name
+         FROM users u, users r
+        WHERE u.id = $1 AND r.id = $2`,
+      [payerId, recipientId]
+    );
+    if (!rows[0]) return;
+    const u = rows[0];
+    const lang = u.language_preference || 'vi';
+    const dateStr = new Date(expiresAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'vi-VN');
+    await sendAndSave(
+      pool,
+      { id: payerId, push_token: u.push_token },
+      'subscription_gift_confirmed',
+      t('push.gift_confirmed_title', lang) || 'Đã tặng Premium thành công',
+      t('push.gift_confirmed_body', lang, { name: u.recipient_name || '', date: dateStr })
+        || `Bạn vừa tặng Premium cho ${u.recipient_name || 'người thân'} đến ${dateStr}.`,
+      { recipientId: String(recipientId), expiresAt: new Date(expiresAt).toISOString() }
+    );
+  } catch {}
 }
 
 // ─── payWithWallet ───────────────────────────────────────────────────
@@ -400,6 +472,7 @@ module.exports = {
   FREE_CONNECTION_LIMIT,
   PREMIUM_HISTORY_DAYS,
   FREE_HISTORY_DAYS,
+  createQRForRecipient,
   getStatus,
   isPremium,
   createQR,
