@@ -1,4 +1,5 @@
 const checkinService = require('../services/checkin/checkin.service');
+const caregiverStatusService = require('../services/care-circle/caregiver-status.service');
 const engagementService = require('../services/profile/engagement.service');
 const { markActive } = require('../services/profile/lifecycle.service');
 const { t, getLang } = require('../i18n');
@@ -103,7 +104,14 @@ async function emergencyHandler(pool, req, res) {
   const { location } = req.body; // { lat, lng, accuracy }
   try {
     const result = await checkinService.triggerEmergency(pool, req.user.id, location);
-    return res.json(result);
+    // Emergency is always urgent — tell the client whether anyone is on
+    // the other end to receive the alert (MVP audit FIX #4).
+    const caregiverStatus = await caregiverStatusService.buildCaregiverStatus(
+      pool,
+      req.user.id,
+      { riskTier: 'emergency' }
+    );
+    return res.json({ ...result, ...caregiverStatus });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }

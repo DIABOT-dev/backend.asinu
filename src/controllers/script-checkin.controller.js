@@ -17,6 +17,7 @@
  */
 
 const { getUserScript, getScript, createClustersFromOnboarding } = require('../services/checkin/script.service');
+const { buildCaregiverStatus } = require('../services/care-circle/caregiver-status.service');
 const { getNextQuestion } = require('../core/checkin/script-runner');
 const { getFallbackScriptData, logFallback, matchCluster } = require('../services/checkin/fallback.service');
 const { detectEmergency } = require('../services/checkin/emergency-detector');
@@ -469,10 +470,21 @@ async function answerScriptHandler(pool, req, res) {
       await updateAnswers(pool, session_id, answers, answers.length);
     }
 
+    // Surface caregiver connection state on completion so the frontend can
+    // prompt the user to add a caregiver when the result is urgent and
+    // nobody is wired up to receive alerts (MVP audit FIX #4).
+    let caregiverStatus = {};
+    if (result.isDone) {
+      caregiverStatus = await buildCaregiverStatus(pool, userId, {
+        riskTier: result.conclusion?.severity,
+      });
+    }
+
     return res.json({
       ok: true,
       session_id,
       ...result,
+      ...caregiverStatus,
     });
   } catch (err) {
     console.error('[ScriptCheckin] answer failed:', err.message);
