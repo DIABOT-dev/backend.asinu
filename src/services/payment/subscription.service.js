@@ -360,6 +360,43 @@ async function notifyGiftConfirmed(pool, payerId, recipientId, expiresAt) {
  * Atomic: kiểm tra số dư → trừ ví → kích hoạt premium.
  */
 async function payWithWallet(pool, userId, months = 1) {
+  return payWithWalletInternal(pool, { payerId: userId, recipientId: userId, months, isGift: false });
+}
+
+/**
+ * Wallet payment where the BENEFICIARY is someone else in the payer's
+ * Care Circle (MVP audit FIX #10 — wallet variant). Refuses if they're
+ * not connected; otherwise charges payer's wallet and activates Premium
+ * on the recipient.
+ *
+ * @throws Error('not_in_care_circle') when the recipient is not a peer.
+ */
+async function payWithWalletForRecipient(pool, payerId, recipientId, months = 1) {
+  if (Number(payerId) === Number(recipientId)) {
+    return payWithWallet(pool, payerId, months);
+  }
+
+  const { rows } = await pool.query(
+    `SELECT 1
+       FROM user_connections
+      WHERE status = 'accepted'
+        AND (
+          (requester_id = $1 AND addressee_id = $2) OR
+          (requester_id = $2 AND addressee_id = $1)
+        )
+      LIMIT 1`,
+    [payerId, recipientId]
+  );
+  if (rows.length === 0) {
+    const err = new Error('not_in_care_circle');
+    err.code = 'NOT_IN_CARE_CIRCLE';
+    throw err;
+  }
+
+  return payWithWalletInternal(pool, { payerId, recipientId, months, isGift: true });
+}
+
+async function payWithWalletInternal(pool, { payerId, recipientId, months, isGift }) {
   const plan = PLANS[months] || PLANS[1];
   const amount = plan.price;
   const orderCode = generateOrderCode();
@@ -368,68 +405,94 @@ async function payWithWallet(pool, userId, months = 1) {
   try {
     await client.query('BEGIN');
 
-    // Lock row và kiểm tra số dư
-    const { rows: userRows } = await client.query(
-      `SELECT wallet_balance, subscription_tier, subscription_expires_at
-       FROM users WHERE id = $1 FOR UPDATE`,
-      [userId]
-    );
-    const user = userRows[0];
-    if (!user) {
+    // Lock payer's row + check balance. The recipient row is locked next
+    // (only if different from payer) so we never deadlock — same ordering
+    // every time, lowest user id first.
+    const lowerId = Math.min(Number(payerId), Number(recipientId));
+    const higherId = Math.max(Number(payerId), Number(recipientId));
+
+    let payerRow, recipientRow;
+    if (lowerId === higherId) {
+      const r = await client.query(
+        `SELECT id, wallet_balance, subscription_tier, subscription_expires_at
+           FROM users WHERE id = $1 FOR UPDATE`,
+        [payerId]
+      );
+      payerRow = recipientRow = r.rows[0];
+    } else {
+      const r = await client.query(
+        `SELECT id, wallet_balance, subscription_tier, subscription_expires_at
+           FROM users WHERE id IN ($1, $2) ORDER BY id FOR UPDATE`,
+        [lowerId, higherId]
+      );
+      payerRow = r.rows.find((u) => Number(u.id) === Number(payerId));
+      recipientRow = r.rows.find((u) => Number(u.id) === Number(recipientId));
+    }
+
+    if (!payerRow) {
+      await client.query('ROLLBACK');
+      return { ok: false, message: t('error.user_not_found') };
+    }
+    if (!recipientRow) {
       await client.query('ROLLBACK');
       return { ok: false, message: t('error.user_not_found') };
     }
 
-    if (Number(user.wallet_balance) < amount) {
+    if (Number(payerRow.wallet_balance) < amount) {
       await client.query('ROLLBACK');
       return {
         ok: false,
-        message: `Số dư ví không đủ. Cần ${amount.toLocaleString('vi-VN')}đ, hiện có ${Number(user.wallet_balance).toLocaleString('vi-VN')}đ.`,
+        message: `Số dư ví không đủ. Cần ${amount.toLocaleString('vi-VN')}đ, hiện có ${Number(payerRow.wallet_balance).toLocaleString('vi-VN')}đ.`,
       };
     }
 
-    // Trừ số dư ví
+    // Deduct from payer.
     await client.query(
       `UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2`,
-      [amount, userId]
+      [amount, payerId]
     );
 
-    // Ghi lịch sử subscription
+    // Record subscription against the BENEFICIARY (recipient) so existing
+    // "who has Premium" queries continue to work without changes.
     const now = new Date();
     const subEnd = new Date(now);
     subEnd.setMonth(subEnd.getMonth() + plan.months);
 
     await client.query(
-      `INSERT INTO subscriptions (user_id, order_code, amount, qr_url, status, plan_months, subscription_start, subscription_end, completed_at, qr_expires_at)
-       VALUES ($1, $2, $3, '', 'completed', $4, $5, $6, NOW(), NOW())`,
-      [userId, orderCode, amount, plan.months, now, subEnd]
+      `INSERT INTO subscriptions (user_id, payer_user_id, is_gift, order_code, amount, qr_url, status, plan_months, subscription_start, subscription_end, completed_at, qr_expires_at)
+       VALUES ($1, $2, $3, $4, $5, '', 'completed', $6, $7, $8, NOW(), NOW())`,
+      [recipientId, payerId, isGift, orderCode, amount, plan.months, now, subEnd]
     );
 
-    // Gia hạn nếu đang là premium
+    // Extend if the recipient is already premium and hasn't expired.
     let newExpiry = subEnd;
     if (
-      user.subscription_tier === 'premium' &&
-      user.subscription_expires_at &&
-      new Date(user.subscription_expires_at) > now
+      recipientRow.subscription_tier === 'premium' &&
+      recipientRow.subscription_expires_at &&
+      new Date(recipientRow.subscription_expires_at) > now
     ) {
-      newExpiry = new Date(user.subscription_expires_at);
+      newExpiry = new Date(recipientRow.subscription_expires_at);
       newExpiry.setMonth(newExpiry.getMonth() + plan.months);
     }
 
     await client.query(
       `UPDATE users SET subscription_tier = 'premium', subscription_expires_at = $1 WHERE id = $2`,
-      [newExpiry, userId]
+      [newExpiry, recipientId]
     );
 
     await client.query('COMMIT');
-    await cacheDel(`subscription:${userId}`);
+    await cacheDel(`subscription:${recipientId}`);
+    if (isGift) await cacheDel(`subscription:${payerId}`);
 
-    // Notify Premium activated + check low balance after deduction
-    notifyPremiumActivated(pool, userId, newExpiry).catch(() => {});
-    const newBalance = Number(user.wallet_balance) - amount;
-    notifyWalletLowIfNeeded(pool, userId, newBalance).catch(() => {});
+    // Notify the beneficiary, and the payer separately for gifts.
+    notifyPremiumActivated(pool, recipientId, newExpiry).catch(() => {});
+    if (isGift) {
+      notifyGiftConfirmed(pool, payerId, recipientId, newExpiry).catch(() => {});
+    }
+    const newBalance = Number(payerRow.wallet_balance) - amount;
+    notifyWalletLowIfNeeded(pool, payerId, newBalance).catch(() => {});
 
-    return { ok: true, expiresAt: newExpiry, planMonths: plan.months };
+    return { ok: true, expiresAt: newExpiry, planMonths: plan.months, isGift };
   } catch (err) {
     await client.query('ROLLBACK');
     return { ok: false, message: t('error.server') };
@@ -473,6 +536,7 @@ module.exports = {
   PREMIUM_HISTORY_DAYS,
   FREE_HISTORY_DAYS,
   createQRForRecipient,
+  payWithWalletForRecipient,
   getStatus,
   isPremium,
   createQR,

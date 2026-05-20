@@ -126,6 +126,54 @@ async function payWithWallet(pool, req, res) {
   }
 }
 
+/**
+ * POST /api/subscriptions/wallet/gift
+ * body: { months, recipient_user_id }
+ *
+ * Pay with the payer's wallet to activate Premium on a Care Circle peer.
+ * Refuses unless the recipient is an accepted connection.
+ */
+async function payWithWalletForRecipient(pool, req, res) {
+  const payerId = req.user?.id;
+  const requested = parseInt(req.body?.months) || 1;
+  const recipientId = parseInt(req.body?.recipient_user_id);
+
+  if (!Number.isFinite(recipientId) || recipientId <= 0) {
+    return res.status(400).json({
+      ok: false,
+      code: 'INVALID_RECIPIENT',
+      error: t('error.invalid_recipient', getLang(req)) || 'recipient_user_id không hợp lệ',
+    });
+  }
+  if (!VALID_MONTHS.includes(requested)) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_subscription_months', getLang(req)) });
+  }
+
+  try {
+    const result = await subscriptionService.payWithWalletForRecipient(pool, payerId, recipientId, requested);
+    if (!result.ok) {
+      return res.status(400).json({ ok: false, error: result.message });
+    }
+    return res.status(200).json({
+      ok: true,
+      expiresAt: result.expiresAt,
+      planMonths: result.planMonths,
+      isGift: true,
+      recipientUserId: recipientId,
+    });
+  } catch (err) {
+    if (err.code === 'NOT_IN_CARE_CIRCLE') {
+      return res.status(403).json({
+        ok: false,
+        code: 'NOT_IN_CARE_CIRCLE',
+        error: t('error.not_in_care_circle', getLang(req))
+          || 'Bạn chỉ có thể mua Premium cho người đã kết nối trong Care Circle.',
+      });
+    }
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
 module.exports = {
   createQR,
   createQRForRecipient,
@@ -133,4 +181,5 @@ module.exports = {
   getPlans,
   getHistory,
   payWithWallet,
+  payWithWalletForRecipient,
 };
