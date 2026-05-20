@@ -5,10 +5,15 @@
 
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { t } = require('../../i18n');
-const { isPremium, PREMIUM_CONNECTION_LIMIT } = require('../payment/subscription.service');
+const {
+  isPremium,
+  PREMIUM_CONNECTION_LIMIT,
+  FREE_CONNECTION_LIMIT,
+} = require('../payment/subscription.service');
 const { cacheGet, cacheSet } = require('../../lib/redis');
 
-const FREE_TIER_CONNECTION_LIMIT = 1;
+// Backwards-compat alias — kept so existing references (if any) keep working.
+const FREE_TIER_CONNECTION_LIMIT = FREE_CONNECTION_LIMIT;
 
 // =====================================================
 // CONSTANTS

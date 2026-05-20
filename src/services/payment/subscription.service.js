@@ -74,11 +74,14 @@ const PLANS = {
 };
 
 // ─── Limits ────────────────────────────────────────────────────────
+// All limits read from env so product can tune them without a deploy.
+// Defaults match the MVP pricing spec: Premium = 3 caregivers, Free = 1.
 
-const VOICE_MONTHLY_LIMIT      = 5000;
-const PREMIUM_CONNECTION_LIMIT = 50;
-const PREMIUM_HISTORY_DAYS     = 365;
-const FREE_HISTORY_DAYS        = 7;
+const VOICE_MONTHLY_LIMIT      = Number(process.env.VOICE_MONTHLY_LIMIT || 5000);
+const PREMIUM_CONNECTION_LIMIT = Number(process.env.CARE_CIRCLE_PREMIUM_LIMIT || 3);
+const FREE_CONNECTION_LIMIT    = Number(process.env.CARE_CIRCLE_FREE_LIMIT || 1);
+const PREMIUM_HISTORY_DAYS     = Number(process.env.CAREGIVER_HISTORY_DAYS_PREMIUM || 365);
+const FREE_HISTORY_DAYS        = Number(process.env.CAREGIVER_HISTORY_DAYS_FREE || 30);
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -394,6 +397,7 @@ module.exports = {
   payWithWallet,
   VOICE_MONTHLY_LIMIT,
   PREMIUM_CONNECTION_LIMIT,
+  FREE_CONNECTION_LIMIT,
   PREMIUM_HISTORY_DAYS,
   FREE_HISTORY_DAYS,
   getStatus,

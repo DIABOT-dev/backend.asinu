@@ -1,5 +1,6 @@
 ﻿const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
+const { careCircleEnabled } = require('../middleware/care-circle.gate.middleware');
 const {
   createInvitation,
   getInvitations,
@@ -14,6 +15,9 @@ const {
 
 function careCircleRoutes(pool) {
   const router = express.Router();
+
+  // All Care Circle endpoints share the same on/off flag.
+  router.use(careCircleEnabled);
 
   router.post('/invitations', requireAuth, (req, res) => createInvitation(pool, req, res));
   router.get('/invitations', requireAuth, (req, res) => getInvitations(pool, req, res));
