@@ -18,11 +18,15 @@ const OpenAI = require('openai');
 const { cacheGet, cacheSet } = require('../../lib/redis');
 const { isRedFlag, detectEmergency } = require('../../services/checkin/emergency-detector');
 const { safeValidate, SymptomAnalysisSchema } = require('../../lib/ai-schemas');
+const medgemma = require('../../services/ai/providers/medgemma');
 const logger = require('../../lib/logger');
 
 // ─── Provider config ────────────────────────────────────────────────────────
 
-const AI_PROVIDER = process.env.SYMPTOM_AI_PROVIDER || 'openai'; // 'openai' | 'medgemma' (future)
+// Per MVP audit (lỗi 8) clinical AI calls should be routable to MedGemma.
+// Default keeps OpenAI so existing deployments aren't affected; flip
+// SYMPTOM_AI_PROVIDER=medgemma + set MEDGEMMA_ENDPOINT to migrate.
+const AI_PROVIDER = (process.env.SYMPTOM_AI_PROVIDER || 'openai').toLowerCase();
 const AI_MODEL = process.env.SYMPTOM_AI_MODEL || 'gpt-4o-mini';
 
 // Cache TTL: 7 days (analysis result rarely changes)
@@ -34,6 +38,47 @@ let _client = null;
 function getClient() {
   if (!_client) _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
   return _client;
+}
+
+/**
+ * Dispatch a single chat-completion call to the configured provider and
+ * return a normalized shape: { content, usage: { total_tokens } }.
+ *
+ * Falls back from MedGemma to OpenAI when MedGemma isn't configured so a
+ * partially-rolled-out env still works.
+ */
+async function callProvider({ system, user, temperature, maxTokens }) {
+  if (AI_PROVIDER === 'medgemma' && medgemma.isConfigured()) {
+    const res = await medgemma.callMedGemmaWithRetry({
+      system,
+      prompt: user,
+      temperature,
+      maxTokens,
+    });
+    return {
+      content: res.reply,
+      usage: { total_tokens: res.meta?.tokens_used?.total },
+      provider: 'medgemma',
+      model: res.meta?.model || 'medgemma',
+    };
+  }
+
+  // OpenAI path
+  const response = await getClient().chat.completions.create({
+    model: AI_MODEL,
+    temperature,
+    max_tokens: maxTokens,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user },
+    ],
+  });
+  return {
+    content: response.choices?.[0]?.message?.content || '',
+    usage: response.usage || {},
+    provider: 'openai',
+    model: AI_MODEL,
+  };
 }
 
 // ─── Cache key builders ─────────────────────────────────────────────────────
@@ -155,30 +200,27 @@ async function analyzeSymptom(rawInput, context = {}) {
     return cached;
   }
 
-  // 2. Call AI
+  // 2. Call AI (routed via callProvider — OpenAI by default, MedGemma when configured)
   const startTime = Date.now();
   try {
     const userPrompt = _buildAnalysisPrompt(input, context);
 
-    const response = await getClient().chat.completions.create({
-      model: AI_MODEL,
+    const response = await callProvider({
+      system: ANALYSIS_SYSTEM_PROMPT,
+      user: userPrompt,
       temperature: 0.2,
-      max_tokens: 1500,
-      messages: [
-        { role: 'system', content: ANALYSIS_SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
+      maxTokens: 1500,
     });
 
     const duration = Date.now() - startTime;
     const usage = response.usage || {};
 
-    console.log(`[AIAnalyzer] AI call: model=${AI_MODEL}, tokens=${usage.total_tokens || '?'}, duration=${duration}ms, input="${input}"`);
+    console.log(`[AIAnalyzer] AI call: provider=${response.provider}, model=${response.model}, tokens=${usage.total_tokens || '?'}, duration=${duration}ms, input="${input}"`);
 
     // Parse + validate response against the SymptomAnalysis schema.
     // We don't trust the raw model output; if the shape is wrong we fall
     // back to an empty analysis rather than acting on garbage (MVP audit #8).
-    const raw = (response.choices?.[0]?.message?.content || '').trim();
+    const raw = (response.content || '').trim();
     const validated = safeValidate(SymptomAnalysisSchema, raw);
     if (!validated.ok) {
       logger.warn('ai.symptom_analyzer.invalid_output', {
@@ -269,21 +311,18 @@ async function quickUrgencyCheck(rawInput, context = {}) {
     const userPrompt = `Bệnh nhân${contextStr}: "${input}"`;
 
     const startTime = Date.now();
-    const response = await getClient().chat.completions.create({
-      model: AI_MODEL,
+    const response = await callProvider({
+      system: URGENCY_SYSTEM_PROMPT,
+      user: userPrompt,
       temperature: 0.1,
-      max_tokens: 100,
-      messages: [
-        { role: 'system', content: URGENCY_SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
+      maxTokens: 100,
     });
 
     const duration = Date.now() - startTime;
     const usage = response.usage || {};
-    console.log(`[AIAnalyzer] Quick urgency: model=${AI_MODEL}, tokens=${usage.total_tokens || '?'}, duration=${duration}ms`);
+    console.log(`[AIAnalyzer] Quick urgency: provider=${response.provider}, model=${response.model}, tokens=${usage.total_tokens || '?'}, duration=${duration}ms`);
 
-    const raw = (response.choices?.[0]?.message?.content || '').trim();
+    const raw = (response.content || '').trim();
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
