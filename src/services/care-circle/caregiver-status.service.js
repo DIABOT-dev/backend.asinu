@@ -13,10 +13,14 @@ const logger = require('../../lib/logger');
  */
 async function userHasActiveCaregiver(pool, userId) {
   try {
+    // Match BOTH sides of user_connections — the user could be the
+    // inviter (requester_id) or the invitee (addressee_id). Originally
+    // we only checked requester_id, which silently mis-flagged users
+    // whose caregiver had sent them the invite as "no caregiver".
     const { rows } = await pool.query(
       `SELECT 1
          FROM user_connections
-        WHERE requester_id = $1
+        WHERE (requester_id = $1 OR addressee_id = $1)
           AND status = 'accepted'
           AND COALESCE((permissions->>'can_receive_alerts')::boolean, false) = true
         LIMIT 1`,

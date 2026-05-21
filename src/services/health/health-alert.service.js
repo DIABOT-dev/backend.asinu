@@ -10,6 +10,10 @@
  * @returns {Promise<Array>} - Array of { care_member_id, care_member_name }
  */
 async function getActiveConnections(pool, userId) {
+  // Only return connections where the OTHER side has opted into receiving
+  // alerts. Without `can_receive_alerts` filter, caregivers who explicitly
+  // turned alerts off would still be paged for emergencies — a real
+  // privacy + permissions violation.
   const { rows } = await pool.query(
     `SELECT
       CASE
@@ -23,7 +27,8 @@ async function getActiveConnections(pool, userId) {
       (uc.addressee_id = $1 AND u.id = uc.requester_id)
     )
     WHERE uc.status = 'accepted'
-    AND (uc.requester_id = $1 OR uc.addressee_id = $1)`,
+      AND (uc.requester_id = $1 OR uc.addressee_id = $1)
+      AND COALESCE((uc.permissions->>'can_receive_alerts')::boolean, false) = true`,
     [userId]
   );
   return rows;

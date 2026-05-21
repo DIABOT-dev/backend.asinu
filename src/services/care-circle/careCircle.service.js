@@ -543,10 +543,15 @@ async function updateConnection(pool, connectionId, userId, data) {
 async function updateConnectionPermissions(pool, connectionId, userId, newPermissions) {
   const perms = normalizePermissions(newPermissions);
   try {
+    // Only the original requester (the user who invited and set the
+    // initial permissions) is allowed to change them later. Without this
+    // check, the addressee (e.g. a caregiver) could PUT their own
+    // permissions to grant themselves can_view_logs / can_receive_alerts
+    // without the data-owner's consent.
     const result = await pool.query(
       `UPDATE user_connections
        SET permissions = $1::jsonb, updated_at = NOW()
-       WHERE id = $2 AND (requester_id = $3 OR addressee_id = $3) AND status = 'accepted'
+       WHERE id = $2 AND requester_id = $3 AND status = 'accepted'
        RETURNING id`,
       [JSON.stringify(perms), connectionId, userId]
     );
