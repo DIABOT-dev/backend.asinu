@@ -196,6 +196,14 @@ async function featureFlagsHandler(pool, req, res) {
       caregiver_view_logs_enabled: envBool('CAREGIVER_VIEW_LOGS_ENABLED', true),
       caregiver_ack_enabled: envBool('CAREGIVER_ACK_ENABLED', true),
     },
+    // Check-in flow selector (MVP audit lỗi 7). FE currently calls
+    // /checkin/start + /checkin/triage (the AI-driven flow). The
+    // backend also exposes /checkin/script/* which is 0 AI calls per
+    // check-in — much cheaper. The full FE migration is tracked
+    // separately; this flag lets us A/B test once the FE picker lands.
+    checkin: {
+      mode: (process.env.CHECKIN_MODE || 'ai').toLowerCase() === 'script' ? 'script' : 'ai',
+    },
     tier: premium ? 'premium' : 'free',
   });
 }
