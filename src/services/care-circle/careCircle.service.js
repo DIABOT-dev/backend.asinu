@@ -128,18 +128,26 @@ async function createInvitation(pool, requesterId, data) {
     // Get requester name for notification
     const requesterName = await getUserDisplayName(pool, requesterId);
 
-    // Send push + save in-app notification (non-blocking)
+    // Save the in-app notification regardless of push availability — even
+    // if the addressee has never opened the app on a device with push
+    // permission, the invitation must show up in their notification bell
+    // when they next sign in. sendAndSave inserts the DB record first and
+    // only attempts a push if the token looks like an Expo token, so it's
+    // safe to call with push_token: null.
     pool.query('SELECT push_token, language_preference FROM users WHERE id = $1', [addressee_id])
       .then(r => {
         const addressee = r.rows[0];
-        if (!addressee?.push_token) return;
+        if (!addressee) return; // user genuinely doesn't exist — skip
         const lang = addressee.language_preference || 'vi';
         const { t: tt } = require('../../i18n');
-        return sendAndSave(pool, { id: addressee_id, push_token: addressee.push_token },
+        return sendAndSave(
+          pool,
+          { id: addressee_id, push_token: addressee.push_token || null },
           'care_circle_invitation',
           tt('push.invitation_title', lang),
           tt('push.invitation_body', lang, { name: requesterName }),
-          { invitationId: String(invitation.id), senderName: requesterName });
+          { invitationId: String(invitation.id), senderName: requesterName }
+        );
       })
       .catch(() => {});
 
