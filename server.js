@@ -114,6 +114,7 @@ app.use('/api/payments', paymentRoutes(pool));
 app.use('/api/subscriptions', subscriptionRoutes(pool));
 app.use('/api/voice', voiceRoutes(pool));
 app.use('/api/logs', logsRoutes(pool));
+app.use('/api/iap', iapRoutes(pool));
 app.use('/api/asinu-brain', asinuBrainRoutes(pool));
 
 // Sentry error handler must run BEFORE our custom one

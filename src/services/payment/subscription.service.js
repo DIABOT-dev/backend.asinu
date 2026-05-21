@@ -527,6 +527,84 @@ async function getHistory(pool, userId, { page = 1, limit = 20 } = {}) {
   };
 }
 
+// ─── activateFromIap ─────────────────────────────────────────────────
+/**
+ * Activate a Premium subscription based on a verified IAP receipt.
+ * Called by iap.service.verifyAndActivate AFTER the platform receipt has
+ * been validated. Mirrors activateSubscription but skips the QR / payment
+ * row workflow because IAP money already settled with Apple / Google.
+ *
+ * @param {object} pool
+ * @param {number} userId
+ * @param {object} opts
+ *   @param {string} opts.productId
+ *   @param {string} opts.transactionId    used as order_code for traceability
+ *   @param {number} opts.months           1 | 3 | 6 | 12
+ *   @param {string} [opts.expiresAt]      platform-provided expiry (preferred)
+ *   @param {string} opts.platform         'apple' | 'google'
+ */
+async function activateFromIap(pool, userId, { productId, transactionId, months, expiresAt, platform }) {
+  const planMonths = Number(months) || 1;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const now = new Date();
+    // Prefer the platform's expiry — it accounts for free trials, grace
+    // periods, etc. — and fall back to today + planMonths only when the
+    // verifier didn't surface one.
+    const fallbackEnd = new Date(now);
+    fallbackEnd.setMonth(fallbackEnd.getMonth() + planMonths);
+    const subEnd = expiresAt ? new Date(expiresAt) : fallbackEnd;
+
+    // Record the subscription with platform metadata so reporting can
+    // break down revenue by source. Uses qr_url='' since there's no QR.
+    await client.query(
+      `INSERT INTO subscriptions (
+         user_id, order_code, amount, qr_url, status, plan_months,
+         subscription_start, subscription_end, completed_at, qr_expires_at
+       ) VALUES ($1, $2, 0, '', 'completed', $3, $4, $5, NOW(), NOW())
+       ON CONFLICT (order_code) DO NOTHING`,
+      [userId, `iap:${platform}:${transactionId}`, planMonths, now, subEnd]
+    );
+
+    // Extend existing premium expiry if user is already premium and still active.
+    const { rows: userRows } = await client.query(
+      `SELECT subscription_tier, subscription_expires_at FROM users WHERE id = $1 FOR UPDATE`,
+      [userId]
+    );
+    const user = userRows[0];
+    let newExpiry = subEnd;
+    if (
+      user?.subscription_tier === 'premium' &&
+      user.subscription_expires_at &&
+      new Date(user.subscription_expires_at) > now &&
+      // Only extend when the IAP didn't already include an absolute expiry
+      // (Apple / Google's expiry is the authoritative one).
+      !expiresAt
+    ) {
+      newExpiry = new Date(user.subscription_expires_at);
+      newExpiry.setMonth(newExpiry.getMonth() + planMonths);
+    }
+
+    await client.query(
+      `UPDATE users SET subscription_tier = 'premium', subscription_expires_at = $1 WHERE id = $2`,
+      [newExpiry, userId]
+    );
+
+    await client.query('COMMIT');
+    await cacheDel(`subscription:${userId}`);
+    notifyPremiumActivated(pool, userId, newExpiry).catch(() => {});
+
+    return { ok: true, expiresAt: newExpiry, planMonths, platform };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    return { ok: false, message: err.message };
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   PLANS,
   payWithWallet,
@@ -537,6 +615,7 @@ module.exports = {
   FREE_HISTORY_DAYS,
   createQRForRecipient,
   payWithWalletForRecipient,
+  activateFromIap,
   getStatus,
   isPremium,
   createQR,
