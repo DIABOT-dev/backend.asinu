@@ -56,13 +56,64 @@ const TriageActionSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
-const SymptomAnalysisSchema = z.object({
-  detected_symptoms: z.array(z.string().min(1).max(80)).default([]),
-  cluster_key:       z.string().min(1).max(80).optional().nullable(),
-  needs_script:      z.boolean().default(false),
-  confidence:        z.number().min(0).max(1).optional(),
-  reasoning:         z.string().max(2000).optional(),
+// SymptomAnalysisSchema mirrors the shape the analyzer prompt in
+// src/core/agent/ai-symptom-analyzer.js (ANALYSIS_SYSTEM_PROMPT) tells the
+// model to return. _normalizeAnalysis() reads exactly these field names
+// with defensive fallbacks, so the schema must match — otherwise valid AI
+// output is rejected and the analyzer silently falls back to _emptyAnalysis,
+// erasing the whole analysis.
+const AnalysisQuestionSchema = z.object({
+  id:      z.string().min(1).max(40),
+  text:    z.string().min(1).max(800),
+  type:    z.enum(['single_choice', 'slider', 'free_text']).default('single_choice'),
+  options: z.array(z.string()).optional(),
+  min:     z.number().optional(),
+  max:     z.number().optional(),
 });
+
+const AnalysisRuleSchema = z.object({
+  conditions: z
+    .array(
+      z.object({
+        field: z.string().min(1),
+        op:    z.enum(['eq', 'neq', 'gte', 'lte', 'gt', 'lt', 'contains']),
+        value: z.unknown(),
+      })
+    )
+    .default([]),
+  combine:            z.enum(['and', 'or']).optional(),
+  severity:           z.enum(['high', 'medium', 'low']).optional(),
+  follow_up_hours:    z.number().optional(),
+  needs_doctor:       z.boolean().optional(),
+  needs_family_alert: z.boolean().optional(),
+});
+
+const ConclusionTemplateSchema = z.object({
+  summary:        z.string().optional(),
+  recommendation: z.string().optional(),
+  close_message:  z.string().optional(),
+});
+
+const SymptomAnalysisSchema = z.object({
+  understood:    z.string().min(1).max(200).optional(),
+  category:      z.string().max(80).optional(),
+  urgency:       z.enum(['emergency', 'urgent', 'moderate', 'mild', 'unknown']).default('unknown'),
+  possibleCauses: z.array(z.string().max(200)).default([]),
+  needsMoreInfo: z.boolean().optional(),
+  suggestedQuestions: z.array(AnalysisQuestionSchema).default([]),
+  scoringRules: z.array(AnalysisRuleSchema).default([]),
+  conclusionTemplates: z
+    .object({
+      low:    ConclusionTemplateSchema.optional(),
+      medium: ConclusionTemplateSchema.optional(),
+      high:   ConclusionTemplateSchema.optional(),
+    })
+    .partial()
+    .optional(),
+  clusterKey:  z.string().max(80).optional(),
+  displayName: z.string().max(200).optional(),
+  confidence:  z.number().min(0).max(1).optional(),
+}).passthrough(); // Allow extra fields the model invents — _normalizeAnalysis ignores them.
 
 /**
  * Try to parse `raw` (string OR object) as JSON, then validate against

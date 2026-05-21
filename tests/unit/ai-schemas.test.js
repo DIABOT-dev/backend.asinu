@@ -107,9 +107,43 @@ describe('TriageActionSchema', () => {
 });
 
 describe('SymptomAnalysisSchema', () => {
-  test('defaults are applied', () => {
-    const r = safeValidate(SymptomAnalysisSchema, { detected_symptoms: ['fatigue'] });
+  test('accepts the shape the analyzer prompt asks the model to return', () => {
+    const r = safeValidate(SymptomAnalysisSchema, {
+      understood: 'Đại tiện ra máu',
+      category: 'gastrointestinal',
+      urgency: 'urgent',
+      possibleCauses: ['trĩ', 'polyp đại tràng'],
+      needsMoreInfo: true,
+      suggestedQuestions: [
+        { id: 'aq1', text: 'Mức độ?', type: 'slider', min: 0, max: 10 },
+        { id: 'aq2', text: 'Bao lâu rồi?', type: 'single_choice', options: ['<1 ngày', '>1 ngày'] },
+      ],
+      scoringRules: [
+        { conditions: [{ field: 'aq1', op: 'gte', value: 7 }], severity: 'high', needs_doctor: true },
+      ],
+      conclusionTemplates: { low: { summary: 'x', recommendation: 'y', close_message: 'z' } },
+      clusterKey: 'rectal_bleeding',
+      displayName: 'Đại tiện ra máu',
+      confidence: 0.85,
+    });
     expect(r.ok).toBe(true);
-    expect(r.data.needs_script).toBe(false);
+    expect(r.data.suggestedQuestions).toHaveLength(2);
+  });
+
+  test('applies defaults for missing arrays', () => {
+    const r = safeValidate(SymptomAnalysisSchema, { understood: 'mệt' });
+    expect(r.ok).toBe(true);
+    expect(r.data.urgency).toBe('unknown');
+    expect(r.data.possibleCauses).toEqual([]);
+    expect(r.data.suggestedQuestions).toEqual([]);
+    expect(r.data.scoringRules).toEqual([]);
+  });
+
+  test('passes through unknown fields without rejecting', () => {
+    const r = safeValidate(SymptomAnalysisSchema, {
+      understood: 'x',
+      futureField: 'AI invented this',
+    });
+    expect(r.ok).toBe(true);
   });
 });
