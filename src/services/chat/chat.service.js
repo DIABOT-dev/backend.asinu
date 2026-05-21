@@ -845,19 +845,43 @@ async function processChat(pool, userId, message, context = {}) {
 
     const replyProvider = replyResult.provider || 'mock';
 
-    console.log(`[Chat] user=${userId} provider=${replyProvider} reply="${reply.slice(0, 100)}${reply.length > 100 ? '…' : ''}"`);
+    // Pull token counts out of whatever shape the provider returned them in.
+    // Today we see two shapes in the wild: OpenAI/MedGemma return
+    // meta.tokens_used = { prompt, completion, total }; Gemini returns
+    // meta.tokens_used = { promptTokenCount, candidatesTokenCount,
+    // totalTokenCount }. Normalize so logAiInteraction + the chat
+    // controller can rely on a single shape.
+    const meta = replyResult.meta || {};
+    const rawTokens = meta.tokens_used || {};
+    const inputTokens = Number(
+      rawTokens.prompt ?? rawTokens.promptTokenCount ?? rawTokens.prompt_tokens ?? 0
+    );
+    const outputTokens = Number(
+      rawTokens.completion ?? rawTokens.candidatesTokenCount ?? rawTokens.completion_tokens ?? 0
+    );
+    const totalTokens = Number(
+      rawTokens.total ?? rawTokens.totalTokenCount ?? rawTokens.total_tokens ?? (inputTokens + outputTokens) ?? 0
+    );
+
+    console.log(`[Chat] user=${userId} provider=${replyProvider} tokens=${totalTokens} reply="${reply.slice(0, 100)}${reply.length > 100 ? '…' : ''}"`);
 
     // Log AI interaction
     logAiInteraction(pool, {
       userId,
       type: 'chat',
-      model: replyProvider,
+      feature: 'chat',
+      provider: replyProvider,
+      model: meta.model || replyProvider,
       promptSummary: message.slice(0, 500),
       responseSummary: reply,
-      tokensUsed: 0,
+      inputTokens,
+      outputTokens,
+      tokensUsed: totalTokens,
+      latencyMs: chatDuration,
       durationMs: chatDuration,
       isFallback: replyProvider === 'mock',
       safetyFiltered,
+      success: true,
     }).catch(() => {}); // fire-and-forget
 
     // Save assistant reply
@@ -878,7 +902,12 @@ async function processChat(pool, userId, message, context = {}) {
       provider: replyProvider,
       created_at: assistantRow?.created_at
         ? new Date(assistantRow.created_at).toISOString()
-        : now.toISOString()
+        : now.toISOString(),
+      // Expose so the controller can record this call against the user's
+      // monthly chatbot token quota (see chat.controller.postChat ->
+      // recordChatbotUse). Without this the meter sat at 0 forever.
+      tokens_used: totalTokens,
+      meta: { tokens_used: { prompt: inputTokens, completion: outputTokens, total: totalTokens } },
     };
   } catch (err) {
     console.error(`[Chat] user=${userId} error:`, err.message);
