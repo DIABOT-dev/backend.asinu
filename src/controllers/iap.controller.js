@@ -66,4 +66,43 @@ function listProducts(_pool, req, res) {
   });
 }
 
-module.exports = { verifyReceipt, listProducts };
+/**
+ * Apple Server Notifications v2 — Apple POSTs signed JWS webhook envelopes
+ * here when subscriptions renew, expire, refund, or are revoked. URL goes
+ * in App Store Connect → App Information → App Store Server Notifications.
+ *
+ * Apple expects 200 within 5s; non-2xx triggers exponential retry for 3 days.
+ * We always return 200 unless verification fails so retries don't loop.
+ */
+async function appleNotifications(pool, req, res) {
+  try {
+    const result = await iapService.handleAppleNotification(pool, req.body || {});
+    if (!result.ok && result.code === 'APPLE_NOTIF_VERIFY_FAILED') {
+      // Signature failed → 401 so attacker doesn't get acked.
+      return res.status(401).json(result);
+    }
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
+/**
+ * Google Play Real-Time Developer Notifications — Pub/Sub push delivers
+ * subscription state changes here. Configure in Google Play Console →
+ * Monetization setup → Real-time developer notifications.
+ *
+ * Pub/Sub retries non-200 responses; ack everything we accept.
+ */
+async function googleNotifications(pool, req, res) {
+  try {
+    const result = await iapService.handleGoogleNotification(pool, req.body || {});
+    // Always 200 to ack — even errors we logged. Pub/Sub will retry only
+    // on 5xx, and we don't want infinite retry on a malformed message.
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({ ok: false, error: err.message });
+  }
+}
+
+module.exports = { verifyReceipt, listProducts, appleNotifications, googleNotifications };

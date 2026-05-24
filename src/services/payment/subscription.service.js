@@ -605,6 +605,110 @@ async function activateFromIap(pool, userId, { productId, transactionId, months,
   }
 }
 
+// ─── IAP renewal / revoke from store webhooks ─────────────────────────
+/**
+ * Apply a renewal / expiry / revoke event coming from Apple Server
+ * Notifications v2 or Google RTDN. Looks up the user via the existing
+ * iap_receipts row (matched by original_transaction_id) and updates
+ * users.subscription_expires_at — or downgrades them to free when the
+ * event is REVOKE / REFUND / EXPIRED past now.
+ *
+ * @param {object} pool
+ * @param {object} ev
+ *   @param {'apple'|'google'} ev.platform
+ *   @param {string}   ev.transactionId         the new event's tx id (DID_RENEW gives a new one)
+ *   @param {string}   ev.originalTransactionId chain id — used to find the user
+ *   @param {string}   ev.productId
+ *   @param {string|null} ev.expiresAt          ISO; null when revoking
+ *   @param {'renew'|'revoke'|'expire'}  ev.action
+ *   @param {object}   [ev.rawPayload]
+ */
+async function applyIapWebhookEvent(pool, ev) {
+  const {
+    platform, transactionId, originalTransactionId, productId,
+    expiresAt, action, rawPayload,
+  } = ev;
+
+  if (!originalTransactionId) {
+    return { ok: false, error: 'Missing originalTransactionId' };
+  }
+
+  // 1. Find which user this chain belongs to via the first receipt we
+  //    stored for it. If we can't, log and ack (Apple/Google retry forever
+  //    otherwise) — there's nothing to update.
+  const { rows } = await pool.query(
+    `SELECT user_id FROM iap_receipts
+     WHERE original_transaction_id = $1 OR transaction_id = $1
+     ORDER BY id ASC LIMIT 1`,
+    [originalTransactionId]
+  );
+  const userId = rows[0]?.user_id;
+  if (!userId) {
+    return { ok: false, error: 'Unknown subscription chain — no matching receipt' };
+  }
+
+  // 2. Persist the new receipt row for audit + future dedupe.
+  if (transactionId) {
+    try {
+      await pool.query(
+        `INSERT INTO iap_receipts
+           (user_id, platform, product_id, transaction_id, original_transaction_id, expires_at, raw_payload)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+         ON CONFLICT (transaction_id) DO NOTHING`,
+        [userId, platform, productId || 'unknown', transactionId,
+         originalTransactionId, expiresAt || null, JSON.stringify(rawPayload || {})]
+      );
+    } catch (err) {
+      if (err.code !== '42P01') throw err;
+    }
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    if (action === 'renew' && expiresAt) {
+      // Move expiry to the new value Apple/Google supplied. Always trust
+      // the store's expiry — it accounts for prorations, grace periods.
+      await client.query(
+        `UPDATE users
+         SET subscription_tier = 'premium', subscription_expires_at = $1
+         WHERE id = $2`,
+        [new Date(expiresAt), userId]
+      );
+    } else if (action === 'revoke' || action === 'expire') {
+      // Downgrade to free, but only if the stored expiry was actually in
+      // the past (or this is an explicit revoke). Prevents a race where a
+      // late EXPIRED notification arrives after a renewal we already
+      // applied.
+      const { rows: u } = await client.query(
+        `SELECT subscription_expires_at FROM users WHERE id = $1 FOR UPDATE`,
+        [userId]
+      );
+      const currentExpiry = u[0]?.subscription_expires_at;
+      const shouldRevoke = action === 'revoke'
+        || !currentExpiry
+        || new Date(currentExpiry) <= new Date();
+
+      if (shouldRevoke) {
+        await client.query(
+          `UPDATE users SET subscription_tier = 'free' WHERE id = $1`,
+          [userId]
+        );
+      }
+    }
+
+    await client.query('COMMIT');
+    await cacheDel(`subscription:${userId}`);
+    return { ok: true, userId };
+  } catch (err) {
+    await client.query('ROLLBACK');
+    return { ok: false, error: err.message };
+  } finally {
+    client.release();
+  }
+}
+
 module.exports = {
   PLANS,
   payWithWallet,
@@ -616,6 +720,7 @@ module.exports = {
   createQRForRecipient,
   payWithWalletForRecipient,
   activateFromIap,
+  applyIapWebhookEvent,
   getStatus,
   isPremium,
   createQR,
