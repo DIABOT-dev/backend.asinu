@@ -1,4 +1,4 @@
-﻿require('dotenv').config();
+require('dotenv').config();
 const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -18,6 +18,7 @@ const paymentRoutes = require('./src/routes/payment.routes');
 const subscriptionRoutes = require('./src/routes/subscription.routes');
 const voiceRoutes = require('./src/routes/voice.routes');
 const logsRoutes = require('./src/routes/logs.routes');
+const iapRoutes = require('./src/routes/iap.routes');
 const asinuBrainRoutes = require('./asinu-brain-extension/routes/asinuBrain.routes');
 const langMiddleware = require('./src/middleware/lang.middleware');
 const { getRedis } = require('./src/lib/redis');

@@ -207,10 +207,10 @@ const logDataSchemas = {
 };
 
 // Auth validation schemas
-// Register requires both email AND phone
+// Register allows email AND optional phone
 const registerSchema = z.object({
   email: emailSchema,
-  phone_number: phoneSchema,
+  phone_number: z.preprocess((val) => (val === '' ? undefined : val), phoneSchema.optional().nullable()),
   password: passwordSchema,
   full_name: z.string().min(1, t('validation.name_required')).max(255).optional(),
   display_name: z.string().max(255).optional(),
