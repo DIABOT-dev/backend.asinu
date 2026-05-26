@@ -14,7 +14,7 @@
  * Estimated: 100-500 AI calls/đêm cho toàn bộ users.
  */
 
-const OpenAI = require('openai');
+const { callTextAi } = require('../ai/ai.service');
 const { getPendingFallbacks, markFallbackProcessed } = require('./fallback.service');
 const { addCluster, updateClusterStats, generateScriptForCluster, toClusterKey } = require('./script.service');
 const { updateSymptomFrequency } = require('./symptom-tracker.service');
@@ -22,14 +22,6 @@ const { getActiveUserIds, updateAllSegments, getUsersBySegment } = require('../p
 
 // Phase 6 #16: Priority compute — timeout limit để tránh cycle chạy quá lâu
 const MAX_CYCLE_MS = parseInt(process.env.RND_MAX_CYCLE_MS || '1800000', 10); // default 30 phút
-
-let _client = null;
-function getClient() {
-  if (!_client) _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  return _client;
-}
-
-const RND_MODEL = process.env.RND_CYCLE_MODEL || 'gpt-4o-mini';
 
 // ─── Main R&D Cycle ─────────────────────────────────────────────────────────
 
@@ -310,17 +302,14 @@ Phân loại triệu chứng này. Trả về JSON:
 CHỈ JSON.`;
 
   try {
-    const response = await getClient().chat.completions.create({
-      model: RND_MODEL,
+    const response = await callTextAi({
+      system: 'Bạn là bác sĩ phân loại triệu chứng. Chỉ trả về JSON.',
+      prompt,
       temperature: 0.1,
-      max_tokens: 200,
-      messages: [
-        { role: 'system', content: 'Bạn là bác sĩ phân loại triệu chứng. Chỉ trả về JSON.' },
-        { role: 'user', content: prompt },
-      ],
+      maxTokens: 200,
     });
 
-    const raw = (response.choices?.[0]?.message?.content || '').trim();
+    const raw = response.content;
     const match = raw.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('Invalid JSON');
 

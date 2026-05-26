@@ -19,7 +19,12 @@ const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-4o';
  * @returns {Promise<string>} transcript text
  */
 async function transcribeAudio(audioBuffer, mimeType, filename = 'audio.m4a') {
-  if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not configured');
+  const endpoint = process.env.WHISPER_ENDPOINT || 'https://api.openai.com/v1/audio/transcriptions';
+  const apiKey = process.env.WHISPER_API_KEY || OPENAI_API_KEY;
+
+  if (!apiKey && endpoint.includes('api.openai.com')) {
+    throw new Error('OPENAI_API_KEY not configured');
+  }
 
   // Use native FormData (Node.js 18+) + Blob
   const blob = new Blob([audioBuffer], { type: mimeType });
@@ -28,18 +33,21 @@ async function transcribeAudio(audioBuffer, mimeType, filename = 'audio.m4a') {
   form.append('model', 'whisper-1');
   form.append('language', 'vi'); // Ưu tiên tiếng Việt
 
-  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+  const headers = {};
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+
+  const response = await fetch(endpoint, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-    },
+    headers,
     body: form,
   });
 
   if (!response.ok) {
     const errText = await response.text();
 
-    throw new Error(`Whisper API error: ${response.status}`);
+    throw new Error(`Whisper API error (${endpoint}): ${response.status} - ${errText}`);
   }
 
   const data = await response.json();

@@ -7,6 +7,7 @@
  * Categories: health, preference, concern, habit, medication, general
  */
 
+const { callTextAi } = require('../ai/ai.service');
 const MAX_MEMORIES = 20;
 
 /**
@@ -81,22 +82,13 @@ Cập nhật: [{"content":"mới","category":"...","action":"update","old_conten
 CHỈ JSON.`;
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [{ role: 'user', content: prompt }],
-        max_completion_tokens: 512,
-        temperature: 0.3,
-      }),
+    const response = await callTextAi({
+      prompt,
+      temperature: 0.3,
+      maxTokens: 512,
     });
 
-    const data = await response.json();
-    const raw = (data.choices?.[0]?.message?.content || '').trim();
+    const raw = response.content;
 
     // Parse JSON từ response
     const jsonMatch = raw.match(/\[[\s\S]*\]/);

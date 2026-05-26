@@ -17,19 +17,12 @@
  *   -> No AI needed
  */
 
-const OpenAI = require('openai');
+const { callTextAi } = require('../../services/ai/ai.service');
 const { cacheGet, cacheSet } = require('../../lib/redis');
 
 // ─── Provider config ────────────────────────────────────────────────────────
 
-const AI_MODEL = process.env.ANSWER_PARSER_MODEL || process.env.SYMPTOM_AI_MODEL || 'gpt-4o-mini';
 const PARSE_CACHE_TTL = 24 * 60 * 60; // 1 day
-
-let _client = null;
-function getClient() {
-  if (!_client) _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  return _client;
-}
 
 // ─── Vietnamese diacritics removal ──────────────────────────────────────────
 
@@ -457,21 +450,18 @@ Bệnh nhân trả lời: "${rawAnswer}"
 Tìm đáp án phù hợp nhất. Trả về JSON.`;
 
     const startTime = Date.now();
-    const response = await getClient().chat.completions.create({
-      model: AI_MODEL,
+    const response = await callTextAi({
+      system: AI_PARSE_SYSTEM_PROMPT,
+      prompt: userPrompt,
       temperature: 0.1,
-      max_tokens: 200,
-      messages: [
-        { role: 'system', content: AI_PARSE_SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt },
-      ],
+      maxTokens: 200,
     });
 
     const duration = Date.now() - startTime;
     const usage = response.usage || {};
-    console.log(`[AnswerParser] AI parse: model=${AI_MODEL}, tokens=${usage.total_tokens || '?'}, duration=${duration}ms`);
+    console.log(`[AnswerParser] AI parse: provider=${response.provider}, model=${response.model}, tokens=${usage.total || '?'}, duration=${duration}ms`);
 
-    const raw = (response.choices?.[0]?.message?.content || '').trim();
+    const raw = response.content;
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       return { matched: null, value: null, confidence: 0, method: 'ai_failed' };

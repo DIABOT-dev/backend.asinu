@@ -7,18 +7,10 @@
  *   - Non-emergency → GPT with tight prompt for summary + recommendation
  */
 
-const OpenAI = require('openai');
+const { callTextAi } = require('../../services/ai/ai.service');
 const { getHonorifics } = require('../../lib/honorifics');
 const { filterTriageResult } = require('../../services/ai/ai-safety.service');
 const { logAiInteraction } = require('../../services/ai/ai-logger.service');
-
-// ─── OpenAI client (singleton) ───────────────────────────────────────────────
-
-let _client = null;
-function getClient() {
-  if (!_client) _client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  return _client;
-}
 
 const CONCLUSION_MODEL = process.env.TRIAGE_CONCLUSION_MODEL || 'gpt-4o';
 
@@ -229,21 +221,15 @@ async function _generateConclusionWithGPT(state, profile, h, lang, pool) {
   let tokensUsed = 0;
 
   try {
-    const response = await getClient().chat.completions.create({
-      model: CONCLUSION_MODEL,
+    const response = await callTextAi({
+      system: 'Bạn là trợ lý y tế Asinu. Chỉ trả về JSON. Không chẩn đoán. Không kê đơn. Luôn khuyên gặp bác sĩ khi cần. Trả lời có dấu tiếng Việt đầy đủ.',
+      prompt,
       temperature: 0.3,
-      max_tokens: 400,
-      messages: [
-        {
-          role: 'system',
-          content: 'Bạn là trợ lý y tế Asinu. Chỉ trả về JSON. Không chẩn đoán. Không kê đơn. Luôn khuyên gặp bác sĩ khi cần. Trả lời có dấu tiếng Việt đầy đủ.',
-        },
-        { role: 'user', content: prompt },
-      ],
+      maxTokens: 400,
     });
 
-    const raw = response.choices[0]?.message?.content || '';
-    tokensUsed = response.usage?.total_tokens || 0;
+    const raw = response.content;
+    tokensUsed = response.usage?.total || 0;
     const parsed = _parseJSON(raw);
     if (!parsed) throw new Error('GPT returned invalid JSON');
 
@@ -363,14 +349,13 @@ RULES:
 CHỈ JSON.`;
 
   try {
-    const response = await getClient().chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_completion_tokens: 1024,
+    const response = await callTextAi({
+      prompt,
+      maxTokens: 1024,
       temperature: 0.2,
     });
 
-    const raw = (response.choices?.[0]?.message?.content || '').trim();
+    const raw = response.content;
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
 
@@ -446,14 +431,13 @@ QUY TẮC AN TOÀN:
 CHỈ JSON.`;
 
   try {
-    const response = await getClient().chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      max_completion_tokens: 200,
+    const response = await callTextAi({
+      prompt,
+      maxTokens: 200,
       temperature: 0.1,
     });
 
-    const raw = (response.choices?.[0]?.message?.content || '').trim();
+    const raw = response.content;
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       // Fail-safe: nếu AI fail → treat as urgent để gọi bác sĩ (không dám
