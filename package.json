@@ -32,10 +32,10 @@
     "node-cron": "^3.0.3",
     "openai": "^6.27.0",
     "pg": "^8.11.3",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@sentry/node": "^7.119.0"
   },
   "devDependencies": {
-    "@sentry/node": "^7.119.0",
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-node": "^11.1.0",
