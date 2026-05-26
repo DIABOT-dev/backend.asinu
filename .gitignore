@@ -11,3 +11,5 @@ pnpm-debug.log*
 tmp/
 cache/
 audit_pack_v1_*/**/*token*
+certs/*.json
+certs/google-play-key.json
