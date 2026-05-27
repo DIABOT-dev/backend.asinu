@@ -462,6 +462,16 @@ async function upsertProfileV2(pool, userId, data) {
     );
   }
 
+  // Ghi nhận sự đồng ý chính sách bảo mật Nghị định 13
+  await pool.query(
+    `UPDATE users 
+        SET consent_accepted_at = NOW(), 
+            consent_version = 'v1.0.0' 
+      WHERE id = $1 
+        AND consent_accepted_at IS NULL`,
+    [userId]
+  );
+
   // Invalidate profile cache so next fetch returns fresh data
   await cacheDel(`profile:${userId}`, `user:name:${userId}`);
 
