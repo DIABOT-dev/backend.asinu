@@ -28,6 +28,17 @@ const { sendAndSave } = require('../notification/basic.notification.service');
 
 const WALLET_LOW_BALANCE_THRESHOLD = 50000; // 50.000đ
 
+function formatDisplayDate(dateLike, lang = 'vi') {
+  const date = new Date(dateLike);
+  if (Number.isNaN(date.getTime())) return '';
+  if (lang === 'en') {
+    return date.toLocaleDateString('en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  }
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${day}/${month}/${date.getFullYear()}`;
+}
+
 // Helper: notify Premium activation
 async function notifyPremiumActivated(pool, userId, expiresAt) {
   try {
@@ -38,7 +49,7 @@ async function notifyPremiumActivated(pool, userId, expiresAt) {
     if (!rows[0]) return;
     const u = rows[0];
     const lang = u.language_preference || 'vi';
-    const dateStr = new Date(expiresAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'vi-VN');
+    const dateStr = formatDisplayDate(expiresAt, lang);
     await sendAndSave(pool, { id: userId, push_token: u.push_token }, 'subscription_activated',
       t('push.subscription_activated_title', lang),
       t('push.subscription_activated_body', lang, { date: dateStr }),
@@ -340,7 +351,7 @@ async function notifyGiftConfirmed(pool, payerId, recipientId, expiresAt) {
     if (!rows[0]) return;
     const u = rows[0];
     const lang = u.language_preference || 'vi';
-    const dateStr = new Date(expiresAt).toLocaleDateString(lang === 'en' ? 'en-US' : 'vi-VN');
+    const dateStr = formatDisplayDate(expiresAt, lang);
     await sendAndSave(
       pool,
       { id: payerId, push_token: u.push_token },
