@@ -16,6 +16,7 @@ const { runBasicNotifications } = require('../services/notification/basic.notifi
 const { runNightlyCycle } = require('../services/checkin/rnd-cycle.service');
 const { updateAllSegments } = require('../services/profile/lifecycle.service');
 const { runDailyLifecycleNotifications } = require('../services/notification/lifecycle.notification.service');
+const { dispatchPendingNotifications, runHealthFeedCycle } = require('../services/health_feed/service');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
@@ -65,6 +66,17 @@ function startScheduler(pool) {
     }
   });
 
+  safeCron('* * * * *', 'health_feed_notifications', async () => {
+    const result = await dispatchPendingNotifications(pool);
+    if (result?.sent > 0) {
+      logger.info('cron.health_feed_notifications.sent', {
+        sent: result.sent,
+        scanned: result.scanned,
+        skipped: result.skipped,
+      });
+    }
+  });
+
   // Daily chat history cleanup at 03:00 VN time.
   safeCron('0 3 * * *', 'chat_history_cleanup', async () => {
     await pool.query('SELECT cleanup_chat_histories()');
@@ -87,6 +99,11 @@ function startScheduler(pool) {
     const dayOfWeek = new Date(new Date().toLocaleString('en-US', { timeZone: TZ })).getDay();
     const stats = await runDailyLifecycleNotifications(pool, { dayOfWeek });
     logger.info('cron.lifecycle_notifications.stats', { stats });
+  });
+
+  safeCron('0 */6 * * *', 'health_feed_cycle', async () => {
+    const stats = await runHealthFeedCycle(pool);
+    logger.info('cron.health_feed_cycle.stats', { stats });
   });
 }
 

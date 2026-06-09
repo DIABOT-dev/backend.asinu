@@ -15,7 +15,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:reset": "node scripts/reset-db.js",
-    "db:backup": "./scripts/backup-db.sh"
+    "db:backup": "./scripts/backup-db.sh",
+    "test:health-feed": "node scripts/test-health-feed-notifications.js"
   },
   "dependencies": {
     "@apple/app-store-server-library": "^3.1.0",

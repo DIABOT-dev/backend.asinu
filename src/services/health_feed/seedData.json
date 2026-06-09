@@ -1,0 +1,674 @@
+{
+  "content_items": [
+    {
+      "id": "family-dont-just-ask",
+      "title": "Đừng chỉ hỏi bố mẹ \"có khỏe không\"",
+      "summary": "Nhiều người lớn tuổi thường trả lời \"bố/mẹ ổn\" dù cơ thể đang có dấu hiệu bất thường. Người nhà nên hỏi cụ thể hơn.",
+      "body": "Người cao tuổi thường có tâm lý ngại làm phiền con cái, lo lắng về chi phí điều trị, hoặc đôi khi chính họ cũng không nhận ra những thay đổi dần dần của cơ thể. Để nắm bắt chính xác tình trạng của bố mẹ, thay vì những câu hỏi chung chung, bạn hãy sử dụng những câu hỏi cụ thể và quan sát các thói quen sinh hoạt hằng ngày.",
+      "checklist": [
+        "Hôm nay bố/mẹ có cảm thấy chóng mặt hay loạng choạng khi đứng dậy không?",
+        "Bố/mẹ ăn cơm có thấy ngon miệng không? Có bị mệt hoặc buồn ngủ nhiều sau khi ăn xong không?",
+        "Bố/mẹ có bị đau tức ngực, nặng ngực hay có lúc nào thấy hụt hơi, khó thở không?",
+        "Bố/mẹ có thấy đi tiểu nhiều lần hơn bình thường, đặc biệt là vào ban đêm không?",
+        "Tay chân bố/mẹ có bị tê bì, hoặc đi lại có thấy yếu sức hơn những ngày trước không?"
+      ],
+      "content_type": "family_note",
+      "target_roles": ["role_family", "role_caregiver"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Hỏi thăm bố mẹ ngay",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "family-5-signs-to-watch",
+      "title": "5 dấu hiệu ở bố mẹ không nên bỏ qua",
+      "summary": "Những thay đổi nhỏ trong sinh hoạt hằng ngày của bố mẹ có thể là cảnh báo sớm của các vấn đề sức khỏe nghiêm trọng.",
+      "body": "Khi chăm sóc bố mẹ lớn tuổi, việc nhạy cảm với các dấu hiệu bất thường là vô cùng quan trạng. Hãy lưu ý 5 dấu hiệu cảnh báo dưới đây:",
+      "checklist": [
+        "Giảm cân nhanh không rõ nguyên nhân: Có thể do ăn uống kém, tiểu đường hoặc các bệnh lý tiêu hóa.",
+        "Hay bị hụt hơi khi làm việc nhẹ: Cảnh báo vấn đề về tim mạch hoặc hô hấp.",
+        "Thay đổi tâm trạng hoặc suy giảm trí nhớ đột ngột: Không chỉ là tuổi già, có thể là dấu hiệu mất nước hoặc tai biến nhẹ.",
+        "Thường xuyên chóng mặt, loạng choạng khi đi lại: Nguy cơ cao dẫn đến té ngã nguy hiểm.",
+        "Khát nước liên tục và tiểu đêm nhiều: Dấu hiệu điển hình của đường huyết tăng cao."
+      ],
+      "content_type": "family_note",
+      "target_roles": ["role_family", "role_caregiver"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "medium",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Xem hướng dẫn chi tiết",
+      "cta_target": "/feed/family-5-signs-to-watch"
+    },
+    {
+      "id": "family-tired-after-meal",
+      "title": "Khi bố mẹ nói \"hơi mệt\", nên hỏi thêm gì?",
+      "summary": "Cảm giác \"mệt mỏi\" ở người lớn tuổi rất mơ hồ nhưng có thể chứa đựng nhiều nguy cơ nếu đi kèm các biểu hiện cụ thể.",
+      "body": "Mệt mỏi là một triệu chứng rất phổ biến ở người cao tuổi, nhưng đôi khi nó là biểu hiện của hạ đường huyết, huyết áp không ổn định hoặc thiếu máu cơ tim thầm lặng. Hãy hỏi kỹ hơn để xác định tính nghiêm trọng.",
+      "checklist": [
+        "Mệt mỏi bắt đầu từ lúc nào? Có liên quan đến bữa ăn hay sau khi vận động không?",
+        "Bố/mẹ có kèm theo đau đầu, chóng mặt, vã mồ hôi hay lạnh tay chân không?",
+        "Có cảm giác trống ngực, tim đập nhanh hay tức ngực không?",
+        "Bố/mẹ có đo huyết áp và đường huyết gần đây chưa?"
+      ],
+      "content_type": "family_note",
+      "target_roles": ["role_family"],
+      "target_conditions": ["condition_elderly_care"],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Đo huyết áp/đường huyết",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "family-diabetes-3-moments",
+      "title": "Bố mẹ tiểu đường: 3 thời điểm nên hỏi thăm",
+      "summary": "Người bệnh tiểu đường rất dễ gặp các biến động đường huyết bất chợt. Hãy chú ý hỏi thăm vào 3 thời điểm nhạy cảm này.",
+      "body": "Kiểm soát đường huyết không chỉ là dùng thuốc đúng giờ mà còn là theo dõi các biểu hiện lâm sàng. Dưới đây là 3 thời điểm con cái nên gọi điện hoặc hỏi thăm trực tiếp bố mẹ:",
+      "checklist": [
+        "Sáng sớm khi mới ngủ dậy: Hỏi xem bố mẹ có bị mệt mỏi, vã mồ hôi đêm hoặc đau đầu không (dấu hiệu hạ đường huyết ban đêm).",
+        "Khoảng 2 giờ sau bữa ăn chính: Hỏi xem bố mẹ có bị buồn ngủ rũ rượi, khát nước hay đi tiểu nhiều không (dấu hiệu đường huyết tăng cao sau ăn).",
+        "Trước các buổi tập thể dục hoặc đi bộ: Nhắc bố mẹ kiểm tra sức khỏe và mang theo vài viên kẹo phòng hạ đường huyết."
+      ],
+      "content_type": "family_note",
+      "target_roles": ["role_family"],
+      "target_conditions": ["condition_diabetes"],
+      "target_tags": [],
+      "severity_level": "medium",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Nhắc bố mẹ check-in",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "family-call-doctor-immediately",
+      "title": "Khi nào người nhà cần gọi cấp cứu ngay?",
+      "summary": "Nhận biết sớm các triệu chứng nguy kịch để can thiệp kịp thời, tránh các biến chứng đe dọa tính mạng bố mẹ.",
+      "body": "Có những dấu hiệu cấp cứu y khoa mà người nhà tuyệt đối không được chần chừ hay tự xử lý tại nhà. Hãy gọi ngay số cấp cứu 115 hoặc đưa bố mẹ đến cơ sở y tế gần nhất nếu xuất hiện một trong các dấu hiệu sau:",
+      "checklist": [
+        "Đau tức ngực dữ dội kéo dài trên 5 phút, lan lên vai, cổ hoặc tay trái.",
+        "Khó thở cấp tính, thở rít, co kéo cơ hô hấp ở cổ hoặc ngực.",
+        "Yếu đột ngột một bên tay, chân, méo miệng hoặc nói khó, nói ngọng (dấu hiệu đột quỵ).",
+        "Mất ý thức, ngất xỉu, co giật hoặc lay gọi không phản hồi.",
+        "Đau đầu dữ dội đột ngột chưa từng có kèm nôn mửa hoặc gáy cứng."
+      ],
+      "content_type": "warning",
+      "target_roles": ["role_family", "role_caregiver"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "urgent",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Xem danh bạ khẩn cấp",
+      "cta_target": "/feed/family-call-doctor-immediately"
+    },
+    {
+      "id": "family-first-7-days-guide",
+      "title": "Cách theo dõi sức khỏe bố mẹ 7 ngày đầu",
+      "summary": "7 ngày đầu tiên tham gia Asinu là khoảng thời gian vàng để hình thành thói quen theo dõi sức khỏe chủ động.",
+      "body": "Để hỗ trợ bố mẹ tốt nhất, người nhà nên đồng hành cùng bố mẹ thiết lập thói quen ghi chép chỉ số hằng ngày. Khi có dữ liệu liên tục trong 7 ngày, Asinu có thể phân tích và chỉ ra các quy luật sức khỏe cụ thể.",
+      "checklist": [
+        "Ngày 1-3: Đồng hành hướng dẫn bố mẹ cách mở app, ghi nhận huyết áp hoặc đường huyết sau khi đo.",
+        "Ngày 4-5: Nhắc nhở nhẹ nhàng vào khung giờ cố định, giúp bố mẹ ghi nhận cảm giác cơ thể (mệt, khỏe, ngủ ngon).",
+        "Ngày 6-7: Xem bản báo cáo sơ bộ đầu tiên cùng bố mẹ để thấy sự tiến bộ và các điểm cần lưu ý."
+      ],
+      "content_type": "family_note",
+      "target_roles": ["role_family"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Bắt đầu theo dõi",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "family-post-meal-lethargy",
+      "title": "Bố mẹ hay mệt sau ăn: Dấu hiệu chớ coi thường",
+      "summary": "Mệt mỏi rã rời ngay sau khi ăn xong có thể liên quan chặt chẽ đến sự dao động đường huyết đột ngột ở người lớn tuổi.",
+      "body": "Hiện tượng mệt mỏi hoặc buồn ngủ cực độ sau ăn (postprandial somnolence) ở người cao tuổi thường liên quan đến hai nguyên nhân: Huyết áp giảm sau ăn (máu dồn về dạ dày để tiêu hóa thức ăn) hoặc đường huyết tăng vọt do bữa ăn nhiều tinh bột. Bạn nên theo dõi và điều chỉnh chế độ ăn của bố mẹ.",
+      "checklist": [
+        "Giảm bớt tỷ lệ cơm trắng, bún, bánh mì trong bữa ăn; tăng cường rau xanh và đạm lành mạnh.",
+        "Đo huyết áp và đường huyết trước ăn và sau ăn 2 giờ để kiểm chứng sự thay đổi chỉ số.",
+        "Tránh để bố mẹ đứng dậy đột ngột hoặc vận động mạnh ngay sau khi ăn xong."
+      ],
+      "content_type": "family_note",
+      "target_roles": ["role_family"],
+      "target_conditions": ["condition_diabetes", "condition_hypertension"],
+      "target_tags": [],
+      "severity_level": "medium",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Đọc bài viết chi tiết",
+      "cta_target": "/feed/family-post-meal-lethargy"
+    },
+    {
+      "id": "family-remind-without-pressure",
+      "title": "Cách nhắc bố mẹ check-in không gây áp lực",
+      "summary": "Làm thế nào để nhắc nhở bố mẹ đo huyết áp, đường huyết mà không khiến họ có cảm giác bị kiểm soát hay lo lắng?",
+      "body": "Nhiều cha mẹ lớn tuổi có tâm lý sợ bị coi là \"gánh nặng\" hoặc cảm thấy phiền phức khi con cái liên tục nhắc nhở việc uống thuốc, đo chỉ số. Hãy khéo léo thay đổi cách tiếp cận để bố mẹ thấy thoải mái hơn.",
+      "checklist": [
+        "Thay vì hỏi \"Bố đo huyết áp chưa?\", hãy nói \"Hôm nay con thấy trong app báo chỉ số của bố rất tốt, bố đo chưa để con cập nhật giúp nhé\".",
+        "Biến việc đo chỉ số thành thói quen chung của cả nhà: Chia sẻ chỉ số của chính bạn để tạo không khí đồng hành.",
+        "Giải thích rõ ý nghĩa: Đo chỉ số đều đặn giúp con yên tâm làm việc ở xa vì luôn biết bố mẹ ổn."
+      ],
+      "content_type": "family_note",
+      "target_roles": ["role_family"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Chia sẻ cho gia đình",
+      "cta_target": "/feed/family-remind-without-pressure"
+    },
+    {
+      "id": "family-1-min-inquiry-template",
+      "title": "Checklist hỏi thăm bố mẹ trong 1 phút",
+      "summary": "Chỉ cần 1 phút gọi điện hoặc trò chuyện trực tiếp với 5 câu hỏi nhanh này để nắm bắt tình hình sức khỏe của bố mẹ.",
+      "body": "Đôi khi khoảng cách địa lý khiến bạn không thể ở bên chăm sóc bố mẹ mỗi ngày. Hãy dành ra 1 phút mỗi tối gọi điện hỏi thăm với checklist dưới đây để kịp thời phát hiện các thay đổi bất thường.",
+      "checklist": [
+        "Hôm nay bố mẹ ăn uống thế nào, có ăn hết suất không?",
+        "Giấc ngủ đêm qua của bố mẹ có sâu không, có bị thức giấc giữa chừng không?",
+        "Trong người có thấy chỗ nào mỏi mệt hay đau nhức khác thường không?",
+        "Hôm nay bố mẹ đã đo huyết áp/đường huyết chưa?",
+        "Ngày mai bố mẹ có kế hoạch đi đâu hay cần con hỗ trợ gì không?"
+      ],
+      "content_type": "checklist",
+      "target_roles": ["role_family"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Sao chép câu hỏi",
+      "cta_target": "/feed/family-1-min-inquiry-template"
+    },
+    {
+      "id": "family-why-parents-hide-symptoms",
+      "title": "Vì sao người lớn tuổi hay giấu triệu chứng?",
+      "summary": "Hiển tâm lý sợ phiền hà của cha mẹ để có cách quan tâm tinh tế và kịp thời hơn.",
+      "body": "Rất nhiều trường hợp bố mẹ chỉ báo cho con cái khi bệnh đã trở nặng. Hiểu được nguyên nhân tâm lý đằng sau sẽ giúp bạn chủ động hơn trong việc bảo vệ sức khỏe của đấng sinh thành.",
+      "checklist": [
+        "Sợ làm phiền: Bố mẹ thấy con cái bận rộn công việc nên tự chịu đựng các cơn đau nhẹ.",
+        "Sợ tốn kém: Lo lắng về chi phí khám chữa bệnh và mua thuốc men.",
+        "Sợ phát hiện ra bệnh nặng: Tâm lý né tránh việc phải đối mặt với các chẩn đoán y khoa tiêu cực.",
+        "Giải pháp: Thường xuyên chủ động kiểm tra chỉ số sức khỏe của bố mẹ qua ứng dụng Asinu kết nối gia đình."
+      ],
+      "content_type": "family_note",
+      "target_roles": ["role_family"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Mở Care Circle",
+      "cta_target": "/care-circle"
+    },
+    {
+      "id": "diabetes-post-meal-fatigue",
+      "title": "Mệt sau ăn có thể liên quan điều gì?",
+      "summary": "Nếu bác thường xuyên thấy mệt mỏi rã rời, buồn ngủ cực độ sau bữa ăn, hãy chú ý đến lượng đường huyết của mình.",
+      "body": "Sau khi ăn, cơ thể chuyển hóa carbohydrate trong thức ăn thành glucose đi vào máu. Ở người tiểu đường, do thiếu hụt hoặc đề kháng insulin, glucose không thể đi vào tế bào để tạo năng lượng hiệu quả, dẫn đến hiện tượng lượng đường trong máu thì cao nhưng cơ thể vẫn thấy mệt mỏi, uể oải. Ngoài ra, việc ăn quá nhiều tinh bột trong một bữa cũng khiến đường huyết dao động mạnh.",
+      "checklist": [
+        "Theo dõi xem tình trạng mệt mỏi xảy ra sau bữa ăn chứa nhiều tinh bột hay bữa ăn thanh đạm.",
+        "Đo đường huyết sau ăn 2 giờ để kiểm tra xem chỉ số có vượt ngưỡng an toàn không.",
+        "Hãy thử chia nhỏ bữa ăn và tăng tỷ lệ chất xơ (rau xanh) trong khẩu phần.",
+        "Nếu mệt kèm choáng váng, hãy ngồi nghỉ ngay và kiểm tra huyết áp."
+      ],
+      "content_type": "article",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_diabetes"],
+      "target_tags": [],
+      "severity_level": "medium",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Ghi nhận chỉ số ngay",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "diabetes-thirst-urination",
+      "title": "Khát nhiều và đi tiểu nhiều: Khi nào cần chú ý?",
+      "summary": "Khát nước liên tục kèm đi tiểu nhiều lần (đặc biệt về đêm) là những tín hiệu điển hình của đường huyết tăng cao.",
+      "body": "Khi lượng đường trong máu quá cao, thận phải làm việc quá tải để lọc và bài tiết lượng đường dư thừa. Quá trình này kéo theo nước từ các mô tế bào ra ngoài, dẫn đến mất nước và kích thích cảm giác khát nước liên tục. Đây là một vòng lặp cần được kiểm soát sớm để tránh mất điện giải.",
+      "checklist": [
+        "Ghi lại số lần đi tiểu đêm và lượng nước bác uống vào hằng ngày.",
+        "Đo đường huyết lúc đói vào buổi sáng hôm sau.",
+        "Hạn chế uống nước ngọt, nước có gas khi thấy khát; nên uống nước lọc ấm.",
+        "If xuất hiện kèm sụt cân nhanh hoặc nhìn mờ, bác nên đi khám chuyên khoa sớm."
+      ],
+      "content_type": "article",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_diabetes"],
+      "target_tags": [],
+      "severity_level": "medium",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Check-in triệu chứng",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "diabetes-postprandial-glucose",
+      "title": "Đường huyết cao sau ăn nên theo dõi gì?",
+      "summary": "Đường huyết đo sau khi ăn 2 giờ giúp bác đánh giá hiệu quả của chế độ ăn uống và liều dùng thuốc.",
+      "body": "Đường huyết sau ăn của người bình thường thường dưới 140 mg/dL (7.8 mmol/L). Đối với người bệnh tiểu đường, mục tiêu đường huyết sau ăn 2 giờ thường cần duy trì dưới 180 mg/dL (10.0 mmol/L). Việc theo dõi chỉ số này giúp bác điều chỉnh lượng tinh bột nạp vào cơ thể một cách khoa học.",
+      "checklist": [
+        "Ghi lại thực đơn bữa ăn cùng chỉ số đường huyết sau ăn 2 giờ vào ứng dụng Asinu.",
+        "Lưu ý các món ăn làm đường huyết tăng nhanh: Cơm trắng, bánh ngọt, xôi, nước trái cây ngọt.",
+        "Đi bộ nhẹ nhàng 15-20 phút sau khi ăn 30 phút để giúp tiêu thụ bớt đường trong máu."
+      ],
+      "content_type": "checklist",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_diabetes"],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Ghi chỉ số sau ăn",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "diabetes-dont-skip-breakfast",
+      "title": "Vì sao người tiểu đường không nên bỏ bữa sáng?",
+      "summary": "Bỏ bữa sáng có thể gây rối loạn nhịp sinh học và khiến đường huyết tăng vọt khó kiểm soát vào buổi trưa và chiều.",
+      "body": "Bỏ bữa sáng không giúp giảm đường huyết mà ngược lại, dễ gây ra hiện tượng hạ đường huyết đột ngột vào buổi sáng và sau đó làm tăng vọt đường huyết vào bữa trưa do phản ứng bù trừ của gan (giải phóng glycogen dự trữ) và xu hướng ăn nhiều hơn vào bữa sau.",
+      "checklist": [
+        "Ăn sáng đầy đủ, đúng giờ (thường trong vòng 1 giờ sau khi thức dậy).",
+        "Ưu tiên bữa sáng giàu chất xơ và đạm: Trứng luộc, rau xanh, ngũ cốc nguyên hạt, cháo yến mạch.",
+        "Đo đường huyết trước ăn sáng để nắm được chỉ số nền tảng của ngày."
+      ],
+      "content_type": "article",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_diabetes"],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Check-in bữa sáng",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "diabetes-hypoglycemia-signs",
+      "title": "Dấu hiệu hạ đường huyết dễ bị bỏ qua",
+      "summary": "Hạ đường huyết cực kỳ nguy hiểm và cần được xử trí ngay lập tức để tránh biến chứng hôn mê.",
+      "body": "Hạ đường huyết (khi chỉ số đường huyết xuống dưới 70 mg/dL hay 3.9 mmol/L) thường xảy ra do dùng quá liều thuốc, bỏ bữa hoặc vận động quá sức. Hãy nhận biết các dấu hiệu sớm để xử lý kịp thời bằng quy tắc 15-15.",
+      "checklist": [
+        "Dấu hiệu sớm: Vã mồ hôi lạnh, run rẩy tay chân, tim đập nhanh, đói cồn cào, chóng mặt hoặc lo âu đột ngột.",
+        "Quy tắc xử trí 15-15: Ăn ngay 15g carbohydrate hấp thu nhanh (ví dụ: 1/2 cốc nước trái cây, 3 viên kẹo ngọt, hoặc 1 thìa đường pha nước). Hẹn giờ nghỉ ngơi và đo lại đường huyết sau 15 phút.",
+        "Nếu sau 15 phút đường huyết vẫn dưới 70 mg/dL, tiếp tục lặp lại quy tắc trên và báo ngay cho người nhà."
+      ],
+      "content_type": "warning",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_diabetes"],
+      "target_tags": [],
+      "severity_level": "high",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Lưu checklist khẩn cấp",
+      "cta_target": "/feed/diabetes-hypoglycemia-signs"
+    },
+    {
+      "id": "diabetes-when-to-notify-family",
+      "title": "Tiểu đường: Khi nào cần báo ngay cho người thân?",
+      "summary": "Sự chủ động chia sẻ thông tin sức khỏe giúp người thân kịp thời hỗ trợ bác trong những tình huống nguy hiểm.",
+      "body": "Người bệnh tiểu đường, đặc biệt là người lớn tuổi, không nên tự chịu đựng hoặc tự xử lý các triệu chứng nặng một mình. Hãy liên hệ ngay với người thân trong nhà nếu gặp các trường hợp sau:",
+      "checklist": [
+        "Khi đường huyết đo được dưới 70 mg/dL mà sau khi ăn kẹo 15 phút vẫn không tăng lại.",
+        "Đường huyết tăng cao vượt ngưỡng 250 mg/dL kèm theo cảm giác buồn nôn, mệt lả hoặc thở nhanh.",
+        "Bị sốt cao, tiêu chảy hoặc nôn mửa liên tục không thể ăn uống được bình thường.",
+        "Có vết thương, vết trầy xước hoặc sưng tấy bất thường ở bàn chân mà lâu lành."
+      ],
+      "content_type": "article",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_diabetes"],
+      "target_tags": [],
+      "severity_level": "medium",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Xem liên hệ người thân",
+      "cta_target": "/care-circle"
+    },
+    {
+      "id": "diabetes-importance-of-logs",
+      "title": "Ghi chỉ số đều quan trọng hơn bạn nghĩ",
+      "summary": "Theo dõi xu hướng biến động đường huyết có giá trị chẩn đoán và điều trị lớn hơn nhiều so với một chỉ số đơn lẻ.",
+      "body": "Một chỉ số đường huyết đơn lẻ chỉ phản ánh tình trạng tại đúng thời điểm đó. Việc bác ghi nhận chỉ số đều đặn hằng ngày vào Asinu giúp vẽ nên biểu đồ xu hướng chính xác, từ đó bác sĩ điều trị có thể điều chỉnh liều lượng thuốc phù hợp nhất với cơ địa của bác.",
+      "checklist": [
+        "Đo và ghi chỉ số vào các thời điểm cố định: Trước ăn sáng, sau ăn 2 giờ hoặc trước khi đi ngủ.",
+        "Ghi kèm ghi chú nhỏ nếu hôm đó bác ăn đồ ngọt hoặc tập thể dục nhiều hơn bình thường.",
+        "Xem biểu đồ tuần trên ứng dụng Asinu để tự đánh giá mức độ ổn định của bản thân."
+      ],
+      "content_type": "article",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_diabetes"],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Xem biểu đồ đường huyết",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "diabetes-daily-routine",
+      "title": "Một ngày theo dõi tiểu đường nên bắt đầu từ đâu?",
+      "summary": "Thiết lập quy trình theo dõi sức khỏe đơn giản hằng ngày giúp bác sống vui khỏe cùng tiểu đường.",
+      "body": "Đừng để việc theo dõi tiểu đường trở thành áp lực. Bác chỉ cần thực hiện 3 bước nhỏ cực kỳ đơn giản dưới đây mỗi ngày để luôn làm chủ sức khỏe của mình.",
+      "checklist": [
+        "Khởi đầu ngày mới: Đo huyết áp và đường huyết lúc đói ngay sau khi thức dậy và ghi vào app Asinu.",
+        "Kiểm soát bữa ăn: Uống thuốc đúng liều trước hoặc sau ăn theo chỉ định; uống đủ nước ấm suốt cả ngày.",
+        "Kết thúc ngày: Dành 5 phút ngâm chân nước ấm, kiểm tra xem lòng bàn chân có vết xước nào không và ghi nhận nhanh trạng thái sức khỏe trước khi đi ngủ."
+      ],
+      "content_type": "checklist",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_diabetes"],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Bắt đầu check-in ngày mới",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "diabetes-3-small-tips",
+      "title": "3 việc nhỏ giúp kiểm soát đường huyết tốt hơn",
+      "summary": "Những thay đổi nhỏ trong lối sống hằng ngày mang lại hiệu quả kiểm soát đường huyết vô cùng bất ngờ.",
+      "body": "Kiểm soát đường huyết hiệu quả không chỉ dựa vào thuốc. Bác hãy thử áp dụng 3 mẹo nhỏ cực kỳ dễ thực hiện dưới đây vào cuộc sống hằng ngày:",
+      "checklist": [
+        "Uống 1 cốc nước lọc ấm trước bữa ăn khoảng 10-15 phút để giúp tạo cảm giác no giả và hạn chế ăn quá nhiều tinh bột.",
+        "Thay đổi thứ tự ăn trong bữa: Ăn rau xanh trước, sau đó ăn thức ăn (đạm, béo) và ăn cơm tinh bột cuối cùng. Cách ăn này giúp làm chậm quá trình hấp thu đường vào máu.",
+        "Đi bộ nhẹ nhàng khoảng 10-15 phút sau bữa ăn chính thay vì nằm nghỉ ngay lập tức."
+      ],
+      "content_type": "article",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_diabetes"],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Lưu bài viết này",
+      "cta_target": "/feed/diabetes-3-small-tips"
+    },
+    {
+      "id": "diabetes-when-to-visit-clinic",
+      "title": "Khi nào người tiểu đường nên đi khám ngay?",
+      "summary": "Đừng chần chừ đi khám bác sĩ nếu bác gặp phải các dấu hiệu cảnh báo biến chứng tiến triển dưới đây.",
+      "body": "Bên cạnh các buổi tái khám định kỳ, bác cần đi khám chuyên khoa nội tiết ngay lập tức nếu cơ thể xuất hiện các biểu hiện bất thường kéo dài.",
+      "checklist": [
+        "Đường huyết đo lúc đói thường xuyên vượt quá 200 mg/dL hoặc dưới 70 mg/dL nhiều lần trong tuần dù đã uống thuốc đều.",
+        "Có cảm giác tê bì, châm chích, nóng rát dữ dội hoặc mất cảm giác ở hai bàn tay, bàn chân.",
+        "Thường xuyên bị nhìn mờ đột ngột, hoa mắt, chóng mặt hoặc khó giữ thăng bằng.",
+        "Vết loét ở chân bị sưng đỏ, chảy dịch hoặc có mùi hôi."
+      ],
+      "content_type": "warning",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_diabetes"],
+      "target_tags": [],
+      "severity_level": "high",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Xem lịch sử chỉ số",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "hypertension-fast-heartbeat",
+      "title": "Tim đập nhanh: Khi nào cần chú ý?",
+      "summary": "Tim đập nhanh có thể là phản ứng sinh lý bình thường nhưng đi kèm các triệu chứng khác thì chớ nên chủ quan.",
+      "body": "Cảm giác tim đập nhanh, dồn dập hay hụt hẫng lồng ngực (trống ngực) có thể xảy ra khi tập thể dục, lo âu, thiếu ngủ hoặc uống cà phê. Tuy nhiên, đối với người cao huyết áp hoặc có bệnh lý tim mạch, đây có thể là dấu hiệu của rối loạn nhịp tim cần được theo dõi sát sao.",
+      "checklist": [
+        "Khi bị tim đập nhanh, hãy ngồi hoặc nằm nghỉ ngơi ngay lập tức ở nơi thoáng mát, thả lỏng cơ thể.",
+        "Dùng máy đo huyết áp đo nhịp tim và huyết áp hiện tại, ghi lại chỉ số vào Asinu.",
+        "Đặc biệt lưu ý: Nếu tim đập nhanh đi kèm đau tức ngực, khó thở, choáng váng, hoa mắt hoặc vã mồ hôi lạnh, bác cần báo ngay cho người nhà và liên hệ y tế."
+      ],
+      "content_type": "checklist",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_hypertension", "condition_heart_attention"],
+      "target_tags": [],
+      "severity_level": "medium",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Ghi nhận nhịp tim ngay",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "hypertension-headache-handling",
+      "title": "Huyết áp cao kèm đau đầu nên làm gì?",
+      "summary": "Đau đầu dữ dội vùng sau gáy là biểu hiện phổ biến khi huyết áp tăng cao đột ngột. Hãy xử trí an toàn.",
+      "body": "Khi huyết áp tăng cao (đặc biệt trị số tâm thu trên 140 mmHg hoặc tâm trương trên 90 mmHg), áp lực máu lên mạch máu não tăng lên gây ra cảm giác đau đầu, thường tập trung ở vùng chẩm gáy, kèm theo cảm giác nóng mặt, hoa mắt. Bác cần bình tĩnh xử lý theo các bước sau:",
+      "checklist": [
+        "Ngồi nghỉ tĩnh lặng ở không gian yên tĩnh, giảm ánh sáng chói, tránh nằm ngửa bằng phẳng ngay (nên kê cao đầu).",
+        "Đo huyết áp để xác định mức độ tăng cao.",
+        "Uống thuốc hạ huyết áp theo đúng đơn bác sĩ đã kê (không tự ý tăng liều khi chưa hỏi ý kiến chuyên môn).",
+        "Tránh các kích thích: Không uống trà đặc, cà phê, không tắm rửa ngay bằng nước lạnh hoặc nước quá nóng.",
+        "Nếu huyết áp vượt quá 180 mmHg hoặc đau đầu dữ dội kèm buồn nôn, tê yếu chân tay, hãy gọi cấp cứu hoặc đưa đi viện ngay."
+      ],
+      "content_type": "checklist",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_hypertension"],
+      "target_tags": [],
+      "severity_level": "high",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Ghi chỉ số huyết áp",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "general-dizziness-warning",
+      "title": "Chóng mặt: Khi nào không nên chủ quan?",
+      "summary": "Cơn chóng mặt đột ngột ở người lớn tuổi có thể là dấu hiệu của thiếu máu não hoặc dao động huyết áp đột ngột.",
+      "body": "Chóng mặt, cảm giác mọi thứ xung quanh quay cuồng hoặc bồng bềnh là triệu chứng rất dễ gây té ngã ở người lớn tuổi. Triệu chứng này có thể do hạ huyết áp tư thế đứng, thiếu máu não, hoặc rối loạn tiền đình.",
+      "checklist": [
+        "Khi bắt đầu thấy chóng mặt, bác hãy bám chắc vào vật bên cạnh, từ từ ngồi hoặc nằm xuống để tránh bị ngã té.",
+        "Nhắm mắt lại, thở đều và giữ nguyên tư thế đầu, không quay đầu đột ngột.",
+        "Uống một cốc nước lọc ấm.",
+        "Nếu chóng mặt đi kèm nói khó, tê bì một bên mặt, yếu nửa người, hoặc mất thăng bằng hoàn toàn, hãy liên hệ y tế khẩn cấp vì đó có thể là dấu hiệu đột quỵ."
+      ],
+      "content_type": "article",
+      "target_roles": ["role_patient"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "medium",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Lưu checklist chóng mặt",
+      "cta_target": "/feed/general-dizziness-warning"
+    },
+    {
+      "id": "general-chest-pain-guide",
+      "title": "Đau ngực: Dấu hiệu nào cần báo ngay?",
+      "summary": "Đau tức ngực là tín hiệu cảnh báo khẩn cấp từ trái tim. Bác cần biết cách phân biệt cơn đau nguy hiểm.",
+      "body": "Đau ngực có nhiều nguyên nhân, nhưng nguy hiểm nhất là đau thắt ngực do thiếu máu cơ tim hoặc nhồi máu cơ tim. Bác tuyệt đối không được chủ quan nằm chịu đựng một mình.",
+      "checklist": [
+        "Cơn đau thắt ngực nguy hiểm: Cảm giác đè nén, bóp nghẹt hoặc đau nhói dữ dội sau xương ức, lan ra vai trái, cánh tay trái hoặc hàm, kéo dài trên 5 phút, không giảm khi nghỉ ngơi.",
+        "Hành động ngay: Ngừng mọi hoạt động, ngồi nghỉ ngay lập tức, báo cho người thân gần nhất trong nhà và gọi cấp cứu 115.",
+        "Nếu bác có sẵn thuốc ngậm dưới lưỡi do bác sĩ tim mạch kê đơn, hãy sử dụng ngay theo hướng dẫn."
+      ],
+      "content_type": "warning",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_hypertension", "condition_heart_attention"],
+      "target_tags": [],
+      "severity_level": "urgent",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Xem hướng dẫn an toàn",
+      "cta_target": "/feed/general-chest-pain-guide"
+    },
+    {
+      "id": "general-shortness-of-breath",
+      "title": "Khó thở: Checklist an toàn cho bác",
+      "summary": "Khó thở đột ngột hoặc tăng dần cần được xử lý bình tĩnh và khoa học để tránh thiếu oxy não.",
+      "body": "Khó thở có thể xuất phát từ các vấn đề về phổi (hen suyễn, COPD) hoặc tim mạch (suy tim). Việc giữ bình tĩnh để điều hòa nhịp thở là ưu tiên hàng đầu.",
+      "checklist": [
+        "Nới lỏng cởi bớt khuy áo ngực, cổ áo để dễ thở hơn.",
+        "Chọn tư thế ngồi thẳng lưng hoặc hơi cúi người về phía trước, tì tay lên đùi hoặc bàn để cơ hô hấp phụ hoạt động tốt hơn.",
+        "Thực hiện kỹ thuật thở chúm môi: Hít vào chậm bằng mũi, sau đó chúm môi thở ra từ từ kéo dài gấp đôi thời gian hít vào.",
+        "Đo ngay chỉ số nồng độ oxy SpO2 nếu bác có thiết bị đo cầm tay.",
+        "Nếu khó thở tăng dần, không giảm sau 10 phút nghỉ ngơi hoặc đi kèm tím tái môi, hãy gọi hỗ trợ y tế ngay."
+      ],
+      "content_type": "checklist",
+      "target_roles": ["role_patient"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "high",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Ghi nhận chỉ số SpO2",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "general-chronic-fatigue",
+      "title": "Mệt mỏi kéo dài: Nên theo dõi những gì?",
+      "summary": "Cảm giác mệt mỏi rã rời liên tục nhiều ngày là tín hiệu cơ thể đang cần được kiểm tra sức khỏe tổng thể.",
+      "body": "Khác với mệt mỏi tức thời sau lao động, mệt mỏi kéo dài (trên 2 tuần) không đỡ sau khi nghỉ ngơi có thể liên quan đến các vấn đề nội tiết (suy giáp, tiểu đường), thiếu máu, chất lượng giấc ngủ kém hoặc căng thẳng tâm lý kéo dài. Bác nên lập kế hoạch theo dõi các yếu tố sinh hoạt.",
+      "checklist": [
+        "Theo dõi thời gian và chất lượng giấc ngủ hằng đêm (có bị thức giấc nhiều, ngủ ngáy, ngủ không sâu giấc?).",
+        "Ghi nhận lượng nước uống hằng ngày (uống quá ít nước cũng là nguyên nhân gây mệt mỏi ẩn giấu).",
+        "Kiểm tra xem chế độ ăn có bị thiếu hụt dinh dưỡng hoặc bỏ bữa không.",
+        "Đo huyết áp đều đặn 2 lần/ngày để xem huyết áp có bị quá thấp (dưới 90/60 mmHg) không."
+      ],
+      "content_type": "article",
+      "target_roles": ["role_patient"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Ghi nhận giấc ngủ/nước",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "general-poor-sleep",
+      "title": "Ngủ kém ảnh hưởng sức khỏe thế nào?",
+      "summary": "Giấc ngủ là thời gian cơ thể tái tạo năng lượng và điều hòa huyết áp. Ngủ kém kéo dài làm tăng nguy cơ tim mạch.",
+      "body": "Mất ngủ, khó đi vào giấc ngủ hoặc ngủ chập chờn ở người lớn tuổi làm tăng hormone stress cortisol, gây co mạch và làm tăng huyết áp vào ngày hôm sau. Nó cũng làm suy giảm khả năng nhạy cảm với insulin, khiến đường huyết khó kiểm soát hơn.",
+      "checklist": [
+        "Cố gắng đi ngủ và thức dậy vào một khung giờ cố định hằng ngày kể cả ngày nghỉ.",
+        "Tránh uống trà, cà phê sau 2 giờ chiều; hạn chế sử dụng điện thoại, xem tivi trên giường trước khi ngủ 1 giờ.",
+        "Giữ phòng ngủ tối, mát mẻ và yên tĩnh. Bác có thể ngâm chân nước ấm 15 phút trước khi đi ngủ để dễ ngủ hơn."
+      ],
+      "content_type": "article",
+      "target_roles": ["role_patient"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Ghi nhận nhật ký giấc ngủ",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "general-dehydration-fatigue",
+      "title": "Uống nước ít có thể khiến cơ thể mệt hơn?",
+      "summary": "Thiếu nước làm giảm thể tích tuần hoàn máu, khiến tim phải làm việc mệt mỏi hơn để bơm oxy đi khắp cơ thể.",
+      "body": "Ở người cao tuổi, cảm giác khát nước thường bị suy giảm nên họ rất dễ bị thiếu nước mà không tự biết. Thiếu nước gây mệt mỏi, đau đầu, táo bón, khô da và tăng nguy cơ nhiễm trùng tiết niệu. Hãy chủ động uống nước thay vì đợi đến khi khát.",
+      "checklist": [
+        "Đặt mục tiêu uống đủ từ 1.5 đến 2 lít nước mỗi ngày (chia đều thành các cốc nhỏ uống rải rác).",
+        "Uống 1 cốc nước ấm ngay sau khi ngủ dậy để bù nước cho cơ thể sau một đêm dài.",
+        "Quan sát màu sắc nước tiểu: Nước tiểu có màu vàng nhạt là đủ nước, màu vàng sậm chứng tỏ bác cần uống thêm nước ngay."
+      ],
+      "content_type": "article",
+      "target_roles": ["role_patient"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Check-in lượng nước",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "hypertension-when-to-remeasure",
+      "title": "Khi nào bác nên đo huyết áp lại?",
+      "summary": "Đo huyết áp đúng thời điểm và đúng kỹ thuật giúp tránh sai lệch chỉ số do các yếu tố bên ngoài tác động.",
+      "body": "Đo huyết áp quá nhiều lần trong ngày khi đang lo lắng chỉ khiến huyết áp tăng cao hơn. Bác hãy tuân thủ nguyên tắc đo khoa học để có kết quả chính xác nhất.",
+      "checklist": [
+        "Thời điểm đo chuẩn: Đo 2 lần/ngày. Lần 1: Buổi sáng sau khi ngủ dậy 1 giờ (trước khi ăn sáng và uống thuốc). Lần 2: Buổi tối trước khi đi ngủ.",
+        "Kỹ thuật chuẩn: Ngồi nghỉ ngơi yên lặng ít nhất 5 phút trước khi đo. Tư thế ngồi thẳng lưng tựa vào ghế, bàn chân đặt sát sàn nhà, cánh tay đặt trên bàn ngang tim.",
+        "Không đo ngay sau khi vừa đi bộ, tập thể dục, leo cầu thang, ăn no hoặc vừa tức giận. Hãy nghỉ ngơi ít nhất 30 phút trong các trường hợp này."
+      ],
+      "content_type": "article",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_hypertension"],
+      "target_tags": [],
+      "severity_level": "low",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Ghi chỉ số huyết áp",
+      "cta_target": "/checkin"
+    },
+    {
+      "id": "general-need-family-help",
+      "title": "3 dấu hiệu bác cần người thân hỗ trợ ngay",
+      "summary": "Đừng ngần ngại nhờ con cái hoặc người thân hỗ trợ khi bác cảm thấy cơ thể có những bất thường về mặt thể chất.",
+      "body": "Người lớn tuổi thường có xu hướng tự xoay xở khi mệt mỏi để tránh làm phiền con cái bận rộn. Tuy nhiên, việc phát hiện và can thiệp sớm giúp ngăn ngừa tối đa rủi ro biến chứng nguy hiểm.",
+      "checklist": [
+        "Khi bác đo huyết áp thấy chỉ số tăng vọt trên 160 mmHg hoặc nhịp tim đo được trên 100 lần/phút kèm cảm giác bồn chồn.",
+        "Khi thấy chóng mặt, loạng choạng khi đứng dậy, đi lại không vững và có nguy cơ bị ngã.",
+        "Khi bác bị đau nhức xương khớp dữ dội đột ngột làm hạn chế đi lại hoặc khó khăn trong việc tự vệ sinh cá nhân."
+      ],
+      "content_type": "article",
+      "target_roles": ["role_patient"],
+      "target_conditions": [],
+      "target_tags": [],
+      "severity_level": "medium",
+      "shareable": true,
+      "saveable": true,
+      "cta_label": "Liên hệ người thân",
+      "cta_target": "/care-circle"
+    }
+  ],
+  "notification_templates": [
+    {
+      "id": "family_day1_notice",
+      "title": "Asinu nhắc nhở",
+      "body": "Đừng chỉ hỏi bố mẹ \"có khỏe không\". Có 5 dấu hiệu nên hỏi kỹ hơn.",
+      "target_roles": ["role_family"],
+      "target_conditions": [],
+      "target_tags": ["new_user"],
+      "trigger_type": "journey_day",
+      "deep_link": "/feed/family-dont-just-ask",
+      "priority": "normal",
+      "cooldown_hours": 24
+    },
+    {
+      "id": "family_day3_notice",
+      "title": "Hành trình chăm sóc",
+      "body": "3 ngày đầu theo dõi bố mẹ rất quan trọng. Asinu đã chuẩn bị sẵn checklist 1 phút cho bạn.",
+      "target_roles": ["role_family"],
+      "target_conditions": [],
+      "target_tags": [],
+      "trigger_type": "journey_day",
+      "deep_link": "/feed/family-1-min-inquiry-template",
+      "priority": "normal",
+      "cooldown_hours": 24
+    },
+    {
+      "id": "diabetes_fast_heartbeat_notice",
+      "title": "Cảnh báo an toàn",
+      "body": "Tim đập nhanh kèm đau ngực, khó thở hoặc choáng là dấu hiệu cần chú ý. Xem ngay checklist an toàn.",
+      "target_roles": ["role_patient"],
+      "target_conditions": ["condition_diabetes", "condition_hypertension"],
+      "target_tags": ["reports_fast_heartbeat"],
+      "trigger_type": "symptom_reported",
+      "deep_link": "/feed/hypertension-fast-heartbeat",
+      "priority": "high",
+      "cooldown_hours": 12
+    },
+    {
+      "id": "inactive_2_days_notice",
+      "title": "Nhắc nhở sức khỏe",
+      "body": "2 ngày rồi Asinu chưa thấy bác check-in. Ghi nhanh 30 giây để không bỏ sót thay đổi sức khỏe nhé.",
+      "target_roles": ["role_patient"],
+      "target_conditions": [],
+      "target_tags": ["inactive_2_days"],
+      "trigger_type": "inactivity",
+      "deep_link": "/checkin",
+      "priority": "high",
+      "cooldown_hours": 48
+    }
+  ]
+}

@@ -19,6 +19,7 @@ const subscriptionRoutes = require('./src/routes/subscription.routes');
 const voiceRoutes = require('./src/routes/voice.routes');
 const logsRoutes = require('./src/routes/logs.routes');
 const iapRoutes = require('./src/routes/iap.routes');
+const healthFeedRoutes = require('./src/routes/healthFeed.routes');
 const asinuBrainRoutes = require('./asinu-brain-extension/routes/asinuBrain.routes');
 const langMiddleware = require('./src/middleware/lang.middleware');
 const { getRedis } = require('./src/lib/redis');
@@ -78,8 +79,8 @@ app.get('/api/healthz/detailed', async (req, res) => {
 
 // Rate limiting - relaxed for mobile app usage
 // 1000 requests per 15 minutes per IP (more reasonable for mobile apps with multiple API calls)
-const generalLimiter = rateLimit({ 
-  windowMs: 15 * 60 * 1000, 
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
   max: 1000,
   message: { ok: false, error: t('error.too_many_requests', getLang(null)) },
   standardHeaders: true,
@@ -110,6 +111,7 @@ app.use('/api/care-pulse', carePulseRoutes(pool));
 app.use('/api/care-circle', careCircleRoutes(pool));
 app.use('/api/wellness', wellnessRoutes(pool));
 app.use('/api/health', healthRoutes(pool));
+app.use('/api/health-feed', healthFeedRoutes(pool));
 app.use('/api/notifications', notificationRoutes(pool));
 app.use('/api/payments', paymentRoutes(pool));
 app.use('/api/subscriptions', subscriptionRoutes(pool));

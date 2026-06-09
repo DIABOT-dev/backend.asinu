@@ -127,10 +127,10 @@ async function getUserPushToken(pool, userId) {
  * @param {Object} data - JSON data payload
  * @returns {Promise<void>}
  */
-async function saveInAppNotification(pool, userId, type, title, message, data) {
+async function saveInAppNotification(pool, userId, type, title, message, data, priority = 'low') {
   await pool.query(
-    `INSERT INTO notifications (user_id, type, title, message, data) VALUES ($1,$2,$3,$4,$5)`,
-    [userId, type, title, message, JSON.stringify(data)]
+    `INSERT INTO notifications (user_id, type, title, message, data, priority) VALUES ($1,$2,$3,$4,$5,$6)`,
+    [userId, type, title, message, JSON.stringify(data), priority]
   );
 }
 

@@ -2,6 +2,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
+const { seedHealthFeed } = require('../src/services/health_feed/seed');
 
 const DATABASE_URL = process.env.DATABASE_URL;
 if (!DATABASE_URL) {
@@ -39,6 +40,9 @@ async function run() {
       const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
       await client.query('BEGIN');
       await client.query(sql);
+      if (file === '075_health_feed_seed.sql') {
+        await seedHealthFeed(client);
+      }
       await client.query('INSERT INTO schema_migrations (version) VALUES ($1)', [file]);
       await client.query('COMMIT');
       console.log(`applied ${file}`);

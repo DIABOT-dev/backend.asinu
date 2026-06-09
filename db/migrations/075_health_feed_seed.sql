@@ -1,0 +1,2 @@
+-- Seed data for health_feed_* is applied by scripts/migrate.js
+-- using src/services/health_feed/seed.js so content stays maintainable in JSON/JS.
