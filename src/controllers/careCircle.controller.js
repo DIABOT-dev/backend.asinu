@@ -6,6 +6,9 @@
 const { t, getLang } = require('../i18n');
 const { careCircleInvitationSchema } = require('../validation/validation.schemas');
 const checkinService = require('../services/checkin/checkin.service');
+const treeService = require('../services/tree/tree.service');
+const mobileService = require('../services/profile/mobile.service');
+const { getMissions } = require('../services/missions/missions.service');
 const {
   createInvitation: serviceCreateInvitation,
   getInvitations: serviceGetInvitations,
@@ -21,6 +24,50 @@ const {
   getCaregiverCheckins: serviceGetCaregiverCheckins,
   getPatientName,
 } = require('../services/care-circle/careCircle.service');
+
+const dayLabel = (date) => date.toLocaleDateString('vi-VN', { weekday: 'short', timeZone: 'Asia/Ho_Chi_Minh' });
+
+function getLogDetail(log) {
+  return log?.detail || log?.metadata || {};
+}
+
+function buildQuickMetrics(logs) {
+  const latest = (types) => logs.find((log) => types.includes(log.log_type));
+  const glucose = latest(['glucose']);
+  const bp = latest(['bp', 'blood_pressure']);
+  const weight = latest(['weight']);
+  const water = latest(['water']);
+
+  const glucoseDetail = getLogDetail(glucose);
+  const bpDetail = getLogDetail(bp);
+  const weightDetail = getLogDetail(weight);
+  const waterDetail = getLogDetail(water);
+
+  return {
+    glucose: glucoseDetail.value ?? null,
+    bloodPressure: bpDetail.systolic && bpDetail.diastolic ? `${bpDetail.systolic}/${bpDetail.diastolic}` : null,
+    weight: weightDetail.weight_kg ?? weightDetail.value ?? null,
+    water: waterDetail.volume_ml ?? waterDetail.amount_ml ?? null,
+  };
+}
+
+function buildGlucoseTrendData(logs) {
+  const today = new Date();
+  return Array.from({ length: 7 }, (_, idx) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() - (6 - idx));
+    const dateKey = d.toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+    const log = logs.find((item) => {
+      if (item.log_type !== 'glucose') return false;
+      const occurred = new Date(item.occurred_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+      return occurred === dateKey;
+    });
+    return {
+      label: dayLabel(d),
+      value: Number(getLogDetail(log).value || 0),
+    };
+  });
+}
 
 // =====================================================
 // INVITATION HANDLERS
@@ -248,21 +295,76 @@ async function getMemberHealthSummary(pool, req, res) {
   }
 
   try {
-    // Get member's health summary (last 7 days)
-    const report = await checkinService.getHealthReport(pool, memberId, 7);
-    const healthScore = await checkinService.getHealthScore(pool, memberId);
+    const [
+      reportResult,
+      healthScoreResult,
+      treeSummaryResult,
+      treeHistoryResult,
+      logsResult,
+      checkinsResult,
+      missionsResult,
+      patientNameResult,
+    ] = await Promise.allSettled([
+      checkinService.getHealthReport(pool, memberId, 7),
+      checkinService.getHealthScore(pool, memberId),
+      treeService.getTreeSummary(pool, memberId),
+      treeService.getTreeHistory(pool, memberId),
+      mobileService.getRecentLogs(pool, memberId, { limit: 20 }),
+      serviceGetCaregiverCheckins(pool, memberId, 14),
+      getMissions(pool, memberId),
+      getPatientName(pool, memberId),
+    ]);
+
+    const report = reportResult.status === 'fulfilled' ? reportResult.value : null;
+    const healthScore = healthScoreResult.status === 'fulfilled' ? healthScoreResult.value : null;
+    const treeSummary = treeSummaryResult.status === 'fulfilled' ? treeSummaryResult.value : null;
+    const treeHistoryPayload = treeHistoryResult.status === 'fulfilled' ? treeHistoryResult.value : null;
+    const logsPayload = logsResult.status === 'fulfilled' && logsResult.value?.ok ? logsResult.value.logs : [];
+    const checkins = checkinsResult.status === 'fulfilled' ? checkinsResult.value : [];
+    const missions = missionsResult.status === 'fulfilled' ? missionsResult.value : [];
+    const patientName = patientNameResult.status === 'fulfilled' ? patientNameResult.value : null;
+
+    const recentCheckin = Array.isArray(checkins) && checkins.length > 0 ? checkins[0] : null;
+    const alerts = [];
+    if (recentCheckin?.emergency_triggered || recentCheckin?.triage_severity === 'high') {
+      alerts.push({
+        id: `checkin-${recentCheckin.id}`,
+        severity: 'high',
+        title: 'Cảnh báo sức khỏe',
+        message: recentCheckin.triage_summary || 'Có dấu hiệu cần người thân theo dõi.',
+        created_at: recentCheckin.created_at,
+      });
+    } else if (recentCheckin?.triage_severity === 'medium') {
+      alerts.push({
+        id: `checkin-${recentCheckin.id}`,
+        severity: 'medium',
+        title: 'Cần theo dõi',
+        message: recentCheckin.triage_summary || 'Tình trạng gần đây cần được theo dõi thêm.',
+        created_at: recentCheckin.created_at,
+      });
+    }
 
     return res.json({
       ok: true,
+      patientName: patientName || 'Patient',
+      permission: {
+        can_view_logs: true,
+        can_receive_alerts: true,
+        can_ack_escalation: true,
+      },
       healthScore,
-      report: {
-        checkinDays: report.checkinDays,
-        totalDays: report.totalDays,
-        trend: report.trend,
-        severityDistribution: report.severityDistribution,
-        responseRate: report.responseRate || 0,
+      quickMetrics: buildQuickMetrics(logsPayload),
+      treeSummary,
+      treeHistory: treeHistoryPayload?.history || [],
+      glucoseTrendData: buildGlucoseTrendData(logsPayload),
+      recentLogs: logsPayload.slice(0, 5),
+      recentCheckin,
+      missions: missions.slice(0, 4),
+      alerts,
+      report: report ? {
+        ...report,
         recentSessions: report.sessions?.slice(0, 5) || [],
-      }
+      } : null,
     });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
