@@ -69,11 +69,28 @@ async function voiceChat(pool, userId, audioBuffer, mimeType, filename) {
   if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not configured');
 
   // 1. Transcribe
+  const startTranscribe = Date.now();
   const transcript = await transcribeAudio(audioBuffer, mimeType, filename);
+  const latencyTranscribe = Date.now() - startTranscribe;
 
   if (!transcript.trim()) {
     return { transcript: '', reply: t('voice.no_audio') };
   }
+
+  // Log Whisper transcription
+  const whisperProvider = process.env.WHISPER_ENDPOINT ? 'phowhisper' : 'openai';
+  const whisperModel = process.env.WHISPER_ENDPOINT ? 'diepho/PhoWhisper-medium-ct2' : 'whisper-1';
+  const { logAiInteraction } = require('../ai/ai-logger.service');
+  logAiInteraction(pool, {
+    userId,
+    feature: 'voice_chat',
+    action: 'whisper_transcribe',
+    provider: whisperProvider,
+    model: whisperModel,
+    promptSummary: `audio: ${filename}`,
+    responseSummary: transcript,
+    latencyMs: latencyTranscribe,
+  }).catch(() => {});
 
   // 2. Get user profile for context (cached)
   let userName = await cacheGet(`user:name:${userId}`);
@@ -153,9 +170,15 @@ Quy tắc context (kể cả câu dài, nói dài dòng):
 - "sau ăn" / "sau bữa" / "sau khi ăn" / "ăn xong khoảng ... tiếng" → post_meal
 - "trước ngủ" / "trước khi đi ngủ" / "tối trước khi ngủ" → before_sleep
 - Không xác định được → random
-Trích xuất số liệu dù người dùng nói dài dòng hay kể lể, miễn là có số liệu rõ ràng.
 
-Phạm vi hợp lệ: 20 - 800 mg/dL.
+Cách nhận dạng số (hỗ trợ cả chữ viết số bằng tiếng Việt dạng chữ thường từ PhoWhisper):
+- "sáu phẩy hai", "sáu chấm hai" → value=6.2
+- "năm phẩy sáu" → value=5.6
+- "một trăm hai mươi" → value=120
+- "tám mươi lăm" → value=85
+- Trích xuất số liệu dù người dùng nói dài dòng hay kể lể, miễn là có số liệu rõ ràng.
+
+Phạm vi hợp lệ: 1.0 - 800.0 (chấp nhận cả hệ mmol/L như 6.2 và hệ mg/dL như 120).
 Nếu số ngoài phạm vi hoặc không rõ ràng → ok: false, giải thích lý do.
 Chỉ trả về JSON thuần, không markdown, không giải thích thêm.`;
 
@@ -223,8 +246,14 @@ Quy tắc injection_site:
 - "cánh tay" / "bắp tay" → arm
 - "mông" → buttock
 
-Phạm vi liều hợp lệ: 1 - 200 IU.
-Trích xuất số liệu dù người dùng nói dài dòng, miễn là có số đơn vị rõ ràng.
+Cách nhận dạng số liều (hỗ trợ cả chữ viết số bằng tiếng Việt dạng chữ thường từ PhoWhisper):
+- "tiêm mười đơn vị", "mười đơn vị insulin" → dose_units=10
+- "mười hai đơn vị" → dose_units=12
+- "mười hai" (chỉ có số) → dose_units=12
+- "hai mươi lăm" → dose_units=25
+- Trích xuất số liệu dù người dùng nói dài dòng, miễn là có số đơn vị rõ ràng.
+
+Phạm vi liều hợp lệ: 0.1 - 200.0 IU.
 Chỉ trả về JSON thuần, không markdown, không giải thích thêm.`;
 
 /**

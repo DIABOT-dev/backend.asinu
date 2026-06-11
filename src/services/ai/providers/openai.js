@@ -201,8 +201,12 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
 }
 
 async function getWhisperTranscription(audioBuffer, filename = 'audio.m4a', lang = 'vi') {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error('OPENAI_API_KEY not set');
+  const endpoint = process.env.WHISPER_ENDPOINT || 'https://api.openai.com/v1/audio/transcriptions';
+  const apiKey = process.env.WHISPER_API_KEY || process.env.OPENAI_API_KEY;
+
+  if (!apiKey && endpoint.includes('api.openai.com')) {
+    throw new Error('OPENAI_API_KEY not set');
+  }
 
   const { Blob } = require('buffer');
   const formData = new FormData();
@@ -210,16 +214,21 @@ async function getWhisperTranscription(audioBuffer, filename = 'audio.m4a', lang
   formData.append('model', 'whisper-1');
   // Không truyền language → Whisper tự detect, tránh lỗi khi UI dùng tiếng Anh nhưng người dùng nói tiếng Việt
 
-  const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+  const headers = {};
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+
+  const response = await fetch(endpoint, {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${apiKey}` },
+    headers,
     body: formData,
     signal: AbortSignal.timeout(30000),
   });
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error(`Whisper API error ${response.status}: ${err}`);
+    throw new Error(`Whisper API error (${endpoint}) ${response.status}: ${err}`);
   }
   const data = await response.json();
   return data.text || '';

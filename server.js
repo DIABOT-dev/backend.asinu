@@ -102,7 +102,12 @@ app.use(generalLimiter);
 app.use(langMiddleware);
 
 // Postgres connection pool (instrumented with slow-query logging)
-const pool = createPool({ connectionString: DATABASE_URL });
+const pool = createPool({
+  connectionString: DATABASE_URL,
+  max: Number(process.env.DB_POOL_MAX || 20),           // Tối đa 20 kết nối đồng thời cho tải MVP
+  idleTimeoutMillis: 30000,                            // Đóng kết nối nhàn rỗi sau 30 giây
+  connectionTimeoutMillis: 2000                         // Ngắt kết nối và báo lỗi sau 2 giây nếu DB nghẽn
+});
 
 app.use('/api/auth', authLimiter, authRoutes(pool));
 app.use('/api/mobile', mobileRoutes(pool));

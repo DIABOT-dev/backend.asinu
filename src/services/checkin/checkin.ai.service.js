@@ -23,10 +23,12 @@ const OpenAI = require('openai');
 const { t } = require('../../i18n');
 const { filterTriageResult } = require('../ai/ai-safety.service');
 const { logAiInteraction } = require('../ai/ai-logger.service');
+const logger = require('../../lib/logger');
 const triageV2 = require('./checkin.triage.v2');
 const { routeForTriage } = require('../../core/ai/model-router');
 const { getOrCallAI, getCacheStats } = require('../../core/ai/context-cache');
 const { collectOutput, autoRateQuality } = require('../../core/ai/distillation');
+const console = { log: logger.debug, error: logger.error };
 
 // Normalize answer: array → string, null-safe
 const safeAns = (answer) => (Array.isArray(answer) ? answer.join(', ') : String(answer || '')).toLowerCase();
@@ -881,9 +883,6 @@ QUY TẮC TỐI THƯỢNG (vi phạm = lỗi hệ thống):
 6. Giọng điệu: ấm áp, chuyên nghiệp, dễ hiểu cho người lớn tuổi.
 Trả lời JSON only.`;
 
-    // TODO: Wire routeForTriage() to pick model, getOrCallAI() for caching,
-    // and collectOutput() + autoRateQuality() after response for distillation.
-    // Imports are ready: routeForTriage, getOrCallAI, getCacheStats, collectOutput, autoRateQuality
     response = await getClient().chat.completions.create({
       model: 'gpt-4o',
       messages: [

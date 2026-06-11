@@ -29,6 +29,8 @@ const { t } = require('../../i18n');
 const { getHonorifics } = require('../../lib/honorifics');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
 const { buildCheckinContext, applyIllusion } = require('../../core/checkin/illusion-layer');
+const logger = require('../../lib/logger');
+const console = { log: logger.debug, error: logger.error };
 
 // ─── Priority map ────────────────────────────────────────────────
 const TYPE_PRIORITY = {
@@ -789,7 +791,10 @@ async function reactToTriageResult(pool, userId, checkinId, result) {
  * Alerts ALL care circle members with can_receive_alerts=true.
  */
 async function triggerEmergency(pool, userId, location) {
-  console.log(`[SOS] triggerEmergency userId=${userId} location=${JSON.stringify(location)}`);
+  logger.info('[SOS] emergency triggered', {
+    userId,
+    hasLocation: Boolean(location),
+  });
 
   // Dedup: nếu user vừa kích hoạt emergency trong 5 phút và caregiver chưa
   // confirm → không gửi lại. Tránh spam khi user nhấn SOS nhiều lần (panic
@@ -803,7 +808,7 @@ async function triggerEmergency(pool, userId, location) {
     [userId]
   );
   if (recent.length > 0) {
-    console.log(`[SOS] dedup: skip — emergency đã gửi gần đây và chưa confirm`);
+    logger.info('[SOS] emergency dedup skipped', { userId });
     // Lấy lang của user để render message theo ngôn ngữ họ chọn (không hardcode 'vi')
     const { rows: langRows } = await pool.query(
       `SELECT COALESCE(language_preference, 'vi') AS lang FROM users WHERE id = $1`,
@@ -833,7 +838,10 @@ async function triggerEmergency(pool, userId, location) {
     [userId, checkinDateVN(), JSON.stringify(location || null)]
   );
   const checkinId = sessionRows[0]?.id;
-  console.log(`[SOS] checkin upserted id=${checkinId}`);
+  logger.debug('[SOS] emergency checkin upserted', {
+    userId,
+    checkinId,
+  });
 
   // Get user info
   const { rows: userRows } = await pool.query(
@@ -870,7 +878,10 @@ async function triggerEmergency(pool, userId, location) {
        AND COALESCE((uc.permissions->>'can_receive_alerts')::boolean, false) = true`,
     [userId]
   );
-  console.log(`[SOS] found ${caregivers.length} caregiver(s):`, caregivers.map(c => ({ id: c.id, hasToken: !!c.push_token, can_receive_alerts: c.can_receive_alerts })));
+  logger.debug('[SOS] caregivers matched', {
+    userId,
+    caregiversCount: caregivers.length,
+  });
 
   const locationStr = location
     ? ` (${location.lat?.toFixed(4)}, ${location.lng?.toFixed(4)})`
@@ -896,18 +907,24 @@ async function triggerEmergency(pool, userId, location) {
              alert_type = 'emergency', sent_at = NOW(), confirmed_at = NULL, resent_count = 0`,
           [checkinId, cg.id, userId]
         );
-        console.log(`[SOS] inserted caregiver_alert_confirmations for caregiver=${cg.id}`);
+        logger.debug('[SOS] caregiver confirmation upserted', {
+          userId,
+          caregiverId: cg.id,
+        });
       } catch (e) {
         console.error(`[SOS] failed to insert confirmation for caregiver=${cg.id}:`, e.message);
       }
     }
 
-    console.log(`[SOS] sending notification to caregiver=${cg.id} pushToken=${cg.push_token ? cg.push_token.slice(0,30) + '...' : 'NONE'}`);
     const result = await sendCheckinNotification(
       pool, cg.id, cg.push_token || null,
       'emergency', title, body, data
     );
-    console.log(`[SOS] notification sent to caregiver=${cg.id}`, result);
+    logger.debug('[SOS] notification dispatch complete', {
+      userId,
+      caregiverId: cg.id,
+      success: Boolean(result?.ok ?? result?.success ?? true),
+    });
   }
 
   return {

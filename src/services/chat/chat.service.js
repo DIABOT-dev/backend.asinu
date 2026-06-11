@@ -8,6 +8,7 @@
 const { t } = require('../../i18n');
 const { filterChatResponse } = require('../ai/ai-safety.service');
 const { logAiInteraction } = require('../ai/ai-logger.service');
+const logger = require('../../lib/logger');
 const { getUserMemories, formatMemoriesForPrompt, extractAndSaveMemories } = require('./memory.service');
 
 // =====================================================
@@ -760,7 +761,10 @@ async function processChat(pool, userId, message, context = {}) {
   const { getChatReply } = require('./chat.provider.service');
   const { isPremium: checkIsPremium } = require('../payment/subscription.service');
 
-  console.log(`[Chat] user=${userId} msg="${message.slice(0, 80)}${message.length > 80 ? '…' : ''}"`);
+  logger.debug('[Chat] received message', {
+    userId,
+    messageLength: String(message || '').length,
+  });
 
   try {
     const now = new Date();
@@ -779,7 +783,12 @@ async function processChat(pool, userId, message, context = {}) {
     const userLang = userRow?.lang || context.lang || 'vi';
     const userIsPremium = await checkIsPremium(pool, userId);
     const retentionDays = userIsPremium ? RETENTION_DAYS_PREMIUM : RETENTION_DAYS_FREE;
-    console.log(`[Chat] user=${userId} provider=${provider || 'default'} premium=${userIsPremium} lang=${userLang}`);
+    logger.debug('[Chat] request context', {
+      userId,
+      provider: provider || 'default',
+      premium: userIsPremium,
+      lang: userLang,
+    });
 
     if (provider === 'diabrain') {
       // DiaBrain manages its own conversation state — keep existing behavior
@@ -863,7 +872,12 @@ async function processChat(pool, userId, message, context = {}) {
       rawTokens.total ?? rawTokens.totalTokenCount ?? rawTokens.total_tokens ?? (inputTokens + outputTokens) ?? 0
     );
 
-    console.log(`[Chat] user=${userId} provider=${replyProvider} tokens=${totalTokens} reply="${reply.slice(0, 100)}${reply.length > 100 ? '…' : ''}"`);
+    logger.debug('[Chat] reply generated', {
+      userId,
+      provider: replyProvider,
+      tokens: totalTokens,
+      replyLength: reply.length,
+    });
 
     // Log AI interaction
     logAiInteraction(pool, {

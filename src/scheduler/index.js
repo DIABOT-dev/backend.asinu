@@ -105,6 +105,17 @@ function startScheduler(pool) {
     const stats = await runHealthFeedCycle(pool);
     logger.info('cron.health_feed_cycle.stats', { stats });
   });
+
+  // Daily database log cleanup at 03:30 VN time.
+  safeCron('30 3 * * *', 'database_log_cleanup', async () => {
+    // Giữ ai_logs trong 90 ngày
+    await pool.query("DELETE FROM ai_logs WHERE created_at < NOW() - INTERVAL '90 days'");
+    // Giữ fallback_logs trong 30 ngày
+    await pool.query("DELETE FROM fallback_logs WHERE created_at < NOW() - INTERVAL '30 days'");
+    // Giữ user_activity_logs trong 90 ngày
+    await pool.query("DELETE FROM user_activity_logs WHERE created_at < NOW() - INTERVAL '90 days'");
+    logger.info('cron.database_log_cleanup.completed');
+  });
 }
 
 module.exports = { startScheduler };

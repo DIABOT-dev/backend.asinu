@@ -90,8 +90,26 @@ async function transcribeAudio(pool, req, res) {
 
   try {
     const lang = req.headers['accept-language']?.startsWith('en') ? 'en' : 'vi';
+    const startTranscribe = Date.now();
     const text = await getWhisperTranscription(req.file.buffer, req.file.originalname, lang);
+    const latencyTranscribe = Date.now() - startTranscribe;
     await incrementVoiceUsage(pool, req.user.id);
+
+    // Log the AI interaction
+    const whisperProvider = process.env.WHISPER_ENDPOINT ? 'phowhisper' : 'openai';
+    const whisperModel = process.env.WHISPER_ENDPOINT ? 'diepho/PhoWhisper-medium-ct2' : 'whisper-1';
+    const { logAiInteraction } = require('../services/ai/ai-logger.service');
+    logAiInteraction(pool, {
+      userId: req.user.id,
+      feature: 'chat',
+      action: 'whisper_transcribe',
+      provider: whisperProvider,
+      model: whisperModel,
+      promptSummary: `audio: ${req.file.originalname} (${req.file.size} bytes)`,
+      responseSummary: text,
+      latencyMs: latencyTranscribe,
+    }).catch(() => {});
+
     return res.status(200).json({ ok: true, text, voiceUsed: voiceUsed + 1, voiceLimit: VOICE_MONTHLY_LIMIT });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

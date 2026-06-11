@@ -6,6 +6,7 @@
 const { t } = require('../../i18n');
 const { normalizePhoneNumber, getPhoneVariants } = require('../auth/auth.service');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
+const logger = require('../../lib/logger');
 
 /**
  * Get user profile with onboarding data
@@ -367,7 +368,10 @@ async function deleteAccount(pool, userId) {
  */
 async function updatePushToken(pool, userId, pushToken) {
   try {
-    console.log('[updatePushToken] userId:', userId, 'token:', pushToken?.substring(0, 30));
+    logger.debug('[updatePushToken] set', {
+      userId,
+      hasToken: Boolean(pushToken),
+    });
     // Clear this token from any other user first (1 device = 1 user)
     await pool.query(
       `UPDATE users SET push_token = NULL WHERE push_token = $1 AND id != $2`,
@@ -377,7 +381,10 @@ async function updatePushToken(pool, userId, pushToken) {
       `UPDATE users SET push_token = $1 WHERE id = $2`,
       [pushToken, userId]
     );
-    console.log('[updatePushToken] Success, rowCount:', result.rowCount);
+    logger.debug('[updatePushToken] success', {
+      userId,
+      rowCount: result.rowCount,
+    });
     return { ok: true };
   } catch (err) {
     console.error('[updatePushToken] DB Error:', err.message, err.code);

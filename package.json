@@ -16,7 +16,9 @@
     "format:check": "prettier --check .",
     "db:reset": "node scripts/reset-db.js",
     "db:backup": "./scripts/backup-db.sh",
-    "test:health-feed": "node scripts/test-health-feed-notifications.js"
+    "test:health-feed": "node scripts/simulate-feed.js",
+    "simulate-feed": "node scripts/simulate-feed.js",
+    "seed:care-circle-demo": "node scripts/seed-care-circle-demo.js"
   },
   "dependencies": {
     "@apple/app-store-server-library": "^3.1.0",

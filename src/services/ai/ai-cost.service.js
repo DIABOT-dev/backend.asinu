@@ -16,6 +16,8 @@ const PRICING = {
   'gpt-4-turbo':         { input: 0.01, output: 0.03 },
   'gpt-3.5-turbo':       { input: 0.0005, output: 0.0015 },
   'whisper-1':           { input: 0, output: 0, perMinute: 0.006 },
+  'phowhisper':          { input: 0, output: 0, perMinute: 0 },
+  'diepho/PhoWhisper-medium-ct2': { input: 0, output: 0, perMinute: 0 },
 
   // Google — Gemini & MedGemma
   'gemini-2.0-flash':    { input: 0.00010, output: 0.00040 },

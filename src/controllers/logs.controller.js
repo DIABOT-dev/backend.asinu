@@ -55,18 +55,35 @@ async function voiceParse(pool, req, res) {
   }
 
   try {
+    const startTranscribe = Date.now();
     const result = await parseLogVoice(
       req.file.buffer,
       req.file.mimetype,
       req.file.originalname || 'voice_log.m4a',
       log_type
     );
+    const latencyTranscribe = Date.now() - startTranscribe;
 
     // Count usage only when audio was actually processed (transcript exists)
     if (result.transcript) {
       try {
         await incrementVoiceUsage(pool, req.user.id);
       } catch { /* non-blocking */ }
+
+      // Log Whisper transcription
+      const whisperProvider = process.env.WHISPER_ENDPOINT ? 'phowhisper' : 'openai';
+      const whisperModel = process.env.WHISPER_ENDPOINT ? 'diepho/PhoWhisper-medium-ct2' : 'whisper-1';
+      const { logAiInteraction } = require('../services/ai/ai-logger.service');
+      logAiInteraction(pool, {
+        userId: req.user.id,
+        feature: 'voice_log',
+        action: 'whisper_transcribe',
+        provider: whisperProvider,
+        model: whisperModel,
+        promptSummary: `audio: ${req.file.originalname || 'voice_log.m4a'} (${req.file.size} bytes), log_type: ${log_type}`,
+        responseSummary: result.transcript,
+        latencyMs: latencyTranscribe,
+      }).catch(() => {});
     }
 
     return res.status(200).json(result);

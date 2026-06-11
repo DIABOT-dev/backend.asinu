@@ -215,7 +215,7 @@ function generateProviderId(provider, providerId, email) {
 async function findUserByEmail(pool, email) {
   const normalizedEmail = String(email).trim().toLowerCase();
   const result = await pool.query(
-    'SELECT id, email, password_hash FROM users WHERE email = $1',
+    'SELECT id, email, password_hash FROM users WHERE email = $1 AND deleted_at IS NULL',
     [normalizedEmail]
   );
   return result.rows[0] || null;
@@ -244,7 +244,7 @@ async function findUserById(pool, userId) {
  */
 async function findUserByProviderId(pool, idColumn, providerId) {
   const result = await pool.query(
-    `SELECT id, email FROM users WHERE ${idColumn} = $1`,
+    `SELECT id, email FROM users WHERE ${idColumn} = $1 AND deleted_at IS NULL`,
     [providerId]
   );
   return result.rows[0] || null;
@@ -260,8 +260,8 @@ async function findUserByProviderId(pool, idColumn, providerId) {
 async function createUserWithEmail(pool, email, passwordHash) {
   const normalizedEmail = String(email).trim().toLowerCase();
   const result = await pool.query(
-    `INSERT INTO users (email, password_hash)
-     VALUES ($1, $2)
+    `INSERT INTO users (email, password_hash, consent_accepted_at, consent_version)
+     VALUES ($1, $2, NOW(), 'v1.0.0')
      ON CONFLICT (email) DO NOTHING
      RETURNING id, email`,
     [normalizedEmail, passwordHash]
@@ -281,8 +281,8 @@ async function createUserWithEmail(pool, email, passwordHash) {
  */
 async function createUserWithProvider(pool, idColumn, providerId, provider, email, phoneNumber) {
   const result = await pool.query(
-    `INSERT INTO users (${idColumn}, email, phone_number, auth_provider)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO users (${idColumn}, email, phone_number, auth_provider, consent_accepted_at, consent_version)
+     VALUES ($1, $2, $3, $4, NOW(), 'v1.0.0')
      RETURNING id, email`,
     [providerId, email || null, phoneNumber || null, provider.toUpperCase()]
   );
@@ -441,11 +441,16 @@ async function registerByEmail(pool, email, password, phoneNumber, fullName, dis
     
     // Insert user
     const result = await pool.query(
-      `INSERT INTO users (email, phone_number, password_hash, full_name, display_name, auth_provider)
-       VALUES ($1, $2, $3, $4, $5, 'EMAIL')
+      `INSERT INTO users (email, phone_number, password_hash, full_name, display_name, auth_provider, consent_accepted_at, consent_version)
+       VALUES ($1, $2, $3, $4, $5, 'EMAIL', NOW(), 'v1.0.0')
+       ON CONFLICT (email) DO NOTHING
        RETURNING id, email, phone_number, full_name, display_name`,
       [normalizedEmail, finalPhone, passwordHash, fullName || null, displayName || null]
     );
+
+    if (!result.rows[0]) {
+      return { ok: false, error: t('auth.email_already_registered') };
+    }
     
     const user = result.rows[0];
     
@@ -483,7 +488,7 @@ async function loginByEmail(pool, identifier, password) {
       // Search by phone variants
       const variants = getPhoneVariants(identifier);
       const result = await pool.query(
-        'SELECT id, email, password_hash, phone_number, display_name, full_name FROM users WHERE phone_number = ANY($1::text[])',
+        'SELECT id, email, password_hash, phone_number, display_name, full_name FROM users WHERE phone_number = ANY($1::text[]) AND deleted_at IS NULL',
         [variants]
       );
       user = result.rows[0];
@@ -536,7 +541,7 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
     // If email provided, check if already registered via email/password
     if (email) {
       const emailUser = await pool.query(
-        'SELECT id, password_hash FROM users WHERE email = $1',
+        'SELECT id, password_hash FROM users WHERE email = $1 AND deleted_at IS NULL',
         [String(email).trim().toLowerCase()]
       );
       if (emailUser.rows.length > 0 && emailUser.rows[0].password_hash) {
