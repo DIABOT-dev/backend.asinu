@@ -4,9 +4,11 @@
  */
 
 const { t } = require('../../i18n');
-const { normalizePhoneNumber, getPhoneVariants } = require('../auth/auth.service');
+const { normalizePhoneNumber, getPhoneVariants, getCrmUserPayload } = require('../auth/auth.service');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
 const logger = require('../../lib/logger');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
+const { emitProfileUpdated } = require('../integrations/crm-profile.service');
 
 /**
  * Get user profile with onboarding data
@@ -264,7 +266,21 @@ async function updateProfile(pool, userId, updates) {
 
     // Invalidate profile cache and fetch updated
     await cacheDel(`profile:${userId}`, `user:name:${userId}`);
-    return await getProfile(pool, userId);
+    const updatedProfile = await getProfile(pool, userId);
+    const crmUser = await getCrmUserPayload(pool, userId);
+    if (crmUser) emitCrmEventAsync(pool, 'user.updated', crmUser);
+    if (
+      dateOfBirth !== undefined ||
+      chronicDiseases !== undefined ||
+      gender !== undefined
+    ) {
+      const onboardingSync = await pool.query(
+        'SELECT age, birth_year, medical_conditions FROM user_onboarding_profiles WHERE user_id = $1',
+        [userId],
+      );
+      emitProfileUpdated(pool, userId, onboardingSync.rows[0] || {});
+    }
+    return updatedProfile;
   } catch (err) {
 
     if (err?.code === '23505' && err?.constraint === 'users_phone_key') {
@@ -346,6 +362,15 @@ async function deleteAccount(pool, userId) {
       `tree:summary:${userId}`, `tree:history:${userId}`, `missions:${userId}`,
       `health:score:${userId}`, `wellness:state:${userId}`, `wellness:score:${userId}`,
       `engagement:pattern:${userId}`
+    );
+
+    // Keep the deletion signal after the source transaction commits. CRM only
+    // receives the external user id and performs its own redaction.
+    emitCrmEventAsync(
+      pool,
+      'user.deleted',
+      { user_id: String(userId) },
+      { event_id: `user.deleted:${userId}` },
     );
 
     return { ok: true, message: t('success.account_deleted') };

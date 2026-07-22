@@ -10,6 +10,7 @@
 
 const { sendAndSave } = require('./basic.notification.service');
 const { t } = require('../../i18n');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 const EXPIRING_DAYS_BEFORE = 3;
 const PROFILE_INCOMPLETE_DAYS_AFTER_SIGNUP = 3;
@@ -40,11 +41,28 @@ async function runSubscriptionExpiringSoon(pool) {
   for (const u of rows) {
     const lang = u.lang;
     const days = Math.max(1, Math.ceil((new Date(u.subscription_expires_at) - new Date()) / (24 * 60 * 60 * 1000)));
+    const expiresAt = new Date(u.subscription_expires_at).toISOString();
+
+    // The notification scheduler is also the source of truth for the CRM
+    // lifecycle event. A stable event id prevents duplicate CRM rows while
+    // this 3-day window is scanned on every scheduler run.
+    emitCrmEventAsync(
+      pool,
+      'subscription.expiring',
+      {
+        user_id: String(u.id),
+        state: 'paid',
+        status: 'expiring',
+        expires_at: expiresAt,
+      },
+      { event_id: `subscription.expiring:${u.id}:${expiresAt}` },
+    );
+
     const ok = await sendAndSave(
       pool, { id: u.id, push_token: u.push_token }, 'subscription_expiring_soon',
       t('push.subscription_expiring_title', lang),
       t('push.subscription_expiring_body', lang, { days }),
-      { expiresAt: new Date(u.subscription_expires_at).toISOString(), days: String(days) }
+      { expiresAt, days: String(days) }
     );
     if (ok) sent++;
   }
@@ -80,6 +98,11 @@ async function runSubscriptionExpired(pool) {
       t('push.subscription_expired_body', lang),
       {}
     );
+    emitCrmEventAsync(pool, 'subscription.expired', {
+      user_id: String(u.id),
+      state: 'churn',
+      status: 'expired',
+    });
     if (ok) sent++;
   }
   return { checked: rows.length, sent };

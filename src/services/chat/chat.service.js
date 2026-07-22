@@ -10,6 +10,7 @@ const { filterChatResponse } = require('../ai/ai-safety.service');
 const { logAiInteraction } = require('../ai/ai-logger.service');
 const logger = require('../../lib/logger');
 const { getUserMemories, formatMemoriesForPrompt, extractAndSaveMemories } = require('./memory.service');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 // =====================================================
 // CONSTANTS
@@ -900,6 +901,20 @@ async function processChat(pool, userId, message, context = {}) {
 
     // Save assistant reply
     const assistantRow = await saveAssistantReply(pool, userId, reply, now);
+
+    // CRM gets usage metadata only; chat messages and AI content stay in Asinu.
+    emitCrmEventAsync(
+      pool,
+      'chat.used',
+      {
+        user_id: String(userId),
+        chat_id: assistantRow?.id ? String(assistantRow.id) : null,
+        provider: replyProvider,
+        status: 'completed',
+        tokens_used: Number(totalTokens || 0),
+      },
+      { event_id: `chat.used:${assistantRow?.id || `${userId}:${now.toISOString()}`}` },
+    );
 
     // Extract memories in background (fire-and-forget)
     if (conversationHistory && conversationHistory.length >= 4) {

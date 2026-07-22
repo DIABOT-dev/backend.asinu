@@ -1,6 +1,7 @@
 const { t } = require('../../i18n');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
-﻿function resolveClient(poolOrClient) {
+const { enqueueCrmEvent } = require('../integrations/crm-event.service');
+function resolveClient(poolOrClient) {
   if (poolOrClient && typeof poolOrClient.query === 'function') {
     return poolOrClient;
   }
@@ -120,7 +121,21 @@ async function updateMissionProgress(clientOrPool, userId, missionKey, delta, op
        RETURNING *`,
       [userId, missionKey, nextProgress, goal, status, today, now]
     );
-    return updated.rows[0];
+    const result = updated.rows[0];
+    if (status === 'completed' && row.status !== 'completed') {
+      await enqueueCrmEvent(
+        clientOrPool,
+        'mission.completed',
+        {
+          user_id: String(userId),
+          mission_key: missionKey,
+          status: 'completed',
+          count: Number(result.progress || goal),
+        },
+        { event_id: `mission.completed:${userId}:${missionKey}:${today}` },
+      );
+    }
+    return result;
   }
 
   const startProgress = Math.min(Math.max(delta, 0), goal);
@@ -131,7 +146,21 @@ async function updateMissionProgress(clientOrPool, userId, missionKey, delta, op
      RETURNING *`,
     [userId, missionKey, status, startProgress, goal, today, now]
   );
-  return inserted.rows[0];
+  const result = inserted.rows[0];
+  if (status === 'completed') {
+    await enqueueCrmEvent(
+      clientOrPool,
+      'mission.completed',
+      {
+        user_id: String(userId),
+        mission_key: missionKey,
+        status: 'completed',
+        count: Number(result.progress || goal),
+      },
+      { event_id: `mission.completed:${userId}:${missionKey}:${today}` },
+    );
+  }
+  return result;
 }
 
 /**

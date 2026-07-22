@@ -25,6 +25,7 @@ const BASE_PRICE = 199000; // VND/tháng
 const { t } = require('../../i18n');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
 const { sendAndSave } = require('../notification/basic.notification.service');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 const WALLET_LOW_BALANCE_THRESHOLD = 50000; // 50.000đ
 
@@ -56,6 +57,27 @@ async function notifyPremiumActivated(pool, userId, expiresAt) {
       { expiresAt: new Date(expiresAt).toISOString() }
     );
   } catch {}
+}
+
+function emitSubscriptionChange(pool, eventType, payload) {
+  emitCrmEventAsync(pool, eventType, {
+    user_id: String(payload.userId),
+    ...(payload.subscriptionId ? { subscription_id: String(payload.subscriptionId) } : {}),
+    ...(payload.productCode ? { product_code: String(payload.productCode) } : {}),
+    ...(payload.planCode ? { plan_code: String(payload.planCode) } : {}),
+    ...(payload.state ? { state: payload.state } : {}),
+    ...(payload.status ? { status: payload.status } : {}),
+    ...(payload.expiresAt ? { expires_at: new Date(payload.expiresAt).toISOString() } : {}),
+    ...(payload.externalRef ? { external_ref: String(payload.externalRef) } : {}),
+    ...(payload.provider ? { provider: String(payload.provider) } : {}),
+    ...(payload.amountMinor != null ? { amount_minor: Number(payload.amountMinor) } : {}),
+    ...(payload.currency ? { currency: String(payload.currency) } : {}),
+    ...(payload.paidAt ? { paid_at: new Date(payload.paidAt).toISOString() } : {}),
+    ...(payload.payerUserId != null ? { payer_user_id: String(payload.payerUserId) } : {}),
+    beneficiary_user_id: String(payload.beneficiaryUserId ?? payload.userId),
+    ...(payload.isGift != null ? { is_gift: Boolean(payload.isGift) } : {}),
+    txn_type: 'subscription',
+  });
 }
 
 // Helper: warn nếu wallet thấp sau giao dịch
@@ -324,6 +346,22 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
     // Notify the recipient (always) and the payer separately if this was
     // a gift purchase (Tùng buys for Đức).
     notifyPremiumActivated(pool, userId, newExpiry).catch(() => {});
+    emitSubscriptionChange(pool, 'subscription.activated', {
+      userId,
+      subscriptionId: sub.id,
+      planCode: `premium_${planMonths}m`,
+      state: 'paid',
+      status: 'active',
+      expiresAt: newExpiry,
+      externalRef: sub.order_code,
+      provider: 'sepay',
+      amountMinor: sub.amount,
+      currency: 'VND',
+      paidAt: sub.completed_at || new Date().toISOString(),
+      payerUserId: sub.payer_user_id,
+      beneficiaryUserId: userId,
+      isGift: sub.is_gift,
+    });
     if (sub.is_gift && sub.payer_user_id && sub.payer_user_id !== userId) {
       notifyGiftConfirmed(pool, sub.payer_user_id, userId, newExpiry).catch(() => {});
     }
@@ -606,6 +644,20 @@ async function activateFromIap(pool, userId, { productId, transactionId, months,
     await client.query('COMMIT');
     await cacheDel(`subscription:${userId}`);
     notifyPremiumActivated(pool, userId, newExpiry).catch(() => {});
+    emitSubscriptionChange(pool, 'subscription.activated', {
+      userId,
+      planCode: `premium_${planMonths}m`,
+      productCode: productId,
+      state: 'paid',
+      status: 'active',
+      expiresAt: newExpiry,
+      externalRef: `iap:${platform}:${transactionId}`,
+      provider: platform,
+      amountMinor: 0,
+      currency: 'VND',
+      paidAt: new Date().toISOString(),
+      beneficiaryUserId: userId,
+    });
 
     return { ok: true, expiresAt: newExpiry, planMonths, platform };
   } catch (err) {
@@ -675,6 +727,8 @@ async function applyIapWebhookEvent(pool, ev) {
   }
 
   const client = await pool.connect();
+  let appliedEventType = null;
+  let appliedExpiry = expiresAt || null;
   try {
     await client.query('BEGIN');
 
@@ -687,6 +741,7 @@ async function applyIapWebhookEvent(pool, ev) {
          WHERE id = $2`,
         [new Date(expiresAt), userId]
       );
+      appliedEventType = 'subscription.renewed';
     } else if (action === 'revoke' || action === 'expire') {
       // Downgrade to free, but only if the stored expiry was actually in
       // the past (or this is an explicit revoke). Prevents a race where a
@@ -706,11 +761,28 @@ async function applyIapWebhookEvent(pool, ev) {
           `UPDATE users SET subscription_tier = 'free' WHERE id = $1`,
           [userId]
         );
+        appliedEventType = action === 'expire' ? 'subscription.expired' : 'subscription.cancelled';
+        appliedExpiry = currentExpiry || expiresAt || null;
       }
     }
 
     await client.query('COMMIT');
     await cacheDel(`subscription:${userId}`);
+    if (appliedEventType) {
+      emitSubscriptionChange(pool, appliedEventType, {
+        userId,
+        productCode: productId,
+        state: appliedEventType === 'subscription.renewed' ? 'paid' : 'churn',
+        status: appliedEventType === 'subscription.renewed' ? 'active' : 'expired',
+        expiresAt: appliedExpiry,
+        externalRef: transactionId,
+        provider: platform,
+        amountMinor: 0,
+        currency: 'VND',
+        paidAt: new Date().toISOString(),
+        beneficiaryUserId: userId,
+      });
+    }
     return { ok: true, userId };
   } catch (err) {
     await client.query('ROLLBACK');

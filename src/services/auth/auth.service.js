@@ -10,6 +10,8 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { t } = require('../../i18n');
+const crypto = require('crypto');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 // =====================================================
 // CONSTANTS
@@ -20,6 +22,58 @@ if (!JWT_SECRET) {
   throw new Error('[FATAL] JWT_SECRET environment variable is not set. Server cannot start.');
 }
 const JWT_EXPIRES_IN = '30d';
+
+async function getCrmUserPayload(pool, userId) {
+  const result = await pool.query(
+    `SELECT id, email, phone_number, full_name, display_name, avatar_url,
+            subscription_tier, subscription_expires_at
+       FROM users
+      WHERE id = $1`,
+    [userId],
+  );
+  const user = result.rows[0];
+  if (!user) return null;
+  return {
+    user_id: String(user.id),
+    full_name: user.full_name || user.display_name || null,
+    phone: user.phone_number || null,
+    email: user.email || null,
+    avatar_url: user.avatar_url || null,
+    lead_source: 'asinu_app',
+    account_tier: user.subscription_tier || 'free',
+    subscription_expires_at: user.subscription_expires_at
+      ? new Date(user.subscription_expires_at).toISOString()
+      : null,
+  };
+}
+
+async function emitAppSessionStarted(pool, userId, provider = 'app') {
+  const sessionId = `asinu:${userId}:${crypto.randomUUID()}`;
+  const payload = { user_id: String(userId), session_id: sessionId, source_platform: provider };
+  await Promise.all([
+    emitCrmEventAsync(pool, 'session.started', payload, { event_id: `session.started:${sessionId}` }),
+    emitCrmEventAsync(pool, 'app.opened', payload, { event_id: `app.opened:${sessionId}` }),
+  ]);
+}
+
+async function emitUserCreated(pool, userId) {
+  const payload = await getCrmUserPayload(pool, userId);
+  if (payload) await emitCrmEventAsync(pool, 'user.created', payload, { event_id: `user.created:${userId}` });
+}
+
+async function emitPrivacyConsentAccepted(pool, userId, version = 'v1.0.0') {
+  await emitCrmEventAsync(
+    pool,
+    'consent.updated',
+    {
+      user_id: String(userId),
+      consent_type: 'privacy_policy',
+      status: 'accepted',
+      version,
+    },
+    { event_id: `consent.updated:privacy_policy:${userId}:${version}` },
+  );
+}
 
 // =====================================================
 // JWT OPERATIONS
@@ -456,8 +510,11 @@ async function registerByEmail(pool, email, password, phoneNumber, fullName, dis
     
     // Initialize default missions
     await initializeDefaultMissions(pool, user.id);
+    await emitUserCreated(pool, user.id);
+    await emitPrivacyConsentAccepted(pool, user.id);
     
     const token_response = issueJwt(user);
+    await emitAppSessionStarted(pool, user.id, 'email');
     return { 
       ok: true, 
       token: token_response.token, 
@@ -504,6 +561,7 @@ async function loginByEmail(pool, identifier, password) {
     }
     
     const token_response = issueJwt(user);
+    await emitAppSessionStarted(pool, user.id, 'email');
     return { 
       ok: true, 
       token: token_response.token, 
@@ -531,6 +589,7 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
     const existing = await findUserByProviderId(pool, idColumn, providerId);
     if (existing) {
       const token_response = issueJwt(existing);
+      await emitAppSessionStarted(pool, existing.id, provider);
       return {
         ok: true,
         token: token_response.token,
@@ -551,6 +610,9 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
       if (emailUser.rows.length > 0) {
         const linkedUser = emailUser.rows[0];
         await pool.query(`UPDATE users SET ${idColumn} = $1 WHERE id = $2`, [providerId, linkedUser.id]);
+        const linkedPayload = await getCrmUserPayload(pool, linkedUser.id);
+        if (linkedPayload) emitCrmEventAsync(pool, 'user.updated', linkedPayload);
+        await emitAppSessionStarted(pool, linkedUser.id, provider);
         const token_response = issueJwt(linkedUser);
         return { ok: true, token: token_response.token, user: token_response.user };
       }
@@ -561,8 +623,11 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
     
     // Initialize default missions
     await initializeDefaultMissions(pool, newUser.id);
+    await emitUserCreated(pool, newUser.id);
+    await emitPrivacyConsentAccepted(pool, newUser.id);
     
     const token_response = issueJwt(newUser);
+    await emitAppSessionStarted(pool, newUser.id, provider);
     return { 
       ok: true, 
       token: token_response.token, 
@@ -645,6 +710,12 @@ async function searchUsers(pool, currentUserId, query) {
 
 async function logout(pool, userId) {
   await pool.query('UPDATE users SET push_token = NULL WHERE id = $1', [userId]);
+  emitCrmEventAsync(
+    pool,
+    'session.ended',
+    { user_id: String(userId), status: 'ended', source_platform: 'app' },
+    { event_id: `session.ended:${userId}:${Date.now()}` },
+  );
 }
 
 // =====================================================
@@ -668,6 +739,7 @@ module.exports = {
   findUserByEmail,
   findUserById,
   findUserByProviderId,
+  getCrmUserPayload,
   createUserWithEmail,
   createUserWithProvider,
   createOrUpdateUserWithPhone,

@@ -83,6 +83,8 @@ const normalizeJointIssues = (items) => {
 };
 
 const { cacheDel } = require('../../lib/redis');
+const { emitProfileUpdated } = require('../integrations/crm-profile.service');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 // =====================================================
 // DATABASE OPERATIONS
@@ -182,6 +184,8 @@ async function upsertProfile(pool, userId, profile) {
   // Invalidate profile cache after onboarding update
   await cacheDel(`profile:${userId}`, `user:name:${userId}`);
 
+  emitProfileUpdated(pool, userId, { ...profile, medical_conditions: normalizedMedical });
+
   return result.rows[0];
 }
 
@@ -262,7 +266,9 @@ async function upsertProfileFromAI(pool, userId, aiProfile) {
     ]
   );
 
-  return result.rows[0];
+  const saved = result.rows[0];
+  emitProfileUpdated(pool, userId, { ...aiProfile, medical_conditions: medical });
+  return saved;
 }
 
 // =====================================================
@@ -463,17 +469,34 @@ async function upsertProfileV2(pool, userId, data) {
   }
 
   // Ghi nhận sự đồng ý chính sách bảo mật Nghị định 13
-  await pool.query(
+  const consentResult = await pool.query(
     `UPDATE users 
         SET consent_accepted_at = NOW(), 
             consent_version = 'v1.0.0' 
       WHERE id = $1 
-        AND consent_accepted_at IS NULL`,
+        AND consent_accepted_at IS NULL
+      RETURNING id, consent_version`,
     [userId]
   );
 
+  if (consentResult.rowCount) {
+    emitCrmEventAsync(
+      pool,
+      'consent.updated',
+      {
+        user_id: String(userId),
+        consent_type: 'privacy_policy',
+        status: 'accepted',
+        version: consentResult.rows[0].consent_version || 'v1.0.0',
+      },
+      { event_id: `consent.updated:privacy_policy:${userId}:${consentResult.rows[0].consent_version || 'v1.0.0'}` },
+    );
+  }
+
   // Invalidate profile cache so next fetch returns fresh data
   await cacheDel(`profile:${userId}`, `user:name:${userId}`);
+
+  emitProfileUpdated(pool, userId, { ...data, medical_conditions: normalizedConditions });
 
   return saved;
 }

@@ -4,11 +4,41 @@
  */
 
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 async function trackEvent(pool, userId, eventType, metadata = {}) {
   await pool.query(
     `INSERT INTO user_engagement (user_id, event_type, metadata) VALUES ($1, $2, $3::jsonb)`,
     [userId, eventType, JSON.stringify(metadata)]
+  );
+}
+
+/**
+ * Record an authenticated app screen view and forward only the screen
+ * identifier to CRM. Never send screen params/query strings or page content.
+ */
+async function trackScreenView(pool, userId, { screenName, featureCode = null } = {}) {
+  const normalizedScreenName = String(screenName || '').trim().slice(0, 120);
+  if (!normalizedScreenName) throw new Error('screen_name is required');
+
+  const normalizedFeatureCode = featureCode == null
+    ? null
+    : String(featureCode).trim().slice(0, 80) || null;
+
+  await trackEvent(pool, userId, 'screen_viewed', {
+    screen_name: normalizedScreenName,
+    ...(normalizedFeatureCode ? { feature_code: normalizedFeatureCode } : {}),
+  });
+
+  emitCrmEventAsync(
+    pool,
+    'screen.viewed',
+    {
+      user_id: String(userId),
+      screen_name: normalizedScreenName,
+      ...(normalizedFeatureCode ? { feature_code: normalizedFeatureCode } : {}),
+      source_platform: 'asinu_app',
+    },
   );
 }
 
@@ -67,4 +97,4 @@ async function getOptimalNotificationTime(pool, userId) {
   };
 }
 
-module.exports = { trackEvent, getUserPattern, getOptimalNotificationTime };
+module.exports = { trackEvent, trackScreenView, getUserPattern, getOptimalNotificationTime };

@@ -11,6 +11,7 @@ const crypto = require('crypto');
 const subscriptionService = require('./subscription.service');
 const { t } = require('../../i18n');
 const { sendAndSave } = require('../notification/basic.notification.service');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 const WALLET_LOW_BALANCE_THRESHOLD = 50000; // 50.000đ
 const WEBHOOK_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes — reject older webhooks
@@ -208,6 +209,27 @@ async function handleWebhook(pool, req) {
       { amount: String(transferAmount), balance: String(u.wallet_balance), orderCode }
     ).catch(() => {});
   }
+
+  emitCrmEventAsync(
+    pool,
+    'payment.completed',
+    {
+      user_id: String(userId),
+      external_ref: String(orderCode),
+      transaction_id: webhookId,
+      provider: 'sepay',
+      status: 'completed',
+      amount_minor: Number(transferAmount),
+      currency: 'VND',
+      paid_at: new Date().toISOString(),
+      state: 'paid',
+      payer_user_id: String(userId),
+      beneficiary_user_id: String(userId),
+      is_gift: false,
+      txn_type: 'wallet_topup',
+    },
+    { event_id: `payment.completed:${orderCode}` },
+  );
 
   return { ok: true, message: 'completed', userId, amount: transferAmount, orderCode };
 }

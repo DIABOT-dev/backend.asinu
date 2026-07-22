@@ -1,6 +1,7 @@
 'use strict';
 
 const { DEFAULT_TIMEZONE } = require('./config');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 async function getContentCatalog(pool) {
   const { rows } = await pool.query(
@@ -302,6 +303,14 @@ async function markRead(pool, userId, feedItemId) {
       WHERE id = $1 AND user_id = $2`,
     [feedItemId, userId]
   );
+  if (rowCount > 0) {
+    emitCrmEventAsync(
+      pool,
+      'content.viewed',
+      { user_id: String(userId), content_id: String(feedItemId), status: 'read', content_action: 'read' },
+      { event_id: `content.viewed:${userId}:${feedItemId}` },
+    );
+  }
   return rowCount > 0;
 }
 
@@ -321,6 +330,12 @@ async function saveContent(pool, userId, contentId) {
      VALUES ($1, $2)
      ON CONFLICT DO NOTHING`,
     [userId, contentId]
+  );
+  emitCrmEventAsync(
+    pool,
+    'content.saved',
+    { user_id: String(userId), content_id: String(contentId), status: 'saved', content_action: 'saved' },
+    { event_id: `content.saved:${userId}:${contentId}` },
   );
 }
 
@@ -350,6 +365,26 @@ async function trackEvent(pool, userId, { content_id, feed_item_id = null, event
      VALUES ($1,$2,$3,$4,$5)`,
     [userId, content_id, feed_item_id, event_type, JSON.stringify(metadata || {})]
   );
+  const normalizedEvent = String(event_type || '').toLowerCase();
+  const crmEventType = normalizedEvent.includes('save')
+    ? 'content.saved'
+    : normalizedEvent.includes('view') || normalizedEvent.includes('read')
+      ? 'content.viewed'
+      : null;
+  if (crmEventType) {
+    emitCrmEventAsync(
+      pool,
+      crmEventType,
+      {
+        user_id: String(userId),
+        content_id: content_id == null ? null : String(content_id),
+        feed_item_id: feed_item_id == null ? null : String(feed_item_id),
+        content_action: normalizedEvent,
+        status: 'recorded',
+      },
+      { event_id: `${crmEventType}:${userId}:${content_id}:${feed_item_id || normalizedEvent}` },
+    );
+  }
 }
 
 async function enqueueNotification(pool, userId, feedItemId, templateId, payload) {

@@ -25,6 +25,7 @@ const { saveSymptomLogs } = require('./symptom-tracker.service');
 const { dispatch: dispatchNotification } = require('../../core/notification/notification.orchestrator');
 const { trackEvent } = require('../profile/engagement.service');
 const { updateMissionProgress } = require('../missions/missions.service');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 const { t } = require('../../i18n');
 const { getHonorifics } = require('../../lib/honorifics');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
@@ -243,6 +244,18 @@ async function startCheckin(pool, userId, status, bodyLocations = null, bodyLoca
 
   // Track engagement event
   trackEvent(pool, userId, 'checkin_response', { status, flowState }).catch(() => {});
+
+  emitCrmEventAsync(
+    pool,
+    'checkin.started',
+    {
+      user_id: String(userId),
+      checkin_id: rows[0]?.id ? String(rows[0].id) : null,
+      status,
+      flow_state: flowState,
+    },
+    { event_id: `checkin.started:${userId}:${date}:${rows[0]?.updated_at || Date.now()}` },
+  );
 
   // Invalidate health score cache
   await cacheDel(`health:score:${userId}`);

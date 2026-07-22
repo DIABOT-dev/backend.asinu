@@ -8,6 +8,7 @@
  */
 
 const { dispatch: dispatchNotification } = require('../../core/notification/notification.orchestrator');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 // ─── Profile helper ────────────────────────────────────────────────────────
 
@@ -75,6 +76,19 @@ async function createSession(pool, userId, scriptId, clusterKey, sessionType = '
     // non-fatal — session still usable without checkin link
   }
 
+  emitCrmEventAsync(
+    pool,
+    'checkin.started',
+    {
+      user_id: String(userId),
+      session_id: String(session.id),
+      checkin_id: session.checkin_id ? String(session.checkin_id) : null,
+      status,
+      flow_state: flowState,
+    },
+    { event_id: `checkin.started:${session.id}` },
+  );
+
   return session;
 }
 
@@ -136,7 +150,8 @@ async function completeSession(pool, sessionId, answers, conclusion) {
        conclusion_recommendation = $10,
        conclusion_close_message = $11,
        completed_at = NOW()
-     WHERE id = $1`,
+     WHERE id = $1
+     RETURNING user_id, checkin_id`,
     [
       sessionId,
       JSON.stringify(answers),
@@ -154,6 +169,24 @@ async function completeSession(pool, sessionId, answers, conclusion) {
       conclusion.closeMessage,
     ]
   );
+  const result = await pool.query(
+    'SELECT user_id, checkin_id FROM script_sessions WHERE id = $1',
+    [sessionId],
+  );
+  const session = result.rows[0];
+  if (session) {
+    emitCrmEventAsync(
+      pool,
+      'checkin.completed',
+      {
+        user_id: String(session.user_id),
+        session_id: String(sessionId),
+        checkin_id: session.checkin_id ? String(session.checkin_id) : null,
+        status: 'completed',
+      },
+      { event_id: `checkin.completed:${sessionId}` },
+    );
+  }
 }
 
 /**

@@ -17,6 +17,7 @@ const { runNightlyCycle } = require('../services/checkin/rnd-cycle.service');
 const { updateAllSegments } = require('../services/profile/lifecycle.service');
 const { runDailyLifecycleNotifications } = require('../services/notification/lifecycle.notification.service');
 const { dispatchPendingNotifications, runHealthFeedCycle } = require('../services/health_feed/service');
+const { flushCrmEventOutbox } = require('../services/integrations/crm-event.service');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
@@ -55,6 +56,14 @@ function safeCron(expression, name, handler) {
 }
 
 function startScheduler(pool) {
+  // Reliable Asinu -> CRM webhook delivery and retry.
+  safeCron('* * * * *', 'crm_event_webhooks', async () => {
+    const stats = await flushCrmEventOutbox(pool, 100);
+    if (stats.sent > 0 || stats.failed > 0) {
+      logger.info('cron.crm_event_webhooks.stats', stats);
+    }
+  });
+
   // Per-minute notification tick — sends notifications for users whose configured HH:MM == now.
   safeCron('* * * * *', 'basic_notifications', async () => {
     const result = await runBasicNotifications(pool);

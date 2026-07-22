@@ -22,6 +22,7 @@ const {
 } = require('../controllers/checkin.controller');
 const { getCaregiverLogs, getCaregiverCheckins, getMemberHealthSummary } = require('../controllers/careCircle.controller');
 const { testNotificationHandler } = require('../controllers/notification.controller');
+const { trackScreenViewHandler } = require('../controllers/engagement.controller');
 const {
   getScriptHandler, startScriptHandler, answerScriptHandler,
   getSessionHandler, createClustersHandler,
@@ -115,6 +116,7 @@ function mobileRoutes(pool) {
   router.get('/health-score', requireAuth, (req, res) => healthScoreHandler(pool, req, res));
 
   // Engagement patterns
+  router.post('/engagement/screen-view', requireAuth, (req, res) => trackScreenViewHandler(pool, req, res));
   router.get('/engagement/pattern', requireAuth, (req, res) => engagementPatternHandler(pool, req, res));
   router.get('/engagement/optimal-time', requireAuth, (req, res) => engagementOptimalTimeHandler(pool, req, res));
 

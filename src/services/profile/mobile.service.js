@@ -6,6 +6,7 @@
 const { t } = require('../../i18n');
 const { cacheDel } = require('../../lib/redis');
 const { sendAndSave } = require('../notification/basic.notification.service');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 const VALID_LOG_TYPES = new Set([
   'glucose',
@@ -246,6 +247,21 @@ async function createLog(pool, userId, payload) {
     await insertDetailLog(client, logType, logId, data);
 
     await client.query('COMMIT');
+
+    // CRM receives only the event metadata, never the health measurement value.
+    emitCrmEventAsync(
+      pool,
+      'health_log.created',
+      {
+        user_id: String(userId),
+        log_id: String(logId),
+        log_type: logType,
+        source,
+        status: 'created',
+        occurred_at: occurredDate.toISOString(),
+      },
+      { event_id: `health_log.created:${logId}` },
+    );
 
     // Update mission progress based on log type
     try {

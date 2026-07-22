@@ -11,6 +11,7 @@ const {
   FREE_CONNECTION_LIMIT,
 } = require('../payment/subscription.service');
 const { cacheGet, cacheSet } = require('../../lib/redis');
+const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 // Backwards-compat alias — kept so existing references (if any) keep working.
 const FREE_TIER_CONNECTION_LIMIT = FREE_CONNECTION_LIMIT;
@@ -23,6 +24,22 @@ const DEFAULT_PERMISSIONS = {
   can_view_logs: true,
   can_receive_alerts: true,
   can_ack_escalation: true,
+};
+
+const emitCareCircleChange = (pool, connection, status = connection?.status) => {
+  if (!connection?.id || connection.requester_id == null || connection.addressee_id == null) return;
+  emitCrmEventAsync(pool, 'care_circle.updated', {
+    // The patient is the primary CRM contact for a relationship event. Keep
+    // both directional ids below so the CRM can render the full connection.
+    user_id: String(connection.requester_id),
+    connection_id: String(connection.id),
+    patient_user_id: String(connection.requester_id),
+    caregiver_user_id: String(connection.addressee_id),
+    relationship_type: connection.relationship_type || null,
+    role: connection.role || null,
+    can_receive_alerts: Boolean(connection.permissions?.can_receive_alerts),
+    status,
+  });
 };
 
 // =====================================================
@@ -124,6 +141,7 @@ async function createInvitation(pool, requesterId, data) {
     );
 
     const invitation = result.rows[0];
+    emitCareCircleChange(pool, invitation, 'pending');
 
     // Get requester name for notification
     const requesterName = await getUserDisplayName(pool, requesterId);
@@ -276,6 +294,7 @@ async function acceptInvitation(pool, invitationId, userId) {
       [result.rows[0].id]
     );
     const connection = fullResult.rows[0] || result.rows[0];
+    emitCareCircleChange(pool, connection, 'active');
 
     // Get accepter name for notification
     const accepterName = await getUserDisplayName(pool, userId);
@@ -435,6 +454,7 @@ async function deleteConnection(pool, connectionId, userId) {
     }
 
     const connection = result.rows[0];
+    emitCareCircleChange(pool, connection, 'inactive');
     const otherUserId = Number(connection.requester_id) === Number(userId)
       ? connection.addressee_id
       : connection.requester_id;
@@ -533,6 +553,7 @@ async function updateConnection(pool, connectionId, userId, data) {
       [connectionId]
     );
 
+    emitCareCircleChange(pool, rows[0], 'active');
     return { ok: true, connection: rows[0] };
   } catch (err) {
 
@@ -581,6 +602,7 @@ async function updateConnectionPermissions(pool, connectionId, userId, newPermis
       [result.rows[0].id]
     );
     const conn = rows[0];
+    emitCareCircleChange(pool, conn, 'active');
 
     // Notify the OTHER user that their permissions changed (non-blocking)
     const otherUserId = Number(conn.requester_id) === Number(userId)
