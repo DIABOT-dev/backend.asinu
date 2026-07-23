@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node scripts/migrate.js && node server.js",
     "dev": "node scripts/migrate.js && nodemon server.js",
-    "build": "node -c 'require(\"./server.js\")' && echo 'Backend build successful'",
+    "build": "node --check server.js && echo 'Backend build successful'",
     "test": "jest --runInBand",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
