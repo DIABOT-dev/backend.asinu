@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const logger = require('../../lib/logger');
+const { assertCrmEventType } = require('./crm-event.catalog');
 
 const CRM_EVENTS_URL = process.env.CRM_INTEGRATION_URL || '';
 const CRM_EVENTS_SECRET = process.env.CRM_INTEGRATION_SECRET || '';
@@ -7,15 +8,20 @@ const TIMEOUT_MS = Number(process.env.CRM_INTEGRATION_TIMEOUT_MS || 5000);
 
 const isDbClient = (value) => value && typeof value.query === 'function';
 
-const buildCrmEnvelope = (eventType, payload, options = {}) => ({
-  event_id: options.event_id || `${eventType}:${crypto.randomUUID()}`,
-  event_type: eventType,
-  occurred_at: options.occurred_at || new Date().toISOString(),
-  source: options.source || 'asinu-backend',
-  version: Number(options.version || 1),
-  ...(options.correlation_id ? { correlation_id: String(options.correlation_id) } : {}),
-  payload: payload && typeof payload === 'object' ? payload : {},
-});
+const buildCrmEnvelope = (eventType, payload, options = {}) => {
+  // backend.asinu is CommonJS JavaScript, so validate at runtime before an
+  // invalid event can be written to the durable outbox.
+  assertCrmEventType(eventType);
+  return {
+    event_id: options.event_id || `${eventType}:${crypto.randomUUID()}`,
+    event_type: eventType,
+    occurred_at: options.occurred_at || new Date().toISOString(),
+    source: options.source || 'asinu-backend',
+    version: Number(options.version || 1),
+    ...(options.correlation_id ? { correlation_id: String(options.correlation_id) } : {}),
+    payload: payload && typeof payload === 'object' ? payload : {},
+  };
+};
 
 const deliverCrmEnvelope = async (envelope) => {
   if (!CRM_EVENTS_URL || !CRM_EVENTS_SECRET) return { sent: false, skipped: true };

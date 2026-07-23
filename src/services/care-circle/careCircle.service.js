@@ -28,6 +28,7 @@ const DEFAULT_PERMISSIONS = {
 
 const emitCareCircleChange = (pool, connection, status = connection?.status) => {
   if (!connection?.id || connection.requester_id == null || connection.addressee_id == null) return;
+  const changeMarker = connection.updated_at || connection.accepted_at || connection.created_at || 'unknown';
   emitCrmEventAsync(pool, 'care_circle.updated', {
     // The patient is the primary CRM contact for a relationship event. Keep
     // both directional ids below so the CRM can render the full connection.
@@ -39,6 +40,8 @@ const emitCareCircleChange = (pool, connection, status = connection?.status) => 
     role: connection.role || null,
     can_receive_alerts: Boolean(connection.permissions?.can_receive_alerts),
     status,
+  }, {
+    event_id: `care_circle.updated:${connection.id}:${status}:${String(changeMarker)}`,
   });
 };
 

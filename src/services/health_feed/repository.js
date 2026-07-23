@@ -360,9 +360,10 @@ async function listSaved(pool, userId) {
 }
 
 async function trackEvent(pool, userId, { content_id, feed_item_id = null, event_type, metadata = {} }) {
-  await pool.query(
+  const insertResult = await pool.query(
     `INSERT INTO health_feed_content_events(user_id, content_id, feed_item_id, event_type, metadata)
-     VALUES ($1,$2,$3,$4,$5)`,
+     VALUES ($1,$2,$3,$4,$5)
+     RETURNING id`,
     [userId, content_id, feed_item_id, event_type, JSON.stringify(metadata || {})]
   );
   const normalizedEvent = String(event_type || '').toLowerCase();
@@ -382,7 +383,7 @@ async function trackEvent(pool, userId, { content_id, feed_item_id = null, event
         content_action: normalizedEvent,
         status: 'recorded',
       },
-      { event_id: `${crmEventType}:${userId}:${content_id}:${feed_item_id || normalizedEvent}` },
+      { event_id: `${crmEventType}:${insertResult.rows[0]?.id || `${userId}:${content_id}:${feed_item_id || normalizedEvent}`}` },
     );
   }
 }

@@ -60,7 +60,7 @@ async function notifyPremiumActivated(pool, userId, expiresAt) {
 }
 
 function emitSubscriptionChange(pool, eventType, payload, options = {}) {
-  emitCrmEventAsync(pool, eventType, {
+  const eventPayload = {
     user_id: String(payload.userId),
     ...(payload.subscriptionId ? { subscription_id: String(payload.subscriptionId) } : {}),
     ...(payload.productCode ? { product_code: String(payload.productCode) } : {}),
@@ -77,7 +77,14 @@ function emitSubscriptionChange(pool, eventType, payload, options = {}) {
     beneficiary_user_id: String(payload.beneficiaryUserId ?? payload.userId),
     ...(payload.isGift != null ? { is_gift: Boolean(payload.isGift) } : {}),
     txn_type: 'subscription',
-  }, options);
+  };
+  const stableReference = eventPayload.external_ref
+    || eventPayload.subscription_id
+    || [eventPayload.user_id, eventPayload.product_code, eventPayload.expires_at].filter(Boolean).join(':');
+  const eventOptions = options.event_id
+    ? options
+    : { ...options, event_id: `${eventType}:${stableReference || crypto.randomUUID()}` };
+  emitCrmEventAsync(pool, eventType, eventPayload, eventOptions);
 }
 
 // Helper: warn nếu wallet thấp sau giao dịch
@@ -679,6 +686,7 @@ async function activateFromIap(pool, userId, { productId, transactionId, months,
     }, { event_id: `subscription.started:iap:${platform}:${transactionId}` });
     emitSubscriptionChange(pool, 'subscription.activated', {
       userId,
+      subscriptionId: `iap:${platform}:${transactionId}`,
       planCode: `premium_${planMonths}m`,
       productCode: productId,
       state: 'paid',
