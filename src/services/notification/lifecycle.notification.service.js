@@ -75,7 +75,8 @@ async function runSubscriptionExpiringSoon(pool) {
  */
 async function runSubscriptionExpired(pool) {
   const { rows } = await pool.query(
-    `SELECT u.id, u.push_token, COALESCE(u.language_preference, 'vi') AS lang
+    `SELECT u.id, u.push_token, u.subscription_expires_at,
+            COALESCE(u.language_preference, 'vi') AS lang
      FROM users u
      WHERE u.subscription_expires_at IS NOT NULL
        AND u.subscription_expires_at <= NOW()
@@ -98,11 +99,15 @@ async function runSubscriptionExpired(pool) {
       t('push.subscription_expired_body', lang),
       {}
     );
+    const expiresAt = u.subscription_expires_at
+      ? new Date(u.subscription_expires_at).toISOString()
+      : null;
     emitCrmEventAsync(pool, 'subscription.expired', {
       user_id: String(u.id),
       state: 'churn',
       status: 'expired',
-    });
+      expires_at: expiresAt,
+    }, { event_id: `subscription.expired:${u.id}:${expiresAt ?? 'unknown'}` });
     if (ok) sent++;
   }
   return { checked: rows.length, sent };

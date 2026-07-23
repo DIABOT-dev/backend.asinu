@@ -59,7 +59,7 @@ async function notifyPremiumActivated(pool, userId, expiresAt) {
   } catch {}
 }
 
-function emitSubscriptionChange(pool, eventType, payload) {
+function emitSubscriptionChange(pool, eventType, payload, options = {}) {
   emitCrmEventAsync(pool, eventType, {
     user_id: String(payload.userId),
     ...(payload.subscriptionId ? { subscription_id: String(payload.subscriptionId) } : {}),
@@ -77,7 +77,7 @@ function emitSubscriptionChange(pool, eventType, payload) {
     beneficiary_user_id: String(payload.beneficiaryUserId ?? payload.userId),
     ...(payload.isGift != null ? { is_gift: Boolean(payload.isGift) } : {}),
     txn_type: 'subscription',
-  });
+  }, options);
 }
 
 // Helper: warn nếu wallet thấp sau giao dịch
@@ -263,6 +263,25 @@ async function createQRInternal(pool, { payerId, recipientId, months, isGift }) 
      RETURNING qr_expires_at`,
     [recipientId, payerId, isGift, orderCode, amount, qrUrl, plan.months]
   );
+
+  // The CRM rule engine needs the beginning of the purchase lifecycle before
+  // the payment is confirmed. Keep the payload metadata-only and use a stable
+  // event id so retries cannot create duplicate lifecycle events.
+  emitSubscriptionChange(pool, 'subscription.started', {
+    userId: recipientId,
+    subscriptionId: orderCode,
+    planCode: `premium_${plan.months}m`,
+    state: 'pending',
+    status: 'pending',
+    expiresAt: rows[0]?.qr_expires_at,
+    externalRef: orderCode,
+    provider: 'sepay',
+    amountMinor: amount,
+    currency: 'VND',
+    payerUserId: payerId,
+    beneficiaryUserId: recipientId,
+    isGift,
+  }, { event_id: `subscription.started:${orderCode}` });
 
   return {
     order_code: orderCode,
@@ -644,6 +663,20 @@ async function activateFromIap(pool, userId, { productId, transactionId, months,
     await client.query('COMMIT');
     await cacheDel(`subscription:${userId}`);
     notifyPremiumActivated(pool, userId, newExpiry).catch(() => {});
+    emitSubscriptionChange(pool, 'subscription.started', {
+      userId,
+      subscriptionId: `iap:${platform}:${transactionId}`,
+      planCode: `premium_${planMonths}m`,
+      state: 'paid',
+      status: 'active',
+      expiresAt: newExpiry,
+      externalRef: `iap:${platform}:${transactionId}`,
+      provider: platform,
+      amountMinor: 0,
+      currency: 'VND',
+      paidAt: new Date().toISOString(),
+      beneficiaryUserId: userId,
+    }, { event_id: `subscription.started:iap:${platform}:${transactionId}` });
     emitSubscriptionChange(pool, 'subscription.activated', {
       userId,
       planCode: `premium_${planMonths}m`,
@@ -683,7 +716,7 @@ async function activateFromIap(pool, userId, { productId, transactionId, months,
  *   @param {string}   ev.originalTransactionId chain id — used to find the user
  *   @param {string}   ev.productId
  *   @param {string|null} ev.expiresAt          ISO; null when revoking
- *   @param {'renew'|'revoke'|'expire'}  ev.action
+ *   @param {'renew'|'revoke'|'refund'|'expire'}  ev.action
  *   @param {object}   [ev.rawPayload]
  */
 async function applyIapWebhookEvent(pool, ev) {
@@ -742,7 +775,7 @@ async function applyIapWebhookEvent(pool, ev) {
         [new Date(expiresAt), userId]
       );
       appliedEventType = 'subscription.renewed';
-    } else if (action === 'revoke' || action === 'expire') {
+    } else if (action === 'revoke' || action === 'refund' || action === 'expire') {
       // Downgrade to free, but only if the stored expiry was actually in
       // the past (or this is an explicit revoke). Prevents a race where a
       // late EXPIRED notification arrives after a renewal we already
@@ -752,7 +785,7 @@ async function applyIapWebhookEvent(pool, ev) {
         [userId]
       );
       const currentExpiry = u[0]?.subscription_expires_at;
-      const shouldRevoke = action === 'revoke'
+      const shouldRevoke = action === 'revoke' || action === 'refund'
         || !currentExpiry
         || new Date(currentExpiry) <= new Date();
 
@@ -782,6 +815,23 @@ async function applyIapWebhookEvent(pool, ev) {
         paidAt: new Date().toISOString(),
         beneficiaryUserId: userId,
       });
+    }
+    if (action === 'refund') {
+      emitCrmEventAsync(pool, 'payment.refunded', {
+        user_id: String(userId),
+        external_ref: transactionId ? String(transactionId) : undefined,
+        transaction_id: transactionId ? String(transactionId) : undefined,
+        provider: platform,
+        status: 'refunded',
+        amount_minor: 0,
+        currency: 'VND',
+        refunded_at: new Date().toISOString(),
+        state: 'refunded',
+        payer_user_id: String(userId),
+        beneficiary_user_id: String(userId),
+        is_gift: false,
+        txn_type: 'subscription',
+      }, { event_id: `payment.refunded:${platform}:${transactionId || userId}` });
     }
     return { ok: true, userId };
   } catch (err) {

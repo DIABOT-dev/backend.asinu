@@ -452,7 +452,9 @@ async function handleAppleNotification(pool, envelope) {
     action = 'renew';
   } else if (notificationType === 'EXPIRED') {
     action = 'expire';
-  } else if (notificationType === 'REFUND' || notificationType === 'REVOKE') {
+  } else if (notificationType === 'REFUND') {
+    action = 'refund';
+  } else if (notificationType === 'REVOKE') {
     action = 'revoke';
   } else if (notificationType === 'DID_FAIL_TO_RENEW') {
     // Grace period — leave expiry alone; user is still premium until it ends.
