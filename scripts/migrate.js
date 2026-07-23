@@ -29,7 +29,10 @@ async function run() {
 
     const files = fs
       .readdirSync(migrationsDir)
-      .filter((file) => file.endsWith('.sql'))
+      // Only execute canonical migration files. macOS can leave `._*`
+      // AppleDouble metadata files next to source files; they are binary
+      // metadata, not SQL, and must never be sent to PostgreSQL.
+      .filter((file) => /^\d+_.+\.sql$/.test(file))
       .sort();
 
     for (const file of files) {
