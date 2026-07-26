@@ -9,6 +9,7 @@
     "build": "node --check server.js && echo 'Backend build successful'",
     "test": "jest --runInBand",
     "test:crm-events": "node scripts/check-crm-event-coverage.js",
+    "backfill:crm-users": "node scripts/backfill-crm-users.js",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "lint": "eslint . --ext .js",
