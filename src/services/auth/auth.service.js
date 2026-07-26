@@ -25,10 +25,12 @@ const JWT_EXPIRES_IN = '30d';
 
 async function getCrmUserPayload(pool, userId) {
   const result = await pool.query(
-    `SELECT id, email, phone_number, full_name, display_name, avatar_url,
-            subscription_tier, subscription_expires_at
-       FROM users
-      WHERE id = $1`,
+    `SELECT u.id, u.email, u.phone_number, u.full_name, u.display_name, u.avatar_url,
+            u.zalo_id, u.subscription_tier, u.subscription_expires_at,
+            uop.birth_year, uop.gender
+       FROM users u
+       LEFT JOIN user_onboarding_profiles uop ON uop.user_id = u.id
+      WHERE u.id = $1`,
     [userId],
   );
   const user = result.rows[0];
@@ -39,6 +41,9 @@ async function getCrmUserPayload(pool, userId) {
     phone: user.phone_number || null,
     email: user.email || null,
     avatar_url: user.avatar_url || null,
+    birth_year: user.birth_year == null ? null : Number(user.birth_year),
+    gender: user.gender || null,
+    zalo_user_id: user.zalo_id || null,
     lead_source: 'asinu_app',
     account_tier: user.subscription_tier || 'free',
     subscription_expires_at: user.subscription_expires_at
