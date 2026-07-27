@@ -697,7 +697,11 @@ async function searchUsers(pool, currentUserId, query) {
          FROM users
         WHERE deleted_at IS NULL
           AND id != $1
-          AND REPLACE(REPLACE(COALESCE(phone_number, ''), ' ', ''), '-', '') = $2
+          AND REGEXP_REPLACE(
+                REGEXP_REPLACE(COALESCE(phone_number, ''), '[\\s\\-()]', '', 'g'),
+                '^\\+?84',
+                '0'
+              ) = $2
         LIMIT 1`,
       [currentUserId, phone]
     );

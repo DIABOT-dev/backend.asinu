@@ -48,10 +48,26 @@ describe('searchUsers (phone-only, exact match)', () => {
     expect(pool.query.mock.calls[0][1]).toEqual([1, '0901234567']);
   });
 
+  test('accepts 84 form, normalizes to 0', async () => {
+    const pool = poolReturning([
+      { id: 42, phone_number: '84901234567', display_name: 'Đức', email: null, full_name: null },
+    ]);
+    const r = await searchUsers(pool, 1, '84901234567');
+    expect(r).toHaveLength(1);
+    expect(pool.query.mock.calls[0][1]).toEqual([1, '0901234567']);
+  });
+
   test('strips spaces / dashes / parentheses', async () => {
     const pool = poolReturning([]);
     await searchUsers(pool, 1, '090 123-4567');
     expect(pool.query.mock.calls[0][1]).toEqual([1, '0901234567']);
+  });
+
+  test('matches legacy international values stored with +84', async () => {
+    const pool = poolReturning([]);
+    await searchUsers(pool, 1, '0901234567');
+    expect(pool.query.mock.calls[0][0]).toContain("REGEXP_REPLACE");
+    expect(pool.query.mock.calls[0][0]).toContain("'^\\+?84'");
   });
 });
 
