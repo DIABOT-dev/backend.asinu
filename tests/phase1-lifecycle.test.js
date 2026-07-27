@@ -557,27 +557,27 @@ async function testCheckinIntegration() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SUITE 12: server.js cron configuration
+// SUITE 12: scheduler cron configuration
 // ═══════════════════════════════════════════════════════════════════════════════
 async function testServerCron() {
-  console.log('\n══════ SUITE 12: server.js Cron Config ══════');
+  console.log('\n══════ SUITE 12: scheduler Cron Config ══════');
 
-  const serverSrc = require('fs').readFileSync(
-    require('path').join(__dirname, '..', 'server.js'), 'utf8'
+  const schedulerSrc = require('fs').readFileSync(
+    require('path').join(__dirname, '..', 'src', 'scheduler', 'index.js'), 'utf8'
   );
 
   // 12.1 Lifecycle cron imported
-  assert(serverSrc.includes("require('./src/services/profile/lifecycle.service')"), '12.1 lifecycle imported in server.js');
+  assert(schedulerSrc.includes("require('../services/profile/lifecycle.service')"), '12.1 lifecycle imported in scheduler');
 
   // 12.2 Lifecycle cron runs at 1:00 AM (before R&D at 2:00 AM)
-  assert(serverSrc.includes('vnNow.getHours() === 1'), '12.2 Lifecycle cron at 1:00 AM VN');
+  assert(schedulerSrc.includes("safeCron('0 1 * * *', 'lifecycle_update'"), '12.2 Lifecycle cron at 1:00 AM VN');
 
   // 12.3 R&D still runs at 2:00 AM
-  assert(serverSrc.includes('vnNow.getHours() === 2'), '12.3 R&D cron at 2:00 AM VN');
+  assert(schedulerSrc.includes("safeCron('0 2 * * *', 'rnd_cycle'"), '12.3 R&D cron at 2:00 AM VN');
 
   // 12.4 Lifecycle runs BEFORE R&D (order in file)
-  const lifecycleIdx = serverSrc.indexOf('scheduleLifecycleUpdate');
-  const rndIdx = serverSrc.indexOf('scheduleRndCycle');
+  const lifecycleIdx = schedulerSrc.indexOf("safeCron('0 1 * * *', 'lifecycle_update'");
+  const rndIdx = schedulerSrc.indexOf("safeCron('0 2 * * *', 'rnd_cycle'");
   assert(lifecycleIdx < rndIdx, '12.4 Lifecycle scheduled before R&D in code');
 
   // 12.5 R&D cycle also updates segments internally (Step 0)

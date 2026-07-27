@@ -240,7 +240,7 @@ async function test4_careCircleDedup() {
   const mockSendAndSave = async (p, guardian, type, title, text, data) => {
     sendCount++;
     await p.query(
-      `INSERT INTO notifications (user_id, type, title, body, data, created_at)
+        `INSERT INTO notifications (user_id, type, title, message, data, created_at)
        VALUES ($1, $2, $3, $4, $5, NOW())`,
       [guardian.id, type, title, text, JSON.stringify({ ...data, hard_case_test: 'true' })]
     );
@@ -289,7 +289,7 @@ async function test5_multipleGuardians() {
   const mockSendAndSave = async (p, guardian, type, title, text, data) => {
     sentGuardianIds.push(guardian.id);
     await p.query(
-      `INSERT INTO notifications (user_id, type, title, body, data, created_at)
+        `INSERT INTO notifications (user_id, type, title, message, data, created_at)
        VALUES ($1, $2, $3, $4, $5, NOW())`,
       [guardian.id, type, title, text, JSON.stringify({ ...data, hard_case_test: 'true' })]
     );
@@ -328,7 +328,7 @@ async function test6_runReengagementDedup() {
 
   const mockSendAndSave = async (p, user, type, title, text, data) => {
     await p.query(
-      `INSERT INTO notifications (user_id, type, title, body, data, created_at)
+        `INSERT INTO notifications (user_id, type, title, message, data, created_at)
        VALUES ($1, $2, $3, $4, $5, NOW())`,
       [user.id, type, title, text, JSON.stringify({ ...data, hard_case_test: 'true' })]
     );
