@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS users (
   display_name TEXT,
   avatar_url TEXT,
   created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
   deleted_at TIMESTAMP,
   token_version INTEGER DEFAULT 0
 );
