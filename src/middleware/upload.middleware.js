@@ -15,6 +15,10 @@ const ALLOWED_AUDIO_MIMETYPES = new Set([
 ]);
 
 const ALLOWED_AUDIO_EXTENSIONS = /\.(m4a|mp3|mp4|wav|webm|ogg)$/i;
+const ALLOWED_IMAGE_MIMETYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const ALLOWED_IMAGE_EXTENSIONS = /\.(jpe?g|png|webp)$/i;
+const UPLOAD_MAX_SIZE = Number.parseInt(process.env.UPLOAD_MAX_SIZE || '10485760', 10);
+const UPLOAD_MAX_FILES = Number.parseInt(process.env.UPLOAD_MAX_FILES || '10', 10);
 
 // Audio upload config: extension + MIME type check at filter,
 // magic-bytes verification runs separately after multer has the buffer.
@@ -28,6 +32,22 @@ const audioUpload = multer({
       file.mimetype.startsWith('audio/');
     if (extOk && mimeOk) return cb(null, true);
     return cb(new Error(t('error.invalid_audio_file', getLang(req)) || 'Invalid audio file'), false);
+  },
+});
+
+// Image upload config. Files stay in memory and are streamed directly to
+// Cloudinary; nothing is written to the backend filesystem.
+const imageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: Number.isFinite(UPLOAD_MAX_SIZE) ? UPLOAD_MAX_SIZE : 10 * 1024 * 1024,
+    files: Number.isFinite(UPLOAD_MAX_FILES) ? UPLOAD_MAX_FILES : 10,
+  },
+  fileFilter: (req, file, cb) => {
+    const extOk = ALLOWED_IMAGE_EXTENSIONS.test(file.originalname);
+    const mimeOk = ALLOWED_IMAGE_MIMETYPES.has(file.mimetype);
+    if (extOk && mimeOk) return cb(null, true);
+    return cb(new Error('Only JPEG, PNG, and WebP images are supported'), false);
   },
 });
 
@@ -59,6 +79,25 @@ function isAudioBuffer(buf) {
   return false;
 }
 
+function isImageBuffer(buf) {
+  if (!buf || buf.length < 12) return false;
+
+  // JPEG
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return true;
+  // PNG
+  if (
+    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47 &&
+    buf[4] === 0x0d && buf[5] === 0x0a && buf[6] === 0x1a && buf[7] === 0x0a
+  ) return true;
+  // WebP (RIFF....WEBP)
+  if (
+    buf[0] === 0x52 && buf[1] === 0x49 && buf[2] === 0x46 && buf[3] === 0x46 &&
+    buf[8] === 0x57 && buf[9] === 0x45 && buf[10] === 0x42 && buf[11] === 0x50
+  ) return true;
+
+  return false;
+}
+
 /**
  * Run after multer.single(...) — rejects requests whose buffer does not
  * match a known audio container signature.
@@ -74,6 +113,18 @@ function verifyAudioMagicBytes(req, res, next) {
   return next();
 }
 
+/** Run after multer.single(...) and reject MIME-spoofed image uploads. */
+function verifyImageMagicBytes(req, res, next) {
+  const file = req.file;
+  if (!file || !file.buffer) {
+    return res.status(400).json({ ok: false, error: 'No avatar file uploaded' });
+  }
+  if (!isImageBuffer(file.buffer)) {
+    return res.status(400).json({ ok: false, error: 'Invalid image file' });
+  }
+  return next();
+}
+
 // Wrap multer to handle errors as JSON response
 function handleUpload(uploadMiddleware) {
   return (req, res, next) => {
@@ -84,4 +135,12 @@ function handleUpload(uploadMiddleware) {
   };
 }
 
-module.exports = { audioUpload, handleUpload, verifyAudioMagicBytes, isAudioBuffer };
+module.exports = {
+  audioUpload,
+  imageUpload,
+  handleUpload,
+  verifyAudioMagicBytes,
+  verifyImageMagicBytes,
+  isAudioBuffer,
+  isImageBuffer,
+};

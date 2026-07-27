@@ -1,4 +1,4 @@
-const { isAudioBuffer } = require('../../src/middleware/upload.middleware');
+const { isAudioBuffer, isImageBuffer } = require('../../src/middleware/upload.middleware');
 
 describe('isAudioBuffer', () => {
   test('accepts MP3 with ID3 tag', () => {
@@ -55,5 +55,28 @@ describe('isAudioBuffer', () => {
   test('rejects null/undefined', () => {
     expect(isAudioBuffer(null)).toBe(false);
     expect(isAudioBuffer(undefined)).toBe(false);
+  });
+});
+
+describe('isImageBuffer', () => {
+  test('accepts JPEG signature', () => {
+    expect(isImageBuffer(Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))).toBe(true);
+  });
+
+  test('accepts PNG signature', () => {
+    expect(isImageBuffer(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x00]))).toBe(true);
+  });
+
+  test('accepts WebP signature', () => {
+    expect(isImageBuffer(Buffer.from([0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50]))).toBe(true);
+  });
+
+  test('rejects MIME-spoofed text', () => {
+    expect(isImageBuffer(Buffer.from('not an image'))).toBe(false);
+  });
+
+  test('rejects too-short and empty buffers', () => {
+    expect(isImageBuffer(Buffer.from([0xff, 0xd8, 0xff]))).toBe(false);
+    expect(isImageBuffer(null)).toBe(false);
   });
 });

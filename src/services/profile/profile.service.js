@@ -291,6 +291,39 @@ async function updateProfile(pool, userId, updates) {
 }
 
 /**
+ * Persist the Cloudinary URL for the authenticated user's avatar.
+ * The avatar_url column already exists, so this flow does not need a migration.
+ */
+async function updateAvatar(pool, userId, avatarUrl) {
+  if (typeof avatarUrl !== 'string' || !avatarUrl.trim()) {
+    return { ok: false, error: t('error.server'), statusCode: 400 };
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE users
+       SET avatar_url = $1, updated_at = NOW()
+       WHERE id = $2 AND deleted_at IS NULL
+       RETURNING id`,
+      [avatarUrl.trim(), userId]
+    );
+
+    if (!result.rowCount) {
+      return { ok: false, error: t('error.user_not_found'), statusCode: 404 };
+    }
+
+    await cacheDel(`profile:${userId}`, `user:name:${userId}`);
+    const updatedProfile = await getProfile(pool, userId);
+    const crmUser = await getCrmUserPayload(pool, userId);
+    if (crmUser) emitCrmEventAsync(pool, 'user.updated', crmUser);
+    return updatedProfile;
+  } catch (err) {
+    logger.error('[updateAvatar] failed', { userId, code: err?.code, message: err?.message });
+    return { ok: false, error: t('error.server') };
+  }
+}
+
+/**
  * Delete user account (hard delete - xóa toàn bộ dữ liệu)
  * @param {Object} pool - Database pool
  * @param {number} userId - User ID
@@ -474,6 +507,7 @@ module.exports = {
   getProfile,
   getBasicProfile,
   updateProfile,
+  updateAvatar,
   deleteAccount,
   updatePushToken,
   clearPushToken,

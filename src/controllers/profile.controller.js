@@ -6,6 +6,7 @@
 const { t, getLang } = require('../i18n');
 const profileService = require('../services/profile/profile.service');
 const { hashPassword, comparePassword } = require('../services/auth/auth.service');
+const { uploadAvatar } = require('../services/media/cloudinary.service');
 
 async function changePassword(pool, req, res) {
   if (!req.user?.id) {
@@ -80,6 +81,42 @@ async function updateProfile(pool, req, res) {
   }
 
   return res.status(200).json(result);
+}
+
+async function uploadAvatarHandler(pool, req, res) {
+  if (!req.user?.id) {
+    return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
+  }
+  if (!req.file?.buffer) {
+    return res.status(400).json({ ok: false, error: 'No avatar file uploaded' });
+  }
+
+  try {
+    const uploaded = await uploadAvatar(req.file.buffer, req.user.id);
+    const result = await profileService.updateAvatar(pool, req.user.id, uploaded.secureUrl);
+
+    if (!result.ok) {
+      return res.status(result.statusCode || 500).json(result);
+    }
+
+    return res.status(200).json({
+      ok: true,
+      profile: result.profile,
+      avatar: {
+        url: uploaded.secureUrl,
+        publicId: uploaded.publicId,
+        width: uploaded.width,
+        height: uploaded.height,
+        format: uploaded.format,
+      },
+    });
+  } catch (error) {
+    if (error?.code === 'CLOUDINARY_NOT_CONFIGURED') {
+      return res.status(503).json({ ok: false, error: 'Avatar upload is not configured', code: error.code });
+    }
+    console.error('[uploadAvatar] failed:', { code: error?.code, message: error?.message });
+    return res.status(502).json({ ok: false, error: 'Avatar upload failed', code: 'AVATAR_UPLOAD_FAILED' });
+  }
 }
 
 async function deleteAccount(pool, req, res) {
@@ -212,6 +249,7 @@ module.exports = {
   getProfile,
   getBasicProfile,
   updateProfile,
+  uploadAvatarHandler,
   deleteAccount,
   updatePushToken,
   clearPushToken,

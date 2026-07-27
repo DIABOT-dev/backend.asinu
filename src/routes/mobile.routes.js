@@ -2,7 +2,7 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { requirePremium } = require('../middleware/subscription.middleware');
 const { chatbotGate } = require('../middleware/chatbot.gate.middleware');
-const { audioUpload, handleUpload, verifyAudioMagicBytes } = require('../middleware/upload.middleware');
+const { audioUpload, imageUpload, handleUpload, verifyAudioMagicBytes, verifyImageMagicBytes } = require('../middleware/upload.middleware');
 const { loginByEmail, logoutHandler } = require('../controllers/auth.controller');
 const { createMobileLog, getRecentLogs, getTodayLogs } = require('../controllers/mobile.controller');
 const {
@@ -11,7 +11,7 @@ const {
 } = require('../controllers/chat.controller');
 const { getMissionsHandler, getMissionHistoryHandler, getMissionStatsHandler } = require('../controllers/missions.controller');
 const { upsertOnboardingProfile, onboardingNext, onboardingComplete, onboardingCompleteV2 } = require('../controllers/onboarding.controller');
-const { getProfile, getBasicProfile, updateProfile, deleteAccount, updatePushToken, clearPushToken, featureFlagsHandler, changePassword } = require('../controllers/profile.controller');
+const { getProfile, getBasicProfile, updateProfile, uploadAvatarHandler, deleteAccount, updatePushToken, clearPushToken, featureFlagsHandler, changePassword } = require('../controllers/profile.controller');
 const { getTreeSummary, getTreeHistory } = require('../controllers/tree.controller');
 const {
   startCheckinHandler, getLocationsHandler, followUpHandler, triageHandler,
@@ -83,6 +83,13 @@ function mobileRoutes(pool) {
   router.get('/profile/basic', requireAuth, (req, res) => getBasicProfile(pool, req, res));
   router.get('/profile', requireAuth, (req, res) => getProfile(pool, req, res));
   router.put('/profile', requireAuth, (req, res) => updateProfile(pool, req, res));
+  router.post(
+    '/profile/avatar',
+    requireAuth,
+    handleUpload(imageUpload.single('avatar')),
+    verifyImageMagicBytes,
+    (req, res) => uploadAvatarHandler(pool, req, res)
+  );
   router.delete('/profile', requireAuth, (req, res) => deleteAccount(pool, req, res));
   router.post('/auth/change-password', requireAuth, (req, res) => changePassword(pool, req, res));
   router.post('/profile/push-token', requireAuth, (req, res) => updatePushToken(pool, req, res));
