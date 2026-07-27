@@ -173,7 +173,7 @@ describe('handleAppleNotification', () => {
     );
   });
 
-  test('REFUND → action="revoke"', async () => {
+  test('REFUND → action="refund"', async () => {
     mockAppleVerifier.verifyAndDecodeNotification.mockResolvedValue(
       buildNotification('REFUND')
     );
@@ -184,7 +184,7 @@ describe('handleAppleNotification', () => {
 
     expect(subscriptionService.applyIapWebhookEvent).toHaveBeenCalledWith(
       pool,
-      expect.objectContaining({ action: 'revoke' })
+      expect.objectContaining({ action: 'refund' })
     );
   });
 

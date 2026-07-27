@@ -9,6 +9,7 @@
     "build": "node --check server.js && echo 'Backend build successful'",
     "test": "jest --runInBand",
     "test:crm-events": "node scripts/check-crm-event-coverage.js",
+    "test:legacy": "node scripts/run-legacy-test-suites.js",
     "backfill:crm-users": "node scripts/backfill-crm-users.js",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -55,7 +56,8 @@
       "<rootDir>/tests/**/*.test.js"
     ],
     "testPathIgnorePatterns": [
-      "/node_modules/"
+      "/node_modules/",
+      "<rootDir>/tests/(cross-phase-integration|followup-scoring-matrix|hard-cases-[^/]+|phase[1-6]-[^/]+|llm-optimization)\\.test\\.js$"
     ],
     "collectCoverageFrom": [
       "src/**/*.js",
