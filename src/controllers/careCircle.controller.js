@@ -260,8 +260,13 @@ async function getMemberHealthSummary(pool, req, res) {
         totalDays: report.totalDays,
         trend: report.trend,
         severityDistribution: report.severityDistribution,
+        statusDistribution: report.statusDistribution,
+        commonSymptoms: report.commonSymptoms,
+        alerts: report.alerts,
+        sessions: report.sessions || [],
+        highlights: report.highlights || [],
         responseRate: report.responseRate || 0,
-        recentSessions: report.sessions?.slice(0, 5) || [],
+        avgCheckinHour: report.avgCheckinHour || 0,
       }
     });
   } catch (err) {
