@@ -70,7 +70,7 @@ async function loginByEmail(pool, req, res) {
 // =====================================================
 
 async function loginByProvider(pool, req, res, provider, idColumn) {
-  const { token, provider_id, email, phone_number } = req.body || {};
+  const { token, provider_id, email, full_name, phone_number } = req.body || {};
 
   // Validate token
   if (!token) {
@@ -98,10 +98,20 @@ async function loginByProvider(pool, req, res, provider, idColumn) {
   }
 
   // Call service
-  const result = await serviceLoginProvider(pool, idColumn, actualProviderId, provider, verifiedEmail, phone_number);
+  const result = await serviceLoginProvider(
+    pool,
+    idColumn,
+    actualProviderId,
+    provider,
+    verifiedEmail,
+    phone_number,
+    full_name,
+  );
 
   if (!result.ok) {
-    return res.status(401).json(result);
+    // Preserve business conflicts such as an email that already belongs to
+    // an email/password account. The client can then show the correct next step.
+    return res.status(result.statusCode || 401).json(result);
   }
 
   return res.status(200).json(result);

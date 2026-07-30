@@ -303,7 +303,7 @@ async function findUserById(pool, userId) {
  */
 async function findUserByProviderId(pool, idColumn, providerId) {
   const result = await pool.query(
-    `SELECT id, email FROM users WHERE ${idColumn} = $1 AND deleted_at IS NULL`,
+    `SELECT id, email, full_name FROM users WHERE ${idColumn} = $1 AND deleted_at IS NULL`,
     [providerId]
   );
   return result.rows[0] || null;
@@ -336,14 +336,15 @@ async function createUserWithEmail(pool, email, passwordHash) {
  * @param {string} provider - Provider name (GOOGLE, APPLE, ZALO)
  * @param {string|null} email - User email
  * @param {string|null} phoneNumber - User phone
+ * @param {string|null} fullName - Name supplied by the provider, when available
  * @returns {Promise<Object>} - Created user
  */
-async function createUserWithProvider(pool, idColumn, providerId, provider, email, phoneNumber) {
+async function createUserWithProvider(pool, idColumn, providerId, provider, email, phoneNumber, fullName) {
   const result = await pool.query(
-    `INSERT INTO users (${idColumn}, email, phone_number, auth_provider, consent_accepted_at, consent_version)
-     VALUES ($1, $2, $3, $4, NOW(), 'v1.0.0')
-     RETURNING id, email`,
-    [providerId, email || null, phoneNumber || null, provider.toUpperCase()]
+    `INSERT INTO users (${idColumn}, email, phone_number, full_name, auth_provider, consent_accepted_at, consent_version)
+     VALUES ($1, $2, $3, $4, $5, NOW(), 'v1.0.0')
+     RETURNING id, email, full_name`,
+    [providerId, email || null, phoneNumber || null, fullName || null, provider.toUpperCase()]
   );
   return result.rows[0];
 }
@@ -588,11 +589,24 @@ async function loginByEmail(pool, identifier, password) {
  * @param {string|null} phoneNumber - Phone from provider
  * @returns {Promise<Object>} - { ok, token, user, error }
  */
-async function loginByProvider(pool, idColumn, providerId, provider, email, phoneNumber) {
+async function loginByProvider(pool, idColumn, providerId, provider, email, phoneNumber, fullName) {
   try {
     // Check if user exists with this provider
     const existing = await findUserByProviderId(pool, idColumn, providerId);
     if (existing) {
+      // Apple may only return fullName during the first authorization. Save
+      // it for older accounts that were created before this was persisted,
+      // without overwriting a name the user already chose in the app.
+      const normalizedName = String(fullName || '').trim();
+      if (normalizedName && !String(existing.full_name || '').trim()) {
+        await pool.query('UPDATE users SET full_name = $1 WHERE id = $2', [normalizedName, existing.id]);
+        existing.full_name = normalizedName;
+      }
+      if (email && !String(existing.email || '').trim()) {
+        const normalizedEmail = String(email).trim().toLowerCase();
+        await pool.query('UPDATE users SET email = $1 WHERE id = $2', [normalizedEmail, existing.id]);
+        existing.email = normalizedEmail;
+      }
       const token_response = issueJwt(existing);
       await emitAppSessionStarted(pool, existing.id, provider);
       return {
@@ -605,16 +619,21 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
     // If email provided, check if already registered via email/password
     if (email) {
       const emailUser = await pool.query(
-        'SELECT id, password_hash FROM users WHERE email = $1 AND deleted_at IS NULL',
+        'SELECT id, email, full_name FROM users WHERE email = $1 AND deleted_at IS NULL',
         [String(email).trim().toLowerCase()]
       );
-      if (emailUser.rows.length > 0 && emailUser.rows[0].password_hash) {
-        return { ok: false, error: t('auth.email_registered_with_password'), statusCode: 409 };
-      }
-      // If exists without password (another social), link provider to that account
+
+      // A verified provider email identifies the same Asinu account regardless
+      // of whether that account was first created with a password or another
+      // social provider. Link the new provider instead of creating a duplicate.
       if (emailUser.rows.length > 0) {
         const linkedUser = emailUser.rows[0];
         await pool.query(`UPDATE users SET ${idColumn} = $1 WHERE id = $2`, [providerId, linkedUser.id]);
+        const normalizedName = String(fullName || '').trim();
+        if (normalizedName && !String(linkedUser.full_name || '').trim()) {
+          await pool.query('UPDATE users SET full_name = $1 WHERE id = $2', [normalizedName, linkedUser.id]);
+          linkedUser.full_name = normalizedName;
+        }
         const linkedPayload = await getCrmUserPayload(pool, linkedUser.id);
         if (linkedPayload) emitCrmEventAsync(pool, 'user.updated', linkedPayload);
         await emitAppSessionStarted(pool, linkedUser.id, provider);
@@ -624,7 +643,7 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
     }
 
     // Create new user
-    const newUser = await createUserWithProvider(pool, idColumn, providerId, provider, email, phoneNumber);
+    const newUser = await createUserWithProvider(pool, idColumn, providerId, provider, email, phoneNumber, fullName);
     
     // Initialize default missions
     await initializeDefaultMissions(pool, newUser.id);
