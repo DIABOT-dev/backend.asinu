@@ -98,7 +98,12 @@ function issueJwt(user) {
   return {
     ok: true,
     token,
-    user: { id: user.id, email: user.email }
+    user: {
+      id: user.id,
+      email: user.email,
+      full_name: user.full_name || user.display_name || null,
+      phone_number: user.phone_number || null,
+    }
   };
 }
 
@@ -288,7 +293,7 @@ async function findUserByEmail(pool, email) {
  */
 async function findUserById(pool, userId) {
   const result = await pool.query(
-    'SELECT id, email, phone_number FROM users WHERE id = $1',
+    'SELECT id, email, phone_number, full_name, display_name, avatar_url FROM users WHERE id = $1',
     [userId]
   );
   return result.rows[0] || null;
@@ -677,7 +682,9 @@ async function getCurrentUser(pool, userId) {
   return {
     id: String(user.id),
     email: user.email || null,
-    phone: user.phone_number || null
+    phone: user.phone_number || null,
+    full_name: user.full_name || user.display_name || null,
+    avatar_url: user.avatar_url || null,
   };
 }
 
