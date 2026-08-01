@@ -22,6 +22,67 @@ if (!JWT_SECRET) {
   throw new Error('[FATAL] JWT_SECRET environment variable is not set. Server cannot start.');
 }
 const JWT_EXPIRES_IN = '30d';
+const PROVIDER_FETCH_TIMEOUT_MS = 8000;
+const PROVIDER_FETCH_ATTEMPTS = 2;
+const APPLE_KEYS_CACHE_MS = 60 * 60 * 1000;
+
+let appleKeysCache = null;
+let appleKeysCacheExpiresAt = 0;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = PROVIDER_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchProviderJson(url, options = {}, context = 'provider') {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= PROVIDER_FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      const res = await fetchWithTimeout(url, options);
+      if (!res.ok) {
+        console.error(`[Auth] ${context} returned HTTP ${res.status}`);
+        return { ok: false, status: res.status };
+      }
+      return { ok: true, data: await res.json(), status: res.status };
+    } catch (err) {
+      lastError = err;
+      console.error(`[Auth] ${context} fetch failed`, {
+        attempt,
+        message: err?.message || String(err),
+      });
+      if (attempt < PROVIDER_FETCH_ATTEMPTS) {
+        await sleep(250 * attempt);
+      }
+    }
+  }
+
+  return { ok: false, error: lastError };
+}
+
+async function getApplePublicKeys() {
+  const now = Date.now();
+  if (appleKeysCache && now < appleKeysCacheExpiresAt) {
+    return appleKeysCache;
+  }
+
+  const result = await fetchProviderJson('https://appleid.apple.com/auth/keys', {}, 'apple.keys');
+  if (!result.ok || !Array.isArray(result.data?.keys)) {
+    return null;
+  }
+
+  appleKeysCache = result.data.keys;
+  appleKeysCacheExpiresAt = now + APPLE_KEYS_CACHE_MS;
+  return appleKeysCache;
+}
 
 async function getCrmUserPayload(pool, userId) {
   const result = await pool.query(
@@ -160,14 +221,14 @@ async function verifySocialToken(provider, token) {
 
   try {
     if (provider === 'google') {
-      const res = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (!res.ok) {
+      const result = await fetchProviderJson(
+        'https://www.googleapis.com/oauth2/v2/userinfo',
+        { headers: { Authorization: `Bearer ${token}` } },
+        'google.userinfo',
+      );
+      if (!result.ok) return { valid: false };
 
-        return { valid: false };
-      }
-      const data = await res.json();
+      const data = result.data;
       if (!data.id && !data.email) {
         return { valid: false };
       }
@@ -188,12 +249,9 @@ async function verifySocialToken(provider, token) {
         if (!kid) return { valid: false };
 
         // 2. Fetch Apple's public keys
-        const keysRes = await fetch('https://appleid.apple.com/auth/keys');
-        if (!keysRes.ok) {
-          console.error('[Apple Auth] Failed to fetch Apple keys');
-          return { valid: false };
-        }
-        const { keys } = await keysRes.json();
+        const keys = await getApplePublicKeys();
+        if (!keys) return { valid: false };
+
         const appleKey = keys.find(k => k.kid === kid);
         if (!appleKey) {
           console.error('[Apple Auth] No matching key for kid:', kid);
@@ -225,14 +283,14 @@ async function verifySocialToken(provider, token) {
     }
 
     if (provider === 'zalo') {
-      const res = await fetch(`https://graph.zalo.me/v2.0/me?fields=id,name,picture`, {
-        headers: { access_token: token }
-      });
-      if (!res.ok) {
+      const result = await fetchProviderJson(
+        'https://graph.zalo.me/v2.0/me?fields=id,name,picture',
+        { headers: { access_token: token } },
+        'zalo.profile',
+      );
+      if (!result.ok) return { valid: false };
 
-        return { valid: false };
-      }
-      const data = await res.json();
+      const data = result.data;
       if (!data.id) {
         return { valid: false };
       }
