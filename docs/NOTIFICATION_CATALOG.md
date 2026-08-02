@@ -1,208 +1,157 @@
-# Asinu — Danh sách Thông báo
+# Asinu - Danh sách notification hiện tại
 
-Hệ thống gửi thông báo cá nhân hóa theo **tuổi + giới tính** của người dùng.
+Tài liệu này mô tả các notification đang được backend tạo trong bảng
+`notifications` và/hoặc gửi qua push notification.
 
-## Quy tắc xưng hô
+## 1. Quy tắc chung
 
-| Tuổi | Nam | Nữ | Asinu xưng |
-|------|-----|-----|-----------|
-| >= 60 | Chú | Cô | Cháu |
-| 40-59 | Anh | Chị | Em |
-| 25-39 | Anh | Chị | Mình |
-| < 25 | Bạn | Bạn | Mình |
+- Múi giờ scheduler: `Asia/Ho_Chi_Minh`.
+- Notification nhắc sức khỏe chỉ áp dụng cho tài khoản đã hoàn thành onboarding,
+  đã bật reminders và có push token.
+- Một số loại chỉ lưu trong app để hiển thị ở màn Thông báo, không gửi push.
+- Reminder cùng người dùng được cách nhau tối thiểu 5 phút.
+- Cùng một loại notification không gửi lặp trong 5 phút.
+- Khung giờ yên tĩnh: `22:00-05:00`. Trong khung giờ này chỉ xử lý follow-up
+  check-in và cảnh báo đang cần phản hồi.
+- Scheduler chạy mỗi phút; notification chỉ được gửi khi đúng giờ cấu hình của
+  từng người dùng.
 
-**Ví dụ bên dưới dùng:** Chú Hùng, 66 tuổi, tiểu đường + cao huyết áp
+## 2. Notification định kỳ hằng ngày
 
----
+| Type | Thời gian mặc định | Khi nào gửi | Kênh |
+|---|---:|---|---|
+| `morning_checkin` | `07:00` | Người dùng chưa check-in trong ngày | Push + trong app |
+| `reminder_morning_summary` | `08:00` | Còn thiếu log sức khỏe, đường huyết, huyết áp hoặc thuốc trong ngày | Push + trong app |
+| `reminder_afternoon` | `14:00` | Nhắc uống nước, vận động hoặc đo chỉ số theo bệnh nền | Push + trong app |
+| `reminder_evening_summary` | `21:00` | Còn thiếu log buổi tối hoặc chưa ghi nhận thuốc | Push + trong app |
+| `reengagement` | `09:00` | Người dùng đã từng check-in nhưng không quay lại trong vài ngày | Chỉ trong app |
 
-## 1. Nhắc buổi sáng (reminder_morning_summary)
-**Thời gian:** 7:00-8:00 sáng (theo cài đặt user)
+### 2.1 `morning_checkin`
 
-**Title:** ☀️ Chú Hùng ơi, sáng rồi!
+Nội dung chính: mời người dùng bắt đầu check-in sức khỏe trong ngày. Không gửi
+nếu người dùng đã có check-in trong ngày hoặc đã nhận notification này trong ngày.
 
-**Body — Intelligence Layer (tuỳ tình trạng):**
+### 2.2 `reminder_morning_summary`
 
-| Tình trạng | Nội dung |
-|------------|----------|
-| **Symptom xấu đi** | Mấy hôm nay chú hay bị đau đầu, cháu hơi lo. Hôm nay chú thấy thế nào rồi? Vào check-in để cháu theo dõi cùng chú nhé ⚠️ |
-| **Symptom ổn định** | Hôm qua chú có bị đau đầu, hôm nay đỡ hơn chưa? Cháu vẫn đang theo dõi cùng chú nha 💬 |
-| **Symptom đang đỡ** | Tình trạng đau đầu đang đỡ dần rồi, tốt quá! Hôm nay chú thấy sao? Giữ đà này nhé 💪 |
-| **Mệt liên tiếp 3 ngày** | 3 ngày nay chú đều mệt, cháu lo cho chú lắm. Hôm nay thế nào rồi? Vào check-in để cháu biết tình hình nhé 😟 |
-| **Streak 7 ngày khỏe** | 7 ngày liên tiếp chú đều khỏe, cháu mừng quá! Tiếp tục giữ vậy nhé, cháu luôn đồng hành cùng chú 🎉 |
-| **Sau triệu chứng nặng** | Lần trước chú có triệu chứng nặng, cháu vẫn nhớ. Hôm nay chú thấy thế nào rồi? Cho cháu biết để theo dõi tiếp nhé 🩺 |
-| **Mặc định** | Hôm nay chú thế nào? Vào check-in nhanh để cháu nắm tình hình nhé. Mỗi ngày một chút, cháu đồng hành cùng chú ☀️ |
+Backend gộp các việc còn thiếu thành một notification, gồm:
 
-**Body — Fallback (khi Intelligence Layer lỗi):**
+- Đo đường huyết nếu hồ sơ có tiểu đường.
+- Đo huyết áp nếu hồ sơ có cao huyết áp.
+- Uống thuốc nếu người dùng có bệnh nền.
+- Ghi chỉ số sức khỏe nếu chưa có log nào trong ngày.
 
-| Tình trạng | Nội dung |
-|------------|----------|
-| **Có symptom hôm qua** | Hôm qua chú có bị đau đầu, cháu vẫn nhớ nha. Hôm nay chú nhớ đo đường huyết 🩸, đo huyết áp 💓, uống thuốc 💊 nhé, cháu theo dõi cùng chú 💙 |
-| **Không có symptom** | Ngày mới rồi chú ơi! Hôm nay chú nhớ đo đường huyết 🩸, đo huyết áp 💓, uống thuốc 💊 nhé. Mỗi ngày một chút, cháu tin chú làm được 💪 |
+Nếu người dùng đã hoàn tất tất cả việc cần làm thì không gửi notification này.
+Giờ gửi có thể thay đổi theo `morning_time` hoặc cấu hình tương ứng của user.
 
----
+### 2.3 `reminder_afternoon`
 
-## 2. Nhắc buổi chiều (reminder_afternoon)
-**Thời gian:** 14:00-15:00 (theo cài đặt user)
+Nhắc nghỉ ngơi, uống nước, vận động hoặc đo chỉ số. Giờ mặc định là `14:00`,
+có thể thay đổi theo `afternoon_time`.
 
-**Title:** 🌤️ Chú Hùng ơi, chiều rồi!
+### 2.4 `reminder_evening_summary`
 
-**Body — Intelligence Layer:**
+Nhắc ghi log sức khỏe buổi tối và uống thuốc tối. Giờ mặc định là `21:00`,
+có thể thay đổi theo `evening_time`.
 
-| Tình trạng | Nội dung |
-|------------|----------|
-| **Có symptom** | Chiều nay đau đầu thế nào rồi chú? Nghỉ tay chút, uống nước nhé. Cháu vẫn quan tâm chú đây 🌤️ |
-| **Mặc định** | Chiều nay chú thế nào? Nghỉ tay chút, uống nước nhé. Cháu nhắc chú vì quan tâm thôi nha 💧 |
+### 2.5 `reengagement`
 
-**Body — Fallback:**
+Đây là notification nhắc người dùng quay lại app sau khi không hoạt động.
 
-| Bệnh nền | Nội dung |
-|----------|----------|
-| **Tiểu đường** | Chiều nay chú thấy thế nào? Nhớ uống đủ nước và đo đường huyết nếu chưa nhé. Cháu đang theo dõi cùng chú đây 😊 |
-| **Cao huyết áp** | Chiều rồi chú ơi, nghỉ tay chút nhé — nghỉ ngơi cũng quan trọng như uống thuốc vậy. Hôm nay chú uống đủ nước chưa? 💧 |
-| **Chung** | Chiều nay chú thế nào rồi? Vươn vai tí, uống ngụm nước nhé. Cháu nhắc chú vì quan tâm thôi nha 🌿 |
+Điều kiện hiện tại:
 
----
+- Người dùng phải có ít nhất một `health_checkin` thực tế.
+- Lifecycle phải thuộc nhóm `semi_active`, `inactive` hoặc `churned`.
+- Tối đa một notification mỗi ngày.
+- Chỉ lưu trong app, không gửi push để tránh làm phiền.
 
-## 3. Nhắc buổi tối (reminder_evening_summary)
-**Thời gian:** 20:00-21:00 (theo cài đặt user)
+Người chưa từng check-in được xem là người dùng mới, không phải người dùng đã
+không hoạt động. Vì vậy hệ thống không còn dùng giá trị giả `999 ngày` cho nhóm
+này.
 
-**Title:** 🌙 Chú Hùng ơi, tối rồi!
+## 3. Notification thành tích và tổng kết
 
-**Body — Intelligence Layer:**
+| Type | Thời gian | Điều kiện | Kênh |
+|---|---|---|---|
+| `streak_7` | Theo giờ buổi sáng | Đạt chuỗi ghi log 7 ngày | Push + trong app |
+| `streak_14` | Theo giờ buổi sáng | Đạt chuỗi ghi log 14 ngày | Push + trong app |
+| `streak_30` | Theo giờ buổi sáng | Đạt chuỗi ghi log 30 ngày | Push + trong app |
+| `weekly_recap` | Chủ nhật `20:00` | Tổng kết số ngày có log trong 7 ngày gần nhất | Push + trong app |
+| `weekly_wellness_summary` | Chủ nhật `07:00` | Có ít nhất một log trong 7 ngày gần nhất | Chỉ trong app |
 
-| Tình trạng | Nội dung |
-|------------|----------|
-| **Có symptom** | Hôm nay đau đầu thế nào rồi chú? Trước khi ngủ chú nhớ uống thuốc tối 💊 nhé. Cháu vẫn đang theo dõi cùng chú nha 🌙 |
-| **Symptom đang đỡ** | Hôm nay chú đỡ hơn hôm qua rồi, tốt quá! Trước khi ngủ nhớ uống thuốc tối 💊 nhé. Giữ đà này chú nhé 🌟 |
-| **Mặc định** | Trước khi ngủ chú nhớ uống thuốc tối 💊 nhé. Hôm nay chú đã cố gắng rồi, nghỉ ngơi cho ngày mai tiếp tục nha. Cháu chúc chú ngủ ngon 🌙 |
+Các mốc streak được chống lặp trong 25 ngày. Tổng kết tuần được chống lặp
+trong khoảng 6 ngày.
 
-**Body — Fallback:**
+## 4. Notification vòng đời tài khoản
 
-| Tình trạng | Nội dung |
-|------------|----------|
-| **Có symptom** | Trước khi ngủ chú nhớ uống thuốc tối 💊, ghi chỉ số sức khỏe 📋 nhé. Cháu vẫn nhớ chú bị đau đầu, hy vọng đỡ hơn rồi. Chú ngủ ngon nha 💙 |
-| **Không symptom** | Trước khi ngủ chú nhớ uống thuốc tối 💊, ghi chỉ số sức khỏe 📋 nhé. Hôm nay chú đã cố gắng rồi, nghỉ ngơi cho ngày mai tiếp tục nha 🌟 |
+| Type | Thời gian quét | Điều kiện | Kênh |
+|---|---:|---|---|
+| `subscription_expiring_soon` | Hằng ngày `07:00` | Gói Premium còn tối đa 3 ngày | Push + trong app |
+| `subscription_expired` | Hằng ngày `07:00` | Gói vừa hết hạn trong 24 giờ | Push + trong app |
+| `profile_incomplete` | Hằng ngày `07:00` | Sau 3 ngày đăng ký nhưng còn thiếu hồ sơ/onboarding | Chỉ trong app |
 
----
+Các notification vòng đời có cơ chế chống gửi lặp theo thời gian hoặc theo tài
+khoản. `profile_incomplete` chỉ gửi một lần cho mỗi tài khoản.
 
-## 4. Streak Milestone (streak_7 / streak_14 / streak_30)
-**Thời gian:** Sáng (cùng morning), khi user đạt mốc
+## 5. Notification phát sinh khi check-in
 
-**Title:** 🔥 Chuỗi 7 ngày, Chú Hùng!
+| Type | Khi nào phát sinh | Người nhận | Kênh |
+|---|---|---|---|
+| `checkin_followup` | Người dùng không phản hồi phiên check-in lần đầu | Người dùng | Push + trong app |
+| `checkin_followup_urgent` | Người dùng tiếp tục không phản hồi | Người dùng | Push + trong app |
+| `health_alert` | Phát hiện chỉ số/triệu chứng bất thường hoặc xu hướng xấu | Người dùng | Push + trong app |
+| `caregiver_alert` | Check-in mức cao cần báo người thân | Người thân và/hoặc người dùng | Push + trong app |
+| `emergency` | Check-in có mức khẩn cấp | Người thân | Push + trong app |
 
-**Body:**
-> Tuyệt vời! Chú đã ghi log 7 ngày liên tục rồi. Cháu tự hào về chú lắm — tiếp tục phát huy nhé!
+### Follow-up không phản hồi
 
----
+- Lần bỏ lỡ đầu tiên tạo `checkin_followup`.
+- Các lần tiếp theo tạo `checkin_followup_urgent`.
+- Nếu người dùng tiếp tục không phản hồi, hệ thống có thể báo Care Circle.
+- Phiên được dừng sau ngưỡng retry để tránh gửi vô hạn.
 
-## 5. Tổng kết tuần (weekly_recap)
-**Thời gian:** Chủ nhật 20:00
+### Cảnh báo người thân
 
-**Title:** 📊 Tổng kết tuần, Chú Hùng!
+Khi người dùng chưa xác nhận hoặc người thân chưa phản hồi, hệ thống có thể gửi
+lại `caregiver_alert` hoặc `emergency` sau mỗi 30 phút, tối đa 4 lần retry.
 
-| Số ngày | Nội dung |
-|---------|----------|
-| **7/7** | Tuần hoàn hảo! Chú đã ghi log đủ 7/7 ngày. Cháu tự hào về chú lắm — tuyệt vời! |
-| **5-6/7** | Tuần tốt! Chú ghi log 5/7 ngày, gần hoàn hảo rồi! Cháu tin tuần sau chú làm được 7/7 💪 |
-| **3-4/7** | Chú ghi log 3/7 ngày tuần này. Không tệ đâu! Tuần sau chú cố thêm chút nhé, cháu đồng hành cùng chú 💙 |
-| **0-2/7** | Mới 1/7 ngày ghi log tuần này. Sức khỏe chú quan trọng lắm — tuần sau cháu mong chú ghi log thường xuyên hơn nhé 💙 |
+## 6. Notification Care Circle và tài khoản
 
----
+Các loại sau phát sinh theo thao tác kết nối, không phải notification hằng ngày:
 
-## 6. Cảnh báo sức khỏe (health_alert)
-**Thời gian:** Bất cứ khi nào phát hiện bất thường (max 1 lần/12h)
+- `care_circle_invitation`: có người mời tham gia Care Circle.
+- `care_circle_accepted`: lời mời đã được chấp nhận.
+- `care_circle_rejected`: lời mời bị từ chối.
+- `care_circle_removed`: thành viên bị xóa khỏi nhóm.
+- `care_circle_permission_changed`: quyền của thành viên thay đổi; chỉ trong app.
+- `caregiver_confirmed`: người thân đã xác nhận cảnh báo.
 
-**Title:** Chú ơi, cần chú ý
+## 7. Notification thanh toán và Premium
 
-| Loại | Nội dung |
-|------|----------|
-| **Severity cao** | 🚨 Chú Hùng ơi, triệu chứng đau đầu của chú khá nặng. Chú nên đi khám bác sĩ nhé |
-| **Trend xấu đi** | 📈 Chú Hùng ơi, đau đầu mấy hôm nay có vẻ nặng hơn. Cháu muốn chú theo dõi kỹ nhé |
+Các loại sau phát sinh theo giao dịch, không chạy cố định mỗi ngày:
 
----
+- `subscription_activated`: kích hoạt Premium.
+- `subscription_expiring_soon`: Premium sắp hết hạn.
+- `subscription_expired`: Premium đã hết hạn.
+- `payment_failed`: thanh toán thất bại.
+- `wallet_topup_success`: nạp tiền thành công; chỉ trong app.
+- `wallet_low_balance`: số dư ví thấp; chỉ trong app.
 
-## 7. Follow-up check-in (checkin_followup)
-**Thời gian:** 1-4 giờ sau check-in (tuỳ mức độ: high_alert = 1h, follow_up = 3h)
+## 8. Kiểm tra notification trong app
 
-**Title:** 💙 Cháu vẫn ở đây — chú khoẻ hơn chưa?
+Frontend lấy danh sách từ API notifications và hiển thị `title`, `message`,
+`created_at`, `is_read` từ backend. Vì vậy các notification cũ vẫn có thể xuất
+hiện trong lịch sử dù rule hiện tại đã được sửa.
 
-**Body:** 🌿 Cháu vẫn nhớ lúc nãy chú hơi mệt. Giờ đỡ hơn chưa? Cho cháu biết nhé.
+Đặc biệt, các bản ghi `reengagement` cũ với nội dung `999 ngày` là dữ liệu lịch
+sử do rule cũ tạo ra. Code hiện tại không tạo thêm bản ghi kiểu này cho người
+chưa từng check-in; khi người dùng check-in, các bản ghi `reengagement` chưa đọc
+được đánh dấu đã đọc.
 
-**Urgent (mệt nặng):**
+## 9. Nguồn code chính
 
-**Title:** 💙 Cháu vẫn đang ở đây nè
-
-**Body:** Chú ơi, cháu lo quá. Cho cháu biết chú thế nào nhé — cháu đang theo dõi cùng chú 💙
-
----
-
-## 8. Cảnh báo khẩn cấp (emergency)
-**Gửi cho:** Người thân trong Care Circle
-
-**Title:** 🚨 Khẩn cấp — Cần giúp đỡ ngay!
-
-**Body:** 🚨 Người thân của bạn đang cần hỗ trợ khẩn cấp. Kiểm tra ngay!
-
----
-
-## 9. Care Circle
-
-### Lời mời kết nối
-**Title:** 🤝 Lời mời Care Circle
-
-**Body:** Có người muốn kết nối với bạn trong Care Circle — cùng chăm sóc nhau nhé!
-
-### Chấp nhận lời mời
-**Title:** ✅ Lời mời được chấp nhận
-
-**Body:** 🎉 Thành viên mới đã tham gia nhóm chăm sóc của bạn!
-
-### Người thân xác nhận
-**Title:** ✅ Người thân đã phản hồi
-
-**Body:** 💙 Người thân đã nhận thông báo và đang hỗ trợ bạn rồi.
-
----
-
-## 10. Re-engagement (user không mở app)
-**Thời gian:** 9:00 sáng, khi user inactive 3+ ngày
-**Nội dung:** AI sinh tự động dựa trên context (symptom, streak, lifecycle)
-
-**Title:** 💙 Chú Hùng ơi, lâu rồi không thấy chú!
-
-**Body:** *(Ví dụ AI sinh)* Mấy hôm nay không thấy chú vào check-in, cháu hơi lo. Chú có khỏe không? Vào app nhanh để cháu biết tình hình nhé 💙
-
----
-
-## Ví dụ cho user khác
-
-### Chị Mai, 46 tuổi, nữ (chị/em)
-
-| Loại | Title | Body |
-|------|-------|------|
-| Sáng | ☀️ Chị Mai ơi, sáng rồi! | Ngày mới rồi chị ơi! Hôm nay chị nhớ đo đường huyết 🩸, uống thuốc 💊 nhé. Mỗi ngày một chút, em tin chị làm được 💪 |
-| Chiều | 🌤️ Chị Mai ơi, chiều rồi! | Chiều nay chị thế nào? Nghỉ tay chút, uống nước nhé. Em nhắc chị vì quan tâm thôi nha 💧 |
-| Tối | 🌙 Chị Mai ơi, tối rồi! | Trước khi ngủ chị nhớ uống thuốc tối 💊 nhé. Hôm nay chị đã cố gắng rồi, nghỉ ngơi cho ngày mai tiếp tục nha. Em chúc chị ngủ ngon 🌙 |
-| Streak | 🔥 Chuỗi 7 ngày, Chị Mai! | Tuyệt vời! Chị đã ghi log 7 ngày liên tục rồi. Em tự hào về chị lắm — tiếp tục phát huy nhé! |
-
-### Bạn Đức, 26 tuổi, nam (anh/mình)
-
-| Loại | Title | Body |
-|------|-------|------|
-| Sáng | ☀️ Anh Đức ơi, sáng rồi! | Ngày mới rồi anh ơi! Hôm nay anh nhớ đo đường huyết 🩸 nhé. Mỗi ngày một chút, mình tin anh làm được 💪 |
-| Chiều | 🌤️ Anh Đức ơi, chiều rồi! | Chiều nay anh thế nào? Nghỉ tay chút, uống nước nhé. Mình nhắc anh vì quan tâm thôi nha 💧 |
-| Tối | 🌙 Anh Đức ơi, tối rồi! | Trước khi ngủ anh nhớ uống thuốc tối 💊 nhé. Hôm nay anh đã cố gắng rồi, nghỉ ngơi cho ngày mai tiếp tục nha 🌟 |
-
----
-
-## Logic gửi thông báo
-
-| Quy tắc | Chi tiết |
-|---------|----------|
-| **Quiet hours** | 22:00 - 05:00 không gửi reminder (chỉ gửi follow-up khẩn cấp) |
-| **Cross-type gap** | Cùng user không nhận 2 reminder trong 5 phút |
-| **Same-type dedup** | Cùng loại không gửi lại trong 5 phút |
-| **Reminders enabled** | Chỉ gửi khi user bật thông báo trong cài đặt |
-| **Onboarding required** | Chỉ gửi khi user đã hoàn thành onboarding |
-| **Push token required** | Chỉ gửi khi user có push token |
-| **Time matching** | Gửi theo giờ user cài đặt (morning_time, afternoon_time, evening_time) |
+- Scheduler: `src/scheduler/index.js`
+- Reminder định kỳ: `src/services/notification/basic.notification.service.js`
+- Notification vòng đời: `src/services/notification/lifecycle.notification.service.js`
+- Re-engagement: `src/services/notification/reengagement.service.js`
+- Check-in và cảnh báo: `src/services/checkin/checkin.service.js`
+- Điều phối notification: `src/core/notification/notification.orchestrator.js`
