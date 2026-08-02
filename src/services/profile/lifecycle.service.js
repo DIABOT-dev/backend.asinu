@@ -46,6 +46,19 @@ async function getLifecycle(pool, userId) {
     return ensureLifecycle(pool, userId);
   }
 
+  // Legacy rows used 999 for users who had never checked in. That is not a
+  // real inactivity duration and must not be exposed to notification logic.
+  if (rows[0].last_checkin_at == null && (rows[0].inactive_days !== 0 || rows[0].segment !== 'active')) {
+    const { rows: normalized } = await pool.query(
+      `UPDATE user_lifecycle
+          SET inactive_days = 0, segment = 'active', updated_at = NOW()
+        WHERE user_id = $1 AND last_checkin_at IS NULL
+        RETURNING *`,
+      [userId]
+    );
+    return normalized[0] || rows[0];
+  }
+
   return rows[0];
 }
 
@@ -57,9 +70,9 @@ async function ensureLifecycle(pool, userId) {
      SELECT
        $1,
        MAX(hc.session_date)::timestamptz,
-       COALESCE(EXTRACT(DAY FROM NOW() - MAX(hc.session_date)::timestamptz)::int, 999),
+       COALESCE(EXTRACT(DAY FROM NOW() - MAX(hc.session_date)::timestamptz)::int, 0),
        CASE
-         WHEN MAX(hc.session_date) IS NULL THEN 'inactive'
+         WHEN MAX(hc.session_date) IS NULL THEN 'active'
          WHEN MAX(hc.session_date)::date >= (NOW() - INTERVAL '1 day')::date THEN 'active'
          WHEN MAX(hc.session_date)::date >= (NOW() - INTERVAL '3 days')::date THEN 'semi_active'
          WHEN MAX(hc.session_date)::date >= (NOW() - INTERVAL '7 days')::date THEN 'inactive'
@@ -77,7 +90,7 @@ async function ensureLifecycle(pool, userId) {
     // User chưa từng check-in
     const { rows: inserted } = await pool.query(
       `INSERT INTO user_lifecycle (user_id, inactive_days, segment)
-       VALUES ($1, 999, 'inactive')
+       VALUES ($1, 0, 'active')
        ON CONFLICT (user_id) DO UPDATE SET updated_at = NOW()
        RETURNING *`,
       [userId]
@@ -102,6 +115,17 @@ async function markActive(pool, userId) {
      RETURNING *`,
     [userId]
   );
+
+  // A re-engagement reminder is stale as soon as the user checks in. Keep it
+  // in history, but remove it from the unread badge and stop it looking like
+  // an outstanding alert.
+  await pool.query(
+    `UPDATE notifications
+        SET is_read = true, read_at = COALESCE(read_at, NOW())
+      WHERE user_id = $1 AND type = 'reengagement' AND is_read = false`,
+    [userId]
+  );
+
   return rows[0];
 }
 
@@ -110,12 +134,12 @@ async function markActive(pool, userId) {
 async function updateAllSegments(pool) {
   const result = await pool.query(
     `UPDATE user_lifecycle SET
-       inactive_days = COALESCE(
-         EXTRACT(DAY FROM NOW() - last_checkin_at)::int,
-         inactive_days + 1
-       ),
+       inactive_days = CASE
+         WHEN last_checkin_at IS NULL THEN 0
+         ELSE GREATEST(EXTRACT(DAY FROM NOW() - last_checkin_at)::int, 0)
+       END,
        segment = CASE
-         WHEN last_checkin_at IS NULL THEN 'inactive'
+         WHEN last_checkin_at IS NULL THEN 'active'
          WHEN last_checkin_at::date >= (NOW() - INTERVAL '1 day')::date THEN 'active'
          WHEN last_checkin_at::date >= (NOW() - INTERVAL '3 days')::date THEN 'semi_active'
          WHEN last_checkin_at::date >= (NOW() - INTERVAL '7 days')::date THEN 'inactive'

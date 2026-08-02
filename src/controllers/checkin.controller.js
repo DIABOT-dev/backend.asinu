@@ -37,8 +37,9 @@ async function startCheckinHandler(pool, req, res) {
 
   try {
     const session = await checkinService.startCheckin(pool, req.user.id, status, locations, other);
-    // Update lifecycle → active khi user check-in
-    markActive(pool, req.user.id).catch(err =>
+    // Update lifecycle before responding so a re-engagement cron cannot read
+    // the old inactive/999-day state after the user has checked in.
+    await markActive(pool, req.user.id).catch(err =>
       console.warn('[Lifecycle] markActive failed:', err.message)
     );
     return res.json({ ok: true, session });

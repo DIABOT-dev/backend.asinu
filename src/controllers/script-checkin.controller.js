@@ -18,6 +18,7 @@
 
 const { getUserScript, getScript, createClustersFromOnboarding } = require('../services/checkin/script.service');
 const { buildCaregiverStatus } = require('../services/care-circle/caregiver-status.service');
+const { markActive } = require('../services/profile/lifecycle.service');
 const { getNextQuestion } = require('../core/checkin/script-runner');
 const { getFallbackScriptData, logFallback, matchCluster } = require('../services/checkin/fallback.service');
 const { detectEmergency } = require('../services/checkin/emergency-detector');
@@ -94,6 +95,14 @@ async function startScriptHandler(pool, req, res) {
 
     if (!['fine', 'tired', 'very_tired'].includes(status)) {
       return res.status(400).json({ ok: false, error: 'Invalid status' });
+    }
+
+    // Starting any check-in is real activity, including the script-driven
+    // flow. Keep lifecycle state in sync before the response returns.
+    try {
+      await markActive(pool, userId);
+    } catch (err) {
+      console.warn('[Lifecycle] markActive failed:', err.message);
     }
 
     // Status = fine → no script needed
@@ -303,6 +312,14 @@ async function answerScriptHandler(pool, req, res) {
 
     if (session.is_completed) {
       return res.status(400).json({ ok: false, error: 'Session already completed' });
+    }
+
+    // A response is also activity. This covers sessions created by older
+    // clients that did not update lifecycle when they started.
+    try {
+      await markActive(pool, userId);
+    } catch (err) {
+      console.warn('[Lifecycle] markActive failed:', err.message);
     }
 
     // Emergency check on free-text answers

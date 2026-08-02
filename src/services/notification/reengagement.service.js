@@ -125,7 +125,7 @@ async function buildReengagementContext(pool, userId) {
       [userId]
     ),
     pool.query(
-      `SELECT segment, inactive_days FROM user_lifecycle WHERE user_id = $1`,
+      `SELECT segment, inactive_days, last_checkin_at FROM user_lifecycle WHERE user_id = $1`,
       [userId]
     ),
   ]);
@@ -198,8 +198,9 @@ function renderReengagementMessage(template, ctx, user, escalation) {
 async function generateReengagementMessage(pool, userId, user) {
   const ctx = await buildReengagementContext(pool, userId);
 
-  // Skip if user is now active
-  if (ctx.lifecycle.segment === 'active') {
+  // A user who has never checked in is new, not inactive. Legacy lifecycle
+  // rows used inactive_days=999 for this case, so guard by the actual date.
+  if (ctx.lifecycle.segment === 'active' || !ctx.lifecycle.last_checkin_at) {
     return null;
   }
 
@@ -287,7 +288,10 @@ async function runReengagement(pool, sendAndSave) {
     getUsersBySegment(pool, 'churned'),
   ]);
 
-  const allUsers = [...semiActive, ...inactive, ...churned];
+  // Re-engagement only applies to users who have completed at least one
+  // check-in. This excludes legacy rows with no check-in and inactive_days=999.
+  const allUsers = [...semiActive, ...inactive, ...churned]
+    .filter((user) => user.last_checkin_at != null);
   let sent = 0;
   let careAlertsSent = 0;
   let skipped = 0;
