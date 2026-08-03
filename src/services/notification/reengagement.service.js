@@ -30,64 +30,64 @@ const REENGAGEMENT_TEMPLATES = {
   d2_gentle_with_symptom: {
     id: 'reengage_d2_gentle_symptom',
     level: 'gentle',
-    vi: '💬 {callName} ơi, hôm trước {honorific} có bị {symptom}. Hôm nay {honorific} thế nào rồi?',
-    en: '💬 {callName}, you had {symptom} recently. How are you feeling today?',
+    vi: 'Triệu chứng {symptom} đã được ghi nhận lần trước. Nếu vẫn còn, hãy cập nhật hôm nay.',
+    en: 'Your {symptom} was recorded recently. If it is still present, update your health record today.',
   },
   d2_gentle_no_symptom: {
     id: 'reengage_d2_gentle',
     level: 'gentle',
-    vi: '👋 {callName} ơi, {selfRef} chưa thấy {honorific} check-in. Mọi thứ ổn chứ ạ?',
-    en: '👋 {callName}, I haven\'t seen you check in today. Is everything okay?',
+    vi: 'Hôm nay chưa có cập nhật sức khỏe. Mở app để ghi lại tình trạng hiện tại.',
+    en: 'There is no health update today. Open the app to record your current status.',
   },
 
   // D3-4: concerned, mention symptom + previous severity
   d4_concerned_with_symptom: {
     id: 'reengage_d4_concerned_symptom',
     level: 'concerned',
-    vi: '😟 {callName} ơi, mấy hôm nay {honorific} chưa cập nhật. {symptom} có đỡ hơn không ạ? {selfRef} hơi lo',
-    en: '{callName}, you haven\'t updated for a few days. Has your {symptom} improved?',
+    vi: 'Bạn chưa cập nhật vài ngày. Nếu {symptom} vẫn còn, hãy theo dõi thêm hoặc đi khám nếu nặng hơn.',
+    en: 'There has been no update for a few days. If your {symptom} persists, monitor it and seek care if it worsens.',
   },
   d4_concerned_was_severe: {
     id: 'reengage_d4_concerned_severe',
     level: 'concerned',
-    vi: '🩺 {callName} ơi, lần trước {honorific} có triệu chứng nặng. {selfRef} hơi lo, {honorific} ổn không?',
-    en: '{callName}, you had severe symptoms last time. I\'m concerned, are you okay?',
+    vi: 'Lần trước bạn ghi nhận triệu chứng nặng. Nếu chưa đỡ, nên liên hệ cơ sở y tế.',
+    en: 'You recorded severe symptoms recently. If they have not improved, contact a healthcare provider.',
   },
   d4_concerned_default: {
     id: 'reengage_d4_concerned',
     level: 'concerned',
-    vi: '📋 {callName} ơi, {days} ngày nay {honorific} chưa check-in. {selfRef} muốn nghe tin {honorific}',
-    en: '{callName}, it\'s been {days} days. I\'d like to hear from you',
+    vi: 'Đã {days} ngày chưa có cập nhật sức khỏe. Ghi lại tình trạng hiện tại khi thuận tiện.',
+    en: 'There has been no health update for {days} days. Record your current status when you can.',
   },
 
   // D5-7: worried, suggest family
   d7_worried_with_symptom: {
     id: 'reengage_d7_worried_symptom',
     level: 'worried',
-    vi: '⚠️ {callName} ơi, đã {days} ngày rồi. Nếu {honorific} vẫn còn {symptom}, mình nên kiểm tra lại sớm nhé',
-    en: '{callName}, it\'s been {days} days. If your {symptom} persists, please check in soon',
+    vi: 'Đã {days} ngày từ lần cập nhật gần nhất. Nếu {symptom} còn kéo dài, nên đi khám.',
+    en: 'It has been {days} days since your last update. If your {symptom} persists, consider seeing a doctor.',
   },
   d7_worried_default: {
     id: 'reengage_d7_worried',
     level: 'worried',
-    vi: '😔 {callName} ơi, {days} ngày rồi {honorific} chưa quay lại. {selfRef} mong {honorific} ổn',
-    en: '{callName}, {days} days without you. I hope you\'re okay',
+    vi: 'Đã {days} ngày chưa có cập nhật. Mở app để ghi lại tình trạng hôm nay.',
+    en: 'There has been no update for {days} days. Open the app to record today\'s status.',
   },
 
   // D8+: urgent, churned
   d8_urgent: {
     id: 'reengage_d8_urgent',
     level: 'urgent',
-    vi: '🚨 {callName} ơi, {selfRef} rất lo cho {honorific}. Đã {days} ngày rồi. {honorific} vào check-in ngay nhé',
-    en: '{callName}, I\'m really worried. It\'s been {days} days. Please check in now',
+    vi: 'Đã {days} ngày chưa có cập nhật sức khỏe. Nếu bạn đang không ổn, hãy liên hệ người thân hoặc cơ sở y tế.',
+    en: 'There has been no health update for {days} days. If you feel unwell, contact a family member or healthcare provider.',
   },
 
   // Care-circle alert (gửi cho gia đình)
   care_circle_alert: {
     id: 'reengage_care_circle',
     level: 'family',
-    vi: '👨‍👩‍👦 Người thân của bạn ({patientName}) đã không check-in {days} ngày. Vui lòng liên hệ kiểm tra giúp',
-    en: 'Your family member ({patientName}) hasn\'t checked in for {days} days. Please reach out',
+    vi: '{patientName} đã {days} ngày chưa cập nhật sức khỏe. Vui lòng liên hệ để kiểm tra.',
+    en: '{patientName} has not shared a health update for {days} days. Please check in with them.',
   },
 };
 
@@ -264,7 +264,7 @@ async function sendCareCircleAlert(pool, sendAndSave, patientId, patientName, in
     text = text.replace(/\{patientName\}/g, patientDisplay);
     text = text.replace(/\{days\}/g, String(inactiveDays));
 
-    const title = lang === 'en' ? 'Care Alert' : 'Cảnh báo người thân';
+    const title = lang === 'en' ? 'Health check needed' : 'Cần kiểm tra sức khỏe';
 
     const ok = await sendAndSave(pool, guardian, 'caregiver_alert', title, text, {
       type: 'caregiver_alert',
@@ -332,7 +332,7 @@ async function runReengagement(pool, sendAndSave) {
 
       // Send re-engagement push
       const { Honorific } = getHonorifics(user);
-      const title = user.lang === 'en' ? 'Health check-in' : `${Honorific} ơi, mời quay lại`;
+      const title = user.lang === 'en' ? 'Health update' : 'Cập nhật sức khỏe';
 
       const ok = await sendAndSave(pool, user, 'reengagement', title, result.message.text, {
         type: 'reengagement',

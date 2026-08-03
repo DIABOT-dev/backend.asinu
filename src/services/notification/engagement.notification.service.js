@@ -262,46 +262,54 @@ async function generateEngagementNotification(user, context, lang = 'vi', { isPr
       ].filter(Boolean);
 
   const prompt = isEn
-    ? `You are Asinu, a warm and caring health companion app.
+    ? `You are a UX writer for a health app.
 
 USER: ${name}${goal ? `, goal: "${goal}"` : ''}${conditions ? `, conditions: ${conditions}` : ''}
 
 RECENT ACTIVITY:
 ${activityLines.join('\n')}
 
-POSSIBLE ANGLES (pick ONE that feels most natural and personal for this user):
+POSSIBLE ANGLES (pick ONE relevant angle):
 ${angles.map((a, i) => `${i + 1}. Focus on ${a}`).join('\n')}
 
 TASK: Write ONE short push notification to bring the user back to the app.
-- Sound like a caring friend, NOT a reminder bot
-- Be creative — avoid generic "you haven't logged" phrasing
-- Personalize using their name, goal, or health condition when relevant
-- Max 80 characters for body
-- Do NOT mention specific numbers or values
+- Sound like a normal health app notification, not a chatbot or a friend
+- Be clear about the missing update and why it is useful
+- Personalize only when it improves clarity
+- Title: 4-8 words
+- Body: 1-2 sentences, under 120 characters when possible
+- Use no more than one emoji, and only when it adds meaning
+- Do not use emotional, romantic, promotional, or exaggerated language
+- Do not say that Asinu is worried, remembers the user, is always here, or is proud
+- Do not ask "How are you today?"
 ${isPreview ? '- PREVIEW mode — always generate content, always return shouldSend: true' : '- If inactive > 14 days → return shouldSend: false (user likely churned)'}
 
 Reply in strict JSON only (no extra text):
-{"shouldSend": true, "title": "Asinu", "body": "notification text here"}`
-    : `Bạn là Asinu — người bạn đồng hành sức khoẻ ấm áp và quan tâm.
+{"shouldSend": true, "title": "Health update", "body": "notification text here"}`
+    : `Bạn là UX Writer cho một ứng dụng sức khỏe.
 
 NGƯỜI DÙNG: ${name}${goal ? `, mục tiêu: "${goal}"` : ''}${conditions ? `, bệnh lý: ${conditions}` : ''}
 
 HOẠT ĐỘNG GẦN ĐÂY:
 ${activityLines.join('\n')}
 
-CÁC GÓC ĐỘ CÓ THỂ DÙNG (chọn MỘT góc tự nhiên và phù hợp nhất với người dùng này):
+CÁC GÓC ĐỘ CÓ THỂ DÙNG (chọn MỘT góc phù hợp nhất):
 ${angles.map((a, i) => `${i + 1}. Tập trung vào ${a}`).join('\n')}
 
 NHIỆM VỤ: Viết MỘT thông báo push ngắn để kéo người dùng mở app.
-- Giọng như người bạn quan tâm, KHÔNG như bot nhắc nhở
-- Sáng tạo — tránh câu kiểu "bạn chưa khai báo..." nhàm chán
-- Cá nhân hoá bằng tên, mục tiêu, hoặc bệnh lý khi phù hợp
-- Tối đa 80 ký tự phần body
-- KHÔNG đề cập số liệu cụ thể
+- Viết như một notification sức khỏe bình thường, không như chatbot hay người thân
+- Nêu rõ dữ liệu còn thiếu và lý do nên cập nhật
+- Chỉ cá nhân hóa khi giúp câu rõ hơn
+- Tiêu đề: 4-8 từ
+- Body: 1-2 câu, dưới 120 ký tự nếu có thể
+- Tối đa một emoji và chỉ dùng khi thật sự cần
+- Không dùng ngôn ngữ cảm xúc, tình cảm, quảng cáo hoặc khoa trương
+- Không nói Asinu lo lắng, nhớ người dùng, luôn ở đây hoặc tự hào
+- Không hỏi "Hôm nay bạn thế nào?"
 ${isPreview ? '- Chế độ PREVIEW — luôn sinh nội dung, luôn trả về shouldSend: true' : '- Nếu không vào app > 14 ngày → trả về shouldSend: false'}
 
 Chỉ trả về JSON thuần (không có text thừa):
-{"shouldSend": true, "title": "Asinu", "body": "nội dung thông báo"}`;
+{"shouldSend": true, "title": "Cập nhật sức khỏe", "body": "nội dung thông báo"}`;
 
   const aiResponse = await getOpenAIReply({
     message: prompt,
@@ -322,7 +330,7 @@ Chỉ trả về JSON thuần (không có text thừa):
     const parsed = JSON.parse(jsonMatch[0]);
     return {
       shouldSend: !!parsed.shouldSend,
-      title: parsed.title || 'Asinu',
+      title: parsed.title || (isEn ? 'Health update' : 'Cập nhật sức khỏe'),
       body: parsed.body || '',
     };
   } catch {
@@ -380,7 +388,7 @@ async function previewEngagementNotification(pool, userId) {
   }
 
   return {
-    title: decision.title || 'Asinu',
+    title: decision.title || (userRow.language_preference === 'en' ? 'Health update' : 'Cập nhật sức khỏe'),
     body: decision.body,
     activitySummary: {
       loggedTodayCount: context.loggedTodayCount,

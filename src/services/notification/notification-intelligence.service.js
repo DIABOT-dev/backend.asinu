@@ -100,38 +100,38 @@ async function buildUserContext(pool, userId) {
 const MORNING_TEMPLATES = {
   has_symptom_worsening: {
     id: 'morning_symptom_worsening',
-    vi: 'Mấy hôm nay {honorific} hay bị {symptom}, {selfRef} hơi lo. Hôm nay {honorific} thấy thế nào rồi? Vào check-in để {selfRef} theo dõi cùng {honorific} nhé ⚠️',
-    en: 'You\'ve had {symptom} recently and it seems to be getting worse. How are you today? Check in so I can keep track with you.',
+    vi: 'Triệu chứng {symptom} đang nặng hơn. Hãy cập nhật check-in hôm nay để theo dõi tình trạng.',
+    en: 'Your {symptom} seems to be getting worse. Check in today to update your health status.',
   },
   has_symptom_stable: {
     id: 'morning_symptom_stable',
-    vi: 'Hôm qua {honorific} có bị {symptom}, hôm nay đỡ hơn chưa? {SelfRef} vẫn đang theo dõi cùng {honorific} nha 💬',
-    en: 'You had {symptom} yesterday — feeling better today? I\'m still keeping track with you.',
+    vi: 'Triệu chứng {symptom} vẫn còn được ghi nhận. Cập nhật check-in để theo dõi thay đổi.',
+    en: 'Your {symptom} was recorded recently. Check in to track any changes.',
   },
   has_symptom_improving: {
     id: 'morning_symptom_improving',
-    vi: 'Tình trạng {symptom} đang đỡ dần rồi, tốt quá! Hôm nay {honorific} thấy sao? Giữ đà này nhé 💪',
-    en: 'Your {symptom} has been improving — great progress! How do you feel today? Keep it up!',
+    vi: 'Triệu chứng {symptom} đang giảm. Ghi thêm check-in hôm nay để theo dõi tiếp.',
+    en: 'Your {symptom} is improving. Check in today to keep tracking it.',
   },
   consecutive_tired: {
     id: 'morning_consecutive_tired',
-    vi: '{tiredDays} ngày nay {honorific} đều mệt, {selfRef} lo cho {honorific} lắm. Hôm nay thế nào rồi? Vào check-in để {selfRef} biết tình hình nhé 😟',
-    en: 'You\'ve been tired for {tiredDays} days — I\'m a bit worried. How are you today? Check in so I know how you\'re doing.',
+    vi: '{tiredDays} ngày liên tiếp bạn ghi nhận mệt mỏi. Cập nhật hôm nay để theo dõi thêm.',
+    en: 'You\'ve recorded tiredness for {tiredDays} days in a row. Check in today to keep tracking it.',
   },
   streak_good: {
     id: 'morning_streak_good',
-    vi: '{streakDays} ngày liên tiếp {honorific} đều khỏe, {selfRef} mừng quá! Tiếp tục giữ vậy nhé, {selfRef} luôn đồng hành cùng {honorific} 🎉',
-    en: '{streakDays} days in a row feeling good — amazing! Keep going, I\'m cheering you on!',
+    vi: 'Bạn đã ghi nhận sức khỏe ổn định {streakDays} ngày liên tiếp. Tiếp tục cập nhật đều đặn.',
+    en: 'You\'ve recorded stable health for {streakDays} days in a row. Keep checking in regularly.',
   },
   high_severity: {
     id: 'morning_high_severity',
-    vi: 'Lần trước {honorific} có triệu chứng nặng, {selfRef} vẫn nhớ. Hôm nay {honorific} thấy thế nào rồi? Cho {selfRef} biết để theo dõi tiếp nhé 🩺',
-    en: 'You had severe symptoms last time — I haven\'t forgotten. How are you feeling now? Let me know so I can keep checking.',
+    vi: 'Lần trước bạn ghi nhận triệu chứng nặng. Hãy cập nhật tình trạng hôm nay để theo dõi tiếp.',
+    en: 'You recorded severe symptoms recently. Update your health status today to keep tracking it.',
   },
   default: {
     id: 'morning_default',
-    vi: 'Hôm nay {honorific} thế nào? Vào check-in nhanh để {selfRef} nắm tình hình nhé. Mỗi ngày một chút, {selfRef} đồng hành cùng {honorific} ☀️',
-    en: 'How are you today? Quick check-in so I can stay updated. One day at a time — I\'m here with you ☀️',
+    vi: 'Hôm nay chưa có dữ liệu sức khỏe. Cập nhật trong khoảng 1 phút để theo dõi chính xác hơn.',
+    en: 'There is no health data for today yet. Check in now to keep your records up to date.',
   },
 };
 
@@ -141,18 +141,18 @@ const MORNING_TEMPLATES = {
 const EVENING_TEMPLATES = {
   has_symptom: {
     id: 'evening_has_symptom',
-    vi: 'Hôm nay {symptom} thế nào rồi {honorific}? Trước khi ngủ {honorific} nhớ {tasks} nhé. {SelfRef} vẫn đang theo dõi cùng {honorific} nha 🌙',
-    en: 'How was your {symptom} today? Before bed, remember to {tasks}. I\'m still keeping track with you 🌙',
+    vi: 'Triệu chứng {symptom} hôm nay thế nào? Trước khi nghỉ, hãy hoàn tất: {tasks}.',
+    en: 'How was your {symptom} today? Before bed, complete: {tasks}.',
   },
   improving: {
     id: 'evening_improving',
-    vi: 'Hôm nay {honorific} đỡ hơn hôm qua rồi, tốt quá! Trước khi ngủ nhớ {tasks} nhé. Giữ đà này {honorific} nhé 🌟',
-    en: 'You\'re doing better today — great! Before bed, remember to {tasks}. Keep this momentum going! 🌟',
+    vi: 'Tình trạng hôm nay đã tốt hơn. Trước khi nghỉ, hãy hoàn tất: {tasks}.',
+    en: 'Your symptoms improved today. Before bed, complete: {tasks}.',
   },
   default: {
     id: 'evening_default',
-    vi: 'Trước khi ngủ {honorific} nhớ {tasks} nhé. Hôm nay {honorific} đã cố gắng rồi, nghỉ ngơi cho ngày mai tiếp tục nha. {SelfRef} chúc {honorific} ngủ ngon 🌙',
-    en: 'Before bed, remember to {tasks}. You did well today — rest up for tomorrow. Sleep well! 🌙',
+    vi: 'Bạn còn thiếu: {tasks}. Hoàn tất trước khi nghỉ để dữ liệu hôm nay đầy đủ.',
+    en: 'Still to do: {tasks}. Complete it before bed to finish today\'s record.',
   },
 };
 
@@ -162,13 +162,13 @@ const EVENING_TEMPLATES = {
 const AFTERNOON_TEMPLATES = {
   has_symptom: {
     id: 'afternoon_has_symptom',
-    vi: 'Chiều nay {symptom} thế nào rồi {honorific}? Nghỉ tay chút, uống nước nhé. {SelfRef} vẫn quan tâm {honorific} đây 🌤️',
-    en: 'How\'s your {symptom} this afternoon? Take a break and stay hydrated. I\'m still here for you 🌤️',
+    vi: 'Triệu chứng {symptom} chiều nay thế nào? Nghỉ vài phút và uống nước nếu cần.',
+    en: 'How is your {symptom} this afternoon? Take a short break and drink some water if needed.',
   },
   default: {
     id: 'afternoon_default',
-    vi: 'Chiều nay {honorific} thế nào? Nghỉ tay chút, uống nước nhé. {SelfRef} nhắc {honorific} vì quan tâm thôi nha 💧',
-    en: 'How\'s your afternoon? Take a break, drink some water. Just checking in because I care 💧',
+    vi: 'Dành vài phút nghỉ ngơi và uống nước trước khi tiếp tục ngày của bạn.',
+    en: 'Take a few minutes to rest and drink some water before continuing your day.',
   },
 };
 
@@ -178,13 +178,13 @@ const AFTERNOON_TEMPLATES = {
 const ALERT_TEMPLATES = {
   severity_high: {
     id: 'alert_severity_high',
-    vi: '🚨 {CallName} ơi, triệu chứng {symptom} của {honorific} khá nặng. {Honorific} nên đi khám bác sĩ nhé',
-    en: '🚨 {callName}, your {symptom} seems severe. Please consider seeing a doctor',
+    vi: '🚨 Triệu chứng {symptom} có mức độ nặng. Bạn nên đi khám để được kiểm tra.',
+    en: '🚨 Your {symptom} appears severe. Consider seeing a doctor for an assessment.',
   },
   trend_worsening: {
     id: 'alert_trend_worsening',
-    vi: '📈 {CallName} ơi, {symptom} mấy hôm nay có vẻ nặng hơn. {SelfRef} muốn {honorific} theo dõi kỹ nhé',
-    en: '📈 {callName}, your {symptom} seems to be getting worse. Please monitor closely',
+    vi: 'Triệu chứng {symptom} có xu hướng nặng hơn. Nếu chưa đỡ, bạn nên đi khám.',
+    en: 'Your {symptom} appears to be getting worse. If it does not improve, consider seeing a doctor.',
   },
 };
 
