@@ -458,7 +458,7 @@
   "checkin.reminder_health_check_title": "Nhắc lại: cần kiểm tra",
   "checkin.reminder_confirm_body": "{{name}} vẫn cần hỗ trợ. Vui lòng xác nhận sau khi đã liên hệ.",
   "checkin.morning_title": "☀️ Cập nhật sức khỏe buổi sáng",
-  "checkin.morning_body": "Hôm nay chưa có dữ liệu sức khỏe. Cập nhật trong khoảng 1 phút.",
+  "checkin.morning_body": "{{CallName}} ơi, hôm nay chưa có dữ liệu sức khỏe. Cập nhật nhanh để Asinu theo dõi tiếp nhé.",
   "voice.no_audio": "Tôi không nghe thấy gì. Bạn có thể nói lại không?",
   "voice.fallback_reply": "Xin lỗi, tôi không thể trả lời lúc này.",
   "voice.no_content": "Không nghe thấy nội dung. Vui lòng nói to và rõ hơn, sau đó thử lại.",

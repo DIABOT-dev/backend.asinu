@@ -30,13 +30,13 @@ const REENGAGEMENT_TEMPLATES = {
   d2_gentle_with_symptom: {
     id: 'reengage_d2_gentle_symptom',
     level: 'gentle',
-    vi: 'Triệu chứng {symptom} đã được ghi nhận lần trước. Nếu vẫn còn, hãy cập nhật hôm nay.',
+    vi: '{CallName} ơi, {symptom} lần trước còn không? Cập nhật hôm nay để Asinu theo dõi tiếp nhé.',
     en: 'Your {symptom} was recorded recently. If it is still present, update your health record today.',
   },
   d2_gentle_no_symptom: {
     id: 'reengage_d2_gentle',
     level: 'gentle',
-    vi: 'Hôm nay chưa có cập nhật sức khỏe. Mở app để ghi lại tình trạng hiện tại.',
+    vi: '{CallName} ơi, hôm nay chưa có cập nhật. Mở app ghi lại để Asinu theo dõi tiếp nhé.',
     en: 'There is no health update today. Open the app to record your current status.',
   },
 
@@ -44,19 +44,19 @@ const REENGAGEMENT_TEMPLATES = {
   d4_concerned_with_symptom: {
     id: 'reengage_d4_concerned_symptom',
     level: 'concerned',
-    vi: 'Bạn chưa cập nhật vài ngày. Nếu {symptom} vẫn còn, hãy theo dõi thêm hoặc đi khám nếu nặng hơn.',
+    vi: '{CallName} ơi, đã vài ngày chưa cập nhật. Nếu {symptom} còn, ghi lại để Asinu theo dõi tiếp; nếu nặng hơn, nên đi khám.',
     en: 'There has been no update for a few days. If your {symptom} persists, monitor it and seek care if it worsens.',
   },
   d4_concerned_was_severe: {
     id: 'reengage_d4_concerned_severe',
     level: 'concerned',
-    vi: 'Lần trước bạn ghi nhận triệu chứng nặng. Nếu chưa đỡ, nên liên hệ cơ sở y tế.',
+    vi: '{CallName} ơi, lần trước {honorific} ghi nhận triệu chứng nặng. Nếu chưa đỡ, nên liên hệ cơ sở y tế.',
     en: 'You recorded severe symptoms recently. If they have not improved, contact a healthcare provider.',
   },
   d4_concerned_default: {
     id: 'reengage_d4_concerned',
     level: 'concerned',
-    vi: 'Đã {days} ngày chưa có cập nhật sức khỏe. Ghi lại tình trạng hiện tại khi thuận tiện.',
+    vi: '{CallName} ơi, đã {days} ngày chưa có cập nhật. Ghi lại khi tiện để Asinu theo dõi tiếp nhé.',
     en: 'There has been no health update for {days} days. Record your current status when you can.',
   },
 
@@ -64,13 +64,13 @@ const REENGAGEMENT_TEMPLATES = {
   d7_worried_with_symptom: {
     id: 'reengage_d7_worried_symptom',
     level: 'worried',
-    vi: 'Đã {days} ngày từ lần cập nhật gần nhất. Nếu {symptom} còn kéo dài, nên đi khám.',
+    vi: '{CallName} ơi, đã {days} ngày từ lần cập nhật gần nhất. Nếu {symptom} còn kéo dài, nên đi khám nhé.',
     en: 'It has been {days} days since your last update. If your {symptom} persists, consider seeing a doctor.',
   },
   d7_worried_default: {
     id: 'reengage_d7_worried',
     level: 'worried',
-    vi: 'Đã {days} ngày chưa có cập nhật. Mở app để ghi lại tình trạng hôm nay.',
+    vi: '{CallName} ơi, đã {days} ngày chưa có cập nhật. Mở app ghi lại hôm nay để Asinu theo dõi tiếp nhé.',
     en: 'There has been no update for {days} days. Open the app to record today\'s status.',
   },
 
@@ -78,7 +78,7 @@ const REENGAGEMENT_TEMPLATES = {
   d8_urgent: {
     id: 'reengage_d8_urgent',
     level: 'urgent',
-    vi: 'Đã {days} ngày chưa có cập nhật sức khỏe. Nếu bạn đang không ổn, hãy liên hệ người thân hoặc cơ sở y tế.',
+    vi: '{CallName} ơi, đã {days} ngày chưa có cập nhật. Nếu đang không ổn, hãy liên hệ người thân hoặc cơ sở y tế.',
     en: 'There has been no health update for {days} days. If you feel unwell, contact a family member or healthcare provider.',
   },
 

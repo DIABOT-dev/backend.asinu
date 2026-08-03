@@ -332,11 +332,11 @@ async function runMorningSummary(pool, hour, minute) {
       if (user.last_symptom) {
         body = isEn
           ? `You recently recorded ${user.last_symptom}. Still to do: ${tasks.join(', ')}.`
-          : `Lần trước bạn ghi nhận ${user.last_symptom}. Còn thiếu hôm nay: ${tasks.join(', ')}.`;
+          : `${CallName} ơi, lần trước ${honorific} ghi nhận ${user.last_symptom}. Hôm nay còn thiếu ${tasks.join(', ')}; cập nhật để Asinu theo dõi tiếp nhé.`;
       } else {
         body = isEn
           ? `There is no health data for today yet. Still to do: ${tasks.join(', ')}.`
-          : `Hôm nay chưa có dữ liệu sức khỏe. Còn thiếu: ${tasks.join(', ')}.`;
+          : `${CallName} ơi, hôm nay chưa có dữ liệu sức khỏe. Cập nhật nhanh để Asinu theo dõi tiếp nhé.`;
       }
     }
 
@@ -383,15 +383,15 @@ async function runAfternoon(pool, hour, minute) {
       if (conditions.hasDiabetes) {
         body = isEn
           ? `If needed, drink some water and check your blood glucose today.`
-          : `Nếu cần, hãy uống nước và đo đường huyết hôm nay.`;
+          : `${CallName} ơi, uống nước và đo đường huyết hôm nay nếu chưa đo nhé.`;
       } else if (conditions.hasHypertension) {
         body = isEn
           ? `Take a short break and check your blood pressure if you have not done so today.`
-          : `Nghỉ vài phút và đo huyết áp nếu hôm nay bạn chưa đo.`;
+          : `${CallName} ơi, nghỉ vài phút rồi đo huyết áp nếu hôm nay chưa đo nhé.`;
       } else {
         body = isEn
           ? `Take a few minutes to rest and drink some water before continuing your day.`
-          : `Dành vài phút nghỉ ngơi và uống nước trước khi tiếp tục ngày của bạn.`;
+          : `${CallName} ơi, nghỉ một chút và uống nước trước khi tiếp tục ngày nhé.`;
       }
     }
     const target = conditions.hasDiabetes ? 'glucose' : conditions.hasHypertension ? 'blood_pressure' : 'home';
@@ -470,11 +470,11 @@ async function runEveningSummary(pool, hour, minute) {
       if (user.last_symptom) {
         body = isEn
           ? `You recently recorded ${user.last_symptom}. Still to do before bed: ${tasks.join(', ')}.`
-          : `Lần trước bạn ghi nhận ${user.last_symptom}. Còn thiếu trước khi nghỉ: ${tasks.join(', ')}.`;
+          : `${CallName} ơi, lần trước ${honorific} ghi nhận ${user.last_symptom}. Còn thiếu ${tasks.join(', ')}; cập nhật để Asinu theo dõi tiếp nhé.`;
       } else {
         body = isEn
           ? `Still to do before bed: ${tasks.join(', ')}. Complete today's record before you rest.`
-          : `Còn thiếu trước khi nghỉ: ${tasks.join(', ')}. Hoàn tất để dữ liệu hôm nay đầy đủ.`;
+          : `${CallName} ơi, hôm nay còn thiếu ${tasks.join(', ')}. Ghi thêm trước khi nghỉ để Asinu theo dõi đủ dữ liệu nhé.`;
       }
     }
 
