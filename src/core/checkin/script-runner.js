@@ -44,9 +44,8 @@ function getNextQuestion(scriptData, answers = [], options = {}) {
 
   const { sessionType = 'initial', profile = {}, previousSeverity = null } = options;
 
-  const questions = sessionType === 'followup'
-    ? (scriptData.followup_questions || [])
-    : (scriptData.questions || []);
+  const questions =
+    sessionType === 'followup' ? scriptData.followup_questions || [] : scriptData.questions || [];
 
   const currentStep = answers.length;
   const totalSteps = questions.length;
@@ -54,9 +53,10 @@ function getNextQuestion(scriptData, answers = [], options = {}) {
   // Check if all questions answered
   if (currentStep >= totalSteps) {
     // All done → evaluate scoring
-    const conclusion = sessionType === 'followup'
-      ? _buildFollowUpConclusion(scriptData, answers, previousSeverity, profile)
-      : _buildInitialConclusion(scriptData, answers, profile);
+    const conclusion =
+      sessionType === 'followup'
+        ? _buildFollowUpConclusion(scriptData, answers, previousSeverity, profile)
+        : _buildInitialConclusion(scriptData, answers, profile);
 
     return {
       isDone: true,
@@ -71,7 +71,10 @@ function getNextQuestion(scriptData, answers = [], options = {}) {
 
   // Guard against null/undefined question in array
   if (!nextQ || typeof nextQ !== 'object') {
-    const paddedAnswers = [...answers, { question_id: `skip_${currentStep}`, answer: null, skipped: true }];
+    const paddedAnswers = [
+      ...answers,
+      { question_id: `skip_${currentStep}`, answer: null, skipped: true },
+    ];
     return getNextQuestion(scriptData, paddedAnswers, options);
   }
 
@@ -90,7 +93,7 @@ function getNextQuestion(scriptData, answers = [], options = {}) {
     question: {
       id: nextQ.id,
       text: personalizedText,
-      type: nextQ.type,         // 'slider' | 'single_choice' | 'multi_choice' | 'free_text'
+      type: nextQ.type, // 'slider' | 'single_choice' | 'multi_choice' | 'free_text'
       options: nextQ.options || null,
       min: nextQ.min,
       max: nextQ.max,
@@ -159,10 +162,10 @@ function _shouldSkip(skipIf, answers) {
   }
 
   if (skipIf.any) {
-    return skipIf.any.some(c => _evalSkipCondition(c, answersMap));
+    return skipIf.any.some((c) => _evalSkipCondition(c, answersMap));
   }
   if (skipIf.all) {
-    return skipIf.all.every(c => _evalSkipCondition(c, answersMap));
+    return skipIf.all.every((c) => _evalSkipCondition(c, answersMap));
   }
   return _evalSkipCondition(skipIf, answersMap);
 }
@@ -173,14 +176,22 @@ function _evalSkipCondition(condition, answersMap) {
   if (answer === undefined || answer === null) return false;
 
   switch (op) {
-    case 'eq':  return answer === value;
-    case 'neq': return answer !== value;
-    case 'gt':  return Number(answer) > Number(value);
-    case 'gte': return Number(answer) >= Number(value);
-    case 'lt':  return Number(answer) < Number(value);
-    case 'lte': return Number(answer) <= Number(value);
-    case 'contains': return String(answer).toLowerCase().includes(String(value).toLowerCase());
-    default: return false;
+    case 'eq':
+      return answer === value;
+    case 'neq':
+      return answer !== value;
+    case 'gt':
+      return Number(answer) > Number(value);
+    case 'gte':
+      return Number(answer) >= Number(value);
+    case 'lt':
+      return Number(answer) < Number(value);
+    case 'lte':
+      return Number(answer) <= Number(value);
+    case 'contains':
+      return String(answer).toLowerCase().includes(String(value).toLowerCase());
+    default:
+      return false;
   }
 }
 

@@ -14,8 +14,15 @@ const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Imports
-const { listComplaints, resolveComplaint, symptomMap } = require('../src/services/checkin/clinical-mapping');
-const { createClustersFromOnboarding, toClusterKey } = require('../src/services/checkin/script.service');
+const {
+  listComplaints,
+  resolveComplaint,
+  symptomMap,
+} = require('../src/services/checkin/clinical-mapping');
+const {
+  createClustersFromOnboarding,
+  toClusterKey,
+} = require('../src/services/checkin/script.service');
 const { validateScript, getNextQuestion } = require('../src/services/checkin/script-runner');
 const { evaluateScript } = require('../src/services/checkin/scoring-engine');
 
@@ -59,11 +66,11 @@ function simulateSession(scriptData, strategy = 'first') {
   const maxIterations = 50;
 
   // For HIGH strategy, figure out which answers the scoring rules actually look for
-  let highTargetAnswers = {};
+  const highTargetAnswers = {};
   if (strategy === 'high' && scriptData.scoring_rules) {
     for (const rule of scriptData.scoring_rules) {
       if (rule.severity !== 'high') continue;
-      for (const cond of (rule.conditions || [])) {
+      for (const cond of rule.conditions || []) {
         if (cond.op === 'gte') {
           highTargetAnswers[cond.field] = { type: 'gte', value: cond.value + 1 };
         } else if (cond.op === 'eq') {
@@ -107,9 +114,12 @@ function simulateSession(scriptData, strategy = 'first') {
         // Include the danger symptom text the rule looks for
         answer = target.value;
       } else if (strategy === 'high') {
-        answer = q.options.filter(o => !o.includes('không')).slice(-2).join(', ');
+        answer = q.options
+          .filter((o) => !o.includes('không'))
+          .slice(-2)
+          .join(', ');
       } else if (strategy === 'low') {
-        const noOption = q.options.find(o => o.includes('không'));
+        const noOption = q.options.find((o) => o.includes('không'));
         answer = noOption || q.options[0];
       } else {
         answer = q.options[0];
@@ -269,11 +279,13 @@ async function run() {
       if (lowResult.ok) {
         const lc = lowResult.conclusion;
         row.lowOk = lc.severity === 'low';
-        assert(lc.severity === 'low', `${complaint}: LOW strategy -> severity=low (got ${lc.severity})`);
+        assert(
+          lc.severity === 'low',
+          `${complaint}: LOW strategy -> severity=low (got ${lc.severity})`
+        );
       } else {
         row.errors.push('LOW session failed');
       }
-
     } catch (err) {
       row.errors.push(err.message);
       console.log(`    ERROR for ${complaint}: ${err.message}`);
@@ -291,8 +303,14 @@ async function run() {
   async function getScriptData(complaint) {
     const clusterKey = toClusterKey(complaint);
     // Re-generate to ensure fresh
-    await pool.query('DELETE FROM triage_scripts WHERE user_id = $1 AND cluster_key = $2', [TEST_USER_ID, clusterKey]);
-    await pool.query('DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2', [TEST_USER_ID, clusterKey]);
+    await pool.query('DELETE FROM triage_scripts WHERE user_id = $1 AND cluster_key = $2', [
+      TEST_USER_ID,
+      clusterKey,
+    ]);
+    await pool.query('DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2', [
+      TEST_USER_ID,
+      clusterKey,
+    ]);
     const clusters = await createClustersFromOnboarding(pool, TEST_USER_ID, [complaint]);
     const { rows } = await pool.query(
       `SELECT * FROM triage_scripts
@@ -305,7 +323,7 @@ async function run() {
 
   function questionsContain(scriptData, keyword) {
     if (!scriptData || !scriptData.questions) return false;
-    return scriptData.questions.some(q => {
+    return scriptData.questions.some((q) => {
       const text = (q.text || '').toLowerCase();
       const opts = (q.options || []).join(' ').toLowerCase();
       return text.includes(keyword) || opts.includes(keyword);
@@ -316,10 +334,22 @@ async function run() {
   {
     const sd = await getScriptData('\u0111au \u0111\u1ea7u');
     if (sd) {
-      assert(questionsContain(sd, 'v\u1ecb tr\u00ed'), '\u0111au \u0111\u1ea7u: asks about location');
-      assert(questionsContain(sd, 'ki\u1ec3u') || questionsContain(sd, 'th\u1ebf n\u00e0o'), '\u0111au \u0111\u1ea7u: asks about type');
-      assert(questionsContain(sd, 'tri\u1ec7u ch\u1ee9ng') || questionsContain(sd, '\u0111i k\u00e8m'), '\u0111au \u0111\u1ea7u: asks about associated symptoms');
-      assert(questionsContain(sd, 'm\u1ee9c') || questionsContain(sd, '\u0111\u1ed9'), '\u0111au \u0111\u1ea7u: asks about severity');
+      assert(
+        questionsContain(sd, 'v\u1ecb tr\u00ed'),
+        '\u0111au \u0111\u1ea7u: asks about location'
+      );
+      assert(
+        questionsContain(sd, 'ki\u1ec3u') || questionsContain(sd, 'th\u1ebf n\u00e0o'),
+        '\u0111au \u0111\u1ea7u: asks about type'
+      );
+      assert(
+        questionsContain(sd, 'tri\u1ec7u ch\u1ee9ng') || questionsContain(sd, '\u0111i k\u00e8m'),
+        '\u0111au \u0111\u1ea7u: asks about associated symptoms'
+      );
+      assert(
+        questionsContain(sd, 'm\u1ee9c') || questionsContain(sd, '\u0111\u1ed9'),
+        '\u0111au \u0111\u1ea7u: asks about severity'
+      );
       console.log('  \u0111au \u0111\u1ea7u (headache): quality checks done');
     } else {
       console.log('  WARN: could not get script for \u0111au \u0111\u1ea7u');
@@ -330,9 +360,20 @@ async function run() {
   {
     const sd = await getScriptData('\u0111au b\u1ee5ng');
     if (sd) {
-      assert(questionsContain(sd, 'ki\u1ec3u') || questionsContain(sd, 'th\u1ebf n\u00e0o'), '\u0111au b\u1ee5ng: asks about pain type');
-      assert(questionsContain(sd, 'v\u1ecb tr\u00ed') || questionsContain(sd, 'v\u00f9ng'), '\u0111au b\u1ee5ng: asks about location');
-      assert(questionsContain(sd, 'tri\u1ec7u ch\u1ee9ng') || questionsContain(sd, '\u0111i k\u00e8m') || questionsContain(sd, 'th\u00eam'), '\u0111au b\u1ee5ng: asks about associated');
+      assert(
+        questionsContain(sd, 'ki\u1ec3u') || questionsContain(sd, 'th\u1ebf n\u00e0o'),
+        '\u0111au b\u1ee5ng: asks about pain type'
+      );
+      assert(
+        questionsContain(sd, 'v\u1ecb tr\u00ed') || questionsContain(sd, 'v\u00f9ng'),
+        '\u0111au b\u1ee5ng: asks about location'
+      );
+      assert(
+        questionsContain(sd, 'tri\u1ec7u ch\u1ee9ng') ||
+          questionsContain(sd, '\u0111i k\u00e8m') ||
+          questionsContain(sd, 'th\u00eam'),
+        '\u0111au b\u1ee5ng: asks about associated'
+      );
       console.log('  \u0111au b\u1ee5ng (abdominal pain): quality checks done');
     } else {
       console.log('  WARN: could not get script for \u0111au b\u1ee5ng');
@@ -344,11 +385,17 @@ async function run() {
     const sd = await getScriptData('ch\u00f3ng m\u1eb7t');
     if (sd) {
       assert(
-        questionsContain(sd, 'ki\u1ec3u') || questionsContain(sd, 'lo\u1ea1i') || questionsContain(sd, 'c\u1ea3m gi\u00e1c') || questionsContain(sd, 'ch\u00f3ng m\u1eb7t'),
+        questionsContain(sd, 'ki\u1ec3u') ||
+          questionsContain(sd, 'lo\u1ea1i') ||
+          questionsContain(sd, 'c\u1ea3m gi\u00e1c') ||
+          questionsContain(sd, 'ch\u00f3ng m\u1eb7t'),
         'ch\u00f3ng m\u1eb7t: asks about type of dizziness'
       );
       assert(
-        questionsContain(sd, 'khi n\u00e0o') || questionsContain(sd, 'l\u00fac n\u00e0o') || questionsContain(sd, 't\u00ecnh hu\u1ed1ng') || questionsContain(sd, 'xu\u1ea5t hi\u1ec7n'),
+        questionsContain(sd, 'khi n\u00e0o') ||
+          questionsContain(sd, 'l\u00fac n\u00e0o') ||
+          questionsContain(sd, 't\u00ecnh hu\u1ed1ng') ||
+          questionsContain(sd, 'xu\u1ea5t hi\u1ec7n'),
         'ch\u00f3ng m\u1eb7t: asks about triggers'
       );
       console.log('  ch\u00f3ng m\u1eb7t (dizziness): quality checks done');
@@ -361,9 +408,16 @@ async function run() {
   {
     const sd = await getScriptData('kh\u00f3 th\u1edf');
     if (sd) {
-      const hasRedFlagAwareness = sd.scoring_rules && sd.scoring_rules.some(r => r.severity === 'high');
-      assert(hasRedFlagAwareness, 'kh\u00f3 th\u1edf: has high-severity scoring rule (danger awareness)');
-      assert(sd.questions && sd.questions.length >= 2, 'kh\u00f3 th\u1edf: has at least 2 questions');
+      const hasRedFlagAwareness =
+        sd.scoring_rules && sd.scoring_rules.some((r) => r.severity === 'high');
+      assert(
+        hasRedFlagAwareness,
+        'kh\u00f3 th\u1edf: has high-severity scoring rule (danger awareness)'
+      );
+      assert(
+        sd.questions && sd.questions.length >= 2,
+        'kh\u00f3 th\u1edf: has at least 2 questions'
+      );
       console.log('  kh\u00f3 th\u1edf (dyspnea): quality checks done');
     } else {
       console.log('  WARN: could not get script for kh\u00f3 th\u1edf');
@@ -388,7 +442,7 @@ async function run() {
     'LOW'.padEnd(6),
   ];
   console.log('| ' + hdr.join(' | ') + ' |');
-  console.log('|' + hdr.map(h => '-'.repeat(h.length + 2)).join('|') + '|');
+  console.log('|' + hdr.map((h) => '-'.repeat(h.length + 2)).join('|') + '|');
 
   let allValid = 0;
   let allSession = 0;
@@ -396,7 +450,7 @@ async function run() {
   let allLow = 0;
 
   for (const r of results) {
-    const ok = (b) => b ? 'PASS' : 'FAIL';
+    const ok = (b) => (b ? 'PASS' : 'FAIL');
     const cols = [
       r.complaint.padEnd(16),
       String(r.questions).padEnd(10),
@@ -415,11 +469,13 @@ async function run() {
   }
 
   console.log('');
-  console.log(`Valid: ${allValid}/${results.length}  |  Session: ${allSession}/${results.length}  |  HIGH: ${allHigh}/${results.length}  |  LOW: ${allLow}/${results.length}`);
+  console.log(
+    `Valid: ${allValid}/${results.length}  |  Session: ${allSession}/${results.length}  |  HIGH: ${allHigh}/${results.length}  |  LOW: ${allLow}/${results.length}`
+  );
   console.log(`\nTotal assertions: ${totalPass} passed, ${totalFail} failed`);
 
   // Print errors if any
-  const errorRows = results.filter(r => r.errors.length > 0);
+  const errorRows = results.filter((r) => r.errors.length > 0);
   if (errorRows.length > 0) {
     console.log('\n--- Errors ---');
     for (const r of errorRows) {
@@ -441,7 +497,7 @@ async function run() {
 }
 
 run()
-  .catch(err => {
+  .catch((err) => {
     console.error('Fatal error:', err);
     process.exit(1);
   })

@@ -17,7 +17,11 @@ const { Pool } = require('pg');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const { createClustersFromOnboarding, getUserScript, getScript } = require('../src/services/checkin/script.service');
+const {
+  createClustersFromOnboarding,
+  getUserScript,
+  getScript,
+} = require('../src/services/checkin/script.service');
 const { getNextQuestion, validateScript } = require('../src/services/checkin/script-runner');
 const { listComplaints } = require('../src/services/checkin/clinical-mapping');
 
@@ -70,7 +74,11 @@ function simulateInitialSession(scriptData) {
 
     if (q.type === 'slider') {
       answer = 5;
-    } else if ((q.type === 'single_choice' || q.type === 'multi_choice') && q.options && q.options.length > 0) {
+    } else if (
+      (q.type === 'single_choice' || q.type === 'multi_choice') &&
+      q.options &&
+      q.options.length > 0
+    ) {
       answer = q.options[0];
     } else if (q.type === 'free_text') {
       answer = 'bình thường';
@@ -105,9 +113,12 @@ function simulateFollowUp(scriptData, fuAnswers) {
 
     const q = result.question;
     // Pick answer from fuAnswers by index, fallback to first option
-    const answer = fuAnswers[answers.length] !== undefined
-      ? fuAnswers[answers.length]
-      : (q.options ? q.options[0] : 'ok');
+    const answer =
+      fuAnswers[answers.length] !== undefined
+        ? fuAnswers[answers.length]
+        : q.options
+          ? q.options[0]
+          : 'ok';
 
     answers.push({ question_id: q.id, answer });
   }
@@ -165,7 +176,7 @@ async function run() {
 
     try {
       // 4a: getScript for this cluster
-      const clusterInfo = userScript.clusters.find(c => c.display_name === complaint);
+      const clusterInfo = userScript.clusters.find((c) => c.display_name === complaint);
       if (!clusterInfo) {
         row.errors.push('cluster not found in getUserScript');
         results.push(row);
@@ -196,17 +207,44 @@ async function run() {
         const c = sessionResult.conclusion;
 
         // 4e: Verify conclusion fields
-        const hasSeverity      = assert(typeof c.severity === 'string', `${complaint}: conclusion.severity is string`);
-        const hasFollowUp      = assert(typeof c.followUpHours === 'number', `${complaint}: conclusion.followUpHours is number`);
-        const hasNeedsDoctor   = assert(typeof c.needsDoctor === 'boolean', `${complaint}: conclusion.needsDoctor is boolean`);
-        const hasSummary       = assert(typeof c.summary === 'string' && c.summary.length > 0, `${complaint}: conclusion.summary non-empty`);
-        const hasRecommendation = assert(typeof c.recommendation === 'string' && c.recommendation.length > 0, `${complaint}: conclusion.recommendation non-empty`);
-        const hasCloseMessage  = assert(typeof c.closeMessage === 'string' && c.closeMessage.length > 0, `${complaint}: conclusion.closeMessage non-empty`);
+        const hasSeverity = assert(
+          typeof c.severity === 'string',
+          `${complaint}: conclusion.severity is string`
+        );
+        const hasFollowUp = assert(
+          typeof c.followUpHours === 'number',
+          `${complaint}: conclusion.followUpHours is number`
+        );
+        const hasNeedsDoctor = assert(
+          typeof c.needsDoctor === 'boolean',
+          `${complaint}: conclusion.needsDoctor is boolean`
+        );
+        const hasSummary = assert(
+          typeof c.summary === 'string' && c.summary.length > 0,
+          `${complaint}: conclusion.summary non-empty`
+        );
+        const hasRecommendation = assert(
+          typeof c.recommendation === 'string' && c.recommendation.length > 0,
+          `${complaint}: conclusion.recommendation non-empty`
+        );
+        const hasCloseMessage = assert(
+          typeof c.closeMessage === 'string' && c.closeMessage.length > 0,
+          `${complaint}: conclusion.closeMessage non-empty`
+        );
 
-        row.conclusion = hasSeverity && hasFollowUp && hasNeedsDoctor && hasSummary && hasRecommendation && hasCloseMessage;
+        row.conclusion =
+          hasSeverity &&
+          hasFollowUp &&
+          hasNeedsDoctor &&
+          hasSummary &&
+          hasRecommendation &&
+          hasCloseMessage;
 
         // 4f: Verify Vietnamese text in summary
-        assert(isVietnamese(c.summary), `${complaint}: summary is Vietnamese text ("${c.summary}")`);
+        assert(
+          isVietnamese(c.summary),
+          `${complaint}: summary is Vietnamese text ("${c.summary}")`
+        );
       }
 
       // 4g: Follow-up "better" session — ["Đỡ hơn", "Không"] → severity=low
@@ -230,7 +268,6 @@ async function run() {
       } else {
         row.errors.push('FU-Worse session failed');
       }
-
     } catch (err) {
       row.errors.push(err.message);
       console.log(`    ERROR [${complaint}]: ${err.message}`);
@@ -246,7 +283,7 @@ async function run() {
   console.log('  SUMMARY TABLE');
   console.log('================================================================\n');
 
-  const ok = (b) => b ? 'PASS' : 'FAIL';
+  const ok = (b) => (b ? 'PASS' : 'FAIL');
   const pad = (s, n) => String(s).padEnd(n);
 
   const hdr = [
@@ -258,9 +295,13 @@ async function run() {
     pad('FU-Worse', 9),
   ];
   console.log('| ' + hdr.join(' | ') + ' |');
-  console.log('|' + hdr.map(h => '-'.repeat(h.length + 2)).join('|') + '|');
+  console.log('|' + hdr.map((h) => '-'.repeat(h.length + 2)).join('|') + '|');
 
-  let cValid = 0, cSession = 0, cConclusion = 0, cBetter = 0, cWorse = 0;
+  let cValid = 0,
+    cSession = 0,
+    cConclusion = 0,
+    cBetter = 0,
+    cWorse = 0;
 
   for (const r of results) {
     const cols = [
@@ -281,10 +322,12 @@ async function run() {
   }
 
   console.log('');
-  console.log(`Valid: ${cValid}/${results.length}  |  Session: ${cSession}/${results.length}  |  Conclusion: ${cConclusion}/${results.length}  |  FU-Better: ${cBetter}/${results.length}  |  FU-Worse: ${cWorse}/${results.length}`);
+  console.log(
+    `Valid: ${cValid}/${results.length}  |  Session: ${cSession}/${results.length}  |  Conclusion: ${cConclusion}/${results.length}  |  FU-Better: ${cBetter}/${results.length}  |  FU-Worse: ${cWorse}/${results.length}`
+  );
 
   // Print errors if any
-  const errorRows = results.filter(r => r.errors.length > 0);
+  const errorRows = results.filter((r) => r.errors.length > 0);
   if (errorRows.length > 0) {
     console.log('\n--- Errors ---');
     for (const r of errorRows) {
@@ -312,7 +355,7 @@ async function run() {
 }
 
 run()
-  .catch(err => {
+  .catch((err) => {
     console.error('Fatal error:', err);
     process.exit(1);
   })

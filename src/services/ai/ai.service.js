@@ -8,7 +8,6 @@
  * Normalizes input/output structure to prevent tight coupling to specific vendor SDKs.
  */
 
-const openaiProvider = require('./providers/openai');
 const medgemmaProvider = require('./providers/medgemma');
 
 const CLINICAL_PROVIDER = (process.env.AI_PROVIDER_CLINICAL || 'openai').toLowerCase();
@@ -33,16 +32,18 @@ async function callTextAi({ system, prompt, messages, temperature, maxTokens, js
 
     // If messages array is provided, flatten it to a single prompt (MedGemma format)
     if (messages && messages.length > 0) {
-      const systemMsg = messages.find(m => m.role === 'system');
+      const systemMsg = messages.find((m) => m.role === 'system');
       if (systemMsg) {
         finalSystem = systemMsg.content;
       }
 
-      const nonSystemMsgs = messages.filter(m => m.role !== 'system');
-      finalPrompt = nonSystemMsgs.map(m => {
-        const roleName = m.role === 'user' ? 'User' : 'Assistant';
-        return `${roleName}: ${m.content}`;
-      }).join('\n');
+      const nonSystemMsgs = messages.filter((m) => m.role !== 'system');
+      finalPrompt = nonSystemMsgs
+        .map((m) => {
+          const roleName = m.role === 'user' ? 'User' : 'Assistant';
+          return `${roleName}: ${m.content}`;
+        })
+        .join('\n');
     }
 
     const res = await medgemmaProvider.callMedGemmaWithRetry({

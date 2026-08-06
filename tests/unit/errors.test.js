@@ -22,7 +22,11 @@ describe('AppError', () => {
       details: { internal: 'secret stack' },
     });
     const json = err.toJSON();
-    expect(json).toEqual({ ok: false, error: 'payment provider unavailable', code: 'UPSTREAM_FAILED' });
+    expect(json).toEqual({
+      ok: false,
+      error: 'payment provider unavailable',
+      code: 'UPSTREAM_FAILED',
+    });
     expect(json.cause).toBeUndefined();
     expect(json.details).toBeUndefined();
   });

@@ -33,10 +33,7 @@ const {
 
 const { getNextQuestion } = require('../../src/core/checkin/script-runner');
 
-const {
-  evaluateScript,
-  evaluateFollowUp,
-} = require('../../src/core/checkin/scoring-engine');
+const { evaluateScript, evaluateFollowUp } = require('../../src/core/checkin/scoring-engine');
 
 const {
   getFallbackScriptData,
@@ -46,7 +43,10 @@ const {
 
 const { detectEmergency } = require('../../src/services/checkin/emergency-detector');
 const { detectCombo } = require('../../src/core/checkin/combo-detector');
-const { parseSymptoms, analyzeMultiSymptom } = require('../../src/services/checkin/multi-symptom.service');
+const {
+  parseSymptoms,
+  analyzeMultiSymptom,
+} = require('../../src/services/checkin/multi-symptom.service');
 const { listComplaints } = require('../../src/services/checkin/clinical-mapping');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -73,7 +73,9 @@ function assert(group, label, actual, expected, info) {
     console.log(`  PASS  ${label}`);
   } else {
     totalFail++;
-    console.log(`  FAIL  ${label}  (expected=${JSON.stringify(expected)}, got=${JSON.stringify(actual)})`);
+    console.log(
+      `  FAIL  ${label}  (expected=${JSON.stringify(expected)}, got=${JSON.stringify(actual)})`
+    );
   }
   results.push({ group, label, pass, expected, actual, info: info || null });
   return pass;
@@ -110,7 +112,14 @@ function assertNoCrash(group, label, fn) {
     totalFail++;
     console.log(`  FAIL  ${label}  (CRASHED: ${error})`);
   }
-  results.push({ group, label, pass, expected: 'no crash', actual: crashed ? `CRASH: ${error}` : 'ok', info: null });
+  results.push({
+    group,
+    label,
+    pass,
+    expected: 'no crash',
+    actual: crashed ? `CRASH: ${error}` : 'ok',
+    info: null,
+  });
   return returnVal;
 }
 
@@ -132,7 +141,14 @@ async function assertNoCrashAsync(group, label, fn) {
     totalFail++;
     console.log(`  FAIL  ${label}  (CRASHED: ${error})`);
   }
-  results.push({ group, label, pass, expected: 'no crash', actual: crashed ? `CRASH: ${error}` : 'ok', info: null });
+  results.push({
+    group,
+    label,
+    pass,
+    expected: 'no crash',
+    actual: crashed ? `CRASH: ${error}` : 'ok',
+    info: null,
+  });
   return returnVal;
 }
 
@@ -142,18 +158,31 @@ function header(text) {
 
 // ─── Helper: run a full script session and return conclusion ─────────────────
 
-function runScript(scriptData, answerValues, profile, sessionType = 'initial', previousSeverity = null) {
-  const questions = sessionType === 'followup'
-    ? (scriptData.followup_questions || [])
-    : (scriptData.questions || []);
+function runScript(
+  scriptData,
+  answerValues,
+  profile,
+  sessionType = 'initial',
+  previousSeverity = null
+) {
+  const questions =
+    sessionType === 'followup' ? scriptData.followup_questions || [] : scriptData.questions || [];
 
-  let currentAnswers = [];
+  const currentAnswers = [];
   for (let i = 0; i < answerValues.length && i < questions.length; i++) {
-    const next = getNextQuestion(scriptData, currentAnswers, { sessionType, profile, previousSeverity });
+    const next = getNextQuestion(scriptData, currentAnswers, {
+      sessionType,
+      profile,
+      previousSeverity,
+    });
     if (next.isDone) return next.conclusion;
     currentAnswers.push({ question_id: next.question.id, answer: answerValues[i] });
   }
-  const final = getNextQuestion(scriptData, currentAnswers, { sessionType, profile, previousSeverity });
+  const final = getNextQuestion(scriptData, currentAnswers, {
+    sessionType,
+    profile,
+    previousSeverity,
+  });
   return final.conclusion || null;
 }
 
@@ -193,7 +222,7 @@ async function testGroupA() {
   }
   const sd = scriptRow.script_data;
   const questions = sd.questions || [];
-  const hasSlider = questions.some(q => q.type === 'slider');
+  const hasSlider = questions.some((q) => q.type === 'slider');
 
   // A1: Mild -> severe -> mild -> severe oscillation
   {
@@ -205,13 +234,17 @@ async function testGroupA() {
       } else if (q.type === 'single_choice') {
         answers.push(i % 2 === 0 ? q.options[0] : q.options[q.options.length - 1]);
       } else if (q.type === 'multi_choice') {
-        answers.push(i % 2 === 0 ? 'khong co' : (q.options[0] || 'khong co'));
+        answers.push(i % 2 === 0 ? 'khong co' : q.options[0] || 'khong co');
       } else {
         answers.push('test');
       }
     }
     const conclusion = runScript(sd, answers, PROFILE);
-    assertTruthy('A', 'A1: Oscillating mild/severe answers -> has severity', conclusion && conclusion.severity);
+    assertTruthy(
+      'A',
+      'A1: Oscillating mild/severe answers -> has severity',
+      conclusion && conclusion.severity
+    );
   }
 
   // A2: All mild except last one severe
@@ -229,7 +262,11 @@ async function testGroupA() {
       }
     }
     const conclusion = runScript(sd, answers, PROFILE);
-    assertTruthy('A', 'A2: All mild except last severe -> has conclusion', conclusion && conclusion.severity);
+    assertTruthy(
+      'A',
+      'A2: All mild except last severe -> has conclusion',
+      conclusion && conclusion.severity
+    );
   }
 
   // A3: All severe except last one mild
@@ -247,12 +284,16 @@ async function testGroupA() {
       }
     }
     const conclusion = runScript(sd, answers, PROFILE);
-    assertTruthy('A', 'A3: All severe except last mild -> has conclusion', conclusion && conclusion.severity);
+    assertTruthy(
+      'A',
+      'A3: All severe except last mild -> has conclusion',
+      conclusion && conclusion.severity
+    );
   }
 
   // A4: Slider answer 0 (zero)
   if (hasSlider) {
-    const sliderId = questions.find(q => q.type === 'slider').id;
+    const sliderId = questions.find((q) => q.type === 'slider').id;
     const answersMap = [{ question_id: sliderId, answer: 0 }];
     const scoring = evaluateScript(sd, answersMap, PROFILE);
     assertTruthy('A', 'A4: Slider=0 -> still produces severity', scoring && scoring.severity);
@@ -262,51 +303,83 @@ async function testGroupA() {
 
   // A5: Slider 10 then follow-up "Do hon"
   if (hasSlider) {
-    const answers = questions.map(q => q.type === 'slider' ? 10 : (q.options ? q.options[0] : 'test'));
+    const answers = questions.map((q) =>
+      q.type === 'slider' ? 10 : q.options ? q.options[0] : 'test'
+    );
     const initialConclusion = runScript(sd, answers, PROFILE);
     const initialSeverity = initialConclusion ? initialConclusion.severity : 'high';
 
     const fuData = sd.followup_questions ? sd : getFallbackScriptData();
-    const fuConclusion = runScript(fuData, ['Đỡ hơn', 'Không'], PROFILE, 'followup', initialSeverity);
-    assert('A', 'A5: Slider=10 then follow-up "Đỡ hơn" -> severity drops to low',
-      fuConclusion ? fuConclusion.severity : null, 'low');
+    const fuConclusion = runScript(
+      fuData,
+      ['Đỡ hơn', 'Không'],
+      PROFILE,
+      'followup',
+      initialSeverity
+    );
+    assert(
+      'A',
+      'A5: Slider=10 then follow-up "Đỡ hơn" -> severity drops to low',
+      fuConclusion ? fuConclusion.severity : null,
+      'low'
+    );
   } else {
     assertTruthy('A', 'A5: No slider, skip -> pass', true);
   }
 
   // A6: Slider 1 then follow-up "Nang hon"
   if (hasSlider) {
-    const answers = questions.map(q => q.type === 'slider' ? 1 : (q.options ? q.options[0] : 'test'));
+    const answers = questions.map((q) =>
+      q.type === 'slider' ? 1 : q.options ? q.options[0] : 'test'
+    );
     const initialConclusion = runScript(sd, answers, PROFILE);
     const initialSeverity = initialConclusion ? initialConclusion.severity : 'low';
 
     const fuData = sd.followup_questions ? sd : getFallbackScriptData();
-    const fuConclusion = runScript(fuData, ['Nặng hơn', 'Có'], PROFILE, 'followup', initialSeverity);
-    assert('A', 'A6: Slider=1 then follow-up "Nặng hơn" -> severity climbs to high',
-      fuConclusion ? fuConclusion.severity : null, 'high');
+    const fuConclusion = runScript(
+      fuData,
+      ['Nặng hơn', 'Có'],
+      PROFILE,
+      'followup',
+      initialSeverity
+    );
+    assert(
+      'A',
+      'A6: Slider=1 then follow-up "Nặng hơn" -> severity climbs to high',
+      fuConclusion ? fuConclusion.severity : null,
+      'high'
+    );
   } else {
     assertTruthy('A', 'A6: No slider, skip -> pass', true);
   }
 
   // A7: Skip every question (answer "khong co" / "khong ro")
   {
-    const answers = questions.map(q => {
+    const answers = questions.map((q) => {
       if (q.type === 'slider') return 0;
       return 'khong co';
     });
     const conclusion = runScript(sd, answers, PROFILE);
-    assertTruthy('A', 'A7: All "khong co" / 0 answers -> still completes', conclusion && conclusion.severity);
+    assertTruthy(
+      'A',
+      'A7: All "khong co" / 0 answers -> still completes',
+      conclusion && conclusion.severity
+    );
   }
 
   // A8: Same option for all questions
   {
-    const answers = questions.map(q => {
+    const answers = questions.map((q) => {
       if (q.type === 'slider') return 5;
       if (q.options && q.options.length > 0) return q.options[0];
       return 'test';
     });
     const conclusion = runScript(sd, answers, PROFILE);
-    assertTruthy('A', 'A8: Same first option for all -> completes', conclusion && conclusion.severity);
+    assertTruthy(
+      'A',
+      'A8: Same first option for all -> completes',
+      conclusion && conclusion.severity
+    );
   }
 
   // A9: Mix of Vietnamese + English answers
@@ -323,12 +396,16 @@ async function testGroupA() {
 
   // A10: Answer all with first option immediately (timing doesn't matter)
   {
-    const answers = questions.map(q => {
+    const answers = questions.map((q) => {
       if (q.type === 'slider') return q.min || 0;
       return q.options ? q.options[0] : '';
     });
     const conclusion = runScript(sd, answers, PROFILE);
-    assertTruthy('A', 'A10: All first options (fast) -> completes, timing irrelevant', conclusion && conclusion.severity);
+    assertTruthy(
+      'A',
+      'A10: All first options (fast) -> completes, timing irrelevant',
+      conclusion && conclusion.severity
+    );
   }
 }
 
@@ -345,10 +422,14 @@ async function testGroupB() {
   function chainFollowUp(steps, startSeverity) {
     let severity = startSeverity;
     for (const step of steps) {
-      const result = evaluateFollowUp(fuData, [
-        { question_id: 'fu1', answer: step },
-        { question_id: 'fu2', answer: 'Không' },
-      ], severity);
+      const result = evaluateFollowUp(
+        fuData,
+        [
+          { question_id: 'fu1', answer: step },
+          { question_id: 'fu2', answer: 'Không' },
+        ],
+        severity
+      );
       severity = result.severity;
     }
     return severity;
@@ -392,71 +473,109 @@ async function testGroupB() {
 
   // B7: From HIGH: better -> should become LOW
   {
-    const r = evaluateFollowUp(fuData, [
-      { question_id: 'fu1', answer: 'Đỡ hơn' },
-      { question_id: 'fu2', answer: 'Không' },
-    ], 'high');
+    const r = evaluateFollowUp(
+      fuData,
+      [
+        { question_id: 'fu1', answer: 'Đỡ hơn' },
+        { question_id: 'fu2', answer: 'Không' },
+      ],
+      'high'
+    );
     assert('B', 'B7: HIGH + better -> LOW', r.severity, 'low');
   }
 
   // B8: From HIGH: same -> stays HIGH
   {
-    const r = evaluateFollowUp(fuData, [
-      { question_id: 'fu1', answer: 'Vẫn vậy' },
-      { question_id: 'fu2', answer: 'Không' },
-    ], 'high');
+    const r = evaluateFollowUp(
+      fuData,
+      [
+        { question_id: 'fu1', answer: 'Vẫn vậy' },
+        { question_id: 'fu2', answer: 'Không' },
+      ],
+      'high'
+    );
     assert('B', 'B8: HIGH + same -> stays HIGH', r.severity, 'high');
   }
 
   // B9: From LOW: worse -> HIGH (escalate)
   {
-    const r = evaluateFollowUp(fuData, [
-      { question_id: 'fu1', answer: 'Nặng hơn' },
-      { question_id: 'fu2', answer: 'Không' },
-    ], 'low');
+    const r = evaluateFollowUp(
+      fuData,
+      [
+        { question_id: 'fu1', answer: 'Nặng hơn' },
+        { question_id: 'fu2', answer: 'Không' },
+      ],
+      'low'
+    );
     assert('B', 'B9: LOW + worse -> HIGH', r.severity, 'high');
   }
 
   // B10: From LOW: same -> LOW (monitoring)
   {
-    const r = evaluateFollowUp(fuData, [
-      { question_id: 'fu1', answer: 'Vẫn vậy' },
-      { question_id: 'fu2', answer: 'Không' },
-    ], 'low');
+    const r = evaluateFollowUp(
+      fuData,
+      [
+        { question_id: 'fu1', answer: 'Vẫn vậy' },
+        { question_id: 'fu2', answer: 'Không' },
+      ],
+      'low'
+    );
     assert('B', 'B10: LOW + same -> stays LOW', r.severity, 'low');
   }
 
   // B11: From MEDIUM: better -> LOW
   {
-    const r = evaluateFollowUp(fuData, [
-      { question_id: 'fu1', answer: 'Đỡ hơn' },
-      { question_id: 'fu2', answer: 'Không' },
-    ], 'medium');
+    const r = evaluateFollowUp(
+      fuData,
+      [
+        { question_id: 'fu1', answer: 'Đỡ hơn' },
+        { question_id: 'fu2', answer: 'Không' },
+      ],
+      'medium'
+    );
     assert('B', 'B11: MEDIUM + better -> LOW', r.severity, 'low');
   }
 
   // B12: From MEDIUM: worse -> HIGH
   {
-    const r = evaluateFollowUp(fuData, [
-      { question_id: 'fu1', answer: 'Nặng hơn' },
-      { question_id: 'fu2', answer: 'Không' },
-    ], 'medium');
+    const r = evaluateFollowUp(
+      fuData,
+      [
+        { question_id: 'fu1', answer: 'Nặng hơn' },
+        { question_id: 'fu2', answer: 'Không' },
+      ],
+      'medium'
+    );
     assert('B', 'B12: MEDIUM + worse -> HIGH', r.severity, 'high');
   }
 
   // B13: From MEDIUM: same -> MEDIUM
   {
-    const r = evaluateFollowUp(fuData, [
-      { question_id: 'fu1', answer: 'Vẫn vậy' },
-      { question_id: 'fu2', answer: 'Không' },
-    ], 'medium');
+    const r = evaluateFollowUp(
+      fuData,
+      [
+        { question_id: 'fu1', answer: 'Vẫn vậy' },
+        { question_id: 'fu2', answer: 'Không' },
+      ],
+      'medium'
+    );
     assert('B', 'B13: MEDIUM + same -> MEDIUM', r.severity, 'medium');
   }
 
   // B14: 10 follow-ups in a row -> no infinite loop, no crash
   {
-    const steps = ['Đỡ hơn', 'Nặng hơn', 'Vẫn vậy', 'Đỡ hơn', 'Nặng hơn',
-                   'Vẫn vậy', 'Đỡ hơn', 'Nặng hơn', 'Vẫn vậy', 'Đỡ hơn'];
+    const steps = [
+      'Đỡ hơn',
+      'Nặng hơn',
+      'Vẫn vậy',
+      'Đỡ hơn',
+      'Nặng hơn',
+      'Vẫn vậy',
+      'Đỡ hơn',
+      'Nặng hơn',
+      'Vẫn vậy',
+      'Đỡ hơn',
+    ];
     assertNoCrash('B', 'B14: 10 follow-ups in a row -> no crash', () => {
       return chainFollowUp(steps, 'medium');
     });
@@ -464,10 +583,14 @@ async function testGroupB() {
 
   // B15: previousSeverity=null -> defaults correctly
   {
-    const r = evaluateFollowUp(fuData, [
-      { question_id: 'fu1', answer: 'Van vay' },
-      { question_id: 'fu2', answer: 'Khong' },
-    ], null);
+    const r = evaluateFollowUp(
+      fuData,
+      [
+        { question_id: 'fu1', answer: 'Van vay' },
+        { question_id: 'fu2', answer: 'Khong' },
+      ],
+      null
+    );
     assertTruthy('B', 'B15: previousSeverity=null -> defaults (has severity)', r && r.severity);
   }
 }
@@ -488,9 +611,9 @@ async function testGroupC() {
   const sd = scriptRow.script_data;
 
   // Build severe answers (slider=8 for sliders, worst option for choices)
-  const severeAnswers = (sd.questions || []).map(q => ({
+  const severeAnswers = (sd.questions || []).map((q) => ({
     question_id: q.id,
-    answer: q.type === 'slider' ? 8 : (q.options ? q.options[q.options.length - 1] : 'severe'),
+    answer: q.type === 'slider' ? 8 : q.options ? q.options[q.options.length - 1] : 'severe',
   }));
 
   function scoreWith(profile) {
@@ -506,28 +629,50 @@ async function testGroupC() {
 
   // C2: Age 40, diabetes only
   {
-    const r = scoreWith({ birth_year: 1986, age: 40, medical_conditions: ['Tieu duong'], gender: 'Nam' });
+    const r = scoreWith({
+      birth_year: 1986,
+      age: 40,
+      medical_conditions: ['Tieu duong'],
+      gender: 'Nam',
+    });
     assertTruthy('C', 'C2: Age 40, diabetes -> modifier bumps', r && r.severity);
-    results[results.length - 1].info = `severity=${r.severity}, modifiers=${JSON.stringify(r.modifiersApplied)}`;
+    results[results.length - 1].info =
+      `severity=${r.severity}, modifiers=${JSON.stringify(r.modifiersApplied)}`;
   }
 
   // C3: Age 60, hypertension only
   {
-    const r = scoreWith({ birth_year: 1966, age: 60, medical_conditions: ['Cao huyet ap'], gender: 'Nam' });
+    const r = scoreWith({
+      birth_year: 1966,
+      age: 60,
+      medical_conditions: ['Cao huyet ap'],
+      gender: 'Nam',
+    });
     assertTruthy('C', 'C3: Age 60, hypertension -> elderly bump', r && r.severity);
-    results[results.length - 1].info = `severity=${r.severity}, modifiers=${JSON.stringify(r.modifiersApplied)}`;
+    results[results.length - 1].info =
+      `severity=${r.severity}, modifiers=${JSON.stringify(r.modifiersApplied)}`;
   }
 
   // C4: Age 75, 4 conditions
   {
-    const r = scoreWith({ birth_year: 1951, age: 75, medical_conditions: ['Tieu duong', 'Cao huyet ap', 'Tim mach', 'Gout'], gender: 'Nam' });
+    const r = scoreWith({
+      birth_year: 1951,
+      age: 75,
+      medical_conditions: ['Tieu duong', 'Cao huyet ap', 'Tim mach', 'Gout'],
+      gender: 'Nam',
+    });
     assertTruthy('C', 'C4: Age 75, 4 conditions -> highest severity zone', r && r.severity);
     results[results.length - 1].info = `severity=${r.severity}`;
   }
 
   // C5: Age 90, 5 conditions -> no overflow
   {
-    const r = scoreWith({ birth_year: 1936, age: 90, medical_conditions: ['Tieu duong', 'Cao huyet ap', 'Tim mach', 'Gout', 'Suy than'], gender: 'Nam' });
+    const r = scoreWith({
+      birth_year: 1936,
+      age: 90,
+      medical_conditions: ['Tieu duong', 'Cao huyet ap', 'Tim mach', 'Gout', 'Suy than'],
+      gender: 'Nam',
+    });
     assertTruthy('C', 'C5: Age 90, 5 conditions -> no overflow, has severity', r && r.severity);
     const validSeverities = ['low', 'medium', 'high', 'critical'];
     assert('C', 'C5b: Severity is valid enum', validSeverities.includes(r.severity), true);
@@ -535,18 +680,44 @@ async function testGroupC() {
 
   // C6: Male vs Female same age same conditions -> same severity (no gender bias)
   {
-    const maleR = scoreWith({ birth_year: 1970, age: 56, medical_conditions: ['Tieu duong'], gender: 'Nam' });
-    const femaleR = scoreWith({ birth_year: 1970, age: 56, medical_conditions: ['Tieu duong'], gender: 'Nu' });
-    assert('C', 'C6: Male vs Female -> same severity (no gender bias)', maleR.severity, femaleR.severity);
+    const maleR = scoreWith({
+      birth_year: 1970,
+      age: 56,
+      medical_conditions: ['Tieu duong'],
+      gender: 'Nam',
+    });
+    const femaleR = scoreWith({
+      birth_year: 1970,
+      age: 56,
+      medical_conditions: ['Tieu duong'],
+      gender: 'Nu',
+    });
+    assert(
+      'C',
+      'C6: Male vs Female -> same severity (no gender bias)',
+      maleR.severity,
+      femaleR.severity
+    );
   }
 
   // C7: Profile with 10 conditions -> no crash
   {
     const r = assertNoCrash('C', 'C7: 10 conditions -> no crash', () => {
       return scoreWith({
-        birth_year: 1960, age: 66,
-        medical_conditions: ['Tieu duong', 'Cao huyet ap', 'Tim mach', 'Gout', 'Suy than',
-                            'Hen suyen', 'Viem gan B', 'Thieu mau', 'Loang xuong', 'Parkinson'],
+        birth_year: 1960,
+        age: 66,
+        medical_conditions: [
+          'Tieu duong',
+          'Cao huyet ap',
+          'Tim mach',
+          'Gout',
+          'Suy than',
+          'Hen suyen',
+          'Viem gan B',
+          'Thieu mau',
+          'Loang xuong',
+          'Parkinson',
+        ],
         gender: 'Nam',
       });
     });
@@ -568,9 +739,15 @@ async function testGroupC() {
 
   // C10: Conditions in English
   {
-    const r = scoreWith({ birth_year: 1960, age: 66, medical_conditions: ['diabetes', 'hypertension'], gender: 'Male' });
+    const r = scoreWith({
+      birth_year: 1960,
+      age: 66,
+      medical_conditions: ['diabetes', 'hypertension'],
+      gender: 'Male',
+    });
     assertTruthy('C', 'C10: English conditions -> has severity', r && r.severity);
-    results[results.length - 1].info = `severity=${r.severity}, modifiers=${JSON.stringify(r.modifiersApplied)}`;
+    results[results.length - 1].info =
+      `severity=${r.severity}, modifiers=${JSON.stringify(r.modifiersApplied)}`;
   }
 }
 
@@ -591,12 +768,20 @@ async function testGroupD() {
   // D2: Appendicitis combo
   {
     const combo = detectCombo(['đau bụng dưới phải', 'sốt', 'buồn nôn'], PROFILE);
-    assertTruthy('D', 'D2: Appendicitis combo -> detected', combo.isCombo || combo.combos.length > 0,
-      `combos=${JSON.stringify(combo.combos.map(c => c.id))}`);
+    assertTruthy(
+      'D',
+      'D2: Appendicitis combo -> detected',
+      combo.isCombo || combo.combos.length > 0,
+      `combos=${JSON.stringify(combo.combos.map((c) => c.id))}`
+    );
     // Also check emergency detector
     const emergency = detectEmergency(['đau bụng dưới phải', 'sốt', 'buồn nôn'], PROFILE);
-    assertTruthy('D', 'D2b: Appendicitis emergency check', !emergency.isEmergency || emergency.isEmergency,
-      `isEmergency=${emergency.isEmergency}, type=${emergency.type}`);
+    assertTruthy(
+      'D',
+      'D2b: Appendicitis emergency check',
+      !emergency.isEmergency || emergency.isEmergency,
+      `isEmergency=${emergency.isEmergency}, type=${emergency.type}`
+    );
   }
 
   // D3: DKA emergency (diabetes + thirst + nausea + dizziness)
@@ -606,9 +791,12 @@ async function testGroupD() {
       medical_conditions: ['Tiểu đường', 'Cao huyết áp'],
     };
     const r = detectEmergency(['mệt', 'khát nước nhiều', 'buồn nôn', 'chóng mặt'], dkaProfile);
-    assertTruthy('D', 'D3: DKA symptoms with diabetes -> detected',
+    assertTruthy(
+      'D',
+      'D3: DKA symptoms with diabetes -> detected',
       r.isEmergency || r.severity === 'high',
-      `isEmergency=${r.isEmergency}, type=${r.type}, severity=${r.severity}`);
+      `isEmergency=${r.isEmergency}, type=${r.type}, severity=${r.severity}`
+    );
   }
 
   // D4: Dengue emergency (fever + red spots + abdominal pain)
@@ -625,28 +813,41 @@ async function testGroupD() {
     const r = detectEmergency(['ho ra máu'], PROFILE);
     // ho ra máu is in PE_COMPANION_KW but NOT in HEMORRHAGE_DIRECT_KW
     // With elderly+cardiac profile, chest pain path may fire instead
-    assertTruthy('D', 'D5: "ho ra máu" -> system response (KNOWN GAP: not in HEMORRHAGE_DIRECT_KW)',
+    assertTruthy(
+      'D',
+      'D5: "ho ra máu" -> system response (KNOWN GAP: not in HEMORRHAGE_DIRECT_KW)',
       r !== null && r.severity !== undefined,
-      `isEmergency=${r.isEmergency}, type=${r.type}, severity=${r.severity} [KNOWN GAP: ho ra máu not standalone emergency]`);
+      `isEmergency=${r.isEmergency}, type=${r.type}, severity=${r.severity} [KNOWN GAP: ho ra máu not standalone emergency]`
+    );
     // Document what ACTUALLY happens
-    assertTruthy('D', 'D5b: "ho ra máu" alone -> returns valid result object',
+    assertTruthy(
+      'D',
+      'D5b: "ho ra máu" alone -> returns valid result object',
       typeof r.isEmergency === 'boolean',
-      `Current behavior: isEmergency=${r.isEmergency}, type=${r.type}`);
+      `Current behavior: isEmergency=${r.isEmergency}, type=${r.type}`
+    );
   }
 
   // D6: "đau đầu dữ dội đột ngột" -> red flag
   {
     const r = detectEmergency(['đau đầu dữ dội đột ngột'], PROFILE);
-    assertTruthy('D', 'D6: "đau đầu dữ dội đột ngột" -> high or emergency',
+    assertTruthy(
+      'D',
+      'D6: "đau đầu dữ dội đột ngột" -> high or emergency',
       r.isEmergency || r.severity === 'high',
-      `isEmergency=${r.isEmergency}, type=${r.type}, severity=${r.severity}`);
+      `isEmergency=${r.isEmergency}, type=${r.type}, severity=${r.severity}`
+    );
   }
 
   // D7: "sốt cao + co giật" -> double emergency (seizure takes priority)
   {
     const r = detectEmergency(['sốt cao', 'co giật'], PROFILE);
     assert('D', 'D7: Fever + seizure -> isEmergency', r.isEmergency, true);
-    assertTruthy('D', 'D7b: Type is SEIZURE or critical', r.type === 'SEIZURE' || r.severity === 'critical');
+    assertTruthy(
+      'D',
+      'D7b: Type is SEIZURE or critical',
+      r.type === 'SEIZURE' || r.severity === 'critical'
+    );
   }
 
   // D8: "ngất + khó thở + đau ngực" -> triple threat
@@ -661,9 +862,12 @@ async function testGroupD() {
   // KNOWN GAP: loss of consciousness alone should arguably be emergency.
   {
     const r = detectEmergency(['mất ý thức'], PROFILE);
-    assertTruthy('D', 'D9: "mất ý thức" -> valid response (KNOWN GAP: syncope alone = SAFE)',
+    assertTruthy(
+      'D',
+      'D9: "mất ý thức" -> valid response (KNOWN GAP: syncope alone = SAFE)',
       r !== null && typeof r.isEmergency === 'boolean',
-      `isEmergency=${r.isEmergency}, type=${r.type} [KNOWN GAP: standalone syncope not emergency]`);
+      `isEmergency=${r.isEmergency}, type=${r.type} [KNOWN GAP: standalone syncope not emergency]`
+    );
   }
 
   // D10: "chảy máu bất thường" -> in DENGUE_BLEED_KW, only triggers with fever+abdominal pain.
@@ -671,9 +875,12 @@ async function testGroupD() {
   // KNOWN GAP: abnormal bleeding alone should arguably escalate.
   {
     const r = detectEmergency(['chảy máu bất thường'], PROFILE);
-    assertTruthy('D', 'D10: "chảy máu bất thường" -> valid response (KNOWN GAP: needs fever+abd pain)',
+    assertTruthy(
+      'D',
+      'D10: "chảy máu bất thường" -> valid response (KNOWN GAP: needs fever+abd pain)',
       r !== null && typeof r.isEmergency === 'boolean',
-      `isEmergency=${r.isEmergency}, type=${r.type}, severity=${r.severity} [KNOWN GAP: standalone bleed not emergency]`);
+      `isEmergency=${r.isEmergency}, type=${r.type}, severity=${r.severity} [KNOWN GAP: standalone bleed not emergency]`
+    );
   }
 }
 
@@ -690,22 +897,46 @@ async function testGroupE() {
     const start = Date.now();
     const parsed = parseSymptoms(bigInput);
     const elapsed = Date.now() - start;
-    assertTruthy('E', `E1: Parse 50+ symptoms -> ${parsed.length} items in ${elapsed}ms`, parsed.length > 0);
+    assertTruthy(
+      'E',
+      `E1: Parse 50+ symptoms -> ${parsed.length} items in ${elapsed}ms`,
+      parsed.length > 0
+    );
     assert('E', 'E1b: No timeout (< 1000ms)', elapsed < 1000, true);
   }
 
   // E2: detectCombo with 20 symptoms -> completes fast
   {
     const symptoms = [
-      'dau dau', 'chong mat', 'buon non', 'sot', 'ho',
-      'dau bung', 'met moi', 'kho tho', 'dau nguc', 'dau lung',
-      'tieu chay', 'non', 'mat ngu', 'dau khop', 'phat ban',
-      'dau vai', 'dau co', 'o nong', 'tao bon', 'lo lang',
+      'dau dau',
+      'chong mat',
+      'buon non',
+      'sot',
+      'ho',
+      'dau bung',
+      'met moi',
+      'kho tho',
+      'dau nguc',
+      'dau lung',
+      'tieu chay',
+      'non',
+      'mat ngu',
+      'dau khop',
+      'phat ban',
+      'dau vai',
+      'dau co',
+      'o nong',
+      'tao bon',
+      'lo lang',
     ];
     const start = Date.now();
     const r = detectCombo(symptoms, PROFILE);
     const elapsed = Date.now() - start;
-    assertTruthy('E', `E2: detectCombo 20 symptoms -> ${r.combos.length} combos in ${elapsed}ms`, true);
+    assertTruthy(
+      'E',
+      `E2: detectCombo 20 symptoms -> ${r.combos.length} combos in ${elapsed}ms`,
+      true
+    );
     assert('E', 'E2b: Completed < 100ms', elapsed < 100, true);
   }
 
@@ -727,7 +958,9 @@ async function testGroupE() {
     } else {
       const sd = scriptRow.script_data;
       const questions = sd.questions || [];
-      const answers = questions.map(q => q.type === 'slider' ? 5 : (q.options ? q.options[0] : 'test'));
+      const answers = questions.map((q) =>
+        q.type === 'slider' ? 5 : q.options ? q.options[0] : 'test'
+      );
       const start = Date.now();
       let allCompleted = true;
       for (let i = 0; i < 20; i++) {
@@ -741,12 +974,26 @@ async function testGroupE() {
 
   // E5: analyzeMultiSymptom with 10 symptoms
   {
-    const symptoms = ['dau dau', 'chong mat', 'buon non', 'sot', 'ho',
-                      'dau bung', 'met moi', 'kho tho', 'dau lung', 'dau khop'];
+    const symptoms = [
+      'dau dau',
+      'chong mat',
+      'buon non',
+      'sot',
+      'ho',
+      'dau bung',
+      'met moi',
+      'kho tho',
+      'dau lung',
+      'dau khop',
+    ];
     const start = Date.now();
-    const r = await assertNoCrashAsync('E', 'E5: analyzeMultiSymptom 10 symptoms -> no crash', async () => {
-      return await analyzeMultiSymptom(pool, USER_ID, symptoms, PROFILE);
-    });
+    const r = await assertNoCrashAsync(
+      'E',
+      'E5: analyzeMultiSymptom 10 symptoms -> no crash',
+      async () => {
+        return await analyzeMultiSymptom(pool, USER_ID, symptoms, PROFILE);
+      }
+    );
     const elapsed = Date.now() - start;
     if (r) {
       assert('E', `E5b: Completed < 500ms (actual: ${elapsed}ms)`, elapsed < 500, true);
@@ -770,7 +1017,11 @@ async function testGroupF() {
 
     // Verify fallback still works
     const fb = getFallbackScriptData();
-    assertTruthy('F', 'F1b: Fallback script still available', fb && fb.questions && fb.questions.length > 0);
+    assertTruthy(
+      'F',
+      'F1b: Fallback script still available',
+      fb && fb.questions && fb.questions.length > 0
+    );
 
     // Restore
     await pool.query('UPDATE problem_clusters SET is_active = TRUE WHERE user_id = $1', [USER_ID]);
@@ -798,7 +1049,10 @@ async function testGroupF() {
 
     // Cleanup temp clusters
     for (const key of tempKeys) {
-      await pool.query('DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2', [USER_ID, key]);
+      await pool.query('DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2', [
+        USER_ID,
+        key,
+      ]);
     }
   }
 
@@ -828,8 +1082,9 @@ async function testGroupF() {
     };
 
     let count = 0;
-    let answers = [];
-    for (let i = 0; i < 25; i++) { // safety: max 25 iterations
+    const answers = [];
+    for (let i = 0; i < 25; i++) {
+      // safety: max 25 iterations
       const r = getNextQuestion(bigScript, answers, { sessionType: 'initial', profile: PROFILE });
       if (r.isDone) break;
       answers.push({ question_id: r.question.id, answer: 5 });
@@ -853,11 +1108,18 @@ async function testGroupF() {
 
     // Immediately try to match
     const match = await matchCluster(pool, USER_ID, freshSymptom);
-    assert('F', 'F5: Race condition - just created cluster matches immediately', match.matched, true);
+    assert(
+      'F',
+      'F5: Race condition - just created cluster matches immediately',
+      match.matched,
+      true
+    );
 
     // Cleanup
-    await pool.query('DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2 AND source = $3',
-      [USER_ID, freshKey, 'test']);
+    await pool.query(
+      'DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2 AND source = $3',
+      [USER_ID, freshKey, 'test']
+    );
   }
 }
 
@@ -902,10 +1164,14 @@ async function main() {
   console.log('  Group | Pass | Fail | Total');
   console.log('  ------+------+------+------');
   for (const [g, data] of Object.entries(groups)) {
-    console.log(`  ${g.padEnd(5)} | ${String(data.pass).padStart(4)} | ${String(data.fail).padStart(4)} | ${String(data.pass + data.fail).padStart(5)}`);
+    console.log(
+      `  ${g.padEnd(5)} | ${String(data.pass).padStart(4)} | ${String(data.fail).padStart(4)} | ${String(data.pass + data.fail).padStart(5)}`
+    );
   }
   console.log('  ------+------+------+------');
-  console.log(`  TOTAL | ${String(totalPass).padStart(4)} | ${String(totalFail).padStart(4)} | ${String(totalPass + totalFail).padStart(5)}`);
+  console.log(
+    `  TOTAL | ${String(totalPass).padStart(4)} | ${String(totalFail).padStart(4)} | ${String(totalPass + totalFail).padStart(5)}`
+  );
   console.log('');
   console.log(`  Result: ${totalFail === 0 ? 'ALL PASSED' : `${totalFail} FAILED`}`);
   console.log('');
@@ -924,11 +1190,14 @@ async function main() {
     totalFail,
     totalTests: totalPass + totalFail,
     groups: Object.fromEntries(
-      Object.entries(groups).map(([g, data]) => [g, {
-        pass: data.pass,
-        fail: data.fail,
-        tests: data.tests,
-      }])
+      Object.entries(groups).map(([g, data]) => [
+        g,
+        {
+          pass: data.pass,
+          fail: data.fail,
+          tests: data.tests,
+        },
+      ])
     ),
   };
   fs.writeFileSync(outputPath, JSON.stringify(report, null, 2));

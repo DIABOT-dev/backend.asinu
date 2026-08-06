@@ -37,12 +37,23 @@ function mockReq(userId, body = {}, query = {}) {
 }
 
 function mockRes() {
-  let _s = 200, _j = null;
+  let _s = 200,
+    _j = null;
   return {
-    status(c) { _s = c; return this; },
-    json(d) { _j = d; return this; },
-    getStatus() { return _s; },
-    getData() { return _j; },
+    status(c) {
+      _s = c;
+      return this;
+    },
+    json(d) {
+      _j = d;
+      return this;
+    },
+    getStatus() {
+      return _s;
+    },
+    getData() {
+      return _j;
+    },
   };
 }
 
@@ -63,7 +74,10 @@ async function cleanup() {
   await pool.query('DELETE FROM problem_clusters WHERE user_id = $1', [TEST_USER_ID]);
   await pool.query('DELETE FROM fallback_logs WHERE user_id = $1', [TEST_USER_ID]);
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
-  await pool.query('DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2', [TEST_USER_ID, today]);
+  await pool.query('DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2', [
+    TEST_USER_ID,
+    today,
+  ]);
 }
 
 /** Helper: start a session and return { session_id, question } */
@@ -77,7 +91,7 @@ async function startSession(clusterKey = 'headache', status = 'tired') {
 
 /** Helper: answer all questions in a session until done */
 async function completeSession(sessionId, firstQuestion) {
-  let questions = [firstQuestion];
+  const questions = [firstQuestion];
   let done = false;
   let lastData = null;
   let maxIter = 20;
@@ -89,7 +103,11 @@ async function completeSession(sessionId, firstQuestion) {
     else if (q.options && q.options.length > 0) answerVal = q.options[0];
     else answerVal = 'test answer';
 
-    const req = mockReq(TEST_USER_ID, { session_id: sessionId, question_id: q.id, answer: answerVal });
+    const req = mockReq(TEST_USER_ID, {
+      session_id: sessionId,
+      question_id: q.id,
+      answer: answerVal,
+    });
     const res = mockRes();
     await answerScriptHandler(pool, req, res);
     lastData = res.getData();
@@ -123,10 +141,16 @@ async function run() {
     const req = { user: { id: TEST_USER_ID }, body: null, query: {} };
     const res = mockRes();
     let crashed = false;
-    try { await startScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await startScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A1: startScript body=null -> no crash');
-    assert(res.getStatus() >= 400 || (res.getData() && res.getData().ok !== undefined),
-      `A1: got response status=${res.getStatus()}`);
+    assert(
+      res.getStatus() >= 400 || (res.getData() && res.getData().ok !== undefined),
+      `A1: got response status=${res.getStatus()}`
+    );
   }
 
   // A2: startScript with body=undefined
@@ -134,16 +158,24 @@ async function run() {
     const req = { user: { id: TEST_USER_ID }, body: undefined, query: {} };
     const res = mockRes();
     let crashed = false;
-    try { await startScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await startScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A2: startScript body=undefined -> no crash');
   }
 
   // A3: startScript with body="" (string)
   {
-    const req = { user: { id: TEST_USER_ID }, body: "", query: {} };
+    const req = { user: { id: TEST_USER_ID }, body: '', query: {} };
     const res = mockRes();
     let crashed = false;
-    try { await startScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await startScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A3: startScript body="" -> no crash');
   }
 
@@ -152,7 +184,11 @@ async function run() {
     const req = { user: { id: TEST_USER_ID }, body: 123, query: {} };
     const res = mockRes();
     let crashed = false;
-    try { await startScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await startScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A4: startScript body=123 -> no crash');
   }
 
@@ -161,37 +197,53 @@ async function run() {
     const req = mockReq(TEST_USER_ID, { status: null });
     const res = mockRes();
     let crashed = false;
-    try { await startScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await startScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A5: startScript status=null -> no crash');
     assert(res.getStatus() === 400, `A5: status=${res.getStatus()} (expected 400)`);
   }
 
   // A6: startScript with {status: ""}
   {
-    const req = mockReq(TEST_USER_ID, { status: "" });
+    const req = mockReq(TEST_USER_ID, { status: '' });
     const res = mockRes();
     let crashed = false;
-    try { await startScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await startScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A6: startScript status="" -> no crash');
     assert(res.getStatus() === 400, `A6: status=${res.getStatus()} (expected 400)`);
   }
 
   // A7: startScript with {status: "TIRED"} (uppercase)
   {
-    const req = mockReq(TEST_USER_ID, { status: "TIRED" });
+    const req = mockReq(TEST_USER_ID, { status: 'TIRED' });
     const res = mockRes();
     let crashed = false;
-    try { await startScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await startScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A7: startScript status="TIRED" -> no crash');
     assert(res.getStatus() === 400, `A7: uppercase TIRED -> 400 (status=${res.getStatus()})`);
   }
 
   // A8: startScript with {status: "tired", cluster_key: 12345} (number key)
   {
-    const req = mockReq(TEST_USER_ID, { status: "tired", cluster_key: 12345 });
+    const req = mockReq(TEST_USER_ID, { status: 'tired', cluster_key: 12345 });
     const res = mockRes();
     let crashed = false;
-    try { await startScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await startScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A8: startScript cluster_key=12345 -> no crash');
     // Should fallback since no script for numeric key
     const d = res.getData();
@@ -200,10 +252,14 @@ async function run() {
 
   // A9: startScript with {status: "tired", cluster_key: null}
   {
-    const req = mockReq(TEST_USER_ID, { status: "tired", cluster_key: null });
+    const req = mockReq(TEST_USER_ID, { status: 'tired', cluster_key: null });
     const res = mockRes();
     let crashed = false;
-    try { await startScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await startScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A9: startScript cluster_key=null -> no crash');
     const d = res.getData();
     assert(d && d.ok === true, `A9: responded ok=${d?.ok}`);
@@ -211,10 +267,14 @@ async function run() {
 
   // A10: startScript with {status: "tired", symptom_input: 12345}
   {
-    const req = mockReq(TEST_USER_ID, { status: "tired", symptom_input: 12345 });
+    const req = mockReq(TEST_USER_ID, { status: 'tired', symptom_input: 12345 });
     const res = mockRes();
     let crashed = false;
-    try { await startScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await startScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A10: startScript symptom_input=12345 -> no crash');
   }
 
@@ -223,49 +283,71 @@ async function run() {
     const req = { user: { id: TEST_USER_ID }, body: null, query: {} };
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A11: answerScript body=null -> no crash');
     assert(res.getStatus() >= 400, `A11: status=${res.getStatus()} (expected >=400)`);
   }
 
   // A12: answerScript with {session_id: "abc"} (string instead of number)
   {
-    const req = mockReq(TEST_USER_ID, { session_id: "abc", question_id: "q1", answer: "test" });
+    const req = mockReq(TEST_USER_ID, { session_id: 'abc', question_id: 'q1', answer: 'test' });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A12: answerScript session_id="abc" -> no crash');
     assert(res.getStatus() >= 400, `A12: status=${res.getStatus()} (expected >=400)`);
   }
 
   // A13: answerScript with {session_id: -1}
   {
-    const req = mockReq(TEST_USER_ID, { session_id: -1, question_id: "q1", answer: "test" });
+    const req = mockReq(TEST_USER_ID, { session_id: -1, question_id: 'q1', answer: 'test' });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A13: answerScript session_id=-1 -> no crash');
     assert(res.getStatus() === 404, `A13: status=${res.getStatus()} (expected 404)`);
   }
 
   // A14: answerScript with {session_id: 0}
   {
-    const req = mockReq(TEST_USER_ID, { session_id: 0, question_id: "q1", answer: "test" });
+    const req = mockReq(TEST_USER_ID, { session_id: 0, question_id: 'q1', answer: 'test' });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A14: answerScript session_id=0 -> no crash');
     // session_id 0 is falsy -> should trigger 400 "Missing session_id"
-    assert(res.getStatus() === 400 || res.getStatus() === 404,
-      `A14: status=${res.getStatus()} (expected 400 or 404)`);
+    assert(
+      res.getStatus() === 400 || res.getStatus() === 404,
+      `A14: status=${res.getStatus()} (expected 400 or 404)`
+    );
   }
 
   // A15: answerScript with {session_id: 999999, question_id: "q1", answer: "test"}
   {
-    const req = mockReq(TEST_USER_ID, { session_id: 999999, question_id: "q1", answer: "test" });
+    const req = mockReq(TEST_USER_ID, { session_id: 999999, question_id: 'q1', answer: 'test' });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A15: answerScript session_id=999999 -> no crash');
     assert(res.getStatus() === 404, `A15: status=${res.getStatus()} (expected 404)`);
   }
@@ -273,10 +355,14 @@ async function run() {
   // A16: answerScript with {session_id: valid, question_id: "", answer: "test"}
   {
     const { session_id } = await startSession();
-    const req = mockReq(TEST_USER_ID, { session_id, question_id: "", answer: "test" });
+    const req = mockReq(TEST_USER_ID, { session_id, question_id: '', answer: 'test' });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A16: answerScript question_id="" -> no crash');
     assert(res.getStatus() === 400, `A16: status=${res.getStatus()} (expected 400)`);
   }
@@ -284,30 +370,42 @@ async function run() {
   // A17: answerScript with {session_id: valid, question_id: null, answer: "test"}
   {
     const { session_id } = await startSession();
-    const req = mockReq(TEST_USER_ID, { session_id, question_id: null, answer: "test" });
+    const req = mockReq(TEST_USER_ID, { session_id, question_id: null, answer: 'test' });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A17: answerScript question_id=null -> no crash');
     assert(res.getStatus() === 400, `A17: status=${res.getStatus()} (expected 400)`);
   }
 
   // A18: createClusters with {symptoms: "not an array"}
   {
-    const req = mockReq(TEST_USER_ID, { symptoms: "not an array" });
+    const req = mockReq(TEST_USER_ID, { symptoms: 'not an array' });
     const res = mockRes();
     let crashed = false;
-    try { await createClustersHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await createClustersHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A18: createClusters symptoms=string -> no crash');
     assert(res.getStatus() === 400, `A18: status=${res.getStatus()} (expected 400)`);
   }
 
   // A19: createClusters with {symptoms: [null, undefined, "", 123]}
   {
-    const req = mockReq(TEST_USER_ID, { symptoms: [null, undefined, "", 123] });
+    const req = mockReq(TEST_USER_ID, { symptoms: [null, undefined, '', 123] });
     const res = mockRes();
     let crashed = false;
-    try { await createClustersHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await createClustersHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A19: createClusters symptoms=[null,undefined,"",123] -> no crash');
     // Should still return 200 since array is non-empty, or handle gracefully
     const d = res.getData();
@@ -319,7 +417,11 @@ async function run() {
     const req = mockReq(TEST_USER_ID, { symptoms: [] });
     const res = mockRes();
     let crashed = false;
-    try { await createClustersHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await createClustersHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'A20: createClusters symptoms=[] -> no crash');
     assert(res.getStatus() === 400, `A20: status=${res.getStatus()} (expected 400)`);
   }
@@ -338,10 +440,14 @@ async function run() {
   // B1: Answer a session that belongs to a different user -> should reject or 404
   {
     const { session_id, question } = await startSession();
-    const req = mockReq(99999, { session_id, question_id: question.id, answer: "hack" });
+    const req = mockReq(99999, { session_id, question_id: question.id, answer: 'hack' });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'B1: answer other user session -> no crash');
     assert(res.getStatus() === 404, `B1: status=${res.getStatus()} (expected 404 - access denied)`);
   }
@@ -349,10 +455,18 @@ async function run() {
   // B2: Start session, then call answerScript with wrong session_id format
   {
     await startSession();
-    const req = mockReq(TEST_USER_ID, { session_id: "not-a-number", question_id: "q1", answer: "test" });
+    const req = mockReq(TEST_USER_ID, {
+      session_id: 'not-a-number',
+      question_id: 'q1',
+      answer: 'test',
+    });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'B2: answerScript wrong session_id format -> no crash');
     assert(res.getStatus() >= 400, `B2: status=${res.getStatus()} (expected >=400)`);
   }
@@ -361,14 +475,20 @@ async function run() {
   {
     const { session_id, question } = await startSession();
     await completeSession(session_id, question);
-    const req = mockReq(TEST_USER_ID, { session_id, question_id: "q1", answer: "post-complete" });
+    const req = mockReq(TEST_USER_ID, { session_id, question_id: 'q1', answer: 'post-complete' });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'B3: answer completed session -> no crash');
     assert(res.getStatus() === 400, `B3: status=${res.getStatus()} (expected 400)`);
-    assert(res.getData()?.error?.includes('already completed'),
-      `B3: error="${res.getData()?.error}"`);
+    assert(
+      res.getData()?.error?.includes('already completed'),
+      `B3: error="${res.getData()?.error}"`
+    );
   }
 
   // B4: Complete a session, then start another with same cluster -> should create new
@@ -379,7 +499,10 @@ async function run() {
     const { session_id: s2 } = await startSession();
     assert(s2 !== s1, `B4: new session created (${s2} != ${s1})`);
     // Note: PG bigint/bigserial returned as string by node-postgres driver
-    assert(s2 !== undefined && s2 !== null, `B4: session_id is present (type=${typeof s2}, pg bigint->string is known)`);
+    assert(
+      s2 !== undefined && s2 !== null,
+      `B4: session_id is present (type=${typeof s2}, pg bigint->string is known)`
+    );
   }
 
   // B5: Start 10 sessions rapidly -> all should create separate rows
@@ -390,36 +513,53 @@ async function run() {
       ids.push(session_id);
     }
     const uniqueIds = new Set(ids);
-    assert(uniqueIds.size === 10, `B5: 10 rapid starts -> ${uniqueIds.size} unique sessions (expected 10)`);
+    assert(
+      uniqueIds.size === 10,
+      `B5: 10 rapid starts -> ${uniqueIds.size} unique sessions (expected 10)`
+    );
   }
 
   // B6: Answer with session_id=0 -> 400 or 404
   {
-    const req = mockReq(TEST_USER_ID, { session_id: 0, question_id: "q1", answer: "x" });
+    const req = mockReq(TEST_USER_ID, { session_id: 0, question_id: 'q1', answer: 'x' });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'B6: session_id=0 -> no crash');
-    assert(res.getStatus() === 400 || res.getStatus() === 404,
-      `B6: status=${res.getStatus()} (expected 400 or 404)`);
+    assert(
+      res.getStatus() === 400 || res.getStatus() === 404,
+      `B6: status=${res.getStatus()} (expected 400 or 404)`
+    );
   }
 
   // B7: Answer with session_id=null -> 400
   {
-    const req = mockReq(TEST_USER_ID, { session_id: null, question_id: "q1", answer: "x" });
+    const req = mockReq(TEST_USER_ID, { session_id: null, question_id: 'q1', answer: 'x' });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'B7: session_id=null -> no crash');
     assert(res.getStatus() === 400, `B7: status=${res.getStatus()} (expected 400)`);
   }
 
   // B8: Answer with session_id=undefined -> 400
   {
-    const req = mockReq(TEST_USER_ID, { session_id: undefined, question_id: "q1", answer: "x" });
+    const req = mockReq(TEST_USER_ID, { session_id: undefined, question_id: 'q1', answer: 'x' });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'B8: session_id=undefined -> no crash');
     assert(res.getStatus() === 400, `B8: status=${res.getStatus()} (expected 400)`);
   }
@@ -429,7 +569,11 @@ async function run() {
     const req = mockReq(TEST_USER_ID, { status: 'tired', cluster_key: 'nonexistent_cluster_xyz' });
     const res = mockRes();
     let crashed = false;
-    try { await startScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await startScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'B9: nonexistent cluster -> no crash');
     const d = res.getData();
     assert(d && d.ok === true, `B9: ok=${d?.ok}`);
@@ -444,8 +588,10 @@ async function run() {
     const res = mockRes();
     await getSessionHandler(pool, req, res);
     const d = res.getData();
-    assert(d.ok === true && d.has_session === false,
-      `B10: no sessions -> has_session=${d.has_session}`);
+    assert(
+      d.ok === true && d.has_session === false,
+      `B10: no sessions -> has_session=${d.has_session}`
+    );
   }
 
   // B11: Start session -> don't answer -> start another -> getSession returns latest
@@ -466,14 +612,18 @@ async function run() {
     const req = mockReq(TEST_USER_ID, {
       session_id,
       question_id: question.id,
-      answer: "test",
-      hacker_field: "xxx",
+      answer: 'test',
+      hacker_field: 'xxx',
       __proto__: { admin: true },
-      constructor: "evil",
+      constructor: 'evil',
     });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'B12: extra fields in body -> no crash');
     assert(res.getData()?.ok === true, `B12: ok=${res.getData()?.ok}`);
   }
@@ -484,7 +634,11 @@ async function run() {
     const req = mockReq(TEST_USER_ID, { session_id, question_id: question.id, answer: null });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'B13: answer=null -> no crash');
     assert(res.getData()?.ok === true, `B13: ok=${res.getData()?.ok}`);
   }
@@ -495,7 +649,11 @@ async function run() {
     const req = mockReq(TEST_USER_ID, { session_id, question_id: question.id, answer: undefined });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'B14: answer=undefined -> no crash');
     assert(res.getData()?.ok === true, `B14: ok=${res.getData()?.ok}`);
   }
@@ -503,10 +661,14 @@ async function run() {
   // B15: Answer with answer="" -> should handle
   {
     const { session_id, question } = await startSession();
-    const req = mockReq(TEST_USER_ID, { session_id, question_id: question.id, answer: "" });
+    const req = mockReq(TEST_USER_ID, { session_id, question_id: question.id, answer: '' });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'B15: answer="" -> no crash');
     assert(res.getData()?.ok === true, `B15: ok=${res.getData()?.ok}`);
   }
@@ -531,14 +693,18 @@ async function run() {
     });
     let crashed = false;
     let results;
-    try { results = await Promise.all(promises); } catch (e) { crashed = true; }
+    try {
+      results = await Promise.all(promises);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'C1: 5 parallel getScript -> no crash');
     if (results) {
-      const allOk = results.every(r => r && r.ok === true && r.has_script === true);
+      const allOk = results.every((r) => r && r.ok === true && r.has_script === true);
       assert(allOk, `C1: all 5 returned ok=true, has_script=true`);
       // Check they all return same greeting
-      const greetings = results.map(r => r.greeting);
-      const allSame = greetings.every(g => g === greetings[0]);
+      const greetings = results.map((r) => r.greeting);
+      const allSame = greetings.every((g) => g === greetings[0]);
       assert(allSame, `C1: all 5 returned same greeting`);
     }
   }
@@ -552,10 +718,14 @@ async function run() {
     });
     let crashed = false;
     let results;
-    try { results = await Promise.all(promises); } catch (e) { crashed = true; }
+    try {
+      results = await Promise.all(promises);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'C2: 3 parallel starts -> no crash');
     if (results) {
-      const ids = results.map(r => r.session_id);
+      const ids = results.map((r) => r.session_id);
       const unique = new Set(ids);
       assert(unique.size === 3, `C2: 3 different sessions (${unique.size} unique)`);
     }
@@ -564,7 +734,8 @@ async function run() {
   // C3: Call answerScriptHandler twice with same answer for same session
   {
     const { session_id, question } = await startSession();
-    const makeReq = () => mockReq(TEST_USER_ID, { session_id, question_id: question.id, answer: "dup" });
+    const makeReq = () =>
+      mockReq(TEST_USER_ID, { session_id, question_id: question.id, answer: 'dup' });
     const res1 = mockRes();
     const res2 = mockRes();
     let crashed = false;
@@ -573,7 +744,9 @@ async function run() {
         answerScriptHandler(pool, makeReq(), res1),
         answerScriptHandler(pool, makeReq(), res2),
       ]);
-    } catch (e) { crashed = true; }
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'C3: duplicate answer -> no crash');
     // At least one should succeed
     const ok1 = res1.getData()?.ok;
@@ -589,31 +762,52 @@ async function run() {
     const res = mockRes();
     await getScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.ok === true && d.has_script === true,
-      `C4: createClusters then getScript -> has_script=${d.has_script}`);
+    assert(
+      d.ok === true && d.has_script === true,
+      `C4: createClusters then getScript -> has_script=${d.has_script}`
+    );
   }
 
   // C5: createClusters with 20 symptoms -> all clusters created
   {
     await cleanup();
     const symptoms = [
-      '\u0111au \u0111\u1ea7u', '\u0111au b\u1ee5ng', 'ch\u00f3ng m\u1eb7t',
-      'm\u1ec7t m\u1ecfi', '\u0111au ng\u1ef1c', 'kh\u00f3 th\u1edf',
-      '\u0111au l\u01b0ng', '\u0111au kh\u1edbp', 'm\u1ea5t ng\u1ee7',
-      's\u1ed1t', 'ho', 'bu\u1ed3n n\u00f4n',
-      'ti\u00eau ch\u1ea3y', 't\u00e1o b\u00f3n', 'ph\u00e1t ban',
-      '\u0111au vai', '\u0111au c\u1ed5', 't\u1ee9c ng\u1ef1c',
-      'huy\u1ebft \u00e1p cao', '\u0111\u01b0\u1eddng huy\u1ebft cao'
+      '\u0111au \u0111\u1ea7u',
+      '\u0111au b\u1ee5ng',
+      'ch\u00f3ng m\u1eb7t',
+      'm\u1ec7t m\u1ecfi',
+      '\u0111au ng\u1ef1c',
+      'kh\u00f3 th\u1edf',
+      '\u0111au l\u01b0ng',
+      '\u0111au kh\u1edbp',
+      'm\u1ea5t ng\u1ee7',
+      's\u1ed1t',
+      'ho',
+      'bu\u1ed3n n\u00f4n',
+      'ti\u00eau ch\u1ea3y',
+      't\u00e1o b\u00f3n',
+      'ph\u00e1t ban',
+      '\u0111au vai',
+      '\u0111au c\u1ed5',
+      't\u1ee9c ng\u1ef1c',
+      'huy\u1ebft \u00e1p cao',
+      '\u0111\u01b0\u1eddng huy\u1ebft cao',
     ];
     const req = mockReq(TEST_USER_ID, { symptoms });
     const res = mockRes();
     let crashed = false;
-    try { await createClustersHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await createClustersHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'C5: 20 symptoms -> no crash');
     const d = res.getData();
     assert(d && d.ok === true, `C5: ok=${d?.ok}`);
-    assert(d.clusters && d.clusters.length >= 15,
-      `C5: ${d?.clusters?.length} clusters created (expected >=15)`);
+    assert(
+      d.clusters && d.clusters.length >= 15,
+      `C5: ${d?.clusters?.length} clusters created (expected >=15)`
+    );
     // Reset to just headache for remaining tests
     await cleanup();
     await createClustersFromOnboarding(pool, TEST_USER_ID, ['\u0111au \u0111\u1ea7u']);
@@ -640,8 +834,10 @@ async function run() {
     const res = mockRes();
     await getSessionHandler(pool, req, res);
     const d = res.getData();
-    assert(d.has_session === true && d.session.is_completed === true,
-      `C7: session completed immediately visible`);
+    assert(
+      d.has_session === true && d.session.is_completed === true,
+      `C7: session completed immediately visible`
+    );
   }
 
   // C8: Delete all clusters from DB -> getScriptHandler returns has_script:false
@@ -652,8 +848,10 @@ async function run() {
     const res = mockRes();
     await getScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.ok === true && d.has_script === false,
-      `C8: no clusters -> has_script=${d.has_script}`);
+    assert(
+      d.ok === true && d.has_script === false,
+      `C8: no clusters -> has_script=${d.has_script}`
+    );
     // Restore
     await createClustersFromOnboarding(pool, TEST_USER_ID, ['\u0111au \u0111\u1ea7u']);
   }
@@ -666,7 +864,11 @@ async function run() {
     const req = mockReq(TEST_USER_ID, { session_id, question_id: question.id, answer: 3 });
     const res = mockRes();
     let crashed = false;
-    try { await answerScriptHandler(pool, req, res); } catch (e) { crashed = true; }
+    try {
+      await answerScriptHandler(pool, req, res);
+    } catch (e) {
+      crashed = true;
+    }
     assert(!crashed, 'C9: deleted script mid-session -> no crash');
     const d = res.getData();
     assert(d && d.ok === true, `C9: handled gracefully ok=${d?.ok}`);
@@ -711,8 +913,10 @@ async function run() {
     const c5req = mockReq(TEST_USER_ID);
     const c5res = mockRes();
     await getSessionHandler(pool, c5req, c5res);
-    assert(c5res.getData()?.ok === true && c5res.getData()?.has_session === true,
-      'C10: getSession ok');
+    assert(
+      c5res.getData()?.ok === true && c5res.getData()?.has_session === true,
+      'C10: getSession ok'
+    );
   }
 
   console.log('');
@@ -732,16 +936,17 @@ async function run() {
     const res = mockRes();
     await getScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.hasOwnProperty('ok'), 'D1: has ok field');
-    assert(d.hasOwnProperty('has_script'), 'D1: has has_script field');
+    assert(Object.prototype.hasOwnProperty.call(d, 'ok'), 'D1: has ok field');
+    assert(Object.prototype.hasOwnProperty.call(d, 'has_script'), 'D1: has has_script field');
     assert(typeof d.greeting === 'string', `D1: greeting is string (type=${typeof d.greeting})`);
-    assert(Array.isArray(d.initial_options) && d.initial_options.length === 3,
-      `D1: initial_options is array of 3 (len=${d.initial_options?.length})`);
+    assert(
+      Array.isArray(d.initial_options) && d.initial_options.length === 3,
+      `D1: initial_options is array of 3 (len=${d.initial_options?.length})`
+    );
     assert(Array.isArray(d.clusters), `D1: clusters is array`);
     // Each initial_option has label, value, emoji
     const opt = d.initial_options[0];
-    assert(opt.label && opt.value && opt.emoji,
-      `D1: initial_option has label/value/emoji`);
+    assert(opt.label && opt.value && opt.emoji, `D1: initial_option has label/value/emoji`);
   }
 
   // D2: startScript fine response format
@@ -750,9 +955,11 @@ async function run() {
     const res = mockRes();
     await startScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.hasOwnProperty('ok') && d.ok === true, 'D2: has ok=true');
-    assert(d.hasOwnProperty('needs_script') && d.needs_script === false,
-      'D2: has needs_script=false');
+    assert(Object.prototype.hasOwnProperty.call(d, 'ok') && d.ok === true, 'D2: has ok=true');
+    assert(
+      Object.prototype.hasOwnProperty.call(d, 'needs_script') && d.needs_script === false,
+      'D2: has needs_script=false'
+    );
     assert(typeof d.message === 'string' && d.message.length > 0, 'D2: has message string');
   }
 
@@ -762,31 +969,34 @@ async function run() {
     const res = mockRes();
     await startScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.hasOwnProperty('ok') && d.ok === true, 'D3: has ok=true');
+    assert(Object.prototype.hasOwnProperty.call(d, 'ok') && d.ok === true, 'D3: has ok=true');
     // PG bigint returned as string by node-postgres; verify it's a valid numeric value
-    assert(d.session_id !== undefined && d.session_id !== null && !isNaN(Number(d.session_id)),
-      `D3: session_id is numeric-coercible (type=${typeof d.session_id}, val=${d.session_id})`);
+    assert(
+      d.session_id !== undefined && d.session_id !== null && !isNaN(Number(d.session_id)),
+      `D3: session_id is numeric-coercible (type=${typeof d.session_id}, val=${d.session_id})`
+    );
     assert(typeof d.isDone === 'boolean', `D3: isDone is boolean (${typeof d.isDone})`);
     assert(d.question && typeof d.question === 'object', 'D3: question is object');
-    assert(d.question.id && d.question.text && d.question.type,
-      `D3: question has id/text/type`);
+    assert(d.question.id && d.question.text && d.question.type, `D3: question has id/text/type`);
   }
 
   // D4: answerScript not done response format
   {
     const { session_id, question } = await startSession();
-    let answerVal = question.type === 'slider' ? 3 :
-      (question.options?.length > 0 ? question.options[0] : 'test');
+    const answerVal =
+      question.type === 'slider' ? 3 : question.options?.length > 0 ? question.options[0] : 'test';
     const req = mockReq(TEST_USER_ID, { session_id, question_id: question.id, answer: answerVal });
     const res = mockRes();
     await answerScriptHandler(pool, req, res);
     const d = res.getData();
     if (!d.isDone) {
-      assert(d.hasOwnProperty('ok') && d.ok === true, 'D4: has ok=true');
-      assert(d.hasOwnProperty('session_id'), 'D4: has session_id');
+      assert(Object.prototype.hasOwnProperty.call(d, 'ok') && d.ok === true, 'D4: has ok=true');
+      assert(Object.prototype.hasOwnProperty.call(d, 'session_id'), 'D4: has session_id');
       assert(d.isDone === false, 'D4: isDone=false');
-      assert(d.question && d.question.id && d.question.text && d.question.type,
-        'D4: question has id/text/type');
+      assert(
+        d.question && d.question.id && d.question.text && d.question.type,
+        'D4: question has id/text/type'
+      );
     } else {
       // Script only has a few questions, already done
       assert(d.ok === true, 'D4: ok=true (already done on first answer)');
@@ -797,10 +1007,16 @@ async function run() {
   {
     const { session_id, question } = await startSession();
     const lastData = await completeSession(session_id, question);
-    assert(lastData.hasOwnProperty('ok') && lastData.ok === true, 'D5: has ok=true');
-    assert(lastData.hasOwnProperty('session_id'), 'D5: has session_id');
+    assert(
+      Object.prototype.hasOwnProperty.call(lastData, 'ok') && lastData.ok === true,
+      'D5: has ok=true'
+    );
+    assert(Object.prototype.hasOwnProperty.call(lastData, 'session_id'), 'D5: has session_id');
     assert(lastData.isDone === true, 'D5: isDone=true');
-    assert(lastData.conclusion && typeof lastData.conclusion === 'object', 'D5: has conclusion object');
+    assert(
+      lastData.conclusion && typeof lastData.conclusion === 'object',
+      'D5: has conclusion object'
+    );
     const c = lastData.conclusion;
     assert(typeof c.severity === 'string', `D5: conclusion.severity is string (${c.severity})`);
     assert(typeof c.summary === 'string', `D5: conclusion.summary is string`);
@@ -813,12 +1029,14 @@ async function run() {
     const res = mockRes();
     await getSessionHandler(pool, req, res);
     const d = res.getData();
-    assert(d.hasOwnProperty('ok') && d.ok === true, 'D6: has ok=true');
+    assert(Object.prototype.hasOwnProperty.call(d, 'ok') && d.ok === true, 'D6: has ok=true');
     assert(d.has_session === true, 'D6: has_session=true');
     assert(d.session && typeof d.session === 'object', 'D6: session is object');
     // PG bigint returned as string by node-postgres
-    assert(d.session.id !== undefined && !isNaN(Number(d.session.id)),
-      `D6: session.id is numeric-coercible (type=${typeof d.session.id})`);
+    assert(
+      d.session.id !== undefined && !isNaN(Number(d.session.id)),
+      `D6: session.id is numeric-coercible (type=${typeof d.session.id})`
+    );
     assert(typeof d.session.cluster_key === 'string', `D6: session.cluster_key is string`);
     assert(typeof d.session.is_completed === 'boolean', `D6: session.is_completed is boolean`);
   }
@@ -830,7 +1048,7 @@ async function run() {
     const res = mockRes();
     await getSessionHandler(pool, req, res);
     const d = res.getData();
-    assert(d.hasOwnProperty('ok') && d.ok === true, 'D7: has ok=true');
+    assert(Object.prototype.hasOwnProperty.call(d, 'ok') && d.ok === true, 'D7: has ok=true');
     assert(d.has_session === false, 'D7: has_session=false');
   }
 
@@ -841,12 +1059,15 @@ async function run() {
     const res = mockRes();
     await createClustersHandler(pool, req, res);
     const d = res.getData();
-    assert(d.hasOwnProperty('ok') && d.ok === true, 'D8: has ok=true');
+    assert(Object.prototype.hasOwnProperty.call(d, 'ok') && d.ok === true, 'D8: has ok=true');
     assert(Array.isArray(d.clusters), 'D8: clusters is array');
     if (d.clusters.length > 0) {
       const cl = d.clusters[0];
       assert(typeof cl.cluster_key === 'string', `D8: cluster_key is string (${cl.cluster_key})`);
-      assert(typeof cl.display_name === 'string', `D8: display_name is string (${cl.display_name})`);
+      assert(
+        typeof cl.display_name === 'string',
+        `D8: display_name is string (${cl.display_name})`
+      );
     }
   }
 
@@ -857,7 +1078,10 @@ async function run() {
     const res1 = mockRes();
     await startScriptHandler(pool, req1, res1);
     const d1 = res1.getData();
-    assert(d1.hasOwnProperty('ok') && d1.ok === false, 'D9: error has ok=false');
+    assert(
+      Object.prototype.hasOwnProperty.call(d1, 'ok') && d1.ok === false,
+      'D9: error has ok=false'
+    );
     assert(typeof d1.error === 'string', `D9: error is string (${d1.error})`);
 
     // 404 error
@@ -888,7 +1112,11 @@ async function run() {
 
     // startScript tired
     const r3 = mockRes();
-    await startScriptHandler(pool, mockReq(TEST_USER_ID, { status: 'tired', cluster_key: 'headache' }), r3);
+    await startScriptHandler(
+      pool,
+      mockReq(TEST_USER_ID, { status: 'tired', cluster_key: 'headache' }),
+      r3
+    );
     responses.push({ handler: 'startScript(tired)', data: r3.getData() });
 
     // getSession
@@ -906,8 +1134,11 @@ async function run() {
     await startScriptHandler(pool, mockReq(TEST_USER_ID, { status: 'bad' }), r6);
     responses.push({ handler: 'startScript(error)', data: r6.getData() });
 
-    const allHaveOk = responses.every(r => {
-      const hasOk = r.data && r.data.hasOwnProperty('ok') && typeof r.data.ok === 'boolean';
+    const allHaveOk = responses.every((r) => {
+      const hasOk =
+        r.data &&
+        Object.prototype.hasOwnProperty.call(r.data, 'ok') &&
+        typeof r.data.ok === 'boolean';
       if (!hasOk) console.log(`    >> ${r.handler} missing ok field:`, r.data);
       return hasOk;
     });
@@ -938,7 +1169,7 @@ async function run() {
   process.exit(failed > 0 ? 1 : 0);
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('Test suite crashed:', err);
   pool.end().then(() => process.exit(1));
 });

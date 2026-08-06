@@ -14,9 +14,13 @@ describe('ASINU -> CRM event contract', () => {
   });
 
   test('builds a valid envelope for a catalogued event', () => {
-    const envelope = buildCrmEnvelope('profile.updated', { user_id: '1' }, {
-      event_id: 'profile.updated:1:2026-07-23T00:00:00.000Z',
-    });
+    const envelope = buildCrmEnvelope(
+      'profile.updated',
+      { user_id: '1' },
+      {
+        event_id: 'profile.updated:1:2026-07-23T00:00:00.000Z',
+      }
+    );
     expect(envelope).toMatchObject({
       event_id: 'profile.updated:1:2026-07-23T00:00:00.000Z',
       event_type: 'profile.updated',
@@ -29,7 +33,7 @@ describe('ASINU -> CRM event contract', () => {
   test('rejects event types outside the approved contract', () => {
     expect(() => buildCrmEnvelope('service.completed', {})).not.toThrow();
     expect(() => buildCrmEnvelope('crm.typo', {})).toThrow(
-      expect.objectContaining({ code: 'UNSUPPORTED_CRM_EVENT_TYPE' }),
+      expect.objectContaining({ code: 'UNSUPPORTED_CRM_EVENT_TYPE' })
     );
   });
 });

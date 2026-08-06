@@ -125,7 +125,7 @@ async function callOpenAI(messages, language) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
         model,
@@ -155,7 +155,7 @@ async function callGemini(messages, language) {
   const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
   const systemPrompt = language === 'en' ? SYSTEM_EN : SYSTEM_VI;
 
-  const contents = messages.map(m => ({
+  const contents = messages.map((m) => ({
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }));

@@ -3,7 +3,13 @@
 const logger = require('../../lib/logger');
 const { sendPushNotification } = require('../notification/push.notification.service');
 const { saveInAppNotification } = require('../notification/notification.service');
-const { DEFAULT_TIMEZONE, getTimeParts, isHealthFeedEnabled, isWithinPushWindow, resolveTimezone } = require('./config');
+const {
+  DEFAULT_TIMEZONE,
+  getTimeParts,
+  isHealthFeedEnabled,
+  isWithinPushWindow,
+  resolveTimezone,
+} = require('./config');
 const { FLOWS, PUSHABLE_FLOWS, getSelfFlow, selectContentForPlan } = require('./logic');
 const repo = require('./repository');
 
@@ -182,7 +188,8 @@ async function saveHealthFeedInAppNotification(pool, job, payload) {
     return existing.rows[0].id;
   }
 
-  const priority = payload.flow === FLOWS.ALERT ? 'high' : payload.flow === FLOWS.FAMILY ? 'medium' : 'low';
+  const priority =
+    payload.flow === FLOWS.ALERT ? 'high' : payload.flow === FLOWS.FAMILY ? 'medium' : 'low';
   const title = payload.title || 'Asinu nhắc bạn';
   const message = payload.body || 'Có một bản tin sức khỏe mới dành cho bạn';
   const data = {

@@ -13,7 +13,11 @@ const { execSync } = require('child_process');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const { createClustersFromOnboarding, getScript, toClusterKey } = require('../../src/services/checkin/script.service');
+const {
+  createClustersFromOnboarding,
+  getScript,
+  toClusterKey,
+} = require('../../src/services/checkin/script.service');
 const { listComplaints } = require('../../src/services/checkin/clinical-mapping');
 const { getFallbackScriptData } = require('../../src/services/checkin/fallback.service');
 
@@ -57,18 +61,48 @@ async function run() {
 
   // Combo patterns (simplified)
   const comboPatterns = [
-    { id: 'stroke', name: 'Nghi đột quỵ', groups: [['đau đầu','nhức đầu'],['mờ mắt','mắt mờ']], severity: 'critical' },
-    { id: 'appendicitis', name: 'Nghi viêm ruột thừa', groups: [['đau bụng'],['sốt']], severity: 'high' },
-    { id: 'hypertension', name: 'Cơn tăng huyết áp', groups: [['đau đầu'],['chóng mặt'],['buồn nôn']], severity: 'high' },
-    { id: 'respiratory', name: 'Nhiễm trùng hô hấp', groups: [['ho'],['sốt'],['đau họng']], severity: 'medium' },
-    { id: 'dehydration', name: 'Mất nước nặng', groups: [['tiêu chảy'],['nôn','buồn nôn'],['sốt']], severity: 'high' },
+    {
+      id: 'stroke',
+      name: 'Nghi đột quỵ',
+      groups: [
+        ['đau đầu', 'nhức đầu'],
+        ['mờ mắt', 'mắt mờ'],
+      ],
+      severity: 'critical',
+    },
+    {
+      id: 'appendicitis',
+      name: 'Nghi viêm ruột thừa',
+      groups: [['đau bụng'], ['sốt']],
+      severity: 'high',
+    },
+    {
+      id: 'hypertension',
+      name: 'Cơn tăng huyết áp',
+      groups: [['đau đầu'], ['chóng mặt'], ['buồn nôn']],
+      severity: 'high',
+    },
+    {
+      id: 'respiratory',
+      name: 'Nhiễm trùng hô hấp',
+      groups: [['ho'], ['sốt'], ['đau họng']],
+      severity: 'medium',
+    },
+    {
+      id: 'dehydration',
+      name: 'Mất nước nặng',
+      groups: [['tiêu chảy'], ['nôn', 'buồn nôn'], ['sốt']],
+      severity: 'high',
+    },
   ];
 
   const html = generateHTML(scripts, fallbackScript, emergencyKeywords, comboPatterns);
   const outPath = path.join(DATA_DIR, 'interactive-test.html');
   fs.writeFileSync(outPath, html);
   console.log('Output:', outPath);
-  try { execSync(`open "${outPath}"`); } catch {}
+  try {
+    execSync(`open "${outPath}"`);
+  } catch {}
   await pool.end();
 }
 
@@ -613,4 +647,8 @@ startCheckin();
 </html>`;
 }
 
-run().catch(err => { console.error('CRASH:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASH:', err);
+  pool.end();
+  process.exit(1);
+});

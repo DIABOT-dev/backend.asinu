@@ -19,16 +19,31 @@ let totalFail = 0;
 const failures = [];
 
 function assert(condition, name) {
-  if (condition) { totalPass++; console.log(`  PASS ✓ ${name}`); }
-  else { totalFail++; failures.push(name); console.log(`  FAIL ✗ ${name}`); }
+  if (condition) {
+    totalPass++;
+    console.log(`  PASS ✓ ${name}`);
+  } else {
+    totalFail++;
+    failures.push(name);
+    console.log(`  FAIL ✗ ${name}`);
+  }
 }
 
 function get(path) {
   return new Promise((resolve, reject) => {
-    http.get('http://localhost:3000' + path, res => {
-      let d = ''; res.on('data', c => d += c);
-      res.on('end', () => { try { resolve({ s: res.statusCode, b: JSON.parse(d) }); } catch { resolve({ s: res.statusCode, b: d }); } });
-    }).on('error', reject);
+    http
+      .get('http://localhost:3000' + path, (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => {
+          try {
+            resolve({ s: res.statusCode, b: JSON.parse(d) });
+          } catch {
+            resolve({ s: res.statusCode, b: d });
+          }
+        });
+      })
+      .on('error', reject);
   });
 }
 
@@ -64,18 +79,27 @@ async function testContextEdgeCases() {
   const { rows: after } = await pool.query(
     `SELECT COUNT(*)::int as cnt FROM problem_clusters WHERE user_id = 4 AND is_active = TRUE`
   );
-  assert(ctx4after.topClusters.length <= parseInt(before[0].cnt), '1.3 Deactivated cluster excluded from context');
+  assert(
+    ctx4after.topClusters.length <= parseInt(before[0].cnt),
+    '1.3 Deactivated cluster excluded from context'
+  );
   // Restore
   await pool.query(`UPDATE problem_clusters SET is_active = TRUE WHERE user_id = 4`);
 
   // 1.4 consecutiveTiredDays accuracy
   // User 4 has 3 recent checkins all "tired" based on earlier data
   const ctx4 = await intel.buildUserContext(pool, 4);
-  assert(ctx4.consecutiveTiredDays >= 0 && ctx4.consecutiveTiredDays <= 3, `1.4 consecutiveTiredDays=${ctx4.consecutiveTiredDays} (0-3 range)`);
+  assert(
+    ctx4.consecutiveTiredDays >= 0 && ctx4.consecutiveTiredDays <= 3,
+    `1.4 consecutiveTiredDays=${ctx4.consecutiveTiredDays} (0-3 range)`
+  );
 
   // 1.5 topClusters ordered by priority DESC
   if (ctx4.topClusters.length >= 2) {
-    assert(ctx4.topClusters[0].priority >= ctx4.topClusters[1].priority, '1.5 topClusters sorted by priority DESC');
+    assert(
+      ctx4.topClusters[0].priority >= ctx4.topClusters[1].priority,
+      '1.5 topClusters sorted by priority DESC'
+    );
   } else {
     assert(true, '1.5 (skipped - < 2 clusters)');
   }
@@ -109,7 +133,10 @@ async function testTemplatePriority() {
     topSymptom: { display_name: 'sốt', trend: 'increasing' },
     streakOkDays: 10,
   });
-  assert(sel2.template.id === 'morning_consecutive_tired', '2.2 No high severity → consecutive_tired wins');
+  assert(
+    sel2.template.id === 'morning_consecutive_tired',
+    '2.2 No high severity → consecutive_tired wins'
+  );
 
   // 2.3 No tired → symptom wins over streak
   const sel3 = intel.selectMorningTemplate({
@@ -145,7 +172,10 @@ async function testTemplatePriority() {
     topSymptom: null,
     streakOkDays: 0,
   });
-  assert(sel6.template.id === 'morning_default', '2.6 Medium severity → default (not high_severity)');
+  assert(
+    sel6.template.id === 'morning_default',
+    '2.6 Medium severity → default (not high_severity)'
+  );
 
   // 2.7 consecutiveTiredDays = 1 → NOT triggered (need >= 2)
   const sel7 = intel.selectMorningTemplate({
@@ -164,29 +194,53 @@ async function testRenderEdgeCases() {
   console.log('\n══════ SUITE 3: Render Edge Cases ══════');
 
   // 3.1 User with no name
-  const r1 = intel.renderMessage(intel.MORNING_TEMPLATES.default, {}, { lang: 'vi', birth_year: null, gender: null, display_name: '' });
+  const r1 = intel.renderMessage(
+    intel.MORNING_TEMPLATES.default,
+    {},
+    { lang: 'vi', birth_year: null, gender: null, display_name: '' }
+  );
   assert(!r1.text.includes('{'), '3.1 No name → renders without {vars}');
   assert(r1.text.includes('bạn'), '3.2 No age → defaults to "bạn"');
 
   // 3.3 User with no birth_year → "bạn"
-  const r2 = intel.renderMessage(intel.MORNING_TEMPLATES.default, {}, { lang: 'vi', birth_year: null, gender: 'nam', display_name: 'Hùng' });
+  const r2 = intel.renderMessage(
+    intel.MORNING_TEMPLATES.default,
+    {},
+    { lang: 'vi', birth_year: null, gender: 'nam', display_name: 'Hùng' }
+  );
   assert(r2.text.includes('bạn Hùng'), '3.3 No birth_year → "bạn Hùng"');
 
   // 3.4 Empty symptom variable
-  const r3 = intel.renderMessage(intel.MORNING_TEMPLATES.has_symptom_stable, { symptom: '' }, { lang: 'vi', birth_year: 1960, gender: 'nam', display_name: 'Hùng' });
+  const r3 = intel.renderMessage(
+    intel.MORNING_TEMPLATES.has_symptom_stable,
+    { symptom: '' },
+    { lang: 'vi', birth_year: 1960, gender: 'nam', display_name: 'Hùng' }
+  );
   assert(!r3.text.includes('{symptom}'), '3.4 Empty symptom → no {symptom} left');
 
   // 3.5 Special characters in symptom
-  const r4 = intel.renderMessage(intel.MORNING_TEMPLATES.has_symptom_stable, { symptom: 'đau "dạ dày" & buồn nôn' }, { lang: 'vi', birth_year: 1960, gender: 'nam', display_name: 'Ba' });
+  const r4 = intel.renderMessage(
+    intel.MORNING_TEMPLATES.has_symptom_stable,
+    { symptom: 'đau "dạ dày" & buồn nôn' },
+    { lang: 'vi', birth_year: 1960, gender: 'nam', display_name: 'Ba' }
+  );
   assert(r4.text.includes('đau "dạ dày" & buồn nôn'), '3.5 Special chars preserved in symptom');
 
   // 3.6 Very long display name
   const longName = 'Nguyễn Văn A Bê Cê Đê';
-  const r5 = intel.renderMessage(intel.MORNING_TEMPLATES.default, {}, { lang: 'vi', birth_year: 1960, gender: 'nam', display_name: longName });
+  const r5 = intel.renderMessage(
+    intel.MORNING_TEMPLATES.default,
+    {},
+    { lang: 'vi', birth_year: 1960, gender: 'nam', display_name: longName }
+  );
   assert(r5.text.includes('Đê'), '3.6 Long name → uses last part');
 
   // 3.7 English mode
-  const r6 = intel.renderMessage(intel.MORNING_TEMPLATES.has_symptom_worsening, { symptom: 'headache' }, { lang: 'en', birth_year: 1960, gender: 'male', display_name: 'John' });
+  const r6 = intel.renderMessage(
+    intel.MORNING_TEMPLATES.has_symptom_worsening,
+    { symptom: 'headache' },
+    { lang: 'en', birth_year: 1960, gender: 'male', display_name: 'John' }
+  );
   assert(r6.text.includes('John'), '3.7 EN: contains name');
   assert(r6.text.includes('headache'), '3.8 EN: contains symptom');
   assert(!r6.text.includes('chú'), '3.9 EN: no Vietnamese honorific');
@@ -224,12 +278,20 @@ async function testGenerateMessageDiversity() {
   // 4.8 All trigger types return valid for user 4
   for (const trigger of ['morning', 'afternoon', 'evening', 'alert_severity', 'alert_trend']) {
     const msg = await intel.generateMessage(pool, 4, trigger, user4);
-    assert(msg.text.length > 5, `4.8 ${trigger} returns non-trivial text (${msg.text.length} chars)`);
+    assert(
+      msg.text.length > 5,
+      `4.8 ${trigger} returns non-trivial text (${msg.text.length} chars)`
+    );
   }
 
   // 4.9 Evening with tasks
-  const mEve = await intel.generateMessage(pool, 4, 'evening', user4, { tasks: 'uống thuốc, đo huyết áp' });
-  assert(mEve.text.includes('uống thuốc') || mEve.text.includes('đo huyết áp'), '4.9 Evening message includes tasks');
+  const mEve = await intel.generateMessage(pool, 4, 'evening', user4, {
+    tasks: 'uống thuốc, đo huyết áp',
+  });
+  assert(
+    mEve.text.includes('uống thuốc') || mEve.text.includes('đo huyết áp'),
+    '4.9 Evening message includes tasks'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -239,14 +301,21 @@ async function testAlertTriggerEdgeCases() {
   console.log('\n══════ SUITE 5: Alert Trigger Edge Cases ══════');
 
   // Setup: ensure user 4 has recent high severity
-  await pool.query(`UPDATE script_sessions SET created_at = NOW(), severity = 'high' WHERE id = (SELECT id FROM script_sessions WHERE user_id = 4 ORDER BY id DESC LIMIT 1)`);
+  await pool.query(
+    `UPDATE script_sessions SET created_at = NOW(), severity = 'high' WHERE id = (SELECT id FROM script_sessions WHERE user_id = 4 ORDER BY id DESC LIMIT 1)`
+  );
 
   // 5.1 High severity within 24h → triggers
   const r1 = await intel.checkAlertTriggers(pool, 4);
-  assert(r1 !== null && r1.trigger === 'alert_severity', '5.1 Recent high severity → alert_severity');
+  assert(
+    r1 !== null && r1.trigger === 'alert_severity',
+    '5.1 Recent high severity → alert_severity'
+  );
 
   // 5.2 Set severity to low → no severity trigger
-  await pool.query(`UPDATE script_sessions SET severity = 'low' WHERE id = (SELECT id FROM script_sessions WHERE user_id = 4 ORDER BY id DESC LIMIT 1)`);
+  await pool.query(
+    `UPDATE script_sessions SET severity = 'low' WHERE id = (SELECT id FROM script_sessions WHERE user_id = 4 ORDER BY id DESC LIMIT 1)`
+  );
   const r2 = await intel.checkAlertTriggers(pool, 4);
   // Might still trigger from trend if count_7d >= 3
   if (r2) {
@@ -256,17 +325,26 @@ async function testAlertTriggerEdgeCases() {
   }
 
   // 5.3 Set cluster trend to increasing + count_7d >= 3 → alert_trend
-  await pool.query(`UPDATE problem_clusters SET trend = 'increasing', count_7d = 5 WHERE user_id = 4 AND id = (SELECT id FROM problem_clusters WHERE user_id = 4 AND is_active = TRUE ORDER BY priority DESC LIMIT 1)`);
+  await pool.query(
+    `UPDATE problem_clusters SET trend = 'increasing', count_7d = 5 WHERE user_id = 4 AND id = (SELECT id FROM problem_clusters WHERE user_id = 4 AND is_active = TRUE ORDER BY priority DESC LIMIT 1)`
+  );
   const r3 = await intel.checkAlertTriggers(pool, 4);
-  assert(r3 !== null && r3.trigger === 'alert_trend', '5.3 Increasing trend + count_7d >= 3 → alert_trend');
+  assert(
+    r3 !== null && r3.trigger === 'alert_trend',
+    '5.3 Increasing trend + count_7d >= 3 → alert_trend'
+  );
 
   // 5.4 count_7d < 3 → no trend trigger
-  await pool.query(`UPDATE problem_clusters SET count_7d = 1 WHERE user_id = 4 AND trend = 'increasing'`);
+  await pool.query(
+    `UPDATE problem_clusters SET count_7d = 1 WHERE user_id = 4 AND trend = 'increasing'`
+  );
   const r4 = await intel.checkAlertTriggers(pool, 4);
   assert(r4 === null, '5.4 count_7d < 3 → no trigger');
 
   // Restore
-  await pool.query(`UPDATE script_sessions SET severity = 'high', created_at = NOW() WHERE id = (SELECT id FROM script_sessions WHERE user_id = 4 ORDER BY id DESC LIMIT 1)`);
+  await pool.query(
+    `UPDATE script_sessions SET severity = 'high', created_at = NOW() WHERE id = (SELECT id FROM script_sessions WHERE user_id = 4 ORDER BY id DESC LIMIT 1)`
+  );
   await pool.query(`UPDATE problem_clusters SET trend = 'stable', count_7d = 0 WHERE user_id = 4`);
 }
 
@@ -282,11 +360,11 @@ async function testApiStress() {
     promises.push(get('/api/health/notif-preview/4/morning'));
   }
   const results = await Promise.all(promises);
-  const allOk = results.every(r => r.s === 200 && r.b.ok);
+  const allOk = results.every((r) => r.s === 200 && r.b.ok);
   assert(allOk, '6.1 10 concurrent preview requests all 200');
 
   // 6.2 All return same templateId (deterministic)
-  const ids = results.map(r => r.b.templateId);
+  const ids = results.map((r) => r.b.templateId);
   const unique = new Set(ids);
   assert(unique.size === 1, '6.2 All 10 return same templateId (deterministic)');
 
@@ -298,7 +376,10 @@ async function testApiStress() {
     get('/api/health/notif-context/4'),
     get('/api/health/notif-alerts/4'),
   ]);
-  assert(mixed.every(r => r.s === 200), '6.3 Mixed concurrent requests all 200');
+  assert(
+    mixed.every((r) => r.s === 200),
+    '6.3 Mixed concurrent requests all 200'
+  );
 
   // 6.4 Preview for users with onboarding profiles
   for (const uid of [1, 3, 4]) {
@@ -318,19 +399,34 @@ async function testBasicNotifIntegration() {
 
   const fs = require('fs');
   const path = require('path');
-  const src = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'notification', 'basic.notification.service.js'), 'utf8');
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'notification', 'basic.notification.service.js'),
+    'utf8'
+  );
 
   // 7.1 Intelligence imported
-  assert(src.includes("require('./notification-intelligence.service')"), '7.1 Intelligence service imported');
+  assert(
+    src.includes("require('./notification-intelligence.service')"),
+    '7.1 Intelligence service imported'
+  );
 
   // 7.2 generateMessage used in morning
-  assert(src.includes("generateMessage(pool, user.id, 'morning'"), '7.2 Morning uses generateMessage');
+  assert(
+    src.includes("generateMessage(pool, user.id, 'morning'"),
+    '7.2 Morning uses generateMessage'
+  );
 
   // 7.3 generateMessage used in afternoon
-  assert(src.includes("generateMessage(pool, user.id, 'afternoon'"), '7.3 Afternoon uses generateMessage');
+  assert(
+    src.includes("generateMessage(pool, user.id, 'afternoon'"),
+    '7.3 Afternoon uses generateMessage'
+  );
 
   // 7.4 generateMessage used in evening
-  assert(src.includes("generateMessage(pool, user.id, 'evening'"), '7.4 Evening uses generateMessage');
+  assert(
+    src.includes("generateMessage(pool, user.id, 'evening'"),
+    '7.4 Evening uses generateMessage'
+  );
 
   // 7.5 Fallback exists (try/catch around generateMessage)
   const morningSection = src.substring(src.indexOf("'morning'"), src.indexOf("'morning'") + 500);
@@ -343,7 +439,10 @@ async function testBasicNotifIntegration() {
   assert(src.includes('runContextAlerts(pool)'), '7.7 runContextAlerts called in orchestrator');
 
   // 7.8 Context alerts use lifecycle filter
-  assert(src.includes("ul.segment IN ('active', 'semi_active')"), '7.8 Context alerts filter by lifecycle');
+  assert(
+    src.includes("ul.segment IN ('active', 'semi_active')"),
+    '7.8 Context alerts filter by lifecycle'
+  );
 
   // 7.9 Context alerts have 12h dedup
   assert(src.includes("INTERVAL '12 hours'"), '7.9 Context alerts have 12h dedup');
@@ -382,7 +481,10 @@ async function testBilingual() {
   ];
   let allBilingual = true;
   for (const t of allTemplates) {
-    if (!t.vi || !t.en) { allBilingual = false; break; }
+    if (!t.vi || !t.en) {
+      allBilingual = false;
+      break;
+    }
   }
   assert(allBilingual, '8.4 All templates bilingual (vi + en)');
 }
@@ -398,7 +500,10 @@ async function testTraceability() {
 
   for (const trigger of triggers) {
     const msg = await intel.generateMessage(pool, 4, trigger, user);
-    assert(typeof msg.templateId === 'string' && msg.templateId.length > 0, `9.1 ${trigger} has templateId`);
+    assert(
+      typeof msg.templateId === 'string' && msg.templateId.length > 0,
+      `9.1 ${trigger} has templateId`
+    );
     assert(typeof msg.text === 'string' && msg.text.length > 0, `9.2 ${trigger} has text`);
     assert(msg.context !== undefined, `9.3 ${trigger} returns context`);
   }
@@ -423,7 +528,9 @@ async function run() {
   await testTraceability();
 
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log(`║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`);
+  console.log(
+    `║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`
+  );
   if (totalFail > 0) {
     console.log('║  FAILURES:                                       ║');
     for (const f of failures) console.log(`║  - ${f.substring(0, 46).padEnd(46)} ║`);
@@ -434,4 +541,8 @@ async function run() {
   process.exit(totalFail > 0 ? 1 : 0);
 }
 
-run().catch(err => { console.error('CRASHED:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASHED:', err);
+  pool.end();
+  process.exit(1);
+});

@@ -3,7 +3,7 @@
  * Tracks user behavior patterns for smarter notifications.
  */
 
-const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
+const { cacheGet, cacheSet } = require('../../lib/redis');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 async function trackEvent(pool, userId, eventType, metadata = {}) {
@@ -18,28 +18,25 @@ async function trackEvent(pool, userId, eventType, metadata = {}) {
  * identifier to CRM. Never send screen params/query strings or page content.
  */
 async function trackScreenView(pool, userId, { screenName, featureCode = null } = {}) {
-  const normalizedScreenName = String(screenName || '').trim().slice(0, 120);
+  const normalizedScreenName = String(screenName || '')
+    .trim()
+    .slice(0, 120);
   if (!normalizedScreenName) throw new Error('screen_name is required');
 
-  const normalizedFeatureCode = featureCode == null
-    ? null
-    : String(featureCode).trim().slice(0, 80) || null;
+  const normalizedFeatureCode =
+    featureCode == null ? null : String(featureCode).trim().slice(0, 80) || null;
 
   await trackEvent(pool, userId, 'screen_viewed', {
     screen_name: normalizedScreenName,
     ...(normalizedFeatureCode ? { feature_code: normalizedFeatureCode } : {}),
   });
 
-  emitCrmEventAsync(
-    pool,
-    'screen.viewed',
-    {
-      user_id: String(userId),
-      screen_name: normalizedScreenName,
-      ...(normalizedFeatureCode ? { feature_code: normalizedFeatureCode } : {}),
-      source_platform: 'asinu_app',
-    },
-  );
+  emitCrmEventAsync(pool, 'screen.viewed', {
+    user_id: String(userId),
+    screen_name: normalizedScreenName,
+    ...(normalizedFeatureCode ? { feature_code: normalizedFeatureCode } : {}),
+    source_platform: 'asinu_app',
+  });
 }
 
 async function getUserPattern(pool, userId) {
@@ -65,7 +62,7 @@ async function getUserPattern(pool, userId) {
     [userId]
   );
 
-  const activeHours = hourRes.rows.map(r => parseInt(r.hour));
+  const activeHours = hourRes.rows.map((r) => parseInt(r.hour));
   const total = parseInt(responseRes.rows[0]?.total || 0);
   const responded = parseInt(responseRes.rows[0]?.responded || 0);
   const responseRate = total > 0 ? responded / total : 1;
@@ -91,9 +88,9 @@ async function getOptimalNotificationTime(pool, userId) {
   // Use most active hours
   const sorted = pattern.activeHours.sort((a, b) => a - b);
   return {
-    morning: sorted.find(h => h >= 6 && h <= 10) || 8,
-    afternoon: sorted.find(h => h >= 11 && h <= 15) || 12,
-    evening: sorted.find(h => h >= 17 && h <= 22) || 20,
+    morning: sorted.find((h) => h >= 6 && h <= 10) || 8,
+    afternoon: sorted.find((h) => h >= 11 && h <= 15) || 12,
+    evening: sorted.find((h) => h >= 17 && h <= 22) || 20,
   };
 }
 

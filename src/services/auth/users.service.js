@@ -32,16 +32,15 @@ async function searchUsers(pool, currentUserId, query) {
 
     const result = await pool.query(sql, params);
 
-    const users = result.rows.map(row => ({
+    const users = result.rows.map((row) => ({
       id: String(row.id),
       name: row.name || `User ${row.id}`,
       email: row.email || null,
-      phone: row.phone || null
+      phone: row.phone || null,
     }));
 
     return { ok: true, users };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -69,21 +68,20 @@ async function getAllUsers(pool, currentUserId, limit = 100) {
       [currentUserId, limit]
     );
 
-    const users = result.rows.map(row => ({
+    const users = result.rows.map((row) => ({
       id: String(row.id),
       name: row.name || `User ${row.id}`,
       email: row.email || null,
-      phone: row.phone || null
+      phone: row.phone || null,
     }));
 
     return { ok: true, users };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
 
 module.exports = {
   searchUsers,
-  getAllUsers
+  getAllUsers,
 };

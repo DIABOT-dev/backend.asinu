@@ -16,9 +16,18 @@
 
 const { callTextAi } = require('../ai/ai.service');
 const { getPendingFallbacks, markFallbackProcessed } = require('./fallback.service');
-const { addCluster, updateClusterStats, generateScriptForCluster, toClusterKey } = require('./script.service');
+const {
+  addCluster,
+  updateClusterStats,
+  generateScriptForCluster,
+  toClusterKey,
+} = require('./script.service');
 const { updateSymptomFrequency } = require('./symptom-tracker.service');
-const { getActiveUserIds, updateAllSegments, getUsersBySegment } = require('../profile/lifecycle.service');
+const {
+  getActiveUserIds: _getActiveUserIds,
+  updateAllSegments,
+  getUsersBySegment,
+} = require('../profile/lifecycle.service');
 
 // Phase 6 #16: Priority compute — timeout limit để tránh cycle chạy quá lâu
 const MAX_CYCLE_MS = parseInt(process.env.RND_MAX_CYCLE_MS || '1800000', 10); // default 30 phút
@@ -67,10 +76,12 @@ async function runNightlyCycle(pool) {
       getUsersBySegment(pool, 'active'),
       getUsersBySegment(pool, 'semi_active'),
     ]);
-    const activeIds = activeUsers.map(u => u.user_id);
-    const semiActiveIds = semiActiveUsers.map(u => u.user_id);
+    const activeIds = activeUsers.map((u) => u.user_id);
+    const semiActiveIds = semiActiveUsers.map((u) => u.user_id);
 
-    console.log(`[R&D] Priority: ${activeIds.length} active, ${semiActiveIds.length} semi_active, ${stats.usersSkipped} skipped`);
+    console.log(
+      `[R&D] Priority: ${activeIds.length} active, ${semiActiveIds.length} semi_active, ${stats.usersSkipped} skipped`
+    );
 
     // ─── PRIORITY 1: Active users (full processing, no timeout) ──────────
     const activeFallback = await processFallbackLogs(pool, activeIds);
@@ -89,12 +100,12 @@ async function runNightlyCycle(pool) {
     const elapsedAfterActive = Date.now() - cycleStart.getTime();
     if (elapsedAfterActive < MAX_CYCLE_MS) {
       const remainingMs = MAX_CYCLE_MS - elapsedAfterActive;
-      console.log(`[R&D] Active done in ${elapsedAfterActive}ms — ${Math.round(remainingMs/1000)}s remaining for semi_active`);
+      console.log(
+        `[R&D] Active done in ${elapsedAfterActive}ms — ${Math.round(remainingMs / 1000)}s remaining for semi_active`
+      );
 
       // Process semi_active with periodic timeout check
-      const semiResult = await processSemiActiveWithTimeout(
-        pool, semiActiveIds, cycleStart
-      );
+      const semiResult = await processSemiActiveWithTimeout(pool, semiActiveIds, cycleStart);
       stats.semiActiveProcessed = semiResult.usersProcessed;
       stats.semiActiveSkippedTimeout = semiResult.skipped;
       stats.fallbacksProcessed += semiResult.fallbacksProcessed;
@@ -103,7 +114,9 @@ async function runNightlyCycle(pool) {
       stats.scriptsRegenerated += semiResult.scriptsRegenerated;
       stats.aiCallsMade += semiResult.aiCalls;
     } else {
-      console.log(`[R&D] ⚠️ TIMEOUT after active processing — skipping all ${semiActiveIds.length} semi_active users`);
+      console.log(
+        `[R&D] ⚠️ TIMEOUT after active processing — skipping all ${semiActiveIds.length} semi_active users`
+      );
       stats.semiActiveSkippedTimeout = semiActiveIds.length;
     }
 
@@ -127,11 +140,20 @@ async function runNightlyCycle(pool) {
          scripts_reused = $11,
          elapsed_ms = $12
        WHERE id = $1`,
-      [cycleLogId, stats.usersProcessed, stats.fallbacksProcessed,
-       stats.clustersCreated, stats.clustersUpdated,
-       stats.scriptsRegenerated, stats.aiCallsMade,
-       stats.activeProcessed, stats.semiActiveProcessed,
-       stats.semiActiveSkippedTimeout, stats.scriptsReused, stats.elapsedMs]
+      [
+        cycleLogId,
+        stats.usersProcessed,
+        stats.fallbacksProcessed,
+        stats.clustersCreated,
+        stats.clustersUpdated,
+        stats.scriptsRegenerated,
+        stats.aiCallsMade,
+        stats.activeProcessed,
+        stats.semiActiveProcessed,
+        stats.semiActiveSkippedTimeout,
+        stats.scriptsReused,
+        stats.elapsedMs,
+      ]
     );
 
     console.log(`[R&D Cycle] Completed in ${stats.elapsedMs}ms:`, stats);
@@ -140,12 +162,14 @@ async function runNightlyCycle(pool) {
     console.error('[R&D Cycle] Failed:', err.message);
 
     if (cycleLogId) {
-      await pool.query(
-        `UPDATE rnd_cycle_logs SET
+      await pool
+        .query(
+          `UPDATE rnd_cycle_logs SET
            completed_at = NOW(), status = 'failed', error_message = $2
          WHERE id = $1`,
-        [cycleLogId, err.message]
-      ).catch(() => {});
+          [cycleLogId, err.message]
+        )
+        .catch(() => {});
     }
 
     throw err;
@@ -177,7 +201,9 @@ async function processSemiActiveWithTimeout(pool, semiActiveIds, cycleStart) {
     // Check timeout before each batch
     if (Date.now() - cycleStart.getTime() >= MAX_CYCLE_MS) {
       result.skipped = semiActiveIds.length - i;
-      console.log(`[R&D] ⏱️ Timeout reached — skipping remaining ${result.skipped} semi_active users`);
+      console.log(
+        `[R&D] ⏱️ Timeout reached — skipping remaining ${result.skipped} semi_active users`
+      );
       break;
     }
 
@@ -252,16 +278,23 @@ async function processFallbackLogs(pool, activeUserIds = null) {
 
         if (label.matchExisting) {
           // Merge into existing cluster
-          await markFallbackProcessed(
-            pool, fb.id, label.label, label.clusterKey, label.confidence
-          );
+          await markFallbackProcessed(pool, fb.id, label.label, label.clusterKey, label.confidence);
         } else {
           // Create new cluster
           const cluster = await addCluster(
-            pool, parseInt(userId), label.clusterKey, label.displayName, 'rnd_cycle'
+            pool,
+            parseInt(userId),
+            label.clusterKey,
+            label.displayName,
+            'rnd_cycle'
           );
           await markFallbackProcessed(
-            pool, fb.id, label.label, label.clusterKey, label.confidence, cluster.id
+            pool,
+            fb.id,
+            label.label,
+            label.clusterKey,
+            label.confidence,
+            cluster.id
           );
           clustersCreated++;
         }
@@ -282,7 +315,7 @@ async function processFallbackLogs(pool, activeUserIds = null) {
  */
 async function labelSymptom(rawInput, existingClusters) {
   const clusterList = existingClusters
-    .map(c => `${c.cluster_key} (${c.display_name})`)
+    .map((c) => `${c.cluster_key} (${c.display_name})`)
     .join(', ');
 
   const prompt = `Bệnh nhân nói: "${rawInput}"
@@ -377,7 +410,7 @@ async function updateAllClusterFrequencies(pool, activeUserIds = null) {
 
       for (const cluster of clusters) {
         // Find matching frequency data
-        const freq = frequencies.find(f => {
+        const freq = frequencies.find((f) => {
           const fName = f.symptom_name.toLowerCase();
           const cName = cluster.display_name.toLowerCase();
           return fName.includes(cName) || cName.includes(fName);

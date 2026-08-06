@@ -20,13 +20,15 @@ describe('safeValidate', () => {
   });
 
   test('extracts JSON from code fence', () => {
-    const raw = '```json\n{"risk_tier":"LOW","risk_score":10,"notify_caregiver":false,"reasoning":"ok","outcome_text":"fine","recommended_action":"rest"}\n```';
+    const raw =
+      '```json\n{"risk_tier":"LOW","risk_score":10,"notify_caregiver":false,"reasoning":"ok","outcome_text":"fine","recommended_action":"rest"}\n```';
     const r = safeValidate(RiskAssessmentSchema, raw);
     expect(r.ok).toBe(true);
   });
 
   test('extracts JSON when surrounded by prose', () => {
-    const raw = 'Here is my assessment: {"risk_tier":"HIGH","risk_score":80,"notify_caregiver":true,"reasoning":"chest pain","outcome_text":"go to ER","recommended_action":"call 115"} -- end';
+    const raw =
+      'Here is my assessment: {"risk_tier":"HIGH","risk_score":80,"notify_caregiver":true,"reasoning":"chest pain","outcome_text":"go to ER","recommended_action":"call 115"} -- end';
     const r = safeValidate(RiskAssessmentSchema, raw);
     expect(r.ok).toBe(true);
     expect(r.data.risk_tier).toBe('HIGH');
@@ -39,14 +41,17 @@ describe('safeValidate', () => {
   });
 
   test('rejects invalid risk_tier', () => {
-    const r = safeValidate(RiskAssessmentSchema, JSON.stringify({
-      risk_tier: 'SOMETHING_ELSE',
-      risk_score: 50,
-      notify_caregiver: false,
-      reasoning: 'x',
-      outcome_text: 'y',
-      recommended_action: 'z',
-    }));
+    const r = safeValidate(
+      RiskAssessmentSchema,
+      JSON.stringify({
+        risk_tier: 'SOMETHING_ELSE',
+        risk_score: 50,
+        notify_caregiver: false,
+        reasoning: 'x',
+        outcome_text: 'y',
+        recommended_action: 'z',
+      })
+    );
     expect(r.ok).toBe(false);
     expect(r.reason).toBe('schema_mismatch');
   });
@@ -119,7 +124,11 @@ describe('SymptomAnalysisSchema', () => {
         { id: 'aq2', text: 'Bao lâu rồi?', type: 'single_choice', options: ['<1 ngày', '>1 ngày'] },
       ],
       scoringRules: [
-        { conditions: [{ field: 'aq1', op: 'gte', value: 7 }], severity: 'high', needs_doctor: true },
+        {
+          conditions: [{ field: 'aq1', op: 'gte', value: 7 }],
+          severity: 'high',
+          needs_doctor: true,
+        },
       ],
       conclusionTemplates: { low: { summary: 'x', recommendation: 'y', close_message: 'z' } },
       clusterKey: 'rectal_bleeding',

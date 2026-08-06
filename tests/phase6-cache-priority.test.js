@@ -11,7 +11,11 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const http = require('http');
 
 const cache = require('../src/services/checkin/script-cache.service');
-const { runNightlyCycle, processSemiActiveWithTimeout, MAX_CYCLE_MS } = require('../src/services/checkin/rnd-cycle.service');
+const {
+  runNightlyCycle,
+  processSemiActiveWithTimeout,
+  MAX_CYCLE_MS,
+} = require('../src/services/checkin/rnd-cycle.service');
 const lifecycle = require('../src/services/profile/lifecycle.service');
 
 let totalPass = 0;
@@ -19,29 +23,55 @@ let totalFail = 0;
 const failures = [];
 
 function assert(condition, name) {
-  if (condition) { totalPass++; console.log(`  PASS ✓ ${name}`); }
-  else { totalFail++; failures.push(name); console.log(`  FAIL ✗ ${name}`); }
+  if (condition) {
+    totalPass++;
+    console.log(`  PASS ✓ ${name}`);
+  } else {
+    totalFail++;
+    failures.push(name);
+    console.log(`  FAIL ✗ ${name}`);
+  }
 }
 
 function get(path) {
   return new Promise((resolve, reject) => {
-    http.get('http://localhost:3000' + path, res => {
-      let d = ''; res.on('data', c => d += c);
-      res.on('end', () => { try { resolve({ s: res.statusCode, b: JSON.parse(d) }); } catch { resolve({ s: res.statusCode, b: d }); } });
-    }).on('error', reject);
+    http
+      .get('http://localhost:3000' + path, (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => {
+          try {
+            resolve({ s: res.statusCode, b: JSON.parse(d) });
+          } catch {
+            resolve({ s: res.statusCode, b: d });
+          }
+        });
+      })
+      .on('error', reject);
   });
 }
 
 function post(path, body) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body || {});
-    const req = http.request('http://localhost:3000' + path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': data.length },
-    }, res => {
-      let d = ''; res.on('data', c => d += c);
-      res.on('end', () => { try { resolve({ s: res.statusCode, b: JSON.parse(d) }); } catch { resolve({ s: res.statusCode, b: d }); } });
-    });
+    const req = http.request(
+      'http://localhost:3000' + path,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': data.length },
+      },
+      (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => {
+          try {
+            resolve({ s: res.statusCode, b: JSON.parse(d) });
+          } catch {
+            resolve({ s: res.statusCode, b: d });
+          }
+        });
+      }
+    );
     req.on('error', reject);
     req.write(data);
     req.end();
@@ -56,7 +86,9 @@ let TEST_SCRIPT_ID = null;
 // SETUP: Reset reuse counters for clean tests
 // ═══════════════════════════════════════════════════════════════════════════════
 async function setup() {
-  await pool.query('UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE user_id = 4');
+  await pool.query(
+    'UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE user_id = 4'
+  );
   // Pick a cluster_key user 4 has an active script for
   const { rows } = await pool.query(
     `SELECT cluster_key, id FROM triage_scripts WHERE user_id = 4 AND is_active = TRUE AND script_type = 'initial' ORDER BY created_at DESC LIMIT 1`
@@ -81,13 +113,16 @@ async function testSchema() {
     ORDER BY column_name
   `);
   assert(cols.length === 2, '1.1 Both columns added');
-  const reuseCol = cols.find(c => c.column_name === 'reuse_count');
+  const reuseCol = cols.find((c) => c.column_name === 'reuse_count');
   assert(reuseCol && reuseCol.data_type === 'integer', '1.2 reuse_count is integer');
   assert(reuseCol && reuseCol.is_nullable === 'NO', '1.3 reuse_count NOT NULL');
   assert(reuseCol && reuseCol.column_default === '0', '1.4 reuse_count default=0');
 
-  const lastReusedCol = cols.find(c => c.column_name === 'last_reused_at');
-  assert(lastReusedCol && lastReusedCol.data_type === 'timestamp with time zone', '1.5 last_reused_at is timestamptz');
+  const lastReusedCol = cols.find((c) => c.column_name === 'last_reused_at');
+  assert(
+    lastReusedCol && lastReusedCol.data_type === 'timestamp with time zone',
+    '1.5 last_reused_at is timestamptz'
+  );
 
   // 1.6 Index on reuse_count exists
   const { rows: idx } = await pool.query(`
@@ -101,7 +136,10 @@ async function testSchema() {
     WHERE table_name = 'rnd_cycle_logs'
       AND column_name IN ('active_processed', 'semi_active_processed', 'semi_active_skipped_timeout', 'scripts_reused', 'elapsed_ms')
   `);
-  assert(logCols.length === 5, `1.7 rnd_cycle_logs has 5 new metric columns (got ${logCols.length})`);
+  assert(
+    logCols.length === 5,
+    `1.7 rnd_cycle_logs has 5 new metric columns (got ${logCols.length})`
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -145,7 +183,10 @@ async function testReuseScript() {
   console.log('\n══════ SUITE 3: reuseScript ══════');
 
   // Reset counter
-  await pool.query('UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE id = $1', [TEST_SCRIPT_ID]);
+  await pool.query(
+    'UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE id = $1',
+    [TEST_SCRIPT_ID]
+  );
 
   // 3.1 First reuse
   const r1 = await cache.reuseScript(pool, 4, TEST_CLUSTER_KEY);
@@ -154,7 +195,10 @@ async function testReuseScript() {
   assert(r1.last_reused_at !== null, '3.3 last_reused_at set');
 
   // 3.4 Verify in DB
-  const { rows: v1 } = await pool.query('SELECT reuse_count, last_reused_at FROM triage_scripts WHERE id = $1', [TEST_SCRIPT_ID]);
+  const { rows: v1 } = await pool.query(
+    'SELECT reuse_count, last_reused_at FROM triage_scripts WHERE id = $1',
+    [TEST_SCRIPT_ID]
+  );
   assert(v1[0].reuse_count === 1, '3.4 DB verified reuse_count=1');
   assert(v1[0].last_reused_at !== null, '3.5 DB verified last_reused_at not null');
 
@@ -166,7 +210,9 @@ async function testReuseScript() {
   for (let i = 0; i < 5; i++) {
     await cache.reuseScript(pool, 4, TEST_CLUSTER_KEY);
   }
-  const { rows: v2 } = await pool.query('SELECT reuse_count FROM triage_scripts WHERE id = $1', [TEST_SCRIPT_ID]);
+  const { rows: v2 } = await pool.query('SELECT reuse_count FROM triage_scripts WHERE id = $1', [
+    TEST_SCRIPT_ID,
+  ]);
   assert(v2[0].reuse_count === 7, `3.7 After 5 more reuses → 7 (got ${v2[0].reuse_count})`);
 
   // 3.8 reuseScript on non-existent → null
@@ -174,7 +220,10 @@ async function testReuseScript() {
   assert(r3 === null, '3.8 Non-existent → null');
 
   // Reset
-  await pool.query('UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE id = $1', [TEST_SCRIPT_ID]);
+  await pool.query(
+    'UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE id = $1',
+    [TEST_SCRIPT_ID]
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -184,7 +233,10 @@ async function testGetOrReuseScript() {
   console.log('\n══════ SUITE 4: getOrReuseScript ══════');
 
   // Reset counter
-  await pool.query('UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE id = $1', [TEST_SCRIPT_ID]);
+  await pool.query(
+    'UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE id = $1',
+    [TEST_SCRIPT_ID]
+  );
 
   // 4.1 First call → cache_first
   const r1 = await cache.getOrReuseScript(pool, 4, TEST_CLUSTER_KEY);
@@ -223,13 +275,18 @@ async function testGetOrReuseScript() {
   // 4.13 Generator throws → error path
   const r7 = await cache.getOrReuseScript(pool, 4, 'nonexistent_xyz_3', {
     allowGenerate: true,
-    generator: async () => { throw new Error('boom'); },
+    generator: async () => {
+      throw new Error('boom');
+    },
   });
   assert(r7.source === 'none', '4.13 Generator error → none');
   assert(r7.error === 'boom', '4.14 error message captured');
 
   // Reset
-  await pool.query('UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE id = $1', [TEST_SCRIPT_ID]);
+  await pool.query(
+    'UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE id = $1',
+    [TEST_SCRIPT_ID]
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -239,7 +296,9 @@ async function testStats() {
   console.log('\n══════ SUITE 5: Stats Functions ══════');
 
   // Setup: reset, then reuse 3 scripts
-  await pool.query('UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE user_id = 4');
+  await pool.query(
+    'UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE user_id = 4'
+  );
 
   // 5.1 Initial stats — all zeros
   let stats = await cache.getReuseStatsForUser(pool, 4);
@@ -272,7 +331,9 @@ async function testStats() {
   assert(top1.length === 1, '5.12 Limit=1 respected');
 
   // Reset
-  await pool.query('UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE user_id = 4');
+  await pool.query(
+    'UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE user_id = 4'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -283,10 +344,16 @@ async function testPriorityCompute() {
 
   // 6.1 MAX_CYCLE_MS exported
   assert(typeof MAX_CYCLE_MS === 'number', '6.1 MAX_CYCLE_MS exported');
-  assert(MAX_CYCLE_MS === 1800000, `6.2 Default MAX_CYCLE_MS = 1800000 (30min) (got ${MAX_CYCLE_MS})`);
+  assert(
+    MAX_CYCLE_MS === 1800000,
+    `6.2 Default MAX_CYCLE_MS = 1800000 (30min) (got ${MAX_CYCLE_MS})`
+  );
 
   // 6.3 processSemiActiveWithTimeout exported
-  assert(typeof processSemiActiveWithTimeout === 'function', '6.3 processSemiActiveWithTimeout exported');
+  assert(
+    typeof processSemiActiveWithTimeout === 'function',
+    '6.3 processSemiActiveWithTimeout exported'
+  );
 
   // 6.4 Run cycle and check priority metrics
   const stats = await runNightlyCycle(pool);
@@ -298,8 +365,10 @@ async function testPriorityCompute() {
   assert(stats.elapsedMs < MAX_CYCLE_MS, '6.9 elapsedMs < MAX_CYCLE_MS');
 
   // 6.10 active + semi_active processed = total processed
-  assert(stats.usersProcessed === stats.activeProcessed + stats.semiActiveProcessed,
-    `6.10 usersProcessed = active + semi (${stats.usersProcessed} = ${stats.activeProcessed} + ${stats.semiActiveProcessed})`);
+  assert(
+    stats.usersProcessed === stats.activeProcessed + stats.semiActiveProcessed,
+    `6.10 usersProcessed = active + semi (${stats.usersProcessed} = ${stats.activeProcessed} + ${stats.semiActiveProcessed})`
+  );
 
   // 6.11 Cycle log has new fields populated
   const { rows: logs } = await pool.query(`SELECT * FROM rnd_cycle_logs ORDER BY id DESC LIMIT 1`);
@@ -351,8 +420,10 @@ async function testSemiActiveIntegration() {
   const stats = await runNightlyCycle(pool);
 
   // Should now process user 4 in semi_active priority
-  assert(stats.semiActiveProcessed >= 1 || stats.activeProcessed === 0,
-    `8.1 User 4 (semi_active) processed in priority 2 (active=${stats.activeProcessed}, semi=${stats.semiActiveProcessed})`);
+  assert(
+    stats.semiActiveProcessed >= 1 || stats.activeProcessed === 0,
+    `8.1 User 4 (semi_active) processed in priority 2 (active=${stats.activeProcessed}, semi=${stats.semiActiveProcessed})`
+  );
 
   // Restore
   if (backup.length > 0) {
@@ -374,7 +445,10 @@ async function testApi() {
     `SELECT id FROM triage_scripts WHERE user_id = 4 AND is_active = TRUE ORDER BY created_at DESC LIMIT 1`
   );
   const scriptIdForApi = freshScript[0]?.id || TEST_SCRIPT_ID;
-  await pool.query('UPDATE triage_scripts SET reuse_count = 3, last_reused_at = NOW() WHERE id = $1', [scriptIdForApi]);
+  await pool.query(
+    'UPDATE triage_scripts SET reuse_count = 3, last_reused_at = NOW() WHERE id = $1',
+    [scriptIdForApi]
+  );
 
   // 9.1 GET /cache/global
   const r1 = await get('/api/health/cache/global');
@@ -403,7 +477,10 @@ async function testApi() {
   // 9.10 POST /cache/reuse — reuse cached
   const r6 = await post('/api/health/cache/reuse', { userId: 4, clusterKey: TEST_CLUSTER_KEY });
   assert(r6.s === 200 && r6.b.ok, '9.10 POST /cache/reuse → 200');
-  assert(['cache_reused', 'cache_first'].includes(r6.b.source), `9.11 Source = cache_reused (got ${r6.b.source})`);
+  assert(
+    ['cache_reused', 'cache_first'].includes(r6.b.source),
+    `9.11 Source = cache_reused (got ${r6.b.source})`
+  );
 
   // 9.12 POST /cache/reuse missing params → 400
   const r7 = await post('/api/health/cache/reuse', {});
@@ -421,7 +498,9 @@ async function testApi() {
   assert(r9.b.log.status === 'completed', '9.17 Last log = completed');
 
   // Reset
-  await pool.query('UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE user_id = 4');
+  await pool.query(
+    'UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE user_id = 4'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -443,11 +522,17 @@ async function testCodeIntegration() {
 
   // 10.7 rnd-cycle exports
   assert(typeof MAX_CYCLE_MS === 'number', '10.7 MAX_CYCLE_MS exported');
-  assert(typeof processSemiActiveWithTimeout === 'function', '10.8 processSemiActiveWithTimeout exported');
+  assert(
+    typeof processSemiActiveWithTimeout === 'function',
+    '10.8 processSemiActiveWithTimeout exported'
+  );
 
   // 10.9 health.routes uses Phase 6
-  const hr = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'health.routes.js'), 'utf8');
-  assert(hr.includes("script-cache.service"), '10.9 routes imports script-cache');
+  const hr = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'routes', 'health.routes.js'),
+    'utf8'
+  );
+  assert(hr.includes('script-cache.service'), '10.9 routes imports script-cache');
   assert(hr.includes('/cache/global'), '10.10 routes has /cache/global');
   assert(hr.includes('/cache/user'), '10.11 routes has /cache/user');
   assert(hr.includes('/cache/top-reused'), '10.12 routes has /cache/top-reused');
@@ -456,7 +541,10 @@ async function testCodeIntegration() {
   assert(hr.includes('/rnd-cycle/last'), '10.15 routes has /rnd-cycle/last');
 
   // 10.16 rnd-cycle.service uses priority logic
-  const rc = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'checkin', 'rnd-cycle.service.js'), 'utf8');
+  const rc = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'checkin', 'rnd-cycle.service.js'),
+    'utf8'
+  );
   assert(rc.includes('PRIORITY 1'), '10.16 Has PRIORITY 1 comment');
   assert(rc.includes('PRIORITY 2'), '10.17 Has PRIORITY 2 comment');
   assert(rc.includes('MAX_CYCLE_MS'), '10.18 Uses MAX_CYCLE_MS');
@@ -490,7 +578,10 @@ async function testDefensive() {
 
   // 11.7 getGlobalReuseStats always returns
   const g = await cache.getGlobalReuseStats(pool);
-  assert(g !== null && typeof g.total_active_scripts === 'number', '11.7 Global stats always returns');
+  assert(
+    g !== null && typeof g.total_active_scripts === 'number',
+    '11.7 Global stats always returns'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -515,7 +606,9 @@ async function run() {
   await testDefensive();
 
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log(`║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`);
+  console.log(
+    `║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`
+  );
   if (totalFail > 0) {
     console.log('║  FAILURES:                                       ║');
     for (const f of failures) console.log(`║  - ${f.substring(0, 46).padEnd(46)} ║`);
@@ -526,4 +619,8 @@ async function run() {
   process.exit(totalFail > 0 ? 1 : 0);
 }
 
-run().catch(err => { console.error('CRASHED:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASHED:', err);
+  pool.end();
+  process.exit(1);
+});

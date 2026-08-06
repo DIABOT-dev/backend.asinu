@@ -8,7 +8,10 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { createPool } = require('../src/lib/db');
-const { enqueueCrmEvent, flushCrmEventOutbox } = require('../src/services/integrations/crm-event.service');
+const {
+  enqueueCrmEvent,
+  flushCrmEventOutbox,
+} = require('../src/services/integrations/crm-event.service');
 
 const confirmed = process.argv.includes('--confirm');
 const pool = createPool({ connectionString: process.env.DATABASE_URL, max: 3 });
@@ -50,12 +53,18 @@ async function run() {
        FROM users u
        LEFT JOIN user_onboarding_profiles uop ON uop.user_id = u.id
       WHERE u.deleted_at IS NULL
-      ORDER BY u.id`,
+      ORDER BY u.id`
   );
 
   const users = result.rows;
   const preview = users.map((user) => String(user.id));
-  console.log(JSON.stringify({ mode: confirmed ? 'confirm' : 'dry-run', count: users.length, user_ids: preview }));
+  console.log(
+    JSON.stringify({
+      mode: confirmed ? 'confirm' : 'dry-run',
+      count: users.length,
+      user_ids: preview,
+    })
+  );
   if (!confirmed) return;
 
   let queued = 0;
@@ -78,7 +87,7 @@ async function run() {
   }
 
   const status = await pool.query(
-    "SELECT status, count(*)::int AS count FROM crm_event_outbox WHERE event_id LIKE 'backfill:user.created:%' GROUP BY status ORDER BY status",
+    "SELECT status, count(*)::int AS count FROM crm_event_outbox WHERE event_id LIKE 'backfill:user.created:%' GROUP BY status ORDER BY status"
   );
   console.log(JSON.stringify({ queued, sent, failed, status: status.rows }));
 }

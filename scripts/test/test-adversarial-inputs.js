@@ -13,15 +13,9 @@ const {
   toClusterKey,
 } = require('../src/services/checkin/script.service');
 
-const {
-  getNextQuestion,
-  validateScript,
-} = require('../src/services/checkin/script-runner');
+const { getNextQuestion, validateScript } = require('../src/services/checkin/script-runner');
 
-const {
-  evaluateScript,
-  evaluateFollowUp,
-} = require('../src/services/checkin/scoring-engine');
+const { evaluateScript, evaluateFollowUp } = require('../src/services/checkin/scoring-engine');
 
 const {
   getFallbackScriptData,
@@ -29,9 +23,7 @@ const {
   matchCluster,
 } = require('../src/services/checkin/fallback.service');
 
-const {
-  detectEmergency,
-} = require('../src/services/checkin/emergency-detector');
+const { detectEmergency } = require('../src/services/checkin/emergency-detector');
 
 // ─── Test harness ──────────────────────────────────────────────────────────
 
@@ -44,7 +36,14 @@ function report(section, testName, input, expected, actual, pass) {
   const status = pass ? 'PASS' : 'FAIL';
   if (pass) totalPass++;
   else totalFail++;
-  const entry = { section, testName, input: truncate(input), expected, actual: truncate(actual), status };
+  const entry = {
+    section,
+    testName,
+    input: truncate(input),
+    expected,
+    actual: truncate(actual),
+    status,
+  };
   results.push(entry);
   console.log(`  ${status}  [${section}] ${testName}`);
   if (!pass) {
@@ -103,7 +102,9 @@ async function cleanup() {
     // Setup: create clusters from onboarding
     console.log('--- Setup: createClustersFromOnboarding ---');
     const clusters = await createClustersFromOnboarding(pool, USER_ID, ['đau đầu', 'chóng mặt']);
-    console.log(`  Created ${clusters.length} clusters: ${clusters.map(c => c.cluster_key).join(', ')}\n`);
+    console.log(
+      `  Created ${clusters.length} clusters: ${clusters.map((c) => c.cluster_key).join(', ')}\n`
+    );
 
     // ═════════════════════════════════════════════════════════════════════════
     // A. Garbage inputs to matchCluster (15 tests)
@@ -151,12 +152,38 @@ async function cleanup() {
     const sliderScript = {
       questions: [
         { id: 'q1', text: 'Mức đau?', type: 'slider', min: 0, max: 10 },
-        { id: 'q2', text: 'Triệu chứng kèm?', type: 'multi_choice', options: ['buồn nôn', 'chóng mặt', 'không có'] },
+        {
+          id: 'q2',
+          text: 'Triệu chứng kèm?',
+          type: 'multi_choice',
+          options: ['buồn nôn', 'chóng mặt', 'không có'],
+        },
       ],
       scoring_rules: [
-        { conditions: [{ field: 'q1', op: 'gte', value: 7 }], combine: 'and', severity: 'high', follow_up_hours: 1, needs_doctor: true, needs_family_alert: true },
-        { conditions: [{ field: 'q1', op: 'gte', value: 4 }], combine: 'and', severity: 'medium', follow_up_hours: 3, needs_doctor: false, needs_family_alert: false },
-        { conditions: [{ field: 'q1', op: 'lt', value: 4 }], combine: 'and', severity: 'low', follow_up_hours: 6, needs_doctor: false, needs_family_alert: false },
+        {
+          conditions: [{ field: 'q1', op: 'gte', value: 7 }],
+          combine: 'and',
+          severity: 'high',
+          follow_up_hours: 1,
+          needs_doctor: true,
+          needs_family_alert: true,
+        },
+        {
+          conditions: [{ field: 'q1', op: 'gte', value: 4 }],
+          combine: 'and',
+          severity: 'medium',
+          follow_up_hours: 3,
+          needs_doctor: false,
+          needs_family_alert: false,
+        },
+        {
+          conditions: [{ field: 'q1', op: 'lt', value: 4 }],
+          combine: 'and',
+          severity: 'low',
+          follow_up_hours: 6,
+          needs_doctor: false,
+          needs_family_alert: false,
+        },
       ],
       condition_modifiers: [],
       conclusion_templates: {
@@ -180,7 +207,10 @@ async function cleanup() {
       { name: 'float 3.14159', answers: [{ question_id: 'q1', answer: 3.14159 }] },
       { name: 'NaN answer', answers: [{ question_id: 'q1', answer: NaN }] },
       { name: 'Infinity answer', answers: [{ question_id: 'q1', answer: Infinity }] },
-      { name: 'string "7" (valid number as string)', answers: [{ question_id: 'q1', answer: '7' }] },
+      {
+        name: 'string "7" (valid number as string)',
+        answers: [{ question_id: 'q1', answer: '7' }],
+      },
       { name: 'non-existent question_id "q999"', answers: [{ question_id: 'q999', answer: 5 }] },
     ];
 
@@ -193,10 +223,14 @@ async function cleanup() {
 
     // Duplicate question_id
     noCrash('B', 'duplicate question_id in answers', 'q1 twice', () => {
-      const r = evaluateScript(sliderScript, [
-        { question_id: 'q1', answer: 3 },
-        { question_id: 'q1', answer: 8 },
-      ], {});
+      const r = evaluateScript(
+        sliderScript,
+        [
+          { question_id: 'q1', answer: 3 },
+          { question_id: 'q1', answer: 8 },
+        ],
+        {}
+      );
       return `severity=${r.severity} (last wins due to Map)`;
     });
 
@@ -211,36 +245,89 @@ async function cleanup() {
       { name: '{ questions: null }', data: { questions: null } },
       { name: '{ questions: "not an array" }', data: { questions: 'not an array' } },
       { name: '{ questions: [null] }', data: { questions: [null] } },
-      { name: '{ questions: [{id:null,text:null,type:null}] }', data: { questions: [{ id: null, text: null, type: null }] } },
-      { name: 'scoring_rules: null', data: { questions: [{ id: 'q1', text: 'Q', type: 'slider' }], scoring_rules: null } },
-      { name: 'conclusion_templates: null', data: {
-        questions: [{ id: 'q1', text: 'Q', type: 'slider', min: 0, max: 10 }],
-        scoring_rules: [],
-        conclusion_templates: null,
-      }},
-      { name: 'rule refs non-existent field', data: {
-        questions: [{ id: 'q1', text: 'Q', type: 'slider', min: 0, max: 10 }],
-        scoring_rules: [{ conditions: [{ field: 'q_nonexistent', op: 'gte', value: 5 }], combine: 'and', severity: 'high' }],
-        conclusion_templates: { high: { summary: 'S', recommendation: 'R', close_message: 'C' } },
-      }},
-      { name: 'empty conditions array in rule', data: {
-        questions: [{ id: 'q1', text: 'Q', type: 'slider', min: 0, max: 10 }],
-        scoring_rules: [{ conditions: [], combine: 'and', severity: 'high' }],
-        conclusion_templates: { high: { summary: 'S', recommendation: 'R', close_message: 'C' } },
-      }},
-      { name: 'unknown operator "xyz"', data: {
-        questions: [{ id: 'q1', text: 'Q', type: 'slider', min: 0, max: 10 }],
-        scoring_rules: [{ conditions: [{ field: 'q1', op: 'xyz', value: 5 }], combine: 'and', severity: 'high' }],
-        conclusion_templates: { high: { summary: 'S', recommendation: 'R', close_message: 'C' } },
-      }},
-      { name: 'circular skip_if (q1 skip if q2, q2 skip if q1)', data: {
-        questions: [
-          { id: 'q1', text: 'Q1', type: 'slider', min: 0, max: 10, skip_if: { field: 'q2', op: 'eq', value: 5 } },
-          { id: 'q2', text: 'Q2', type: 'slider', min: 0, max: 10, skip_if: { field: 'q1', op: 'eq', value: 5 } },
-        ],
-        scoring_rules: [{ conditions: [{ field: 'q1', op: 'gte', value: 5 }], combine: 'and', severity: 'high' }],
-        conclusion_templates: { low: { summary: 'S', recommendation: 'R', close_message: 'C' } },
-      }},
+      {
+        name: '{ questions: [{id:null,text:null,type:null}] }',
+        data: { questions: [{ id: null, text: null, type: null }] },
+      },
+      {
+        name: 'scoring_rules: null',
+        data: { questions: [{ id: 'q1', text: 'Q', type: 'slider' }], scoring_rules: null },
+      },
+      {
+        name: 'conclusion_templates: null',
+        data: {
+          questions: [{ id: 'q1', text: 'Q', type: 'slider', min: 0, max: 10 }],
+          scoring_rules: [],
+          conclusion_templates: null,
+        },
+      },
+      {
+        name: 'rule refs non-existent field',
+        data: {
+          questions: [{ id: 'q1', text: 'Q', type: 'slider', min: 0, max: 10 }],
+          scoring_rules: [
+            {
+              conditions: [{ field: 'q_nonexistent', op: 'gte', value: 5 }],
+              combine: 'and',
+              severity: 'high',
+            },
+          ],
+          conclusion_templates: { high: { summary: 'S', recommendation: 'R', close_message: 'C' } },
+        },
+      },
+      {
+        name: 'empty conditions array in rule',
+        data: {
+          questions: [{ id: 'q1', text: 'Q', type: 'slider', min: 0, max: 10 }],
+          scoring_rules: [{ conditions: [], combine: 'and', severity: 'high' }],
+          conclusion_templates: { high: { summary: 'S', recommendation: 'R', close_message: 'C' } },
+        },
+      },
+      {
+        name: 'unknown operator "xyz"',
+        data: {
+          questions: [{ id: 'q1', text: 'Q', type: 'slider', min: 0, max: 10 }],
+          scoring_rules: [
+            {
+              conditions: [{ field: 'q1', op: 'xyz', value: 5 }],
+              combine: 'and',
+              severity: 'high',
+            },
+          ],
+          conclusion_templates: { high: { summary: 'S', recommendation: 'R', close_message: 'C' } },
+        },
+      },
+      {
+        name: 'circular skip_if (q1 skip if q2, q2 skip if q1)',
+        data: {
+          questions: [
+            {
+              id: 'q1',
+              text: 'Q1',
+              type: 'slider',
+              min: 0,
+              max: 10,
+              skip_if: { field: 'q2', op: 'eq', value: 5 },
+            },
+            {
+              id: 'q2',
+              text: 'Q2',
+              type: 'slider',
+              min: 0,
+              max: 10,
+              skip_if: { field: 'q1', op: 'eq', value: 5 },
+            },
+          ],
+          scoring_rules: [
+            {
+              conditions: [{ field: 'q1', op: 'gte', value: 5 }],
+              combine: 'and',
+              severity: 'high',
+            },
+          ],
+          conclusion_templates: { low: { summary: 'S', recommendation: 'R', close_message: 'C' } },
+        },
+      },
     ];
 
     for (const m of malformedScripts) {
@@ -278,16 +365,20 @@ async function cleanup() {
     // D2: answer same question twice
     noCrash('D', 'answer same question twice', 'q1 twice', () => {
       const q1Id = qs.length > 0 ? qs[0].id : 'q1';
-      const r = getNextQuestion(dizzScriptData, [
-        { question_id: q1Id, answer: 5 },
-        { question_id: q1Id, answer: 8 },
-      ], {});
+      const r = getNextQuestion(
+        dizzScriptData,
+        [
+          { question_id: q1Id, answer: 5 },
+          { question_id: q1Id, answer: 8 },
+        ],
+        {}
+      );
       return JSON.stringify(r);
     });
 
     // D3: multi_choice answer as string instead of array
     noCrash('D', 'multi_choice answer as string', 'string instead of array', () => {
-      const multiQ = qs.find(q => q.type === 'multi_choice');
+      const multiQ = qs.find((q) => q.type === 'multi_choice');
       const answers = qs.map((q, i) => {
         if (q.type === 'multi_choice') return { question_id: q.id, answer: 'buồn nôn' }; // string not array
         if (q.type === 'slider') return { question_id: q.id, answer: 5 };
@@ -426,23 +517,34 @@ async function cleanup() {
     console.log('\n=== F. Cross-module data flow (8 tests) ===');
 
     // F1: Create cluster -> delete from DB -> getScript returns null -> getNextQuestion with null
-    await noCrashAsync('F', 'getScript after cluster deleted -> null -> getNextQuestion(null)', 'delete cluster', async () => {
-      // Create a temp cluster
-      const tempClusters = await createClustersFromOnboarding(pool, USER_ID, ['đau lưng']);
-      // Delete it
-      await pool.query('DELETE FROM triage_scripts WHERE user_id = $1 AND cluster_key = $2', [USER_ID, 'back_pain']);
-      await pool.query('DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2', [USER_ID, 'back_pain']);
-      // Try to get script
-      const script = await getScript(pool, USER_ID, 'back_pain');
-      if (script !== null) return `unexpected: script not null after delete`;
-      // Now feed null to getNextQuestion - this may crash
-      try {
-        const r = getNextQuestion(null, [], {});
-        return `getNextQuestion(null) returned: ${JSON.stringify(r)}`;
-      } catch (e) {
-        return `getNextQuestion(null) threw: ${e.message} (EXPECTED - null script not handled)`;
+    await noCrashAsync(
+      'F',
+      'getScript after cluster deleted -> null -> getNextQuestion(null)',
+      'delete cluster',
+      async () => {
+        // Create a temp cluster
+        const tempClusters = await createClustersFromOnboarding(pool, USER_ID, ['đau lưng']);
+        // Delete it
+        await pool.query('DELETE FROM triage_scripts WHERE user_id = $1 AND cluster_key = $2', [
+          USER_ID,
+          'back_pain',
+        ]);
+        await pool.query('DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2', [
+          USER_ID,
+          'back_pain',
+        ]);
+        // Try to get script
+        const script = await getScript(pool, USER_ID, 'back_pain');
+        if (script !== null) return `unexpected: script not null after delete`;
+        // Now feed null to getNextQuestion - this may crash
+        try {
+          const r = getNextQuestion(null, [], {});
+          return `getNextQuestion(null) returned: ${JSON.stringify(r)}`;
+        } catch (e) {
+          return `getNextQuestion(null) threw: ${e.message} (EXPECTED - null script not handled)`;
+        }
       }
-    });
+    );
 
     // F2: Corrupt script_data in DB -> getNextQuestion handles gracefully
     await noCrashAsync('F', 'corrupted script_data in DB', 'corrupt json', async () => {
@@ -473,7 +575,10 @@ async function cleanup() {
       // Get first question
       const q1 = getNextQuestion(sd, [], {});
       // Now delete cluster from DB
-      await pool.query('DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2', [USER_ID, 'dizziness']);
+      await pool.query('DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2', [
+        USER_ID,
+        'dizziness',
+      ]);
       // Continue answering - script runner is stateless, works from script_data in memory
       const q2 = getNextQuestion(sd, [{ question_id: q1.question?.id || 'q1', answer: 5 }], {});
       // Restore cluster
@@ -484,51 +589,75 @@ async function cleanup() {
     // F4: evaluateFollowUp with previousSeverity=null
     noCrash('F', 'evaluateFollowUp previousSeverity=null', 'null severity', () => {
       const fbScript = getFallbackScriptData();
-      const r = evaluateFollowUp(fbScript, [
-        { question_id: 'fu1', answer: 'Vẫn vậy' },
-        { question_id: 'fu2', answer: 'Không' },
-      ], null);
+      const r = evaluateFollowUp(
+        fbScript,
+        [
+          { question_id: 'fu1', answer: 'Vẫn vậy' },
+          { question_id: 'fu2', answer: 'Không' },
+        ],
+        null
+      );
       return `severity=${r.severity}, action=${r.action}`;
     });
 
     // F5: evaluateFollowUp with previousSeverity="invalid_string"
     noCrash('F', 'evaluateFollowUp previousSeverity="invalid_string"', '"invalid_string"', () => {
       const fbScript = getFallbackScriptData();
-      const r = evaluateFollowUp(fbScript, [
-        { question_id: 'fu1', answer: 'Vẫn vậy' },
-        { question_id: 'fu2', answer: 'Không' },
-      ], 'invalid_string');
+      const r = evaluateFollowUp(
+        fbScript,
+        [
+          { question_id: 'fu1', answer: 'Vẫn vậy' },
+          { question_id: 'fu2', answer: 'Không' },
+        ],
+        'invalid_string'
+      );
       return `severity=${r.severity}, action=${r.action}`;
     });
 
     // F6: matchCluster when all clusters is_active=false
-    await noCrashAsync('F', 'matchCluster all clusters is_active=false', 'all inactive', async () => {
-      await pool.query('UPDATE problem_clusters SET is_active = FALSE WHERE user_id = $1', [USER_ID]);
-      const r = await matchCluster(pool, USER_ID, 'đau đầu');
-      // Restore
-      await pool.query('UPDATE problem_clusters SET is_active = TRUE WHERE user_id = $1', [USER_ID]);
-      return `matched=${r.matched}`;
-    });
+    await noCrashAsync(
+      'F',
+      'matchCluster all clusters is_active=false',
+      'all inactive',
+      async () => {
+        await pool.query('UPDATE problem_clusters SET is_active = FALSE WHERE user_id = $1', [
+          USER_ID,
+        ]);
+        const r = await matchCluster(pool, USER_ID, 'đau đầu');
+        // Restore
+        await pool.query('UPDATE problem_clusters SET is_active = TRUE WHERE user_id = $1', [
+          USER_ID,
+        ]);
+        return `matched=${r.matched}`;
+      }
+    );
 
     // F7: logFallback - test constraint violation resilience
     await noCrashAsync('F', 'logFallback constraint test', 'potential constraint', async () => {
       // Log with null checkin_id (should be fine)
       await logFallback(pool, USER_ID, 'test adversarial input', null, []);
       // Log again with same data (should not crash even if there were unique constraints)
-      await logFallback(pool, USER_ID, 'test adversarial input', null, [{ question_id: 'fb1', answer: 3 }]);
+      await logFallback(pool, USER_ID, 'test adversarial input', null, [
+        { question_id: 'fb1', answer: 3 },
+      ]);
       return 'logged twice without crash';
     });
 
     // F8: getUserScript when user has clusters but NO scripts
-    await noCrashAsync('F', 'getUserScript with clusters but no scripts', 'no scripts', async () => {
-      // Delete all scripts but keep clusters
-      await pool.query('DELETE FROM triage_scripts WHERE user_id = $1', [USER_ID]);
-      const r = await getUserScript(pool, USER_ID);
-      // Restore
-      await createClustersFromOnboarding(pool, USER_ID, ['đau đầu', 'chóng mặt']);
-      if (!r) return 'returned null (clusters exist but no scripts)';
-      return `greeting=${r.greeting}, clusters=${r.clusters?.length}, scripts=${Object.keys(r.scripts || {}).length}`;
-    });
+    await noCrashAsync(
+      'F',
+      'getUserScript with clusters but no scripts',
+      'no scripts',
+      async () => {
+        // Delete all scripts but keep clusters
+        await pool.query('DELETE FROM triage_scripts WHERE user_id = $1', [USER_ID]);
+        const r = await getUserScript(pool, USER_ID);
+        // Restore
+        await createClustersFromOnboarding(pool, USER_ID, ['đau đầu', 'chóng mặt']);
+        if (!r) return 'returned null (clusters exist but no scripts)';
+        return `greeting=${r.greeting}, clusters=${r.clusters?.length}, scripts=${Object.keys(r.scripts || {}).length}`;
+      }
+    );
 
     // ═════════════════════════════════════════════════════════════════════════
     // SUMMARY
@@ -543,7 +672,7 @@ async function cleanup() {
 
     if (totalFail > 0) {
       console.log('\nFailed tests:');
-      for (const r of results.filter(r => r.status === 'FAIL')) {
+      for (const r of results.filter((r) => r.status === 'FAIL')) {
         console.log(`  [${r.section}] ${r.testName}`);
         console.log(`    input:    ${r.input}`);
         console.log(`    expected: ${r.expected}`);
@@ -554,21 +683,32 @@ async function cleanup() {
     console.log('\nDetailed results per section:');
     const sections = ['A', 'B', 'C', 'D', 'E', 'F'];
     for (const s of sections) {
-      const sectionResults = results.filter(r => r.section === s);
-      const sPass = sectionResults.filter(r => r.status === 'PASS').length;
-      const sFail = sectionResults.filter(r => r.status === 'FAIL').length;
-      const sectionNames = { A: 'Garbage matchCluster', B: 'Wrong answer types', C: 'Malformed scripts', D: 'User mistakes', E: 'Emergency adversarial', F: 'Cross-module flow' };
-      console.log(`  ${s}. ${sectionNames[s]}: ${sPass} pass, ${sFail} fail (${sectionResults.length} total)`);
+      const sectionResults = results.filter((r) => r.section === s);
+      const sPass = sectionResults.filter((r) => r.status === 'PASS').length;
+      const sFail = sectionResults.filter((r) => r.status === 'FAIL').length;
+      const sectionNames = {
+        A: 'Garbage matchCluster',
+        B: 'Wrong answer types',
+        C: 'Malformed scripts',
+        D: 'User mistakes',
+        E: 'Emergency adversarial',
+        F: 'Cross-module flow',
+      };
+      console.log(
+        `  ${s}. ${sectionNames[s]}: ${sPass} pass, ${sFail} fail (${sectionResults.length} total)`
+      );
     }
 
     console.log('');
-
   } catch (err) {
     console.error('FATAL ERROR:', err);
   } finally {
     // Cleanup
     try {
-      await pool.query('DELETE FROM triage_scripts WHERE user_id = $1 AND cluster_key = $2', [USER_ID, 'test_corrupt']);
+      await pool.query('DELETE FROM triage_scripts WHERE user_id = $1 AND cluster_key = $2', [
+        USER_ID,
+        'test_corrupt',
+      ]);
     } catch (_) {}
     await pool.end();
   }

@@ -5,11 +5,7 @@
     "birth_year": 1958,
     "gender": "Nam",
     "full_name": "Trần Văn Hùng",
-    "medical_conditions": [
-      "Tiểu đường",
-      "Cao huyết áp",
-      "Tim mạch"
-    ],
+    "medical_conditions": ["Tiểu đường", "Cao huyết áp", "Tim mạch"],
     "age": 68
   },
   "totalPass": 67,

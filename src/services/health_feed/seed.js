@@ -42,7 +42,7 @@ function normalizeEntry(entry, idx) {
     target_flow: flowFromEntry(entry),
     target_cluster_key: entry.target_tags?.[0] || null,
     topic_category: topicFromEntry(entry),
-    flow_step: flowFromEntry(entry) === FLOWS.ONBOARDING ? ((idx % 5) + 1) : null,
+    flow_step: flowFromEntry(entry) === FLOWS.ONBOARDING ? (idx % 5) + 1 : null,
     severity_level: entry.severity_level || 'low',
     engagement_score: entry.content_type === 'warning' ? 95 : 60,
     shareable: entry.shareable !== false,
@@ -58,9 +58,14 @@ function generatedEntries() {
     {
       id: 'onboarding-profile-summary',
       title: 'Hồ sơ sức khỏe đầu tiên của bác có ý nghĩa gì?',
-      summary: 'Bản tóm tắt này giúp Asinu cá nhân hóa các hướng dẫn theo bệnh nền và thói quen của bác.',
+      summary:
+        'Bản tóm tắt này giúp Asinu cá nhân hóa các hướng dẫn theo bệnh nền và thói quen của bác.',
       body: 'Trong 7 ngày đầu, bác nên xem lại hồ sơ sức khỏe để hiểu vì sao Asinu gợi ý những nội dung nhất định. Hồ sơ càng đầy đủ, bản tin càng sát nhu cầu thực tế.',
-      checklist: ['Mở lại hồ sơ sức khỏe', 'Kiểm tra bệnh nền đã khai đúng chưa', 'Nhờ người thân hỗ trợ nếu cần'],
+      checklist: [
+        'Mở lại hồ sơ sức khỏe',
+        'Kiểm tra bệnh nền đã khai đúng chưa',
+        'Nhờ người thân hỗ trợ nếu cần',
+      ],
       content_type: 'article',
       target_conditions: [],
       target_flow: FLOWS.ONBOARDING,
@@ -98,9 +103,14 @@ function generatedEntries() {
     {
       id: 'reactivate-high-value-article',
       title: 'Quay lại với một bài hướng dẫn ngắn nhưng hữu ích',
-      summary: 'Nếu bác đang bận, chỉ cần đọc nhanh 2 phút bài này để lấy lại nhịp chăm sóc sức khỏe.',
+      summary:
+        'Nếu bác đang bận, chỉ cần đọc nhanh 2 phút bài này để lấy lại nhịp chăm sóc sức khỏe.',
       body: 'Không cần quay lại thật nhiều việc cùng lúc. Chỉ cần đọc một bài ngắn, xem lại triệu chứng gần đây và chọn một việc nhỏ để làm hôm nay.',
-      checklist: ['Đọc nhanh bài viết', 'Nhớ lại triệu chứng gần đây', 'Chọn một việc nhỏ để bắt đầu lại'],
+      checklist: [
+        'Đọc nhanh bài viết',
+        'Nhớ lại triệu chứng gần đây',
+        'Chọn một việc nhỏ để bắt đầu lại',
+      ],
       content_type: 'article',
       target_conditions: [],
       target_flow: FLOWS.REACTIVATE,
@@ -118,7 +128,8 @@ function generatedEntries() {
     {
       id: 'winback-welcome-back-1',
       title: 'Mừng bác quay lại Asinu',
-      summary: 'Asinu đã chuẩn bị sẵn một vài gợi ý nhẹ nhàng để bác quay lại nhịp theo dõi sức khỏe.',
+      summary:
+        'Asinu đã chuẩn bị sẵn một vài gợi ý nhẹ nhàng để bác quay lại nhịp theo dõi sức khỏe.',
       body: 'Nếu đã lâu bác chưa mở lại ứng dụng, không sao cả. Hãy bắt đầu từ việc đọc bản tin này và kiểm tra xem cơ thể mình dạo gần đây thế nào.',
       checklist: ['Đọc lại bản tin', 'Nhớ lại triệu chứng nổi bật', 'Mở check-in khi sẵn sàng'],
       content_type: 'article',
@@ -138,7 +149,8 @@ function generatedEntries() {
     {
       id: 'winback-welcome-back-2',
       title: 'Khi quay lại, nên bắt đầu từ đâu?',
-      summary: 'Bác không cần làm hết mọi thứ. Chỉ cần bắt đầu từ một tín hiệu sức khỏe gần đây nhất.',
+      summary:
+        'Bác không cần làm hết mọi thứ. Chỉ cần bắt đầu từ một tín hiệu sức khỏe gần đây nhất.',
       body: 'Nếu bác thấy mệt sau ăn, đau đầu, chóng mặt hoặc quên thuốc gần đây, hãy bắt đầu bằng mục đó. Một bước nhỏ vẫn tốt hơn bỏ trống hoàn toàn.',
       checklist: ['Chọn một tín hiệu gần đây', 'Mở check-in', 'Lưu lại bài này nếu cần'],
       content_type: 'article',
@@ -158,7 +170,8 @@ function generatedEntries() {
     {
       id: 'winback-welcome-back-3',
       title: 'Một lần cập nhật ngắn cũng có giá trị',
-      summary: 'Chỉ cần một lần cập nhật ngắn hôm nay là đủ để Asinu gợi ý đúng hơn cho bác ngày mai.',
+      summary:
+        'Chỉ cần một lần cập nhật ngắn hôm nay là đủ để Asinu gợi ý đúng hơn cho bác ngày mai.',
       body: 'Hệ thống không cần bác hoàn hảo. Chỉ cần bác quay lại với một lần đo, một lần ghi triệu chứng hoặc một lần check-in ngắn.',
       checklist: ['Đo một chỉ số', 'Ghi một triệu chứng', 'Check-in ngắn trong hôm nay'],
       content_type: 'checklist',
@@ -231,9 +244,24 @@ async function upsertContent(client, entry) {
 
 async function seedNotificationTemplates(client) {
   const templates = [
-    ['health_feed_alert', FLOWS.ALERT, 'Asinu thấy có điều cần bác lưu ý', 'Có một cảnh báo nhẹ nhàng mới trong bản tin sức khỏe của bác'],
-    ['health_feed_family', FLOWS.FAMILY, 'Asinu có gợi ý chăm sóc người thân', 'Có một bản tin mới để bác hỏi thăm người thân cụ thể hơn'],
-    ['health_feed_onboarding', FLOWS.ONBOARDING, 'Asinu chuẩn bị sẵn một hướng dẫn mới', 'Có một bản tin sức khỏe mới phù hợp với giai đoạn hiện tại của bác'],
+    [
+      'health_feed_alert',
+      FLOWS.ALERT,
+      'Asinu thấy có điều cần bác lưu ý',
+      'Có một cảnh báo nhẹ nhàng mới trong bản tin sức khỏe của bác',
+    ],
+    [
+      'health_feed_family',
+      FLOWS.FAMILY,
+      'Asinu có gợi ý chăm sóc người thân',
+      'Có một bản tin mới để bác hỏi thăm người thân cụ thể hơn',
+    ],
+    [
+      'health_feed_onboarding',
+      FLOWS.ONBOARDING,
+      'Asinu chuẩn bị sẵn một hướng dẫn mới',
+      'Có một bản tin sức khỏe mới phù hợp với giai đoạn hiện tại của bác',
+    ],
   ];
 
   for (const [id, flow, title, body] of templates) {

@@ -20,26 +20,63 @@ function assert(label, condition) {
 // ─── Test data ─────────────────────────────────────────────────────────────
 
 const testScript = {
-  greeting: "Test greeting",
+  greeting: 'Test greeting',
   questions: [
-    { id: "q1", text: "{Honorific} đau mức nào?", type: "slider", min: 0, max: 10 },
-    { id: "q2", text: "Triệu chứng kèm?", type: "multi_choice", options: ["buồn nôn", "sốt", "không có"], skip_if: { field: "q1", op: "lt", value: 3 } },
-    { id: "q3", text: "Từ khi nào?", type: "single_choice", options: ["vừa mới", "vài giờ", "từ sáng"] },
-    { id: "q4", text: "Ghi chú thêm?", type: "free_text" },
+    { id: 'q1', text: '{Honorific} đau mức nào?', type: 'slider', min: 0, max: 10 },
+    {
+      id: 'q2',
+      text: 'Triệu chứng kèm?',
+      type: 'multi_choice',
+      options: ['buồn nôn', 'sốt', 'không có'],
+      skip_if: { field: 'q1', op: 'lt', value: 3 },
+    },
+    {
+      id: 'q3',
+      text: 'Từ khi nào?',
+      type: 'single_choice',
+      options: ['vừa mới', 'vài giờ', 'từ sáng'],
+    },
+    { id: 'q4', text: 'Ghi chú thêm?', type: 'free_text' },
   ],
   scoring_rules: [
-    { conditions: [{ field: "q1", op: "gte", value: 7 }], combine: "and", severity: "high", follow_up_hours: 1, needs_doctor: true, needs_family_alert: true },
-    { conditions: [{ field: "q1", op: "gte", value: 4 }], combine: "and", severity: "medium", follow_up_hours: 3, needs_doctor: false, needs_family_alert: false },
-    { conditions: [], combine: "and", severity: "low", follow_up_hours: 6, needs_doctor: false, needs_family_alert: false },
+    {
+      conditions: [{ field: 'q1', op: 'gte', value: 7 }],
+      combine: 'and',
+      severity: 'high',
+      follow_up_hours: 1,
+      needs_doctor: true,
+      needs_family_alert: true,
+    },
+    {
+      conditions: [{ field: 'q1', op: 'gte', value: 4 }],
+      combine: 'and',
+      severity: 'medium',
+      follow_up_hours: 3,
+      needs_doctor: false,
+      needs_family_alert: false,
+    },
+    {
+      conditions: [],
+      combine: 'and',
+      severity: 'low',
+      follow_up_hours: 6,
+      needs_doctor: false,
+      needs_family_alert: false,
+    },
   ],
   condition_modifiers: [],
   conclusion_templates: {
-    low: { summary: "Nhẹ", recommendation: "Nghỉ ngơi", close_message: "{selfRef} hỏi lại sau" },
-    medium: { summary: "Trung bình", recommendation: "Theo dõi", close_message: "Hẹn 3h" },
-    high: { summary: "Nặng", recommendation: "Đi khám", close_message: "Hẹn 1h" },
+    low: { summary: 'Nhẹ', recommendation: 'Nghỉ ngơi', close_message: '{selfRef} hỏi lại sau' },
+    medium: { summary: 'Trung bình', recommendation: 'Theo dõi', close_message: 'Hẹn 3h' },
+    high: { summary: 'Nặng', recommendation: 'Đi khám', close_message: 'Hẹn 1h' },
   },
   followup_questions: [
-    { id: "fu1", text: "Thế nào rồi?", type: "single_choice", options: ["Đỡ hơn", "Vẫn vậy", "Nặng hơn"] },
+    {
+      id: 'fu1',
+      text: 'Thế nào rồi?',
+      type: 'single_choice',
+      options: ['Đỡ hơn', 'Vẫn vậy', 'Nặng hơn'],
+    },
   ],
 };
 
@@ -71,13 +108,25 @@ const allAnswers = [
 const a3 = getNextQuestion(testScript, allAnswers);
 assert('All answered → isDone=true', a3.isDone === true);
 assert('Conclusion has severity', a3.conclusion && typeof a3.conclusion.severity === 'string');
-assert('Conclusion has followUpHours', a3.conclusion && typeof a3.conclusion.followUpHours === 'number');
-assert('Conclusion has needsDoctor', a3.conclusion && typeof a3.conclusion.needsDoctor === 'boolean');
+assert(
+  'Conclusion has followUpHours',
+  a3.conclusion && typeof a3.conclusion.followUpHours === 'number'
+);
+assert(
+  'Conclusion has needsDoctor',
+  a3.conclusion && typeof a3.conclusion.needsDoctor === 'boolean'
+);
 assert('Conclusion has summary', a3.conclusion && typeof a3.conclusion.summary === 'string');
-assert('Conclusion has recommendation', a3.conclusion && typeof a3.conclusion.recommendation === 'string');
-assert('Conclusion has closeMessage', a3.conclusion && typeof a3.conclusion.closeMessage === 'string');
+assert(
+  'Conclusion has recommendation',
+  a3.conclusion && typeof a3.conclusion.recommendation === 'string'
+);
+assert(
+  'Conclusion has closeMessage',
+  a3.conclusion && typeof a3.conclusion.closeMessage === 'string'
+);
 
-results.forEach(r => console.log(r));
+results.forEach((r) => console.log(r));
 results.length = 0;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -94,7 +143,10 @@ assert('slider: has max', b1.question.max === 10);
 // multi_choice (q2)
 const b2 = getNextQuestion(testScript, [{ question_id: 'q1', answer: 5 }]);
 assert('multi_choice: type=multi_choice', b2.question.type === 'multi_choice');
-assert('multi_choice: has options array', Array.isArray(b2.question.options) && b2.question.options.length === 3);
+assert(
+  'multi_choice: has options array',
+  Array.isArray(b2.question.options) && b2.question.options.length === 3
+);
 
 // single_choice (q3)
 const b3 = getNextQuestion(testScript, [
@@ -102,7 +154,10 @@ const b3 = getNextQuestion(testScript, [
   { question_id: 'q2', answer: 'sốt' },
 ]);
 assert('single_choice: type=single_choice', b3.question.type === 'single_choice');
-assert('single_choice: has options array', Array.isArray(b3.question.options) && b3.question.options.length === 3);
+assert(
+  'single_choice: has options array',
+  Array.isArray(b3.question.options) && b3.question.options.length === 3
+);
 
 // free_text (q4)
 const b4 = getNextQuestion(testScript, [
@@ -112,7 +167,7 @@ const b4 = getNextQuestion(testScript, [
 ]);
 assert('free_text: type=free_text', b4.question.type === 'free_text');
 
-results.forEach(r => console.log(r));
+results.forEach((r) => console.log(r));
 results.length = 0;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -132,8 +187,8 @@ assert('skip_if condition not met: q2 NOT skipped', c2.question && c2.question.i
 const scriptWithAny = JSON.parse(JSON.stringify(testScript));
 scriptWithAny.questions[1].skip_if = {
   any: [
-    { field: "q1", op: "lt", value: 3 },
-    { field: "q1", op: "gt", value: 9 },
+    { field: 'q1', op: 'lt', value: 3 },
+    { field: 'q1', op: 'gt', value: 9 },
   ],
 };
 const c3a = getNextQuestion(scriptWithAny, [{ question_id: 'q1', answer: 2 }]);
@@ -147,8 +202,8 @@ assert('skip_if any: no condition true → NOT skipped', c3c.question && c3c.que
 const scriptWithAll = JSON.parse(JSON.stringify(testScript));
 scriptWithAll.questions[1].skip_if = {
   all: [
-    { field: "q1", op: "lt", value: 5 },
-    { field: "q1", op: "gt", value: 1 },
+    { field: 'q1', op: 'lt', value: 5 },
+    { field: 'q1', op: 'gt', value: 1 },
   ],
 };
 const c4a = getNextQuestion(scriptWithAll, [{ question_id: 'q1', answer: 3 }]);
@@ -156,7 +211,7 @@ assert('skip_if all: both true (3<5 && 3>1) → skipped', c4a.question && c4a.qu
 const c4b = getNextQuestion(scriptWithAll, [{ question_id: 'q1', answer: 6 }]);
 assert('skip_if all: one false (6 not <5) → NOT skipped', c4b.question && c4b.question.id === 'q2');
 
-results.forEach(r => console.log(r));
+results.forEach((r) => console.log(r));
 results.length = 0;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -202,7 +257,7 @@ const d6 = getNextQuestion(testScript, []);
 // Without profile, honorific defaults to "bạn", Honorific to "Bạn"
 assert('Missing profile → uses default honorific', d6.question.text === 'Bạn đau mức nào?');
 
-results.forEach(r => console.log(r));
+results.forEach((r) => console.log(r));
 results.length = 0;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -216,12 +271,18 @@ assert('followup: returns fu1 question', e1.question && e1.question.id === 'fu1'
 assert('followup: totalSteps=1', e1.totalSteps === 1);
 
 // followup conclusion
-const e2 = getNextQuestion(testScript, [{ question_id: 'fu1', answer: 'Đỡ hơn' }], { sessionType: 'followup', previousSeverity: 'medium' });
+const e2 = getNextQuestion(testScript, [{ question_id: 'fu1', answer: 'Đỡ hơn' }], {
+  sessionType: 'followup',
+  previousSeverity: 'medium',
+});
 assert('followup: isDone=true after all answered', e2.isDone === true);
-assert('followup conclusion has severity', e2.conclusion && typeof e2.conclusion.severity === 'string');
+assert(
+  'followup conclusion has severity',
+  e2.conclusion && typeof e2.conclusion.severity === 'string'
+);
 assert('followup conclusion has action', e2.conclusion && typeof e2.conclusion.action === 'string');
 
-results.forEach(r => console.log(r));
+results.forEach((r) => console.log(r));
 results.length = 0;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -236,37 +297,87 @@ assert('Valid script → errors empty', f1.errors.length === 0);
 
 // Missing questions
 const f2 = validateScript({ scoring_rules: [], conclusion_templates: {} });
-assert('Missing questions → error', f2.valid === false && f2.errors.some(e => e.includes('questions')));
+assert(
+  'Missing questions → error',
+  f2.valid === false && f2.errors.some((e) => e.includes('questions'))
+);
 
 // Missing question id
-const f3 = validateScript({ questions: [{ text: 'x', type: 'free_text' }], scoring_rules: [], conclusion_templates: {} });
-assert('Missing question id → error', f3.valid === false && f3.errors.some(e => e.includes('id')));
+const f3 = validateScript({
+  questions: [{ text: 'x', type: 'free_text' }],
+  scoring_rules: [],
+  conclusion_templates: {},
+});
+assert(
+  'Missing question id → error',
+  f3.valid === false && f3.errors.some((e) => e.includes('id'))
+);
 
 // Missing question text
-const f4 = validateScript({ questions: [{ id: 'q1', type: 'free_text' }], scoring_rules: [], conclusion_templates: {} });
-assert('Missing question text → error', f4.valid === false && f4.errors.some(e => e.includes('text')));
+const f4 = validateScript({
+  questions: [{ id: 'q1', type: 'free_text' }],
+  scoring_rules: [],
+  conclusion_templates: {},
+});
+assert(
+  'Missing question text → error',
+  f4.valid === false && f4.errors.some((e) => e.includes('text'))
+);
 
 // Missing question type
-const f5 = validateScript({ questions: [{ id: 'q1', text: 'x' }], scoring_rules: [], conclusion_templates: {} });
-assert('Missing question type → error', f5.valid === false && f5.errors.some(e => e.includes('type')));
+const f5 = validateScript({
+  questions: [{ id: 'q1', text: 'x' }],
+  scoring_rules: [],
+  conclusion_templates: {},
+});
+assert(
+  'Missing question type → error',
+  f5.valid === false && f5.errors.some((e) => e.includes('type'))
+);
 
 // single_choice without options
-const f6 = validateScript({ questions: [{ id: 'q1', text: 'x', type: 'single_choice' }], scoring_rules: [], conclusion_templates: {} });
-assert('single_choice without options → error', f6.valid === false && f6.errors.some(e => e.includes('options')));
+const f6 = validateScript({
+  questions: [{ id: 'q1', text: 'x', type: 'single_choice' }],
+  scoring_rules: [],
+  conclusion_templates: {},
+});
+assert(
+  'single_choice without options → error',
+  f6.valid === false && f6.errors.some((e) => e.includes('options'))
+);
 
 // slider without min/max
-const f7 = validateScript({ questions: [{ id: 'q1', text: 'x', type: 'slider' }], scoring_rules: [], conclusion_templates: {} });
-assert('slider without min/max → error', f7.valid === false && f7.errors.some(e => e.includes('min') || e.includes('max')));
+const f7 = validateScript({
+  questions: [{ id: 'q1', text: 'x', type: 'slider' }],
+  scoring_rules: [],
+  conclusion_templates: {},
+});
+assert(
+  'slider without min/max → error',
+  f7.valid === false && f7.errors.some((e) => e.includes('min') || e.includes('max'))
+);
 
 // Missing scoring_rules
-const f8 = validateScript({ questions: [{ id: 'q1', text: 'x', type: 'free_text' }], conclusion_templates: {} });
-assert('Missing scoring_rules → error', f8.valid === false && f8.errors.some(e => e.includes('scoring_rules')));
+const f8 = validateScript({
+  questions: [{ id: 'q1', text: 'x', type: 'free_text' }],
+  conclusion_templates: {},
+});
+assert(
+  'Missing scoring_rules → error',
+  f8.valid === false && f8.errors.some((e) => e.includes('scoring_rules'))
+);
 
 // Missing conclusion_templates
-const f9 = validateScript({ questions: [{ id: 'q1', text: 'x', type: 'free_text' }], scoring_rules: [] });
-assert('Missing conclusion_templates → error', f9.valid === false && f9.errors.some(e => e.includes('conclusion_templates')));
+const f9 = validateScript({
+  questions: [{ id: 'q1', text: 'x', type: 'free_text' }],
+  scoring_rules: [],
+});
+assert(
+  'Missing conclusion_templates → error',
+  f9.valid === false && f9.errors.some((e) => e.includes('conclusion_templates'))
+);
 
-results.forEach(r => console.log(r));
+results.forEach((r) => console.log(r));
 results.length = 0;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -300,7 +411,7 @@ const extraAnswers = [
 const g3 = getNextQuestion(testScript, extraAnswers);
 assert('Extra answers → isDone=true', g3.isDone === true);
 
-results.forEach(r => console.log(r));
+results.forEach((r) => console.log(r));
 results.length = 0;
 
 // ═══════════════════════════════════════════════════════════════════════════

@@ -1,11 +1,11 @@
 /**
  * Push Notification Service
  * Handles sending push notifications via Expo Push Notification Service
- * 
+ *
  * To use this service:
  * 1. Store user's Expo Push Token in the database when they login/register
  * 2. Call sendPushNotification when you need to notify users
- * 
+ *
  * Note: This requires users to have the Expo Push Token stored in the database
  */
 
@@ -22,44 +22,47 @@ const { t } = require('../../i18n');
  */
 async function sendPushNotification(expoPushTokens, title, body, data = {}) {
   if (!expoPushTokens || expoPushTokens.length === 0) {
-
     return { ok: false, error: t('error.no_push_tokens') };
   }
 
   // Filter valid Expo push tokens
-  const validTokens = expoPushTokens.filter(token => 
-    token && typeof token === 'string' && token.startsWith('ExponentPushToken[')
+  const validTokens = expoPushTokens.filter(
+    (token) => token && typeof token === 'string' && token.startsWith('ExponentPushToken[')
   );
 
   if (validTokens.length === 0) {
-
     return { ok: false, error: t('error.no_valid_push_tokens') };
   }
 
   // Map notification type → channel + sound
   const SOUND_MAP = {
-    care_circle_invitation: { channelId: 'care-circle', sound: 'asinu_care.wav',      priority: 'high'   },
-    care_circle_accepted:   { channelId: 'care-circle', sound: 'asinu_care.wav',      priority: 'high'   },
-    alert:                  { channelId: 'alert',       sound: 'asinu_alert.wav',     priority: 'high'   },
-    caregiver_alert:        { channelId: 'alert',       sound: 'asinu_alert.wav',     priority: 'high'   },
-    streak_7:               { channelId: 'milestone',   sound: 'asinu_milestone.wav', priority: 'normal' },
-    streak_14:              { channelId: 'milestone',   sound: 'asinu_milestone.wav', priority: 'normal' },
-    streak_30:              { channelId: 'milestone',   sound: 'asinu_milestone.wav', priority: 'normal' },
-    weekly_recap:           { channelId: 'milestone',   sound: 'asinu_milestone.wav', priority: 'normal' },
-    morning_checkin:        { channelId: 'checkin',     sound: 'asinu_reminder.wav',  priority: 'high'   },
-    checkin_followup:       { channelId: 'checkin',     sound: 'asinu_reminder.wav',  priority: 'high'   },
-    checkin_followup_urgent:{ channelId: 'alert',       sound: 'asinu_alert.wav',     priority: 'high'   },
-    emergency:              { channelId: 'alert',       sound: 'asinu_alert.wav',     priority: 'high'   },
+    care_circle_invitation: { channelId: 'care-circle', sound: 'asinu_care.wav', priority: 'high' },
+    care_circle_accepted: { channelId: 'care-circle', sound: 'asinu_care.wav', priority: 'high' },
+    alert: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
+    caregiver_alert: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
+    streak_7: { channelId: 'milestone', sound: 'asinu_milestone.wav', priority: 'normal' },
+    streak_14: { channelId: 'milestone', sound: 'asinu_milestone.wav', priority: 'normal' },
+    streak_30: { channelId: 'milestone', sound: 'asinu_milestone.wav', priority: 'normal' },
+    weekly_recap: { channelId: 'milestone', sound: 'asinu_milestone.wav', priority: 'normal' },
+    morning_checkin: { channelId: 'checkin', sound: 'asinu_reminder.wav', priority: 'high' },
+    checkin_followup: { channelId: 'checkin', sound: 'asinu_reminder.wav', priority: 'high' },
+    checkin_followup_urgent: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
+    emergency: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
   };
   const notifType = data?.type || '';
-  const config = SOUND_MAP[notifType] || { channelId: 'reminder', sound: 'asinu_reminder.wav', priority: 'normal' };
+  const config = SOUND_MAP[notifType] || {
+    channelId: 'reminder',
+    sound: 'asinu_reminder.wav',
+    priority: 'normal',
+  };
 
   // Caregiver alert cần xác nhận → thêm categoryIdentifier để hiện nút trên notification
-  const isCaregiverAlert = ['caregiver_alert', 'alert', 'emergency'].includes(notifType)
-    || data?.alertType === 'emergency'
-    || data?.requiresImmediate === true;
+  const isCaregiverAlert =
+    ['caregiver_alert', 'alert', 'emergency'].includes(notifType) ||
+    data?.alertType === 'emergency' ||
+    data?.requiresImmediate === true;
 
-  const messages = validTokens.map(token => ({
+  const messages = validTokens.map((token) => ({
     to: token,
     sound: config.sound,
     title: title,
@@ -74,22 +77,20 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
     const response = await fetch(EXPO_PUSH_ENDPOINT, {
       method: 'POST',
       headers: {
-        'Accept': 'application/json',
+        Accept: 'application/json',
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(messages),
     });
 
     const result = await response.json();
-    
-    if (!response.ok) {
 
+    if (!response.ok) {
       return { ok: false, error: result.message || t('error.push_service_error') };
     }
 
     return { ok: true, data: result };
   } catch (error) {
-
     return { ok: false, error: error.message };
   }
 }
@@ -101,7 +102,13 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
  * @param {string} senderName - Name of the person who sent the invitation
  * @param {number} invitationId - ID of the invitation
  */
-async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitationId, senderId = null) {
+async function notifyCareCircleInvitation(
+  pool,
+  addresseeId,
+  senderName,
+  invitationId,
+  senderId = null
+) {
   try {
     // Get addressee's push token from database
     // Note: You need to add a push_token column to the users table
@@ -111,7 +118,6 @@ async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitat
     );
 
     if (result.rows.length === 0 || !result.rows[0].push_token) {
-
       return { ok: false, error: t('error.no_push_token') };
     }
 
@@ -130,7 +136,6 @@ async function notifyCareCircleInvitation(pool, addresseeId, senderName, invitat
       }
     );
   } catch (error) {
-
     return { ok: false, error: error.message };
   }
 }
@@ -149,7 +154,6 @@ async function notifyCareCircleAccepted(pool, requesterId, accepterName, accepte
     );
 
     if (result.rows.length === 0 || !result.rows[0].push_token) {
-
       return { ok: false, error: t('error.no_push_token') };
     }
 
@@ -167,7 +171,6 @@ async function notifyCareCircleAccepted(pool, requesterId, accepterName, accepte
       }
     );
   } catch (error) {
-
     return { ok: false, error: error.message };
   }
 }

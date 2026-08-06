@@ -143,18 +143,14 @@ describe('handleAppleNotification', () => {
   });
 
   test('returns APPLE_NOTIF_VERIFY_FAILED when JWS signature invalid', async () => {
-    mockAppleVerifier.verifyAndDecodeNotification.mockRejectedValue(
-      new Error('Bad signature')
-    );
+    mockAppleVerifier.verifyAndDecodeNotification.mockRejectedValue(new Error('Bad signature'));
     const r = await handleAppleNotification(pool, { signedPayload: 'bad' });
     expect(r.ok).toBe(false);
     expect(r.code).toBe('APPLE_NOTIF_VERIFY_FAILED');
   });
 
   test('DID_RENEW → applyIapWebhookEvent with action="renew"', async () => {
-    mockAppleVerifier.verifyAndDecodeNotification.mockResolvedValue(
-      buildNotification('DID_RENEW')
-    );
+    mockAppleVerifier.verifyAndDecodeNotification.mockResolvedValue(buildNotification('DID_RENEW'));
     mockAppleVerifier.verifyAndDecodeTransaction.mockResolvedValue(buildTx());
     subscriptionService.applyIapWebhookEvent.mockResolvedValue({ ok: true, userId: 7 });
 
@@ -174,9 +170,7 @@ describe('handleAppleNotification', () => {
   });
 
   test('REFUND → action="refund"', async () => {
-    mockAppleVerifier.verifyAndDecodeNotification.mockResolvedValue(
-      buildNotification('REFUND')
-    );
+    mockAppleVerifier.verifyAndDecodeNotification.mockResolvedValue(buildNotification('REFUND'));
     mockAppleVerifier.verifyAndDecodeTransaction.mockResolvedValue(buildTx());
     subscriptionService.applyIapWebhookEvent.mockResolvedValue({ ok: true });
 
@@ -189,9 +183,7 @@ describe('handleAppleNotification', () => {
   });
 
   test('EXPIRED → action="expire"', async () => {
-    mockAppleVerifier.verifyAndDecodeNotification.mockResolvedValue(
-      buildNotification('EXPIRED')
-    );
+    mockAppleVerifier.verifyAndDecodeNotification.mockResolvedValue(buildNotification('EXPIRED'));
     mockAppleVerifier.verifyAndDecodeTransaction.mockResolvedValue(buildTx());
     subscriptionService.applyIapWebhookEvent.mockResolvedValue({ ok: true });
 
@@ -265,9 +257,7 @@ describe('handleGoogleNotification', () => {
     return {
       data: {
         latestOrderId: 'GPA.1234-5678-9012-34567..0',
-        lineItems: [
-          { productId: 'asinu.premium.monthly', expiryTime: '2030-01-01T00:00:00Z' },
-        ],
+        lineItems: [{ productId: 'asinu.premium.monthly', expiryTime: '2030-01-01T00:00:00Z' }],
         ...overrides,
       },
     };

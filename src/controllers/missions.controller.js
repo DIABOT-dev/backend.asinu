@@ -1,5 +1,9 @@
 ﻿const { t, getLang } = require('../i18n');
-const { getMissions, getMissionHistory, getMissionStats } = require('../services/missions/missions.service');
+const {
+  getMissions,
+  getMissionHistory,
+  getMissionStats,
+} = require('../services/missions/missions.service');
 
 /**
  * GET /api/missions
@@ -14,7 +18,6 @@ async function getMissionsHandler(pool, req, res) {
     const missions = await getMissions(pool, req.user.id);
     return res.status(200).json({ ok: true, missions });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -48,8 +51,8 @@ async function getMissionStatsHandler(pool, req, res) {
   }
 }
 
-module.exports = { 
+module.exports = {
   getMissionsHandler,
   getMissionHistoryHandler,
-  getMissionStatsHandler
+  getMissionStatsHandler,
 };

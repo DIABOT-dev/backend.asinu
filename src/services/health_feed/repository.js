@@ -22,7 +22,20 @@ async function getContentCatalog(pool) {
 async function getUserContexts(pool, userIds) {
   if (!userIds.length) return [];
 
-  const [{ rows: users }, { rows: clusters }, { rows: sessions }, { rows: familyRows }, { rows: adherence }, { rows: engagement }, { rows: flowRows }, { rows: historyRows }, { rows: activeFeedRows }, { rows: recentFeedPushRows }, { rows: recentTemplateRows }, { rows: recentReengagementRows }] = await Promise.all([
+  const [
+    { rows: users },
+    { rows: clusters },
+    { rows: sessions },
+    { rows: familyRows },
+    { rows: adherence },
+    { rows: engagement },
+    { rows: flowRows },
+    { rows: historyRows },
+    { rows: activeFeedRows },
+    { rows: recentFeedPushRows },
+    { rows: recentTemplateRows },
+    { rows: recentReengagementRows },
+  ] = await Promise.all([
     pool.query(
       `SELECT u.id, u.created_at, u.push_token, u.language_preference, u.display_name, u.full_name,
               uop.medical_conditions, uop.birth_year, uop.age, uop.post_meal_drowsy, uop.user_group,
@@ -135,8 +148,12 @@ async function getUserContexts(pool, userIds) {
 
   const clusterMap = new Map(clusters.map((row) => [row.user_id, row]));
   const sessionMap = new Map(sessions.map((row) => [row.user_id, row]));
-  const adherenceMap = new Map(adherence.map((row) => [row.user_id, Number(row.adherence_rate || 0)]));
-  const engagementMap = new Map(engagement.map((row) => [row.user_id, Number(row.checkin_days_7d || 0)]));
+  const adherenceMap = new Map(
+    adherence.map((row) => [row.user_id, Number(row.adherence_rate || 0)])
+  );
+  const engagementMap = new Map(
+    engagement.map((row) => [row.user_id, Number(row.checkin_days_7d || 0)])
+  );
   const flowMap = new Map(flowRows.map((row) => [row.user_id, row]));
   const recentFeedPushSet = new Set(recentFeedPushRows.map((row) => row.user_id));
   const recentReengagementSet = new Set(recentReengagementRows.map((row) => row.user_id));
@@ -151,7 +168,9 @@ async function getUserContexts(pool, userIds) {
     familyMap.get(row.user_id).push(row);
   }
   for (const list of familyMap.values()) {
-    list.sort((a, b) => Number(b.patient_inactive_days || 0) - Number(a.patient_inactive_days || 0));
+    list.sort(
+      (a, b) => Number(b.patient_inactive_days || 0) - Number(a.patient_inactive_days || 0)
+    );
   }
   const historyMap = new Map();
   for (const row of historyRows) {
@@ -199,12 +218,10 @@ async function getEligibleUserIds(pool) {
 async function upsertUserFlow(pool, userId, nextFlow, selectedItems) {
   const nextStep = Math.min(
     5,
-    Math.max(
-      1,
-      ...selectedItems.map((item) => Number(item.content.flow_step || 1))
-    ) + 1
+    Math.max(1, ...selectedItems.map((item) => Number(item.content.flow_step || 1))) + 1
   );
-  const lastTopic = selectedItems.find((item) => item.content.topic_category)?.content.topic_category || null;
+  const lastTopic =
+    selectedItems.find((item) => item.content.topic_category)?.content.topic_category || null;
   await pool.query(
     `INSERT INTO health_feed_user_flow (user_id, current_flow, current_step, flow_entered_at, last_content_at, last_content_topic, updated_at)
      VALUES ($1, $2, $3, NOW(), NOW(), $4, NOW())
@@ -230,11 +247,15 @@ async function insertFeedItems(pool, user, selectedItems) {
   for (const item of selectedItems) {
     const content = item.content;
     const patientId = item.patient_id || null;
-    const priority = content.content_type === 'warning'
-      ? 100
-      : item.flow === 'FLOW_FAMILY' && patientId && user.related_patients.find((p) => p.patient_id === patientId)?.patient_inactive_days >= 3
-        ? 80
-        : 40;
+    const priority =
+      content.content_type === 'warning'
+        ? 100
+        : item.flow === 'FLOW_FAMILY' &&
+            patientId &&
+            user.related_patients.find((p) => p.patient_id === patientId)?.patient_inactive_days >=
+              3
+          ? 80
+          : 40;
 
     const message = content.summary || content.body.slice(0, 180);
     const result = await pool.query(
@@ -307,8 +328,13 @@ async function markRead(pool, userId, feedItemId) {
     emitCrmEventAsync(
       pool,
       'content.viewed',
-      { user_id: String(userId), content_id: String(feedItemId), status: 'read', content_action: 'read' },
-      { event_id: `content.viewed:${userId}:${feedItemId}` },
+      {
+        user_id: String(userId),
+        content_id: String(feedItemId),
+        status: 'read',
+        content_action: 'read',
+      },
+      { event_id: `content.viewed:${userId}:${feedItemId}` }
     );
   }
   return rowCount > 0;
@@ -334,8 +360,13 @@ async function saveContent(pool, userId, contentId) {
   emitCrmEventAsync(
     pool,
     'content.saved',
-    { user_id: String(userId), content_id: String(contentId), status: 'saved', content_action: 'saved' },
-    { event_id: `content.saved:${userId}:${contentId}` },
+    {
+      user_id: String(userId),
+      content_id: String(contentId),
+      status: 'saved',
+      content_action: 'saved',
+    },
+    { event_id: `content.saved:${userId}:${contentId}` }
   );
 }
 
@@ -359,7 +390,11 @@ async function listSaved(pool, userId) {
   return rows;
 }
 
-async function trackEvent(pool, userId, { content_id, feed_item_id = null, event_type, metadata = {} }) {
+async function trackEvent(
+  pool,
+  userId,
+  { content_id, feed_item_id = null, event_type, metadata = {} }
+) {
   const insertResult = await pool.query(
     `INSERT INTO health_feed_content_events(user_id, content_id, feed_item_id, event_type, metadata)
      VALUES ($1,$2,$3,$4,$5)
@@ -383,7 +418,9 @@ async function trackEvent(pool, userId, { content_id, feed_item_id = null, event
         content_action: normalizedEvent,
         status: 'recorded',
       },
-      { event_id: `${crmEventType}:${insertResult.rows[0]?.id || `${userId}:${content_id}:${feed_item_id || normalizedEvent}`}` },
+      {
+        event_id: `${crmEventType}:${insertResult.rows[0]?.id || `${userId}:${content_id}:${feed_item_id || normalizedEvent}`}`,
+      }
     );
   }
 }

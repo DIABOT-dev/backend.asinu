@@ -2,30 +2,81 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { requirePremium } = require('../middleware/subscription.middleware');
 const { chatbotGate } = require('../middleware/chatbot.gate.middleware');
-const { audioUpload, imageUpload, handleUpload, verifyAudioMagicBytes, verifyImageMagicBytes } = require('../middleware/upload.middleware');
-const { loginByEmail, logoutHandler } = require('../controllers/auth.controller');
-const { createMobileLog, getRecentLogs, getTodayLogs } = require('../controllers/mobile.controller');
 const {
-  postChat, getChatHistoryHandler, transcribeAudio,
-  postChatFeedback, getChatNotes, deleteChatNote, getChatFeedbacks, getChatNotedIds,
+  audioUpload,
+  imageUpload,
+  handleUpload,
+  verifyAudioMagicBytes,
+  verifyImageMagicBytes,
+} = require('../middleware/upload.middleware');
+const { loginByEmail, logoutHandler } = require('../controllers/auth.controller');
+const {
+  createMobileLog,
+  getRecentLogs,
+  getTodayLogs,
+} = require('../controllers/mobile.controller');
+const {
+  postChat,
+  getChatHistoryHandler,
+  transcribeAudio,
+  postChatFeedback,
+  getChatNotes,
+  deleteChatNote,
+  getChatFeedbacks,
+  getChatNotedIds,
 } = require('../controllers/chat.controller');
-const { getMissionsHandler, getMissionHistoryHandler, getMissionStatsHandler } = require('../controllers/missions.controller');
-const { upsertOnboardingProfile, onboardingNext, onboardingComplete, onboardingCompleteV2 } = require('../controllers/onboarding.controller');
-const { getProfile, getBasicProfile, updateProfile, uploadAvatarHandler, deleteAccount, updatePushToken, clearPushToken, featureFlagsHandler, changePassword } = require('../controllers/profile.controller');
+const {
+  getMissionsHandler,
+  getMissionHistoryHandler,
+  getMissionStatsHandler,
+} = require('../controllers/missions.controller');
+const {
+  upsertOnboardingProfile,
+  onboardingNext,
+  onboardingComplete,
+  onboardingCompleteV2,
+} = require('../controllers/onboarding.controller');
+const {
+  getProfile,
+  getBasicProfile,
+  updateProfile,
+  uploadAvatarHandler,
+  deleteAccount,
+  updatePushToken,
+  clearPushToken,
+  featureFlagsHandler,
+  changePassword,
+} = require('../controllers/profile.controller');
 const { getTreeSummary, getTreeHistory } = require('../controllers/tree.controller');
 const {
-  startCheckinHandler, getLocationsHandler, followUpHandler, triageHandler,
-  todayCheckinHandler, emergencyHandler,
-  pendingAlertsHandler, confirmAlertHandler,
-  healthReportHandler, resetTodayHandler, simulateTimePassHandler,
-  healthScoreHandler, engagementPatternHandler, engagementOptimalTimeHandler,
+  startCheckinHandler,
+  getLocationsHandler,
+  followUpHandler,
+  triageHandler,
+  todayCheckinHandler,
+  emergencyHandler,
+  pendingAlertsHandler,
+  confirmAlertHandler,
+  healthReportHandler,
+  resetTodayHandler,
+  simulateTimePassHandler,
+  healthScoreHandler,
+  engagementPatternHandler,
+  engagementOptimalTimeHandler,
 } = require('../controllers/checkin.controller');
-const { getCaregiverLogs, getCaregiverCheckins, getMemberHealthSummary } = require('../controllers/careCircle.controller');
+const {
+  getCaregiverLogs,
+  getCaregiverCheckins,
+  getMemberHealthSummary,
+} = require('../controllers/careCircle.controller');
 const { testNotificationHandler } = require('../controllers/notification.controller');
 const { trackScreenViewHandler } = require('../controllers/engagement.controller');
 const {
-  getScriptHandler, startScriptHandler, answerScriptHandler,
-  getSessionHandler, createClustersHandler,
+  getScriptHandler,
+  startScriptHandler,
+  answerScriptHandler,
+  getSessionHandler,
+  createClustersHandler,
 } = require('../controllers/script-checkin.controller');
 
 function mobileRoutes(pool) {
@@ -38,8 +89,12 @@ function mobileRoutes(pool) {
   router.get('/logs/today', requireAuth, (req, res) => getTodayLogs(pool, req, res));
 
   // Caregiver view patient logs (requires can_view_logs permission)
-  router.get('/caregiver/logs/:patientId', requireAuth, (req, res) => getCaregiverLogs(pool, req, res));
-  router.get('/caregiver/checkins/:patientId', requireAuth, (req, res) => getCaregiverCheckins(pool, req, res));
+  router.get('/caregiver/logs/:patientId', requireAuth, (req, res) =>
+    getCaregiverLogs(pool, req, res)
+  );
+  router.get('/caregiver/checkins/:patientId', requireAuth, (req, res) =>
+    getCaregiverCheckins(pool, req, res)
+  );
 
   // Chat — gated by chatbot feature flag + daily/monthly limits (MVP audit #1)
   router.post(
@@ -64,7 +119,9 @@ function mobileRoutes(pool) {
 
   // Missions
   router.get('/missions', requireAuth, (req, res) => getMissionsHandler(pool, req, res));
-  router.get('/missions/history', requireAuth, (req, res) => getMissionHistoryHandler(pool, req, res));
+  router.get('/missions/history', requireAuth, (req, res) =>
+    getMissionHistoryHandler(pool, req, res)
+  );
   router.get('/missions/stats', requireAuth, (req, res) => getMissionStatsHandler(pool, req, res));
 
   // Onboarding — legacy form
@@ -74,10 +131,14 @@ function mobileRoutes(pool) {
   router.post('/onboarding/next', requireAuth, (req, res) => onboardingNext(pool, req, res));
 
   // Onboarding — AI-driven: lưu profile khi AI báo done
-  router.post('/onboarding/complete', requireAuth, (req, res) => onboardingComplete(pool, req, res));
+  router.post('/onboarding/complete', requireAuth, (req, res) =>
+    onboardingComplete(pool, req, res)
+  );
 
   // Onboarding — V2 fixed 5-page wizard
-  router.post('/onboarding/complete-v2', requireAuth, (req, res) => onboardingCompleteV2(pool, req, res));
+  router.post('/onboarding/complete-v2', requireAuth, (req, res) =>
+    onboardingCompleteV2(pool, req, res)
+  );
 
   // Profile
   router.get('/profile/basic', requireAuth, (req, res) => getBasicProfile(pool, req, res));
@@ -96,39 +157,65 @@ function mobileRoutes(pool) {
   router.delete('/profile/push-token', requireAuth, (req, res) => clearPushToken(pool, req, res));
 
   // Health Check-in
-  router.get('/checkin/today',     requireAuth, (req, res) => todayCheckinHandler(pool, req, res));
+  router.get('/checkin/today', requireAuth, (req, res) => todayCheckinHandler(pool, req, res));
   router.get('/checkin/locations', requireAuth, (req, res) => getLocationsHandler(pool, req, res));
-  router.post('/checkin/start',    requireAuth, (req, res) => startCheckinHandler(pool, req, res));
+  router.post('/checkin/start', requireAuth, (req, res) => startCheckinHandler(pool, req, res));
   router.post('/checkin/followup', requireAuth, (req, res) => followUpHandler(pool, req, res));
-  router.post('/checkin/triage',          requireAuth, (req, res) => triageHandler(pool, req, res));
-  router.post('/checkin/emergency',       requireAuth, (req, res) => emergencyHandler(pool, req, res));
-  router.get ('/checkin/pending-alerts',  requireAuth, (req, res) => pendingAlertsHandler(pool, req, res));
-  router.post('/checkin/confirm-alert',   requireAuth, (req, res) => confirmAlertHandler(pool, req, res));
-  router.get ('/checkin/report',          requireAuth, (req, res) => healthReportHandler(pool, req, res));
+  router.post('/checkin/triage', requireAuth, (req, res) => triageHandler(pool, req, res));
+  router.post('/checkin/emergency', requireAuth, (req, res) => emergencyHandler(pool, req, res));
+  router.get('/checkin/pending-alerts', requireAuth, (req, res) =>
+    pendingAlertsHandler(pool, req, res)
+  );
+  router.post('/checkin/confirm-alert', requireAuth, (req, res) =>
+    confirmAlertHandler(pool, req, res)
+  );
+  router.get('/checkin/report', requireAuth, (req, res) => healthReportHandler(pool, req, res));
   // DEV-ONLY — blocked in production
   if (process.env.NODE_ENV !== 'production') {
-    router.post('/checkin/reset-today',   requireAuth, (req, res) => resetTodayHandler(pool, req, res));
-    router.post('/checkin/simulate-time', requireAuth, (req, res) => simulateTimePassHandler(pool, req, res));
-    router.post('/test-notification',     requireAuth, (req, res) => testNotificationHandler(pool, req, res));
+    router.post('/checkin/reset-today', requireAuth, (req, res) =>
+      resetTodayHandler(pool, req, res)
+    );
+    router.post('/checkin/simulate-time', requireAuth, (req, res) =>
+      simulateTimePassHandler(pool, req, res)
+    );
+    router.post('/test-notification', requireAuth, (req, res) =>
+      testNotificationHandler(pool, req, res)
+    );
   }
 
   // Script-driven Check-in (new system — 0 AI calls per check-in)
-  router.get ('/checkin/script',          requireAuth, (req, res) => getScriptHandler(pool, req, res));
-  router.post('/checkin/script/start',    requireAuth, (req, res) => startScriptHandler(pool, req, res));
-  router.post('/checkin/script/answer',   requireAuth, (req, res) => answerScriptHandler(pool, req, res));
-  router.get ('/checkin/script/session',  requireAuth, (req, res) => getSessionHandler(pool, req, res));
-  router.post('/checkin/script/clusters', requireAuth, (req, res) => createClustersHandler(pool, req, res));
+  router.get('/checkin/script', requireAuth, (req, res) => getScriptHandler(pool, req, res));
+  router.post('/checkin/script/start', requireAuth, (req, res) =>
+    startScriptHandler(pool, req, res)
+  );
+  router.post('/checkin/script/answer', requireAuth, (req, res) =>
+    answerScriptHandler(pool, req, res)
+  );
+  router.get('/checkin/script/session', requireAuth, (req, res) =>
+    getSessionHandler(pool, req, res)
+  );
+  router.post('/checkin/script/clusters', requireAuth, (req, res) =>
+    createClustersHandler(pool, req, res)
+  );
 
   // Health Score
   router.get('/health-score', requireAuth, (req, res) => healthScoreHandler(pool, req, res));
 
   // Engagement patterns
-  router.post('/engagement/screen-view', requireAuth, (req, res) => trackScreenViewHandler(pool, req, res));
-  router.get('/engagement/pattern', requireAuth, (req, res) => engagementPatternHandler(pool, req, res));
-  router.get('/engagement/optimal-time', requireAuth, (req, res) => engagementOptimalTimeHandler(pool, req, res));
+  router.post('/engagement/screen-view', requireAuth, (req, res) =>
+    trackScreenViewHandler(pool, req, res)
+  );
+  router.get('/engagement/pattern', requireAuth, (req, res) =>
+    engagementPatternHandler(pool, req, res)
+  );
+  router.get('/engagement/optimal-time', requireAuth, (req, res) =>
+    engagementOptimalTimeHandler(pool, req, res)
+  );
 
   // Care Circle Dashboard — caregiver views member's health summary
-  router.get('/care-circle/member/:memberId/health-summary', requireAuth, (req, res) => getMemberHealthSummary(pool, req, res));
+  router.get('/care-circle/member/:memberId/health-summary', requireAuth, (req, res) =>
+    getMemberHealthSummary(pool, req, res)
+  );
 
   // Tree (Health Score)
   router.get('/tree', requireAuth, (req, res) => getTreeSummary(pool, req, res));

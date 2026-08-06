@@ -24,16 +24,31 @@ let totalFail = 0;
 const failures = [];
 
 function assert(condition, name) {
-  if (condition) { totalPass++; console.log(`  PASS ✓ ${name}`); }
-  else { totalFail++; failures.push(name); console.log(`  FAIL ✗ ${name}`); }
+  if (condition) {
+    totalPass++;
+    console.log(`  PASS ✓ ${name}`);
+  } else {
+    totalFail++;
+    failures.push(name);
+    console.log(`  FAIL ✗ ${name}`);
+  }
 }
 
 function get(path) {
   return new Promise((resolve, reject) => {
-    http.get('http://localhost:3000' + path, res => {
-      let d = ''; res.on('data', c => d += c);
-      res.on('end', () => { try { resolve({ s: res.statusCode, b: JSON.parse(d) }); } catch { resolve({ s: res.statusCode, b: d }); } });
-    }).on('error', reject);
+    http
+      .get('http://localhost:3000' + path, (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => {
+          try {
+            resolve({ s: res.statusCode, b: JSON.parse(d) });
+          } catch {
+            resolve({ s: res.statusCode, b: d });
+          }
+        });
+      })
+      .on('error', reject);
   });
 }
 
@@ -53,14 +68,20 @@ async function testLifecycleDrivesRnd() {
     `UPDATE user_lifecycle SET segment = 'active', inactive_days = 0, last_checkin_at = NOW() WHERE user_id = 4`
   );
   let stats = await runNightlyCycle(pool);
-  assert(stats.activeProcessed >= 1, `1.1 Active user processed in P1 (active=${stats.activeProcessed})`);
+  assert(
+    stats.activeProcessed >= 1,
+    `1.1 Active user processed in P1 (active=${stats.activeProcessed})`
+  );
 
   // 1.2 Semi-active → goes into Priority 2
   await pool.query(
     `UPDATE user_lifecycle SET segment = 'semi_active', inactive_days = 2, last_checkin_at = NOW() - INTERVAL '2 days' WHERE user_id = 4`
   );
   stats = await runNightlyCycle(pool);
-  assert(stats.semiActiveProcessed >= 1, `1.2 Semi-active processed in P2 (semi=${stats.semiActiveProcessed})`);
+  assert(
+    stats.semiActiveProcessed >= 1,
+    `1.2 Semi-active processed in P2 (semi=${stats.semiActiveProcessed})`
+  );
   assert(stats.activeProcessed === 0, '1.3 No active processing for user');
 
   // 1.4 Inactive → skipped entirely
@@ -83,7 +104,10 @@ async function testLifecycleDrivesRnd() {
   // 1.9 markActive promotes user back → next cycle includes them
   await lifecycle.markActive(pool, 4);
   stats = await runNightlyCycle(pool);
-  assert(stats.activeProcessed >= 1, `1.9 After markActive → P1 again (active=${stats.activeProcessed})`);
+  assert(
+    stats.activeProcessed >= 1,
+    `1.9 After markActive → P1 again (active=${stats.activeProcessed})`
+  );
 
   // Restore
   if (backup.length > 0) {
@@ -104,28 +128,68 @@ async function testReengagementUsesLifecycle() {
   const { rows: backup } = await pool.query('SELECT * FROM user_lifecycle WHERE user_id = 1');
 
   // 2.1 active → no reengagement
-  await pool.query(`UPDATE user_lifecycle SET segment='active', inactive_days=0, last_checkin_at=NOW() WHERE user_id=1`);
-  let m = await reengagement.generateReengagementMessage(pool, 1, { id: 1, birth_year: 1980, gender: 'nam', display_name: 'Đức', lang: 'vi' });
+  await pool.query(
+    `UPDATE user_lifecycle SET segment='active', inactive_days=0, last_checkin_at=NOW() WHERE user_id=1`
+  );
+  let m = await reengagement.generateReengagementMessage(pool, 1, {
+    id: 1,
+    birth_year: 1980,
+    gender: 'nam',
+    display_name: 'Đức',
+    lang: 'vi',
+  });
   assert(m === null, '2.1 active → no reengagement message');
 
   // 2.2 semi_active 2d → gentle
-  await pool.query(`UPDATE user_lifecycle SET segment='semi_active', inactive_days=2, last_checkin_at=NOW() - INTERVAL '2 days' WHERE user_id=1`);
-  m = await reengagement.generateReengagementMessage(pool, 1, { id: 1, birth_year: 1980, gender: 'nam', display_name: 'Đức', lang: 'vi' });
+  await pool.query(
+    `UPDATE user_lifecycle SET segment='semi_active', inactive_days=2, last_checkin_at=NOW() - INTERVAL '2 days' WHERE user_id=1`
+  );
+  m = await reengagement.generateReengagementMessage(pool, 1, {
+    id: 1,
+    birth_year: 1980,
+    gender: 'nam',
+    display_name: 'Đức',
+    lang: 'vi',
+  });
   assert(m && m.escalation.level === 'gentle', '2.2 semi_active 2d → gentle');
 
   // 2.3 inactive 4d → concerned
-  await pool.query(`UPDATE user_lifecycle SET segment='inactive', inactive_days=4, last_checkin_at=NOW() - INTERVAL '4 days' WHERE user_id=1`);
-  m = await reengagement.generateReengagementMessage(pool, 1, { id: 1, birth_year: 1980, gender: 'nam', display_name: 'Đức', lang: 'vi' });
+  await pool.query(
+    `UPDATE user_lifecycle SET segment='inactive', inactive_days=4, last_checkin_at=NOW() - INTERVAL '4 days' WHERE user_id=1`
+  );
+  m = await reengagement.generateReengagementMessage(pool, 1, {
+    id: 1,
+    birth_year: 1980,
+    gender: 'nam',
+    display_name: 'Đức',
+    lang: 'vi',
+  });
   assert(m && m.escalation.level === 'concerned', '2.3 inactive 4d → concerned');
 
   // 2.4 inactive 6d → worried
-  await pool.query(`UPDATE user_lifecycle SET segment='inactive', inactive_days=6, last_checkin_at=NOW() - INTERVAL '6 days' WHERE user_id=1`);
-  m = await reengagement.generateReengagementMessage(pool, 1, { id: 1, birth_year: 1980, gender: 'nam', display_name: 'Đức', lang: 'vi' });
+  await pool.query(
+    `UPDATE user_lifecycle SET segment='inactive', inactive_days=6, last_checkin_at=NOW() - INTERVAL '6 days' WHERE user_id=1`
+  );
+  m = await reengagement.generateReengagementMessage(pool, 1, {
+    id: 1,
+    birth_year: 1980,
+    gender: 'nam',
+    display_name: 'Đức',
+    lang: 'vi',
+  });
   assert(m && m.escalation.level === 'worried', '2.4 inactive 6d → worried');
 
   // 2.5 churned 10d → urgent + family
-  await pool.query(`UPDATE user_lifecycle SET segment='churned', inactive_days=10, last_checkin_at=NOW() - INTERVAL '10 days' WHERE user_id=1`);
-  m = await reengagement.generateReengagementMessage(pool, 1, { id: 1, birth_year: 1980, gender: 'nam', display_name: 'Đức', lang: 'vi' });
+  await pool.query(
+    `UPDATE user_lifecycle SET segment='churned', inactive_days=10, last_checkin_at=NOW() - INTERVAL '10 days' WHERE user_id=1`
+  );
+  m = await reengagement.generateReengagementMessage(pool, 1, {
+    id: 1,
+    birth_year: 1980,
+    gender: 'nam',
+    display_name: 'Đức',
+    lang: 'vi',
+  });
   assert(m && m.escalation.level === 'urgent', '2.5 churned 10d → urgent');
   assert(m && m.escalation.includeFamily === true, '2.6 urgent → includeFamily=true');
 
@@ -150,7 +214,10 @@ async function testNotifReengagementConsistency() {
 
   // 3.1 Same topSymptom display_name (both query problem_clusters)
   if (ctxNotif.topSymptom && ctxReeng.topSymptom) {
-    assert(ctxNotif.topSymptom.display_name === ctxReeng.topSymptom.display_name, '3.1 Same topSymptom across modules');
+    assert(
+      ctxNotif.topSymptom.display_name === ctxReeng.topSymptom.display_name,
+      '3.1 Same topSymptom across modules'
+    );
   } else {
     assert(true, '3.1 (no topSymptom)');
   }
@@ -182,17 +249,34 @@ async function testIllusionWithCompanion() {
     greeting: 'Hello',
     questions: [
       { id: 'q1', text: 'Đau mức nào?', type: 'slider', min: 0, max: 10 },
-      { id: 'q2', text: 'Từ khi nào?', type: 'single_choice', options: ['Vừa mới', 'Vài giờ', 'Hôm qua'] },
-      { id: 'q3', text: 'Có nặng hơn không?', type: 'single_choice', options: ['Đỡ hơn', 'Vẫn vậy', 'Nặng hơn'] },
+      {
+        id: 'q2',
+        text: 'Từ khi nào?',
+        type: 'single_choice',
+        options: ['Vừa mới', 'Vài giờ', 'Hôm qua'],
+      },
+      {
+        id: 'q3',
+        text: 'Có nặng hơn không?',
+        type: 'single_choice',
+        options: ['Đỡ hơn', 'Vẫn vậy', 'Nặng hơn'],
+      },
     ],
     scoring_rules: [{ conditions: [{ field: 'q1', op: 'gte', value: 7 }], severity: 'high' }],
-    conclusion_templates: { low: { summary: 'OK' }, medium: { summary: 'Watch' }, high: { summary: 'Bad' } },
+    conclusion_templates: {
+      low: { summary: 'OK' },
+      medium: { summary: 'Watch' },
+      high: { summary: 'Bad' },
+    },
   };
 
   // 4.1 Step 0: greeting + continuity
   const r0 = il.applyIllusion(
     { isDone: false, question: scriptData.questions[0], currentStep: 0, totalSteps: 3 },
-    scriptData, ctx, USER_HUNG, {}
+    scriptData,
+    ctx,
+    USER_HUNG,
+    {}
   );
   assert(r0._greeting !== undefined, '4.1 Step 0 has greeting');
   assert(r0._continuity !== undefined, '4.2 Step 0 has continuity (3 tired days)');
@@ -203,7 +287,10 @@ async function testIllusionWithCompanion() {
   // 4.6 Step 1 with answer 2 → empathy positive
   const r1 = il.applyIllusion(
     { isDone: false, question: scriptData.questions[1], currentStep: 1, totalSteps: 3 },
-    scriptData, ctx, USER_HUNG, { lastAnswer: { question_id: 'q1', answer: 2 } }
+    scriptData,
+    ctx,
+    USER_HUNG,
+    { lastAnswer: { question_id: 'q1', answer: 2 } }
   );
   assert(r1._empathy !== undefined, '4.6 Step 1 has empathy');
   assert(r1._empathy.templateId === 'empathy_positive', '4.7 Slider 2 → empathy_positive');
@@ -213,14 +300,25 @@ async function testIllusionWithCompanion() {
   // 4.10 Step 2 with answer "Nặng hơn" → empathy worsening
   const r2 = il.applyIllusion(
     { isDone: false, question: scriptData.questions[2], currentStep: 2, totalSteps: 3 },
-    scriptData, ctx, USER_HUNG, { lastAnswer: { question_id: 'q2', answer: 'Vài giờ' } }
+    scriptData,
+    ctx,
+    USER_HUNG,
+    { lastAnswer: { question_id: 'q2', answer: 'Vài giờ' } }
   );
   assert(r2._empathy !== undefined, '4.10 Step 2 has empathy');
 
   // 4.11 Conclusion (low severity vs medium last) → progress severity_improved
   const rEnd = il.applyIllusion(
-    { isDone: true, conclusion: { severity: 'low', summary: 'OK', recommendation: 'rest', closeMessage: 'bye' }, currentStep: 3, totalSteps: 3 },
-    scriptData, ctx, USER_HUNG, {}
+    {
+      isDone: true,
+      conclusion: { severity: 'low', summary: 'OK', recommendation: 'rest', closeMessage: 'bye' },
+      currentStep: 3,
+      totalSteps: 3,
+    },
+    scriptData,
+    ctx,
+    USER_HUNG,
+    {}
   );
   assert(rEnd._progress !== undefined, '4.11 Conclusion has progress');
   assert(rEnd._progress.templateId === 'progress_severity_improved', '4.12 medium→low = improved');
@@ -235,7 +333,9 @@ async function testCacheReuseOnReturn() {
 
   // Backup
   const { rows: backup } = await pool.query('SELECT * FROM user_lifecycle WHERE user_id = 4');
-  await pool.query('UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE user_id = 4');
+  await pool.query(
+    'UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE user_id = 4'
+  );
 
   // Get a real cluster_key for user 4
   const { rows: clusters } = await pool.query(
@@ -259,7 +359,10 @@ async function testCacheReuseOnReturn() {
   // 5.3 Use cached script (no AI call needed)
   const r1 = await cache.getOrReuseScript(pool, 4, clusterKey);
   assert(r1.script !== null, '5.3 Cached script reused');
-  assert(r1.source === 'cache_first' || r1.source === 'cache_reused', `5.4 Source = cache_* (got ${r1.source})`);
+  assert(
+    r1.source === 'cache_first' || r1.source === 'cache_reused',
+    `5.4 Source = cache_* (got ${r1.source})`
+  );
 
   // 5.5 Subsequent access → cache_reused with incremented counter
   const r2 = await cache.getOrReuseScript(pool, 4, clusterKey);
@@ -267,7 +370,9 @@ async function testCacheReuseOnReturn() {
   assert(r2.script.reuse_count > r1.script.reuse_count, '5.6 reuse_count incremented');
 
   // Cleanup
-  await pool.query('UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE user_id = 4');
+  await pool.query(
+    'UPDATE triage_scripts SET reuse_count = 0, last_reused_at = NULL WHERE user_id = 4'
+  );
   if (backup.length > 0) {
     await pool.query(
       `UPDATE user_lifecycle SET segment=$1, inactive_days=$2, last_checkin_at=$3 WHERE user_id=4`,
@@ -311,7 +416,8 @@ async function testEndToEndJourney() {
     assert(ctxR.lifecycle.segment === lc.segment, '6.7 reengagement segment matches lifecycle');
     assert(ctxN.lifecycle.segment === lc.segment, '6.8 notification segment matches lifecycle');
   } else {
-    assert(true, '6.7 (skip)'); assert(true, '6.8 (skip)');
+    assert(true, '6.7 (skip)');
+    assert(true, '6.8 (skip)');
   }
 
   // 6.9 Honorific consistency across modules
@@ -335,19 +441,56 @@ async function testTemplateIdConsistency() {
   const triggers = ['morning', 'afternoon', 'evening', 'alert_severity', 'alert_trend'];
   for (const trigger of triggers) {
     const msg = await notifIntel.generateMessage(pool, 4, trigger, USER_HUNG);
-    assert(typeof msg.templateId === 'string' && msg.templateId.length > 0, `7 Notif ${trigger} has templateId`);
+    assert(
+      typeof msg.templateId === 'string' && msg.templateId.length > 0,
+      `7 Notif ${trigger} has templateId`
+    );
   }
 
   // 7.2 Illusion templates have correct IDs
-  const ctx = { topSymptom: { display_name: 'x', trend: 'stable' }, consecutiveTiredDays: 0, lastSeverity: 'low' };
-  const greetings = ['greeting_default', 'greeting_consecutive_tired', 'greeting_trend_worsening', 'greeting_trend_improving', 'greeting_symptom_yesterday'];
+  const ctx = {
+    topSymptom: { display_name: 'x', trend: 'stable' },
+    consecutiveTiredDays: 0,
+    lastSeverity: 'low',
+  };
+  const greetings = [
+    'greeting_default',
+    'greeting_consecutive_tired',
+    'greeting_trend_worsening',
+    'greeting_trend_improving',
+    'greeting_symptom_yesterday',
+  ];
   // Build different contexts to hit each template
   const ctxs = [
     [{ topSymptom: null, consecutiveTiredDays: 0, lastSeverity: 'low' }, 'greeting_default'],
-    [{ topSymptom: null, consecutiveTiredDays: 3, lastSeverity: 'low' }, 'greeting_consecutive_tired'],
-    [{ topSymptom: { display_name: 'x', trend: 'increasing' }, consecutiveTiredDays: 0, lastSeverity: 'low' }, 'greeting_trend_worsening'],
-    [{ topSymptom: { display_name: 'x', trend: 'decreasing' }, consecutiveTiredDays: 0, lastSeverity: 'low' }, 'greeting_trend_improving'],
-    [{ topSymptom: { display_name: 'x', trend: 'stable' }, consecutiveTiredDays: 0, lastSeverity: 'low' }, 'greeting_symptom_yesterday'],
+    [
+      { topSymptom: null, consecutiveTiredDays: 3, lastSeverity: 'low' },
+      'greeting_consecutive_tired',
+    ],
+    [
+      {
+        topSymptom: { display_name: 'x', trend: 'increasing' },
+        consecutiveTiredDays: 0,
+        lastSeverity: 'low',
+      },
+      'greeting_trend_worsening',
+    ],
+    [
+      {
+        topSymptom: { display_name: 'x', trend: 'decreasing' },
+        consecutiveTiredDays: 0,
+        lastSeverity: 'low',
+      },
+      'greeting_trend_improving',
+    ],
+    [
+      {
+        topSymptom: { display_name: 'x', trend: 'stable' },
+        consecutiveTiredDays: 0,
+        lastSeverity: 'low',
+      },
+      'greeting_symptom_yesterday',
+    ],
   ];
   for (const [c, expectedId] of ctxs) {
     const g = il.rewriteGreeting('Hi', c, USER_HUNG);
@@ -355,25 +498,25 @@ async function testTemplateIdConsistency() {
   }
 
   // 7.3 Reengagement templates have unique IDs
-  const reIds = Object.values(reengagement.REENGAGEMENT_TEMPLATES).map(t => t.id);
+  const reIds = Object.values(reengagement.REENGAGEMENT_TEMPLATES).map((t) => t.id);
   assert(reIds.length === new Set(reIds).size, '7.3 Reengagement IDs unique');
 
   // 7.4 Notification templates have unique IDs
   const notifIds = [
-    ...Object.values(notifIntel.MORNING_TEMPLATES).map(t => t.id),
-    ...Object.values(notifIntel.EVENING_TEMPLATES).map(t => t.id),
-    ...Object.values(notifIntel.AFTERNOON_TEMPLATES).map(t => t.id),
-    ...Object.values(notifIntel.ALERT_TEMPLATES).map(t => t.id),
+    ...Object.values(notifIntel.MORNING_TEMPLATES).map((t) => t.id),
+    ...Object.values(notifIntel.EVENING_TEMPLATES).map((t) => t.id),
+    ...Object.values(notifIntel.AFTERNOON_TEMPLATES).map((t) => t.id),
+    ...Object.values(notifIntel.ALERT_TEMPLATES).map((t) => t.id),
   ];
   assert(notifIds.length === new Set(notifIds).size, '7.4 Notification IDs unique');
 
   // 7.5 Illusion templates have unique IDs
   const ilIds = [
-    ...Object.values(il.GREETING_REWRITES).map(t => t.id),
-    ...Object.values(il.QUESTION_REWRITES).map(t => t.id),
-    ...Object.values(il.CONTINUITY_PREFIXES).map(t => t.id),
-    ...Object.values(il.PROGRESS_TEMPLATES).map(t => t.id),
-    ...Object.values(il.EMPATHY_RESPONSES).map(r => r.id),
+    ...Object.values(il.GREETING_REWRITES).map((t) => t.id),
+    ...Object.values(il.QUESTION_REWRITES).map((t) => t.id),
+    ...Object.values(il.CONTINUITY_PREFIXES).map((t) => t.id),
+    ...Object.values(il.PROGRESS_TEMPLATES).map((t) => t.id),
+    ...Object.values(il.EMPATHY_RESPONSES).map((r) => r.id),
   ];
   assert(ilIds.length === new Set(ilIds).size, '7.5 Illusion IDs unique');
 }
@@ -386,14 +529,14 @@ async function testConcurrentStress() {
 
   // Mix calls to Phase 1, 2, 3, 5, 6 in parallel
   const promises = [
-    lifecycle.getLifecycle(pool, 4),                                           // Phase 1
-    lifecycle.getActiveUserIds(pool),                                          // Phase 1
-    notifIntel.buildUserContext(pool, 4),                                      // Phase 2
-    notifIntel.generateMessage(pool, 4, 'morning', USER_HUNG),                 // Phase 2
-    il.buildCheckinContext(pool, 4),                                           // Phase 3
-    reengagement.buildReengagementContext(pool, 4),                            // Phase 5
-    cache.getReuseStatsForUser(pool, 4),                                       // Phase 6
-    cache.getGlobalReuseStats(pool),                                           // Phase 6
+    lifecycle.getLifecycle(pool, 4), // Phase 1
+    lifecycle.getActiveUserIds(pool), // Phase 1
+    notifIntel.buildUserContext(pool, 4), // Phase 2
+    notifIntel.generateMessage(pool, 4, 'morning', USER_HUNG), // Phase 2
+    il.buildCheckinContext(pool, 4), // Phase 3
+    reengagement.buildReengagementContext(pool, 4), // Phase 5
+    cache.getReuseStatsForUser(pool, 4), // Phase 6
+    cache.getGlobalReuseStats(pool), // Phase 6
   ];
 
   let crashed = false;
@@ -406,7 +549,10 @@ async function testConcurrentStress() {
   }
   assert(!crashed, '8.1 No crash in concurrent calls');
   if (!crashed) {
-    assert(results.every(r => r !== null && r !== undefined), '8.2 All results returned');
+    assert(
+      results.every((r) => r !== null && r !== undefined),
+      '8.2 All results returned'
+    );
   } else {
     assert(false, '8.2 (crashed)');
   }
@@ -534,8 +680,10 @@ async function testDataIntegrity() {
   // 12.1 Lifecycle records always valid
   const { rows: lcs } = await pool.query('SELECT * FROM user_lifecycle');
   for (const lc of lcs) {
-    assert(['active', 'semi_active', 'inactive', 'churned'].includes(lc.segment),
-      `12 user ${lc.user_id} segment valid: ${lc.segment}`);
+    assert(
+      ['active', 'semi_active', 'inactive', 'churned'].includes(lc.segment),
+      `12 user ${lc.user_id} segment valid: ${lc.segment}`
+    );
   }
 
   // 12.2 No orphaned triage_scripts (FK to users)
@@ -587,7 +735,9 @@ async function run() {
   await testDataIntegrity();
 
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log(`║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`);
+  console.log(
+    `║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`
+  );
   if (totalFail > 0) {
     console.log('║  FAILURES:                                       ║');
     for (const f of failures) console.log(`║  - ${f.substring(0, 46).padEnd(46)} ║`);
@@ -598,4 +748,8 @@ async function run() {
   process.exit(totalFail > 0 ? 1 : 0);
 }
 
-run().catch(err => { console.error('CRASHED:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASHED:', err);
+  pool.end();
+  process.exit(1);
+});

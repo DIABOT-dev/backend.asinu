@@ -1,12 +1,17 @@
 ﻿const { getDiaBrainReply } = require('../ai/providers/diabrain');
 const { getOpenAIChatReply } = require('../ai/providers/openai');
-const { getMedGemmaChatReply, isConfigured: isMedGemmaConfigured } = require('../ai/providers/medgemma');
+const {
+  getMedGemmaChatReply,
+  isConfigured: isMedGemmaConfigured,
+} = require('../ai/providers/medgemma');
 const { t } = require('../../i18n');
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
 const buildMockReply = (message) => {
-  const trimmed = String(message || '').slice(0, 240).trim();
+  const trimmed = String(message || '')
+    .slice(0, 240)
+    .trim();
   const prefix = trimmed ? t('chat.mock_reply', 'vi', { message: trimmed }) : '';
   return `${prefix}${t('chat.mock_support')}`;
 };
@@ -35,19 +40,19 @@ async function callGemini(message, context, history = [], systemPrompt = null) {
   for (const msg of history) {
     contents.push({
       role: msg.sender === 'user' ? 'user' : 'model',
-      parts: [{ text: msg.message }]
+      parts: [{ text: msg.message }],
     });
   }
   // Append current user message
   contents.push({
     role: 'user',
-    parts: [{ text: String(message) }]
+    parts: [{ text: String(message) }],
   });
 
   const payload = {
     contents,
     generationConfig: {
-      temperature: 0.75,    // Giảm nhẹ để kiểm soát tốt hơn
+      temperature: 0.75, // Giảm nhẹ để kiểm soát tốt hơn
       topP: 0.95,
       maxOutputTokens: 500,
     },
@@ -56,7 +61,7 @@ async function callGemini(message, context, history = [], systemPrompt = null) {
   // Gemini systemInstruction — AI gets full profile context and conversation guidelines
   if (systemPrompt) {
     payload.systemInstruction = {
-      parts: [{ text: systemPrompt }]
+      parts: [{ text: systemPrompt }],
     };
   }
 
@@ -73,7 +78,7 @@ async function callGemini(message, context, history = [], systemPrompt = null) {
     const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body
+      body,
     });
 
     if (response.status === 429) {
@@ -88,7 +93,10 @@ async function callGemini(message, context, history = [], systemPrompt = null) {
     }
 
     const data = await response.json();
-    const reply = data?.candidates?.[0]?.content?.parts?.map((p) => p.text).join(' ').trim();
+    const reply = data?.candidates?.[0]?.content?.parts
+      ?.map((p) => p.text)
+      .join(' ')
+      .trim();
     return reply || null;
   }
 
@@ -148,7 +156,12 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
     }
     try {
       const userId = context?.user_id ?? context?.userId ?? null;
-      const result = await getMedGemmaChatReply({ message, userId, context: systemPrompt, history });
+      const result = await getMedGemmaChatReply({
+        message,
+        userId,
+        context: systemPrompt,
+        history,
+      });
       if (result) return result;
     } catch (err) {
       console.error('[ChatProvider] MedGemma failed after retries:', err.message);

@@ -14,13 +14,7 @@
  * when clinical context allows it (e.g. progression === 'better' → skip red_flags).
  */
 
-const {
-  resolveComplaint,
-  getAssociatedSymptoms,
-  getRedFlags,
-  getCauses,
-  listComplaints,
-} = require('../../services/checkin/clinical-mapping');
+const { resolveComplaint } = require('../../services/checkin/clinical-mapping');
 
 // Common chief complaints để hiển thị options ở step `symptoms`.
 // Lấy từ KB clinical-mapping (14 triệu chứng chính).
@@ -40,31 +34,31 @@ const COMMON_SYMPTOMS_ORDERED = [
   'đau vai',
   'tê tay chân',
 ];
-const SYMPTOMS_OTHER = 'khác (mô tả thêm)';
+const _SYMPTOMS_OTHER = 'khác (mô tả thêm)';
 
 // Map bệnh nền → triệu chứng thường gặp (đẩy lên đầu danh sách options
 // ở step `symptoms` để user dễ chọn). Key chứa keyword normalize lowercase.
 const CONDITION_TO_PRIORITY_SYMPTOMS = {
-  'tiểu đường':    ['chóng mặt', 'mệt mỏi', 'buồn nôn', 'tê tay chân', 'khó thở'],
-  'đái tháo đường':['chóng mặt', 'mệt mỏi', 'buồn nôn', 'tê tay chân', 'khó thở'],
-  'cao huyết áp':  ['đau đầu', 'chóng mặt', 'đau ngực', 'khó thở'],
-  'huyết áp':      ['đau đầu', 'chóng mặt', 'đau ngực', 'khó thở'],
-  'tim mạch':      ['đau ngực', 'khó thở', 'mệt mỏi', 'chóng mặt'],
-  'tim':           ['đau ngực', 'khó thở', 'mệt mỏi', 'chóng mặt'],
-  'hen suyễn':     ['khó thở', 'ho', 'đau ngực'],
-  'hen':           ['khó thở', 'ho', 'đau ngực'],
-  'copd':          ['khó thở', 'ho', 'mệt mỏi'],
-  'phổi':          ['khó thở', 'ho', 'đau ngực'],
-  'thoái hoá khớp':['đau vai', 'tê tay chân'],
-  'thoái hóa khớp':['đau vai', 'tê tay chân'],
-  'khớp':          ['đau vai', 'tê tay chân'],
-  'mất ngủ':       ['mất ngủ', 'mệt mỏi', 'đau đầu'],
-  'rối loạn lo âu':['mất ngủ', 'mệt mỏi', 'đau đầu', 'đau ngực'],
-  'trầm cảm':      ['mất ngủ', 'mệt mỏi', 'đau đầu'],
-  'dạ dày':        ['đau bụng', 'buồn nôn', 'tiêu chảy'],
-  'tiêu hoá':      ['đau bụng', 'buồn nôn', 'tiêu chảy'],
-  'gan':           ['đau bụng', 'buồn nôn', 'mệt mỏi'],
-  'thận':          ['đau bụng', 'mệt mỏi', 'buồn nôn'],
+  'tiểu đường': ['chóng mặt', 'mệt mỏi', 'buồn nôn', 'tê tay chân', 'khó thở'],
+  'đái tháo đường': ['chóng mặt', 'mệt mỏi', 'buồn nôn', 'tê tay chân', 'khó thở'],
+  'cao huyết áp': ['đau đầu', 'chóng mặt', 'đau ngực', 'khó thở'],
+  'huyết áp': ['đau đầu', 'chóng mặt', 'đau ngực', 'khó thở'],
+  'tim mạch': ['đau ngực', 'khó thở', 'mệt mỏi', 'chóng mặt'],
+  tim: ['đau ngực', 'khó thở', 'mệt mỏi', 'chóng mặt'],
+  'hen suyễn': ['khó thở', 'ho', 'đau ngực'],
+  hen: ['khó thở', 'ho', 'đau ngực'],
+  copd: ['khó thở', 'ho', 'mệt mỏi'],
+  phổi: ['khó thở', 'ho', 'đau ngực'],
+  'thoái hoá khớp': ['đau vai', 'tê tay chân'],
+  'thoái hóa khớp': ['đau vai', 'tê tay chân'],
+  khớp: ['đau vai', 'tê tay chân'],
+  'mất ngủ': ['mất ngủ', 'mệt mỏi', 'đau đầu'],
+  'rối loạn lo âu': ['mất ngủ', 'mệt mỏi', 'đau đầu', 'đau ngực'],
+  'trầm cảm': ['mất ngủ', 'mệt mỏi', 'đau đầu'],
+  'dạ dày': ['đau bụng', 'buồn nôn', 'tiêu chảy'],
+  'tiêu hoá': ['đau bụng', 'buồn nôn', 'tiêu chảy'],
+  gan: ['đau bụng', 'buồn nôn', 'mệt mỏi'],
+  thận: ['đau bụng', 'mệt mỏi', 'buồn nôn'],
 };
 
 /**
@@ -110,12 +104,12 @@ function buildSymptomOptions(bodyLocations, conditions) {
     for (const cond of conditions) {
       const normalized = String(cond).toLowerCase().trim();
       for (const [key, symptoms] of Object.entries(CONDITION_TO_PRIORITY_SYMPTOMS)) {
-        if (normalized.includes(key)) symptoms.forEach(s => priority.add(s.toLowerCase()));
+        if (normalized.includes(key)) symptoms.forEach((s) => priority.add(s.toLowerCase()));
       }
     }
     if (priority.size > 0) {
-      const prioritized = merged.filter(s => priority.has(s.toLowerCase()));
-      const rest = merged.filter(s => !priority.has(s.toLowerCase()));
+      const prioritized = merged.filter((s) => priority.has(s.toLowerCase()));
+      const rest = merged.filter((s) => !priority.has(s.toLowerCase()));
       return [...prioritized, ...rest];
     }
   }
@@ -132,7 +126,7 @@ function buildPrioritizedSymptomOptions(conditions) {
     const normalized = String(cond).toLowerCase().trim();
     for (const [key, symptoms] of Object.entries(CONDITION_TO_PRIORITY_SYMPTOMS)) {
       if (normalized.includes(key)) {
-        symptoms.forEach(s => priority.add(s));
+        symptoms.forEach((s) => priority.add(s));
       }
     }
   }
@@ -142,9 +136,9 @@ function buildPrioritizedSymptomOptions(conditions) {
   }
 
   // Đầu: các triệu chứng ưu tiên (giữ order theo COMMON_SYMPTOMS_ORDERED)
-  const prioritized = COMMON_SYMPTOMS_ORDERED.filter(s => priority.has(s));
+  const prioritized = COMMON_SYMPTOMS_ORDERED.filter((s) => priority.has(s));
   // Sau: các triệu chứng còn lại (giữ order)
-  const rest = COMMON_SYMPTOMS_ORDERED.filter(s => !priority.has(s));
+  const rest = COMMON_SYMPTOMS_ORDERED.filter((s) => !priority.has(s));
   return [...prioritized, ...rest];
 }
 
@@ -152,52 +146,36 @@ function buildPrioritizedSymptomOptions(conditions) {
 
 /** Maximum 8 questions for a brand-new check-in. */
 const INITIAL_STEPS = [
-  'symptoms',     // 1. What's your main complaint?
-  'associated',   // 2. Any associated symptoms?
-  'onset',        // 3. When did it start?
-  'progression',  // 4. Getting better / same / worse?
-  'red_flags',    // 5. Any red-flag symptoms?
-  'cause',        // 6. Possible causes?
-  'action',       // 7. What have you done so far?
-  'conclude',     // 8. Wrap up — deterministic severity
+  'symptoms', // 1. What's your main complaint?
+  'associated', // 2. Any associated symptoms?
+  'onset', // 3. When did it start?
+  'progression', // 4. Getting better / same / worse?
+  'red_flags', // 5. Any red-flag symptoms?
+  'cause', // 6. Possible causes?
+  'action', // 7. What have you done so far?
+  'conclude', // 8. Wrap up — deterministic severity
 ];
 
 /** Maximum 3 questions for a follow-up visit. */
 const FOLLOWUP_STEPS = [
-  'followup_status',  // 1. How are you feeling compared to last time?
-  'followup_detail',  // 2. Any new or worsening symptoms?
-  'conclude',         // 3. Wrap up
+  'followup_status', // 1. How are you feeling compared to last time?
+  'followup_detail', // 2. Any new or worsening symptoms?
+  'conclude', // 3. Wrap up
 ];
 
 // ─── Hardcoded option sets (Vietnamese) ─────────────────────────────────────
 
-const ONSET_OPTIONS = [
-  'vừa mới',
-  'vài giờ trước',
-  'từ sáng',
-  'từ hôm qua',
-  'vài ngày nay',
-];
+const ONSET_OPTIONS = ['vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua', 'vài ngày nay'];
 
 const PROGRESSION_OPTIONS = [
-  'đang đỡ dần',    // better
-  'vẫn như cũ',     // same
+  'đang đỡ dần', // better
+  'vẫn như cũ', // same
   'có vẻ nặng hơn', // worse
 ];
 
-const ACTION_OPTIONS = [
-  'nghỉ ngơi',
-  'uống thuốc',
-  'uống nước',
-  'chưa làm gì',
-];
+const ACTION_OPTIONS = ['nghỉ ngơi', 'uống thuốc', 'uống nước', 'chưa làm gì'];
 
-const FOLLOWUP_STATUS_OPTIONS = [
-  'đỡ hơn nhiều',
-  'đỡ hơn một chút',
-  'vẫn như cũ',
-  'có vẻ nặng hơn',
-];
+const FOLLOWUP_STATUS_OPTIONS = ['đỡ hơn nhiều', 'đỡ hơn một chút', 'vẫn như cũ', 'có vẻ nặng hơn'];
 
 const FOLLOWUP_DETAIL_OPTIONS = [
   'không có triệu chứng mới',
@@ -228,11 +206,11 @@ const PROGRESSION_MAP = {
  */
 function buildState(previousAnswers = [], profile = {}, healthContext = {}) {
   const completedSteps = new Set();
-  let primarySymptom = null;   // resolved key from clinical-mapping
-  let primaryMapping = null;   // full data object from clinical-mapping
+  let primarySymptom = null; // resolved key from clinical-mapping
+  let primaryMapping = null; // full data object from clinical-mapping
   const allSymptoms = [];
   let onset = null;
-  let progression = null;      // 'better' | 'same' | 'worse' | null
+  let progression = null; // 'better' | 'same' | 'worse' | null
   const redFlagsFound = [];
   const causesFound = [];
   const actionsFound = [];
@@ -262,8 +240,8 @@ function buildState(previousAnswers = [], profile = {}, healthContext = {}) {
         // Check if any selected associated symptom is a danger-level item.
         if (primaryMapping) {
           const dangerItems = (primaryMapping.associatedSymptoms || [])
-            .filter(s => s.dangerLevel === 'danger')
-            .map(s => s.text.toLowerCase());
+            .filter((s) => s.dangerLevel === 'danger')
+            .map((s) => s.text.toLowerCase());
           for (const a of answers) {
             if (dangerItems.includes((a || '').toLowerCase())) {
               redFlagsFound.push(a);
@@ -369,8 +347,7 @@ function applySkipLogic(baseSteps, state, status) {
   // ── Rule 3: progression === 'better' → can skip red_flags ──
   //    UNLESS elderly + conditions + non-low concern (Rule 4 overrides).
   if (state.progression === 'better') {
-    const mustKeepRedFlags =
-      state.isElderly && state.hasConditions && state.allSymptoms.length > 0;
+    const mustKeepRedFlags = state.isElderly && state.hasConditions && state.allSymptoms.length > 0;
     if (!mustKeepRedFlags) {
       removeStep(steps, 'red_flags');
     }
@@ -437,9 +414,7 @@ function buildQuestion(step, state) {
 
     case 'associated': {
       // Use clinical-mapping associated symptoms if available.
-      const options = mapping
-        ? mapping.associatedSymptoms.map(s => s.text)
-        : [];
+      const options = mapping ? mapping.associatedSymptoms.map((s) => s.text) : [];
       // Always add a "none" escape hatch.
       if (options.length && !options.includes('không có')) {
         options.push('không có');
@@ -558,9 +533,9 @@ function getNextStep(input) {
     profile = {},
     healthContext = {},
     previousAnswers = [],
-    previousSessionSummary = null,
-    bodyLocation = null,           // legacy single
-    bodyLocations = null,          // new T2 array
+    previousSessionSummary: _previousSessionSummary = null,
+    bodyLocation = null, // legacy single
+    bodyLocations = null, // new T2 array
     bodyLocationOther = null,
   } = input;
 
@@ -576,7 +551,7 @@ function getNextStep(input) {
   const steps = applySkipLogic(baseSteps, state, status);
 
   // 3. Find the first step that hasn't been completed yet.
-  const nextStep = steps.find(s => !state.completedSteps.has(s));
+  const nextStep = steps.find((s) => !state.completedSteps.has(s));
 
   // 4. If no step remains or we've reached 'conclude', wrap up.
   if (!nextStep || nextStep === 'conclude') {
@@ -596,7 +571,7 @@ function getNextStep(input) {
     step: nextStep,
     question: questionData.question,
     options: questionData.options,
-    optionsGrouped: questionData.optionsGrouped || null,  // pass through cho FE render section
+    optionsGrouped: questionData.optionsGrouped || null, // pass through cho FE render section
     multiSelect: questionData.multiSelect,
     allowFreeText: questionData.allowFreeText,
     primarySymptom: state.primarySymptom || null,
@@ -632,7 +607,7 @@ function calculateConclusion(state, status) {
     severity = 'high';
   } else if (state.progression === 'worse') {
     // Worsening + vulnerable population = high; otherwise medium.
-    severity = (state.isElderly || state.hasConditions) ? 'high' : 'medium';
+    severity = state.isElderly || state.hasConditions ? 'high' : 'medium';
   } else if (state.progression === 'same' && (state.isElderly || state.hasConditions)) {
     // Stagnant symptoms in vulnerable population = medium.
     severity = 'medium';

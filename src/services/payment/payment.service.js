@@ -13,11 +13,10 @@ const { t } = require('../../i18n');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
-const WALLET_LOW_BALANCE_THRESHOLD = 50000; // 50.000đ
 const WEBHOOK_MAX_AGE_MS = 15 * 60 * 1000; // 15 minutes — reject older webhooks
 
 const SEPAY_ACCOUNT = process.env.SEPAY_ACCOUNT_NUMBER;
-const SEPAY_BANK    = process.env.SEPAY_BANK_CODE;
+const SEPAY_BANK = process.env.SEPAY_BANK_CODE;
 const SEPAY_API_KEY = process.env.SEPAY_API_KEY;
 
 // Timing-safe comparison to defeat timing attacks against the API key.
@@ -54,7 +53,7 @@ function buildDescription(userId, orderCode) {
 }
 
 function parseDescription(content) {
-  const userMatch  = content.match(/asinupay(\d+)/);
+  const userMatch = content.match(/asinupay(\d+)/);
   const orderMatch = content.match(/order([a-zA-Z0-9]+)/);
   if (!userMatch || !orderMatch) return null;
   return { userId: Number(userMatch[1]), orderCode: orderMatch[1] };
@@ -74,7 +73,7 @@ async function createQR(pool, userId, amount) {
     throw Object.assign(new Error(t('error.min_amount')), { statusCode: 400 });
   }
 
-  const orderCode   = generateOrderCode();
+  const orderCode = generateOrderCode();
   const description = buildDescription(userId, orderCode);
   const qrUrl = `https://qr.sepay.vn/img?acc=${SEPAY_ACCOUNT}&bank=${SEPAY_BANK}&amount=${amount}&des=${description}`;
 
@@ -85,7 +84,13 @@ async function createQR(pool, userId, amount) {
     [orderCode, userId, amount, qrUrl]
   );
 
-  return { order_code: orderCode, qr_url: qrUrl, amount, description, expires_at: inserted[0].expires_at };
+  return {
+    order_code: orderCode,
+    qr_url: qrUrl,
+    amount,
+    description,
+    expires_at: inserted[0].expires_at,
+  };
 }
 
 // ─── handleWebhook ──────────────────────────────────────────────
@@ -97,14 +102,14 @@ async function createQR(pool, userId, amount) {
 async function handleWebhook(pool, req) {
   // 1. Xác thực API key (timing-safe)
   const authHeader = req.headers['authorization'] || '';
-  const incoming   = authHeader.replace(/^Apikey\s+/i, '').trim();
+  const incoming = authHeader.replace(/^Apikey\s+/i, '').trim();
   if (!SEPAY_API_KEY || !safeEqual(incoming, SEPAY_API_KEY)) {
     return { ok: false, statusCode: 401, message: t('error.unauthorized') };
   }
 
   const body = req.body || {};
   const transferAmount = Number(body.transferAmount);
-  const content        = String(body.content || '');
+  const content = String(body.content || '');
 
   // 2. Timestamp check — reject webhooks older than WEBHOOK_MAX_AGE_MS
   const rawDate = body.transactionDate || body.transaction_date;
@@ -143,7 +148,6 @@ async function handleWebhook(pool, req) {
   if (content.includes('asinusub')) {
     const subParsed = subscriptionService.parseSubDescription(content);
     if (!subParsed) {
-
       return { ok: true, message: 'ignored' };
     }
 
@@ -181,10 +185,7 @@ async function handleWebhook(pool, req) {
 
   // 4. Kiểm tra số tiền
   if (Number(payment.amount) !== transferAmount) {
-    await pool.query(
-      `UPDATE payments SET status = 'failed' WHERE order_code = $1`,
-      [orderCode]
-    );
+    await pool.query(`UPDATE payments SET status = 'failed' WHERE order_code = $1`, [orderCode]);
     // Thông báo thanh toán thất bại
     notifyPaymentFailed(pool, userId, payment.amount).catch(() => {});
     return { ok: false, statusCode: 400, message: t('error.payment_amount_mismatch') };
@@ -200,7 +201,10 @@ async function handleWebhook(pool, req) {
   if (balRows[0]) {
     const u = balRows[0];
     const lang = u.language_preference || 'vi';
-    sendAndSave(pool, { id: userId, push_token: u.push_token }, 'wallet_topup_success',
+    sendAndSave(
+      pool,
+      { id: userId, push_token: u.push_token },
+      'wallet_topup_success',
       t('push.wallet_topup_title', lang),
       t('push.wallet_topup_body', lang, {
         amount: Number(transferAmount).toLocaleString('vi-VN'),
@@ -228,7 +232,7 @@ async function handleWebhook(pool, req) {
       is_gift: false,
       txn_type: 'wallet_topup',
     },
-    { event_id: `payment.completed:${orderCode}` },
+    { event_id: `payment.completed:${orderCode}` }
   );
 
   return { ok: true, message: 'completed', userId, amount: transferAmount, orderCode };
@@ -243,7 +247,10 @@ async function notifyPaymentFailed(pool, userId, amount) {
   if (!rows[0]) return;
   const u = rows[0];
   const lang = u.language_preference || 'vi';
-  return sendAndSave(pool, { id: userId, push_token: u.push_token }, 'payment_failed',
+  return sendAndSave(
+    pool,
+    { id: userId, push_token: u.push_token },
+    'payment_failed',
     t('push.payment_failed_title', lang),
     t('push.payment_failed_body', lang, { amount: Number(amount).toLocaleString('vi-VN') }),
     { amount: String(amount) }
@@ -253,10 +260,7 @@ async function notifyPaymentFailed(pool, userId, amount) {
 // ─── getBalance ─────────────────────────────────────────────────
 
 async function getBalance(pool, userId) {
-  const { rows } = await pool.query(
-    `SELECT wallet_balance FROM users WHERE id = $1`,
-    [userId]
-  );
+  const { rows } = await pool.query(`SELECT wallet_balance FROM users WHERE id = $1`, [userId]);
   return { balance: Number(rows[0]?.wallet_balance ?? 0) };
 }
 
@@ -274,10 +278,9 @@ async function getHistory(pool, userId, { page = 1, limit = 20 } = {}) {
     [userId, limit, offset]
   );
 
-  const { rows: countRows } = await pool.query(
-    `SELECT COUNT(*) FROM payments WHERE user_id = $1`,
-    [userId]
-  );
+  const { rows: countRows } = await pool.query(`SELECT COUNT(*) FROM payments WHERE user_id = $1`, [
+    userId,
+  ]);
 
   return {
     payments: rows,

@@ -15,7 +15,7 @@ const {
   getMyAlerts,
   getCaregiverAlertsHandler,
   postAckAlert,
-  postHelpRequest
+  postHelpRequest,
 } = require('../controllers/wellness.controller');
 
 function wellnessRoutes(pool) {
@@ -91,7 +91,9 @@ function wellnessRoutes(pool) {
    * Người thân xem các alerts
    * Query: ?unreadOnly=true&limit=20
    */
-  router.get('/caregiver/alerts', requireAuth, (req, res) => getCaregiverAlertsHandler(pool, req, res));
+  router.get('/caregiver/alerts', requireAuth, (req, res) =>
+    getCaregiverAlertsHandler(pool, req, res)
+  );
 
   /**
    * POST /api/wellness/alerts/:id/ack

@@ -46,7 +46,9 @@ async function cacheGet(key) {
 async function cacheSet(key, value, ttlSeconds = 300) {
   try {
     await getRedis().set(key, JSON.stringify(value), 'EX', ttlSeconds);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -55,7 +57,9 @@ async function cacheSet(key, value, ttlSeconds = 300) {
 async function cacheDel(...keys) {
   try {
     if (keys.length > 0) await getRedis().del(...keys);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 /**
@@ -70,7 +74,9 @@ async function cacheDelPattern(pattern) {
       cursor = nextCursor;
       if (keys.length > 0) await redis.del(...keys);
     } while (cursor !== '0');
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 /**

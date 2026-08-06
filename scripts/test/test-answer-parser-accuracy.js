@@ -19,7 +19,7 @@ const TOKEN = jwt.sign({ id: 4 }, process.env.JWT_SECRET, { expiresIn: '1d' });
 async function api(path, body = null) {
   const opts = {
     method: body ? 'POST' : 'GET',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
   };
   if (body) opts.body = JSON.stringify(body);
   return (await fetch('http://localhost:3000/api/mobile' + path, opts)).json();
@@ -30,7 +30,7 @@ async function api(path, body = null) {
 async function resetSession() {
   await api('/checkin/reset-today', {});
   // Small delay to let DB settle
-  await new Promise(r => setTimeout(r, 300));
+  await new Promise((r) => setTimeout(r, 300));
 }
 
 // ── Run a full script session with given answers ────────────────────────────
@@ -52,9 +52,14 @@ async function runSession(clusterKey, answers) {
   while (!current.isDone && current.question && safety < 12) {
     const q = current.question;
     // Use provided answer or fallback to first option
-    const ans = ansIdx < answers.length
-      ? answers[ansIdx]
-      : (q.options ? q.options[0] : (q.type === 'slider' ? 5 : 'ok'));
+    const ans =
+      ansIdx < answers.length
+        ? answers[ansIdx]
+        : q.options
+          ? q.options[0]
+          : q.type === 'slider'
+            ? 5
+            : 'ok';
 
     conversation.push({
       qId: q.id,
@@ -96,7 +101,7 @@ function severityMatch(sevA, sevB) {
   // Match = same severity OR B is at most 1 level lower
   const rankA = SEVERITY_RANK[sevA] ?? -1;
   const rankB = SEVERITY_RANK[sevB] ?? -1;
-  return rankA === rankB || (rankA - rankB === 1);
+  return rankA === rankB || rankA - rankB === 1;
 }
 
 // ── Test pair definitions ───────────────────────────────────────────────────
@@ -110,18 +115,13 @@ const PAIRS = [
     cluster: 'headache',
     label: 'Headache: basic mild',
     optionAnswers: [
-      'mot ben dau',            // Will get parsed: "mot ben dau" -> "mot ben dau" (no-diac for "mot ben dau")
-      'nhuc am i',              // Note: these are the OPTION values from clinical-mapping
-      'khong co',               // no additional symptoms
-      'nhe, van sinh hoat duoc' // mild severity
+      'mot ben dau', // Will get parsed: "mot ben dau" -> "mot ben dau" (no-diac for "mot ben dau")
+      'nhuc am i', // Note: these are the OPTION values from clinical-mapping
+      'khong co', // no additional symptoms
+      'nhe, van sinh hoat duoc', // mild severity
     ],
     // Actually use exact option text for option session
-    optionAnswersExact: [
-      'một bên đầu',
-      'nhức âm ỉ',
-      'không có',
-      'nhẹ, vẫn sinh hoạt được',
-    ],
+    optionAnswersExact: ['một bên đầu', 'nhức âm ỉ', 'không có', 'nhẹ, vẫn sinh hoạt được'],
     freeTextAnswers: [
       'đau 1 bên đầu thôi',
       'cứ nhức âm ỉ suốt ngày',
@@ -136,12 +136,7 @@ const PAIRS = [
     id: 2,
     cluster: 'headache',
     label: 'Headache: severe + mo mat (danger)',
-    optionAnswersExact: [
-      'toàn bộ đầu',
-      'đau giật theo nhịp tim',
-      'mờ mắt',
-      'nặng, phải nằm nghỉ',
-    ],
+    optionAnswersExact: ['toàn bộ đầu', 'đau giật theo nhịp tim', 'mờ mắt', 'nặng, phải nằm nghỉ'],
     freeTextAnswers: [
       'đau khắp cả đầu luôn',
       'đau giật giật theo nhịp đập',
@@ -162,12 +157,7 @@ const PAIRS = [
       'buồn nôn',
       'trung bình, khó tập trung',
     ],
-    freeTextAnswers: [
-      'dau 1 ben dau',
-      'dau nhoi tung con',
-      'buon non',
-      'trung binh kho tap trung',
-    ],
+    freeTextAnswers: ['dau 1 ben dau', 'dau nhoi tung con', 'buon non', 'trung binh kho tap trung'],
     expectSeveritySame: true,
   },
 
@@ -176,12 +166,7 @@ const PAIRS = [
     id: 4,
     cluster: 'headache',
     label: 'Headache: slang/casual',
-    optionAnswersExact: [
-      'sau gáy',
-      'đau như bóp chặt',
-      'chóng mặt',
-      'nặng, phải nằm nghỉ',
-    ],
+    optionAnswersExact: ['sau gáy', 'đau như bóp chặt', 'chóng mặt', 'nặng, phải nằm nghỉ'],
     freeTextAnswers: [
       'nhức sau gáy á',
       'kiểu bị bóp chặt đầu vậy đó',
@@ -196,12 +181,7 @@ const PAIRS = [
     id: 5,
     cluster: 'headache',
     label: 'Headache: long descriptive text',
-    optionAnswersExact: [
-      'vùng trán',
-      'nhức âm ỉ',
-      'sợ ánh sáng',
-      'trung bình, khó tập trung',
-    ],
+    optionAnswersExact: ['vùng trán', 'nhức âm ỉ', 'sợ ánh sáng', 'trung bình, khó tập trung'],
     freeTextAnswers: [
       'dạ con bị đau ở phía trước trán ấy ạ, cứ nhức nhức vùng trán suốt',
       'cảm giác nhức nhức âm ỉ không dứt, cứ nhức hoài không hết được',
@@ -218,12 +198,7 @@ const PAIRS = [
     id: 6,
     cluster: 'dizziness',
     label: 'Dizziness: basic mild',
-    optionAnswersExact: [
-      'lâng lâng, lơ lửng',
-      'khi đứng dậy',
-      'không có',
-      'không dùng thuốc gì',
-    ],
+    optionAnswersExact: ['lâng lâng, lơ lửng', 'khi đứng dậy', 'không có', 'không dùng thuốc gì'],
     freeTextAnswers: [
       'cảm giác lâng lâng trong đầu ấy',
       'mỗi khi đứng dậy là thấy chóng mặt',
@@ -258,18 +233,8 @@ const PAIRS = [
     id: 8,
     cluster: 'dizziness',
     label: 'Dizziness: no diacritics',
-    optionAnswersExact: [
-      'tối sầm mắt',
-      'khi đứng dậy',
-      'hoa mắt',
-      'không dùng thuốc gì',
-    ],
-    freeTextAnswers: [
-      'toi sam mat',
-      'khi dung day',
-      'hoa mat',
-      'khong dung thuoc gi',
-    ],
+    optionAnswersExact: ['tối sầm mắt', 'khi đứng dậy', 'hoa mắt', 'không dùng thuốc gì'],
+    freeTextAnswers: ['toi sam mat', 'khi dung day', 'hoa mat', 'khong dung thuoc gi'],
     expectSeveritySame: true,
   },
 
@@ -280,12 +245,7 @@ const PAIRS = [
     id: 9,
     cluster: 'abdominal_pain',
     label: 'Abdominal: basic mild',
-    optionAnswersExact: [
-      'quanh rốn',
-      'đau âm ỉ liên tục',
-      'đau sau khi ăn',
-      'không có',
-    ],
+    optionAnswersExact: ['quanh rốn', 'đau âm ỉ liên tục', 'đau sau khi ăn', 'không có'],
     freeTextAnswers: [
       'đau quanh vùng rốn ấy',
       'cứ đau âm ỉ hoài không dứt',
@@ -341,7 +301,9 @@ async function run() {
     totalSessions++;
 
     if (!resultA.ok) {
-      console.log(`  [A] FAILED: ${resultA.type} - ${JSON.stringify(resultA.data?.error || resultA.data?.ok)}`);
+      console.log(
+        `  [A] FAILED: ${resultA.type} - ${JSON.stringify(resultA.data?.error || resultA.data?.ok)}`
+      );
       report.push({
         pair: pair.id,
         label: pair.label,
@@ -361,7 +323,9 @@ async function run() {
     totalSessions++;
 
     if (!resultB.ok) {
-      console.log(`  [B] FAILED: ${resultB.type} - ${JSON.stringify(resultB.data?.error || resultB.data?.ok)}`);
+      console.log(
+        `  [B] FAILED: ${resultB.type} - ${JSON.stringify(resultB.data?.error || resultB.data?.ok)}`
+      );
       report.push({
         pair: pair.id,
         label: pair.label,
@@ -401,9 +365,15 @@ async function run() {
       }
     }
 
-    console.log(`  [A] severity=${resultA.severity} doctor=${resultA.needsDoctor} followUp=${resultA.followUpHours}h`);
-    console.log(`  [B] severity=${resultB.severity} doctor=${resultB.needsDoctor} followUp=${resultB.followUpHours}h`);
-    console.log(`  ${match ? 'PASS' : 'FAIL'} ${notes.length > 0 ? '(' + notes.join(', ') + ')' : '(exact match)'}${parsedInfo}`);
+    console.log(
+      `  [A] severity=${resultA.severity} doctor=${resultA.needsDoctor} followUp=${resultA.followUpHours}h`
+    );
+    console.log(
+      `  [B] severity=${resultB.severity} doctor=${resultB.needsDoctor} followUp=${resultB.followUpHours}h`
+    );
+    console.log(
+      `  ${match ? 'PASS' : 'FAIL'} ${notes.length > 0 ? '(' + notes.join(', ') + ')' : '(exact match)'}${parsedInfo}`
+    );
     console.log('');
 
     report.push({
@@ -426,22 +396,22 @@ async function run() {
   console.log('');
   console.log(
     'Pair'.padEnd(6) +
-    'Label'.padEnd(35) +
-    'SevA'.padEnd(9) +
-    'SevB'.padEnd(9) +
-    'Match'.padEnd(7) +
-    'Notes'
+      'Label'.padEnd(35) +
+      'SevA'.padEnd(9) +
+      'SevB'.padEnd(9) +
+      'Match'.padEnd(7) +
+      'Notes'
   );
   console.log('-'.repeat(90));
 
   for (const r of report) {
     console.log(
       String(r.pair).padEnd(6) +
-      r.label.substring(0, 33).padEnd(35) +
-      (r.sevA || '-').padEnd(9) +
-      (r.sevB || '-').padEnd(9) +
-      (r.match ? 'YES' : 'NO').padEnd(7) +
-      (r.notes || '')
+        r.label.substring(0, 33).padEnd(35) +
+        (r.sevA || '-').padEnd(9) +
+        (r.sevB || '-').padEnd(9) +
+        (r.match ? 'YES' : 'NO').padEnd(7) +
+        (r.notes || '')
     );
   }
 
@@ -452,7 +422,7 @@ async function run() {
   console.log(`Pairs failed:   ${totalFailed}/${PAIRS.length}`);
   console.log('');
 
-  const accuracy = PAIRS.length > 0 ? Math.round(totalPassed / PAIRS.length * 100) : 0;
+  const accuracy = PAIRS.length > 0 ? Math.round((totalPassed / PAIRS.length) * 100) : 0;
   console.log(`Parser accuracy: ${accuracy}% (severity match rate)`);
   console.log('');
 
@@ -465,7 +435,7 @@ async function run() {
   console.log('='.repeat(72));
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('Test crashed:', err);
   process.exit(1);
 });

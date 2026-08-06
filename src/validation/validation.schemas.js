@@ -9,9 +9,9 @@ const phoneSchema = z
   .min(10, t('validation.phone_min'))
   .max(15, t('validation.phone_invalid'))
   .regex(/^[0-9+\-\s()]+$/, t('validation.phone_chars'))
-  .transform(val => val.replace(/[\s\-()]/g, '')) // Remove formatting
-  .refine(val => /^(\+84|84|0)[0-9]{9,10}$/.test(val), {
-    message: t('validation.phone_format')
+  .transform((val) => val.replace(/[\s\-()]/g, '')) // Remove formatting
+  .refine((val) => /^(\+84|84|0)[0-9]{9,10}$/.test(val), {
+    message: t('validation.phone_format'),
   });
 
 // Email validation schema
@@ -50,9 +50,7 @@ const onboardingIssueItemSchema = z
     }
   });
 
-const onboardingIssueListSchema = z.array(
-  z.union([z.string(), onboardingIssueItemSchema])
-);
+const onboardingIssueListSchema = z.array(z.union([z.string(), onboardingIssueItemSchema]));
 
 const onboardingProfileSchema = z
   .object({
@@ -116,7 +114,16 @@ const escalationAckSchema = z.object({
 });
 
 const logBaseSchema = z.object({
-  log_type: z.enum(['glucose', 'bp', 'weight', 'water', 'meal', 'insulin', 'medication', 'care_pulse']),
+  log_type: z.enum([
+    'glucose',
+    'bp',
+    'weight',
+    'water',
+    'meal',
+    'insulin',
+    'medication',
+    'care_pulse',
+  ]),
   occurred_at: z.string().min(1),
   source: z.string().optional(),
   note: z.string().optional().nullable(),
@@ -210,7 +217,10 @@ const logDataSchemas = {
 // Register allows email AND optional phone
 const registerSchema = z.object({
   email: emailSchema,
-  phone_number: z.preprocess((val) => (val === '' ? undefined : val), phoneSchema.optional().nullable()),
+  phone_number: z.preprocess(
+    (val) => (val === '' ? undefined : val),
+    phoneSchema.optional().nullable()
+  ),
   password: passwordSchema,
   full_name: z.string().min(1, t('validation.name_required')).max(255).optional(),
   display_name: z.string().max(255).optional(),

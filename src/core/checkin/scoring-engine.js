@@ -13,15 +13,15 @@
 // ─── Operator evaluators ──────────────────────────────────────────────────────
 
 const OPERATORS = {
-  eq:       (a, b) => a === b,
-  neq:      (a, b) => a !== b,
-  gt:       (a, b) => Number(a) > Number(b),
-  gte:      (a, b) => Number(a) >= Number(b),
-  lt:       (a, b) => Number(a) < Number(b),
-  lte:      (a, b) => Number(a) <= Number(b),
+  eq: (a, b) => a === b,
+  neq: (a, b) => a !== b,
+  gt: (a, b) => Number(a) > Number(b),
+  gte: (a, b) => Number(a) >= Number(b),
+  lt: (a, b) => Number(a) < Number(b),
+  lte: (a, b) => Number(a) <= Number(b),
   contains: (a, b) => String(a).toLowerCase().includes(String(b).toLowerCase()),
-  in:       (a, b) => Array.isArray(b) && b.includes(a),
-  not_in:   (a, b) => Array.isArray(b) && !b.includes(a),
+  in: (a, b) => Array.isArray(b) && b.includes(a),
+  not_in: (a, b) => Array.isArray(b) && !b.includes(a),
 };
 
 /**
@@ -60,10 +60,10 @@ function evaluateRule(rule, answersMap) {
   if (conditions.length === 0) return false;
 
   if (combine === 'or') {
-    return conditions.some(c => evaluateCondition(c, answersMap));
+    return conditions.some((c) => evaluateCondition(c, answersMap));
   }
   // Default: AND
-  return conditions.every(c => evaluateCondition(c, answersMap));
+  return conditions.every((c) => evaluateCondition(c, answersMap));
 }
 
 /**
@@ -82,14 +82,15 @@ function applyModifiers(currentSeverity, modifiers = [], answersMap, userConditi
 
   for (const mod of modifiers) {
     // Check if user has the required medical condition
-    const conditionMatch = !mod.user_condition ||
-      userConditions.some(c => c.toLowerCase().includes(mod.user_condition.toLowerCase()));
+    const conditionMatch =
+      !mod.user_condition ||
+      userConditions.some((c) => c.toLowerCase().includes(mod.user_condition.toLowerCase()));
 
     if (!conditionMatch) continue;
 
     // Check extra conditions on answers
-    const extraMatch = !mod.extra_conditions ||
-      mod.extra_conditions.every(c => evaluateCondition(c, answersMap));
+    const extraMatch =
+      !mod.extra_conditions || mod.extra_conditions.every((c) => evaluateCondition(c, answersMap));
 
     if (!extraMatch) continue;
 
@@ -171,7 +172,10 @@ function evaluateScript(scriptData, answers, profile = {}) {
   // Apply condition modifiers (may bump severity up)
   if (modifiers.length > 0) {
     const { severity, modifiersApplied } = applyModifiers(
-      result.severity, modifiers, answersMap, userConditions
+      result.severity,
+      modifiers,
+      answersMap,
+      userConditions
     );
     if (severity !== result.severity) {
       result.severity = severity;
@@ -203,8 +207,8 @@ function evaluateScript(scriptData, answers, profile = {}) {
       // Elderly + conditions + triệu chứng → tối thiểu MEDIUM (theo dõi kỹ hơn)
       result.severity = 'medium';
       result.followUpHours = 3;
-      result.needsDoctor = false;        // KHÔNG khuyên bác sĩ ngay cho case nhẹ
-      result.needsFamilyAlert = false;   // KHÔNG báo gia đình cho case nhẹ
+      result.needsDoctor = false; // KHÔNG khuyên bác sĩ ngay cho case nhẹ
+      result.needsFamilyAlert = false; // KHÔNG báo gia đình cho case nhẹ
       result.modifiersApplied.push('elderly+conditions → medium (theo dõi kỹ)');
     }
     // MEDIUM giữ nguyên MEDIUM — không tự động bump lên HIGH
@@ -243,7 +247,7 @@ function evaluateFollowUp(scriptData, answers, previousSeverity = 'medium') {
       followUpHours: _defaultFollowUp('low'),
       needsDoctor: false,
       needsFamilyAlert: false,
-      action: 'monitoring',  // → hẹn tối
+      action: 'monitoring', // → hẹn tối
     };
   }
 
@@ -286,7 +290,7 @@ function evaluateFollowUp(scriptData, answers, previousSeverity = 'medium') {
   return {
     severity: previousSeverity,
     followUpHours: _defaultFollowUp(previousSeverity),
-    needsDoctor: false,  // KHÔNG tự động khuyên bác sĩ cho "vẫn vậy"
+    needsDoctor: false, // KHÔNG tự động khuyên bác sĩ cho "vẫn vậy"
     needsFamilyAlert: false,
     action: 'continue_followup',
   };
@@ -296,10 +300,14 @@ function evaluateFollowUp(scriptData, answers, previousSeverity = 'medium') {
 
 function _defaultFollowUp(severity) {
   switch (severity) {
-    case 'critical': return 0.5;
-    case 'high':     return 1;
-    case 'medium':   return 3;
-    default:         return 6;
+    case 'critical':
+      return 0.5;
+    case 'high':
+      return 1;
+    case 'medium':
+      return 3;
+    default:
+      return 6;
   }
 }
 

@@ -13,7 +13,10 @@ const envContent = fs.readFileSync(__dirname + '/../.env', 'utf8');
 let JWT_SECRET = '';
 for (const line of envContent.split('\n')) {
   const m = line.match(/^JWT_SECRET\s*=\s*(.+)/);
-  if (m) { JWT_SECRET = m[1].trim(); break; }
+  if (m) {
+    JWT_SECRET = m[1].trim();
+    break;
+  }
 }
 const TOKEN = jwt.sign({ id: 4 }, JWT_SECRET, { expiresIn: '1d' });
 
@@ -24,7 +27,7 @@ async function api(path, body = null) {
     method: body ? 'POST' : 'GET',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + TOKEN,
+      Authorization: 'Bearer ' + TOKEN,
     },
   };
   if (body) opts.body = JSON.stringify(body);
@@ -126,9 +129,8 @@ async function runSession(sessionNum, config) {
     const customAnswers = config.customAnswers || [];
 
     while (currentQuestion && questionsAnswered < maxQuestions) {
-      const customText = customAnswers[questionsAnswered] !== undefined
-        ? customAnswers[questionsAnswered]
-        : null;
+      const customText =
+        customAnswers[questionsAnswered] !== undefined ? customAnswers[questionsAnswered] : null;
 
       const answer = pickAnswer(currentQuestion, customText);
 
@@ -141,7 +143,9 @@ async function runSession(sessionNum, config) {
       questionsAnswered++;
 
       if (!ansRes.ok) {
-        result.errors.push(`ANSWER Q${questionsAnswered} FAILED: ${ansRes.error || JSON.stringify(ansRes)}`);
+        result.errors.push(
+          `ANSWER Q${questionsAnswered} FAILED: ${ansRes.error || JSON.stringify(ansRes)}`
+        );
         result.pass = false;
         return result;
       }
@@ -201,7 +205,6 @@ async function runSession(sessionNum, config) {
       result.errors.push('LOW severity but needsFamilyAlert=true');
       result.pass = false;
     }
-
   } catch (err) {
     result.errors.push('EXCEPTION: ' + err.message);
     result.pass = false;
@@ -229,7 +232,12 @@ const sessions = [
   {
     label: 'headache+longtext',
     cluster_key: 'headache',
-    customAnswers: ['đau sau gáy nặng lắm', 'nhói dữ dội', 'buồn nôn chóng mặt mờ mắt', 'nặng phải nằm'],
+    customAnswers: [
+      'đau sau gáy nặng lắm',
+      'nhói dữ dội',
+      'buồn nôn chóng mặt mờ mắt',
+      'nặng phải nằm',
+    ],
   },
   {
     label: 'dizziness+longtext',
@@ -317,14 +325,18 @@ async function main() {
 
   for (let i = 0; i < sessions.length; i++) {
     const cfg = sessions[i];
-    process.stdout.write(`  [${String(i + 1).padStart(2)}/${sessions.length}] ${cfg.label.padEnd(35)} ... `);
+    process.stdout.write(
+      `  [${String(i + 1).padStart(2)}/${sessions.length}] ${cfg.label.padEnd(35)} ... `
+    );
 
     const r = await runSession(i + 1, cfg);
     results.push(r);
 
     if (r.pass) {
       passCount++;
-      console.log(`PASS  sev=${r.severity}  Qs=${r.questions_asked}  doc=${r.needsDoctor}  fam=${r.needsFamilyAlert}`);
+      console.log(
+        `PASS  sev=${r.severity}  Qs=${r.questions_asked}  doc=${r.needsDoctor}  fam=${r.needsFamilyAlert}`
+      );
     } else {
       failCount++;
       console.log(`FAIL  ${r.errors.join(' | ')}`);
@@ -370,7 +382,7 @@ async function main() {
 
   if (failCount > 0) {
     console.log('\n--- FAILED SESSION DETAILS ---');
-    for (const r of results.filter(r => !r.pass)) {
+    for (const r of results.filter((r) => !r.pass)) {
       console.log(`  Session #${r.session} (${r.cluster_or_input}):`);
       for (const e of r.errors) {
         console.log(`    - ${e}`);
@@ -382,7 +394,7 @@ async function main() {
   process.exit(failCount > 0 ? 1 : 0);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('FATAL:', err);
   process.exit(2);
 });

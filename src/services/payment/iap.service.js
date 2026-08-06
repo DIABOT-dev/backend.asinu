@@ -54,10 +54,14 @@ const PLATFORM_APPLE = 'apple';
 const PLATFORM_GOOGLE = 'google';
 
 function isApplePlatform(p) {
-  return String(p || '').toLowerCase() === PLATFORM_APPLE || String(p || '').toLowerCase() === 'ios';
+  return (
+    String(p || '').toLowerCase() === PLATFORM_APPLE || String(p || '').toLowerCase() === 'ios'
+  );
 }
 function isGooglePlatform(p) {
-  return String(p || '').toLowerCase() === PLATFORM_GOOGLE || String(p || '').toLowerCase() === 'android';
+  return (
+    String(p || '').toLowerCase() === PLATFORM_GOOGLE || String(p || '').toLowerCase() === 'android'
+  );
 }
 
 // ─── Product ID → plan months mapping ──────────────────────────────
@@ -67,7 +71,13 @@ function productIdToMonths(productId) {
   if (id.endsWith('.monthly') || id.endsWith('.month') || id.endsWith('.1m')) return 1;
   if (id.endsWith('.quarterly') || id.endsWith('.3m')) return 3;
   if (id.endsWith('.semiannual') || id.endsWith('.6m')) return 6;
-  if (id.endsWith('.yearly') || id.endsWith('.annual') || id.endsWith('.year') || id.endsWith('.12m')) return 12;
+  if (
+    id.endsWith('.yearly') ||
+    id.endsWith('.annual') ||
+    id.endsWith('.year') ||
+    id.endsWith('.12m')
+  )
+    return 12;
   return null;
 }
 
@@ -95,17 +105,16 @@ function getAppleVerifier() {
   // Load Apple Root certificates from disk. Download them from
   // https://www.apple.com/certificateauthority/ and drop the .cer files
   // into the configured directory.
-  const certDir = process.env.APPLE_ROOT_CA_DIR
-    || path.resolve(__dirname, '../../../certs/apple');
+  const certDir = process.env.APPLE_ROOT_CA_DIR || path.resolve(__dirname, '../../../certs/apple');
 
   let rootCerts;
   try {
-    const files = fs.readdirSync(certDir).filter(f => f.endsWith('.cer'));
+    const files = fs.readdirSync(certDir).filter((f) => f.endsWith('.cer'));
     if (files.length === 0) {
       logger.warn(`iap.apple.no_root_certs — drop AppleRootCA-G3.cer into ${certDir}`);
       return null;
     }
-    rootCerts = files.map(f => fs.readFileSync(path.join(certDir, f)));
+    rootCerts = files.map((f) => fs.readFileSync(path.join(certDir, f)));
   } catch (e) {
     logger.warn(`iap.apple.cert_dir_missing — ${certDir}: ${e.message}`);
     return null;
@@ -151,14 +160,19 @@ async function verifyAppleReceipt({ signedTransaction } = {}) {
     return {
       ok: false,
       code: 'APPLE_VERIFIER_NOT_CONFIGURED',
-      error: 'Apple verifier missing — set APPLE_BUNDLE_ID + drop AppleRootCA-G3.cer into certs/apple/.',
+      error:
+        'Apple verifier missing — set APPLE_BUNDLE_ID + drop AppleRootCA-G3.cer into certs/apple/.',
     };
   }
 
   try {
     const decoded = await verifier.verifyAndDecodeTransaction(signedTransaction);
     if (!decoded || !decoded.productId || !decoded.transactionId) {
-      return { ok: false, code: 'APPLE_INVALID_TRANSACTION', error: 'Decoded transaction missing required fields' };
+      return {
+        ok: false,
+        code: 'APPLE_INVALID_TRANSACTION',
+        error: 'Decoded transaction missing required fields',
+      };
     }
     return {
       ok: true,
@@ -229,7 +243,11 @@ async function getGoogleAndroidpublisher() {
  */
 async function verifyGooglePurchase({ productId, purchaseToken } = {}) {
   if (!productId || !purchaseToken) {
-    return { ok: false, code: 'INVALID_PAYLOAD', error: 'Missing Google productId or purchaseToken' };
+    return {
+      ok: false,
+      code: 'INVALID_PAYLOAD',
+      error: 'Missing Google productId or purchaseToken',
+    };
   }
 
   const packageName = process.env.GOOGLE_PLAY_PACKAGE_NAME;
@@ -266,12 +284,10 @@ async function verifyGooglePurchase({ productId, purchaseToken } = {}) {
 
     // subscriptionState: SUBSCRIPTION_STATE_ACTIVE, IN_GRACE_PERIOD, etc.
     const state = data.subscriptionState;
-    const goodStates = new Set([
-      'SUBSCRIPTION_STATE_ACTIVE',
-      'SUBSCRIPTION_STATE_IN_GRACE_PERIOD',
-      'SUBSCRIPTION_STATE_ON_HOLD', // user is in hold; some apps want to deny — we deny.
-    ]);
-    if (!state || !['SUBSCRIPTION_STATE_ACTIVE', 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD'].includes(state)) {
+    if (
+      !state ||
+      !['SUBSCRIPTION_STATE_ACTIVE', 'SUBSCRIPTION_STATE_IN_GRACE_PERIOD'].includes(state)
+    ) {
       return {
         ok: false,
         code: 'GOOGLE_INACTIVE',
@@ -313,7 +329,10 @@ async function verifyGooglePurchase({ productId, purchaseToken } = {}) {
 
 // ─── Idempotency: store the receipt before activating ─────────────
 
-async function recordReceipt(pool, { userId, platform, productId, transactionId, originalTransactionId, expiresAt, rawPayload }) {
+async function recordReceipt(
+  pool,
+  { userId, platform, productId, transactionId, originalTransactionId, expiresAt, rawPayload }
+) {
   try {
     const insert = await pool.query(
       `INSERT INTO iap_receipts
@@ -321,8 +340,15 @@ async function recordReceipt(pool, { userId, platform, productId, transactionId,
        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
        ON CONFLICT (transaction_id) DO NOTHING
        RETURNING id`,
-      [userId, platform, productId, transactionId, originalTransactionId || null, expiresAt || null,
-       JSON.stringify(rawPayload || {})]
+      [
+        userId,
+        platform,
+        productId,
+        transactionId,
+        originalTransactionId || null,
+        expiresAt || null,
+        JSON.stringify(rawPayload || {}),
+      ]
     );
     return insert.rowCount > 0;
   } catch (err) {
@@ -360,7 +386,11 @@ async function verifyAndActivate(pool, userId, payload = {}) {
   const { productId, transactionId, originalTransactionId, expiresAt } = verification;
   const months = productIdToMonths(productId);
   if (!months) {
-    return { ok: false, code: 'UNKNOWN_PRODUCT', error: `Cannot map productId ${productId} to plan months` };
+    return {
+      ok: false,
+      code: 'UNKNOWN_PRODUCT',
+      error: `Cannot map productId ${productId} to plan months`,
+    };
   }
 
   const isNew = await recordReceipt(pool, {
@@ -409,7 +439,11 @@ async function handleAppleNotification(pool, envelope) {
 
   const verifier = getAppleVerifier();
   if (!verifier) {
-    return { ok: false, code: 'APPLE_VERIFIER_NOT_CONFIGURED', error: 'Apple verifier not configured' };
+    return {
+      ok: false,
+      code: 'APPLE_VERIFIER_NOT_CONFIGURED',
+      error: 'Apple verifier not configured',
+    };
   }
 
   let decodedNotification;
@@ -470,7 +504,11 @@ async function handleAppleNotification(pool, envelope) {
     productId: tx.productId,
     expiresAt: tx.expiresDate ? new Date(tx.expiresDate).toISOString() : null,
     action,
-    rawPayload: { notificationType, subtype, environment: decodedNotification.signedDate ? 'sandbox-or-prod' : undefined },
+    rawPayload: {
+      notificationType,
+      subtype,
+      environment: decodedNotification.signedDate ? 'sandbox-or-prod' : undefined,
+    },
   });
 }
 
@@ -530,7 +568,11 @@ async function handleGoogleNotification(pool, body) {
   // doesn't include the new expiry — we have to look it up).
   const publisher = await getGoogleAndroidpublisher();
   if (!publisher) {
-    return { ok: false, code: 'GOOGLE_VERIFIER_NOT_CONFIGURED', error: 'Google verifier missing creds' };
+    return {
+      ok: false,
+      code: 'GOOGLE_VERIFIER_NOT_CONFIGURED',
+      error: 'Google verifier missing creds',
+    };
   }
 
   let info;

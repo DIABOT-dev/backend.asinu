@@ -16,7 +16,9 @@ async function createQR(pool, req, res) {
   const userId = req.user?.id;
   const requested = parseInt(req.body?.months) || 1;
   if (!VALID_MONTHS.includes(requested)) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_subscription_months', getLang(req)) });
+    return res
+      .status(400)
+      .json({ ok: false, error: t('error.invalid_subscription_months', getLang(req)) });
   }
 
   try {
@@ -48,19 +50,27 @@ async function createQRForRecipient(pool, req, res) {
     });
   }
   if (!VALID_MONTHS.includes(requested)) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_subscription_months', getLang(req)) });
+    return res
+      .status(400)
+      .json({ ok: false, error: t('error.invalid_subscription_months', getLang(req)) });
   }
 
   try {
-    const result = await subscriptionService.createQRForRecipient(pool, payerId, recipientId, requested);
+    const result = await subscriptionService.createQRForRecipient(
+      pool,
+      payerId,
+      recipientId,
+      requested
+    );
     return res.status(200).json({ ok: true, ...result });
   } catch (err) {
     if (err.code === 'NOT_IN_CARE_CIRCLE') {
       return res.status(403).json({
         ok: false,
         code: 'NOT_IN_CARE_CIRCLE',
-        error: t('error.not_in_care_circle', getLang(req)) ||
-               'Bạn chỉ có thể mua Premium cho người đã kết nối trong Care Circle.',
+        error:
+          t('error.not_in_care_circle', getLang(req)) ||
+          'Bạn chỉ có thể mua Premium cho người đã kết nối trong Care Circle.',
       });
     }
     return res.status(500).json({ ok: false, error: err.message });
@@ -94,7 +104,7 @@ function getPlans(pool, req, res) {
  * Get subscription history
  */
 async function getHistory(pool, req, res) {
-  const page  = Math.max(1, parseInt(req.query.page)  || 1);
+  const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(50, parseInt(req.query.limit) || 20);
   try {
     const result = await subscriptionService.getHistory(pool, req.user.id, { page, limit });
@@ -112,7 +122,9 @@ async function payWithWallet(pool, req, res) {
   const userId = req.user?.id;
   const requested = parseInt(req.body?.months) || 1;
   if (!VALID_MONTHS.includes(requested)) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_subscription_months', getLang(req)) });
+    return res
+      .status(400)
+      .json({ ok: false, error: t('error.invalid_subscription_months', getLang(req)) });
   }
 
   try {
@@ -120,7 +132,9 @@ async function payWithWallet(pool, req, res) {
     if (!result.ok) {
       return res.status(400).json({ ok: false, error: result.message });
     }
-    return res.status(200).json({ ok: true, expiresAt: result.expiresAt, planMonths: result.planMonths });
+    return res
+      .status(200)
+      .json({ ok: true, expiresAt: result.expiresAt, planMonths: result.planMonths });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -146,11 +160,18 @@ async function payWithWalletForRecipient(pool, req, res) {
     });
   }
   if (!VALID_MONTHS.includes(requested)) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_subscription_months', getLang(req)) });
+    return res
+      .status(400)
+      .json({ ok: false, error: t('error.invalid_subscription_months', getLang(req)) });
   }
 
   try {
-    const result = await subscriptionService.payWithWalletForRecipient(pool, payerId, recipientId, requested);
+    const result = await subscriptionService.payWithWalletForRecipient(
+      pool,
+      payerId,
+      recipientId,
+      requested
+    );
     if (!result.ok) {
       return res.status(400).json({ ok: false, error: result.message });
     }
@@ -166,8 +187,9 @@ async function payWithWalletForRecipient(pool, req, res) {
       return res.status(403).json({
         ok: false,
         code: 'NOT_IN_CARE_CIRCLE',
-        error: t('error.not_in_care_circle', getLang(req))
-          || 'Bạn chỉ có thể mua Premium cho người đã kết nối trong Care Circle.',
+        error:
+          t('error.not_in_care_circle', getLang(req)) ||
+          'Bạn chỉ có thể mua Premium cho người đã kết nối trong Care Circle.',
       });
     }
     return res.status(500).json({ ok: false, error: err.message });

@@ -43,74 +43,153 @@ function removeDiacritics(str) {
 
 const SYNONYMS = {
   // Nausea
-  'ói': 'buồn nôn',
-  'nôn': 'buồn nôn',
+  ói: 'buồn nôn',
+  nôn: 'buồn nôn',
   'muốn ói': 'buồn nôn',
   'muốn nôn': 'buồn nôn',
   'lợm giọng': 'buồn nôn',
   // Fainting
-  'xỉu': 'ngất',
+  xỉu: 'ngất',
   'ngất xỉu': 'ngất',
-  'choáng': 'chóng mặt',
+  choáng: 'chóng mặt',
   'hoa mắt': 'chóng mặt',
   // Pain
-  'nhức': 'đau',
+  nhức: 'đau',
   'nhức đầu': 'đau đầu',
-  'đau': 'đau',
+  đau: 'đau',
   // Vision
-  'mờ': 'mờ mắt',
+  mờ: 'mờ mắt',
   'nhìn mờ': 'mờ mắt',
   'mờ mờ': 'mờ mắt',
   'nhìn không rõ': 'mờ mắt',
   // Fever
-  'nóng': 'sốt',
+  nóng: 'sốt',
   'nóng sốt': 'sốt',
   'nóng người': 'sốt',
   // Stiff
-  'cứng': 'cứng cổ',
+  cứng: 'cứng cổ',
   'cứng gáy': 'cứng cổ',
   // Light sensitivity
   'sợ sáng': 'sợ ánh sáng',
   'chói mắt': 'sợ ánh sáng',
   'nhạy sáng': 'sợ ánh sáng',
   // General
-  'mệt': 'mệt mỏi',
+  mệt: 'mệt mỏi',
   'kiệt sức': 'mệt mỏi',
 };
 
 // ─── Severity words ─────────────────────────────────────────────────────────
 
 const SEVERITY_LOW = [
-  'nhẹ', 'ít', 'bình thường', 'hơi hơi', 'chút chút', 'tí xíu', 'tí', 'không nhiều', 'nhẹ nhàng',
+  'nhẹ',
+  'ít',
+  'bình thường',
+  'hơi hơi',
+  'chút chút',
+  'tí xíu',
+  'tí',
+  'không nhiều',
+  'nhẹ nhàng',
   // Không dấu
-  'nhe', 'it', 'binh thuong', 'hoi hoi', 'chut chut', 'ti xiu', 'khong nhieu', 'nhe nhang',
+  'nhe',
+  'it',
+  'binh thuong',
+  'hoi hoi',
+  'chut chut',
+  'ti xiu',
+  'khong nhieu',
+  'nhe nhang',
 ];
 const SEVERITY_MID = [
-  'vừa', 'trung bình', 'tàm tạm', 'cũng được', 'vừa vừa', 'không nhẹ không nặng', 'hơi nặng', 'hơi đau',
+  'vừa',
+  'trung bình',
+  'tàm tạm',
+  'cũng được',
+  'vừa vừa',
+  'không nhẹ không nặng',
+  'hơi nặng',
+  'hơi đau',
   // Không dấu
-  'vua', 'trung binh', 'tam tam', 'cung duoc', 'hoi nang', 'hoi dau',
+  'vua',
+  'trung binh',
+  'tam tam',
+  'cung duoc',
+  'hoi nang',
+  'hoi dau',
 ];
 const SEVERITY_HIGH = [
-  'nặng', 'nhiều', 'dữ dội', 'kinh khủng', 'quá trời', 'ghê lắm', 'khủng khiếp',
-  'nặng lắm', 'đau lắm', 'dữ lắm', 'khó chịu lắm', 'chịu không nổi', 'rất nặng',
-  'rất nhiều', 'rất đau', 'cực kỳ', 'chết luôn', 'không chịu nổi', 'quá sức chịu đựng',
+  'nặng',
+  'nhiều',
+  'dữ dội',
+  'kinh khủng',
+  'quá trời',
+  'ghê lắm',
+  'khủng khiếp',
+  'nặng lắm',
+  'đau lắm',
+  'dữ lắm',
+  'khó chịu lắm',
+  'chịu không nổi',
+  'rất nặng',
+  'rất nhiều',
+  'rất đau',
+  'cực kỳ',
+  'chết luôn',
+  'không chịu nổi',
+  'quá sức chịu đựng',
   // Không dấu
-  'nang', 'nhieu', 'du doi', 'kinh khung', 'qua troi', 'ghe lam', 'khung khiep',
-  'nang lam', 'dau lam', 'du lam', 'kho chiu lam', 'chiu khong noi', 'rat nang',
-  'rat nhieu', 'rat dau', 'cuc ky', 'chet luon', 'khong chiu noi', 'dau chet di duoc',
+  'nang',
+  'nhieu',
+  'du doi',
+  'kinh khung',
+  'qua troi',
+  'ghe lam',
+  'khung khiep',
+  'nang lam',
+  'dau lam',
+  'du lam',
+  'kho chiu lam',
+  'chiu khong noi',
+  'rat nang',
+  'rat nhieu',
+  'rat dau',
+  'cuc ky',
+  'chet luon',
+  'khong chiu noi',
+  'dau chet di duoc',
 ];
 
 // ─── Vietnamese number words ────────────────────────────────────────────────
 
 const VN_NUMBERS = {
   // Có dấu
-  'không': 0, 'một': 1, 'hai': 2, 'ba': 3, 'bốn': 4, 'tư': 4,
-  'năm': 5, 'sáu': 6, 'bảy': 7, 'bẩy': 7, 'tám': 8, 'chín': 9, 'mười': 10,
+  không: 0,
+  một: 1,
+  hai: 2,
+  ba: 3,
+  bốn: 4,
+  tư: 4,
+  năm: 5,
+  sáu: 6,
+  bảy: 7,
+  bẩy: 7,
+  tám: 8,
+  chín: 9,
+  mười: 10,
   // Không dấu
-  'khong': 0, 'mot': 1, 'bon': 4, 'tu': 4,
-  'nam': 5, 'sau': 6, 'bay': 7, 'tam': 8, 'chin': 9, 'muoi': 10,
+  khong: 0,
+  mot: 1,
+  bon: 4,
+  tu: 4,
+  nam: 5,
+  sau: 6,
+  bay: 7,
+  tam: 8,
+  chin: 9,
+  muoi: 10,
   // Casual
-  'zero': 0, 'max': 10,
+  zero: 0,
+  max: 10,
 };
 
 // ─── Layer 1: Local matching ────────────────────────────────────────────────
@@ -141,29 +220,90 @@ function localMatch(rawAnswer, options, questionType = 'single_choice') {
 
   // ── 1b-pre. Follow-up specific matching — MUST run first to avoid "hơn" confusion ──
   // "tệ hơn"/"đau hơn"/"nặng hơn" must NOT match "Đỡ hơn"
-  const isFollowUpQ = options.length <= 4 && options.some(o =>
-    o.includes('Đỡ') || o.includes('đỡ') || o.includes('Nặng') || o.includes('nặng') ||
-    o.includes('Vẫn') || o.includes('vẫn')
-  );
+  const isFollowUpQ =
+    options.length <= 4 &&
+    options.some(
+      (o) =>
+        o.includes('Đỡ') ||
+        o.includes('đỡ') ||
+        o.includes('Nặng') ||
+        o.includes('nặng') ||
+        o.includes('Vẫn') ||
+        o.includes('vẫn')
+    );
   if (isFollowUpQ) {
-    const WORSE_WORDS = ['nặng', 'tệ', 'đau hơn', 'dữ hơn', 'xấu hơn', 'tồi hơn', 'nang', 'te',
-      'nặng hơn', 'tệ hơn', 'đau dữ', 'nhiều hơn', 'nhieu hon', 'nang hon', 'te hon'];
-    const BETTER_WORDS = ['đỡ', 'tốt', 'khỏe', 'bớt', 'hết', 'giảm', 'khá hơn', 'ổn hơn',
-      'do', 'tot', 'khoe', 'bot', 'het', 'giam', 'on hon', 'đỡ hơn', 'tốt hơn', 'do hon', 'tot hon'];
-    const SAME_WORDS = ['vẫn', 'y như', 'giống', 'không đổi', 'không thay đổi', 'cũng thế', 'như cũ',
-      'van', 'y nhu', 'giong', 'khong doi', 'khong thay doi', 'cung the', 'nhu cu', 'vẫn vậy', 'van vay'];
+    const WORSE_WORDS = [
+      'nặng',
+      'tệ',
+      'đau hơn',
+      'dữ hơn',
+      'xấu hơn',
+      'tồi hơn',
+      'nang',
+      'te',
+      'nặng hơn',
+      'tệ hơn',
+      'đau dữ',
+      'nhiều hơn',
+      'nhieu hon',
+      'nang hon',
+      'te hon',
+    ];
+    const BETTER_WORDS = [
+      'đỡ',
+      'tốt',
+      'khỏe',
+      'bớt',
+      'hết',
+      'giảm',
+      'khá hơn',
+      'ổn hơn',
+      'do',
+      'tot',
+      'khoe',
+      'bot',
+      'het',
+      'giam',
+      'on hon',
+      'đỡ hơn',
+      'tốt hơn',
+      'do hon',
+      'tot hon',
+    ];
+    const SAME_WORDS = [
+      'vẫn',
+      'y như',
+      'giống',
+      'không đổi',
+      'không thay đổi',
+      'cũng thế',
+      'như cũ',
+      'van',
+      'y nhu',
+      'giong',
+      'khong doi',
+      'khong thay doi',
+      'cung the',
+      'nhu cu',
+      'vẫn vậy',
+      'van vay',
+    ];
 
-    const worseOpt = options.find(o => o.includes('Nặng') || o.includes('nặng'));
-    const betterOpt = options.find(o => o.includes('Đỡ') || o.includes('đỡ'));
-    const sameOpt = options.find(o => o.includes('Vẫn') || o.includes('vẫn'));
+    const worseOpt = options.find((o) => o.includes('Nặng') || o.includes('nặng'));
+    const betterOpt = options.find((o) => o.includes('Đỡ') || o.includes('đỡ'));
+    const sameOpt = options.find((o) => o.includes('Vẫn') || o.includes('vẫn'));
 
-    if (WORSE_WORDS.some(w => input.includes(w))) {
-      return { matched: [worseOpt || options[options.length - 1]], method: 'followup_specific', confidence: 0.9 };
+    if (WORSE_WORDS.some((w) => input.includes(w))) {
+      return {
+        matched: [worseOpt || options[options.length - 1]],
+        method: 'followup_specific',
+        confidence: 0.9,
+      };
     }
-    if (BETTER_WORDS.some(w => input.includes(w))) {
+    if (BETTER_WORDS.some((w) => input.includes(w))) {
       return { matched: [betterOpt || options[0]], method: 'followup_specific', confidence: 0.9 };
     }
-    if (SAME_WORDS.some(w => input.includes(w))) {
+    if (SAME_WORDS.some((w) => input.includes(w))) {
       return { matched: [sameOpt || options[1]], method: 'followup_specific', confidence: 0.85 };
     }
   }
@@ -179,10 +319,10 @@ function localMatch(rawAnswer, options, questionType = 'single_choice') {
       keywordMatches.push({ option: opt, confidence: 0.9 });
     } else {
       // Check significant words (3+ chars to avoid "hơn" false matches)
-      const optWords = optLower.split(/[\s,]+/).filter(w => w.length >= 3);
-      const matchedWords = optWords.filter(w => input.includes(w));
+      const optWords = optLower.split(/[\s,]+/).filter((w) => w.length >= 3);
+      const matchedWords = optWords.filter((w) => input.includes(w));
       if (matchedWords.length > 0 && matchedWords.length >= optWords.length * 0.4) {
-        const conf = 0.6 + (0.3 * matchedWords.length / optWords.length);
+        const conf = 0.6 + (0.3 * matchedWords.length) / optWords.length;
         keywordMatches.push({ option: opt, confidence: Math.min(0.9, conf) });
       }
     }
@@ -192,7 +332,7 @@ function localMatch(rawAnswer, options, questionType = 'single_choice') {
     keywordMatches.sort((a, b) => b.confidence - a.confidence);
     if (isMulti) {
       return {
-        matched: keywordMatches.map(m => m.option),
+        matched: keywordMatches.map((m) => m.option),
         method: 'keyword',
         confidence: keywordMatches[0].confidence,
       };
@@ -213,10 +353,10 @@ function localMatch(rawAnswer, options, questionType = 'single_choice') {
     if (inputNoDiac.includes(optNoDiac)) {
       noDiacMatches.push({ option: opt, confidence: 0.8 });
     } else {
-      const optWords = optNoDiac.split(/[\s,]+/).filter(w => w.length >= 2);
-      const matchedWords = optWords.filter(w => inputNoDiac.includes(w));
+      const optWords = optNoDiac.split(/[\s,]+/).filter((w) => w.length >= 2);
+      const matchedWords = optWords.filter((w) => inputNoDiac.includes(w));
       if (matchedWords.length > 0 && matchedWords.length >= optWords.length * 0.4) {
-        const conf = 0.5 + (0.3 * matchedWords.length / optWords.length);
+        const conf = 0.5 + (0.3 * matchedWords.length) / optWords.length;
         noDiacMatches.push({ option: opt, confidence: Math.min(0.8, conf) });
       }
     }
@@ -226,7 +366,7 @@ function localMatch(rawAnswer, options, questionType = 'single_choice') {
     noDiacMatches.sort((a, b) => b.confidence - a.confidence);
     if (isMulti) {
       return {
-        matched: noDiacMatches.map(m => m.option),
+        matched: noDiacMatches.map((m) => m.option),
         method: 'no_diacritics',
         confidence: noDiacMatches[0].confidence,
       };
@@ -254,11 +394,11 @@ function localMatch(rawAnswer, options, questionType = 'single_choice') {
 
   if (synonymMatches.length > 0) {
     // Deduplicate
-    const unique = [...new Map(synonymMatches.map(m => [m.option, m])).values()];
+    const unique = [...new Map(synonymMatches.map((m) => [m.option, m])).values()];
     unique.sort((a, b) => b.confidence - a.confidence);
     if (isMulti) {
       return {
-        matched: unique.map(m => m.option),
+        matched: unique.map((m) => m.option),
         method: 'synonym',
         confidence: unique[0].confidence,
       };
@@ -274,9 +414,9 @@ function localMatch(rawAnswer, options, questionType = 'single_choice') {
   // For choice questions where options represent severity levels (ordered mild → severe)
   if (options.length >= 2) {
     // Check severity — longer/more-specific patterns checked first within each level
-    const isHighSeverity = SEVERITY_HIGH.some(w => input.includes(w));
-    const isLowSeverity = SEVERITY_LOW.some(w => input.includes(w));
-    const isMidSeverity = SEVERITY_MID.some(w => input.includes(w));
+    const isHighSeverity = SEVERITY_HIGH.some((w) => input.includes(w));
+    const isLowSeverity = SEVERITY_LOW.some((w) => input.includes(w));
+    const isMidSeverity = SEVERITY_MID.some((w) => input.includes(w));
 
     if (isHighSeverity && !isLowSeverity) {
       return {
@@ -304,11 +444,16 @@ function localMatch(rawAnswer, options, questionType = 'single_choice') {
 
   // ── 1f. "không" / negation handling ──
   const negWords = ['không', 'ko', 'k ', 'hông', 'hem', 'chưa', 'chẳng', 'không có gì', 'không có'];
-  if (negWords.some(w => input.includes(w) || input === w.trim())) {
+  if (negWords.some((w) => input.includes(w) || input === w.trim())) {
     // Find "không có" or "không" or "không rõ" option
-    const negOption = options.find(o => {
+    const negOption = options.find((o) => {
       const ol = o.toLowerCase();
-      return ol.includes('không có') || ol === 'không' || ol.includes('không rõ') || ol.includes('bình thường');
+      return (
+        ol.includes('không có') ||
+        ol === 'không' ||
+        ol.includes('không rõ') ||
+        ol.includes('bình thường')
+      );
     });
     if (negOption) {
       return {
@@ -362,37 +507,128 @@ function parseSliderFromText(rawAnswer, min = 0, max = 10) {
   }
 
   // 4. Severity-based inference (có dấu + không dấu)
-  const extremeHigh = ['cực kỳ', 'chết luôn', 'không chịu nổi', 'quá sức chịu đựng', 'tột cùng', 'max',
-    'cuc ky', 'chet luon', 'khong chiu noi', 'qua suc chiu dung', 'dau chet di duoc', 'dau chet'];
-  const high = ['nặng', 'dữ dội', 'kinh khủng', 'quá trời', 'ghê lắm', 'nặng lắm', 'đau lắm',
-    'chịu không nổi', 'rất nặng', 'rất đau', 'rất nhiều', 'khủng khiếp', 'dữ lắm', 'nhiều lắm',
-    'nang', 'du doi', 'kinh khung', 'qua troi', 'ghe lam', 'nang lam', 'dau lam',
-    'chiu khong noi', 'rat nang', 'rat dau', 'rat nhieu', 'khung khiep', 'du lam', 'nhieu lam'];
-  const medHigh = ['nhiều', 'khá', 'hơi nặng', 'khá nhiều', 'khá nặng', 'khá đau',
-    'nhieu', 'kha', 'hoi nang', 'kha nhieu', 'kha nang'];
-  const mid = ['vừa', 'trung bình', 'vừa vừa', 'tàm tạm', 'bình thường',
-    'vua', 'trung binh', 'vua vua', 'tam tam', 'binh thuong'];
-  const low = ['nhẹ', 'ít', 'hơi hơi', 'chút chút', 'tí', 'tí xíu', 'hơi', 'nhẹ nhàng', 'ít ít',
-    'nhe', 'it', 'hoi hoi', 'chut chut', 'ti', 'ti xiu', 'hoi', 'nhe nhang', 'it it', 'hoi thoi'];
-  const none = ['không', 'không đau', 'không có', 'ko', 'hông', 'hem', 'zero', 'ko đau',
-    'khong', 'khong dau', 'khong co', 'hong', 'ko dau'];
+  const extremeHigh = [
+    'cực kỳ',
+    'chết luôn',
+    'không chịu nổi',
+    'quá sức chịu đựng',
+    'tột cùng',
+    'max',
+    'cuc ky',
+    'chet luon',
+    'khong chiu noi',
+    'qua suc chiu dung',
+    'dau chet di duoc',
+    'dau chet',
+  ];
+  const high = [
+    'nặng',
+    'dữ dội',
+    'kinh khủng',
+    'quá trời',
+    'ghê lắm',
+    'nặng lắm',
+    'đau lắm',
+    'chịu không nổi',
+    'rất nặng',
+    'rất đau',
+    'rất nhiều',
+    'khủng khiếp',
+    'dữ lắm',
+    'nhiều lắm',
+    'nang',
+    'du doi',
+    'kinh khung',
+    'qua troi',
+    'ghe lam',
+    'nang lam',
+    'dau lam',
+    'chiu khong noi',
+    'rat nang',
+    'rat dau',
+    'rat nhieu',
+    'khung khiep',
+    'du lam',
+    'nhieu lam',
+  ];
+  const medHigh = [
+    'nhiều',
+    'khá',
+    'hơi nặng',
+    'khá nhiều',
+    'khá nặng',
+    'khá đau',
+    'nhieu',
+    'kha',
+    'hoi nang',
+    'kha nhieu',
+    'kha nang',
+  ];
+  const mid = [
+    'vừa',
+    'trung bình',
+    'vừa vừa',
+    'tàm tạm',
+    'bình thường',
+    'vua',
+    'trung binh',
+    'vua vua',
+    'tam tam',
+    'binh thuong',
+  ];
+  const low = [
+    'nhẹ',
+    'ít',
+    'hơi hơi',
+    'chút chút',
+    'tí',
+    'tí xíu',
+    'hơi',
+    'nhẹ nhàng',
+    'ít ít',
+    'nhe',
+    'it',
+    'hoi hoi',
+    'chut chut',
+    'ti',
+    'ti xiu',
+    'hoi',
+    'nhe nhang',
+    'it it',
+    'hoi thoi',
+  ];
+  const none = [
+    'không',
+    'không đau',
+    'không có',
+    'ko',
+    'hông',
+    'hem',
+    'zero',
+    'ko đau',
+    'khong',
+    'khong dau',
+    'khong co',
+    'hong',
+    'ko dau',
+  ];
 
-  if (none.some(w => input.includes(w))) {
+  if (none.some((w) => input.includes(w))) {
     return { value: min, confidence: 0.85, method: 'severity_word' };
   }
-  if (extremeHigh.some(w => input.includes(w))) {
+  if (extremeHigh.some((w) => input.includes(w))) {
     return { value: max, confidence: 0.85, method: 'severity_word' };
   }
-  if (high.some(w => input.includes(w))) {
+  if (high.some((w) => input.includes(w))) {
     return { value: Math.round(min + range * 0.85), confidence: 0.75, method: 'severity_word' };
   }
-  if (medHigh.some(w => input.includes(w))) {
+  if (medHigh.some((w) => input.includes(w))) {
     return { value: Math.round(min + range * 0.7), confidence: 0.7, method: 'severity_word' };
   }
-  if (mid.some(w => input.includes(w))) {
+  if (mid.some((w) => input.includes(w))) {
     return { value: Math.round(min + range * 0.5), confidence: 0.7, method: 'severity_word' };
   }
-  if (low.some(w => input.includes(w))) {
+  if (low.some((w) => input.includes(w))) {
     return { value: Math.round(min + range * 0.2), confidence: 0.7, method: 'severity_word' };
   }
 
@@ -437,7 +673,9 @@ async function aiParse(rawAnswer, question) {
     if (cached) {
       return { ...cached, method: 'ai_cached' };
     }
-  } catch (_) { /* cache miss, continue */ }
+  } catch (_) {
+    /* cache miss, continue */
+  }
 
   try {
     const userPrompt = `Câu hỏi: "${question.text || ''}"
@@ -459,7 +697,9 @@ Tìm đáp án phù hợp nhất. Trả về JSON.`;
 
     const duration = Date.now() - startTime;
     const usage = response.usage || {};
-    console.log(`[AnswerParser] AI parse: provider=${response.provider}, model=${response.model}, tokens=${usage.total || '?'}, duration=${duration}ms`);
+    console.log(
+      `[AnswerParser] AI parse: provider=${response.provider}, model=${response.model}, tokens=${usage.total || '?'}, duration=${duration}ms`
+    );
 
     const raw = response.content;
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -481,17 +721,17 @@ Tìm đáp án phù hợp nhất. Trả về JSON.`;
     } else {
       const matchedOpts = Array.isArray(parsed.matched_options) ? parsed.matched_options : [];
       // Validate that AI returned options that actually exist
-      const validOpts = matchedOpts.filter(m =>
-        (question.options || []).some(o => o.toLowerCase() === m.toLowerCase())
+      const validOpts = matchedOpts.filter((m) =>
+        (question.options || []).some((o) => o.toLowerCase() === m.toLowerCase())
       );
       // Map back to exact option casing
-      const exactOpts = validOpts.map(m =>
-        (question.options || []).find(o => o.toLowerCase() === m.toLowerCase()) || m
+      const exactOpts = validOpts.map(
+        (m) => (question.options || []).find((o) => o.toLowerCase() === m.toLowerCase()) || m
       );
       result = {
         matched: exactOpts.length > 0 ? exactOpts : null,
         value: null,
-        confidence: exactOpts.length > 0 ? (parsed.confidence || 0.7) : 0,
+        confidence: exactOpts.length > 0 ? parsed.confidence || 0.7 : 0,
         method: 'ai',
       };
     }
@@ -499,7 +739,9 @@ Tìm đáp án phù hợp nhất. Trả về JSON.`;
     // Cache result
     try {
       await cacheSet(cacheKey, result, PARSE_CACHE_TTL);
-    } catch (_) { /* cache write failure is non-fatal */ }
+    } catch (_) {
+      /* cache write failure is non-fatal */
+    }
 
     return result;
   } catch (err) {
@@ -524,7 +766,7 @@ Tìm đáp án phù hợp nhất. Trả về JSON.`;
  *   original: string,
  * }>}
  */
-async function parseAnswer(rawAnswer, question, context = {}) {
+async function parseAnswer(rawAnswer, question, _context = {}) {
   const original = rawAnswer;
 
   if (rawAnswer == null || rawAnswer === '') {

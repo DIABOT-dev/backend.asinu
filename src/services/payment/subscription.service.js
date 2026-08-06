@@ -16,11 +16,9 @@
 const crypto = require('crypto');
 
 const SEPAY_ACCOUNT = process.env.SEPAY_ACCOUNT_NUMBER;
-const SEPAY_BANK    = process.env.SEPAY_BANK_CODE;
+const SEPAY_BANK = process.env.SEPAY_BANK_CODE;
 
 // ─── Plan pricing ─────────────────────────────────────────────────
-
-const BASE_PRICE = 199000; // VND/tháng
 
 const { t } = require('../../i18n');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
@@ -51,7 +49,10 @@ async function notifyPremiumActivated(pool, userId, expiresAt) {
     const u = rows[0];
     const lang = u.language_preference || 'vi';
     const dateStr = formatDisplayDate(expiresAt, lang);
-    await sendAndSave(pool, { id: userId, push_token: u.push_token }, 'subscription_activated',
+    await sendAndSave(
+      pool,
+      { id: userId, push_token: u.push_token },
+      'subscription_activated',
       t('push.subscription_activated_title', lang),
       t('push.subscription_activated_body', lang, { date: dateStr }),
       { expiresAt: new Date(expiresAt).toISOString() }
@@ -78,9 +79,12 @@ function emitSubscriptionChange(pool, eventType, payload, options = {}) {
     ...(payload.isGift != null ? { is_gift: Boolean(payload.isGift) } : {}),
     txn_type: 'subscription',
   };
-  const stableReference = eventPayload.external_ref
-    || eventPayload.subscription_id
-    || [eventPayload.user_id, eventPayload.product_code, eventPayload.expires_at].filter(Boolean).join(':');
+  const stableReference =
+    eventPayload.external_ref ||
+    eventPayload.subscription_id ||
+    [eventPayload.user_id, eventPayload.product_code, eventPayload.expires_at]
+      .filter(Boolean)
+      .join(':');
   const eventOptions = options.event_id
     ? options
     : { ...options, event_id: `${eventType}:${stableReference || crypto.randomUUID()}` };
@@ -98,7 +102,10 @@ async function notifyWalletLowIfNeeded(pool, userId, balance) {
     if (!rows[0]) return;
     const u = rows[0];
     const lang = u.language_preference || 'vi';
-    await sendAndSave(pool, { id: userId, push_token: u.push_token }, 'wallet_low_balance',
+    await sendAndSave(
+      pool,
+      { id: userId, push_token: u.push_token },
+      'wallet_low_balance',
       t('push.wallet_low_title', lang),
       t('push.wallet_low_body', lang, { balance: Number(balance).toLocaleString('vi-VN') }),
       { balance: String(balance) }
@@ -107,9 +114,9 @@ async function notifyWalletLowIfNeeded(pool, userId, balance) {
 }
 
 const PLANS = {
-  1:  { months: 1,  labelKey: 'subscription.plan_1',  discount: 0,  price: 199000  },
-  3:  { months: 3,  labelKey: 'subscription.plan_3',  discount: 5,  price: 567000  }, // 199000*3*0.95 = 567150 → 567000
-  6:  { months: 6,  labelKey: 'subscription.plan_6',  discount: 10, price: 1075000 }, // 199000*6*0.90 = 1074600 → 1075000
+  1: { months: 1, labelKey: 'subscription.plan_1', discount: 0, price: 199000 },
+  3: { months: 3, labelKey: 'subscription.plan_3', discount: 5, price: 567000 }, // 199000*3*0.95 = 567150 → 567000
+  6: { months: 6, labelKey: 'subscription.plan_6', discount: 10, price: 1075000 }, // 199000*6*0.90 = 1074600 → 1075000
   12: { months: 12, labelKey: 'subscription.plan_12', discount: 20, price: 1910000 }, // 199000*12*0.80 = 1910400 → 1910000
 };
 
@@ -117,11 +124,11 @@ const PLANS = {
 // All limits read from env so product can tune them without a deploy.
 // Defaults match the MVP pricing spec: Premium = 3 caregivers, Free = 1.
 
-const VOICE_MONTHLY_LIMIT      = Number(process.env.VOICE_MONTHLY_LIMIT || 5000);
+const VOICE_MONTHLY_LIMIT = Number(process.env.VOICE_MONTHLY_LIMIT || 5000);
 const PREMIUM_CONNECTION_LIMIT = Number(process.env.CARE_CIRCLE_PREMIUM_LIMIT || 3);
-const FREE_CONNECTION_LIMIT    = Number(process.env.CARE_CIRCLE_FREE_LIMIT || 1);
-const PREMIUM_HISTORY_DAYS     = Number(process.env.CAREGIVER_HISTORY_DAYS_PREMIUM || 365);
-const FREE_HISTORY_DAYS        = Number(process.env.CAREGIVER_HISTORY_DAYS_FREE || 30);
+const FREE_CONNECTION_LIMIT = Number(process.env.CARE_CIRCLE_FREE_LIMIT || 1);
+const PREMIUM_HISTORY_DAYS = Number(process.env.CAREGIVER_HISTORY_DAYS_PREMIUM || 365);
+const FREE_HISTORY_DAYS = Number(process.env.CAREGIVER_HISTORY_DAYS_FREE || 30);
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -138,7 +145,7 @@ function buildDescription(userId, orderCode) {
 }
 
 function parseSubDescription(content) {
-  const userMatch  = content.match(/asinusub(\d+)/);
+  const userMatch = content.match(/asinusub(\d+)/);
   const orderMatch = content.match(/order([a-zA-Z0-9]+)/);
   if (!userMatch || !orderMatch) return null;
   return { userId: Number(userMatch[1]), orderCode: orderMatch[1] };
@@ -173,7 +180,7 @@ async function getStatus(pool, userId) {
     expiresAt,
     voiceUsedThisMonth,
     voiceMonthlyLimit: VOICE_MONTHLY_LIMIT,
-    plans: Object.values(PLANS).map(p => ({ ...p, label: t(p.labelKey, 'vi') })),
+    plans: Object.values(PLANS).map((p) => ({ ...p, label: t(p.labelKey, 'vi') })),
   };
 
   await cacheSet(`subscription:${userId}`, result, 3600); // 1 hour
@@ -274,32 +281,37 @@ async function createQRInternal(pool, { payerId, recipientId, months, isGift }) 
   // The CRM rule engine needs the beginning of the purchase lifecycle before
   // the payment is confirmed. Keep the payload metadata-only and use a stable
   // event id so retries cannot create duplicate lifecycle events.
-  emitSubscriptionChange(pool, 'subscription.started', {
-    userId: recipientId,
-    subscriptionId: orderCode,
-    planCode: `premium_${plan.months}m`,
-    state: 'pending',
-    status: 'pending',
-    expiresAt: rows[0]?.qr_expires_at,
-    externalRef: orderCode,
-    provider: 'sepay',
-    amountMinor: amount,
-    currency: 'VND',
-    payerUserId: payerId,
-    beneficiaryUserId: recipientId,
-    isGift,
-  }, { event_id: `subscription.started:${orderCode}` });
+  emitSubscriptionChange(
+    pool,
+    'subscription.started',
+    {
+      userId: recipientId,
+      subscriptionId: orderCode,
+      planCode: `premium_${plan.months}m`,
+      state: 'pending',
+      status: 'pending',
+      expiresAt: rows[0]?.qr_expires_at,
+      externalRef: orderCode,
+      provider: 'sepay',
+      amountMinor: amount,
+      currency: 'VND',
+      payerUserId: payerId,
+      beneficiaryUserId: recipientId,
+      isGift,
+    },
+    { event_id: `subscription.started:${orderCode}` }
+  );
 
   return {
     order_code: orderCode,
-    qr_url:     qrUrl,
+    qr_url: qrUrl,
     amount,
     description,
     expires_at: rows[0].qr_expires_at,
     plan_months: plan.months,
-    discount:    plan.discount,
-    label:       t(plan.labelKey),
-    is_gift:    isGift,
+    discount: plan.discount,
+    label: t(plan.labelKey),
+    is_gift: isGift,
     payer_user_id: payerId,
     recipient_user_id: recipientId,
   };
@@ -392,7 +404,13 @@ async function activateSubscription(pool, userId, orderCode, months = 1) {
       notifyGiftConfirmed(pool, sub.payer_user_id, userId, newExpiry).catch(() => {});
     }
 
-    return { ok: true, expiresAt: newExpiry, planMonths, isGift: !!sub.is_gift, payerUserId: sub.payer_user_id };
+    return {
+      ok: true,
+      expiresAt: newExpiry,
+      planMonths,
+      isGift: !!sub.is_gift,
+      payerUserId: sub.payer_user_id,
+    };
   } catch (err) {
     await client.query('ROLLBACK');
 
@@ -421,8 +439,8 @@ async function notifyGiftConfirmed(pool, payerId, recipientId, expiresAt) {
       { id: payerId, push_token: u.push_token },
       'subscription_gift_confirmed',
       t('push.gift_confirmed_title', lang) || 'Đã tặng Premium thành công',
-      t('push.gift_confirmed_body', lang, { name: u.recipient_name || '', date: dateStr })
-        || `Bạn vừa tặng Premium cho ${u.recipient_name || 'người thân'} đến ${dateStr}.`,
+      t('push.gift_confirmed_body', lang, { name: u.recipient_name || '', date: dateStr }) ||
+        `Bạn vừa tặng Premium cho ${u.recipient_name || 'người thân'} đến ${dateStr}.`,
       { recipientId: String(recipientId), expiresAt: new Date(expiresAt).toISOString() }
     );
   } catch {}
@@ -435,7 +453,12 @@ async function notifyGiftConfirmed(pool, payerId, recipientId, expiresAt) {
  * Atomic: kiểm tra số dư → trừ ví → kích hoạt premium.
  */
 async function payWithWallet(pool, userId, months = 1) {
-  return payWithWalletInternal(pool, { payerId: userId, recipientId: userId, months, isGift: false });
+  return payWithWalletInternal(pool, {
+    payerId: userId,
+    recipientId: userId,
+    months,
+    isGift: false,
+  });
 }
 
 /**
@@ -522,10 +545,10 @@ async function payWithWalletInternal(pool, { payerId, recipientId, months, isGif
     }
 
     // Deduct from payer.
-    await client.query(
-      `UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2`,
-      [amount, payerId]
-    );
+    await client.query(`UPDATE users SET wallet_balance = wallet_balance - $1 WHERE id = $2`, [
+      amount,
+      payerId,
+    ]);
 
     // Record subscription against the BENEFICIARY (recipient) so existing
     // "who has Premium" queries continue to work without changes.
@@ -618,7 +641,11 @@ async function getHistory(pool, userId, { page = 1, limit = 20 } = {}) {
  *   @param {string} [opts.expiresAt]      platform-provided expiry (preferred)
  *   @param {string} opts.platform         'apple' | 'google'
  */
-async function activateFromIap(pool, userId, { productId, transactionId, months, expiresAt, platform }) {
+async function activateFromIap(
+  pool,
+  userId,
+  { productId, transactionId, months, expiresAt, platform }
+) {
   const planMonths = Number(months) || 1;
   const client = await pool.connect();
   try {
@@ -670,20 +697,25 @@ async function activateFromIap(pool, userId, { productId, transactionId, months,
     await client.query('COMMIT');
     await cacheDel(`subscription:${userId}`);
     notifyPremiumActivated(pool, userId, newExpiry).catch(() => {});
-    emitSubscriptionChange(pool, 'subscription.started', {
-      userId,
-      subscriptionId: `iap:${platform}:${transactionId}`,
-      planCode: `premium_${planMonths}m`,
-      state: 'paid',
-      status: 'active',
-      expiresAt: newExpiry,
-      externalRef: `iap:${platform}:${transactionId}`,
-      provider: platform,
-      amountMinor: 0,
-      currency: 'VND',
-      paidAt: new Date().toISOString(),
-      beneficiaryUserId: userId,
-    }, { event_id: `subscription.started:iap:${platform}:${transactionId}` });
+    emitSubscriptionChange(
+      pool,
+      'subscription.started',
+      {
+        userId,
+        subscriptionId: `iap:${platform}:${transactionId}`,
+        planCode: `premium_${planMonths}m`,
+        state: 'paid',
+        status: 'active',
+        expiresAt: newExpiry,
+        externalRef: `iap:${platform}:${transactionId}`,
+        provider: platform,
+        amountMinor: 0,
+        currency: 'VND',
+        paidAt: new Date().toISOString(),
+        beneficiaryUserId: userId,
+      },
+      { event_id: `subscription.started:iap:${platform}:${transactionId}` }
+    );
     emitSubscriptionChange(pool, 'subscription.activated', {
       userId,
       subscriptionId: `iap:${platform}:${transactionId}`,
@@ -729,8 +761,13 @@ async function activateFromIap(pool, userId, { productId, transactionId, months,
  */
 async function applyIapWebhookEvent(pool, ev) {
   const {
-    platform, transactionId, originalTransactionId, productId,
-    expiresAt, action, rawPayload,
+    platform,
+    transactionId,
+    originalTransactionId,
+    productId,
+    expiresAt,
+    action,
+    rawPayload,
   } = ev;
 
   if (!originalTransactionId) {
@@ -759,8 +796,15 @@ async function applyIapWebhookEvent(pool, ev) {
            (user_id, platform, product_id, transaction_id, original_transaction_id, expires_at, raw_payload)
          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
          ON CONFLICT (transaction_id) DO NOTHING`,
-        [userId, platform, productId || 'unknown', transactionId,
-         originalTransactionId, expiresAt || null, JSON.stringify(rawPayload || {})]
+        [
+          userId,
+          platform,
+          productId || 'unknown',
+          transactionId,
+          originalTransactionId,
+          expiresAt || null,
+          JSON.stringify(rawPayload || {}),
+        ]
       );
     } catch (err) {
       if (err.code !== '42P01') throw err;
@@ -793,15 +837,14 @@ async function applyIapWebhookEvent(pool, ev) {
         [userId]
       );
       const currentExpiry = u[0]?.subscription_expires_at;
-      const shouldRevoke = action === 'revoke' || action === 'refund'
-        || !currentExpiry
-        || new Date(currentExpiry) <= new Date();
+      const shouldRevoke =
+        action === 'revoke' ||
+        action === 'refund' ||
+        !currentExpiry ||
+        new Date(currentExpiry) <= new Date();
 
       if (shouldRevoke) {
-        await client.query(
-          `UPDATE users SET subscription_tier = 'free' WHERE id = $1`,
-          [userId]
-        );
+        await client.query(`UPDATE users SET subscription_tier = 'free' WHERE id = $1`, [userId]);
         appliedEventType = action === 'expire' ? 'subscription.expired' : 'subscription.cancelled';
         appliedExpiry = currentExpiry || expiresAt || null;
       }
@@ -825,21 +868,26 @@ async function applyIapWebhookEvent(pool, ev) {
       });
     }
     if (action === 'refund') {
-      emitCrmEventAsync(pool, 'payment.refunded', {
-        user_id: String(userId),
-        external_ref: transactionId ? String(transactionId) : undefined,
-        transaction_id: transactionId ? String(transactionId) : undefined,
-        provider: platform,
-        status: 'refunded',
-        amount_minor: 0,
-        currency: 'VND',
-        refunded_at: new Date().toISOString(),
-        state: 'refunded',
-        payer_user_id: String(userId),
-        beneficiary_user_id: String(userId),
-        is_gift: false,
-        txn_type: 'subscription',
-      }, { event_id: `payment.refunded:${platform}:${transactionId || userId}` });
+      emitCrmEventAsync(
+        pool,
+        'payment.refunded',
+        {
+          user_id: String(userId),
+          external_ref: transactionId ? String(transactionId) : undefined,
+          transaction_id: transactionId ? String(transactionId) : undefined,
+          provider: platform,
+          status: 'refunded',
+          amount_minor: 0,
+          currency: 'VND',
+          refunded_at: new Date().toISOString(),
+          state: 'refunded',
+          payer_user_id: String(userId),
+          beneficiary_user_id: String(userId),
+          is_gift: false,
+          txn_type: 'subscription',
+        },
+        { event_id: `payment.refunded:${platform}:${transactionId || userId}` }
+      );
     }
     return { ok: true, userId };
   } catch (err) {

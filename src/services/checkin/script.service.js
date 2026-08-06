@@ -15,7 +15,7 @@
  *   - Future: MedGemma generates enhanced scripts
  */
 
-const { symptomMap, resolveComplaint, listComplaints } = require('./clinical-mapping');
+const { resolveComplaint } = require('./clinical-mapping');
 const { validateScript } = require('../../core/checkin/script-runner');
 const { getHonorifics } = require('../../lib/honorifics');
 const { reuseScript } = require('./script-cache.service');
@@ -33,8 +33,8 @@ const CLUSTER_KEY_MAP = {
   'đau lưng': 'back_pain',
   'đau khớp': 'joint_pain',
   'mất ngủ': 'insomnia',
-  'sốt': 'fever',
-  'ho': 'cough',
+  sốt: 'fever',
+  ho: 'cough',
   'buồn nôn': 'nausea',
   'tiêu chảy': 'diarrhea',
   'táo bón': 'constipation',
@@ -94,7 +94,7 @@ async function createClustersFromOnboarding(pool, userId, symptoms) {
          ON CONFLICT (user_id, cluster_key) DO UPDATE SET
            display_name = $3, is_active = TRUE, updated_at = NOW()
          RETURNING *`,
-        [userId, clusterKey, displayName, symptoms.length - i]  // higher priority for first symptoms
+        [userId, clusterKey, displayName, symptoms.length - i] // higher priority for first symptoms
       );
       clusters.push(rows[0]);
     } catch (err) {
@@ -107,7 +107,10 @@ async function createClustersFromOnboarding(pool, userId, symptoms) {
     try {
       await generateScriptForCluster(pool, userId, cluster);
     } catch (err) {
-      console.error(`[ScriptService] Failed to generate script for ${cluster.cluster_key}:`, err.message);
+      console.error(
+        `[ScriptService] Failed to generate script for ${cluster.cluster_key}:`,
+        err.message
+      );
     }
   }
 
@@ -192,7 +195,8 @@ function _addHonorifics(question) {
     const startsWithVerb = /^(Có |Từ |Khi |Đã |Đang )/i.test(q);
     const isHowQuestion = /^(Kiểu|Mức độ|Tình trạng)/i.test(q);
     const isAboutQuestion = /^(Giấc ngủ|Nhiệt độ|Chất nôn)/i.test(q);
-    const isSpecificQ = /ở vị trí|xuất hiện khi|kéo dài bao|ảnh hưởng|liên quan|lan ra|nặng hơn khi/i.test(q);
+    const isSpecificQ =
+      /ở vị trí|xuất hiện khi|kéo dài bao|ảnh hưởng|liên quan|lan ra|nặng hơn khi/i.test(q);
 
     if (isAboutQuestion) {
       // "Giấc ngủ của bạn..." → "{Honorific} ngủ gần đây thế nào?"
@@ -227,7 +231,6 @@ function _addHonorifics(question) {
 function _buildScriptFromMapping(complaintKey, mappingData, cluster) {
   const associated = mappingData.associatedSymptoms || [];
   const redFlags = mappingData.redFlags || [];
-  const causes = mappingData.causes || [];
   const followUpQs = mappingData.followUpQuestions || [];
 
   // Build questions from mapping's followUpQuestions (structured)
@@ -263,9 +266,9 @@ function _buildScriptFromMapping(complaintKey, mappingData, cluster) {
 
     // Q2: associated symptoms (top 6)
     const topAssociated = associated
-      .filter(s => s.dangerLevel !== 'danger')
+      .filter((s) => s.dangerLevel !== 'danger')
       .slice(0, 5)
-      .map(s => s.text);
+      .map((s) => s.text);
     if (topAssociated.length > 0) {
       topAssociated.push('không có');
       questions.push({
@@ -297,7 +300,7 @@ function _buildScriptFromMapping(complaintKey, mappingData, cluster) {
   }
 
   // Build scoring rules
-  const scoringRules = _buildScoringRules(questions, associated, redFlags);
+  const scoringRules = _buildScoringRules(questions, associated);
 
   // Build conclusion templates
   const conclusionTemplates = _buildConclusionTemplates(cluster);
@@ -321,24 +324,20 @@ function _buildScriptFromMapping(complaintKey, mappingData, cluster) {
 /**
  * Build scoring rules based on question structure.
  */
-function _buildScoringRules(questions, associated, redFlags) {
+function _buildScoringRules(questions, associated) {
   const rules = [];
-  const hasSlider = questions.some(q => q.type === 'slider');
-  const hasProgression = questions.some(q =>
-    q.options && q.options.includes('có vẻ nặng hơn')
-  );
+  const hasSlider = questions.some((q) => q.type === 'slider');
+  const hasProgression = questions.some((q) => q.options && q.options.includes('có vẻ nặng hơn'));
 
   // Find question IDs
-  const sliderId = questions.find(q => q.type === 'slider')?.id;
-  const progressionId = questions.find(q =>
-    q.options && q.options.includes('có vẻ nặng hơn')
+  const sliderId = questions.find((q) => q.type === 'slider')?.id;
+  const progressionId = questions.find(
+    (q) => q.options && q.options.includes('có vẻ nặng hơn')
   )?.id;
 
   // Find danger associated symptoms question
-  const dangerSymptoms = associated
-    .filter(s => s.dangerLevel === 'danger')
-    .map(s => s.text);
-  const associatedQId = questions.find(q => q.type === 'multi_choice')?.id;
+  const dangerSymptoms = associated.filter((s) => s.dangerLevel === 'danger').map((s) => s.text);
+  const associatedQId = questions.find((q) => q.type === 'multi_choice')?.id;
 
   // Rule 1: HIGH — slider >= 7 OR progression worse
   if (hasSlider) {
@@ -348,7 +347,7 @@ function _buildScoringRules(questions, associated, redFlags) {
       severity: 'high',
       follow_up_hours: 1,
       needs_doctor: true,
-      needs_family_alert: false,  // Chỉ báo gia đình khi THỰC SỰ nghiêm trọng (emergency/critical)
+      needs_family_alert: false, // Chỉ báo gia đình khi THỰC SỰ nghiêm trọng (emergency/critical)
     });
   }
 
@@ -381,12 +380,11 @@ function _buildScoringRules(questions, associated, redFlags) {
   // detect "worst" answers that indicate HIGH severity.
   if (!hasSlider) {
     // Strategy 1: Find severity-type question with "nặng" option
-    const severityQ = questions.find(q =>
-      q.type === 'single_choice' && q.options &&
-      q.options.some(o => o.includes('nặng'))
+    const severityQ = questions.find(
+      (q) => q.type === 'single_choice' && q.options && q.options.some((o) => o.includes('nặng'))
     );
     if (severityQ) {
-      const severeOption = severityQ.options.find(o => o.includes('nặng') && !o.includes('nhẹ'));
+      const severeOption = severityQ.options.find((o) => o.includes('nặng') && !o.includes('nhẹ'));
       if (severeOption) {
         rules.push({
           conditions: [{ field: severityQ.id, op: 'eq', value: severeOption }],
@@ -394,7 +392,7 @@ function _buildScoringRules(questions, associated, redFlags) {
           severity: 'high',
           follow_up_hours: 1,
           needs_doctor: true,
-          needs_family_alert: false,  // Chỉ báo gia đình khi THỰC SỰ nghiêm trọng (emergency/critical)
+          needs_family_alert: false, // Chỉ báo gia đình khi THỰC SỰ nghiêm trọng (emergency/critical)
         });
       }
     }
@@ -404,9 +402,12 @@ function _buildScoringRules(questions, associated, redFlags) {
     // Clinical convention: options are ordered mild → severe, so the last option
     // of a severity question is the most severe.
     if (!severityQ) {
-      const severityByText = questions.find(q =>
-        q.type === 'single_choice' && q.options && q.options.length >= 3 &&
-        /mức độ|ảnh hưởng|nghiêm trọng/i.test(q.text)
+      const severityByText = questions.find(
+        (q) =>
+          q.type === 'single_choice' &&
+          q.options &&
+          q.options.length >= 3 &&
+          /mức độ|ảnh hưởng|nghiêm trọng/i.test(q.text)
       );
       if (severityByText) {
         const lastOption = severityByText.options[severityByText.options.length - 1];
@@ -430,7 +431,7 @@ function _buildScoringRules(questions, associated, redFlags) {
           severity: 'high',
           follow_up_hours: 1,
           needs_doctor: true,
-          needs_family_alert: false,  // Chỉ báo gia đình khi THỰC SỰ nghiêm trọng (emergency/critical)
+          needs_family_alert: false, // Chỉ báo gia đình khi THỰC SỰ nghiêm trọng (emergency/critical)
         });
       }
     }
@@ -444,7 +445,7 @@ function _buildScoringRules(questions, associated, redFlags) {
         // Skip if it's a "không rõ"/"không có" type escape option
         if (lastOption.includes('không') || lastOption.includes('rõ')) continue;
         // Skip if we already have a rule for this question
-        if (rules.some(r => r.conditions.some(c => c.field === q.id))) continue;
+        if (rules.some((r) => r.conditions.some((c) => c.field === q.id))) continue;
 
         rules.push({
           conditions: [{ field: q.id, op: 'eq', value: lastOption }],
@@ -460,7 +461,7 @@ function _buildScoringRules(questions, associated, redFlags) {
     // Strategy 4: For multi_choice with warning/danger items, any selection = MEDIUM
     for (const q of questions) {
       if (q.type === 'multi_choice' && q.options && q.options.length >= 3) {
-        if (rules.some(r => r.conditions.some(c => c.field === q.id))) continue;
+        if (rules.some((r) => r.conditions.some((c) => c.field === q.id))) continue;
         // If user selects anything other than "không có" → at least MEDIUM
         rules.push({
           conditions: [{ field: q.id, op: 'neq', value: 'không có' }],
@@ -476,9 +477,7 @@ function _buildScoringRules(questions, associated, redFlags) {
 
   // Rule 3: LOW — default (slider < 4 or no slider)
   rules.push({
-    conditions: hasSlider
-      ? [{ field: sliderId, op: 'lt', value: 4 }]
-      : [],
+    conditions: hasSlider ? [{ field: sliderId, op: 'lt', value: 4 }] : [],
     combine: 'and',
     severity: 'low',
     follow_up_hours: 6,
@@ -493,7 +492,7 @@ function _buildScoringRules(questions, associated, redFlags) {
  * Build condition modifiers (medical conditions → severity bump).
  */
 function _buildConditionModifiers(questions) {
-  const sliderId = questions.find(q => q.type === 'slider')?.id;
+  const sliderId = questions.find((q) => q.type === 'slider')?.id;
 
   if (sliderId) {
     return [
@@ -519,8 +518,8 @@ function _buildConditionModifiers(questions) {
   }
 
   // No slider — use progression or severity question for modifiers
-  const progressionId = questions.find(q =>
-    q.options && q.options.includes('có vẻ nặng hơn')
+  const progressionId = questions.find(
+    (q) => q.options && q.options.includes('có vẻ nặng hơn')
   )?.id;
 
   if (progressionId) {
@@ -562,72 +561,86 @@ function _buildConclusionTemplates(cluster) {
   const SPECIFIC_ADVICE = {
     headache: {
       low: 'Nghỉ ngơi, tránh nhìn màn hình lâu, uống đủ nước. Nếu hay đau đầu, nên ghi lại thời điểm và tần suất.',
-      medium: 'Uống thuốc giảm đau (paracetamol) nếu có, nằm nghỉ nơi yên tĩnh, tránh ánh sáng mạnh. Nếu không đỡ sau 24h hoặc đau tăng → đi khám.',
+      medium:
+        'Uống thuốc giảm đau (paracetamol) nếu có, nằm nghỉ nơi yên tĩnh, tránh ánh sáng mạnh. Nếu không đỡ sau 24h hoặc đau tăng → đi khám.',
       high: '🏥 {Honorific} nên đi khám bác sĩ hôm nay. Đau đầu dữ dội có thể cần kiểm tra huyết áp hoặc chụp chiếu. Trong khi chờ: nằm nghỉ, tránh gắng sức.',
     },
     abdominal_pain: {
       low: 'Ăn nhẹ, tránh đồ cay nóng và dầu mỡ, uống nước ấm. Nếu đau sau ăn thường xuyên, nên ghi lại thực đơn.',
-      medium: 'Ăn cháo loãng hoặc thức ăn mềm, tránh rượu bia và thuốc lá. Nếu đau kèm sốt hoặc nôn → đi khám sớm.',
+      medium:
+        'Ăn cháo loãng hoặc thức ăn mềm, tránh rượu bia và thuốc lá. Nếu đau kèm sốt hoặc nôn → đi khám sớm.',
       high: '🏥 {Honorific} nên đi khám bác sĩ hôm nay. Đau bụng nặng có thể cần siêu âm. Trong khi chờ: không ăn, chỉ uống nước, nằm nghiêng trái.',
     },
     dizziness: {
       low: 'Ngồi hoặc nằm nghỉ, tránh đứng dậy nhanh, uống đủ nước. Nếu hay bị khi đứng lên → kiểm tra huyết áp.',
-      medium: 'Nằm nghỉ, đầu hơi cao, uống nước từng ngụm nhỏ. Tránh lái xe và leo cầu thang. Nếu kèm ù tai hoặc buồn nôn → đi khám.',
+      medium:
+        'Nằm nghỉ, đầu hơi cao, uống nước từng ngụm nhỏ. Tránh lái xe và leo cầu thang. Nếu kèm ù tai hoặc buồn nôn → đi khám.',
       high: '🏥 {Honorific} nên đi khám bác sĩ hôm nay. Chóng mặt nặng cần đo huyết áp và kiểm tra tai trong. Trong khi chờ: NẰM YÊN, không đi lại một mình.',
     },
     fatigue: {
       low: 'Nghỉ ngơi đầy đủ, ăn uống điều độ, uống đủ 2 lít nước/ngày. Nếu mệt kéo dài hơn 1 tuần, nên xét nghiệm máu.',
-      medium: 'Nghỉ ngơi tuyệt đối hôm nay, ăn thức ăn giàu sắt và vitamin. Đo đường huyết nếu có máy. Nếu kèm sụt cân hoặc sốt → đi khám.',
+      medium:
+        'Nghỉ ngơi tuyệt đối hôm nay, ăn thức ăn giàu sắt và vitamin. Đo đường huyết nếu có máy. Nếu kèm sụt cân hoặc sốt → đi khám.',
       high: '🏥 {Honorific} nên đi khám bác sĩ hôm nay. Mệt mỏi nặng cần xét nghiệm máu kiểm tra thiếu máu, đường huyết, tuyến giáp. Nằm nghỉ, không gắng sức.',
     },
     chest_pain: {
       low: 'Nghỉ ngơi, hít thở sâu và chậm, tránh gắng sức. Nếu đau khi hít sâu có thể do cơ — chườm ấm nhẹ.',
-      medium: 'Nằm nghỉ, nới lỏng quần áo, tránh hoạt động. Đo huyết áp nếu có máy. Nếu đau lan ra tay trái hoặc hàm → gọi cấp cứu.',
+      medium:
+        'Nằm nghỉ, nới lỏng quần áo, tránh hoạt động. Đo huyết áp nếu có máy. Nếu đau lan ra tay trái hoặc hàm → gọi cấp cứu.',
       high: '🏥 GỌI CẤP CỨU 115 hoặc đến phòng cấp cứu NGAY. Trong khi chờ: ngồi nghỉ, nới lỏng quần áo, nhai 1 viên aspirin nếu có.',
     },
     dyspnea: {
       low: 'Ngồi thẳng lưng, hít thở chậm và sâu. Mở cửa sổ cho thoáng. Tránh nằm ngay khi khó thở.',
-      medium: 'Ngồi nghỉ, không nằm. Tránh gắng sức. Nếu có bình xịt hen → dùng ngay. Nếu không đỡ sau 30 phút → đi khám.',
+      medium:
+        'Ngồi nghỉ, không nằm. Tránh gắng sức. Nếu có bình xịt hen → dùng ngay. Nếu không đỡ sau 30 phút → đi khám.',
       high: '🏥 {Honorific} cần đi khám NGAY. Khó thở nặng có thể nguy hiểm. Trong khi chờ: ngồi thẳng, không nằm, nới lỏng quần áo.',
     },
     back_pain: {
       low: 'Chườm ấm vùng đau, tránh ngồi lâu hoặc bê vác nặng. Thay đổi tư thế mỗi 30 phút. Đi bộ nhẹ nếu không quá đau.',
-      medium: 'Nghỉ ngơi, chườm ấm 15-20 phút, uống thuốc giảm đau nếu có. Tránh cúi gập người. Nếu đau lan xuống chân → đi khám sớm.',
+      medium:
+        'Nghỉ ngơi, chườm ấm 15-20 phút, uống thuốc giảm đau nếu có. Tránh cúi gập người. Nếu đau lan xuống chân → đi khám sớm.',
       high: '🏥 {Honorific} nên đi khám bác sĩ hôm nay. Đau lưng kèm tê chân hoặc yếu chân cần chụp MRI. Nằm nghỉ trên mặt phẳng cứng.',
     },
     joint_pain: {
       low: 'Chườm ấm hoặc lạnh (tùy viêm hay đau cơ), nghỉ ngơi khớp đau, tránh vận động mạnh. Xoa nhẹ dầu nóng nếu thích.',
-      medium: 'Nghỉ ngơi khớp đau, chườm đá 15 phút nếu sưng, uống thuốc giảm đau nếu có. Nếu khớp sưng đỏ nóng → đi khám sớm.',
+      medium:
+        'Nghỉ ngơi khớp đau, chườm đá 15 phút nếu sưng, uống thuốc giảm đau nếu có. Nếu khớp sưng đỏ nóng → đi khám sớm.',
       high: '🏥 {Honorific} nên đi khám bác sĩ hôm nay. Đau khớp nặng cần xét nghiệm viêm và chụp X-quang. Tránh vận động khớp đau.',
     },
     insomnia: {
       low: 'Tránh caffeine sau 2h chiều, tắt màn hình 1h trước ngủ, phòng tối và mát. Thử thư giãn bằng hít thở sâu.',
-      medium: 'Giữ giờ ngủ cố định, tránh ngủ trưa quá 30 phút. Tắm nước ấm trước ngủ. Nếu mất ngủ > 2 tuần liên tục → đi khám.',
+      medium:
+        'Giữ giờ ngủ cố định, tránh ngủ trưa quá 30 phút. Tắm nước ấm trước ngủ. Nếu mất ngủ > 2 tuần liên tục → đi khám.',
       high: '🏥 {Honorific} nên đi khám bác sĩ. Mất ngủ kéo dài ảnh hưởng sức khỏe nghiêm trọng, có thể cần thuốc hỗ trợ.',
     },
     fever: {
       low: 'Uống nhiều nước, mặc đồ thoáng, lau mát. Uống paracetamol nếu sốt > 38.5°C. Theo dõi nhiệt độ mỗi 4h.',
-      medium: 'Uống paracetamol đúng liều, uống nhiều nước, lau mát cổ và nách. Nếu sốt > 39°C hoặc kéo dài > 3 ngày → đi khám.',
+      medium:
+        'Uống paracetamol đúng liều, uống nhiều nước, lau mát cổ và nách. Nếu sốt > 39°C hoặc kéo dài > 3 ngày → đi khám.',
       high: '🏥 {Honorific} cần đi khám NGAY. Sốt cao kéo dài có thể là dấu hiệu nhiễm trùng nặng. Uống hạ sốt, lau mát, uống nhiều nước trong khi chờ.',
     },
     cough: {
       low: 'Uống nước ấm pha mật ong, súc miệng nước muối, tránh khói bụi. Nếu ho khan kéo dài > 1 tuần → đi khám.',
-      medium: 'Uống thuốc ho nếu có, uống nước ấm thường xuyên, tránh lạnh. Nếu ho ra đờm vàng/xanh hoặc kèm sốt → đi khám.',
+      medium:
+        'Uống thuốc ho nếu có, uống nước ấm thường xuyên, tránh lạnh. Nếu ho ra đờm vàng/xanh hoặc kèm sốt → đi khám.',
       high: '🏥 {Honorific} nên đi khám bác sĩ hôm nay. Ho nặng kèm khó thở hoặc ho ra máu cần chụp X-quang phổi ngay.',
     },
     nausea: {
       low: 'Ăn nhẹ (bánh mì, cháo), uống nước gừng ấm, tránh mùi nặng. Ăn ít nhưng nhiều bữa.',
-      medium: 'Không ăn 1-2h, uống nước từng ngụm nhỏ. Nếu nôn nhiều → uống oresol bù nước. Nếu kèm đau bụng dữ → đi khám.',
+      medium:
+        'Không ăn 1-2h, uống nước từng ngụm nhỏ. Nếu nôn nhiều → uống oresol bù nước. Nếu kèm đau bụng dữ → đi khám.',
       high: '🏥 {Honorific} nên đi khám bác sĩ. Buồn nôn/nôn liên tục có thể gây mất nước nguy hiểm. Uống oresol, không ăn đồ cứng.',
     },
     diarrhea: {
       low: 'Uống nhiều nước và oresol bù điện giải, ăn cháo trắng, tránh sữa và đồ dầu mỡ. Rửa tay thường xuyên.',
-      medium: 'Uống oresol đều đặn, ăn cháo muối. Nếu tiêu chảy > 5 lần/ngày hoặc kèm sốt cao → đi khám ngay.',
+      medium:
+        'Uống oresol đều đặn, ăn cháo muối. Nếu tiêu chảy > 5 lần/ngày hoặc kèm sốt cao → đi khám ngay.',
       high: '🏥 {Honorific} cần đi khám NGAY. Tiêu chảy nặng gây mất nước nguy hiểm, đặc biệt với người có bệnh nền. Uống oresol liên tục.',
     },
     gastric_pain: {
       low: 'Ăn đúng giờ, tránh bỏ bữa. Tránh đồ chua, cay, cà phê. Uống nước ấm sau ăn 30 phút.',
-      medium: 'Uống thuốc dạ dày nếu có (antacid), ăn nhẹ đúng giờ, tránh rượu bia tuyệt đối. Nếu đau kèm nôn ra máu → cấp cứu ngay.',
+      medium:
+        'Uống thuốc dạ dày nếu có (antacid), ăn nhẹ đúng giờ, tránh rượu bia tuyệt đối. Nếu đau kèm nôn ra máu → cấp cứu ngay.',
       high: '🏥 {Honorific} nên đi khám bác sĩ hôm nay. Đau dạ dày nặng có thể cần nội soi. Không uống aspirin/ibuprofen, chỉ dùng paracetamol.',
     },
   };
@@ -643,12 +656,15 @@ function _buildConclusionTemplates(cluster) {
     },
     medium: {
       summary: `{Honorific} bị ${name} mức trung bình, cần theo dõi thêm.`,
-      recommendation: specific?.medium || `Nghỉ ngơi, uống thuốc nếu có. Nếu không đỡ sau 24h nên đi khám.`,
+      recommendation:
+        specific?.medium || `Nghỉ ngơi, uống thuốc nếu có. Nếu không đỡ sau 24h nên đi khám.`,
       close_message: `{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng nhé.`,
     },
     high: {
       summary: `{Honorific} bị ${name} nặng, cần được bác sĩ đánh giá.`,
-      recommendation: specific?.high || `🏥 {Honorific} nên đi khám bác sĩ hôm nay. Trong khi chờ, nghỉ ngơi và uống nhiều nước.`,
+      recommendation:
+        specific?.high ||
+        `🏥 {Honorific} nên đi khám bác sĩ hôm nay. Trong khi chờ, nghỉ ngơi và uống nhiều nước.`,
       close_message: `{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng. Đi khám sớm nhé.`,
     },
   };
@@ -690,12 +706,10 @@ function _buildGenericScript(cluster) {
         severity: 'high',
         follow_up_hours: 1,
         needs_doctor: true,
-        needs_family_alert: false,  // Chỉ báo gia đình khi THỰC SỰ nghiêm trọng (emergency/critical)
+        needs_family_alert: false, // Chỉ báo gia đình khi THỰC SỰ nghiêm trọng (emergency/critical)
       },
       {
-        conditions: [
-          { field: 'q3', op: 'eq', value: 'có vẻ nặng hơn' },
-        ],
+        conditions: [{ field: 'q3', op: 'eq', value: 'có vẻ nặng hơn' }],
         combine: 'and',
         severity: 'high',
         follow_up_hours: 1,
@@ -747,7 +761,7 @@ function _buildFollowUpScript(cluster) {
         severity: 'high',
         follow_up_hours: 1,
         needs_doctor: true,
-        needs_family_alert: false,  // Chỉ báo gia đình khi THỰC SỰ nghiêm trọng (emergency/critical)
+        needs_family_alert: false, // Chỉ báo gia đình khi THỰC SỰ nghiêm trọng (emergency/critical)
       },
       {
         conditions: [{ field: 'fu2', op: 'eq', value: 'Có' }],
@@ -883,7 +897,7 @@ async function getUserScript(pool, userId) {
   ];
 
   // Map clusters with their scripts
-  const clusterScripts = clusters.map(c => ({
+  const clusterScripts = clusters.map((c) => ({
     cluster_key: c.cluster_key,
     display_name: c.display_name,
     priority: c.priority,

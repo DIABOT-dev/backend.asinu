@@ -24,20 +24,32 @@ const DETAIL_TABLES = {
   bp: { table: 'blood_pressure_logs', columns: ['systolic', 'diastolic', 'pulse', 'unit'] },
   weight: { table: 'weight_logs', columns: ['weight_kg', 'body_fat_percent', 'muscle_percent'] },
   water: { table: 'water_logs', columns: ['volume_ml'] },
-  meal: { table: 'meal_logs', columns: ['calories_kcal', 'carbs_g', 'protein_g', 'fat_g', 'meal_text', 'photo_url'] },
-  insulin: { table: 'insulin_logs', columns: ['insulin_type', 'dose_units', 'unit', 'timing', 'injection_site'] },
-  medication: { table: 'medication_logs', columns: ['med_name', 'dose_text', 'dose_value', 'dose_unit', 'frequency_text'] },
-  care_pulse: { table: 'care_pulse_logs', columns: ['status', 'sub_status', 'trigger_source', 'escalation_sent', 'silence_count'] },
+  meal: {
+    table: 'meal_logs',
+    columns: ['calories_kcal', 'carbs_g', 'protein_g', 'fat_g', 'meal_text', 'photo_url'],
+  },
+  insulin: {
+    table: 'insulin_logs',
+    columns: ['insulin_type', 'dose_units', 'unit', 'timing', 'injection_site'],
+  },
+  medication: {
+    table: 'medication_logs',
+    columns: ['med_name', 'dose_text', 'dose_value', 'dose_unit', 'frequency_text'],
+  },
+  care_pulse: {
+    table: 'care_pulse_logs',
+    columns: ['status', 'sub_status', 'trigger_source', 'escalation_sent', 'silence_count'],
+  },
 };
 
 const MISSION_MAPPING = {
-  'glucose': { key: 'log_glucose', goal: 2 },
-  'bp': { key: 'log_bp', goal: 2 },
-  'weight': { key: 'log_weight', goal: 1 },
-  'water': { key: 'log_water', goal: 4 },
-  'meal': { key: 'log_meal', goal: 3 },
-  'insulin': { key: 'log_insulin', goal: 1 },
-  'medication': { key: 'log_medication', goal: 1 }
+  glucose: { key: 'log_glucose', goal: 2 },
+  bp: { key: 'log_bp', goal: 2 },
+  weight: { key: 'log_weight', goal: 1 },
+  water: { key: 'log_water', goal: 4 },
+  meal: { key: 'log_meal', goal: 3 },
+  insulin: { key: 'log_insulin', goal: 1 },
+  medication: { key: 'log_medication', goal: 1 },
 };
 
 function isObject(value) {
@@ -92,7 +104,7 @@ async function insertDetailLog(client, logType, logId, data) {
           data.protein_g ?? null,
           data.fat_g ?? null,
           data.meal_text || null,
-          data.photo_url || null
+          data.photo_url || null,
         ]
       );
       break;
@@ -107,7 +119,7 @@ async function insertDetailLog(client, logType, logId, data) {
           data.dose_units,
           data.unit || 'U',
           data.timing || null,
-          data.injection_site || null
+          data.injection_site || null,
         ]
       );
       break;
@@ -122,7 +134,7 @@ async function insertDetailLog(client, logType, logId, data) {
           data.dose_text,
           data.dose_value ?? null,
           data.dose_unit || null,
-          data.frequency_text || null
+          data.frequency_text || null,
         ]
       );
       break;
@@ -179,14 +191,16 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
   if (recentAlert.length > 0) return;
 
   // Get user name
-  const { rows: [user] } = await pool.query(
-    'SELECT full_name, display_name FROM users WHERE id = $1', [userId]
-  );
+  const {
+    rows: [user],
+  } = await pool.query('SELECT full_name, display_name FROM users WHERE id = $1', [userId]);
   const name = user?.full_name || user?.display_name || `User ${userId}`;
 
   // Notify the user themselves
-  await sendAndSave(pool, { id: userId, push_token: null }, 'health_alert',
-    title, body, { alertType: logType, severity });
+  await sendAndSave(pool, { id: userId, push_token: null }, 'health_alert', title, body, {
+    alertType: logType,
+    severity,
+  });
 
   // Find care circle caregivers with alert permission
   const { rows: caregivers } = await pool.query(
@@ -203,9 +217,11 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
   );
 
   for (const cg of caregivers) {
-    await sendAndSave(pool, cg, 'health_alert',
-      `${name}: ${title}`, body,
-      { alertType: logType, severity, patientId: userId });
+    await sendAndSave(pool, cg, 'health_alert', `${name}: ${title}`, body, {
+      alertType: logType,
+      severity,
+      patientId: userId,
+    });
   }
 }
 
@@ -218,7 +234,7 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
  */
 async function createLog(pool, userId, payload) {
   const { updateMissionProgress } = require('../missions/missions.service');
-  
+
   const logType = payload.log_type;
   const occurredAt = payload.occurred_at;
   const source = payload.source || 'manual';
@@ -260,27 +276,29 @@ async function createLog(pool, userId, payload) {
         status: 'created',
         occurred_at: occurredDate.toISOString(),
       },
-      { event_id: `health_log.created:${logId}` },
+      { event_id: `health_log.created:${logId}` }
     );
 
     // Update mission progress based on log type
     try {
       const mission = MISSION_MAPPING[logType];
       if (mission) {
-        await updateMissionProgress(pool, userId, mission.key, 1, { goal: mission.goal, now: occurredDate });
-
+        await updateMissionProgress(pool, userId, mission.key, 1, {
+          goal: mission.goal,
+          now: occurredDate,
+        });
       }
 
       // Also update daily_checkin for any health log
       await updateMissionProgress(pool, userId, 'daily_checkin', 1, { goal: 1, now: occurredDate });
-    } catch (missionErr) {
-
-    }
+    } catch (missionErr) {}
 
     // Invalidate related caches when new health log is created
     await cacheDel(
-      `tree:summary:${userId}`, `tree:history:${userId}`,
-      `health:score:${userId}`, `missions:${userId}`
+      `tree:summary:${userId}`,
+      `tree:history:${userId}`,
+      `health:score:${userId}`,
+      `missions:${userId}`
     );
 
     // Check critical health values and alert care circle
@@ -321,11 +339,16 @@ async function getRecentLogs(pool, userId, options = {}) {
       [userId]
     );
     const row = tierRow.rows[0];
-    const isUserPremium = row?.subscription_tier === 'premium' && row?.subscription_expires_at && new Date(row.subscription_expires_at) > new Date();
+    const isUserPremium =
+      row?.subscription_tier === 'premium' &&
+      row?.subscription_expires_at &&
+      new Date(row.subscription_expires_at) > new Date();
     historyFilter = isUserPremium
       ? `AND occurred_at > NOW() - INTERVAL '365 days'`
       : `AND occurred_at > NOW() - INTERVAL '7 days'`;
-  } catch (_) { /* fall through — keep 7-day default */ }
+  } catch (_) {
+    /* fall through — keep 7-day default */
+  }
 
   try {
     if (!type) {
@@ -345,23 +368,23 @@ async function getRecentLogs(pool, userId, options = {}) {
         commonResult.rows.map(async (commonLog) => {
           const detailData = {};
           const detail = DETAIL_TABLES[commonLog.log_type];
-          
+
           if (detail) {
             const detailResult = await pool.query(
               `SELECT ${detail.columns.join(', ')} FROM ${detail.table} WHERE log_id = $1`,
               [commonLog.id]
             );
-            
+
             if (detailResult.rows.length > 0) {
-              detail.columns.forEach(col => {
+              detail.columns.forEach((col) => {
                 detailData[col] = detailResult.rows[0][col];
               });
             }
           }
-          
+
           return {
             ...commonLog,
-            detail: detailData
+            detail: detailData,
           };
         })
       );
@@ -394,7 +417,6 @@ async function getRecentLogs(pool, userId, options = {}) {
 
     return { ok: true, logs };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -428,30 +450,30 @@ async function getTodayLogs(pool, userId, options = {}) {
         commonResult.rows.map(async (commonLog) => {
           const detailData = {};
           const detail = DETAIL_TABLES[commonLog.log_type];
-          
+
           if (detail) {
             const detailResult = await pool.query(
               `SELECT ${detail.columns.join(', ')} FROM ${detail.table} WHERE log_id = $1`,
               [commonLog.id]
             );
-            
+
             if (detailResult.rows.length > 0) {
-              detail.columns.forEach(col => {
+              detail.columns.forEach((col) => {
                 detailData[col] = detailResult.rows[0][col];
               });
             }
           }
-          
+
           return {
             ...commonLog,
-            detail: detailData
+            detail: detailData,
           };
         })
       );
 
       // Thống kê theo loại
       const typeCount = {};
-      logs.forEach(log => {
+      logs.forEach((log) => {
         typeCount[log.log_type] = (typeCount[log.log_type] || 0) + 1;
       });
 
@@ -461,7 +483,7 @@ async function getTodayLogs(pool, userId, options = {}) {
     // Lấy logs hôm nay theo loại cụ thể
     const detail = DETAIL_TABLES[type];
     const detailColumns = detail.columns.map((col) => `d.${col}`).join(', ');
-    
+
     const result = await pool.query(
       `SELECT c.id, c.log_type, c.occurred_at, c.source, c.note, c.metadata, c.created_at, ${detailColumns}
        FROM logs_common c
@@ -482,7 +504,6 @@ async function getTodayLogs(pool, userId, options = {}) {
 
     return { ok: true, logs, count: logs.length };
   } catch (err) {
-
     return { ok: false, error: t('error.get_today_logs'), statusCode: 500 };
   }
 }
@@ -501,5 +522,5 @@ module.exports = {
   isValidLogType,
   VALID_LOG_TYPES,
   DETAIL_TABLES,
-  MISSION_MAPPING
+  MISSION_MAPPING,
 };

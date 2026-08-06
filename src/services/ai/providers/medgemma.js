@@ -34,8 +34,8 @@ async function callMedGemma({ prompt, system, maxTokens = 800, temperature = 0.3
   }
 
   const endpoint = process.env.MEDGEMMA_ENDPOINT;
-  const apiKey   = process.env.MEDGEMMA_API_KEY || '';
-  const model    = DEFAULT_MODEL;
+  const apiKey = process.env.MEDGEMMA_API_KEY || '';
+  const model = DEFAULT_MODEL;
 
   // Body shape mirrors the OpenAI Chat Completions schema since Vertex
   // AI accepts it and most self-hosted serving frameworks do too. Adapt
@@ -73,10 +73,8 @@ async function callMedGemma({ prompt, system, maxTokens = 800, temperature = 0.3
   }
 
   const data = await response.json();
-  const reply = data.choices?.[0]?.message?.content
-              ?? data.predictions?.[0]?.content
-              ?? data.text
-              ?? '';
+  const reply =
+    data.choices?.[0]?.message?.content ?? data.predictions?.[0]?.content ?? data.text ?? '';
 
   if (!reply || !reply.trim()) {
     throw new Error('MedGemma returned empty response');
@@ -118,15 +116,15 @@ async function callMedGemmaWithRetry(opts, { maxRetries = DEFAULT_MAX_RETRIES } 
  * Drop-in shape that matches getOpenAIChatReply() so chat.provider.service
  * can swap providers without other callsites changing.
  */
-async function getMedGemmaChatReply({ message, userId, context, history = [] }) {
+async function getMedGemmaChatReply({ message, userId: _userId, context, history = [] }) {
   if (!isConfigured()) return null;
 
   // Same window-trim convention as the OpenAI path: caller already
   // truncates `history` to HISTORY_LIMIT_*; we just stringify it.
-  const turns = history.map((t) => `${t.sender === 'user' ? 'User' : 'Assistant'}: ${t.message}`).join('\n');
-  const prompt = turns
-    ? `${turns}\nUser: ${String(message || '')}`
-    : String(message || '');
+  const turns = history
+    .map((t) => `${t.sender === 'user' ? 'User' : 'Assistant'}: ${t.message}`)
+    .join('\n');
+  const prompt = turns ? `${turns}\nUser: ${String(message || '')}` : String(message || '');
 
   return callMedGemmaWithRetry({ prompt, system: context });
 }

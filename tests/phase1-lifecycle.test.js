@@ -10,7 +10,12 @@ const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const lifecycle = require('../src/services/profile/lifecycle.service');
-const { runNightlyCycle, updateAllClusterFrequencies, optimizeScripts, processFallbackLogs } = require('../src/services/checkin/rnd-cycle.service');
+const {
+  runNightlyCycle,
+  updateAllClusterFrequencies,
+  optimizeScripts,
+  processFallbackLogs,
+} = require('../src/services/checkin/rnd-cycle.service');
 
 let totalPass = 0;
 let totalFail = 0;
@@ -58,7 +63,10 @@ async function testSchema() {
   assert(cols.length === 6, '1.1 Table has 6 columns');
   assert(cols[0].column_name === 'user_id' && cols[0].is_nullable === 'NO', '1.2 user_id NOT NULL');
   assert(cols[1].column_name === 'segment' && cols[1].is_nullable === 'NO', '1.3 segment NOT NULL');
-  assert(cols[4].column_name === 'inactive_days' && cols[4].is_nullable === 'NO', '1.4 inactive_days NOT NULL');
+  assert(
+    cols[4].column_name === 'inactive_days' && cols[4].is_nullable === 'NO',
+    '1.4 inactive_days NOT NULL'
+  );
 
   // 1.5 CHECK constraint: valid segments only
   try {
@@ -109,7 +117,8 @@ async function testSchema() {
   `);
   for (const row of verify) {
     if (row.user_id === 4) assert(row.segment === 'active', `1.10a User 4 seed = active`);
-    if (row.user_id === 2) assert(row.segment === 'inactive', `1.10b User 2 seed = inactive (no checkins)`);
+    if (row.user_id === 2)
+      assert(row.segment === 'inactive', `1.10b User 2 seed = inactive (no checkins)`);
   }
 }
 
@@ -120,10 +129,15 @@ async function testCalculateSegment() {
   console.log('\n══════ SUITE 2: calculateSegment JS vs SQL ══════');
 
   const cases = [
-    [0, 'active'], [1, 'active'],
-    [2, 'semi_active'], [3, 'semi_active'],
-    [4, 'inactive'], [7, 'inactive'],
-    [8, 'churned'], [30, 'churned'], [999, 'churned'],
+    [0, 'active'],
+    [1, 'active'],
+    [2, 'semi_active'],
+    [3, 'semi_active'],
+    [4, 'inactive'],
+    [7, 'inactive'],
+    [8, 'churned'],
+    [30, 'churned'],
+    [999, 'churned'],
   ];
 
   for (const [days, expected] of cases) {
@@ -139,11 +153,16 @@ async function testCalculateSegment() {
     );
     await lifecycle.updateAllSegments(pool);
     const { rows } = await pool.query('SELECT segment FROM user_lifecycle WHERE user_id = 4');
-    assert(rows[0].segment === expected, `2.SQL days=${days} → ${rows[0].segment} (expected ${expected})`);
+    assert(
+      rows[0].segment === expected,
+      `2.SQL days=${days} → ${rows[0].segment} (expected ${expected})`
+    );
   }
 
   // Restore
-  await pool.query(`UPDATE user_lifecycle SET last_checkin_at = '2026-04-09'::timestamptz, inactive_days = 0, segment = 'active' WHERE user_id = 4`);
+  await pool.query(
+    `UPDATE user_lifecycle SET last_checkin_at = '2026-04-09'::timestamptz, inactive_days = 0, segment = 'active' WHERE user_id = 4`
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -184,7 +203,10 @@ async function testEnsureLifecycle() {
   await pool.query('DELETE FROM user_lifecycle WHERE user_id = 1');
   const lc4 = await lifecycle.getLifecycle(pool, 1);
   assert(lc4.user_id === 1, '3.8 getLifecycle auto-creates record');
-  assert(['active', 'semi_active', 'inactive', 'churned'].includes(lc4.segment), '3.9 Segment is valid');
+  assert(
+    ['active', 'semi_active', 'inactive', 'churned'].includes(lc4.segment),
+    '3.9 Segment is valid'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -221,8 +243,12 @@ async function testMarkActive() {
   assert(result.inactive_days === 0, '4.5 UPSERT inactive_days=0');
 
   // Restore
-  await pool.query(`UPDATE user_lifecycle SET segment = 'churned', inactive_days = 10, last_checkin_at = '2026-03-30'::timestamptz WHERE user_id IN (1, 3)`);
-  await pool.query(`UPDATE user_lifecycle SET segment = 'inactive', inactive_days = 999, last_checkin_at = NULL WHERE user_id = 2`);
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'churned', inactive_days = 10, last_checkin_at = '2026-03-30'::timestamptz WHERE user_id IN (1, 3)`
+  );
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'inactive', inactive_days = 999, last_checkin_at = NULL WHERE user_id = 2`
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -236,10 +262,15 @@ async function testUpdateAllSegments() {
   assert(typeof stats.active === 'number', '5.1 stats.active is number');
   assert(typeof stats.total === 'number', '5.2 stats.total is number');
   assert(stats.total >= 4, '5.3 total >= 4 users');
-  assert(stats.active + stats.semi_active + stats.inactive + stats.churned === stats.total, '5.4 Stats sum = total');
+  assert(
+    stats.active + stats.semi_active + stats.inactive + stats.churned === stats.total,
+    '5.4 Stats sum = total'
+  );
 
   // 5.5 Segment transition simulation: active → semi_active → inactive → churned
-  await pool.query(`UPDATE user_lifecycle SET last_checkin_at = NOW(), segment = 'active', inactive_days = 0 WHERE user_id = 4`);
+  await pool.query(
+    `UPDATE user_lifecycle SET last_checkin_at = NOW(), segment = 'active', inactive_days = 0 WHERE user_id = 4`
+  );
 
   const transitions = [
     ['0 days', 'active'],
@@ -249,14 +280,21 @@ async function testUpdateAllSegments() {
   ];
 
   for (const [offset, expected] of transitions) {
-    await pool.query(`UPDATE user_lifecycle SET last_checkin_at = NOW() - '${offset}'::interval WHERE user_id = 4`);
+    await pool.query(
+      `UPDATE user_lifecycle SET last_checkin_at = NOW() - '${offset}'::interval WHERE user_id = 4`
+    );
     await lifecycle.updateAllSegments(pool);
     const { rows } = await pool.query('SELECT segment FROM user_lifecycle WHERE user_id = 4');
-    assert(rows[0].segment === expected, `5.5 After ${offset}: ${rows[0].segment} (expected ${expected})`);
+    assert(
+      rows[0].segment === expected,
+      `5.5 After ${offset}: ${rows[0].segment} (expected ${expected})`
+    );
   }
 
   // 5.6 User with NULL last_checkin_at stays inactive
-  await pool.query(`UPDATE user_lifecycle SET last_checkin_at = NULL, segment = 'inactive' WHERE user_id = 2`);
+  await pool.query(
+    `UPDATE user_lifecycle SET last_checkin_at = NULL, segment = 'inactive' WHERE user_id = 2`
+  );
   await lifecycle.updateAllSegments(pool);
   const { rows: u2 } = await pool.query('SELECT segment FROM user_lifecycle WHERE user_id = 2');
   assert(u2[0].segment === 'inactive', '5.6 NULL last_checkin_at → stays inactive');
@@ -268,7 +306,9 @@ async function testUpdateAllSegments() {
   assert(check[0].segment === 'inactive', '5.7 Multiple calls idempotent');
 
   // Restore
-  await pool.query(`UPDATE user_lifecycle SET last_checkin_at = '2026-04-09'::timestamptz, inactive_days = 0, segment = 'active' WHERE user_id = 4`);
+  await pool.query(
+    `UPDATE user_lifecycle SET last_checkin_at = '2026-04-09'::timestamptz, inactive_days = 0, segment = 'active' WHERE user_id = 4`
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -291,7 +331,9 @@ async function testGetActiveUserIds() {
   assert(!ids.includes(3), '6.5 User 3 (churned) excluded');
 
   // 6.6 If a semi_active user exists, it should be included
-  await pool.query(`UPDATE user_lifecycle SET segment = 'semi_active', inactive_days = 2 WHERE user_id = 1`);
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'semi_active', inactive_days = 2 WHERE user_id = 1`
+  );
   const ids2 = await lifecycle.getActiveUserIds(pool);
   assert(ids2.includes(1), '6.6 Semi_active user included');
   await lifecycle.markActive(pool, 4); // re-ensure active after segment changes
@@ -304,9 +346,15 @@ async function testGetActiveUserIds() {
   assert(ids3.length === 0, '6.8 All inactive → empty array');
 
   // Restore
-  await pool.query(`UPDATE user_lifecycle SET segment = 'active', inactive_days = 0, last_checkin_at = '2026-04-09'::timestamptz WHERE user_id = 4`);
-  await pool.query(`UPDATE user_lifecycle SET segment = 'churned', inactive_days = 10, last_checkin_at = '2026-03-30'::timestamptz WHERE user_id IN (1, 3)`);
-  await pool.query(`UPDATE user_lifecycle SET segment = 'inactive', inactive_days = 999, last_checkin_at = NULL WHERE user_id = 2`);
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'active', inactive_days = 0, last_checkin_at = '2026-04-09'::timestamptz WHERE user_id = 4`
+  );
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'churned', inactive_days = 10, last_checkin_at = '2026-03-30'::timestamptz WHERE user_id IN (1, 3)`
+  );
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'inactive', inactive_days = 999, last_checkin_at = NULL WHERE user_id = 2`
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -317,38 +365,63 @@ async function testShouldGenerateScript() {
 
   // 7.1 Active → always true
   await pool.query(`UPDATE user_lifecycle SET segment = 'active' WHERE user_id = 4`);
-  assert(await lifecycle.shouldGenerateScript(pool, 4) === true, '7.1 active → true');
+  assert((await lifecycle.shouldGenerateScript(pool, 4)) === true, '7.1 active → true');
 
   // 7.2 Inactive → false
-  assert(await lifecycle.shouldGenerateScript(pool, 1) === false, '7.2 churned → false');
+  assert((await lifecycle.shouldGenerateScript(pool, 1)) === false, '7.2 churned → false');
 
   // 7.3 Churned → false
-  assert(await lifecycle.shouldGenerateScript(pool, 3) === false, '7.3 churned → false');
+  assert((await lifecycle.shouldGenerateScript(pool, 3)) === false, '7.3 churned → false');
 
   // 7.4 Semi_active + recent script → false
-  await pool.query(`UPDATE user_lifecycle SET segment = 'semi_active', inactive_days = 2 WHERE user_id = 4`);
-  await pool.query(`UPDATE triage_scripts SET created_at = NOW() WHERE user_id = 4 AND is_active = TRUE`);
-  assert(await lifecycle.shouldGenerateScript(pool, 4) === false, '7.4 semi_active + recent script → false');
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'semi_active', inactive_days = 2 WHERE user_id = 4`
+  );
+  await pool.query(
+    `UPDATE triage_scripts SET created_at = NOW() WHERE user_id = 4 AND is_active = TRUE`
+  );
+  assert(
+    (await lifecycle.shouldGenerateScript(pool, 4)) === false,
+    '7.4 semi_active + recent script → false'
+  );
 
   // 7.5 Semi_active + ALL scripts old (>7d) → true
-  await pool.query(`UPDATE triage_scripts SET created_at = NOW() - INTERVAL '10 days' WHERE user_id = 4 AND is_active = TRUE`);
-  assert(await lifecycle.shouldGenerateScript(pool, 4) === true, '7.5 semi_active + old scripts → true');
+  await pool.query(
+    `UPDATE triage_scripts SET created_at = NOW() - INTERVAL '10 days' WHERE user_id = 4 AND is_active = TRUE`
+  );
+  assert(
+    (await lifecycle.shouldGenerateScript(pool, 4)) === true,
+    '7.5 semi_active + old scripts → true'
+  );
 
   // 7.6 Semi_active + no scripts at all → true
   // Use user 1 who has no scripts
-  await pool.query(`UPDATE user_lifecycle SET segment = 'semi_active', inactive_days = 2 WHERE user_id = 1`);
-  const { rows: u1scripts } = await pool.query(`SELECT COUNT(*) as cnt FROM triage_scripts WHERE user_id = 1 AND is_active = TRUE`);
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'semi_active', inactive_days = 2 WHERE user_id = 1`
+  );
+  const { rows: u1scripts } = await pool.query(
+    `SELECT COUNT(*) as cnt FROM triage_scripts WHERE user_id = 1 AND is_active = TRUE`
+  );
   if (parseInt(u1scripts[0].cnt) === 0) {
-    assert(await lifecycle.shouldGenerateScript(pool, 1) === true, '7.6 semi_active + no scripts → true');
+    assert(
+      (await lifecycle.shouldGenerateScript(pool, 1)) === true,
+      '7.6 semi_active + no scripts → true'
+    );
   } else {
     console.log('  SKIP  7.6 (user 1 has scripts)');
     totalPass++;
   }
 
   // Restore
-  await pool.query(`UPDATE triage_scripts SET created_at = NOW() WHERE user_id = 4 AND is_active = TRUE`);
-  await pool.query(`UPDATE user_lifecycle SET segment = 'active', inactive_days = 0 WHERE user_id = 4`);
-  await pool.query(`UPDATE user_lifecycle SET segment = 'churned', inactive_days = 10 WHERE user_id = 1`);
+  await pool.query(
+    `UPDATE triage_scripts SET created_at = NOW() WHERE user_id = 4 AND is_active = TRUE`
+  );
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'active', inactive_days = 0 WHERE user_id = 4`
+  );
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'churned', inactive_days = 10 WHERE user_id = 1`
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -399,7 +472,10 @@ async function testRndCycleIntegration() {
 
   // 8.10 optimizeScripts respects filter
   const scriptStats = await optimizeScripts(pool, [4]);
-  assert(typeof scriptStats.regenerated === 'number', '8.10 optimizeScripts returns regenerated count');
+  assert(
+    typeof scriptStats.regenerated === 'number',
+    '8.10 optimizeScripts returns regenerated count'
+  );
 
   // Restore
   await pool.query(`UPDATE problem_clusters SET updated_at = NOW() WHERE user_id = 3`);
@@ -414,7 +490,9 @@ async function testRndCycleEmptyActive() {
   // Make ALL users truly inactive by setting last_checkin_at far in the past
   // Note: R&D Step 0 calls updateAllSegments which recalculates from last_checkin_at
   // So we must set last_checkin_at to old date, not just override segment
-  await pool.query(`UPDATE user_lifecycle SET last_checkin_at = NOW() - INTERVAL '30 days' WHERE TRUE`);
+  await pool.query(
+    `UPDATE user_lifecycle SET last_checkin_at = NOW() - INTERVAL '30 days' WHERE TRUE`
+  );
   await pool.query(`UPDATE user_lifecycle SET last_checkin_at = NULL WHERE user_id = 2`);
 
   let stats;
@@ -433,9 +511,15 @@ async function testRndCycleEmptyActive() {
   assert(stats.scriptsRegenerated === 0, '9.5 0 scripts regenerated');
 
   // Restore
-  await pool.query(`UPDATE user_lifecycle SET segment = 'active', inactive_days = 0, last_checkin_at = '2026-04-09'::timestamptz WHERE user_id = 4`);
-  await pool.query(`UPDATE user_lifecycle SET segment = 'churned', inactive_days = 10, last_checkin_at = '2026-03-30'::timestamptz WHERE user_id IN (1, 3)`);
-  await pool.query(`UPDATE user_lifecycle SET segment = 'inactive', inactive_days = 999, last_checkin_at = NULL WHERE user_id = 2`);
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'active', inactive_days = 0, last_checkin_at = '2026-04-09'::timestamptz WHERE user_id = 4`
+  );
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'churned', inactive_days = 10, last_checkin_at = '2026-03-30'::timestamptz WHERE user_id IN (1, 3)`
+  );
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'inactive', inactive_days = 999, last_checkin_at = NULL WHERE user_id = 2`
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -448,27 +532,39 @@ async function testApiEndpoints() {
 
   function get(path) {
     return new Promise((resolve, reject) => {
-      http.get('http://localhost:3000' + path, res => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-          catch { resolve({ status: res.statusCode, body: data }); }
-        });
-      }).on('error', reject);
+      http
+        .get('http://localhost:3000' + path, (res) => {
+          let data = '';
+          res.on('data', (c) => (data += c));
+          res.on('end', () => {
+            try {
+              resolve({ status: res.statusCode, body: JSON.parse(data) });
+            } catch {
+              resolve({ status: res.statusCode, body: data });
+            }
+          });
+        })
+        .on('error', reject);
     });
   }
 
   function post(path) {
     return new Promise((resolve, reject) => {
-      const req = http.request('http://localhost:3000' + path, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, res => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-          catch { resolve({ status: res.statusCode, body: data }); }
-        });
-      });
+      const req = http.request(
+        'http://localhost:3000' + path,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+        (res) => {
+          let data = '';
+          res.on('data', (c) => (data += c));
+          res.on('end', () => {
+            try {
+              resolve({ status: res.statusCode, body: JSON.parse(data) });
+            } catch {
+              resolve({ status: res.statusCode, body: data });
+            }
+          });
+        }
+      );
       req.on('error', reject);
       req.end();
     });
@@ -507,11 +603,17 @@ async function testApiEndpoints() {
   // 10.10 GET /lifecycle/check-script/:userId (active) — ensure active first
   await lifecycle.markActive(pool, 4);
   r = await get('/api/health/lifecycle/check-script/4');
-  assert(r.status === 200 && r.body.shouldGenerateScript === true, '10.10 check-script active → true');
+  assert(
+    r.status === 200 && r.body.shouldGenerateScript === true,
+    '10.10 check-script active → true'
+  );
 
   // 10.11 GET /lifecycle/check-script/:userId (churned)
   r = await get('/api/health/lifecycle/check-script/3');
-  assert(r.status === 200 && r.body.shouldGenerateScript === false, '10.11 check-script churned → false');
+  assert(
+    r.status === 200 && r.body.shouldGenerateScript === false,
+    '10.11 check-script churned → false'
+  );
 
   // 10.12 check-script not found
   r = await get('/api/health/lifecycle/check-script/99999');
@@ -529,11 +631,17 @@ async function testApiEndpoints() {
     get('/api/health/lifecycle/4'),
     get('/api/health/lifecycle/check-script/4'),
   ]);
-  assert(results.every(r => r.status === 200), '10.14 5 concurrent requests all succeed');
+  assert(
+    results.every((r) => r.status === 200),
+    '10.14 5 concurrent requests all succeed'
+  );
 
   // 10.15 Route ordering: /lifecycle/check-script/:id does NOT conflict with /lifecycle/:id
   r = await get('/api/health/lifecycle/check-script/4');
-  assert(r.body.shouldGenerateScript !== undefined, '10.15 Route /check-script/:id correctly matched (not /:userId)');
+  assert(
+    r.body.shouldGenerateScript !== undefined,
+    '10.15 Route /check-script/:id correctly matched (not /:userId)'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -544,16 +652,26 @@ async function testCheckinIntegration() {
 
   // 11.1 Verify markActive is imported in checkin controller
   const controllerSrc = require('fs').readFileSync(
-    require('path').join(__dirname, '..', 'src', 'controllers', 'checkin.controller.js'), 'utf8'
+    require('path').join(__dirname, '..', 'src', 'controllers', 'checkin.controller.js'),
+    'utf8'
   );
-  assert(controllerSrc.includes("require('../services/profile/lifecycle.service')"), '11.1 lifecycle imported in controller');
-  assert(controllerSrc.includes('markActive(pool, req.user.id)'), '11.2 markActive called in startCheckinHandler');
+  assert(
+    controllerSrc.includes("require('../services/profile/lifecycle.service')"),
+    '11.1 lifecycle imported in controller'
+  );
+  assert(
+    controllerSrc.includes('markActive(pool, req.user.id)'),
+    '11.2 markActive called in startCheckinHandler'
+  );
   assert(controllerSrc.includes('.catch('), '11.3 markActive has error handling (.catch)');
 
   // 11.4 markActive is non-blocking (fire-and-forget with .catch)
   // Verify the pattern: markActive(pool, req.user.id).catch(...)
   // This ensures check-in response is not delayed if lifecycle update fails
-  assert(controllerSrc.includes('markActive(pool, req.user.id).catch'), '11.4 markActive is fire-and-forget');
+  assert(
+    controllerSrc.includes('markActive(pool, req.user.id).catch'),
+    '11.4 markActive is fire-and-forget'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -563,14 +681,21 @@ async function testServerCron() {
   console.log('\n══════ SUITE 12: scheduler Cron Config ══════');
 
   const schedulerSrc = require('fs').readFileSync(
-    require('path').join(__dirname, '..', 'src', 'scheduler', 'index.js'), 'utf8'
+    require('path').join(__dirname, '..', 'src', 'scheduler', 'index.js'),
+    'utf8'
   );
 
   // 12.1 Lifecycle cron imported
-  assert(schedulerSrc.includes("require('../services/profile/lifecycle.service')"), '12.1 lifecycle imported in scheduler');
+  assert(
+    schedulerSrc.includes("require('../services/profile/lifecycle.service')"),
+    '12.1 lifecycle imported in scheduler'
+  );
 
   // 12.2 Lifecycle cron runs at 1:00 AM (before R&D at 2:00 AM)
-  assert(schedulerSrc.includes("safeCron('0 1 * * *', 'lifecycle_update'"), '12.2 Lifecycle cron at 1:00 AM VN');
+  assert(
+    schedulerSrc.includes("safeCron('0 1 * * *', 'lifecycle_update'"),
+    '12.2 Lifecycle cron at 1:00 AM VN'
+  );
 
   // 12.3 R&D still runs at 2:00 AM
   assert(schedulerSrc.includes("safeCron('0 2 * * *', 'rnd_cycle'"), '12.3 R&D cron at 2:00 AM VN');
@@ -582,11 +707,15 @@ async function testServerCron() {
 
   // 12.5 R&D cycle also updates segments internally (Step 0)
   const rndSrc = require('fs').readFileSync(
-    require('path').join(__dirname, '..', 'src', 'services', 'checkin', 'rnd-cycle.service.js'), 'utf8'
+    require('path').join(__dirname, '..', 'src', 'services', 'checkin', 'rnd-cycle.service.js'),
+    'utf8'
   );
   assert(rndSrc.includes('updateAllSegments(pool)'), '12.5 R&D Step 0 calls updateAllSegments');
   // Phase 6: refactored to use getUsersBySegment for priority compute (active + semi_active separately)
-  assert(rndSrc.includes('getUsersBySegment'), '12.6 R&D gets users by segment after segment update');
+  assert(
+    rndSrc.includes('getUsersBySegment'),
+    '12.6 R&D gets users by segment after segment update'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -598,11 +727,17 @@ async function testGetUsersBySegment() {
   await lifecycle.markActive(pool, 4); // ensure active
   const active = await lifecycle.getUsersBySegment(pool, 'active');
   assert(Array.isArray(active), '13.1 Returns array');
-  assert(active.some(u => u.user_id === 4), '13.2 User 4 in active list');
+  assert(
+    active.some((u) => u.user_id === 4),
+    '13.2 User 4 in active list'
+  );
 
   const churned = await lifecycle.getUsersBySegment(pool, 'churned');
-  assert(churned.some(u => u.user_id === 1) || churned.some(u => u.user_id === 3), '13.3 Churned users found');
-  assert(!churned.some(u => u.user_id === 4), '13.4 User 4 NOT in churned');
+  assert(
+    churned.some((u) => u.user_id === 1) || churned.some((u) => u.user_id === 3),
+    '13.3 Churned users found'
+  );
+  assert(!churned.some((u) => u.user_id === 4), '13.4 User 4 NOT in churned');
 
   const empty = await lifecycle.getUsersBySegment(pool, 'semi_active');
   assert(Array.isArray(empty), '13.5 Returns empty array for segment with no users');
@@ -621,7 +756,9 @@ async function testDataConsistency() {
   assert(r1[0].segment === 'active', '14.1 markActive then updateAll → stays active');
 
   // 14.2 After time passes, updateAll changes segment correctly
-  await pool.query(`UPDATE user_lifecycle SET last_checkin_at = NOW() - INTERVAL '4 days' WHERE user_id = 3`);
+  await pool.query(
+    `UPDATE user_lifecycle SET last_checkin_at = NOW() - INTERVAL '4 days' WHERE user_id = 3`
+  );
   await lifecycle.updateAllSegments(pool);
   const { rows: r2 } = await pool.query('SELECT segment FROM user_lifecycle WHERE user_id = 3');
   assert(r2[0].segment === 'inactive', '14.2 4 days later → inactive');
@@ -638,19 +775,30 @@ async function testDataConsistency() {
   assert(ids2.includes(3), '14.4 markActive → immediately in active IDs');
 
   // 14.5 All lifecycle records valid after operations
-  const { rows: all } = await pool.query('SELECT user_id, segment, inactive_days FROM user_lifecycle');
+  const { rows: all } = await pool.query(
+    'SELECT user_id, segment, inactive_days FROM user_lifecycle'
+  );
   for (const row of all) {
     assert(
       ['active', 'semi_active', 'inactive', 'churned'].includes(row.segment),
       `14.5 User ${row.user_id} has valid segment: ${row.segment}`
     );
-    assert(row.inactive_days >= 0, `14.6 User ${row.user_id} inactive_days >= 0: ${row.inactive_days}`);
+    assert(
+      row.inactive_days >= 0,
+      `14.6 User ${row.user_id} inactive_days >= 0: ${row.inactive_days}`
+    );
   }
 
   // Restore
-  await pool.query(`UPDATE user_lifecycle SET segment = 'churned', inactive_days = 10, last_checkin_at = '2026-03-30'::timestamptz WHERE user_id IN (1, 3)`);
-  await pool.query(`UPDATE user_lifecycle SET segment = 'inactive', inactive_days = 999, last_checkin_at = NULL WHERE user_id = 2`);
-  await pool.query(`UPDATE user_lifecycle SET segment = 'active', inactive_days = 0, last_checkin_at = '2026-04-09'::timestamptz WHERE user_id = 4`);
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'churned', inactive_days = 10, last_checkin_at = '2026-03-30'::timestamptz WHERE user_id IN (1, 3)`
+  );
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'inactive', inactive_days = 999, last_checkin_at = NULL WHERE user_id = 2`
+  );
+  await pool.query(
+    `UPDATE user_lifecycle SET segment = 'active', inactive_days = 0, last_checkin_at = '2026-04-09'::timestamptz WHERE user_id = 4`
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -689,7 +837,7 @@ async function run() {
   process.exit(totalFail > 0 ? 1 : 0);
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('TEST RUNNER CRASHED:', err);
   pool.end();
   process.exit(1);

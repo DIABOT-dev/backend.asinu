@@ -18,7 +18,9 @@ function clamp(value, min, max) {
 
 function normalizePhoneNumber(phone) {
   if (!phone) return null;
-  let p = String(phone).trim().replace(/[\s\-\(\)]/g, '');
+  let p = String(phone)
+    .trim()
+    .replace(/[\s()-]/g, '');
   if (p.startsWith('+84')) p = '0' + p.slice(3);
   if (p.startsWith('84') && p.length === 11) p = '0' + p.slice(2);
   return p;

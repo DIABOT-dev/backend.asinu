@@ -9,10 +9,10 @@
  */
 
 const COOLDOWN_MINUTES = {
-  critical: 1,      // 1 min cooldown — prevents panic multi-tap but still urgent
-  high: 30,          // 30 min cooldown
-  medium: 60,        // 1h cooldown
-  low: 120,          // 2h cooldown
+  critical: 1, // 1 min cooldown — prevents panic multi-tap but still urgent
+  high: 30, // 30 min cooldown
+  medium: 60, // 1h cooldown
+  low: 120, // 2h cooldown
 };
 
 const TYPE_PRIORITY = {
@@ -59,7 +59,9 @@ async function dispatch(pool, { userId, type, title, body, data = {}, priority =
         [userId, type, cooldownMinutes]
       );
       if (recent.length > 0) {
-        console.log(`[Orchestrator] Skipped ${type} for user ${userId} (cooldown ${cooldownMinutes}min)`);
+        console.log(
+          `[Orchestrator] Skipped ${type} for user ${userId} (cooldown ${cooldownMinutes}min)`
+        );
         return null;
       }
     }
@@ -77,7 +79,9 @@ async function dispatch(pool, { userId, type, title, body, data = {}, priority =
     return null;
   } finally {
     // Advisory lock released when client returns to pool
-    await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [`notif:${userId}:${type}`]).catch(() => {});
+    await client
+      .query(`SELECT pg_advisory_unlock(hashtext($1))`, [`notif:${userId}:${type}`])
+      .catch(() => {});
     client.release();
   }
 }

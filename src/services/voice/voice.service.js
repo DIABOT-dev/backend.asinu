@@ -7,7 +7,7 @@ const { t } = require('../../i18n');
 const { cacheGet, cacheSet } = require('../../lib/redis');
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-4o';
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
 
 // ─── transcribeAudio ────────────────────────────────────────────
 
@@ -95,10 +95,9 @@ async function voiceChat(pool, userId, audioBuffer, mimeType, filename) {
   // 2. Get user profile for context (cached)
   let userName = await cacheGet(`user:name:${userId}`);
   if (!userName) {
-    const { rows } = await pool.query(
-      `SELECT full_name, display_name FROM users WHERE id = $1`,
-      [userId]
-    );
+    const { rows } = await pool.query(`SELECT full_name, display_name FROM users WHERE id = $1`, [
+      userId,
+    ]);
     userName = rows[0]?.display_name || rows[0]?.full_name || 'bạn';
     await cacheSet(`user:name:${userId}`, userName, 7200);
   }
@@ -130,7 +129,7 @@ Không cung cấp chẩn đoán y tế. Khuyến khích gặp bác sĩ khi cần
   });
 
   if (!chatResponse.ok) {
-    const errText = await chatResponse.text();
+    await chatResponse.text();
 
     throw new Error(`Chat API error: ${chatResponse.status}`);
   }
@@ -275,14 +274,13 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
       ok: false,
       transcript: '',
       parsed: null,
-      error: t('voice.no_content')
+      error: t('voice.no_content'),
     };
   }
 
   // Step 2: GPT-4o parse transcript → structured JSON
-  const systemPrompt = logType === 'glucose' ? GLUCOSE_SYSTEM
-    : logType === 'insulin' ? INSULIN_SYSTEM
-    : BP_SYSTEM;
+  const systemPrompt =
+    logType === 'glucose' ? GLUCOSE_SYSTEM : logType === 'insulin' ? INSULIN_SYSTEM : BP_SYSTEM;
 
   const chatRes = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -294,11 +292,11 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
       model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: transcript }
+        { role: 'user', content: transcript },
       ],
       temperature: 0.1,
       max_completion_tokens: 300,
-      response_format: { type: 'json_object' }
+      response_format: { type: 'json_object' },
     }),
     signal: AbortSignal.timeout(20000),
   });
@@ -317,7 +315,7 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
       ok: false,
       transcript,
       parsed: null,
-      error: t('voice.ai_parse_error')
+      error: t('voice.ai_parse_error'),
     };
   }
 
@@ -326,7 +324,7 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
       ok: false,
       transcript,
       parsed: null,
-      error: parsed.error || t('voice.invalid_data')
+      error: parsed.error || t('voice.invalid_data'),
     };
   }
 
@@ -334,7 +332,7 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
     ok: true,
     transcript,
     parsed,
-    error: null
+    error: null,
   };
 }
 

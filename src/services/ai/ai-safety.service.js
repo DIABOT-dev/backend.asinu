@@ -13,21 +13,28 @@
 //   2. Trấn an sai ("không cần đi bác sĩ") — nguy hiểm cho user health app
 const BANNED_PHRASES = [
   // Diagnosis (LLM không tự khẳng định bệnh)
-  'bạn bị', 'bạn mắc', 'chẩn đoán', 'xác định bệnh',
-  'you have', 'diagnosed with', 'you are suffering from',
+  'bạn bị',
+  'bạn mắc',
+  'chẩn đoán',
+  'xác định bệnh',
+  'you have',
+  'diagnosed with',
+  'you are suffering from',
   // Dangerous reassurance
-  'không cần đi bác sĩ', 'không cần lo', 'chắc chắn không sao',
-  'no need to see a doctor', 'definitely fine', 'nothing to worry about',
+  'không cần đi bác sĩ',
+  'không cần lo',
+  'chắc chắn không sao',
+  'no need to see a doctor',
+  'definitely fine',
+  'nothing to worry about',
 ];
 
 // Phrases that MUST be present when severity is high
-const REQUIRED_HIGH_SEVERITY = [
-  'bác sĩ', 'doctor', 'y tế', 'medical',
-];
+const REQUIRED_HIGH_SEVERITY = ['bác sĩ', 'doctor', 'y tế', 'medical'];
 
 function filterAiOutput(text, severity = 'low') {
   let filtered = text;
-  let warnings = [];
+  const warnings = [];
 
   // Check banned phrases
   for (const phrase of BANNED_PHRASES) {
@@ -40,7 +47,7 @@ function filterAiOutput(text, severity = 'low') {
 
   // For high severity, ensure doctor recommendation is present
   if (severity === 'high') {
-    const hasDocRef = REQUIRED_HIGH_SEVERITY.some(p => filtered.toLowerCase().includes(p));
+    const hasDocRef = REQUIRED_HIGH_SEVERITY.some((p) => filtered.toLowerCase().includes(p));
     if (!hasDocRef) {
       filtered += '\n\nNếu tình trạng không cải thiện, nên liên hệ bác sĩ để được tư vấn.';
       warnings.push('Added doctor recommendation for high severity');

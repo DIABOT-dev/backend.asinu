@@ -20,28 +20,55 @@ let totalFail = 0;
 const failures = [];
 
 function assert(condition, name) {
-  if (condition) { totalPass++; console.log(`  PASS ✓ ${name}`); }
-  else { totalFail++; failures.push(name); console.log(`  FAIL ✗ ${name}`); }
+  if (condition) {
+    totalPass++;
+    console.log(`  PASS ✓ ${name}`);
+  } else {
+    totalFail++;
+    failures.push(name);
+    console.log(`  FAIL ✗ ${name}`);
+  }
 }
 
 function get(path) {
   return new Promise((resolve, reject) => {
-    http.get('http://localhost:3000' + path, res => {
-      let d = ''; res.on('data', c => d += c);
-      res.on('end', () => { try { resolve({ s: res.statusCode, b: JSON.parse(d) }); } catch { resolve({ s: res.statusCode, b: d }); } });
-    }).on('error', reject);
+    http
+      .get('http://localhost:3000' + path, (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => {
+          try {
+            resolve({ s: res.statusCode, b: JSON.parse(d) });
+          } catch {
+            resolve({ s: res.statusCode, b: d });
+          }
+        });
+      })
+      .on('error', reject);
   });
 }
 
 function post(path, body) {
   return new Promise((resolve, reject) => {
     const data = JSON.stringify(body || {});
-    const req = http.request('http://localhost:3000' + path, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
-    }, res => {
-      let d = ''; res.on('data', c => d += c);
-      res.on('end', () => { try { resolve({ s: res.statusCode, b: JSON.parse(d) }); } catch { resolve({ s: res.statusCode, b: d }); } });
-    });
+    const req = http.request(
+      'http://localhost:3000' + path,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+      },
+      (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => {
+          try {
+            resolve({ s: res.statusCode, b: JSON.parse(d) });
+          } catch {
+            resolve({ s: res.statusCode, b: d });
+          }
+        });
+      }
+    );
     req.on('error', reject);
     req.write(data);
     req.end();
@@ -51,16 +78,22 @@ function post(path, body) {
 function getSSE(path) {
   return new Promise((resolve, reject) => {
     const events = [];
-    const req = http.get('http://localhost:3000' + path, res => {
+    const req = http.get('http://localhost:3000' + path, (res) => {
       let buf = '';
-      res.on('data', c => { buf += c; });
+      res.on('data', (c) => {
+        buf += c;
+      });
       res.on('end', () => {
         const lines = buf.split('\n');
         let currentEvent = {};
         for (const line of lines) {
           if (line.startsWith('event: ')) currentEvent.event = line.substring(7);
           else if (line.startsWith('data: ')) {
-            try { currentEvent.data = JSON.parse(line.substring(6)); } catch { currentEvent.data = line.substring(6); }
+            try {
+              currentEvent.data = JSON.parse(line.substring(6));
+            } catch {
+              currentEvent.data = line.substring(6);
+            }
             events.push(currentEvent);
             currentEvent = {};
           }
@@ -69,7 +102,10 @@ function getSSE(path) {
       });
     });
     req.on('error', reject);
-    setTimeout(() => { req.destroy(); resolve(events); }, 5000);
+    setTimeout(() => {
+      req.destroy();
+      resolve(events);
+    }, 5000);
   });
 }
 
@@ -125,10 +161,17 @@ async function testModelRouter() {
   assert(r10.complexity.redFlagCount === 2, '1.14 2 red flags detected');
 
   // 1.15 Complex conditions → high complexity score
-  const r11 = router.routeModel({ userConditions: ['tiểu đường', 'bệnh tim', 'cao huyết áp'], severity: 'medium', answerCount: 4 });
+  const r11 = router.routeModel({
+    userConditions: ['tiểu đường', 'bệnh tim', 'cao huyết áp'],
+    severity: 'medium',
+    answerCount: 4,
+  });
   // 3 conditions(+3) + medium(+1) + 4 answers(+1) = 5, under threshold 7 → Small is correct
   // Need more to push over 7: add high severity
-  const r11b = router.routeModel({ userConditions: ['tiểu đường', 'bệnh tim', 'cao huyết áp'], severity: 'high' });
+  const r11b = router.routeModel({
+    userConditions: ['tiểu đường', 'bệnh tim', 'cao huyết áp'],
+    severity: 'high',
+  });
   assert(r11b.model === router.BIG_MODEL, '1.15 Multiple conditions + high severity → Big');
 
   // 1.16 routeForTriage
@@ -179,7 +222,10 @@ async function testContextCache() {
   const r1 = await cache.getOrCallAI(
     [{ role: 'user', content: 'test_unique_' + Date.now() }],
     'test-model',
-    async () => { called = true; return { answer: 42 }; },
+    async () => {
+      called = true;
+      return { answer: 42 };
+    },
     60
   );
   assert(r1.cacheHit === false, '2.4 First call = cache miss');
@@ -191,15 +237,31 @@ async function testContextCache() {
   const r2 = await cache.getOrCallAI(
     [{ role: 'user', content: 'test_unique_' + (Date.now() - 1) }],
     'test-model',
-    async () => { called = true; return { answer: 99 }; },
+    async () => {
+      called = true;
+      return { answer: 99 };
+    },
     60
   );
   // Note: might be miss if timestamp changed — that's OK
   // But the same exact content should hit
   const testContent = 'cache_hit_test_' + Math.random();
-  await cache.getOrCallAI([{ role: 'user', content: testContent }], 'test', async () => ({ v: 1 }), 60);
+  await cache.getOrCallAI(
+    [{ role: 'user', content: testContent }],
+    'test',
+    async () => ({ v: 1 }),
+    60
+  );
   called = false;
-  const r3 = await cache.getOrCallAI([{ role: 'user', content: testContent }], 'test', async () => { called = true; return { v: 2 }; }, 60);
+  const r3 = await cache.getOrCallAI(
+    [{ role: 'user', content: testContent }],
+    'test',
+    async () => {
+      called = true;
+      return { v: 2 };
+    },
+    60
+  );
   assert(r3.cacheHit === true, '2.7 Second call = cache hit');
   assert(called === false, '2.8 AI function NOT called on hit');
   assert(r3.response.v === 1, '2.9 Cached response returned (not new)');
@@ -247,17 +309,17 @@ async function testStreaming() {
   assert(events[0]?.data?.cached === true, '3.3 Start data.cached = true');
 
   // 3.4 Middle events = chunk with text
-  const chunks = events.filter(e => e.event === 'chunk');
+  const chunks = events.filter((e) => e.event === 'chunk');
   assert(chunks.length >= 2, `3.4 Has ${chunks.length} chunks (>= 2)`);
   assert(chunks[0]?.data?.text?.length > 0, '3.5 Chunk has text');
 
   // 3.6 Last event = done
-  const doneEvents = events.filter(e => e.event === 'done');
+  const doneEvents = events.filter((e) => e.event === 'done');
   assert(doneEvents.length >= 1, '3.6 Has done event');
   assert(doneEvents[0]?.data?.fullText?.length > 0, '3.7 Done has fullText');
 
   // 3.8 All chunks together = full text
-  const reassembled = chunks.map(c => c.data.text).join('');
+  const reassembled = chunks.map((c) => c.data.text).join('');
   assert(reassembled === doneEvents[0]?.data?.fullText, '3.8 Chunks reassemble to fullText');
 }
 
@@ -287,7 +349,10 @@ async function testDistillation() {
   assert(q4 === 0, '4.4 null → quality 0');
 
   // 4.5 collectOutput — saves to DB
-  const id1 = await distillation.collectOutput(pool, 'test_triage', 'gpt-4o',
+  const id1 = await distillation.collectOutput(
+    pool,
+    'test_triage',
+    'gpt-4o',
     [{ role: 'user', content: 'test collect' }],
     { text: 'Great question response', severity: 'low' },
     0.9
@@ -295,7 +360,10 @@ async function testDistillation() {
   assert(id1 !== null && id1 > 0, `4.5 Collected output id=${id1}`);
 
   // 4.6 collectOutput dedup — same input today
-  const id2 = await distillation.collectOutput(pool, 'test_triage', 'gpt-4o',
+  const id2 = await distillation.collectOutput(
+    pool,
+    'test_triage',
+    'gpt-4o',
     [{ role: 'user', content: 'test collect' }],
     { text: 'Different output' },
     0.8
@@ -319,11 +387,17 @@ async function testDistillation() {
   // System message should still be first
   assert(enhanced.messages[0].role === 'system', '4.12 System message still first');
   // User message should still be last
-  assert(enhanced.messages[enhanced.messages.length - 1].role === 'user', '4.13 User message still last');
+  assert(
+    enhanced.messages[enhanced.messages.length - 1].role === 'user',
+    '4.13 User message still last'
+  );
 
   // 4.14 Stats
   const stats = await distillation.getGlobalDistillationStats(pool);
-  assert(stats.total_collected >= 1, `4.14 Stats: total_collected >= 1 (got ${stats.total_collected})`);
+  assert(
+    stats.total_collected >= 1,
+    `4.14 Stats: total_collected >= 1 (got ${stats.total_collected})`
+  );
 
   // 4.15 Detailed stats by task
   const detailed = await distillation.getDistillationStats(pool);
@@ -362,9 +436,13 @@ async function testApiEndpoints() {
 
   // 5.7 POST /ai/cache-test (miss then hit)
   const testKey = 'api_test_' + Date.now();
-  const r6 = await post('/api/health/ai/cache-test', { messages: [{ role: 'user', content: testKey }] });
+  const r6 = await post('/api/health/ai/cache-test', {
+    messages: [{ role: 'user', content: testKey }],
+  });
   assert(r6.b.cacheHit === false, '5.7 First call = miss');
-  const r7 = await post('/api/health/ai/cache-test', { messages: [{ role: 'user', content: testKey }] });
+  const r7 = await post('/api/health/ai/cache-test', {
+    messages: [{ role: 'user', content: testKey }],
+  });
   assert(r7.b.cacheHit === true, '5.8 Second call = hit');
 
   // 5.9 POST /ai/cache-test — missing params
@@ -373,7 +451,8 @@ async function testApiEndpoints() {
 
   // 5.10 POST /ai/distillation-collect
   const r9 = await post('/api/health/ai/distillation-collect', {
-    taskType: 'test_api', model: 'gpt-4o',
+    taskType: 'test_api',
+    model: 'gpt-4o',
     input: [{ role: 'user', content: 'test api' }],
     output: { text: 'API test response' },
   });
@@ -449,7 +528,9 @@ async function run() {
   await testExports();
 
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log(`║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`);
+  console.log(
+    `║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`
+  );
   if (totalFail > 0) {
     console.log('║  FAILURES:                                       ║');
     for (const f of failures) console.log(`║  - ${f.substring(0, 46).padEnd(46)} ║`);
@@ -460,4 +541,8 @@ async function run() {
   process.exit(totalFail > 0 ? 1 : 0);
 }
 
-run().catch(err => { console.error('CRASHED:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASHED:', err);
+  pool.end();
+  process.exit(1);
+});

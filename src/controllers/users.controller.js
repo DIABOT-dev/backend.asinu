@@ -8,7 +8,7 @@ const usersService = require('../services/auth/users.service');
 
 async function searchUsers(pool, req, res) {
   const query = String(req.query.q || '').trim();
-  
+
   if (!query || query.length < 2) {
     return res.status(400).json({ ok: false, error: t('error.query_too_short', getLang(req)) });
   }
@@ -34,5 +34,5 @@ async function getAllUsers(pool, req, res) {
 
 module.exports = {
   searchUsers,
-  getAllUsers
+  getAllUsers,
 };

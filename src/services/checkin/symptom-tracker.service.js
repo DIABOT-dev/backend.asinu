@@ -6,30 +6,90 @@
  */
 
 // Triệu chứng thường gặp — dùng để match từ câu trả lời
-const KNOWN_SYMPTOMS = [
-  'mệt mỏi', 'chóng mặt', 'đau đầu', 'buồn nôn', 'khát nước',
-  'ăn không ngon', 'đau bụng', 'khó thở', 'đau ngực', 'tức ngực',
-  'hoa mắt', 'vã mồ hôi', 'mất ngủ', 'sốt', 'ho', 'đau lưng',
-  'đau khớp', 'tiêu chảy', 'táo bón', 'phát ban', 'ngứa',
-  'lo lắng', 'căng thẳng', 'run tay', 'tim đập nhanh', 'ngất',
+const _KNOWN_SYMPTOMS = [
+  'mệt mỏi',
+  'chóng mặt',
+  'đau đầu',
+  'buồn nôn',
+  'khát nước',
+  'ăn không ngon',
+  'đau bụng',
+  'khó thở',
+  'đau ngực',
+  'tức ngực',
+  'hoa mắt',
+  'vã mồ hôi',
+  'mất ngủ',
+  'sốt',
+  'ho',
+  'đau lưng',
+  'đau khớp',
+  'tiêu chảy',
+  'táo bón',
+  'phát ban',
+  'ngứa',
+  'lo lắng',
+  'căng thẳng',
+  'run tay',
+  'tim đập nhanh',
+  'ngất',
   // English
-  'fatigue', 'dizziness', 'headache', 'nausea', 'thirst',
-  'chest pain', 'shortness of breath', 'blurred vision',
+  'fatigue',
+  'dizziness',
+  'headache',
+  'nausea',
+  'thirst',
+  'chest pain',
+  'shortness of breath',
+  'blurred vision',
 ];
 
 // Câu trả lời KHÔNG phải triệu chứng
 const NON_SYMPTOM_ANSWERS = new Set([
-  'nhẹ', 'trung bình', 'khá nặng', 'rất nặng',
-  'vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua', 'vài ngày nay',
-  'đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn',
-  'đã đỡ nhiều', 'mệt hơn trước', 'đã đỡ hơn',
-  'ngủ ít', 'bỏ bữa', 'căng thẳng', 'quên uống thuốc', 'không rõ',
-  'nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì',
-  'lần đầu', 'thỉnh thoảng', 'hay bị', 'gần đây bị nhiều hơn',
-  'đã uống', 'quên', 'chưa đến giờ',
-  'không có', 'không có gì thêm', 'không',
-  'mild', 'moderate', 'severe', 'better', 'same', 'worse',
-  'rested', 'nothing yet', 'not sure',
+  'nhẹ',
+  'trung bình',
+  'khá nặng',
+  'rất nặng',
+  'vừa mới',
+  'vài giờ trước',
+  'từ sáng',
+  'từ hôm qua',
+  'vài ngày nay',
+  'đang đỡ dần',
+  'vẫn như cũ',
+  'có vẻ nặng hơn',
+  'đã đỡ nhiều',
+  'mệt hơn trước',
+  'đã đỡ hơn',
+  'ngủ ít',
+  'bỏ bữa',
+  'căng thẳng',
+  'quên uống thuốc',
+  'không rõ',
+  'nghỉ ngơi',
+  'ăn uống',
+  'uống nước',
+  'uống thuốc',
+  'chưa làm gì',
+  'lần đầu',
+  'thỉnh thoảng',
+  'hay bị',
+  'gần đây bị nhiều hơn',
+  'đã uống',
+  'quên',
+  'chưa đến giờ',
+  'không có',
+  'không có gì thêm',
+  'không',
+  'mild',
+  'moderate',
+  'severe',
+  'better',
+  'same',
+  'worse',
+  'rested',
+  'nothing yet',
+  'not sure',
 ]);
 
 /**
@@ -45,14 +105,20 @@ function extractSymptoms(triageMessages) {
     const ans = (msg.answer || '').toLowerCase();
 
     // Chỉ extract từ câu hỏi về triệu chứng
-    const isSymptomQ = q.includes('triệu chứng') || q.includes('symptoms')
-      || q.includes('dấu hiệu') || q.includes('vấn đề gì')
-      || q.includes('tình trạng nào');
+    const isSymptomQ =
+      q.includes('triệu chứng') ||
+      q.includes('symptoms') ||
+      q.includes('dấu hiệu') ||
+      q.includes('vấn đề gì') ||
+      q.includes('tình trạng nào');
 
     if (!isSymptomQ) continue;
 
     // Split câu trả lời (có thể multi-select: "mệt mỏi, chóng mặt, đau đầu")
-    const parts = ans.split(/,|;/).map(s => s.trim()).filter(Boolean);
+    const parts = ans
+      .split(/,|;/)
+      .map((s) => s.trim())
+      .filter(Boolean);
     for (const part of parts) {
       if (NON_SYMPTOM_ANSWERS.has(part)) continue;
       if (part.length < 2) continue;
@@ -89,12 +155,14 @@ async function saveSymptomLogs(pool, userId, checkinId, triageMessages, sessionD
   const date = sessionDate || new Date().toISOString().slice(0, 10);
 
   for (const symptom of symptoms) {
-    await pool.query(
-      `INSERT INTO symptom_logs (user_id, checkin_id, symptom_name, severity, occurred_date)
+    await pool
+      .query(
+        `INSERT INTO symptom_logs (user_id, checkin_id, symptom_name, severity, occurred_date)
        VALUES ($1, $2, $3, $4, $5)
        ON CONFLICT DO NOTHING`,
-      [userId, checkinId, symptom, severity, date]
-    ).catch(err => console.error('[SymptomTracker] Failed to save symptom log:', err.message));
+        [userId, checkinId, symptom, severity, date]
+      )
+      .catch((err) => console.error('[SymptomTracker] Failed to save symptom log:', err.message));
   }
 
   // Cập nhật frequency
@@ -125,16 +193,18 @@ async function updateSymptomFrequency(pool, userId) {
   }
 
   const now = new Date();
-  const d7 = new Date(now); d7.setDate(d7.getDate() - 7);
-  const d14 = new Date(now); d14.setDate(d14.getDate() - 14);
+  const d7 = new Date(now);
+  d7.setDate(d7.getDate() - 7);
+  const d14 = new Date(now);
+  d14.setDate(d14.getDate() - 14);
 
   for (const [symptom, dates] of Object.entries(bySymptom)) {
-    const count7d = dates.filter(d => new Date(d) >= d7).length;
+    const count7d = dates.filter((d) => new Date(d) >= d7).length;
     const count30d = dates.length;
     const lastOccurred = dates[0]; // already sorted DESC
 
     // Trend: so sánh 7 ngày gần vs 7 ngày trước đó
-    const countPrev7d = dates.filter(d => {
+    const countPrev7d = dates.filter((d) => {
       const dd = new Date(d);
       return dd >= d14 && dd < d7;
     }).length;
@@ -143,13 +213,15 @@ async function updateSymptomFrequency(pool, userId) {
     if (count7d > countPrev7d + 1) trend = 'increasing';
     else if (count7d < countPrev7d - 1) trend = 'decreasing';
 
-    await pool.query(
-      `INSERT INTO symptom_frequency (user_id, symptom_name, count_7d, count_30d, trend, last_occurred, updated_at)
+    await pool
+      .query(
+        `INSERT INTO symptom_frequency (user_id, symptom_name, count_7d, count_30d, trend, last_occurred, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW())
        ON CONFLICT (user_id, symptom_name) DO UPDATE SET
          count_7d = $3, count_30d = $4, trend = $5, last_occurred = $6, updated_at = NOW()`,
-      [userId, symptom, count7d, count30d, trend, lastOccurred]
-    ).catch(err => console.error('[SymptomTracker] Failed to update frequency:', err.message));
+        [userId, symptom, count7d, count30d, trend, lastOccurred]
+      )
+      .catch((err) => console.error('[SymptomTracker] Failed to update frequency:', err.message));
   }
 }
 
@@ -169,10 +241,13 @@ async function getSymptomFrequencyContext(pool, userId) {
 
   if (rows.length === 0) return null;
 
-  return rows.map(r => {
-    const trendLabel = r.trend === 'increasing' ? '↑ tăng' : r.trend === 'decreasing' ? '↓ giảm' : '→ ổn định';
-    return `- ${r.symptom_name}: ${r.count_7d} lần/7 ngày, ${r.count_30d} lần/30 ngày (${trendLabel})`;
-  }).join('\n');
+  return rows
+    .map((r) => {
+      const trendLabel =
+        r.trend === 'increasing' ? '↑ tăng' : r.trend === 'decreasing' ? '↓ giảm' : '→ ổn định';
+      return `- ${r.symptom_name}: ${r.count_7d} lần/7 ngày, ${r.count_30d} lần/30 ngày (${trendLabel})`;
+    })
+    .join('\n');
 }
 
 /**
@@ -189,8 +264,8 @@ async function getMedicationAdherenceContext(pool, userId) {
 
   if (rows.length === 0) return null;
 
-  const taken = rows.filter(r => r.status === 'taken').length;
-  const skipped = rows.filter(r => r.status === 'skipped').length;
+  const taken = rows.filter((r) => r.status === 'taken').length;
+  const skipped = rows.filter((r) => r.status === 'skipped').length;
   const total = rows.length;
 
   let summary = `Thuốc 7 ngày: ${taken}/${total} ngày uống đúng`;

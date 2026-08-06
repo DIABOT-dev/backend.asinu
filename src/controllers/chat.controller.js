@@ -4,9 +4,18 @@
  */
 
 const { chatRequestSchema } = require('../validation/validation.schemas');
-const { processChat, getChatHistory, RETENTION_DAYS_FREE, RETENTION_DAYS_PREMIUM } = require('../services/chat/chat.service');
+const {
+  processChat,
+  getChatHistory,
+  RETENTION_DAYS_FREE,
+  RETENTION_DAYS_PREMIUM,
+} = require('../services/chat/chat.service');
 const { getWhisperTranscription } = require('../services/ai/providers/openai');
-const { VOICE_MONTHLY_LIMIT, getVoiceUsageThisMonth, incrementVoiceUsage } = require('../services/payment/subscription.service');
+const {
+  VOICE_MONTHLY_LIMIT,
+  getVoiceUsageThisMonth,
+  incrementVoiceUsage,
+} = require('../services/payment/subscription.service');
 const { recordChatbotUse } = require('../services/chat/chatbot-usage.service');
 const { t, getLang } = require('../i18n');
 const feedbackService = require('../services/chat/chat-feedback.service');
@@ -19,7 +28,11 @@ async function postChat(pool, req, res) {
   // Validate request
   const parsed = chatRequestSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_payload', getLang(req)), details: parsed.error.issues });
+    return res.status(400).json({
+      ok: false,
+      error: t('error.invalid_payload', getLang(req)),
+      details: parsed.error.issues,
+    });
   }
 
   const { message, client_ts, context } = parsed.data;
@@ -41,7 +54,7 @@ async function postChat(pool, req, res) {
     chat_id: result.chat_id,
     provider: result.provider,
     created_at: result.created_at,
-    client_ts
+    client_ts,
   });
 }
 
@@ -52,18 +65,21 @@ async function postChat(pool, req, res) {
 async function getChatHistoryHandler(pool, req, res) {
   try {
     const userId = req.user.id;
-    const isPremium = await require('../services/payment/subscription.service').isPremium(pool, userId);
+    const isPremium = await require('../services/payment/subscription.service').isPremium(
+      pool,
+      userId
+    );
     const retentionDays = isPremium ? RETENTION_DAYS_PREMIUM : RETENTION_DAYS_FREE;
     const messages = await getChatHistory(pool, userId, 200, retentionDays);
 
     return res.status(200).json({
       ok: true,
-      messages: messages.map(m => ({
+      messages: messages.map((m) => ({
         id: String(m.id),
         role: m.sender === 'assistant' ? 'assistant' : 'user',
         text: m.message,
-        timestamp: new Date(m.created_at).toISOString()
-      }))
+        timestamp: new Date(m.created_at).toISOString(),
+      })),
     });
   } catch (err) {
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
@@ -75,7 +91,8 @@ async function getChatHistoryHandler(pool, req, res) {
  * Transcribe audio to text using Whisper
  */
 async function transcribeAudio(pool, req, res) {
-  if (!req.file) return res.status(400).json({ ok: false, error: t('error.missing_audio', getLang(req)) });
+  if (!req.file)
+    return res.status(400).json({ ok: false, error: t('error.missing_audio', getLang(req)) });
 
   const voiceUsed = await getVoiceUsageThisMonth(pool, req.user.id);
   if (voiceUsed >= VOICE_MONTHLY_LIMIT) {
@@ -97,7 +114,9 @@ async function transcribeAudio(pool, req, res) {
 
     // Log the AI interaction
     const whisperProvider = process.env.WHISPER_ENDPOINT ? 'phowhisper' : 'openai';
-    const whisperModel = process.env.WHISPER_ENDPOINT ? 'diepho/PhoWhisper-medium-ct2' : 'whisper-1';
+    const whisperModel = process.env.WHISPER_ENDPOINT
+      ? 'diepho/PhoWhisper-medium-ct2'
+      : 'whisper-1';
     const { logAiInteraction } = require('../services/ai/ai-logger.service');
     logAiInteraction(pool, {
       userId: req.user.id,
@@ -110,7 +129,9 @@ async function transcribeAudio(pool, req, res) {
       latencyMs: latencyTranscribe,
     }).catch(() => {});
 
-    return res.status(200).json({ ok: true, text, voiceUsed: voiceUsed + 1, voiceLimit: VOICE_MONTHLY_LIMIT });
+    return res
+      .status(200)
+      .json({ ok: true, text, voiceUsed: voiceUsed + 1, voiceLimit: VOICE_MONTHLY_LIMIT });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });
   }
@@ -214,7 +235,7 @@ async function getChatFeedbacks(pool, req, res) {
 async function getChatNotedIds(pool, req, res) {
   try {
     const rows = await feedbackService.getChatNotedIds(pool, req.user.id);
-    return res.json({ ok: true, ids: rows.map(r => r.message_id) });
+    return res.json({ ok: true, ids: rows.map((r) => r.message_id) });
   } catch {
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }

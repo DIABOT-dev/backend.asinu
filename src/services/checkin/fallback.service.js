@@ -14,9 +14,6 @@
  *   - Ngày mai user có script sẵn cho triệu chứng đó
  */
 
-const { evaluateScript } = require('../../core/checkin/scoring-engine');
-const { getHonorifics } = require('../../lib/honorifics');
-
 // ─── Standard fallback questions ────────────────────────────────────────────
 
 const FALLBACK_QUESTIONS = [
@@ -208,53 +205,100 @@ async function matchCluster(pool, userId, symptomInput) {
     const displayNoDiac = removeDiacritics(displayLower);
 
     // Level 1: substring match (exact, with diacritics)
-    if (input.includes(displayLower) || displayLower.includes(input) ||
-        input.includes(keyLower) || keyLower.includes(input)) {
+    if (
+      input.includes(displayLower) ||
+      displayLower.includes(input) ||
+      input.includes(keyLower) ||
+      keyLower.includes(input)
+    ) {
       return { matched: true, cluster };
     }
 
     // Level 2: no-diacritics match
     // "dau dau" matches "đau đầu", "chong mat" matches "chóng mặt"
-    if (inputNoDiac.includes(displayNoDiac) || displayNoDiac.includes(inputNoDiac) ||
-        inputNoDiac.includes(keyLower) || keyLower.includes(inputNoDiac)) {
+    if (
+      inputNoDiac.includes(displayNoDiac) ||
+      displayNoDiac.includes(inputNoDiac) ||
+      inputNoDiac.includes(keyLower) ||
+      keyLower.includes(inputNoDiac)
+    ) {
       return { matched: true, cluster };
     }
 
     // Level 3: token overlap — meaningful tokens must match
-    const GENERIC_TOKENS = new Set(['đau', 'bị', 'hơi', 'rất', 'hay', 'có', 'mỗi', 'khi', 'lúc', 'sau', 'của', 'trong', 'này',
-                                     'dau', 'bi', 'hoi', 'rat', 'hay', 'co', 'moi', 'khi', 'luc', 'sau', 'cua', 'trong', 'nay']);
-    const inputTokens = input.split(/\s+/).filter(t => t.length >= 2 && !GENERIC_TOKENS.has(t));
+    const GENERIC_TOKENS = new Set([
+      'đau',
+      'bị',
+      'hơi',
+      'rất',
+      'hay',
+      'có',
+      'mỗi',
+      'khi',
+      'lúc',
+      'sau',
+      'của',
+      'trong',
+      'này',
+      'dau',
+      'bi',
+      'hoi',
+      'rat',
+      'hay',
+      'co',
+      'moi',
+      'khi',
+      'luc',
+      'sau',
+      'cua',
+      'trong',
+      'nay',
+    ]);
+    const inputTokens = input.split(/\s+/).filter((t) => t.length >= 2 && !GENERIC_TOKENS.has(t));
     // No-diacritics tokens need >= 3 chars to avoid false positives ("ho"→2 chars, too short)
-    const inputTokensNoDiac = inputNoDiac.split(/\s+/).filter(t => t.length >= 3 && !GENERIC_TOKENS.has(t));
-    const displayTokens = displayLower.split(/\s+/).filter(t => t.length >= 2 && !GENERIC_TOKENS.has(t));
-    const displayTokensNoDiac = displayNoDiac.split(/\s+/).filter(t => t.length >= 3 && !GENERIC_TOKENS.has(t));
-    const keyTokens = keyLower.split(/\s+/).filter(t => t.length >= 2);
+    const inputTokensNoDiac = inputNoDiac
+      .split(/\s+/)
+      .filter((t) => t.length >= 3 && !GENERIC_TOKENS.has(t));
+    const displayTokens = displayLower
+      .split(/\s+/)
+      .filter((t) => t.length >= 2 && !GENERIC_TOKENS.has(t));
+    const displayTokensNoDiac = displayNoDiac
+      .split(/\s+/)
+      .filter((t) => t.length >= 3 && !GENERIC_TOKENS.has(t));
+    const keyTokens = keyLower.split(/\s+/).filter((t) => t.length >= 2);
 
     // Level 4: synonym expansion
     // User says "ói" but cluster is "buồn nôn", "nhức" but cluster is "đau"
     const SYNONYMS = {
-      'ói': ['buồn nôn', 'nôn', 'nausea'], 'nôn': ['buồn nôn', 'nausea'],
-      'nhức': ['đau đầu', 'headache'], 'xỉu': ['ngất', 'chóng mặt', 'dizziness'],
-      'mờ': ['mắt mờ', 'mờ mắt'], 'tê': ['tê tay', 'tê chân', 'tê bì'],
-      'run': ['run tay', 'sốt'], 'ngứa': ['ngứa da', 'phát ban', 'rash'],
-      'oi': ['buon non', 'nausea'], 'nhuc': ['dau dau', 'headache'],
-      'xiu': ['ngat', 'chong mat'], 'te': ['te tay', 'te chan'],
+      ói: ['buồn nôn', 'nôn', 'nausea'],
+      nôn: ['buồn nôn', 'nausea'],
+      nhức: ['đau đầu', 'headache'],
+      xỉu: ['ngất', 'chóng mặt', 'dizziness'],
+      mờ: ['mắt mờ', 'mờ mắt'],
+      tê: ['tê tay', 'tê chân', 'tê bì'],
+      run: ['run tay', 'sốt'],
+      ngứa: ['ngứa da', 'phát ban', 'rash'],
+      oi: ['buon non', 'nausea'],
+      nhuc: ['dau dau', 'headache'],
+      xiu: ['ngat', 'chong mat'],
+      te: ['te tay', 'te chan'],
     };
 
     // Check with diacritics first, then without, then synonyms
-    let hasTokenOverlap = inputTokens.some(t =>
-      displayTokens.includes(t) || keyTokens.includes(t)
-    ) || inputTokensNoDiac.some(t =>
-      displayTokensNoDiac.includes(t) || keyTokens.includes(t)
-    );
+    let hasTokenOverlap =
+      inputTokens.some((t) => displayTokens.includes(t) || keyTokens.includes(t)) ||
+      inputTokensNoDiac.some((t) => displayTokensNoDiac.includes(t) || keyTokens.includes(t));
 
     // Synonym check: expand input tokens and match
     if (!hasTokenOverlap) {
       for (const t of [...inputTokens, ...inputTokensNoDiac]) {
         const syns = SYNONYMS[t];
         if (syns) {
-          hasTokenOverlap = syns.some(syn =>
-            displayLower.includes(syn) || displayNoDiac.includes(removeDiacritics(syn)) || keyLower.includes(syn)
+          hasTokenOverlap = syns.some(
+            (syn) =>
+              displayLower.includes(syn) ||
+              displayNoDiac.includes(removeDiacritics(syn)) ||
+              keyLower.includes(syn)
           );
           if (hasTokenOverlap) break;
         }
@@ -288,7 +332,14 @@ async function getPendingFallbacks(pool, limit = 100) {
 /**
  * Mark fallback as processed.
  */
-async function markFallbackProcessed(pool, fallbackId, label, clusterKey, confidence, mergedClusterId = null) {
+async function markFallbackProcessed(
+  pool,
+  fallbackId,
+  label,
+  clusterKey,
+  confidence,
+  mergedClusterId = null
+) {
   await pool.query(
     `UPDATE fallback_logs SET
        status = $2,
@@ -298,7 +349,14 @@ async function markFallbackProcessed(pool, fallbackId, label, clusterKey, confid
        merged_to_cluster_id = $6,
        processed_at = NOW()
      WHERE id = $1`,
-    [fallbackId, mergedClusterId ? 'merged' : 'processed', label, clusterKey, confidence, mergedClusterId]
+    [
+      fallbackId,
+      mergedClusterId ? 'merged' : 'processed',
+      label,
+      clusterKey,
+      confidence,
+      mergedClusterId,
+    ]
   );
 }
 

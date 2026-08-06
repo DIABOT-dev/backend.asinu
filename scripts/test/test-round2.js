@@ -16,71 +16,96 @@ require('dotenv').config();
 const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const { createClustersFromOnboarding, getUserScript, getScript, addCluster } = require('../src/services/checkin/script.service');
+const {
+  createClustersFromOnboarding,
+  getUserScript,
+  getScript,
+  addCluster,
+} = require('../src/services/checkin/script.service');
 const { getNextQuestion } = require('../src/services/checkin/script-runner');
-const { getFallbackScriptData, logFallback, matchCluster, getPendingFallbacks, markFallbackProcessed } = require('../src/services/checkin/fallback.service');
+const {
+  getFallbackScriptData,
+  logFallback,
+  matchCluster,
+  getPendingFallbacks,
+  markFallbackProcessed,
+} = require('../src/services/checkin/fallback.service');
 const { detectEmergency } = require('../src/services/checkin/emergency-detector');
 
 const USER_ID = 3;
 const PROFILE = {
-  birth_year: 1960, gender: 'Nam', full_name: 'Nguyen Van A',
-  display_name: 'Chu A', medical_conditions: [], age: 66,
+  birth_year: 1960,
+  gender: 'Nam',
+  full_name: 'Nguyen Van A',
+  display_name: 'Chu A',
+  medical_conditions: [],
+  age: 66,
 };
 
-let pass = 0, fail = 0;
+let pass = 0,
+  fail = 0;
 function assert(cond, label) {
-  if (cond) { console.log(`    [PASS] ${label}`); pass++; }
-  else { console.log(`    [FAIL] ${label}`); fail++; }
+  if (cond) {
+    console.log(`    [PASS] ${label}`);
+    pass++;
+  } else {
+    console.log(`    [FAIL] ${label}`);
+    fail++;
+  }
 }
-function header(t) { console.log(`\n${'='.repeat(70)}\n  ${t}\n${'='.repeat(70)}`); }
-function step(t) { console.log(`\n  > ${t}`); }
+function header(t) {
+  console.log(`\n${'='.repeat(70)}\n  ${t}\n${'='.repeat(70)}`);
+}
+function step(t) {
+  console.log(`\n  > ${t}`);
+}
 
 // ---- Symptom test configs ----
 const SYMPTOM_TESTS = [
   {
     symptom: 'dau rang',
-    displayName: 'dau rang',         // Vietnamese: đau răng
+    displayName: 'dau rang', // Vietnamese: đau răng
     clusterKey: 'dau_rang',
     pain: 7,
-    onset: 'Tu hom qua',            // Từ hôm qua
-    progression: 'Nang hon',         // Nặng hơn
+    onset: 'Tu hom qua', // Từ hôm qua
+    progression: 'Nang hon', // Nặng hơn
     expectedSeverity: 'high',
   },
   {
     symptom: 'ngua da',
-    displayName: 'ngua da',          // Vietnamese: ngứa da
+    displayName: 'ngua da', // Vietnamese: ngứa da
     clusterKey: 'ngua_da',
     pain: 3,
-    onset: 'Vai ngay',              // Vài ngày
-    progression: 'Van vay',          // Vẫn vậy
+    onset: 'Vai ngay', // Vài ngày
+    progression: 'Van vay', // Vẫn vậy
     expectedSeverity: 'low',
   },
   {
     symptom: 'dau vai phai',
-    displayName: 'dau vai phai',     // Vietnamese: đau vai phải
+    displayName: 'dau vai phai', // Vietnamese: đau vai phải
     clusterKey: 'dau_vai_phai',
     pain: 5,
-    onset: 'Tu sang',               // Từ sáng
-    progression: 'Van vay',          // Vẫn vậy
+    onset: 'Tu sang', // Từ sáng
+    progression: 'Van vay', // Vẫn vậy
     expectedSeverity: 'medium',
   },
   {
     symptom: 'op nong sau an',
-    displayName: 'op nong sau an',   // Vietnamese: ợ nóng sau ăn
+    displayName: 'op nong sau an', // Vietnamese: ợ nóng sau ăn
     clusterKey: 'op_nong_sau_an',
     pain: 4,
-    onset: 'Vai gio truoc',         // Vài giờ trước
-    progression: 'Dang do',          // Đang đỡ
-    expectedSeverity: 'medium',      // pain=4 triggers medium (gte 4)
+    onset: 'Vai gio truoc', // Vài giờ trước
+    progression: 'Dang do', // Đang đỡ
+    expectedSeverity: 'medium', // pain=4 triggers medium (gte 4)
   },
   {
     symptom: 'mat mo',
-    displayName: 'mat mo',           // Vietnamese: mắt mờ
+    displayName: 'mat mo', // Vietnamese: mắt mờ
     clusterKey: 'mat_mo',
     pain: 6,
-    onset: 'Vua moi',               // Vừa mới
-    progression: 'Nang hon',         // Nặng hơn
-    expectedSeverity: 'high',        // progression "Nặng hơn" triggers high
+    onset: 'Vua moi', // Vừa mới
+    progression: 'Nang hon', // Nặng hơn
+    expectedSeverity: 'high', // progression "Nặng hơn" triggers high
   },
 ];
 
@@ -167,9 +192,12 @@ async function run() {
   console.log('    Cleaned up all data for user_id=3');
 
   // Create initial clusters
-  const initialClusters = await createClustersFromOnboarding(pool, USER_ID, ['\u0111au \u0111\u1ea7u', 'm\u1ec7t m\u1ecfi']);
+  const initialClusters = await createClustersFromOnboarding(pool, USER_ID, [
+    '\u0111au \u0111\u1ea7u',
+    'm\u1ec7t m\u1ecfi',
+  ]);
   assert(initialClusters.length === 2, 'Created 2 initial clusters: dau dau, met moi');
-  console.log(`    Initial clusters: ${initialClusters.map(c => c.cluster_key).join(', ')}`);
+  console.log(`    Initial clusters: ${initialClusters.map((c) => c.cluster_key).join(', ')}`);
 
   // Store fallback log IDs for later
   const fallbackLogIds = [];
@@ -184,13 +212,20 @@ async function run() {
     header(`SYMPTOM ${i + 1}/5: "${t.symptom}" (cluster_key: ${t.clusterKey})`);
 
     // ---- (a) matchCluster() -> verify NO match (or expected token overlap) ----
-    step(`(a) matchCluster("${t.symptom}") -> expect ${t.tokenOverlapExpected ? 'TOKEN OVERLAP (known behavior)' : 'NO match'}`);
+    step(
+      `(a) matchCluster("${t.symptom}") -> expect ${t.tokenOverlapExpected ? 'TOKEN OVERLAP (known behavior)' : 'NO match'}`
+    );
     const match1 = await matchCluster(pool, USER_ID, t.symptom);
     if (t.tokenOverlapExpected) {
       // Token overlap: "đau răng" matches "đau đầu" via shared "đau" token — this is expected
       r.noMatch = match1.matched; // expected to match (token overlap)
-      assert(match1.matched, `"${t.symptom}" matches via token overlap (expected) -> cluster: ${match1.cluster?.cluster_key}`);
-      console.log(`    NOTE: Token overlap is expected behavior. In production, R&D cycle creates a dedicated cluster.`);
+      assert(
+        match1.matched,
+        `"${t.symptom}" matches via token overlap (expected) -> cluster: ${match1.cluster?.cluster_key}`
+      );
+      console.log(
+        `    NOTE: Token overlap is expected behavior. In production, R&D cycle creates a dedicated cluster.`
+      );
     } else {
       r.noMatch = !match1.matched;
       assert(!match1.matched, `"${t.symptom}" does NOT match any existing cluster`);
@@ -203,7 +238,9 @@ async function run() {
     assert(!em.isEmergency, `"${t.symptom}" is NOT an emergency (type=${em.type || 'none'})`);
 
     // ---- (c) Run fallback script (3 questions) ----
-    step(`(c) Run fallback script with pain=${t.pain}, onset="${t.onset}", progression="${t.progression}"`);
+    step(
+      `(c) Run fallback script with pain=${t.pain}, onset="${t.onset}", progression="${t.progression}"`
+    );
     const fbScript = getFallbackScriptData();
     const fbAnswers = [];
 
@@ -239,7 +276,10 @@ async function run() {
         assert(ok, `Severity is ${sev} (expected LOW or MEDIUM for pain=4, easing)`);
       } else {
         r.fallbackOK = sev === t.expectedSeverity;
-        assert(sev === t.expectedSeverity, `Severity "${sev}" matches expected "${t.expectedSeverity}"`);
+        assert(
+          sev === t.expectedSeverity,
+          `Severity "${sev}" matches expected "${t.expectedSeverity}"`
+        );
       }
     }
 
@@ -248,7 +288,7 @@ async function run() {
     await logFallback(pool, USER_ID, t.symptom, null, fbAnswers);
 
     const { rows: logs } = await pool.query(
-      "SELECT * FROM fallback_logs WHERE user_id=$1 AND raw_input=$2 ORDER BY created_at DESC LIMIT 1",
+      'SELECT * FROM fallback_logs WHERE user_id=$1 AND raw_input=$2 ORDER BY created_at DESC LIMIT 1',
       [USER_ID, t.symptom]
     );
     r.logged = logs.length === 1 && logs[0].status === 'pending';
@@ -265,7 +305,7 @@ async function run() {
     assert(newCluster.source === 'rnd_cycle', `Source = rnd_cycle`);
 
     // Mark fallback as processed
-    await markFallbackProcessed(pool, logs[0].id, t.displayName, t.clusterKey, 0.90, newCluster.id);
+    await markFallbackProcessed(pool, logs[0].id, t.displayName, t.clusterKey, 0.9, newCluster.id);
 
     // ---- (f) matchCluster() AGAIN -> verify NOW MATCHES ----
     step(`(f) matchCluster("${t.symptom}") again -> expect MATCH`);
@@ -277,12 +317,19 @@ async function run() {
         // The important thing is that the dedicated cluster EXISTS and has a script.
         // In production, the R&D cycle would also add aliases/synonyms.
         r.reMatch = true;
-        console.log(`    Matched: ${match2.cluster.cluster_key} (token overlap may pick first match)`);
-        console.log(`    Dedicated cluster "${t.clusterKey}" exists separately with its own script`);
+        console.log(
+          `    Matched: ${match2.cluster.cluster_key} (token overlap may pick first match)`
+        );
+        console.log(
+          `    Dedicated cluster "${t.clusterKey}" exists separately with its own script`
+        );
         assert(true, `Match works (via token overlap to: ${match2.cluster.cluster_key})`);
       } else {
         r.reMatch = match2.cluster.cluster_key === t.clusterKey;
-        assert(match2.cluster.cluster_key === t.clusterKey, `Matched cluster: ${match2.cluster.cluster_key}`);
+        assert(
+          match2.cluster.cluster_key === t.clusterKey,
+          `Matched cluster: ${match2.cluster.cluster_key}`
+        );
       }
     } else {
       r.reMatch = false;
@@ -293,8 +340,14 @@ async function run() {
     const script = await getScript(pool, USER_ID, t.clusterKey, 'initial');
     assert(script !== null, `Script exists for ${t.clusterKey}`);
     if (script) {
-      assert(script.script_data.questions.length > 0, `Script has ${script.script_data.questions.length} questions`);
-      assert(script.script_data.scoring_rules.length > 0, `Script has ${script.script_data.scoring_rules.length} scoring rules`);
+      assert(
+        script.script_data.questions.length > 0,
+        `Script has ${script.script_data.questions.length} questions`
+      );
+      assert(
+        script.script_data.scoring_rules.length > 0,
+        `Script has ${script.script_data.scoring_rules.length} scoring rules`
+      );
     }
 
     // ---- (h) Run script session -> verify completes with conclusion ----
@@ -306,7 +359,10 @@ async function run() {
       let stepCount = 0;
 
       while (!done && stepCount < 15) {
-        const next = getNextQuestion(scriptData, scriptAnswers, { sessionType: 'initial', profile: PROFILE });
+        const next = getNextQuestion(scriptData, scriptAnswers, {
+          sessionType: 'initial',
+          profile: PROFILE,
+        });
         if (next.isDone) {
           done = true;
           console.log(`    Script completed after ${stepCount} questions`);
@@ -348,12 +404,12 @@ async function run() {
   // getPendingFallbacks() -> all should be processed
   step('getPendingFallbacks() -> verify all processed');
   const pending = await getPendingFallbacks(pool);
-  const userPending = pending.filter(p => p.user_id === USER_ID);
+  const userPending = pending.filter((p) => p.user_id === USER_ID);
   assert(userPending.length === 0, `No pending fallbacks for user ${USER_ID} (all processed)`);
 
   // Verify fallback status in DB
   const { rows: allFallbacks } = await pool.query(
-    "SELECT raw_input, status, ai_cluster_key FROM fallback_logs WHERE user_id=$1 ORDER BY created_at",
+    'SELECT raw_input, status, ai_cluster_key FROM fallback_logs WHERE user_id=$1 ORDER BY created_at',
     [USER_ID]
   );
   console.log('    Fallback logs:');
@@ -368,13 +424,18 @@ async function run() {
   if (userScript) {
     console.log(`    Total clusters: ${userScript.clusters.length}`);
     for (const c of userScript.clusters) {
-      console.log(`      ${c.has_script ? '[OK]' : '[NO SCRIPT]'} ${c.cluster_key} - "${c.display_name}"`);
+      console.log(
+        `      ${c.has_script ? '[OK]' : '[NO SCRIPT]'} ${c.cluster_key} - "${c.display_name}"`
+      );
     }
-    assert(userScript.clusters.length === 7, `User has 7 clusters (2 original + 5 new), got ${userScript.clusters.length}`);
+    assert(
+      userScript.clusters.length === 7,
+      `User has 7 clusters (2 original + 5 new), got ${userScript.clusters.length}`
+    );
 
     // Verify each new cluster has a script
     for (const t of SYMPTOM_TESTS_VN) {
-      const found = userScript.clusters.find(c => c.cluster_key === t.clusterKey);
+      const found = userScript.clusters.find((c) => c.cluster_key === t.clusterKey);
       assert(found, `Cluster "${t.clusterKey}" exists`);
       if (found) {
         assert(found.has_script, `Cluster "${t.clusterKey}" has script`);
@@ -389,24 +450,30 @@ async function run() {
   // ======================================================================
 
   console.log('');
-  console.log('  | # | Symptom          | No Match | Not Emergency | Fallback OK | Logged | Cluster Created | Re-match | Script OK |');
-  console.log('  |---|------------------|----------|---------------|-------------|--------|-----------------|----------|-----------|');
+  console.log(
+    '  | # | Symptom          | No Match | Not Emergency | Fallback OK | Logged | Cluster Created | Re-match | Script OK |'
+  );
+  console.log(
+    '  |---|------------------|----------|---------------|-------------|--------|-----------------|----------|-----------|'
+  );
   for (let i = 0; i < SYMPTOM_TESTS_VN.length; i++) {
     const t = SYMPTOM_TESTS_VN[i];
     const r = results[i];
     const sym = t.symptom.padEnd(16);
-    const p = (v) => v ? 'PASS' : 'FAIL';
-    console.log(`  | ${i + 1} | ${sym} | ${p(r.noMatch).padEnd(8)} | ${p(r.notEmergency).padEnd(13)} | ${p(r.fallbackOK).padEnd(11)} | ${p(r.logged).padEnd(6)} | ${p(r.clusterCreated).padEnd(15)} | ${p(r.reMatch).padEnd(8)} | ${p(r.scriptOK).padEnd(9)} |`);
+    const p = (v) => (v ? 'PASS' : 'FAIL');
+    console.log(
+      `  | ${i + 1} | ${sym} | ${p(r.noMatch).padEnd(8)} | ${p(r.notEmergency).padEnd(13)} | ${p(r.fallbackOK).padEnd(11)} | ${p(r.logged).padEnd(6)} | ${p(r.clusterCreated).padEnd(15)} | ${p(r.reMatch).padEnd(8)} | ${p(r.scriptOK).padEnd(9)} |`
+    );
   }
   console.log('');
 
   // Count per-symptom pass/fail
   const symptomResults = results.map((r, i) => {
-    const allPass = Object.values(r).every(v => v);
+    const allPass = Object.values(r).every((v) => v);
     return { symptom: SYMPTOM_TESTS_VN[i].symptom, allPass };
   });
-  const symptomsPass = symptomResults.filter(s => s.allPass).length;
-  const symptomsFail = symptomResults.filter(s => !s.allPass).length;
+  const symptomsPass = symptomResults.filter((s) => s.allPass).length;
+  const symptomsFail = symptomResults.filter((s) => !s.allPass).length;
 
   console.log(`  Symptoms fully passing: ${symptomsPass}/5`);
   console.log(`  Symptoms with failures: ${symptomsFail}/5`);
@@ -416,7 +483,9 @@ async function run() {
   // ======================================================================
 
   if (fail === 0) {
-    console.log('\n  ALL TESTS PASSED - Full FALLBACK -> R&D -> MATCH lifecycle works for all 5 symptoms');
+    console.log(
+      '\n  ALL TESTS PASSED - Full FALLBACK -> R&D -> MATCH lifecycle works for all 5 symptoms'
+    );
   } else {
     console.log(`\n  ${fail} test(s) FAILED - review output above`);
   }
@@ -425,7 +494,7 @@ async function run() {
   process.exit(fail > 0 ? 1 : 0);
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('FATAL:', err);
   pool.end();
   process.exit(1);

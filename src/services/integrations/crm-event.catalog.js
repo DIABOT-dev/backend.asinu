@@ -48,10 +48,7 @@ const CRM_DEFERRED_EVENT_TYPES = Object.freeze([
   'service.expired',
 ]);
 
-const CRM_EVENT_TYPES = Object.freeze([
-  ...CRM_PHASE_ONE_EVENT_TYPES,
-  ...CRM_DEFERRED_EVENT_TYPES,
-]);
+const CRM_EVENT_TYPES = Object.freeze([...CRM_PHASE_ONE_EVENT_TYPES, ...CRM_DEFERRED_EVENT_TYPES]);
 
 const CRM_EVENT_TYPE_SET = new Set(CRM_EVENT_TYPES);
 

@@ -18,34 +18,64 @@ const { execSync } = require('child_process');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const { createClustersFromOnboarding, getUserScript, getScript, addCluster, toClusterKey } = require('../../src/services/checkin/script.service');
+const {
+  createClustersFromOnboarding,
+  getUserScript,
+  getScript,
+  addCluster,
+  toClusterKey,
+} = require('../../src/services/checkin/script.service');
 const { getNextQuestion } = require('../../src/core/checkin/script-runner');
 const { evaluateFollowUp } = require('../../src/core/checkin/scoring-engine');
-const { getFallbackScriptData, logFallback, matchCluster } = require('../../src/services/checkin/fallback.service');
+const {
+  getFallbackScriptData,
+  logFallback,
+  matchCluster,
+} = require('../../src/services/checkin/fallback.service');
 const { detectEmergency } = require('../../src/services/checkin/emergency-detector');
 const { listComplaints } = require('../../src/services/checkin/clinical-mapping');
 
 const USER_ID = 4;
 const DATA_DIR = path.join(__dirname, './data');
-const PROFILE = { birth_year: 1958, gender: 'Nam', full_name: 'Trần Văn Hùng', medical_conditions: ['Tiểu đường', 'Cao huyết áp'], age: 68 };
+const PROFILE = {
+  birth_year: 1958,
+  gender: 'Nam',
+  full_name: 'Trần Văn Hùng',
+  medical_conditions: ['Tiểu đường', 'Cao huyết áp'],
+  age: 68,
+};
 
 // ─── Helpers ───────────────────────────────────────────────────
 function pickAnswer(q, strategy) {
   const opts = q.options || [];
-  if (strategy === 'mild') return q.type === 'slider' ? 2 : (opts.find(o => o.includes('không') || o.includes('nhẹ')) || opts[0] || 'không');
-  if (strategy === 'severe') return q.type === 'slider' ? 8 : (opts.find(o => o.includes('nặng') || o.includes('dữ')) || opts[opts.length - 1] || 'nặng');
-  if (strategy === 'mid') return q.type === 'slider' ? 5 : (opts[Math.floor(opts.length / 2)] || opts[0] || 'vừa');
+  if (strategy === 'mild')
+    return q.type === 'slider'
+      ? 2
+      : opts.find((o) => o.includes('không') || o.includes('nhẹ')) || opts[0] || 'không';
+  if (strategy === 'severe')
+    return q.type === 'slider'
+      ? 8
+      : opts.find((o) => o.includes('nặng') || o.includes('dữ')) || opts[opts.length - 1] || 'nặng';
+  if (strategy === 'mid')
+    return q.type === 'slider' ? 5 : opts[Math.floor(opts.length / 2)] || opts[0] || 'vừa';
   return opts[0] || 5;
 }
 
 function runScript(scriptData, profile, strategy) {
-  const answers = [], convo = [];
-  let step, count = 0;
+  const answers = [],
+    convo = [];
+  let step,
+    count = 0;
   do {
     step = getNextQuestion(scriptData, answers, { sessionType: 'initial', profile });
     if (!step.isDone && step.question) {
       const ans = pickAnswer(step.question, strategy);
-      convo.push({ q: step.question.text, type: step.question.type, options: step.question.options, a: ans });
+      convo.push({
+        q: step.question.text,
+        type: step.question.type,
+        options: step.question.options,
+        a: ans,
+      });
       answers.push({ question_id: step.question.id, answer: ans });
       count++;
     }
@@ -64,18 +94,26 @@ function followUp(scriptData, status, hasNewSymptoms, prevSeverity) {
 
 // ─── Flow definitions ──────────────────────────────────────────
 const flows = [];
-let totalPass = 0, totalFail = 0;
+let totalPass = 0,
+  totalFail = 0;
 
 function addFlow(id, name, desc, steps, category) {
   flows.push({ id, name, desc, steps, category, pass: true, issues: [] });
 }
 
 function step(flowId, action, detail, result, check, extra = null) {
-  const flow = flows.find(f => f.id === flowId);
+  const flow = flows.find((f) => f.id === flowId);
   const passed = check();
-  if (!passed) { flow.pass = false; flow.issues.push(detail); totalFail++; } else { totalPass++; }
+  if (!passed) {
+    flow.pass = false;
+    flow.issues.push(detail);
+    totalFail++;
+  } else {
+    totalPass++;
+  }
   flow.steps.push({
-    action, detail,
+    action,
+    detail,
     result: typeof result === 'object' ? JSON.stringify(result) : String(result),
     passed,
     convo: extra?.convo || null,
@@ -103,9 +141,27 @@ async function run() {
   // ════════════════════════════════════════════════════════════════
   // FLOW A: "Tôi ổn" sáng → "Tôi ổn" tối → kết thúc ngày
   // ════════════════════════════════════════════════════════════════
-  addFlow('A', '"Tôi ổn" cả sáng lẫn tối', 'User khỏe mạnh cả ngày, không cần script, không cần AI', [], 'normal');
-  step('A', 'Sáng: User chọn "Tôi ổn"', 'Không chạy script, hẹn 9h tối', 'fine → monitoring', () => true);
-  step('A', 'Tối: User xác nhận "Vẫn ổn"', 'Kết thúc ngày, hẹn sáng mai', 'fine → resolved', () => true);
+  addFlow(
+    'A',
+    '"Tôi ổn" cả sáng lẫn tối',
+    'User khỏe mạnh cả ngày, không cần script, không cần AI',
+    [],
+    'normal'
+  );
+  step(
+    'A',
+    'Sáng: User chọn "Tôi ổn"',
+    'Không chạy script, hẹn 9h tối',
+    'fine → monitoring',
+    () => true
+  );
+  step(
+    'A',
+    'Tối: User xác nhận "Vẫn ổn"',
+    'Kết thúc ngày, hẹn sáng mai',
+    'fine → resolved',
+    () => true
+  );
   step('A', 'Kiểm tra: 0 AI call cả ngày', 'Không gọi AI lần nào', '0 calls', () => true);
 
   // ════════════════════════════════════════════════════════════════
@@ -115,133 +171,405 @@ async function run() {
   step('B', 'Sáng: "Tôi ổn"', 'Hẹn 9h tối', 'monitoring', () => true);
   step('B', 'Tối: "Hơi mệt" → chọn "đau đầu"', 'Chạy script đau đầu', 'follow_up', () => true);
   const B_result = runScript(headacheScript, PROFILE, 'mild');
-  step('B', `Script đau đầu: ${B_result.questionCount} câu hỏi`, `Trả lời nhẹ nhất → Severity: ${B_result.conclusion?.severity}`, B_result.conclusion?.severity, () => B_result.isDone, { convo: B_result.convo, conclusion: B_result.conclusion });
+  step(
+    'B',
+    `Script đau đầu: ${B_result.questionCount} câu hỏi`,
+    `Trả lời nhẹ nhất → Severity: ${B_result.conclusion?.severity}`,
+    B_result.conclusion?.severity,
+    () => B_result.isDone,
+    { convo: B_result.convo, conclusion: B_result.conclusion }
+  );
 
   // ════════════════════════════════════════════════════════════════
   // FLOW C: "Hơi mệt" → script nhẹ → follow-up "Đỡ hơn" → resolved
   // ════════════════════════════════════════════════════════════════
-  addFlow('C', '"Hơi mệt" → nhẹ → đỡ → resolved', 'Case phổ biến nhất: mệt nhẹ, đỡ sau vài giờ', [], 'normal');
+  addFlow(
+    'C',
+    '"Hơi mệt" → nhẹ → đỡ → resolved',
+    'Case phổ biến nhất: mệt nhẹ, đỡ sau vài giờ',
+    [],
+    'normal'
+  );
   const C_result = runScript(headacheScript, PROFILE, 'mild');
-  step('C', 'Sáng: "Hơi mệt" → chọn "đau đầu" → trả lời nhẹ', `${C_result.questionCount} câu → ${C_result.conclusion?.severity}`, C_result.conclusion?.severity, () => C_result.isDone, { convo: C_result.convo, conclusion: C_result.conclusion });
+  step(
+    'C',
+    'Sáng: "Hơi mệt" → chọn "đau đầu" → trả lời nhẹ',
+    `${C_result.questionCount} câu → ${C_result.conclusion?.severity}`,
+    C_result.conclusion?.severity,
+    () => C_result.isDone,
+    { convo: C_result.convo, conclusion: C_result.conclusion }
+  );
   const C_fu = followUp(headacheScript, 'better', false, C_result.conclusion?.severity);
-  step('C', `Follow-up sau ${C_result.conclusion?.followUpHours}h: "Đỡ hơn" + không triệu chứng mới`, `→ ${C_fu.severity} → monitoring → hẹn tối`, C_fu, () => C_fu.severity === 'low', { followUp: { status: 'Đỡ hơn', newSymptoms: false, result: C_fu } });
+  step(
+    'C',
+    `Follow-up sau ${C_result.conclusion?.followUpHours}h: "Đỡ hơn" + không triệu chứng mới`,
+    `→ ${C_fu.severity} → monitoring → hẹn tối`,
+    C_fu,
+    () => C_fu.severity === 'low',
+    { followUp: { status: 'Đỡ hơn', newSymptoms: false, result: C_fu } }
+  );
 
   // ════════════════════════════════════════════════════════════════
   // FLOW D: "Hơi mệt" → trung bình → "Vẫn vậy" → tiếp tục follow-up
   // ════════════════════════════════════════════════════════════════
-  addFlow('D', '"Hơi mệt" → trung bình → "Vẫn vậy" → tiếp tục', 'Không đỡ cũng không nặng hơn, hệ thống tiếp tục theo dõi', [], 'normal');
+  addFlow(
+    'D',
+    '"Hơi mệt" → trung bình → "Vẫn vậy" → tiếp tục',
+    'Không đỡ cũng không nặng hơn, hệ thống tiếp tục theo dõi',
+    [],
+    'normal'
+  );
   const D_result = runScript(dizzinessScript, PROFILE, 'mid');
-  step('D', 'Sáng: "Hơi mệt" → chọn "chóng mặt" → trả lời vừa', `${D_result.questionCount} câu → ${D_result.conclusion?.severity}`, D_result.conclusion?.severity, () => D_result.isDone, { convo: D_result.convo, conclusion: D_result.conclusion });
+  step(
+    'D',
+    'Sáng: "Hơi mệt" → chọn "chóng mặt" → trả lời vừa',
+    `${D_result.questionCount} câu → ${D_result.conclusion?.severity}`,
+    D_result.conclusion?.severity,
+    () => D_result.isDone,
+    { convo: D_result.convo, conclusion: D_result.conclusion }
+  );
   const D_fu1 = followUp(dizzinessScript, 'same', false, D_result.conclusion?.severity);
-  step('D', 'Follow-up 1: "Vẫn vậy" + không triệu chứng mới', `→ tiếp tục theo dõi`, D_fu1, () => D_fu1.action === 'continue_followup', { followUp: { status: 'Vẫn vậy', newSymptoms: false, result: D_fu1 } });
+  step(
+    'D',
+    'Follow-up 1: "Vẫn vậy" + không triệu chứng mới',
+    `→ tiếp tục theo dõi`,
+    D_fu1,
+    () => D_fu1.action === 'continue_followup',
+    { followUp: { status: 'Vẫn vậy', newSymptoms: false, result: D_fu1 } }
+  );
   const D_fu2 = followUp(dizzinessScript, 'same', false, D_fu1.severity);
-  step('D', 'Follow-up 2: vẫn "Vẫn vậy"', `→ tiếp tục theo dõi`, D_fu2, () => D_fu2.action === 'continue_followup', { followUp: { status: 'Vẫn vậy', newSymptoms: false, result: D_fu2 } });
+  step(
+    'D',
+    'Follow-up 2: vẫn "Vẫn vậy"',
+    `→ tiếp tục theo dõi`,
+    D_fu2,
+    () => D_fu2.action === 'continue_followup',
+    { followUp: { status: 'Vẫn vậy', newSymptoms: false, result: D_fu2 } }
+  );
   const D_fu3 = followUp(dizzinessScript, 'better', false, D_fu2.severity);
-  step('D', 'Follow-up 3: "Đỡ hơn" → kết thúc theo dõi', `→ monitoring → hẹn tối`, D_fu3, () => D_fu3.severity === 'low', { followUp: { status: 'Đỡ hơn', newSymptoms: false, result: D_fu3 } });
+  step(
+    'D',
+    'Follow-up 3: "Đỡ hơn" → kết thúc theo dõi',
+    `→ monitoring → hẹn tối`,
+    D_fu3,
+    () => D_fu3.severity === 'low',
+    { followUp: { status: 'Đỡ hơn', newSymptoms: false, result: D_fu3 } }
+  );
 
   // ════════════════════════════════════════════════════════════════
   // FLOW E: "Hơi mệt" → nặng → "Nặng hơn" → escalate + bác sĩ
   // ════════════════════════════════════════════════════════════════
-  addFlow('E', '"Hơi mệt" → nặng → "Nặng hơn" → escalate', 'Triệu chứng nặng dần, hệ thống phải cảnh báo mạnh', [], 'critical');
+  addFlow(
+    'E',
+    '"Hơi mệt" → nặng → "Nặng hơn" → escalate',
+    'Triệu chứng nặng dần, hệ thống phải cảnh báo mạnh',
+    [],
+    'critical'
+  );
   const E_result = runScript(headacheScript, PROFILE, 'severe');
-  step('E', 'Sáng: "Hơi mệt" → chọn "đau đầu" → trả lời nặng nhất', `${E_result.questionCount} câu → ${E_result.conclusion?.severity}`, E_result.conclusion?.severity, () => ['high', 'medium'].includes(E_result.conclusion?.severity), { convo: E_result.convo, conclusion: E_result.conclusion });
+  step(
+    'E',
+    'Sáng: "Hơi mệt" → chọn "đau đầu" → trả lời nặng nhất',
+    `${E_result.questionCount} câu → ${E_result.conclusion?.severity}`,
+    E_result.conclusion?.severity,
+    () => ['high', 'medium'].includes(E_result.conclusion?.severity),
+    { convo: E_result.convo, conclusion: E_result.conclusion }
+  );
   const E_fu = followUp(headacheScript, 'worse', true, E_result.conclusion?.severity);
-  step('E', 'Follow-up: "Nặng hơn" + CÓ triệu chứng mới → escalate + bác sĩ', `Severity: ${E_fu.severity}, needsDoctor: ${E_fu.needsDoctor}`, E_fu, () => E_fu.severity === 'high' && E_fu.needsDoctor && E_fu.action === 'escalate', { followUp: { status: 'Nặng hơn', newSymptoms: true, result: E_fu } });
+  step(
+    'E',
+    'Follow-up: "Nặng hơn" + CÓ triệu chứng mới → escalate + bác sĩ',
+    `Severity: ${E_fu.severity}, needsDoctor: ${E_fu.needsDoctor}`,
+    E_fu,
+    () => E_fu.severity === 'high' && E_fu.needsDoctor && E_fu.action === 'escalate',
+    { followUp: { status: 'Nặng hơn', newSymptoms: true, result: E_fu } }
+  );
 
   // ════════════════════════════════════════════════════════════════
   // FLOW F: "Rất mệt" → HIGH ngay → follow-up 1h → "Đỡ hơn"
   // ════════════════════════════════════════════════════════════════
-  addFlow('F', '"Rất mệt" → HIGH → follow-up nhanh → đỡ', 'User rất mệt nhưng hồi phục nhanh', [], 'normal');
+  addFlow(
+    'F',
+    '"Rất mệt" → HIGH → follow-up nhanh → đỡ',
+    'User rất mệt nhưng hồi phục nhanh',
+    [],
+    'normal'
+  );
   const F_result = runScript(fatigueScript, PROFILE, 'severe');
-  step('F', 'Sáng: "Rất mệt" → chọn "mệt mỏi" → trả lời nặng', `${F_result.questionCount} câu → ${F_result.conclusion?.severity}`, F_result.conclusion?.severity, () => F_result.isDone, { convo: F_result.convo, conclusion: F_result.conclusion });
+  step(
+    'F',
+    'Sáng: "Rất mệt" → chọn "mệt mỏi" → trả lời nặng',
+    `${F_result.questionCount} câu → ${F_result.conclusion?.severity}`,
+    F_result.conclusion?.severity,
+    () => F_result.isDone,
+    { convo: F_result.convo, conclusion: F_result.conclusion }
+  );
   const F_fu = followUp(fatigueScript, 'better', false, F_result.conclusion?.severity);
-  step('F', `Follow-up sau ${F_result.conclusion?.followUpHours}h: "Đỡ hơn" → monitoring`, `→ ${F_fu.severity} → hẹn tối`, F_fu, () => F_fu.severity === 'low', { followUp: { status: 'Đỡ hơn', newSymptoms: false, result: F_fu } });
+  step(
+    'F',
+    `Follow-up sau ${F_result.conclusion?.followUpHours}h: "Đỡ hơn" → monitoring`,
+    `→ ${F_fu.severity} → hẹn tối`,
+    F_fu,
+    () => F_fu.severity === 'low',
+    { followUp: { status: 'Đỡ hơn', newSymptoms: false, result: F_fu } }
+  );
 
   // ════════════════════════════════════════════════════════════════
   // FLOW G: "Rất mệt" → HIGH → follow-up → "Nặng hơn" × 2 → escalate mạnh
   // ════════════════════════════════════════════════════════════════
-  addFlow('G', '"Rất mệt" → liên tục nặng hơn → escalate', 'User không cải thiện, hệ thống phải báo gia đình', [], 'critical');
+  addFlow(
+    'G',
+    '"Rất mệt" → liên tục nặng hơn → escalate',
+    'User không cải thiện, hệ thống phải báo gia đình',
+    [],
+    'critical'
+  );
   const G_result = runScript(headacheScript, PROFILE, 'severe');
-  step('G', 'Sáng: "Rất mệt" → chọn "đau đầu" → trả lời nặng', `${G_result.questionCount} câu → ${G_result.conclusion?.severity}`, G_result.conclusion?.severity, () => G_result.isDone, { convo: G_result.convo, conclusion: G_result.conclusion });
+  step(
+    'G',
+    'Sáng: "Rất mệt" → chọn "đau đầu" → trả lời nặng',
+    `${G_result.questionCount} câu → ${G_result.conclusion?.severity}`,
+    G_result.conclusion?.severity,
+    () => G_result.isDone,
+    { convo: G_result.convo, conclusion: G_result.conclusion }
+  );
   const G_fu1 = followUp(headacheScript, 'worse', false, G_result.conclusion?.severity);
-  step('G', 'Follow-up 1: "Nặng hơn" → cần bác sĩ', `${G_fu1.severity}, needsDoctor: ${G_fu1.needsDoctor}`, G_fu1, () => G_fu1.severity === 'high', { followUp: { status: 'Nặng hơn', newSymptoms: false, result: G_fu1 } });
+  step(
+    'G',
+    'Follow-up 1: "Nặng hơn" → cần bác sĩ',
+    `${G_fu1.severity}, needsDoctor: ${G_fu1.needsDoctor}`,
+    G_fu1,
+    () => G_fu1.severity === 'high',
+    { followUp: { status: 'Nặng hơn', newSymptoms: false, result: G_fu1 } }
+  );
   const G_fu2 = followUp(headacheScript, 'worse', true, G_fu1.severity);
-  step('G', 'Follow-up 2: "Nặng hơn" + triệu chứng mới → escalate', `${G_fu2.severity}, báo gia đình`, G_fu2, () => G_fu2.severity === 'high' && G_fu2.needsDoctor, { followUp: { status: 'Nặng hơn', newSymptoms: true, result: G_fu2 } });
+  step(
+    'G',
+    'Follow-up 2: "Nặng hơn" + triệu chứng mới → escalate',
+    `${G_fu2.severity}, báo gia đình`,
+    G_fu2,
+    () => G_fu2.severity === 'high' && G_fu2.needsDoctor,
+    { followUp: { status: 'Nặng hơn', newSymptoms: true, result: G_fu2 } }
+  );
 
   // ════════════════════════════════════════════════════════════════
   // FLOW H: Emergency lúc bắt đầu → bypass tất cả
   // ════════════════════════════════════════════════════════════════
-  addFlow('H', 'Emergency ngay từ đầu', 'User nói "đau ngực khó thở" → bypass script, cấp cứu ngay', [], 'emergency');
+  addFlow(
+    'H',
+    'Emergency ngay từ đầu',
+    'User nói "đau ngực khó thở" → bypass script, cấp cứu ngay',
+    [],
+    'emergency'
+  );
   const H_em = detectEmergency(['đau ngực', 'khó thở', 'vã mồ hôi'], PROFILE);
-  step('H', 'User nhập: "đau ngực, khó thở, vã mồ hôi"', `isEmergency: ${H_em.isEmergency}, type: ${H_em.type}`, H_em, () => H_em.isEmergency === true);
+  step(
+    'H',
+    'User nhập: "đau ngực, khó thở, vã mồ hôi"',
+    `isEmergency: ${H_em.isEmergency}, type: ${H_em.type}`,
+    H_em,
+    () => H_em.isEmergency === true
+  );
   step('H', 'Kiểm tra: loại cấp cứu', `Type: ${H_em.type}`, H_em.type, () => H_em.type === 'MI');
-  step('H', 'Kiểm tra: không chạy script, không chạy scoring', 'Bypass hoàn toàn', 'bypassed', () => true);
+  step(
+    'H',
+    'Kiểm tra: không chạy script, không chạy scoring',
+    'Bypass hoàn toàn',
+    'bypassed',
+    () => true
+  );
 
   // ════════════════════════════════════════════════════════════════
   // FLOW I: Emergency giữa chừng script
   // ════════════════════════════════════════════════════════════════
-  addFlow('I', 'Emergency giữa session', 'Đang trả lời script, đột nhiên nhập triệu chứng nguy hiểm', [], 'emergency');
+  addFlow(
+    'I',
+    'Emergency giữa session',
+    'Đang trả lời script, đột nhiên nhập triệu chứng nguy hiểm',
+    [],
+    'emergency'
+  );
   step('I', 'Bắt đầu script đau đầu bình thường', 'Câu 1 trả lời OK', 'q1 answered', () => true);
   const I_em = detectEmergency(['yếu nửa người, nói ngọng'], PROFILE);
-  step('I', 'Câu 2: user gõ "yếu nửa người, nói ngọng"', `isEmergency: ${I_em.isEmergency}, type: ${I_em.type}`, I_em, () => I_em.isEmergency);
-  step('I', 'Kiểm tra: dừng script, chuyển cấp cứu', `Type: ${I_em.type}`, 'STROKE', () => I_em.type === 'STROKE');
+  step(
+    'I',
+    'Câu 2: user gõ "yếu nửa người, nói ngọng"',
+    `isEmergency: ${I_em.isEmergency}, type: ${I_em.type}`,
+    I_em,
+    () => I_em.isEmergency
+  );
+  step(
+    'I',
+    'Kiểm tra: dừng script, chuyển cấp cứu',
+    `Type: ${I_em.type}`,
+    'STROKE',
+    () => I_em.type === 'STROKE'
+  );
 
   // ════════════════════════════════════════════════════════════════
   // FLOW J: Triệu chứng lạ → fallback → R&D → ngày mai có script
   // ════════════════════════════════════════════════════════════════
-  addFlow('J', 'Triệu chứng mới → fallback → R&D → script', 'User nói "đau dạ dày" lần đầu, hệ thống học dần', [], 'fallback');
+  addFlow(
+    'J',
+    'Triệu chứng mới → fallback → R&D → script',
+    'User nói "đau dạ dày" lần đầu, hệ thống học dần',
+    [],
+    'fallback'
+  );
   const J_match = await matchCluster(pool, USER_ID, 'đau dạ dày');
-  step('J', 'Ngày 1: "đau dạ dày" → tìm trong DB', `Matched: ${J_match.matched}`, J_match, () => !J_match.matched);
+  step(
+    'J',
+    'Ngày 1: "đau dạ dày" → tìm trong DB',
+    `Matched: ${J_match.matched}`,
+    J_match,
+    () => !J_match.matched
+  );
   const J_fb = runScript(fallbackScript, PROFILE, 'mid');
-  step('J', 'Fallback: 3 câu cơ bản', `${J_fb.questionCount} câu → severity: ${J_fb.conclusion?.severity}`, J_fb.conclusion?.severity, () => J_fb.isDone);
+  step(
+    'J',
+    'Fallback: 3 câu cơ bản',
+    `${J_fb.questionCount} câu → severity: ${J_fb.conclusion?.severity}`,
+    J_fb.conclusion?.severity,
+    () => J_fb.isDone
+  );
   await logFallback(pool, USER_ID, 'đau dạ dày', null, []);
   step('J', 'Log fallback → chờ R&D đêm', 'Saved to fallback_logs', 'pending', () => true);
   const J_cluster = await addCluster(pool, USER_ID, 'gastric_pain', 'đau dạ dày', 'rnd_cycle');
-  step('J', 'R&D đêm: tạo cluster "đau dạ dày"', `Cluster: ${J_cluster.cluster_key}`, J_cluster.cluster_key, () => !!J_cluster);
+  step(
+    'J',
+    'R&D đêm: tạo cluster "đau dạ dày"',
+    `Cluster: ${J_cluster.cluster_key}`,
+    J_cluster.cluster_key,
+    () => !!J_cluster
+  );
   const J_match2 = await matchCluster(pool, USER_ID, 'đau dạ dày');
-  step('J', 'Ngày 2: "đau dạ dày" → tìm lại', `Matched: ${J_match2.matched} → ${J_match2.cluster?.cluster_key}`, J_match2, () => J_match2.matched);
+  step(
+    'J',
+    'Ngày 2: "đau dạ dày" → tìm lại',
+    `Matched: ${J_match2.matched} → ${J_match2.cluster?.cluster_key}`,
+    J_match2,
+    () => J_match2.matched
+  );
   const J_script = await getScript(pool, USER_ID, 'gastric_pain', 'initial');
-  step('J', 'Ngày 2: có script riêng', `${J_script?.script_data?.questions?.length} câu chuyên sâu`, J_script?.script_data?.questions?.length, () => !!J_script);
+  step(
+    'J',
+    'Ngày 2: có script riêng',
+    `${J_script?.script_data?.questions?.length} câu chuyên sâu`,
+    J_script?.script_data?.questions?.length,
+    () => !!J_script
+  );
 
   // ════════════════════════════════════════════════════════════════
   // FLOW K: Đổi triệu chứng giữa ngày
   // ════════════════════════════════════════════════════════════════
-  addFlow('K', 'Đổi triệu chứng: sáng đau đầu, chiều chóng mặt', 'User có nhiều vấn đề, mỗi lần check-in khác nhau', [], 'normal');
+  addFlow(
+    'K',
+    'Đổi triệu chứng: sáng đau đầu, chiều chóng mặt',
+    'User có nhiều vấn đề, mỗi lần check-in khác nhau',
+    [],
+    'normal'
+  );
   const K1 = runScript(headacheScript, PROFILE, 'mild');
-  step('K', 'Sáng: đau đầu nhẹ', `Severity: ${K1.conclusion?.severity}`, K1.conclusion?.severity, () => K1.isDone);
+  step(
+    'K',
+    'Sáng: đau đầu nhẹ',
+    `Severity: ${K1.conclusion?.severity}`,
+    K1.conclusion?.severity,
+    () => K1.isDone
+  );
   const K1_fu = followUp(headacheScript, 'better', false, K1.conclusion?.severity);
-  step('K', 'Follow-up đau đầu: "Đỡ hơn"', `→ ${K1_fu.severity}`, K1_fu, () => K1_fu.severity === 'low');
+  step(
+    'K',
+    'Follow-up đau đầu: "Đỡ hơn"',
+    `→ ${K1_fu.severity}`,
+    K1_fu,
+    () => K1_fu.severity === 'low'
+  );
   const K2 = runScript(dizzinessScript, PROFILE, 'mid');
-  step('K', 'Chiều: chóng mặt (triệu chứng khác)', `Severity: ${K2.conclusion?.severity}`, K2.conclusion?.severity, () => K2.isDone);
+  step(
+    'K',
+    'Chiều: chóng mặt (triệu chứng khác)',
+    `Severity: ${K2.conclusion?.severity}`,
+    K2.conclusion?.severity,
+    () => K2.isDone
+  );
   step('K', 'Kiểm tra: 2 sessions khác cluster', 'headache + dizziness', '2 clusters', () => true);
 
   // ════════════════════════════════════════════════════════════════
   // FLOW L: "Tôi ổn" sáng → emergency buổi tối
   // ════════════════════════════════════════════════════════════════
-  addFlow('L', '"Tôi ổn" sáng → emergency tối', 'Sáng khỏe nhưng tối đột ngột nguy hiểm', [], 'emergency');
+  addFlow(
+    'L',
+    '"Tôi ổn" sáng → emergency tối',
+    'Sáng khỏe nhưng tối đột ngột nguy hiểm',
+    [],
+    'emergency'
+  );
   step('L', 'Sáng: "Tôi ổn" → monitoring', 'Hẹn 9h tối', 'fine', () => true);
   const L_em = detectEmergency(['co giật'], PROFILE);
-  step('L', 'Tối: "co giật" → EMERGENCY', `isEmergency: ${L_em.isEmergency}, type: ${L_em.type}`, L_em, () => L_em.isEmergency && L_em.type === 'SEIZURE');
+  step(
+    'L',
+    'Tối: "co giật" → EMERGENCY',
+    `isEmergency: ${L_em.isEmergency}, type: ${L_em.type}`,
+    L_em,
+    () => L_em.isEmergency && L_em.type === 'SEIZURE'
+  );
   step('L', 'Kiểm tra: bypass evening check', 'Emergency > evening review', 'bypassed', () => true);
 
   // ════════════════════════════════════════════════════════════════
   // FLOW M: Follow-up chuỗi: đỡ → vậy → nặng → escalate
   // ════════════════════════════════════════════════════════════════
-  addFlow('M', 'Follow-up chuỗi dài: đỡ → vậy → nặng', 'Theo dõi nhiều lần trong ngày, tình trạng thay đổi', [], 'critical');
+  addFlow(
+    'M',
+    'Follow-up chuỗi dài: đỡ → vậy → nặng',
+    'Theo dõi nhiều lần trong ngày, tình trạng thay đổi',
+    [],
+    'critical'
+  );
   const M_init = runScript(headacheScript, PROFILE, 'mid');
-  step('M', 'Check-in ban đầu: trung bình', `Severity: ${M_init.conclusion?.severity}`, M_init.conclusion?.severity, () => M_init.isDone);
+  step(
+    'M',
+    'Check-in ban đầu: trung bình',
+    `Severity: ${M_init.conclusion?.severity}`,
+    M_init.conclusion?.severity,
+    () => M_init.isDone
+  );
   const M_fu1 = followUp(headacheScript, 'better', false, M_init.conclusion?.severity);
-  step('M', 'Follow-up 1: "Đỡ hơn"', `${M_fu1.severity} → monitoring`, M_fu1, () => M_fu1.severity === 'low');
+  step(
+    'M',
+    'Follow-up 1: "Đỡ hơn"',
+    `${M_fu1.severity} → monitoring`,
+    M_fu1,
+    () => M_fu1.severity === 'low'
+  );
   const M_fu2 = followUp(headacheScript, 'same', false, 'low');
   step('M', 'Follow-up 2: "Vẫn vậy" (từ low)', `${M_fu2.severity}`, M_fu2, () => true);
   const M_fu3 = followUp(headacheScript, 'worse', true, M_fu2.severity);
-  step('M', 'Follow-up 3: "Nặng hơn" + triệu chứng mới!', `${M_fu3.severity} → escalate`, M_fu3, () => M_fu3.severity === 'high');
-  step('M', 'Kiểm tra: phải khuyên đi bác sĩ', `needsDoctor: ${M_fu3.needsDoctor}`, M_fu3.needsDoctor, () => M_fu3.needsDoctor);
+  step(
+    'M',
+    'Follow-up 3: "Nặng hơn" + triệu chứng mới!',
+    `${M_fu3.severity} → escalate`,
+    M_fu3,
+    () => M_fu3.severity === 'high'
+  );
+  step(
+    'M',
+    'Kiểm tra: phải khuyên đi bác sĩ',
+    `needsDoctor: ${M_fu3.needsDoctor}`,
+    M_fu3.needsDoctor,
+    () => M_fu3.needsDoctor
+  );
 
   // ════════════════════════════════════════════════════════════════
   // FLOW N: Phủ định emergency → không báo cấp cứu
   // ════════════════════════════════════════════════════════════════
-  addFlow('N', 'Phủ định: "không đau ngực" → không phải emergency', 'User nói KHÔNG bị, hệ thống phải hiểu phủ định', [], 'emergency');
+  addFlow(
+    'N',
+    'Phủ định: "không đau ngực" → không phải emergency',
+    'User nói KHÔNG bị, hệ thống phải hiểu phủ định',
+    [],
+    'emergency'
+  );
   const N1 = detectEmergency(['không đau ngực'], PROFILE);
   step('N', '"không đau ngực"', `isEmergency: ${N1.isEmergency}`, N1, () => !N1.isEmergency);
   const N2 = detectEmergency(['hết khó thở rồi'], PROFILE);
@@ -252,47 +580,145 @@ async function run() {
   // ════════════════════════════════════════════════════════════════
   // FLOW O: Người cao tuổi + bệnh nền → luôn nghiêm túc hơn
   // ════════════════════════════════════════════════════════════════
-  addFlow('O', 'Người cao tuổi: dù nhẹ cũng phải theo dõi kỹ', 'Bà Lan 75t, 4 bệnh nền — không được bỏ qua', [], 'safety');
-  const elderlyProfile = { birth_year: 1951, gender: 'Nữ', full_name: 'Nguyễn Thị Lan', medical_conditions: ['Tiểu đường', 'Cao huyết áp', 'Suy tim', 'Loãng xương'], age: 75 };
+  addFlow(
+    'O',
+    'Người cao tuổi: dù nhẹ cũng phải theo dõi kỹ',
+    'Bà Lan 75t, 4 bệnh nền — không được bỏ qua',
+    [],
+    'safety'
+  );
+  const elderlyProfile = {
+    birth_year: 1951,
+    gender: 'Nữ',
+    full_name: 'Nguyễn Thị Lan',
+    medical_conditions: ['Tiểu đường', 'Cao huyết áp', 'Suy tim', 'Loãng xương'],
+    age: 75,
+  };
   const O_result = runScript(headacheScript, elderlyProfile, 'mild');
-  step('O', 'Bà Lan trả lời nhẹ nhất', `Severity: ${O_result.conclusion?.severity}`, O_result.conclusion?.severity, () => O_result.conclusion?.severity !== 'low');
-  step('O', 'Kiểm tra: KHÔNG ĐƯỢC xếp Nhẹ', `${O_result.conclusion?.severity} (phải >= Trung bình)`, O_result.conclusion?.severity, () => ['medium', 'high'].includes(O_result.conclusion?.severity));
-  const youngProfile = { birth_year: 1996, gender: 'Nam', full_name: 'Anh An', medical_conditions: [], age: 30 };
+  step(
+    'O',
+    'Bà Lan trả lời nhẹ nhất',
+    `Severity: ${O_result.conclusion?.severity}`,
+    O_result.conclusion?.severity,
+    () => O_result.conclusion?.severity !== 'low'
+  );
+  step(
+    'O',
+    'Kiểm tra: KHÔNG ĐƯỢC xếp Nhẹ',
+    `${O_result.conclusion?.severity} (phải >= Trung bình)`,
+    O_result.conclusion?.severity,
+    () => ['medium', 'high'].includes(O_result.conclusion?.severity)
+  );
+  const youngProfile = {
+    birth_year: 1996,
+    gender: 'Nam',
+    full_name: 'Anh An',
+    medical_conditions: [],
+    age: 30,
+  };
   const O_young = runScript(headacheScript, youngProfile, 'mild');
-  step('O', 'Anh An (30t khỏe) cùng câu trả lời', `Severity: ${O_young.conclusion?.severity}`, O_young.conclusion?.severity, () => true);
-  const elderlyHigher = ['high', 'medium', 'low'].indexOf(O_result.conclusion?.severity) <= ['high', 'medium', 'low'].indexOf(O_young.conclusion?.severity);
-  step('O', 'So sánh: Bà Lan phải >= Anh An', `${O_result.conclusion?.severity} >= ${O_young.conclusion?.severity}`, elderlyHigher, () => elderlyHigher);
+  step(
+    'O',
+    'Anh An (30t khỏe) cùng câu trả lời',
+    `Severity: ${O_young.conclusion?.severity}`,
+    O_young.conclusion?.severity,
+    () => true
+  );
+  const elderlyHigher =
+    ['high', 'medium', 'low'].indexOf(O_result.conclusion?.severity) <=
+    ['high', 'medium', 'low'].indexOf(O_young.conclusion?.severity);
+  step(
+    'O',
+    'So sánh: Bà Lan phải >= Anh An',
+    `${O_result.conclusion?.severity} >= ${O_young.conclusion?.severity}`,
+    elderlyHigher,
+    () => elderlyHigher
+  );
 
   // ════════════════════════════════════════════════════════════════
   // FLOW P: Triệu chứng lạ + biến thể → token matching
   // ════════════════════════════════════════════════════════════════
-  addFlow('P', 'Biến thể triệu chứng → token matching', 'User nói khác nhau nhưng cùng 1 bệnh', [], 'fallback');
+  addFlow(
+    'P',
+    'Biến thể triệu chứng → token matching',
+    'User nói khác nhau nhưng cùng 1 bệnh',
+    [],
+    'fallback'
+  );
   const P1 = await matchCluster(pool, USER_ID, 'chóng mặt buổi sáng');
-  step('P', '"chóng mặt buổi sáng" → tìm cluster', `Matched: ${P1.matched} → ${P1.cluster?.cluster_key}`, P1, () => P1.matched);
+  step(
+    'P',
+    '"chóng mặt buổi sáng" → tìm cluster',
+    `Matched: ${P1.matched} → ${P1.cluster?.cluster_key}`,
+    P1,
+    () => P1.matched
+  );
   const P2 = await matchCluster(pool, USER_ID, 'bị mệt quá');
-  step('P', '"bị mệt quá" → tìm cluster (token "mệt")', `Matched: ${P2.matched} → ${P2.cluster?.cluster_key}`, P2, () => P2.matched);
+  step(
+    'P',
+    '"bị mệt quá" → tìm cluster (token "mệt")',
+    `Matched: ${P2.matched} → ${P2.cluster?.cluster_key}`,
+    P2,
+    () => P2.matched
+  );
   const P3 = await matchCluster(pool, USER_ID, 'nhức đầu ghê');
-  step('P', '"nhức đầu ghê" → tìm cluster (token "đầu")', `Matched: ${P3.matched}`, P3, () => P3.matched);
+  step(
+    'P',
+    '"nhức đầu ghê" → tìm cluster (token "đầu")',
+    `Matched: ${P3.matched}`,
+    P3,
+    () => P3.matched
+  );
   const P4 = await matchCluster(pool, USER_ID, 'đau lưng dưới');
   step('P', '"đau lưng dưới" → KHÔNG có cluster', `Matched: ${P4.matched}`, P4, () => !P4.matched);
 
   // ════════════════════════════════════════════════════════════════
   // FLOW Q: "Hơi mệt" nhưng không chọn cluster → fallback
   // ════════════════════════════════════════════════════════════════
-  addFlow('Q', '"Hơi mệt" + nhập tự do → fallback', 'User không chọn cluster sẵn, gõ triệu chứng tự do', [], 'fallback');
+  addFlow(
+    'Q',
+    '"Hơi mệt" + nhập tự do → fallback',
+    'User không chọn cluster sẵn, gõ triệu chứng tự do',
+    [],
+    'fallback'
+  );
   const Q_match = await matchCluster(pool, USER_ID, 'đau tai trái');
-  step('Q', '"đau tai trái" → không match', `Matched: ${Q_match.matched}`, Q_match, () => !Q_match.matched);
+  step(
+    'Q',
+    '"đau tai trái" → không match',
+    `Matched: ${Q_match.matched}`,
+    Q_match,
+    () => !Q_match.matched
+  );
   const Q_fb = runScript(fallbackScript, PROFILE, 'severe');
-  step('Q', 'Fallback 3 câu, trả lời nặng', `Severity: ${Q_fb.conclusion?.severity}`, Q_fb.conclusion?.severity, () => Q_fb.isDone);
-  step('Q', 'Kiểm tra: fallback vẫn cho kết quả', `Summary: ${Q_fb.conclusion?.summary?.substring(0, 30)}`, Q_fb.conclusion?.summary, () => !!Q_fb.conclusion?.summary);
+  step(
+    'Q',
+    'Fallback 3 câu, trả lời nặng',
+    `Severity: ${Q_fb.conclusion?.severity}`,
+    Q_fb.conclusion?.severity,
+    () => Q_fb.isDone
+  );
+  step(
+    'Q',
+    'Kiểm tra: fallback vẫn cho kết quả',
+    `Summary: ${Q_fb.conclusion?.summary?.substring(0, 30)}`,
+    Q_fb.conclusion?.summary,
+    () => !!Q_fb.conclusion?.summary
+  );
   const Q_fu = followUp(fallbackScript, 'worse', true, Q_fb.conclusion?.severity);
-  step('Q', 'Follow-up fallback: "Nặng hơn"', `${Q_fu.severity} → escalate`, Q_fu, () => Q_fu.severity === 'high');
+  step(
+    'Q',
+    'Follow-up fallback: "Nặng hơn"',
+    `${Q_fu.severity} → escalate`,
+    Q_fu,
+    () => Q_fu.severity === 'high'
+  );
 
   // ════════════════════════════════════════════════════════════════
   // Summary
   // ════════════════════════════════════════════════════════════════
-  const passFlows = flows.filter(f => f.pass).length;
-  const failFlows = flows.filter(f => !f.pass).length;
+  const passFlows = flows.filter((f) => f.pass).length;
+  const failFlows = flows.filter((f) => !f.pass).length;
 
   console.log(`\n${'═'.repeat(50)}`);
   console.log(`  ${flows.length} luồng | ${passFlows} đạt | ${failFlows} lỗi`);
@@ -301,17 +727,26 @@ async function run() {
 
   if (failFlows > 0) {
     console.log('\nLỗi:');
-    flows.filter(f => !f.pass).forEach(f => console.log(`  ❌ ${f.name}: ${f.issues.join(', ')}`));
+    flows
+      .filter((f) => !f.pass)
+      .forEach((f) => console.log(`  ❌ ${f.name}: ${f.issues.join(', ')}`));
   }
 
   // Save JSON + HTML
   const output = {
     generatedAt: new Date().toISOString(),
-    summary: { totalFlows: flows.length, passFlows, failFlows, totalSteps: totalPass + totalFail, passSteps: totalPass, failSteps: totalFail },
-    flows: flows.map(f => ({
+    summary: {
+      totalFlows: flows.length,
+      passFlows,
+      failFlows,
+      totalSteps: totalPass + totalFail,
+      passSteps: totalPass,
+      failSteps: totalFail,
+    },
+    flows: flows.map((f) => ({
       ...f,
-      passCount: f.steps.filter(s => s.passed).length,
-      failCount: f.steps.filter(s => !s.passed).length,
+      passCount: f.steps.filter((s) => s.passed).length,
+      failCount: f.steps.filter((s) => !s.passed).length,
     })),
   };
 
@@ -319,7 +754,11 @@ async function run() {
   const allComplaints = listComplaints();
   await pool.query('DELETE FROM triage_scripts WHERE user_id=$1', [USER_ID]);
   await pool.query('DELETE FROM problem_clusters WHERE user_id=$1', [USER_ID]);
-  const { createClustersFromOnboarding: createAll, getScript: getS, toClusterKey: toKey } = require('../../src/services/checkin/script.service');
+  const {
+    createClustersFromOnboarding: createAll,
+    getScript: getS,
+    toClusterKey: toKey,
+  } = require('../../src/services/checkin/script.service');
   await createAll(pool, USER_ID, allComplaints);
   const allScripts = {};
   for (const c of allComplaints) {
@@ -334,7 +773,9 @@ async function run() {
   fs.writeFileSync(htmlPath, html);
   console.log(`\nJSON: scripts/test/data/test-flows.json`);
   console.log(`HTML: scripts/test/data/test-flows-report.html`);
-  try { execSync(`open "${htmlPath}"`); } catch {}
+  try {
+    execSync(`open "${htmlPath}"`);
+  } catch {}
   await pool.end();
 }
 
@@ -342,24 +783,52 @@ function generateFlowHTML(data, allScripts = {}, fallbackScriptData = {}) {
   const s = data.summary;
   const allPass = s.failFlows === 0;
   const catIcons = { normal: '✅', critical: '🔥', emergency: '🚨', fallback: '❓', safety: '🛡️' };
-  const catLabels = { normal: 'Luồng bình thường', critical: 'Luồng nghiêm trọng', emergency: 'Cấp cứu', fallback: 'Triệu chứng lạ', safety: 'An toàn y khoa' };
-  const catColors = { normal: '#16a34a', critical: '#dc2626', emergency: '#7f1d1d', fallback: '#ca8a04', safety: '#2563eb' };
+  const catLabels = {
+    normal: 'Luồng bình thường',
+    critical: 'Luồng nghiêm trọng',
+    emergency: 'Cấp cứu',
+    fallback: 'Triệu chứng lạ',
+    safety: 'An toàn y khoa',
+  };
+  const catColors = {
+    normal: '#16a34a',
+    critical: '#dc2626',
+    emergency: '#7f1d1d',
+    fallback: '#ca8a04',
+    safety: '#2563eb',
+  };
 
   // Serialize flow data for JS replay
-  const flowDataJSON = JSON.stringify(data.flows.map(f => ({
-    id: f.id, name: f.name, desc: f.desc, category: f.category,
-    steps: f.steps.map(st => ({ action: st.action, detail: st.detail, result: st.result, passed: st.passed, convo: st.convo, conclusion: st.conclusion, followUp: st.followUp })),
-  })));
+  const flowDataJSON = JSON.stringify(
+    data.flows.map((f) => ({
+      id: f.id,
+      name: f.name,
+      desc: f.desc,
+      category: f.category,
+      steps: f.steps.map((st) => ({
+        action: st.action,
+        detail: st.detail,
+        result: st.result,
+        passed: st.passed,
+        convo: st.convo,
+        conclusion: st.conclusion,
+        followUp: st.followUp,
+      })),
+    }))
+  );
 
   const categories = {};
-  data.flows.forEach(f => { if (!categories[f.category]) categories[f.category] = []; categories[f.category].push(f); });
+  data.flows.forEach((f) => {
+    if (!categories[f.category]) categories[f.category] = [];
+    categories[f.category].push(f);
+  });
 
   return `<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Asinu — Test luồng Check-in</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f8fafc;color:#1e293b;font-size:13px}
 .header{background:linear-gradient(135deg,#1e40af,#7c3aed);color:#fff;padding:32px 20px;text-align:center}.header h1{font-size:22px;margin-bottom:4px}.header .sub{opacity:.8;font-size:13px}
-.status{display:inline-block;margin-top:12px;padding:6px 20px;border-radius:20px;font-weight:700;font-size:14px;background:${allPass?'rgba(74,222,128,.2)':'rgba(248,113,113,.2)'};color:${allPass?'#bbf7d0':'#fecaca'};border:2px solid ${allPass?'#4ade80':'#f87171'}}
+.status{display:inline-block;margin-top:12px;padding:6px 20px;border-radius:20px;font-weight:700;font-size:14px;background:${allPass ? 'rgba(74,222,128,.2)' : 'rgba(248,113,113,.2)'};color:${allPass ? '#bbf7d0' : '#fecaca'};border:2px solid ${allPass ? '#4ade80' : '#f87171'}}
 .stats{display:flex;justify-content:center;gap:12px;margin:12px auto 20px;max-width:600px;padding:0 16px;position:relative;z-index:1;flex-wrap:wrap}
 .stat{background:#fff;border-radius:10px;padding:14px;text-align:center;flex:1;min-width:80px;box-shadow:0 1px 4px rgba(0,0,0,.08)}.stat .num{font-size:24px;font-weight:800}.stat .lbl{font-size:10px;color:#64748b;text-transform:uppercase;margin-top:2px}
 .stat.p .num{color:#16a34a}.stat.f .num{color:#dc2626}.stat.t .num{color:#2563eb}
@@ -472,7 +941,7 @@ function generateFlowHTML(data, allScripts = {}, fallbackScriptData = {}) {
 .footer{text-align:center;padding:30px;color:#94a3b8;font-size:11px;margin-top:20px;border-top:1px solid #e2e8f0}
 </style></head><body>
 <div class="header"><h1>Test toàn bộ luồng Check-in</h1><div class="sub">${s.totalFlows} luồng × ${s.totalSteps} bước kiểm tra</div>
-<div class="status">${allPass?'✔ TẤT CẢ ĐẠT':'⚠ CÓ LỖI'} — ${s.passFlows}/${s.totalFlows} luồng, ${s.passSteps}/${s.totalSteps} bước</div></div>
+<div class="status">${allPass ? '✔ TẤT CẢ ĐẠT' : '⚠ CÓ LỖI'} — ${s.passFlows}/${s.totalFlows} luồng, ${s.passSteps}/${s.totalSteps} bước</div></div>
 
 <div style="max-width:900px;margin:0 auto;padding:0 16px">
 <div class="tabs">
@@ -488,68 +957,90 @@ function generateFlowHTML(data, allScripts = {}, fallbackScriptData = {}) {
 <div class="stat p"><div class="num">${s.passSteps}</div><div class="lbl">Đạt</div></div>
 <div class="stat f"><div class="num">${s.failSteps}</div><div class="lbl">Lỗi</div></div></div>
 
-${Object.entries(categories).map(([cat, catFlows]) => `
+${Object.entries(categories)
+  .map(
+    ([cat, catFlows]) => `
 <div class="section">
-<div class="cat-title"><span>${catIcons[cat]||'📋'}</span><span style="color:${catColors[cat]||'#334155'}">${catLabels[cat]||cat}</span>
-<span style="font-size:11px;color:#94a3b8;margin-left:auto">${catFlows.filter(f=>f.pass).length}/${catFlows.length} đạt</span></div>
-${catFlows.map(f => `
-<div class="flow${!f.pass?' open':''}">
+<div class="cat-title"><span>${catIcons[cat] || '📋'}</span><span style="color:${catColors[cat] || '#334155'}">${catLabels[cat] || cat}</span>
+<span style="font-size:11px;color:#94a3b8;margin-left:auto">${catFlows.filter((f) => f.pass).length}/${catFlows.length} đạt</span></div>
+${catFlows
+  .map(
+    (f) => `
+<div class="flow${!f.pass ? ' open' : ''}">
 <div class="flow-header">
-<span style="font-size:16px">${f.pass?'✅':'❌'}</span>
+<span style="font-size:16px">${f.pass ? '✅' : '❌'}</span>
 <div style="flex:1" onclick="this.parentElement.parentElement.classList.toggle('open')"><div class="flow-name">${f.id}. ${f.name}</div><div class="flow-desc">${f.desc}</div></div>
-<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('${f.id}')">▶ Tái hiện</button><span class="pill g">${f.passCount} đạt</span>${f.failCount?`<span class="pill r">${f.failCount} lỗi</span>`:''}<span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
+<div class="flow-stats"><button class="replay-btn" onclick="event.stopPropagation();replayFlow('${f.id}')">▶ Tái hiện</button><span class="pill g">${f.passCount} đạt</span>${f.failCount ? `<span class="pill r">${f.failCount} lỗi</span>` : ''}<span class="arrow" onclick="this.parentElement.parentElement.parentElement.classList.toggle('open')">▶</span></div></div>
 <div class="flow-body">
 <div class="timeline">
-${f.steps.map((st, idx) => {
-  const hasDetail = st.convo || st.conclusion || st.followUp;
-  const sevVN = {low:'Nhẹ',medium:'Trung bình',high:'Nặng'};
-  const sevCol = {low:'#16a34a',medium:'#ca8a04',high:'#dc2626'};
+${f.steps
+  .map((st, idx) => {
+    const hasDetail = st.convo || st.conclusion || st.followUp;
+    const sevVN = { low: 'Nhẹ', medium: 'Trung bình', high: 'Nặng' };
+    const sevCol = { low: '#16a34a', medium: '#ca8a04', high: '#dc2626' };
 
-  let expandHTML = '';
-  if (st.convo && st.convo.length > 0) {
-    expandHTML += st.convo.map((c,i) => `
-      <div class="chat-msg chat-system">🤖 <b>Câu ${i+1}:</b> ${c.q}${c.options ? `<div class="chat-opts">Lựa chọn: ${c.options.join(' · ')}</div>` : `<div class="chat-opts">${c.type==='slider'?'Thang điểm 0-10':'Nhập tự do'}</div>`}</div>
+    let expandHTML = '';
+    if (st.convo && st.convo.length > 0) {
+      expandHTML += st.convo
+        .map(
+          (c, i) => `
+      <div class="chat-msg chat-system">🤖 <b>Câu ${i + 1}:</b> ${c.q}${c.options ? `<div class="chat-opts">Lựa chọn: ${c.options.join(' · ')}</div>` : `<div class="chat-opts">${c.type === 'slider' ? 'Thang điểm 0-10' : 'Nhập tự do'}</div>`}</div>
       <div class="chat-msg chat-user">👤 ${c.a}</div>
-    `).join('');
-  }
-  if (st.conclusion) {
-    const c = st.conclusion;
-    const sev = c.severity||'low';
-    expandHTML += `<div class="chat-result ${sev}">
-      <b>📊 Kết quả: <span style="color:${sevCol[sev]}">${sevVN[sev]||sev}</span> · Hẹn ${c.followUpHours||'?'}h · Bác sĩ: ${c.needsDoctor?'CÓ':'Không'} · Gia đình: ${c.needsFamilyAlert?'CÓ':'Không'}</b>
-      ${c.summary?`<div style="margin-top:4px"><b>Tóm tắt:</b> ${c.summary}</div>`:''}
-      ${c.recommendation?`<div><b>Lời khuyên:</b> ${c.recommendation}</div>`:''}
-      ${c.closeMessage?`<div><b>Lời nhắn:</b> ${c.closeMessage}</div>`:''}
+    `
+        )
+        .join('');
+    }
+    if (st.conclusion) {
+      const c = st.conclusion;
+      const sev = c.severity || 'low';
+      expandHTML += `<div class="chat-result ${sev}">
+      <b>📊 Kết quả: <span style="color:${sevCol[sev]}">${sevVN[sev] || sev}</span> · Hẹn ${c.followUpHours || '?'}h · Bác sĩ: ${c.needsDoctor ? 'CÓ' : 'Không'} · Gia đình: ${c.needsFamilyAlert ? 'CÓ' : 'Không'}</b>
+      ${c.summary ? `<div style="margin-top:4px"><b>Tóm tắt:</b> ${c.summary}</div>` : ''}
+      ${c.recommendation ? `<div><b>Lời khuyên:</b> ${c.recommendation}</div>` : ''}
+      ${c.closeMessage ? `<div><b>Lời nhắn:</b> ${c.closeMessage}</div>` : ''}
     </div>`;
-  }
-  if (st.followUp) {
-    const fu = st.followUp;
-    const r = fu.result;
-    const actionVN = r.action==='monitoring'?'✅ Theo dõi → hẹn tối':r.action==='escalate'?'🚨 Cảnh báo + khuyên bác sĩ':r.action==='continue_followup'?'🔄 Tiếp tục follow-up':r.action;
-    expandHTML += `<div class="chat-msg chat-system">🤖 So với lúc trước, thấy thế nào?</div>
+    }
+    if (st.followUp) {
+      const fu = st.followUp;
+      const r = fu.result;
+      const actionVN =
+        r.action === 'monitoring'
+          ? '✅ Theo dõi → hẹn tối'
+          : r.action === 'escalate'
+            ? '🚨 Cảnh báo + khuyên bác sĩ'
+            : r.action === 'continue_followup'
+              ? '🔄 Tiếp tục follow-up'
+              : r.action;
+      expandHTML += `<div class="chat-msg chat-system">🤖 So với lúc trước, thấy thế nào?</div>
       <div class="chat-msg chat-user">👤 ${fu.status}</div>
       <div class="chat-msg chat-system">🤖 Có triệu chứng mới không?</div>
-      <div class="chat-msg chat-user">👤 ${fu.newSymptoms?'Có':'Không'}</div>
+      <div class="chat-msg chat-user">👤 ${fu.newSymptoms ? 'Có' : 'Không'}</div>
       <div class="chat-fu">
-        <b>Kết quả:</b> <span style="color:${sevCol[r.severity]};font-weight:700">${sevVN[r.severity]}</span> · ${actionVN} · Bác sĩ: ${r.needsDoctor?'CÓ':'Không'}
+        <b>Kết quả:</b> <span style="color:${sevCol[r.severity]};font-weight:700">${sevVN[r.severity]}</span> · ${actionVN} · Bác sĩ: ${r.needsDoctor ? 'CÓ' : 'Không'}
       </div>`;
-  }
+    }
 
-  const dotClass = st.passed ? (hasDetail ? 'pass' : 'info') : 'fail';
-  const stepNum = idx + 1;
+    const dotClass = st.passed ? (hasDetail ? 'pass' : 'info') : 'fail';
+    const stepNum = idx + 1;
 
-  return `<div class="tl-node${!st.passed?' expanded':''}" ${hasDetail?`onclick="this.classList.toggle('expanded')"`:''}>
+    return `<div class="tl-node${!st.passed ? ' expanded' : ''}" ${hasDetail ? `onclick="this.classList.toggle('expanded')"` : ''}>
   <div class="tl-dot ${dotClass}">${stepNum}</div>
-  <div class="tl-content${hasDetail?' clickable':''}">
-    <div class="tl-action">${st.passed?'✅':'❌'} ${st.action}${hasDetail?'<span class="expand-hint">▼ chi tiết</span>':''}</div>
+  <div class="tl-content${hasDetail ? ' clickable' : ''}">
+    <div class="tl-action">${st.passed ? '✅' : '❌'} ${st.action}${hasDetail ? '<span class="expand-hint">▼ chi tiết</span>' : ''}</div>
     <div class="tl-detail">${st.detail}</div>
-    <span class="tl-result">${st.result?.substring?.(0,50)||st.result}</span>
+    <span class="tl-result">${st.result?.substring?.(0, 50) || st.result}</span>
   </div>
-  ${hasDetail?`<div class="tl-expand">${expandHTML}</div>`:''}
-</div>`; }).join('')}
+  ${hasDetail ? `<div class="tl-expand">${expandHTML}</div>` : ''}
+</div>`;
+  })
+  .join('')}
 </div>
-</div></div>`).join('')}
-</div>`).join('')}
+</div></div>`
+  )
+  .join('')}
+</div>`
+  )
+  .join('')}
 
 </div><!-- end tab-results -->
 
@@ -914,4 +1405,8 @@ async function iShowConclusion(r){
 </body></html>`;
 }
 
-run().catch(err => { console.error('CRASH:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASH:', err);
+  pool.end();
+  process.exit(1);
+});

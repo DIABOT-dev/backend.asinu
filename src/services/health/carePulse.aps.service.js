@@ -1,5 +1,5 @@
 const { t } = require('../../i18n');
-﻿const { randomUUID } = require('crypto');
+const { randomUUID } = require('crypto');
 const { updateMissionProgress } = require('../missions/missions.service');
 
 const COOLDOWN_MS = 4 * 60 * 60 * 1000;
@@ -16,7 +16,7 @@ const DEFAULT_BASELINE = {
   escalation_silence_count: 2,
   escalation_delay_minutes: 20,
   mu_silence_minutes: 10,
-  sigma_silence_minutes: 5
+  sigma_silence_minutes: 5,
 };
 
 const APS_WEIGHTS = {
@@ -25,7 +25,7 @@ const APS_WEIGHTS = {
   wH: 0.9,
   wE: 1.2,
   wS: 1.0,
-  wR: 1.3
+  wR: 1.3,
 };
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -47,7 +47,9 @@ const addDays = (date, days) => {
 };
 
 const isSameDay = (a, b) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
 
 const isWithinWindow = (date, startHour, endHour) => {
   const start = setTime(date, startHour);
@@ -55,7 +57,8 @@ const isWithinWindow = (date, startHour, endHour) => {
   return date >= start && date < end;
 };
 
-const minutesBetween = (later, earlier) => Math.max(0, (later.getTime() - earlier.getTime()) / 60000);
+const minutesBetween = (later, earlier) =>
+  Math.max(0, (later.getTime() - earlier.getTime()) / 60000);
 
 const computeNormalSchedule = (now, lastCheckInAt, baseline) => {
   const morningStart = setTime(now, baseline.morning_start_hour);
@@ -68,7 +71,9 @@ const computeNormalSchedule = (now, lastCheckInAt, baseline) => {
 
   if (inMorning) {
     const checkedIn = Boolean(
-      lastCheckInAt && isSameDay(lastCheckInAt, now) && isWithinWindow(lastCheckInAt, baseline.morning_start_hour, baseline.morning_end_hour)
+      lastCheckInAt &&
+      isSameDay(lastCheckInAt, now) &&
+      isWithinWindow(lastCheckInAt, baseline.morning_start_hour, baseline.morning_end_hour)
     );
     if (checkedIn) {
       return { nextAskAt: toIso(eveningStart), cooldownUntil: toIso(morningEnd) };
@@ -78,10 +83,15 @@ const computeNormalSchedule = (now, lastCheckInAt, baseline) => {
 
   if (inEvening) {
     const checkedIn = Boolean(
-      lastCheckInAt && isSameDay(lastCheckInAt, now) && isWithinWindow(lastCheckInAt, baseline.evening_start_hour, baseline.evening_end_hour)
+      lastCheckInAt &&
+      isSameDay(lastCheckInAt, now) &&
+      isWithinWindow(lastCheckInAt, baseline.evening_start_hour, baseline.evening_end_hour)
     );
     if (checkedIn) {
-      return { nextAskAt: toIso(setTime(addDays(now, 1), baseline.morning_start_hour)), cooldownUntil: toIso(eveningEnd) };
+      return {
+        nextAskAt: toIso(setTime(addDays(now, 1), baseline.morning_start_hour)),
+        cooldownUntil: toIso(eveningEnd),
+      };
     }
     return { nextAskAt: toIso(eveningStart), cooldownUntil: null };
   }
@@ -92,7 +102,10 @@ const computeNormalSchedule = (now, lastCheckInAt, baseline) => {
   if (now < eveningStart) {
     return { nextAskAt: toIso(eveningStart), cooldownUntil: null };
   }
-  return { nextAskAt: toIso(setTime(addDays(now, 1), baseline.morning_start_hour)), cooldownUntil: null };
+  return {
+    nextAskAt: toIso(setTime(addDays(now, 1), baseline.morning_start_hour)),
+    cooldownUntil: null,
+  };
 };
 
 const computeTiredSchedule = (now, lastCheckInAt, baseline) => {
@@ -127,10 +140,7 @@ const computeTier = (aps) => {
 };
 
 async function ensureBaseline(client, userId) {
-  const existing = await client.query(
-    `SELECT * FROM user_baselines WHERE user_id = $1`,
-    [userId]
-  );
+  const existing = await client.query(`SELECT * FROM user_baselines WHERE user_id = $1`, [userId]);
 
   if (existing.rows.length === 0) {
     const inserted = await client.query(
@@ -162,7 +172,7 @@ async function ensureBaseline(client, userId) {
         DEFAULT_BASELINE.escalation_silence_count,
         DEFAULT_BASELINE.escalation_delay_minutes,
         DEFAULT_BASELINE.mu_silence_minutes,
-        DEFAULT_BASELINE.sigma_silence_minutes
+        DEFAULT_BASELINE.sigma_silence_minutes,
       ]
     );
     return inserted.rows[0];
@@ -224,7 +234,7 @@ const mapRowToState = (row) => ({
   episodeId: row.episode_id || null,
   aps: Number(row.aps || 0),
   tier: Number(row.tier || 0),
-  reasons: Array.isArray(row.reasons) ? row.reasons : row.reasons || []
+  reasons: Array.isArray(row.reasons) ? row.reasons : row.reasons || [],
 });
 
 const parseEventTime = (clientTs, now) => {
@@ -287,16 +297,24 @@ const computeSignals = (now, state, baseline) => {
   const silenceMinutes = lastAskAt ? minutesBetween(now, lastAskAt) : 0;
 
   const mu = Number(baseline.mu_silence_minutes ?? DEFAULT_BASELINE.mu_silence_minutes);
-  const sigma = Math.max(Number(baseline.sigma_silence_minutes ?? DEFAULT_BASELINE.sigma_silence_minutes), SIGMA_FLOOR);
+  const sigma = Math.max(
+    Number(baseline.sigma_silence_minutes ?? DEFAULT_BASELINE.sigma_silence_minutes),
+    SIGMA_FLOOR
+  );
   const z = sigma > 0 ? (silenceMinutes - mu) / sigma : 0;
 
   let R = clamp((z + 3) / 6, 0, 1);
-  const cooldownActive = Boolean(lastOpenedAt && now.getTime() - lastOpenedAt.getTime() <= COOLDOWN_MS);
+  const cooldownActive = Boolean(
+    lastOpenedAt && now.getTime() - lastOpenedAt.getTime() <= COOLDOWN_MS
+  );
   if (cooldownActive) {
     R = 0;
   }
 
-  const delay = Math.max(1, Number(baseline.escalation_delay_minutes ?? DEFAULT_BASELINE.escalation_delay_minutes));
+  const delay = Math.max(
+    1,
+    Number(baseline.escalation_delay_minutes ?? DEFAULT_BASELINE.escalation_delay_minutes)
+  );
   const S = clamp(silenceMinutes / delay, 0, 1);
   const H = mapSelfReportToH(state.currentStatus);
   const E = state.emergencyArmed ? 1 : 0;
@@ -319,7 +337,7 @@ const computeSignals = (now, state, baseline) => {
     `S=${S.toFixed(2)}`,
     `E=${E.toFixed(2)}`,
     `H=${H.toFixed(2)}`,
-    `A=${A.toFixed(0)}`
+    `A=${A.toFixed(0)}`,
   ];
 
   return { aps, tier, reasons, silenceMinutes };
@@ -359,14 +377,17 @@ async function maybeCreateEscalation(client, userId, state, baseline, reasons, n
   if (
     state.tier !== 3 ||
     !state.emergencyArmed ||
-    state.silenceCount < Number(baseline.escalation_silence_count ?? DEFAULT_BASELINE.escalation_silence_count) ||
+    state.silenceCount <
+      Number(baseline.escalation_silence_count ?? DEFAULT_BASELINE.escalation_silence_count) ||
     !state.emergencyLastAskAt
   ) {
     return { escalationCreated: false };
   }
 
   const lastAskAt = toDate(state.emergencyLastAskAt);
-  const delayMinutes = Number(baseline.escalation_delay_minutes ?? DEFAULT_BASELINE.escalation_delay_minutes);
+  const delayMinutes = Number(
+    baseline.escalation_delay_minutes ?? DEFAULT_BASELINE.escalation_delay_minutes
+  );
   if (!lastAskAt || minutesBetween(now, lastAskAt) < delayMinutes) {
     return { escalationCreated: false };
   }
@@ -429,7 +450,13 @@ async function evaluateAndApplyEvent(pool, { userId, event, now }) {
       const stateRow = await getEngineState(client, userId, false);
       await client.query('COMMIT');
       const state = mapRowToState(stateRow);
-      return { state, aps: state.aps, tier: state.tier, reasons: state.reasons, actions: { idempotent: true } };
+      return {
+        state,
+        aps: state.aps,
+        tier: state.tier,
+        reasons: state.reasons,
+        actions: { idempotent: true },
+      };
     }
 
     const baseline = await ensureBaseline(client, userId);
@@ -468,13 +495,19 @@ async function evaluateAndApplyEvent(pool, { userId, event, now }) {
         event.source,
         event.self_report || null,
         silenceMinutes,
-        JSON.stringify(event.payload || {})
+        JSON.stringify(event.payload || {}),
       ]
     );
 
     if (outOfOrder) {
       await client.query('COMMIT');
-      return { state, aps: state.aps, tier: state.tier, reasons: [...state.reasons, 'order=late'], actions: { outOfOrder: true } };
+      return {
+        state,
+        aps: state.aps,
+        tier: state.tier,
+        reasons: [...state.reasons, 'order=late'],
+        actions: { outOfOrder: true },
+      };
     }
 
     state = applyEventToState(state, event, eventTime);
@@ -488,7 +521,14 @@ async function evaluateAndApplyEvent(pool, { userId, event, now }) {
     state.tier = signals.tier;
     state.reasons = signals.reasons;
 
-    const escalation = await maybeCreateEscalation(client, userId, state, baseline, signals.reasons, now);
+    const escalation = await maybeCreateEscalation(
+      client,
+      userId,
+      state,
+      baseline,
+      signals.reasons,
+      now
+    );
 
     if (event.event_type === 'CHECK_IN') {
       await updateBaselineFromEvents(client, userId);
@@ -543,7 +583,7 @@ async function evaluateAndApplyEvent(pool, { userId, event, now }) {
         state.aps,
         state.tier,
         JSON.stringify(state.reasons || []),
-        eventTime
+        eventTime,
       ]
     );
 
@@ -554,7 +594,7 @@ async function evaluateAndApplyEvent(pool, { userId, event, now }) {
       aps: finalState.aps,
       tier: finalState.tier,
       reasons: finalState.reasons,
-      actions: escalation
+      actions: escalation,
     };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -624,7 +664,6 @@ async function acknowledgeEscalation(pool, escalationId, userId) {
 
     return { ok: true, status: 'acknowledged' };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -633,9 +672,5 @@ module.exports = {
   evaluateAndApplyEvent,
   getState,
   ensureBaseline,
-  acknowledgeEscalation
+  acknowledgeEscalation,
 };
-
-
-
-

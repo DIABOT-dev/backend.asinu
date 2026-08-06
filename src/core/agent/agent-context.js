@@ -120,25 +120,29 @@ async function buildContext(pool, userId) {
     ),
 
     // 6b. Agent check-in memories
-    pool.query(
-      `SELECT memory_type, memory_key, content, confidence, source, updated_at
+    pool
+      .query(
+        `SELECT memory_type, memory_key, content, confidence, source, updated_at
        FROM agent_checkin_memory
        WHERE user_id = $1 AND is_active = TRUE
          AND (expires_at IS NULL OR expires_at > NOW())
        ORDER BY updated_at DESC
        LIMIT 20`,
-      [userId]
-    ).catch(() => ({ rows: [] })), // table may not exist yet
+        [userId]
+      )
+      .catch(() => ({ rows: [] })), // table may not exist yet
 
     // 7. Engagement events (last 30 days)
-    pool.query(
-      `SELECT event_type, occurred_at, metadata
+    pool
+      .query(
+        `SELECT event_type, occurred_at, metadata
        FROM user_engagement
        WHERE user_id = $1 AND occurred_at >= NOW() - INTERVAL '30 days'
        ORDER BY occurred_at DESC
        LIMIT 100`,
-      [userId]
-    ).catch(() => ({ rows: [] })), // table may not exist yet
+        [userId]
+      )
+      .catch(() => ({ rows: [] })), // table may not exist yet
   ]);
 
   // ── Parse profile ──────────────────────────────────────────────────────────
@@ -150,14 +154,16 @@ async function buildContext(pool, userId) {
 
   // ── Parse symptoms ─────────────────────────────────────────────────────────
   const symptomRows = symptomsRes.rows;
-  const recurring = symptomRows.filter(s => s.count_7d >= 3);
-  const improving = symptomRows.filter(s => s.trend === 'decreasing');
-  const worsening = symptomRows.filter(s => s.trend === 'increasing');
+  const recurring = symptomRows.filter((s) => s.count_7d >= 3);
+  const improving = symptomRows.filter((s) => s.trend === 'decreasing');
+  const worsening = symptomRows.filter((s) => s.trend === 'increasing');
 
   // ── Parse check-ins ────────────────────────────────────────────────────────
   const checkinRows = checkinsRes.rows;
   const lastCheckin = checkinRows[0] || null;
-  const daysCheckedIn = new Set(checkinRows.map(c => c.session_date?.toISOString?.() || c.session_date)).size;
+  const daysCheckedIn = new Set(
+    checkinRows.map((c) => c.session_date?.toISOString?.() || c.session_date)
+  ).size;
 
   // ── Parse clusters ─────────────────────────────────────────────────────────
   const clusterRows = clustersRes.rows;
@@ -173,18 +179,21 @@ async function buildContext(pool, userId) {
 
   // ── Parse engagement ───────────────────────────────────────────────────────
   const engRows = engagementRes.rows;
-  const checkinResponses = engRows.filter(e => e.event_type === 'checkin_response');
-  const responseRate = engRows.length > 0
-    ? Math.round((checkinResponses.length / Math.max(engRows.length, 1)) * 100) / 100
-    : null;
+  const checkinResponses = engRows.filter((e) => e.event_type === 'checkin_response');
+  const responseRate =
+    engRows.length > 0
+      ? Math.round((checkinResponses.length / Math.max(engRows.length, 1)) * 100) / 100
+      : null;
 
   // Avg response time (from metadata.response_minutes if available)
   let avgResponseMinutes = null;
   const responseTimes = checkinResponses
-    .map(e => e.metadata?.response_minutes)
-    .filter(m => typeof m === 'number');
+    .map((e) => e.metadata?.response_minutes)
+    .filter((m) => typeof m === 'number');
   if (responseTimes.length > 0) {
-    avgResponseMinutes = Math.round(responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length);
+    avgResponseMinutes = Math.round(
+      responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length
+    );
   }
 
   // ── Time context ───────────────────────────────────────────────────────────
@@ -198,13 +207,19 @@ async function buildContext(pool, userId) {
   const avgSev = avgSeverityLabel(checkinRows);
   const hasWorseningTrend = worsening.length > 0;
   const isFrequentUser = daysCheckedIn >= 5;
-  const needsAttention = avgSev === 'high' || hasWorseningTrend
-    || (lastCheckin && lastCheckin.triage_severity === 'high');
+  const needsAttention =
+    avgSev === 'high' ||
+    hasWorseningTrend ||
+    (lastCheckin && lastCheckin.triage_severity === 'high');
 
   let riskLevel = 'low';
   if (needsAttention || (prof.risk_score && prof.risk_score >= 70)) {
     riskLevel = 'high';
-  } else if (hasWorseningTrend || avgSev === 'medium' || (prof.risk_score && prof.risk_score >= 40)) {
+  } else if (
+    hasWorseningTrend ||
+    avgSev === 'medium' ||
+    (prof.risk_score && prof.risk_score >= 40)
+  ) {
     riskLevel = 'moderate';
   }
 
@@ -231,18 +246,18 @@ async function buildContext(pool, userId) {
       lang: prof.lang || 'vi',
     },
     symptoms: {
-      recent7d: symptomRows.map(s => ({
+      recent7d: symptomRows.map((s) => ({
         name: s.symptom_name,
         count: s.count_7d,
         count30d: s.count_30d,
         trend: s.trend,
       })),
-      recurring: recurring.map(s => s.symptom_name),
-      improving: improving.map(s => s.symptom_name),
-      worsening: worsening.map(s => s.symptom_name),
+      recurring: recurring.map((s) => s.symptom_name),
+      improving: improving.map((s) => s.symptom_name),
+      worsening: worsening.map((s) => s.symptom_name),
     },
     history: {
-      checkins7d: checkinRows.map(c => ({
+      checkins7d: checkinRows.map((c) => ({
         date: c.session_date,
         status: c.current_status,
         severity: c.triage_severity,
@@ -250,22 +265,26 @@ async function buildContext(pool, userId) {
       })),
       avgSeverity: avgSev,
       daysCheckedIn,
-      lastCheckin: lastCheckin ? {
-        date: lastCheckin.session_date,
-        severity: lastCheckin.triage_severity,
-        summary: lastCheckin.triage_summary,
-      } : null,
-      previousSession: prevSession ? {
-        cluster: prevSession.cluster_key,
-        severity: prevSession.severity,
-        answers: prevSession.answers,
-        summary: prevSession.conclusion_summary,
-        needsDoctor: prevSession.needs_doctor,
-        at: prevSession.completed_at || prevSession.created_at,
-      } : null,
+      lastCheckin: lastCheckin
+        ? {
+            date: lastCheckin.session_date,
+            severity: lastCheckin.triage_severity,
+            summary: lastCheckin.triage_summary,
+          }
+        : null,
+      previousSession: prevSession
+        ? {
+            cluster: prevSession.cluster_key,
+            severity: prevSession.severity,
+            answers: prevSession.answers,
+            summary: prevSession.conclusion_summary,
+            needsDoctor: prevSession.needs_doctor,
+            at: prevSession.completed_at || prevSession.created_at,
+          }
+        : null,
     },
     clusters: {
-      active: clusterRows.map(c => ({
+      active: clusterRows.map((c) => ({
         key: c.cluster_key,
         displayName: c.display_name,
         priority: c.priority,
@@ -273,11 +292,11 @@ async function buildContext(pool, userId) {
       })),
       topCluster,
     },
-    memories: memoryRows.map(m => ({
+    memories: memoryRows.map((m) => ({
       content: m.content,
       category: m.category,
     })),
-    agentMemories: agentMemRows.map(m => ({
+    agentMemories: agentMemRows.map((m) => ({
       type: m.memory_type,
       key: m.memory_key,
       content: m.content,

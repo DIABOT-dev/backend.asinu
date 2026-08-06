@@ -15,8 +15,8 @@
 
 'use strict';
 
-const MIN_OCCURRENCES = 2;       // need at least 2 occurrences to form a pattern
-const LOOKBACK_DAYS = 30;        // analyze last 30 days of data
+const MIN_OCCURRENCES = 2; // need at least 2 occurrences to form a pattern
+const LOOKBACK_DAYS = 30; // analyze last 30 days of data
 const CONFIDENCE_THRESHOLD = 0.6; // only return patterns above this confidence
 
 /**
@@ -63,18 +63,20 @@ async function detectPatterns(pool, userId) {
     ),
 
     // Medication adherence
-    pool.query(
-      `SELECT medication_date, status
+    pool
+      .query(
+        `SELECT medication_date, status
        FROM medication_adherence
        WHERE user_id = $1 AND medication_date >= CURRENT_DATE - INTERVAL '${LOOKBACK_DAYS} days'
        ORDER BY medication_date DESC`,
-      [userId]
-    ).catch(() => ({ rows: [] })), // table may have no data
+        [userId]
+      )
+      .catch(() => ({ rows: [] })), // table may have no data
   ]);
 
   const symptomLogs = symptomLogsRes.rows;
   const checkins = checkinsRes.rows;
-  const sessions = sessionsRes.rows;
+  const _sessions = sessionsRes.rows;
   const medAdherence = medAdherenceRes.rows;
 
   // ── Pattern 1: Recurring symptom on specific days ──────────────────────────
@@ -96,7 +98,8 @@ async function detectPatterns(pool, userId) {
       // Confidence: how concentrated is this symptom on this day?
       const concentration = count / totalOccurrences;
       const frequency = count / weeksInRange;
-      const confidence = Math.round(Math.min(concentration * 0.6 + frequency * 0.4, 1.0) * 100) / 100;
+      const confidence =
+        Math.round(Math.min(concentration * 0.6 + frequency * 0.4, 1.0) * 100) / 100;
 
       if (confidence >= CONFIDENCE_THRESHOLD) {
         patterns.push({
@@ -115,7 +118,8 @@ async function detectPatterns(pool, userId) {
   const symptomsByHour = {};
   for (const log of symptomLogs) {
     const key = log.symptom_name;
-    if (!symptomsByHour[key]) symptomsByHour[key] = { morning: 0, afternoon: 0, evening: 0, night: 0 };
+    if (!symptomsByHour[key])
+      symptomsByHour[key] = { morning: 0, afternoon: 0, evening: 0, night: 0 };
     const h = parseInt(log.hour || 0);
     if (h >= 5 && h < 12) symptomsByHour[key].morning++;
     else if (h >= 12 && h < 17) symptomsByHour[key].afternoon++;
@@ -123,7 +127,12 @@ async function detectPatterns(pool, userId) {
     else symptomsByHour[key].night++;
   }
 
-  const periodLabels = { morning: 'buổi sáng', afternoon: 'buổi chiều', evening: 'buổi tối', night: 'ban đêm' };
+  const periodLabels = {
+    morning: 'buổi sáng',
+    afternoon: 'buổi chiều',
+    evening: 'buổi tối',
+    night: 'ban đêm',
+  };
   for (const [symptom, periods] of Object.entries(symptomsByHour)) {
     const total = Object.values(periods).reduce((a, b) => a + b, 0);
     if (total < MIN_OCCURRENCES) continue;
@@ -149,8 +158,8 @@ async function detectPatterns(pool, userId) {
     const sevMap = { low: 1, medium: 2, high: 3, critical: 4 };
     const recentSev = checkins
       .slice(0, 7)
-      .map(c => sevMap[c.triage_severity] || 0)
-      .filter(v => v > 0)
+      .map((c) => sevMap[c.triage_severity] || 0)
+      .filter((v) => v > 0)
       .reverse(); // oldest first
 
     if (recentSev.length >= 3) {
@@ -209,7 +218,7 @@ async function detectPatterns(pool, userId) {
   for (const [pair, count] of Object.entries(cooccurrences)) {
     if (count < MIN_OCCURRENCES) continue;
     const totalDays = Object.keys(symptomsByDate).length;
-    const confidence = Math.round(Math.min(count / totalDays * 1.5, 1.0) * 100) / 100;
+    const confidence = Math.round(Math.min((count / totalDays) * 1.5, 1.0) * 100) / 100;
     if (confidence >= CONFIDENCE_THRESHOLD) {
       const [s1, s2] = pair.split(' + ');
       patterns.push({
@@ -227,18 +236,18 @@ async function detectPatterns(pool, userId) {
   if (medAdherence.length > 0 && symptomLogs.length > 0) {
     // Find days where medication was skipped, then check if symptoms appeared next day
     const skippedDates = medAdherence
-      .filter(m => m.status === 'skipped')
-      .map(m => m.medication_date);
+      .filter((m) => m.status === 'skipped')
+      .map((m) => m.medication_date);
 
     if (skippedDates.length >= 2) {
       let symptomsAfterSkip = 0;
-      let totalSkips = skippedDates.length;
+      const totalSkips = skippedDates.length;
 
       for (const skipDate of skippedDates) {
         const nextDay = new Date(skipDate);
         nextDay.setDate(nextDay.getDate() + 1);
         const nextDayStr = nextDay.toISOString().slice(0, 10);
-        const hadSymptom = symptomLogs.some(s => {
+        const hadSymptom = symptomLogs.some((s) => {
           const logDate = s.occurred_date?.toISOString?.()?.slice(0, 10) || String(s.occurred_date);
           return logDate === nextDayStr;
         });

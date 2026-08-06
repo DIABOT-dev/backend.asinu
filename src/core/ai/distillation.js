@@ -26,10 +26,15 @@ const crypto = require('crypto');
  * @param {any} outputData - AI response (parsed)
  * @param {number} [qualityScore] - optional initial quality score
  */
-async function collectOutput(pool, taskType, model, inputMessages, outputData, qualityScore = null) {
-  const inputHash = crypto.createHash('md5')
-    .update(JSON.stringify(inputMessages))
-    .digest('hex');
+async function collectOutput(
+  pool,
+  taskType,
+  model,
+  inputMessages,
+  outputData,
+  qualityScore = null
+) {
+  const inputHash = crypto.createHash('md5').update(JSON.stringify(inputMessages)).digest('hex');
 
   // Dedup: skip if same input already collected today
   const { rows: existing } = await pool.query(
@@ -44,7 +49,14 @@ async function collectOutput(pool, taskType, model, inputMessages, outputData, q
     `INSERT INTO distillation_data (task_type, model_used, input_hash, input_data, output_data, quality_score)
      VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6)
      RETURNING id`,
-    [taskType, model, inputHash, JSON.stringify(inputMessages), JSON.stringify(outputData), qualityScore]
+    [
+      taskType,
+      model,
+      inputHash,
+      JSON.stringify(inputMessages),
+      JSON.stringify(outputData),
+      qualityScore,
+    ]
   );
 
   return rows[0]?.id || null;
@@ -79,7 +91,11 @@ function autoRateQuality(outputData) {
 
     // No error indicators
     const textLower = text.toLowerCase();
-    if (!textLower.includes('error') && !textLower.includes('sorry') && !textLower.includes('i cannot')) {
+    if (
+      !textLower.includes('error') &&
+      !textLower.includes('sorry') &&
+      !textLower.includes('i cannot')
+    ) {
       score += 0.3;
     }
   }
@@ -88,10 +104,10 @@ function autoRateQuality(outputData) {
 }
 
 async function rateOutput(pool, id, qualityScore) {
-  await pool.query(
-    `UPDATE distillation_data SET quality_score = $2 WHERE id = $1`,
-    [id, qualityScore]
-  );
+  await pool.query(`UPDATE distillation_data SET quality_score = $2 WHERE id = $1`, [
+    id,
+    qualityScore,
+  ]);
 }
 
 // ─── Enhance: Build few-shot examples ───────────────────────────────────────
@@ -117,7 +133,7 @@ async function getFewShotExamples(pool, taskType, limit = 3) {
     [taskType, limit]
   );
 
-  return rows.map(r => ({
+  return rows.map((r) => ({
     input: r.input_data,
     output: r.output_data,
     score: r.quality_score,
@@ -145,27 +161,21 @@ async function enhanceWithFewShot(pool, taskType, originalMessages) {
   for (const ex of examples) {
     // Extract user message from input
     const userMsg = Array.isArray(ex.input)
-      ? ex.input.find(m => m.role === 'user')?.content || ''
+      ? ex.input.find((m) => m.role === 'user')?.content || ''
       : JSON.stringify(ex.input);
 
     // Extract assistant response from output
-    const assistantMsg = typeof ex.output === 'string'
-      ? ex.output
-      : JSON.stringify(ex.output);
+    const assistantMsg = typeof ex.output === 'string' ? ex.output : JSON.stringify(ex.output);
 
     fewShotMessages.push({ role: 'user', content: userMsg });
     fewShotMessages.push({ role: 'assistant', content: assistantMsg });
   }
 
   // Insert few-shot examples after system message but before user query
-  const systemMsg = originalMessages.find(m => m.role === 'system');
-  const restMessages = originalMessages.filter(m => m.role !== 'system');
+  const systemMsg = originalMessages.find((m) => m.role === 'system');
+  const restMessages = originalMessages.filter((m) => m.role !== 'system');
 
-  const enhanced = [
-    ...(systemMsg ? [systemMsg] : []),
-    ...fewShotMessages,
-    ...restMessages,
-  ];
+  const enhanced = [...(systemMsg ? [systemMsg] : []), ...fewShotMessages, ...restMessages];
 
   // Mark examples as used
   // (Not critical — just for tracking)

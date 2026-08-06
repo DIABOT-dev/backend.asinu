@@ -29,25 +29,25 @@ function todayVietnam() {
 
 // Mission translations for better UX
 const MISSION_TITLES = {
-  'log_glucose': t('mission.log_glucose'),
-  'log_bp': t('mission.log_bp'),
-  'log_weight': t('mission.log_weight'),
-  'log_water': t('mission.log_water'),
-  'log_meal': t('mission.log_meal'),
-  'log_insulin': t('mission.log_insulin'),
-  'log_medication': t('mission.log_medication'),
-  'daily_checkin': t('mission.daily_checkin')
+  log_glucose: t('mission.log_glucose'),
+  log_bp: t('mission.log_bp'),
+  log_weight: t('mission.log_weight'),
+  log_water: t('mission.log_water'),
+  log_meal: t('mission.log_meal'),
+  log_insulin: t('mission.log_insulin'),
+  log_medication: t('mission.log_medication'),
+  daily_checkin: t('mission.daily_checkin'),
 };
 
 const MISSION_DESCRIPTIONS = {
-  'log_glucose': t('mission.desc_glucose'),
-  'log_bp': t('mission.desc_bp'),
-  'log_weight': t('mission.desc_weight'),
-  'log_water': t('mission.desc_water'),
-  'log_meal': t('mission.desc_meal'),
-  'log_insulin': t('mission.desc_insulin'),
-  'log_medication': t('mission.desc_medication'),
-  'daily_checkin': t('mission.desc_checkin')
+  log_glucose: t('mission.desc_glucose'),
+  log_bp: t('mission.desc_bp'),
+  log_weight: t('mission.desc_weight'),
+  log_water: t('mission.desc_water'),
+  log_meal: t('mission.desc_meal'),
+  log_insulin: t('mission.desc_insulin'),
+  log_medication: t('mission.desc_medication'),
+  daily_checkin: t('mission.desc_checkin'),
 };
 
 async function getMissions(pool, userId) {
@@ -66,7 +66,7 @@ async function getMissions(pool, userId) {
        AND last_incremented_date::text < $2`,
     [userId, today]
   );
-  
+
   const result = await client.query(
     `SELECT mission_key, status, progress, goal, updated_at
      FROM user_missions
@@ -74,19 +74,19 @@ async function getMissions(pool, userId) {
      ORDER BY mission_key ASC`,
     [userId]
   );
-  
+
   // Check cache after reset (reset may or may not happen)
   const cached = await cacheGet(`missions:${userId}`);
   if (cached && result.rows.length === 0) return cached;
 
   // Add titles and descriptions
-  const missionsWithTitles = result.rows.map(mission => ({
+  const missionsWithTitles = result.rows.map((mission) => ({
     ...mission,
     title: MISSION_TITLES[mission.mission_key] || mission.mission_key,
     description: MISSION_DESCRIPTIONS[mission.mission_key] || null,
-    id: `${userId}-${mission.mission_key}` // Add unique id for React keys
+    id: `${userId}-${mission.mission_key}`, // Add unique id for React keys
   }));
-  
+
   await cacheSet(`missions:${userId}`, missionsWithTitles, 600); // 10 min
   return missionsWithTitles;
 }
@@ -132,7 +132,7 @@ async function updateMissionProgress(clientOrPool, userId, missionKey, delta, op
           status: 'completed',
           count: Number(result.progress || goal),
         },
-        { event_id: `mission.completed:${userId}:${missionKey}:${today}` },
+        { event_id: `mission.completed:${userId}:${missionKey}:${today}` }
       );
     }
     return result;
@@ -157,7 +157,7 @@ async function updateMissionProgress(clientOrPool, userId, missionKey, delta, op
         status: 'completed',
         count: Number(result.progress || goal),
       },
-      { event_id: `mission.completed:${userId}:${missionKey}:${today}` },
+      { event_id: `mission.completed:${userId}:${missionKey}:${today}` }
     );
   }
   return result;
@@ -186,13 +186,12 @@ async function getMissionHistory(pool, userId, days = 30) {
       ORDER BY completed_date DESC, mission_key ASC`,
       [userId, days]
     );
-    
-    return { 
-      ok: true, 
-      history: result.rows 
+
+    return {
+      ok: true,
+      history: result.rows,
     };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -218,13 +217,12 @@ async function getMissionStats(pool, userId) {
       ORDER BY mission_key ASC`,
       [userId]
     );
-    
-    return { 
-      ok: true, 
-      stats: result.rows 
+
+    return {
+      ok: true,
+      stats: result.rows,
     };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -233,5 +231,5 @@ module.exports = {
   getMissions,
   updateMissionProgress,
   getMissionHistory,
-  getMissionStats
+  getMissionStats,
 };

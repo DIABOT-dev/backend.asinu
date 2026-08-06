@@ -15,10 +15,7 @@ const {
 
 const { getNextQuestion } = require('../../src/core/checkin/script-runner');
 
-const {
-  evaluateScript,
-  evaluateFollowUp,
-} = require('../../src/core/checkin/scoring-engine');
+const { evaluateScript, evaluateFollowUp } = require('../../src/core/checkin/scoring-engine');
 
 const {
   getFallbackScriptData,
@@ -28,7 +25,10 @@ const {
 
 const { detectEmergency } = require('../../src/services/checkin/emergency-detector');
 const { detectCombo } = require('../../src/core/checkin/combo-detector');
-const { parseSymptoms, analyzeMultiSymptom } = require('../../src/services/checkin/multi-symptom.service');
+const {
+  parseSymptoms,
+  analyzeMultiSymptom,
+} = require('../../src/services/checkin/multi-symptom.service');
 const { listComplaints } = require('../../src/services/checkin/clinical-mapping');
 
 // ─── Config ────────────────────────────────────────────────────────────────
@@ -47,7 +47,14 @@ const groupStats = {};
 
 function record(group, testName, input, expectedBehavior, actualResult, pass) {
   const status = pass ? 'PASS' : 'FAIL';
-  results.push({ group, testName, input: String(input).substring(0, 120), expectedBehavior, actualResult: String(actualResult).substring(0, 200), status });
+  results.push({
+    group,
+    testName,
+    input: String(input).substring(0, 120),
+    expectedBehavior,
+    actualResult: String(actualResult).substring(0, 200),
+    status,
+  });
   if (!groupStats[group]) groupStats[group] = { pass: 0, fail: 0, total: 0 };
   groupStats[group].total++;
   if (pass) groupStats[group].pass++;
@@ -109,7 +116,14 @@ async function main() {
     // Test matchCluster
     try {
       const mc = await matchCluster(pool, USER_ID, input);
-      record('A', `matchCluster("${desc}")`, input, 'no crash', `matched=${mc.matched}, cluster=${mc.cluster?.cluster_key || 'none'}`, true);
+      record(
+        'A',
+        `matchCluster("${desc}")`,
+        input,
+        'no crash',
+        `matched=${mc.matched}, cluster=${mc.cluster?.cluster_key || 'none'}`,
+        true
+      );
     } catch (err) {
       record('A', `matchCluster("${desc}")`, input, 'no crash', `CRASH: ${err.message}`, false);
     }
@@ -117,7 +131,14 @@ async function main() {
     // Test detectEmergency
     try {
       const em = detectEmergency([input], PROFILE);
-      record('A', `detectEmergency("${desc}")`, input, 'no crash', `isEmergency=${em.isEmergency}, type=${em.type}`, true);
+      record(
+        'A',
+        `detectEmergency("${desc}")`,
+        input,
+        'no crash',
+        `isEmergency=${em.isEmergency}, type=${em.type}`,
+        true
+      );
     } catch (err) {
       record('A', `detectEmergency("${desc}")`, input, 'no crash', `CRASH: ${err.message}`, false);
     }
@@ -157,17 +178,45 @@ async function main() {
     // Test matchCluster
     try {
       const mc = await matchCluster(pool, USER_ID, input);
-      record('B', `matchCluster("${input.substring(0, 30)}")`, input, 'no crash', `matched=${mc.matched}, cluster=${mc.cluster?.cluster_key || 'none'}`, true);
+      record(
+        'B',
+        `matchCluster("${input.substring(0, 30)}")`,
+        input,
+        'no crash',
+        `matched=${mc.matched}, cluster=${mc.cluster?.cluster_key || 'none'}`,
+        true
+      );
     } catch (err) {
-      record('B', `matchCluster("${input.substring(0, 30)}")`, input, 'no crash', `CRASH: ${err.message}`, false);
+      record(
+        'B',
+        `matchCluster("${input.substring(0, 30)}")`,
+        input,
+        'no crash',
+        `CRASH: ${err.message}`,
+        false
+      );
     }
 
     // If not matched, test fallback
     try {
       const fb = getFallbackScriptData();
-      record('B', `fallback("${input.substring(0, 30)}")`, input, 'no crash', `questions=${fb.questions.length}`, true);
+      record(
+        'B',
+        `fallback("${input.substring(0, 30)}")`,
+        input,
+        'no crash',
+        `questions=${fb.questions.length}`,
+        true
+      );
     } catch (err) {
-      record('B', `fallback("${input.substring(0, 30)}")`, input, 'no crash', `CRASH: ${err.message}`, false);
+      record(
+        'B',
+        `fallback("${input.substring(0, 30)}")`,
+        input,
+        'no crash',
+        `CRASH: ${err.message}`,
+        false
+      );
     }
   }
 
@@ -205,11 +254,11 @@ async function main() {
     try {
       // Build answers for all questions with this wrong answer
       const questions = scriptData.questions || [];
-      const allAnswers = questions.map(q => ({ question_id: q.id, answer }));
+      const allAnswers = questions.map((q) => ({ question_id: q.id, answer }));
 
       // Run through getNextQuestion step by step
       let step = 0;
-      let currentAnswers = [];
+      const currentAnswers = [];
       let lastResult = null;
       for (const q of questions) {
         currentAnswers.push({ question_id: q.id, answer });
@@ -219,10 +268,23 @@ async function main() {
 
       // Now evaluate
       const scoring = evaluateScript(scriptData, allAnswers, PROFILE);
-      record('C', `wrongAnswer(${name})`, String(answer).substring(0, 50), 'no crash + has severity',
-        `severity=${scoring.severity}, followUp=${scoring.followUpHours}h, done=${lastResult?.isDone}`, true);
+      record(
+        'C',
+        `wrongAnswer(${name})`,
+        String(answer).substring(0, 50),
+        'no crash + has severity',
+        `severity=${scoring.severity}, followUp=${scoring.followUpHours}h, done=${lastResult?.isDone}`,
+        true
+      );
     } catch (err) {
-      record('C', `wrongAnswer(${name})`, String(answer).substring(0, 50), 'no crash', `CRASH: ${err.message}`, false);
+      record(
+        'C',
+        `wrongAnswer(${name})`,
+        String(answer).substring(0, 50),
+        'no crash',
+        `CRASH: ${err.message}`,
+        false
+      );
     }
   }
 
@@ -255,20 +317,46 @@ async function main() {
     // Test parseSymptoms
     try {
       const parsed = parseSymptoms(input);
-      record('D', `parseSymptoms(${name})`, String(input).substring(0, 60), 'no crash',
-        `parsed=${parsed.length} items: [${parsed.slice(0, 3).join(', ')}${parsed.length > 3 ? '...' : ''}]`, true);
+      record(
+        'D',
+        `parseSymptoms(${name})`,
+        String(input).substring(0, 60),
+        'no crash',
+        `parsed=${parsed.length} items: [${parsed.slice(0, 3).join(', ')}${parsed.length > 3 ? '...' : ''}]`,
+        true
+      );
     } catch (err) {
-      record('D', `parseSymptoms(${name})`, String(input).substring(0, 60), 'no crash', `CRASH: ${err.message}`, false);
+      record(
+        'D',
+        `parseSymptoms(${name})`,
+        String(input).substring(0, 60),
+        'no crash',
+        `CRASH: ${err.message}`,
+        false
+      );
     }
 
     // Test analyzeMultiSymptom
     try {
       const symptoms = typeof input === 'string' ? parseSymptoms(input) : [];
       const analysis = await analyzeMultiSymptom(pool, USER_ID, symptoms, PROFILE);
-      record('D', `analyzeMulti(${name})`, String(input).substring(0, 60), 'no crash',
-        `emergency=${analysis.isEmergency}, matched=${analysis.matched.length}, unmatched=${analysis.unmatched.length}`, true);
+      record(
+        'D',
+        `analyzeMulti(${name})`,
+        String(input).substring(0, 60),
+        'no crash',
+        `emergency=${analysis.isEmergency}, matched=${analysis.matched.length}, unmatched=${analysis.unmatched.length}`,
+        true
+      );
     } catch (err) {
-      record('D', `analyzeMulti(${name})`, String(input).substring(0, 60), 'no crash', `CRASH: ${err.message}`, false);
+      record(
+        'D',
+        `analyzeMulti(${name})`,
+        String(input).substring(0, 60),
+        'no crash',
+        `CRASH: ${err.message}`,
+        false
+      );
     }
   }
 
@@ -280,10 +368,26 @@ async function main() {
   console.log('='.repeat(70));
 
   const groupEInputs = [
-    { name: 'chest pain but NOT dyspnea (nhung khong)', input: 'dau nguc nhung khong kho tho', expectEmergency: false },
-    { name: 'yesterday dyspnea now fine', input: 'hom qua kho tho nhung hom nay het roi', expectEmergency: false },
-    { name: 'mom has seizure not me', input: 'me toi bi co giat khong phai toi', expectEmergency: 'test' },
-    { name: 'heard chest pain is dangerous', input: 'toi nghe noi dau nguc la nguy hiem', expectEmergency: 'test' },
+    {
+      name: 'chest pain but NOT dyspnea (nhung khong)',
+      input: 'dau nguc nhung khong kho tho',
+      expectEmergency: false,
+    },
+    {
+      name: 'yesterday dyspnea now fine',
+      input: 'hom qua kho tho nhung hom nay het roi',
+      expectEmergency: false,
+    },
+    {
+      name: 'mom has seizure not me',
+      input: 'me toi bi co giat khong phai toi',
+      expectEmergency: 'test',
+    },
+    {
+      name: 'heard chest pain is dangerous',
+      input: 'toi nghe noi dau nguc la nguy hiem',
+      expectEmergency: 'test',
+    },
     { name: 'NOT weak half body', input: 'khong bi yeu nua nguoi', expectEmergency: false },
     { name: 'getting better chest pain', input: 'bot dau nguc roi', expectEmergency: false },
     { name: 'mild chest pain', input: 'dau nguc it thoi', expectEmergency: 'test' },
@@ -300,7 +404,7 @@ async function main() {
   for (const { name, input, expectEmergency } of groupEInputs) {
     try {
       const em = detectEmergency([input], PROFILE);
-      let pass = true;
+      const pass = true;
       let detail = `isEmergency=${em.isEmergency}, type=${em.type}, severity=${em.severity}`;
 
       if (expectEmergency === false && em.isEmergency) {
@@ -308,9 +412,23 @@ async function main() {
         // Still PASS if no crash — we just note the behavior
       }
 
-      record('E', `emergency(${name})`, input.substring(0, 60), 'no crash + correct detection', detail, pass);
+      record(
+        'E',
+        `emergency(${name})`,
+        input.substring(0, 60),
+        'no crash + correct detection',
+        detail,
+        pass
+      );
     } catch (err) {
-      record('E', `emergency(${name})`, input.substring(0, 60), 'no crash', `CRASH: ${err.message}`, false);
+      record(
+        'E',
+        `emergency(${name})`,
+        input.substring(0, 60),
+        'no crash',
+        `CRASH: ${err.message}`,
+        false
+      );
     }
   }
 
@@ -343,8 +461,14 @@ async function main() {
         { question_id: 'fu2', answer: 'Khong' },
       ];
       const result = evaluateFollowUp(fbScript, answers, 'medium');
-      record('F', `followUp(${name})`, answer, 'no crash + has action',
-        `severity=${result.severity}, action=${result.action}, needsDoctor=${result.needsDoctor}`, true);
+      record(
+        'F',
+        `followUp(${name})`,
+        answer,
+        'no crash + has action',
+        `severity=${result.severity}, action=${result.action}, needsDoctor=${result.needsDoctor}`,
+        true
+      );
     } catch (err) {
       record('F', `followUp(${name})`, answer, 'no crash', `CRASH: ${err.message}`, false);
     }
@@ -370,8 +494,14 @@ async function main() {
       // Check same input gives same result
       return true; // simplified consistency check
     });
-    record('G', '50x matchCluster rapid', '50 calls', 'no crash, consistent',
-      `all completed, results: ${mcResults.filter(Boolean).length} matched / ${mcResults.length} total`, true);
+    record(
+      'G',
+      '50x matchCluster rapid',
+      '50 calls',
+      'no crash, consistent',
+      `all completed, results: ${mcResults.filter(Boolean).length} matched / ${mcResults.length} total`,
+      true
+    );
   } catch (err) {
     record('G', '50x matchCluster rapid', '50 calls', 'no crash', `CRASH: ${err.message}`, false);
   }
@@ -382,19 +512,32 @@ async function main() {
     for (let i = 0; i < 20; i++) {
       const sd = scriptData;
       const questions = sd.questions || [];
-      let answers = [];
+      const answers = [];
       for (const q of questions) {
-        const a = q.type === 'slider' ? (i % 10) : (q.options ? q.options[0] : 'test');
+        const a = q.type === 'slider' ? i % 10 : q.options ? q.options[0] : 'test';
         answers.push({ question_id: q.id, answer: a });
         getNextQuestion(sd, answers, { profile: PROFILE });
       }
       const scoring = evaluateScript(sd, answers, PROFILE);
       if (scoring.severity) completedSessions++;
     }
-    record('G', '20x full script sessions', '20 sessions', 'all complete',
-      `${completedSessions}/20 completed with valid severity`, completedSessions === 20);
+    record(
+      'G',
+      '20x full script sessions',
+      '20 sessions',
+      'all complete',
+      `${completedSessions}/20 completed with valid severity`,
+      completedSessions === 20
+    );
   } catch (err) {
-    record('G', '20x full script sessions', '20 sessions', 'no crash', `CRASH: ${err.message}`, false);
+    record(
+      'G',
+      '20x full script sessions',
+      '20 sessions',
+      'no crash',
+      `CRASH: ${err.message}`,
+      false
+    );
   }
 
   // G3: 100 parseSymptoms calls
@@ -405,8 +548,14 @@ async function main() {
       const p = parseSymptoms(parseInputs[i % parseInputs.length]);
       allParsed += p.length;
     }
-    record('G', '100x parseSymptoms', '100 calls', 'no crash, consistent',
-      `all completed, total parsed items: ${allParsed}`, true);
+    record(
+      'G',
+      '100x parseSymptoms',
+      '100 calls',
+      'no crash, consistent',
+      `all completed, total parsed items: ${allParsed}`,
+      true
+    );
   } catch (err) {
     record('G', '100x parseSymptoms', '100 calls', 'no crash', `CRASH: ${err.message}`, false);
   }
@@ -418,11 +567,24 @@ async function main() {
       const em = detectEmergency(['dau nguc kho tho'], PROFILE);
       emergResults.push(em.isEmergency);
     }
-    const allSame = emergResults.every(v => v === emergResults[0]);
-    record('G', '100x detectEmergency same input', '100 calls', 'always same result',
-      `all=${emergResults[0]}, consistent=${allSame}`, allSame);
+    const allSame = emergResults.every((v) => v === emergResults[0]);
+    record(
+      'G',
+      '100x detectEmergency same input',
+      '100 calls',
+      'always same result',
+      `all=${emergResults[0]}, consistent=${allSame}`,
+      allSame
+    );
   } catch (err) {
-    record('G', '100x detectEmergency same input', '100 calls', 'no crash', `CRASH: ${err.message}`, false);
+    record(
+      'G',
+      '100x detectEmergency same input',
+      '100 calls',
+      'no crash',
+      `CRASH: ${err.message}`,
+      false
+    );
   }
 
   // G5: 100 evaluateScript with random slider values
@@ -431,17 +593,30 @@ async function main() {
     for (let i = 0; i < 100; i++) {
       const sliderVal = Math.floor(Math.random() * 15) - 2; // -2 to 12 (some out of range)
       const questions = scriptData.questions || [];
-      const answers = questions.map(q => ({
+      const answers = questions.map((q) => ({
         question_id: q.id,
-        answer: q.type === 'slider' ? sliderVal : (q.options ? q.options[0] : 'test'),
+        answer: q.type === 'slider' ? sliderVal : q.options ? q.options[0] : 'test',
       }));
       const scoring = evaluateScript(scriptData, answers, PROFILE);
       if (['low', 'medium', 'high', 'critical'].includes(scoring.severity)) validCount++;
     }
-    record('G', '100x evaluateScript random sliders', '100 calls', 'all valid severity',
-      `${validCount}/100 returned valid severity`, validCount === 100);
+    record(
+      'G',
+      '100x evaluateScript random sliders',
+      '100 calls',
+      'all valid severity',
+      `${validCount}/100 returned valid severity`,
+      validCount === 100
+    );
   } catch (err) {
-    record('G', '100x evaluateScript random sliders', '100 calls', 'no crash', `CRASH: ${err.message}`, false);
+    record(
+      'G',
+      '100x evaluateScript random sliders',
+      '100 calls',
+      'no crash',
+      `CRASH: ${err.message}`,
+      false
+    );
   }
 
   // ════════════════════════════════════════════════════════════════════════
@@ -451,35 +626,42 @@ async function main() {
   console.log(' SUMMARY');
   console.log('='.repeat(70));
 
-  const totalPass = results.filter(r => r.status === 'PASS').length;
-  const totalFail = results.filter(r => r.status === 'FAIL').length;
+  const totalPass = results.filter((r) => r.status === 'PASS').length;
+  const totalFail = results.filter((r) => r.status === 'FAIL').length;
   const total = results.length;
 
   console.log('');
   console.log('| Group                              | Pass | Fail | Total |');
   console.log('|------------------------------------|------|------|-------|');
   for (const [group, stats] of Object.entries(groupStats)) {
-    const groupName = {
-      A: 'A: Typos & Misspellings',
-      B: 'B: Slang & Casual Vietnamese',
-      C: 'C: Wrong Answer Types',
-      D: 'D: Multi-Symptom Chaos',
-      E: 'E: Emergency Edge Cases',
-      F: 'F: Follow-Up Chaos',
-      G: 'G: Rapid Sequential Ops',
-    }[group] || group;
-    console.log(`| ${groupName.padEnd(35)}| ${String(stats.pass).padStart(4)} | ${String(stats.fail).padStart(4)} | ${String(stats.total).padStart(5)} |`);
+    const groupName =
+      {
+        A: 'A: Typos & Misspellings',
+        B: 'B: Slang & Casual Vietnamese',
+        C: 'C: Wrong Answer Types',
+        D: 'D: Multi-Symptom Chaos',
+        E: 'E: Emergency Edge Cases',
+        F: 'F: Follow-Up Chaos',
+        G: 'G: Rapid Sequential Ops',
+      }[group] || group;
+    console.log(
+      `| ${groupName.padEnd(35)}| ${String(stats.pass).padStart(4)} | ${String(stats.fail).padStart(4)} | ${String(stats.total).padStart(5)} |`
+    );
   }
   console.log('|------------------------------------|------|------|-------|');
-  console.log(`| ${'TOTAL'.padEnd(35)}| ${String(totalPass).padStart(4)} | ${String(totalFail).padStart(4)} | ${String(total).padStart(5)} |`);
+  console.log(
+    `| ${'TOTAL'.padEnd(35)}| ${String(totalPass).padStart(4)} | ${String(totalFail).padStart(4)} | ${String(total).padStart(5)} |`
+  );
   console.log('');
 
   if (totalFail === 0) {
-    console.log('\x1b[32m*** ALL TESTS PASSED — System is crash-proof against chaotic input! ***\x1b[0m');
+    console.log(
+      '\x1b[32m*** ALL TESTS PASSED — System is crash-proof against chaotic input! ***\x1b[0m'
+    );
   } else {
     console.log(`\x1b[31m*** ${totalFail} TESTS FAILED — See details above ***\x1b[0m`);
     console.log('\nFailed tests:');
-    for (const r of results.filter(r => r.status === 'FAIL')) {
+    for (const r of results.filter((r) => r.status === 'FAIL')) {
       console.log(`  - [${r.group}] ${r.testName}: ${r.actualResult}`);
     }
   }
@@ -499,7 +681,7 @@ async function main() {
   await pool.end();
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('FATAL:', err);
   pool.end();
   process.exit(1);

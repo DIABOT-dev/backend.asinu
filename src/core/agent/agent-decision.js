@@ -17,7 +17,7 @@
 
 const SEVERITY_RANK = { critical: 4, high: 3, medium: 2, low: 1 };
 
-function sevRank(s) {
+function _sevRank(s) {
   return SEVERITY_RANK[s] || 0;
 }
 
@@ -37,12 +37,19 @@ function sevRank(s) {
  * @returns {{ greeting: string, reason: string }}
  */
 function decideGreeting(context) {
-  const { honorifics: h, recentSessions = [], clusters = [], isFollowUp = false, hourOfDay = 12 } = context;
+  const {
+    honorifics: h,
+    recentSessions = [],
+    clusters = [],
+    isFollowUp = false,
+    hourOfDay = 12,
+  } = context;
   if (!h) {
     return { greeting: 'Chao ban! Hom nay ban the nao?', reason: 'no_honorifics_fallback' };
   }
 
-  const CallName = h.CallName || (h.callName ? h.callName.charAt(0).toUpperCase() + h.callName.slice(1) : 'Ban');
+  const CallName =
+    h.CallName || (h.callName ? h.callName.charAt(0).toUpperCase() + h.callName.slice(1) : 'Ban');
 
   // Rule 5: follow-up
   if (isFollowUp) {
@@ -54,7 +61,7 @@ function decideGreeting(context) {
 
   // Find yesterday's high-severity session
   const yesterday = _getYesterdaySessions(recentSessions);
-  const highYesterday = yesterday.find(s => s.severity === 'high' || s.severity === 'critical');
+  const highYesterday = yesterday.find((s) => s.severity === 'high' || s.severity === 'critical');
 
   // Rule 1: high severity yesterday
   if (highYesterday) {
@@ -66,7 +73,7 @@ function decideGreeting(context) {
   }
 
   // Rule 2: worsening trend in any cluster
-  const worseningCluster = clusters.find(c => c.trend === 'increasing' && c.count_7d >= 3);
+  const worseningCluster = clusters.find((c) => c.trend === 'increasing' && c.count_7d >= 3);
   if (worseningCluster) {
     return {
       greeting: `${CallName} oi, may hom nay ${h.honorific} ${worseningCluster.display_name} nhieu hon, hom nay the nao?`,
@@ -85,7 +92,8 @@ function decideGreeting(context) {
   }
 
   // Rule 4: standard greeting (time-aware)
-  const timeGreeting = hourOfDay < 12 ? 'Chao buoi sang' : hourOfDay < 18 ? 'Chao buoi chieu' : 'Chao buoi toi';
+  const timeGreeting =
+    hourOfDay < 12 ? 'Chao buoi sang' : hourOfDay < 18 ? 'Chao buoi chieu' : 'Chao buoi toi';
   return {
     greeting: `${timeGreeting} ${CallName}! Hom nay ${h.honorific} the nao?`,
     reason: 'standard_greeting',
@@ -107,21 +115,22 @@ function decideClusters(context) {
   if (clusters.length === 0) return [];
 
   // Score each cluster
-  const scored = clusters.map(c => {
+  const scored = clusters.map((c) => {
     let score = c.priority || 0;
-    let reasons = [];
+    const reasons = [];
 
     // Rule 1: yesterday HIGH and not resolved
     const yesterdaySessions = _getYesterdaySessions(recentSessions);
     const yesterdayForCluster = yesterdaySessions.find(
-      s => s.cluster_key === c.cluster_key && (s.severity === 'high' || s.severity === 'critical')
+      (s) => s.cluster_key === c.cluster_key && (s.severity === 'high' || s.severity === 'critical')
     );
     if (yesterdayForCluster) {
       // Check if it was resolved (any later session with low/medium)
       const resolved = recentSessions.some(
-        s => s.cluster_key === c.cluster_key
-          && s.severity === 'low'
-          && new Date(s.created_at) > new Date(yesterdayForCluster.created_at)
+        (s) =>
+          s.cluster_key === c.cluster_key &&
+          s.severity === 'low' &&
+          new Date(s.created_at) > new Date(yesterdayForCluster.created_at)
       );
       if (!resolved) {
         score += 50;
@@ -189,8 +198,11 @@ function decideQuestionModifiers(context, scriptData, clusterKey) {
   const reasons = [];
 
   // Rule 1: diabetes + dizziness cluster → add blood sugar question
-  const hasDiabetes = conditions.includes('tieu duong') || conditions.includes('tieu duong')
-    || conditions.includes('diabetes') || conditions.includes('dai thao duong');
+  const hasDiabetes =
+    conditions.includes('tieu duong') ||
+    conditions.includes('tieu duong') ||
+    conditions.includes('diabetes') ||
+    conditions.includes('dai thao duong');
   if (hasDiabetes && (clusterKey === 'dizziness' || clusterKey === 'fatigue')) {
     addAfter.push({
       id: 'agent_blood_sugar',
@@ -204,8 +216,10 @@ function decideQuestionModifiers(context, scriptData, clusterKey) {
   }
 
   // Rule 2: hypertension + headache → add blood pressure question
-  const hasHypertension = conditions.includes('huyet ap') || conditions.includes('hypertension')
-    || conditions.includes('cao huyet ap');
+  const hasHypertension =
+    conditions.includes('huyet ap') ||
+    conditions.includes('hypertension') ||
+    conditions.includes('cao huyet ap');
   if (hasHypertension && (clusterKey === 'headache' || clusterKey === 'dizziness')) {
     addAfter.push({
       id: 'agent_blood_pressure',
@@ -219,7 +233,7 @@ function decideQuestionModifiers(context, scriptData, clusterKey) {
   }
 
   // Rule 3: recurring symptom (count_7d >= 3) → add comparison question
-  const cluster = clusters.find(c => c.cluster_key === clusterKey);
+  const cluster = clusters.find((c) => c.cluster_key === clusterKey);
   if (cluster && cluster.count_7d >= 3) {
     addBefore.push({
       id: 'agent_compare_usual',
@@ -234,10 +248,10 @@ function decideQuestionModifiers(context, scriptData, clusterKey) {
 
   // Rule 4: user answered "van vay" 3 times in a row → add doctor suggestion
   const recentSameCluster = recentSessions
-    .filter(s => s.cluster_key === clusterKey && s.is_completed)
+    .filter((s) => s.cluster_key === clusterKey && s.is_completed)
     .slice(0, 3);
   if (recentSameCluster.length >= 3) {
-    const allSame = recentSameCluster.every(s => s.severity === 'medium');
+    const allSame = recentSameCluster.every((s) => s.severity === 'medium');
     if (allSame) {
       addAfter.push({
         id: 'agent_suggest_doctor',
@@ -254,7 +268,10 @@ function decideQuestionModifiers(context, scriptData, clusterKey) {
   // Rule 5: weekend + stress pattern
   const dayOfWeek = new Date().getDay();
   const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-  if (isWeekend && (clusterKey === 'fatigue' || clusterKey === 'insomnia' || clusterKey === 'stress')) {
+  if (
+    isWeekend &&
+    (clusterKey === 'fatigue' || clusterKey === 'insomnia' || clusterKey === 'stress')
+  ) {
     addAfter.push({
       id: 'agent_rest_activity',
       text: 'Cuoi tuan {honorific} co nghi ngoi duoc khong? Co di bo hay tap the duc gi khong?',
@@ -296,28 +313,36 @@ function decideFinalSeverity(context, scriptSeverity, answers) {
   if (clusterKey) {
     const yesterdaySessions = _getYesterdaySessions(recentSessions);
     const yesterdayHigh = yesterdaySessions.find(
-      s => s.cluster_key === clusterKey && (s.severity === 'high' || s.severity === 'critical')
+      (s) => s.cluster_key === clusterKey && (s.severity === 'high' || s.severity === 'critical')
     );
     if (yesterdayHigh && severity === 'medium') {
-      adjustments.push({ from: 'medium', to: 'high', reason: `yesterday was ${yesterdayHigh.severity} for same cluster` });
+      adjustments.push({
+        from: 'medium',
+        to: 'high',
+        reason: `yesterday was ${yesterdayHigh.severity} for same cluster`,
+      });
       severity = 'high';
     }
   }
 
   // Rule 2: 3+ check-ins this week with same cluster → bump
   if (clusterKey) {
-    const thisWeekSame = recentSessions.filter(s =>
-      s.cluster_key === clusterKey && _isWithinDays(s.created_at, 7)
+    const thisWeekSame = recentSessions.filter(
+      (s) => s.cluster_key === clusterKey && _isWithinDays(s.created_at, 7)
     );
     if (thisWeekSame.length >= 3 && severity === 'low') {
-      adjustments.push({ from: 'low', to: 'medium', reason: `${thisWeekSame.length} check-ins this week for same cluster` });
+      adjustments.push({
+        from: 'low',
+        to: 'medium',
+        reason: `${thisWeekSame.length} check-ins this week for same cluster`,
+      });
       severity = 'medium';
     }
   }
 
   // Rule 3: worsening trend → bump low to medium
   if (clusterKey) {
-    const cluster = clusters.find(c => c.cluster_key === clusterKey);
+    const cluster = clusters.find((c) => c.cluster_key === clusterKey);
     if (cluster && cluster.trend === 'increasing' && severity === 'low') {
       adjustments.push({ from: 'low', to: 'medium', reason: `worsening trend for ${clusterKey}` });
       severity = 'medium';
@@ -325,7 +350,7 @@ function decideFinalSeverity(context, scriptSeverity, answers) {
   }
 
   // Rule 4: elderly + conditions — scoring engine already handles this, don't double-bump
-  const isElderly = profile.birth_year && (new Date().getFullYear() - profile.birth_year >= 60);
+  const isElderly = profile.birth_year && new Date().getFullYear() - profile.birth_year >= 60;
   const hasConditions = (profile.medical_conditions || []).length > 0;
   if (isElderly && hasConditions && severity === 'high') {
     // Don't bump to critical — scoring engine already bumped for elderly
@@ -337,15 +362,21 @@ function decideFinalSeverity(context, scriptSeverity, answers) {
 
   // Rule 5: user usually recovers quickly — don't over-escalate
   if (clusterKey && severity === 'high') {
-    const pastMonth = recentSessions.filter(s =>
-      s.cluster_key === clusterKey && s.is_completed && _isWithinDays(s.created_at, 30)
+    const pastMonth = recentSessions.filter(
+      (s) => s.cluster_key === clusterKey && s.is_completed && _isWithinDays(s.created_at, 30)
     );
     if (pastMonth.length >= 5) {
-      const quickRecoveries = pastMonth.filter(s => s.severity === 'low' || s.severity === 'medium');
+      const quickRecoveries = pastMonth.filter(
+        (s) => s.severity === 'low' || s.severity === 'medium'
+      );
       const recoveryRate = quickRecoveries.length / pastMonth.length;
-      if (recoveryRate >= 0.8 && adjustments.some(a => a.to === 'high')) {
+      if (recoveryRate >= 0.8 && adjustments.some((a) => a.to === 'high')) {
         // User typically recovers — revert bump
-        adjustments.push({ from: 'high', to: 'medium', reason: `high recovery rate (${Math.round(recoveryRate * 100)}%) — not escalating` });
+        adjustments.push({
+          from: 'high',
+          to: 'medium',
+          reason: `high recovery rate (${Math.round(recoveryRate * 100)}%) — not escalating`,
+        });
         severity = 'medium';
       }
     }
@@ -364,27 +395,40 @@ function decideFinalSeverity(context, scriptSeverity, answers) {
  * @param {string} clusterKey
  * @returns {{ followUpHours: number, followUpType: string, message: string, reason: string }}
  */
-function decideFollowUp(context, severity, clusterKey) {
+function decideFollowUp(context, severity, _clusterKey) {
   const { hourOfDay = 12, recentSessions = [], honorifics: h } = context;
-  const CallName = h?.CallName || (h?.callName ? h.callName.charAt(0).toUpperCase() + h.callName.slice(1) : 'Ban');
+  const CallName =
+    h?.CallName || (h?.callName ? h.callName.charAt(0).toUpperCase() + h.callName.slice(1) : 'Ban');
 
   // Base follow-up hours
   let followUpHours;
   let followUpType;
   switch (severity) {
-    case 'critical': followUpHours = 0.5; followUpType = 'urgent'; break;
-    case 'high':     followUpHours = 1;   followUpType = 'check_back'; break;
-    case 'medium':   followUpHours = 3;   followUpType = 'scheduled'; break;
-    default:         followUpHours = 6;   followUpType = 'evening'; break;
+    case 'critical':
+      followUpHours = 0.5;
+      followUpType = 'urgent';
+      break;
+    case 'high':
+      followUpHours = 1;
+      followUpType = 'check_back';
+      break;
+    case 'medium':
+      followUpHours = 3;
+      followUpType = 'scheduled';
+      break;
+    default:
+      followUpHours = 6;
+      followUpType = 'evening';
+      break;
   }
 
   const reasons = [`base: ${severity}=${followUpHours}h`];
 
   // Rule 2: user typically doesn't respond quickly — push schedule
-  const recentCompleted = recentSessions.filter(s => s.is_completed && s.completed_at);
+  const recentCompleted = recentSessions.filter((s) => s.is_completed && s.completed_at);
   if (recentCompleted.length >= 3) {
     // Check average response time
-    const responseTimes = recentCompleted.slice(0, 5).map(s => {
+    const responseTimes = recentCompleted.slice(0, 5).map((s) => {
       const created = new Date(s.created_at).getTime();
       const completed = new Date(s.completed_at).getTime();
       return (completed - created) / 3600000; // hours
@@ -398,7 +442,7 @@ function decideFollowUp(context, severity, clusterKey) {
 
   // Rule 3: night time (22h-6h) → delay until morning unless critical
   if ((hourOfDay >= 22 || hourOfDay < 6) && severity !== 'critical') {
-    const hoursUntilMorning = hourOfDay >= 22 ? (24 - hourOfDay + 7) : (7 - hourOfDay);
+    const hoursUntilMorning = hourOfDay >= 22 ? 24 - hourOfDay + 7 : 7 - hourOfDay;
     if (followUpHours < hoursUntilMorning) {
       followUpHours = hoursUntilMorning;
       followUpType = 'morning';
@@ -407,7 +451,9 @@ function decideFollowUp(context, severity, clusterKey) {
   }
 
   // Rule 4: user had no-response 2+ times → simpler message
-  const noResponseCount = recentSessions.filter(s => !s.is_completed && _isWithinDays(s.created_at, 7)).length;
+  const noResponseCount = recentSessions.filter(
+    (s) => !s.is_completed && _isWithinDays(s.created_at, 7)
+  ).length;
   let message;
   if (noResponseCount >= 2) {
     message = `${CallName}: ${severity === 'high' ? 'Kham bac si chua?' : 'Hom nay the nao?'}`;
@@ -457,7 +503,12 @@ function explainDecisions(decisions) {
     const top = decisions.clusters[0];
     parts.push(`Hoi ve ${top.displayName} truoc vi ${top.reason} (priority=${top.priority})`);
     if (decisions.clusters.length > 1) {
-      parts.push(`Cac cluster khac: ${decisions.clusters.slice(1).map(c => c.displayName).join(', ')}`);
+      parts.push(
+        `Cac cluster khac: ${decisions.clusters
+          .slice(1)
+          .map((c) => c.displayName)
+          .join(', ')}`
+      );
     }
   }
 
@@ -497,7 +548,7 @@ function _getYesterdaySessions(sessions) {
   const yesterdayEnd = new Date(yesterdayStart);
   yesterdayEnd.setHours(23, 59, 59, 999);
 
-  return sessions.filter(s => {
+  return sessions.filter((s) => {
     const d = new Date(s.created_at);
     return d >= yesterdayStart && d <= yesterdayEnd;
   });
@@ -518,7 +569,7 @@ function _isWithinDays(dateStr, days) {
 }
 
 function _clusterDisplayName(clusterKey, clusters) {
-  const c = clusters.find(cl => cl.cluster_key === clusterKey);
+  const c = clusters.find((cl) => cl.cluster_key === clusterKey);
   return c ? c.display_name : clusterKey;
 }
 

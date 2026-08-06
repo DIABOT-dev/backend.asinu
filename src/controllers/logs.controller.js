@@ -47,8 +47,7 @@ async function voiceParse(pool, req, res) {
     return res.status(429).json({
       ok: false,
       code: 'VOICE_LIMIT_EXCEEDED',
-      error:
-        t('error.voice_limit_exceeded', getLang(req), { limit: VOICE_MONTHLY_LIMIT }),
+      error: t('error.voice_limit_exceeded', getLang(req), { limit: VOICE_MONTHLY_LIMIT }),
       voiceUsed,
       voiceLimit: VOICE_MONTHLY_LIMIT,
     });
@@ -68,11 +67,15 @@ async function voiceParse(pool, req, res) {
     if (result.transcript) {
       try {
         await incrementVoiceUsage(pool, req.user.id);
-      } catch { /* non-blocking */ }
+      } catch {
+        /* non-blocking */
+      }
 
       // Log Whisper transcription
       const whisperProvider = process.env.WHISPER_ENDPOINT ? 'phowhisper' : 'openai';
-      const whisperModel = process.env.WHISPER_ENDPOINT ? 'diepho/PhoWhisper-medium-ct2' : 'whisper-1';
+      const whisperModel = process.env.WHISPER_ENDPOINT
+        ? 'diepho/PhoWhisper-medium-ct2'
+        : 'whisper-1';
       const { logAiInteraction } = require('../services/ai/ai-logger.service');
       logAiInteraction(pool, {
         userId: req.user.id,

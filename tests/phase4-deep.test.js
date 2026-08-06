@@ -12,23 +12,41 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const http = require('http');
 
 const il = require('../src/core/checkin/illusion-layer');
-const { getNextQuestion, getNextQuestionWithIllusion } = require('../src/core/checkin/script-runner');
+const {
+  getNextQuestion,
+  getNextQuestionWithIllusion,
+} = require('../src/core/checkin/script-runner');
 
 let totalPass = 0;
 let totalFail = 0;
 const failures = [];
 
 function assert(condition, name) {
-  if (condition) { totalPass++; console.log(`  PASS ✓ ${name}`); }
-  else { totalFail++; failures.push(name); console.log(`  FAIL ✗ ${name}`); }
+  if (condition) {
+    totalPass++;
+    console.log(`  PASS ✓ ${name}`);
+  } else {
+    totalFail++;
+    failures.push(name);
+    console.log(`  FAIL ✗ ${name}`);
+  }
 }
 
 function get(path) {
   return new Promise((resolve, reject) => {
-    http.get('http://localhost:3000' + path, res => {
-      let d = ''; res.on('data', c => d += c);
-      res.on('end', () => { try { resolve({ s: res.statusCode, b: JSON.parse(d) }); } catch { resolve({ s: res.statusCode, b: d }); } });
-    }).on('error', reject);
+    http
+      .get('http://localhost:3000' + path, (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => {
+          try {
+            resolve({ s: res.statusCode, b: JSON.parse(d) });
+          } catch {
+            resolve({ s: res.statusCode, b: d });
+          }
+        });
+      })
+      .on('error', reject);
   });
 }
 
@@ -48,10 +66,31 @@ async function testContinuityCoverage() {
 
   // 1.1 All 4 templates are reachable
   const cases = [
-    [{ topSymptom: { display_name: 'đau', trend: 'stable' }, consecutiveTiredDays: 3, lastSeverity: 'low' }, 'continuity_same_3d'],
-    [{ topSymptom: { display_name: 'sốt', trend: 'decreasing' }, consecutiveTiredDays: 0, lastSeverity: 'low' }, 'continuity_improving'],
+    [
+      {
+        topSymptom: { display_name: 'đau', trend: 'stable' },
+        consecutiveTiredDays: 3,
+        lastSeverity: 'low',
+      },
+      'continuity_same_3d',
+    ],
+    [
+      {
+        topSymptom: { display_name: 'sốt', trend: 'decreasing' },
+        consecutiveTiredDays: 0,
+        lastSeverity: 'low',
+      },
+      'continuity_improving',
+    ],
     [{ topSymptom: null, consecutiveTiredDays: 0, lastSeverity: 'high' }, 'continuity_was_severe'],
-    [{ topSymptom: { display_name: 'ho', trend: 'stable' }, consecutiveTiredDays: 2, lastSeverity: 'low' }, 'continuity_same_2d'],
+    [
+      {
+        topSymptom: { display_name: 'ho', trend: 'stable' },
+        consecutiveTiredDays: 2,
+        lastSeverity: 'low',
+      },
+      'continuity_same_2d',
+    ],
     [{ topSymptom: null, consecutiveTiredDays: 0, lastSeverity: null }, null],
   ];
   for (const [ctx, expected] of cases) {
@@ -66,13 +105,22 @@ async function testContinuityCoverage() {
   // 1.6 days var injected correctly (5, 7, 10)
   for (const days of [3, 5, 7, 10]) {
     const r = il.selectContinuityPrefix(
-      { topSymptom: { display_name: 'x', trend: 'stable' }, consecutiveTiredDays: days, lastSeverity: 'low' }, USER_OLD_M
+      {
+        topSymptom: { display_name: 'x', trend: 'stable' },
+        consecutiveTiredDays: days,
+        lastSeverity: 'low',
+      },
+      USER_OLD_M
     );
     assert(r.text.includes(`${days} ngày`), `1.6 days=${days} injected`);
   }
 
   // 1.10 All honorific types render correctly
-  const ctxFull = { topSymptom: { display_name: 'mệt', trend: 'stable' }, consecutiveTiredDays: 3, lastSeverity: 'low' };
+  const ctxFull = {
+    topSymptom: { display_name: 'mệt', trend: 'stable' },
+    consecutiveTiredDays: 3,
+    lastSeverity: 'low',
+  };
   const honorificCases = [
     [USER_OLD_M, 'chú'],
     [USER_OLD_F, 'cô'],
@@ -82,7 +130,10 @@ async function testContinuityCoverage() {
   ];
   for (const [user, expectedHonorific] of honorificCases) {
     const r = il.selectContinuityPrefix(ctxFull, user);
-    assert(r.text.toLowerCase().includes(expectedHonorific), `1.10 ${expectedHonorific} rendered for ${user.display_name}`);
+    assert(
+      r.text.toLowerCase().includes(expectedHonorific),
+      `1.10 ${expectedHonorific} rendered for ${user.display_name}`
+    );
   }
 
   // 1.15 Continuity with NULL user fields → no crash
@@ -120,10 +171,16 @@ async function testEmpathyVariantCoverage() {
   const uniqueTexts = new Set();
   for (const ansText of variantTests) {
     // Use slider 5 (mild) but with different question_id (doesn't matter for hash)
-    const r = il.selectEmpathyResponse({ question_id: ansText, answer: ansText + ' vẫn vậy' }, USER_OLD_M);
+    const r = il.selectEmpathyResponse(
+      { question_id: ansText, answer: ansText + ' vẫn vậy' },
+      USER_OLD_M
+    );
     if (r) uniqueTexts.add(r.text);
   }
-  assert(uniqueTexts.size >= 2, `2.7 Multiple variants reachable (${uniqueTexts.size} unique texts)`);
+  assert(
+    uniqueTexts.size >= 2,
+    `2.7 Multiple variants reachable (${uniqueTexts.size} unique texts)`
+  );
 
   // 2.8 Verify hash determinism is consistent across multiple calls
   for (let i = 0; i < 5; i++) {
@@ -190,48 +247,86 @@ async function testProgressMatrix() {
     if (expected) {
       assert(p.templateId === expected, `3 ${last}→${curr} = ${expected}`);
     } else {
-      assert(p.templateId === 'progress_no_data', `3 ${last}→${curr} → no_data (worsened, no symptom)`);
+      assert(
+        p.templateId === 'progress_no_data',
+        `3 ${last}→${curr} → no_data (worsened, no symptom)`
+      );
     }
   }
 
   // 3.10 Worsened severity + symptom trend → uses trend
   const p1 = il.generateProgressFeedback(
-    { topSymptom: { display_name: 'sốt', trend: 'increasing' }, lastSeverity: 'low' }, 'high', USER_OLD_M
+    { topSymptom: { display_name: 'sốt', trend: 'increasing' }, lastSeverity: 'low' },
+    'high',
+    USER_OLD_M
   );
   assert(p1.templateId === 'progress_worsening', '3.10 Worsened + symptom → uses trend');
 
   // 3.11 currentSeverity null → uses trend only
   const p2 = il.generateProgressFeedback(
-    { topSymptom: { display_name: 'ho', trend: 'decreasing' }, lastSeverity: 'high' }, null, USER_OLD_M
+    { topSymptom: { display_name: 'ho', trend: 'decreasing' }, lastSeverity: 'high' },
+    null,
+    USER_OLD_M
   );
   assert(p2.templateId === 'progress_improving', '3.11 null current → uses trend');
 
   // 3.12 Both null → uses trend
   const p3 = il.generateProgressFeedback(
-    { topSymptom: { display_name: 'x', trend: 'stable' }, lastSeverity: null }, null, USER_OLD_M
+    { topSymptom: { display_name: 'x', trend: 'stable' }, lastSeverity: null },
+    null,
+    USER_OLD_M
   );
   assert(p3.templateId === 'progress_stable', '3.12 No severity → uses trend stable');
 
   // 3.13 Symptom name with special chars
   const p4 = il.generateProgressFeedback(
-    { topSymptom: { display_name: 'đau "dạ dày" & buồn nôn', trend: 'stable' }, lastSeverity: null }, null, USER_OLD_M
+    {
+      topSymptom: { display_name: 'đau "dạ dày" & buồn nôn', trend: 'stable' },
+      lastSeverity: null,
+    },
+    null,
+    USER_OLD_M
   );
   assert(p4.text.includes('đau "dạ dày" & buồn nôn'), '3.13 Special chars preserved');
 
   // 3.14 Each progress template has honorific/selfRef rendered correctly
-  const allKeys = ['trend_improving', 'trend_stable', 'trend_worsening', 'severity_improved', 'severity_same', 'no_data'];
+  const allKeys = [
+    'trend_improving',
+    'trend_stable',
+    'trend_worsening',
+    'severity_improved',
+    'severity_same',
+    'no_data',
+  ];
   for (const key of allKeys) {
     const t = il.PROGRESS_TEMPLATES[key];
     // Render with full ctx
     const ctx = { topSymptom: { display_name: 'test', trend: 'stable' }, lastSeverity: 'medium' };
     let p;
     if (key.startsWith('trend_')) {
-      const trendVal = key === 'trend_improving' ? 'decreasing' : key === 'trend_worsening' ? 'increasing' : 'stable';
-      p = il.generateProgressFeedback({ ...ctx, topSymptom: { display_name: 'test', trend: trendVal } }, null, USER_OLD_M);
+      const trendVal =
+        key === 'trend_improving'
+          ? 'decreasing'
+          : key === 'trend_worsening'
+            ? 'increasing'
+            : 'stable';
+      p = il.generateProgressFeedback(
+        { ...ctx, topSymptom: { display_name: 'test', trend: trendVal } },
+        null,
+        USER_OLD_M
+      );
     } else if (key === 'severity_improved') {
-      p = il.generateProgressFeedback({ topSymptom: null, lastSeverity: 'high' }, 'low', USER_OLD_M);
+      p = il.generateProgressFeedback(
+        { topSymptom: null, lastSeverity: 'high' },
+        'low',
+        USER_OLD_M
+      );
     } else if (key === 'severity_same') {
-      p = il.generateProgressFeedback({ topSymptom: null, lastSeverity: 'medium' }, 'medium', USER_OLD_M);
+      p = il.generateProgressFeedback(
+        { topSymptom: null, lastSeverity: 'medium' },
+        'medium',
+        USER_OLD_M
+      );
     } else {
       p = il.generateProgressFeedback({ topSymptom: null, lastSeverity: null }, null, USER_OLD_M);
     }
@@ -246,7 +341,11 @@ async function testProgressMatrix() {
 async function testImmutability() {
   console.log('\n══════ SUITE 4: Immutability ══════');
 
-  const ctx = { topSymptom: { display_name: 'đau', trend: 'stable' }, consecutiveTiredDays: 3, lastSeverity: 'medium' };
+  const ctx = {
+    topSymptom: { display_name: 'đau', trend: 'stable' },
+    consecutiveTiredDays: 3,
+    lastSeverity: 'medium',
+  };
   const ctxClone = JSON.parse(JSON.stringify(ctx));
   const scriptData = {
     greeting: 'Hello',
@@ -257,20 +356,34 @@ async function testImmutability() {
   const scriptDataClone = JSON.parse(JSON.stringify(scriptData));
 
   // 4.1 applyIllusion does not mutate ctx
-  const baseResult = { isDone: false, question: scriptData.questions[0], currentStep: 0, totalSteps: 1 };
+  const baseResult = {
+    isDone: false,
+    question: scriptData.questions[0],
+    currentStep: 0,
+    totalSteps: 1,
+  };
   il.applyIllusion(baseResult, scriptData, ctx, USER_OLD_M);
   assert(JSON.stringify(ctx) === JSON.stringify(ctxClone), '4.1 ctx not mutated by applyIllusion');
 
   // 4.2 applyIllusion does not mutate scriptData
-  assert(JSON.stringify(scriptData) === JSON.stringify(scriptDataClone), '4.2 scriptData not mutated');
+  assert(
+    JSON.stringify(scriptData) === JSON.stringify(scriptDataClone),
+    '4.2 scriptData not mutated'
+  );
 
   // 4.3 selectContinuityPrefix does not mutate ctx
   il.selectContinuityPrefix(ctx, USER_OLD_M);
-  assert(JSON.stringify(ctx) === JSON.stringify(ctxClone), '4.3 ctx not mutated by selectContinuityPrefix');
+  assert(
+    JSON.stringify(ctx) === JSON.stringify(ctxClone),
+    '4.3 ctx not mutated by selectContinuityPrefix'
+  );
 
   // 4.4 generateProgressFeedback does not mutate ctx
   il.generateProgressFeedback(ctx, 'low', USER_OLD_M);
-  assert(JSON.stringify(ctx) === JSON.stringify(ctxClone), '4.4 ctx not mutated by generateProgressFeedback');
+  assert(
+    JSON.stringify(ctx) === JSON.stringify(ctxClone),
+    '4.4 ctx not mutated by generateProgressFeedback'
+  );
 
   // 4.5 selectEmpathyResponse does not mutate lastAnswer
   const lastAns = { question_id: 'q1', answer: 5 };
@@ -293,12 +406,22 @@ async function testImmutability() {
 async function testStructurePreservation() {
   console.log('\n══════ SUITE 5: Question Structure Preservation ══════');
 
-  const ctx = { topSymptom: { display_name: 'đau', trend: 'stable' }, consecutiveTiredDays: 2, lastSeverity: 'low' };
+  const ctx = {
+    topSymptom: { display_name: 'đau', trend: 'stable' },
+    consecutiveTiredDays: 2,
+    lastSeverity: 'low',
+  };
   const scriptData = {
     greeting: 'Hello',
     questions: [
       { id: 'q1', text: 'Đau mức nào?', type: 'slider', min: 0, max: 10, cluster: 'pain' },
-      { id: 'q2', text: 'Loại nào?', type: 'single_choice', options: ['A', 'B', 'C'], cluster: 'type' },
+      {
+        id: 'q2',
+        text: 'Loại nào?',
+        type: 'single_choice',
+        options: ['A', 'B', 'C'],
+        cluster: 'type',
+      },
       { id: 'q3', text: 'Triệu chứng gì?', type: 'multi_choice', options: ['X', 'Y', 'Z'] },
     ],
     scoring_rules: [],
@@ -308,7 +431,10 @@ async function testStructurePreservation() {
   // 5.1 Slider question preserves min/max
   const r1 = il.applyIllusion(
     { isDone: false, question: scriptData.questions[0], currentStep: 0, totalSteps: 3 },
-    scriptData, ctx, USER_OLD_M, {}
+    scriptData,
+    ctx,
+    USER_OLD_M,
+    {}
   );
   assert(r1.question.type === 'slider', '5.1 type=slider preserved');
   assert(r1.question.min === 0, '5.2 min=0 preserved');
@@ -318,18 +444,30 @@ async function testStructurePreservation() {
   // 5.5 Single choice preserves options array exactly
   const r2 = il.applyIllusion(
     { isDone: false, question: scriptData.questions[1], currentStep: 1, totalSteps: 3 },
-    scriptData, ctx, USER_OLD_M, { lastAnswer: { answer: 5 } }
+    scriptData,
+    ctx,
+    USER_OLD_M,
+    { lastAnswer: { answer: 5 } }
   );
   assert(r2.question.type === 'single_choice', '5.5 type=single_choice preserved');
-  assert(JSON.stringify(r2.question.options) === JSON.stringify(['A', 'B', 'C']), '5.6 options exact match');
+  assert(
+    JSON.stringify(r2.question.options) === JSON.stringify(['A', 'B', 'C']),
+    '5.6 options exact match'
+  );
 
   // 5.7 Multi choice
   const r3 = il.applyIllusion(
     { isDone: false, question: scriptData.questions[2], currentStep: 2, totalSteps: 3 },
-    scriptData, ctx, USER_OLD_M, { lastAnswer: { answer: 'A' } }
+    scriptData,
+    ctx,
+    USER_OLD_M,
+    { lastAnswer: { answer: 'A' } }
   );
   assert(r3.question.type === 'multi_choice', '5.7 type=multi_choice preserved');
-  assert(JSON.stringify(r3.question.options) === JSON.stringify(['X', 'Y', 'Z']), '5.8 multi options exact');
+  assert(
+    JSON.stringify(r3.question.options) === JSON.stringify(['X', 'Y', 'Z']),
+    '5.8 multi options exact'
+  );
 
   // 5.9 question.id always preserved
   for (const r of [r1, r2, r3]) {
@@ -342,8 +480,10 @@ async function testStructurePreservation() {
 
   // 5.12 _template_id always present
   for (const r of [r1, r2, r3]) {
-    assert(typeof r.question._template_id === 'string' && r.question._template_id.length > 0,
-      `5.12 _template_id present for ${r.question._original_question_id}`);
+    assert(
+      typeof r.question._template_id === 'string' && r.question._template_id.length > 0,
+      `5.12 _template_id present for ${r.question._original_question_id}`
+    );
   }
 }
 
@@ -353,7 +493,11 @@ async function testStructurePreservation() {
 async function testConclusionPreservation() {
   console.log('\n══════ SUITE 6: Conclusion + Progress ══════');
 
-  const ctx = { topSymptom: { display_name: 'đau', trend: 'decreasing' }, consecutiveTiredDays: 0, lastSeverity: 'high' };
+  const ctx = {
+    topSymptom: { display_name: 'đau', trend: 'decreasing' },
+    consecutiveTiredDays: 0,
+    lastSeverity: 'high',
+  };
   const scriptData = {
     questions: [{ id: 'q1', text: 'Test?', type: 'slider', min: 0, max: 10 }],
     scoring_rules: [],
@@ -412,11 +556,14 @@ async function testApiStress() {
     promises.push(get('/api/health/illusion-preview/4'));
   }
   const results = await Promise.all(promises);
-  assert(results.every(r => r.s === 200), '7.1 10 concurrent → all 200');
+  assert(
+    results.every((r) => r.s === 200),
+    '7.1 10 concurrent → all 200'
+  );
 
   // 7.2 All return same continuity (deterministic)
   if (results[0].b.illusion?.continuity) {
-    const ids = results.map(r => r.b.illusion.continuity?.templateId).filter(Boolean);
+    const ids = results.map((r) => r.b.illusion.continuity?.templateId).filter(Boolean);
     const unique = new Set(ids);
     assert(unique.size === 1, `7.2 Continuity deterministic (${unique.size} unique)`);
   } else {
@@ -425,7 +572,7 @@ async function testApiStress() {
 
   // 7.3 All return same empathy
   if (results[0].b.step1_empathy) {
-    const empIds = results.map(r => r.b.step1_empathy?.text).filter(Boolean);
+    const empIds = results.map((r) => r.b.step1_empathy?.text).filter(Boolean);
     const unique = new Set(empIds);
     assert(unique.size === 1, `7.3 Empathy deterministic (${unique.size} unique)`);
   } else {
@@ -434,7 +581,7 @@ async function testApiStress() {
 
   // 7.4 All return same progress
   if (results[0].b.conclusion_progress) {
-    const progIds = results.map(r => r.b.conclusion_progress?.templateId).filter(Boolean);
+    const progIds = results.map((r) => r.b.conclusion_progress?.templateId).filter(Boolean);
     const unique = new Set(progIds);
     assert(unique.size === 1, `7.4 Progress deterministic (${unique.size} unique)`);
   } else {
@@ -442,7 +589,10 @@ async function testApiStress() {
   }
 
   // 7.5 No request crashes
-  assert(results.every(r => r.b.ok === true), '7.5 No crashes');
+  assert(
+    results.every((r) => r.b.ok === true),
+    '7.5 No crashes'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -470,8 +620,10 @@ async function testRealDbIntegration() {
   // 8.x User 4 specifically — should have continuity (3 days tired)
   const r4 = await get('/api/health/illusion-preview/4');
   if (r4.s === 200 && r4.b.illusion?.continuity) {
-    assert(r4.b.illusion.continuity.templateId.startsWith('continuity_'),
-      `8.10 User 4 has continuity: ${r4.b.illusion.continuity.templateId}`);
+    assert(
+      r4.b.illusion.continuity.templateId.startsWith('continuity_'),
+      `8.10 User 4 has continuity: ${r4.b.illusion.continuity.templateId}`
+    );
   } else {
     assert(true, '8.10 (no continuity for user 4)');
   }
@@ -487,7 +639,13 @@ async function testSkippedQuestions() {
   const scriptData = {
     questions: [
       { id: 'q1', text: 'Đau mức nào?', type: 'slider', min: 0, max: 10 },
-      { id: 'q2', text: 'Có sốt không?', type: 'single_choice', options: ['Có', 'Không'], skip_if: { field: 'q1', op: 'lt', value: 4 } },
+      {
+        id: 'q2',
+        text: 'Có sốt không?',
+        type: 'single_choice',
+        options: ['Có', 'Không'],
+        skip_if: { field: 'q1', op: 'lt', value: 4 },
+      },
       { id: 'q3', text: 'Mệt không?', type: 'single_choice', options: ['Có', 'Không'] },
     ],
     scoring_rules: [],
@@ -497,7 +655,10 @@ async function testSkippedQuestions() {
 
   // 9.1 Answer q1=2 → q2 should be skipped, get q3
   const r = getNextQuestionWithIllusion(scriptData, [{ question_id: 'q1', answer: 2 }], {
-    profile: USER_OLD_M, illusionContext: ctx, user: USER_OLD_M, lastAnswer: { answer: 2 }
+    profile: USER_OLD_M,
+    illusionContext: ctx,
+    user: USER_OLD_M,
+    lastAnswer: { answer: 2 },
   });
   assert(!r.isDone, '9.1 Not done after skip');
   // Should be q3 (q2 skipped because q1=2 < 4)
@@ -520,7 +681,10 @@ async function testCodeIntegration() {
   // 10.1 illusion-layer exports all Phase 4 functions
   assert(typeof il.selectContinuityPrefix === 'function', '10.1 selectContinuityPrefix exported');
   assert(typeof il.selectEmpathyResponse === 'function', '10.2 selectEmpathyResponse exported');
-  assert(typeof il.generateProgressFeedback === 'function', '10.3 generateProgressFeedback exported');
+  assert(
+    typeof il.generateProgressFeedback === 'function',
+    '10.3 generateProgressFeedback exported'
+  );
 
   // 10.4 Templates exported
   assert(il.CONTINUITY_PREFIXES !== undefined, '10.4 CONTINUITY_PREFIXES exported');
@@ -528,18 +692,27 @@ async function testCodeIntegration() {
   assert(il.PROGRESS_TEMPLATES !== undefined, '10.6 PROGRESS_TEMPLATES exported');
 
   // 10.7 script-runner passes lastAnswer
-  const sr = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'checkin', 'script-runner.js'), 'utf8');
+  const sr = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'core', 'checkin', 'script-runner.js'),
+    'utf8'
+  );
   assert(sr.includes('lastAnswer'), '10.7 script-runner uses lastAnswer');
   assert(sr.includes('{ lastAnswer }'), '10.8 script-runner forwards lastAnswer to applyIllusion');
 
   // 10.9 health.routes uses Phase 4 features
-  const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'health.routes.js'), 'utf8');
+  const routes = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'routes', 'health.routes.js'),
+    'utf8'
+  );
   assert(routes.includes('continuity'), '10.9 routes references continuity');
   assert(routes.includes('step1_empathy'), '10.10 routes returns empathy');
   assert(routes.includes('conclusion_progress'), '10.11 routes returns progress');
 
   // 10.12 illusion-layer applyIllusion accepts options.lastAnswer
-  const ilSrc = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'checkin', 'illusion-layer.js'), 'utf8');
+  const ilSrc = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'core', 'checkin', 'illusion-layer.js'),
+    'utf8'
+  );
   assert(ilSrc.includes('lastAnswer = null'), '10.12 applyIllusion has lastAnswer default');
   assert(ilSrc.includes('output._continuity'), '10.13 applyIllusion sets _continuity');
   assert(ilSrc.includes('output._empathy'), '10.14 applyIllusion sets _empathy');
@@ -570,16 +743,27 @@ async function testDefensive() {
   assert(p && p.templateId === 'progress_no_data', '11.3 Empty ctx → no_data');
 
   // 11.4 applyIllusion with missing question
-  const r2 = il.applyIllusion({ isDone: false, question: null, currentStep: 0, totalSteps: 1 },
-    {}, {}, USER_OLD_M, {});
+  const r2 = il.applyIllusion(
+    { isDone: false, question: null, currentStep: 0, totalSteps: 1 },
+    {},
+    {},
+    USER_OLD_M,
+    {}
+  );
   assert(r2._illusion?.applied === false, '11.4 Missing question → not applied');
 
   // 11.5 applyIllusion with invalid scriptData (no greeting field)
   const r3 = il.applyIllusion(
-    { isDone: false, question: { id: 'q1', text: 'Test?', type: 'slider' }, currentStep: 0, totalSteps: 1 },
+    {
+      isDone: false,
+      question: { id: 'q1', text: 'Test?', type: 'slider' },
+      currentStep: 0,
+      totalSteps: 1,
+    },
     {}, // empty scriptData
     { topSymptom: null, consecutiveTiredDays: 0, lastSeverity: null },
-    USER_OLD_M, {}
+    USER_OLD_M,
+    {}
   );
   assert(r3._illusion?.applied === true || r3.question, '11.5 Empty scriptData → still works');
 
@@ -590,13 +774,23 @@ async function testDefensive() {
   // 11.7 Very long display_name
   const longUser = { ...USER_OLD_M, display_name: 'Nguyễn Văn Hùng Đức Trí Quân' };
   const c = il.selectContinuityPrefix(
-    { topSymptom: { display_name: 'đau', trend: 'stable' }, consecutiveTiredDays: 3, lastSeverity: 'low' }, longUser
+    {
+      topSymptom: { display_name: 'đau', trend: 'stable' },
+      consecutiveTiredDays: 3,
+      lastSeverity: 'low',
+    },
+    longUser
   );
   assert(c !== null && !c.text.includes('{'), '11.7 Long name → renders cleanly');
 
   // 11.8 Numeric symptom display_name (edge case from DB)
   const c2 = il.selectContinuityPrefix(
-    { topSymptom: { display_name: '123', trend: 'stable' }, consecutiveTiredDays: 3, lastSeverity: 'low' }, USER_OLD_M
+    {
+      topSymptom: { display_name: '123', trend: 'stable' },
+      consecutiveTiredDays: 3,
+      lastSeverity: 'low',
+    },
+    USER_OLD_M
   );
   assert(c2.text.includes('123'), '11.8 Numeric symptom → renders');
 }
@@ -636,7 +830,10 @@ async function testTemplateSafetyDeep() {
 
   // 12.4 Progress templates have id matching key naming
   for (const [, t] of Object.entries(il.PROGRESS_TEMPLATES)) {
-    assert(t.id.startsWith('progress_'), `12.4 progress template id starts with progress_: ${t.id}`);
+    assert(
+      t.id.startsWith('progress_'),
+      `12.4 progress template id starts with progress_: ${t.id}`
+    );
   }
   for (const [, t] of Object.entries(il.CONTINUITY_PREFIXES)) {
     assert(t.id.startsWith('continuity_'), `12.4 continuity id: ${t.id}`);
@@ -668,7 +865,9 @@ async function run() {
   await testTemplateSafetyDeep();
 
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log(`║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`);
+  console.log(
+    `║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`
+  );
   if (totalFail > 0) {
     console.log('║  FAILURES:                                       ║');
     for (const f of failures) console.log(`║  - ${f.substring(0, 46).padEnd(46)} ║`);
@@ -679,4 +878,8 @@ async function run() {
   process.exit(totalFail > 0 ? 1 : 0);
 }
 
-run().catch(err => { console.error('CRASHED:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASHED:', err);
+  pool.end();
+  process.exit(1);
+});

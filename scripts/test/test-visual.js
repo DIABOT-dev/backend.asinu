@@ -15,17 +15,47 @@ const path = require('path');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Import all modules
-const { createClustersFromOnboarding, getUserScript, getScript, addCluster, toClusterKey } = require('../src/services/checkin/script.service');
+const {
+  createClustersFromOnboarding,
+  getUserScript,
+  getScript,
+  addCluster,
+  toClusterKey,
+} = require('../src/services/checkin/script.service');
 const { getNextQuestion, validateScript } = require('../src/services/checkin/script-runner');
 const { evaluateScript, evaluateFollowUp } = require('../src/services/checkin/scoring-engine');
-const { getFallbackScriptData, logFallback, matchCluster, getPendingFallbacks, markFallbackProcessed } = require('../src/services/checkin/fallback.service');
+const {
+  getFallbackScriptData,
+  logFallback,
+  matchCluster,
+  getPendingFallbacks,
+  markFallbackProcessed,
+} = require('../src/services/checkin/fallback.service');
 const { detectEmergency } = require('../src/services/checkin/emergency-detector');
 const { listComplaints, resolveComplaint } = require('../src/services/checkin/clinical-mapping');
 
 const USER_ID = 4;
-const PROFILE_ELDERLY = { birth_year: 1958, gender: 'Nam', full_name: 'Trần Văn Hùng', medical_conditions: ['Tiểu đường', 'Cao huyết áp', 'Tim mạch'], age: 68 };
-const PROFILE_YOUNG = { birth_year: 1995, gender: 'Nam', full_name: 'Nguyễn Văn An', medical_conditions: [], age: 31 };
-const PROFILE_NULL = { birth_year: null, gender: null, full_name: null, medical_conditions: null, age: null };
+const PROFILE_ELDERLY = {
+  birth_year: 1958,
+  gender: 'Nam',
+  full_name: 'Trần Văn Hùng',
+  medical_conditions: ['Tiểu đường', 'Cao huyết áp', 'Tim mạch'],
+  age: 68,
+};
+const PROFILE_YOUNG = {
+  birth_year: 1995,
+  gender: 'Nam',
+  full_name: 'Nguyễn Văn An',
+  medical_conditions: [],
+  age: 31,
+};
+const PROFILE_NULL = {
+  birth_year: null,
+  gender: null,
+  full_name: null,
+  medical_conditions: null,
+  age: null,
+};
 
 // ─── Test collector ────────────────────────────────────────────
 const suites = [];
@@ -39,7 +69,8 @@ function suite(name) {
 function test(name, passed, detail = '', richDetail = '') {
   const status = passed ? 'pass' : 'fail';
   currentSuite.tests.push({ name, status, detail, richDetail });
-  if (passed) currentSuite.pass++; else currentSuite.fail++;
+  if (passed) currentSuite.pass++;
+  else currentSuite.fail++;
 }
 
 function endSuite() {
@@ -70,23 +101,29 @@ async function testScriptGeneration() {
       const { valid } = validateScript(sd);
 
       // Build rich detail showing actual questions
-      const qList = sd.questions.map((q, i) => {
-        let detail = `<b>Câu ${i+1}:</b> ${q.text}`;
-        if (q.type === 'slider') detail += ` <span class="tag blue">Thang ${q.min}-${q.max}</span>`;
-        if (q.type === 'single_choice') detail += ` <span class="tag blue">Chọn 1</span>`;
-        if (q.type === 'multi_choice') detail += ` <span class="tag blue">Chọn nhiều</span>`;
-        if (q.options) detail += `<br><span style="color:#64748b;font-size:11px;margin-left:16px">→ ${q.options.join(' | ')}</span>`;
-        return detail;
-      }).join('<br>');
+      const qList = sd.questions
+        .map((q, i) => {
+          let detail = `<b>Câu ${i + 1}:</b> ${q.text}`;
+          if (q.type === 'slider')
+            detail += ` <span class="tag blue">Thang ${q.min}-${q.max}</span>`;
+          if (q.type === 'single_choice') detail += ` <span class="tag blue">Chọn 1</span>`;
+          if (q.type === 'multi_choice') detail += ` <span class="tag blue">Chọn nhiều</span>`;
+          if (q.options)
+            detail += `<br><span style="color:#64748b;font-size:11px;margin-left:16px">→ ${q.options.join(' | ')}</span>`;
+          return detail;
+        })
+        .join('<br>');
 
-      const rulesSummary = sd.scoring_rules.map(r => {
-        const conds = r.conditions.map(c => `${c.field} ${c.op} "${c.value}"`).join(' & ');
-        return `${conds || '(mặc định)'} → <b>${r.severity.toUpperCase()}</b> (hẹn ${r.follow_up_hours}h)`;
-      }).join('<br>');
+      const rulesSummary = sd.scoring_rules
+        .map((r) => {
+          const conds = r.conditions.map((c) => `${c.field} ${c.op} "${c.value}"`).join(' & ');
+          return `${conds || '(mặc định)'} → <b>${r.severity.toUpperCase()}</b> (hẹn ${r.follow_up_hours}h)`;
+        })
+        .join('<br>');
 
-      const templates = Object.entries(sd.conclusion_templates || {}).map(([k, v]) =>
-        `<b>${k.toUpperCase()}:</b> "${v.summary}"`
-      ).join('<br>');
+      const templates = Object.entries(sd.conclusion_templates || {})
+        .map(([k, v]) => `<b>${k.toUpperCase()}:</b> "${v.summary}"`)
+        .join('<br>');
 
       const rich = `
         <div style="margin:8px 0"><b>📋 Câu hỏi (${sd.questions.length}):</b></div>${qList}
@@ -94,7 +131,12 @@ async function testScriptGeneration() {
         <div style="margin:12px 0 4px"><b>💬 Mẫu kết luận:</b></div>${templates}
       `;
 
-      test(`"${c}" — Tạo kịch bản thành công: ${sd.questions.length} câu hỏi, ${sd.scoring_rules.length} luật chấm điểm`, hasScript && valid, `Mã: ${key}`, rich);
+      test(
+        `"${c}" — Tạo kịch bản thành công: ${sd.questions.length} câu hỏi, ${sd.scoring_rules.length} luật chấm điểm`,
+        hasScript && valid,
+        `Mã: ${key}`,
+        rich
+      );
     } else {
       test(`"${c}" — Hệ thống tạo được kịch bản hỏi`, false, `THẤT BẠI: không tạo được`);
     }
@@ -109,10 +151,13 @@ async function testScriptRunner() {
   for (const c of complaints) {
     const key = toClusterKey(c);
     const script = await getScript(pool, USER_ID, key, 'initial');
-    if (!script) { test(`"${c}" — Không tìm thấy kịch bản`, false, 'Lỗi: thiếu script'); continue; }
+    if (!script) {
+      test(`"${c}" — Không tìm thấy kịch bản`, false, 'Lỗi: thiếu script');
+      continue;
+    }
 
     const sd = script.script_data;
-    let answers = [];
+    const answers = [];
     let step;
     let count = 0;
     const conversation = [];
@@ -120,7 +165,11 @@ async function testScriptRunner() {
     do {
       step = getNextQuestion(sd, answers, { sessionType: 'initial', profile: PROFILE_ELDERLY });
       if (!step.isDone) {
-        const ans = step.question.options ? step.question.options[0] : (step.question.type === 'slider' ? 5 : 'test');
+        const ans = step.question.options
+          ? step.question.options[0]
+          : step.question.type === 'slider'
+            ? 5
+            : 'test';
         conversation.push({ q: step.question.text, a: ans, type: step.question.type });
         answers.push({ question_id: step.question.id, answer: ans });
         count++;
@@ -129,11 +178,15 @@ async function testScriptRunner() {
 
     const sevLabel = { low: 'Nhẹ', medium: 'Trung bình', high: 'Nặng' };
     const sevColor = { low: 'green', medium: 'yellow', high: 'red' };
-    const convo = conversation.map((c, i) =>
-      `<b>Câu ${i+1}:</b> "${c.q}"<br><span style="color:#16a34a;margin-left:16px">→ User trả lời: "${c.a}"</span>`
-    ).join('<br>');
+    const convo = conversation
+      .map(
+        (c, i) =>
+          `<b>Câu ${i + 1}:</b> "${c.q}"<br><span style="color:#16a34a;margin-left:16px">→ User trả lời: "${c.a}"</span>`
+      )
+      .join('<br>');
 
-    const conclusionDetail = step.conclusion ? `
+    const conclusionDetail = step.conclusion
+      ? `
       <div style="margin-top:8px;padding:8px 12px;background:#f0fdf4;border-radius:6px;border-left:3px solid ${sevColor[step.conclusion.severity] === 'green' ? '#16a34a' : sevColor[step.conclusion.severity] === 'red' ? '#dc2626' : '#ca8a04'}">
         <b>Kết quả:</b> <span class="tag ${sevColor[step.conclusion.severity]}">${sevLabel[step.conclusion.severity]}</span>
         | Hẹn lại: <b>${step.conclusion.followUpHours}h</b>
@@ -142,7 +195,8 @@ async function testScriptRunner() {
         <b>Lời khuyên:</b> ${step.conclusion.recommendation}<br>
         <b>Lời chào:</b> ${step.conclusion.closeMessage}
       </div>
-    ` : '';
+    `
+      : '';
 
     const rich = `
       <div style="margin:4px 0"><b>💬 Mô phỏng hội thoại (${count} câu):</b></div>
@@ -150,7 +204,12 @@ async function testScriptRunner() {
       ${conclusionDetail}
     `;
 
-    test(`"${c}" — Phiên check-in ${count} câu → ${sevLabel[step.conclusion?.severity] || '?'}`, step.isDone && !!step.conclusion?.severity, `${sevLabel[step.conclusion?.severity]} | Hẹn ${step.conclusion?.followUpHours}h`, rich);
+    test(
+      `"${c}" — Phiên check-in ${count} câu → ${sevLabel[step.conclusion?.severity] || '?'}`,
+      step.isDone && !!step.conclusion?.severity,
+      `${sevLabel[step.conclusion?.severity]} | Hẹn ${step.conclusion?.followUpHours}h`,
+      rich
+    );
   }
   endSuite();
 }
@@ -160,39 +219,119 @@ async function testScoringEngine() {
 
   const sliderScript = {
     scoring_rules: [
-      { conditions: [{ field: 's1', op: 'gte', value: 7 }], combine: 'and', severity: 'high', follow_up_hours: 1, needs_doctor: true, needs_family_alert: true },
-      { conditions: [{ field: 's1', op: 'gte', value: 4 }], combine: 'and', severity: 'medium', follow_up_hours: 3, needs_doctor: false, needs_family_alert: false },
-      { conditions: [{ field: 's1', op: 'lt', value: 4 }], combine: 'and', severity: 'low', follow_up_hours: 6, needs_doctor: false, needs_family_alert: false },
+      {
+        conditions: [{ field: 's1', op: 'gte', value: 7 }],
+        combine: 'and',
+        severity: 'high',
+        follow_up_hours: 1,
+        needs_doctor: true,
+        needs_family_alert: true,
+      },
+      {
+        conditions: [{ field: 's1', op: 'gte', value: 4 }],
+        combine: 'and',
+        severity: 'medium',
+        follow_up_hours: 3,
+        needs_doctor: false,
+        needs_family_alert: false,
+      },
+      {
+        conditions: [{ field: 's1', op: 'lt', value: 4 }],
+        combine: 'and',
+        severity: 'low',
+        follow_up_hours: 6,
+        needs_doctor: false,
+        needs_family_alert: false,
+      },
     ],
     condition_modifiers: [
-      { user_condition: 'tiểu đường', extra_conditions: [{ field: 's1', op: 'gte', value: 5 }], action: 'bump_severity', to: 'high' },
+      {
+        user_condition: 'tiểu đường',
+        extra_conditions: [{ field: 's1', op: 'gte', value: 5 }],
+        action: 'bump_severity',
+        to: 'high',
+      },
     ],
   };
 
   const sevVN = { low: 'Nhẹ', medium: 'Trung bình', high: 'Nặng' };
 
   // Boundary tests
-  for (const [score, expected] of [[0,'low'],[1,'low'],[2,'low'],[3,'low'],[4,'medium'],[5,'medium'],[6,'medium'],[7,'high'],[8,'high'],[9,'high'],[10,'high']]) {
-    const r = evaluateScript(sliderScript, [{ question_id: 's1', answer: score }], { medical_conditions: [] });
+  for (const [score, expected] of [
+    [0, 'low'],
+    [1, 'low'],
+    [2, 'low'],
+    [3, 'low'],
+    [4, 'medium'],
+    [5, 'medium'],
+    [6, 'medium'],
+    [7, 'high'],
+    [8, 'high'],
+    [9, 'high'],
+    [10, 'high'],
+  ]) {
+    const r = evaluateScript(sliderScript, [{ question_id: 's1', answer: score }], {
+      medical_conditions: [],
+    });
     const rich = `<b>Input:</b> User chọn mức đau = <b>${score}/10</b><br><b>Luật áp dụng:</b> ${score >= 7 ? 'score ≥ 7 → Nặng' : score >= 4 ? 'score ≥ 4 → Trung bình' : 'score < 4 → Nhẹ'}<br><b>Output:</b> severity = <span class="tag ${r.severity === 'high' ? 'red' : r.severity === 'medium' ? 'yellow' : 'green'}">${sevVN[r.severity]}</span>, hẹn lại ${r.followUpHours}h, cần bác sĩ: ${r.needsDoctor ? 'CÓ' : 'Không'}`;
-    test(`Đau mức ${score}/10 → phải là "${sevVN[expected]}"`, r.severity === expected, `Thực tế: ${sevVN[r.severity]}`, rich);
+    test(
+      `Đau mức ${score}/10 → phải là "${sevVN[expected]}"`,
+      r.severity === expected,
+      `Thực tế: ${sevVN[r.severity]}`,
+      rich
+    );
   }
 
   // Modifiers
-  const r1 = evaluateScript(sliderScript, [{ question_id: 's1', answer: 5 }], { medical_conditions: ['Tiểu đường'] });
-  test('Người bị tiểu đường + đau 5/10 → phải tăng lên "Nặng"', r1.severity === 'high', `Thực tế: ${sevVN[r1.severity]}`,
-    `<b>Tình huống:</b> Người bệnh tiểu đường kêu đau 5/10<br><b>Bình thường:</b> 5/10 = Trung bình<br><b>Có tiểu đường:</b> Modifier tự tăng lên <span class="tag red">Nặng</span> vì biến chứng nguy hiểm<br><b>Kết quả:</b> severity = ${r1.severity}, needsDoctor = ${r1.needsDoctor}`);
+  const r1 = evaluateScript(sliderScript, [{ question_id: 's1', answer: 5 }], {
+    medical_conditions: ['Tiểu đường'],
+  });
+  test(
+    'Người bị tiểu đường + đau 5/10 → phải tăng lên "Nặng"',
+    r1.severity === 'high',
+    `Thực tế: ${sevVN[r1.severity]}`,
+    `<b>Tình huống:</b> Người bệnh tiểu đường kêu đau 5/10<br><b>Bình thường:</b> 5/10 = Trung bình<br><b>Có tiểu đường:</b> Modifier tự tăng lên <span class="tag red">Nặng</span> vì biến chứng nguy hiểm<br><b>Kết quả:</b> severity = ${r1.severity}, needsDoctor = ${r1.needsDoctor}`
+  );
 
-  const r2 = evaluateScript(sliderScript, [{ question_id: 's1', answer: 3 }], { medical_conditions: ['Tiểu đường'], age: 75 });
-  test('Người 75 tuổi + tiểu đường + đau 3/10 → KHÔNG ĐƯỢC xếp "Nhẹ"', r2.severity !== 'low', `Thực tế: ${sevVN[r2.severity]}`,
-    `<b>Tình huống:</b> Cụ 75 tuổi, tiểu đường, đau chỉ 3/10<br><b>Bình thường:</b> 3/10 = Nhẹ → không cần làm gì<br><b>An toàn y khoa:</b> Người cao tuổi + bệnh nền → KHÔNG ĐƯỢC xếp Nhẹ dù đau ít<br><b>Kết quả:</b> Hệ thống tự tăng lên <span class="tag yellow">${sevVN[r2.severity]}</span> để theo dõi`);
+  const r2 = evaluateScript(sliderScript, [{ question_id: 's1', answer: 3 }], {
+    medical_conditions: ['Tiểu đường'],
+    age: 75,
+  });
+  test(
+    'Người 75 tuổi + tiểu đường + đau 3/10 → KHÔNG ĐƯỢC xếp "Nhẹ"',
+    r2.severity !== 'low',
+    `Thực tế: ${sevVN[r2.severity]}`,
+    `<b>Tình huống:</b> Cụ 75 tuổi, tiểu đường, đau chỉ 3/10<br><b>Bình thường:</b> 3/10 = Nhẹ → không cần làm gì<br><b>An toàn y khoa:</b> Người cao tuổi + bệnh nền → KHÔNG ĐƯỢC xếp Nhẹ dù đau ít<br><b>Kết quả:</b> Hệ thống tự tăng lên <span class="tag yellow">${sevVN[r2.severity]}</span> để theo dõi`
+  );
 
   // Follow-up
-  const fu1 = evaluateFollowUp({}, [{ question_id: 'fu1', answer: 'Đỡ hơn' }, { question_id: 'fu2', answer: 'Không' }], 'medium');
-  test('Hỏi lại: "Đỡ hơn" + không triệu chứng mới → hạ xuống "Nhẹ", theo dõi', fu1.severity === 'low', `Hành động: ${fu1.action}`);
+  const fu1 = evaluateFollowUp(
+    {},
+    [
+      { question_id: 'fu1', answer: 'Đỡ hơn' },
+      { question_id: 'fu2', answer: 'Không' },
+    ],
+    'medium'
+  );
+  test(
+    'Hỏi lại: "Đỡ hơn" + không triệu chứng mới → hạ xuống "Nhẹ", theo dõi',
+    fu1.severity === 'low',
+    `Hành động: ${fu1.action}`
+  );
 
-  const fu2 = evaluateFollowUp({}, [{ question_id: 'fu1', answer: 'Nặng hơn' }, { question_id: 'fu2', answer: 'Có' }], 'medium');
-  test('Hỏi lại: "Nặng hơn" + có triệu chứng mới → tăng lên "Nặng", cảnh báo', fu2.severity === 'high', `Hành động: ${fu2.action}`);
+  const fu2 = evaluateFollowUp(
+    {},
+    [
+      { question_id: 'fu1', answer: 'Nặng hơn' },
+      { question_id: 'fu2', answer: 'Có' },
+    ],
+    'medium'
+  );
+  test(
+    'Hỏi lại: "Nặng hơn" + có triệu chứng mới → tăng lên "Nặng", cảnh báo',
+    fu2.severity === 'high',
+    `Hành động: ${fu2.action}`
+  );
 
   // Null safety
   const r3 = evaluateScript(sliderScript, [], null);
@@ -220,14 +359,25 @@ async function testFallbackFlow() {
         { question_id: 'fb2', answer: 'Từ sáng' },
         { question_id: 'fb3', answer: 'Vẫn vậy' },
       ];
-      const step = getNextQuestion(fb, answers, { sessionType: 'initial', profile: PROFILE_ELDERLY });
+      const step = getNextQuestion(fb, answers, {
+        sessionType: 'initial',
+        profile: PROFILE_ELDERLY,
+      });
       const sevVN = { low: 'Nhẹ', medium: 'Trung bình', high: 'Nặng' };
-      test(`"${symptom}" — Fallback vẫn cho được kết quả đánh giá`, step.isDone, `Mức độ: ${sevVN[step.conclusion?.severity] || step.conclusion?.severity}`);
+      test(
+        `"${symptom}" — Fallback vẫn cho được kết quả đánh giá`,
+        step.isDone,
+        `Mức độ: ${sevVN[step.conclusion?.severity] || step.conclusion?.severity}`
+      );
 
       await logFallback(pool, USER_ID, symptom, null, answers);
       test(`"${symptom}" — Lưu vào DB để AI xử lý ban đêm`, true, 'Chờ R&D 2:00 AM');
     } else {
-      test(`"${symptom}" — Tìm thấy tương tự trong DB → dùng kịch bản "${match.cluster.display_name}"`, true, `Mã: ${match.cluster.cluster_key}`);
+      test(
+        `"${symptom}" — Tìm thấy tương tự trong DB → dùng kịch bản "${match.cluster.display_name}"`,
+        true,
+        `Mã: ${match.cluster.cluster_key}`
+      );
     }
   }
 
@@ -235,7 +385,11 @@ async function testFallbackFlow() {
   test('R&D đêm: AI tạo nhóm triệu chứng mới "đau răng" thành công', !!cluster, 'Nguồn: rnd_cycle');
 
   const reMatch = await matchCluster(pool, USER_ID, 'đau răng');
-  test('Ngày hôm sau: user nói "đau răng" → GIỜ ĐÃ TÌM THẤY trong DB', reMatch.matched, `Mã: ${reMatch.cluster?.cluster_key}`);
+  test(
+    'Ngày hôm sau: user nói "đau răng" → GIỜ ĐÃ TÌM THẤY trong DB',
+    reMatch.matched,
+    `Mã: ${reMatch.cluster?.cluster_key}`
+  );
 
   endSuite();
 }
@@ -251,7 +405,12 @@ async function testEmergencyDetection() {
     ['User nói "nôn ra máu"', ['nôn ra máu'], true, 'Nghi xuất huyết tiêu hóa'],
     ['User nói "hơi mệt" → KHÔNG phải cấp cứu', ['hơi mệt'], false, 'An toàn'],
     ['User nói "đau đầu nhẹ" → KHÔNG phải cấp cứu', ['đau đầu nhẹ'], false, 'An toàn'],
-    ['User nói "không đau ngực" (phủ định) → Hệ thống hiểu phủ định', ['không đau ngực'], false, 'Phủ định được nhận diện'],
+    [
+      'User nói "không đau ngực" (phủ định) → Hệ thống hiểu phủ định',
+      ['không đau ngực'],
+      false,
+      'Phủ định được nhận diện',
+    ],
   ];
 
   for (const [label, symptoms, expected, type] of emergencies) {
@@ -262,12 +421,16 @@ async function testEmergencyDetection() {
   try {
     detectEmergency(['đau ngực'], null);
     test('Dữ liệu user bị null → hệ thống vẫn phát hiện cấp cứu, không crash', true);
-  } catch { test('Dữ liệu user bị null → không crash', false, 'BỊ CRASH!'); }
+  } catch {
+    test('Dữ liệu user bị null → không crash', false, 'BỊ CRASH!');
+  }
 
   try {
     detectEmergency(null, {});
     test('Không có triệu chứng nào → hệ thống không crash', true);
-  } catch { test('Không có triệu chứng → không crash', false, 'BỊ CRASH!'); }
+  } catch {
+    test('Không có triệu chứng → không crash', false, 'BỊ CRASH!');
+  }
 
   endSuite();
 }
@@ -287,8 +450,8 @@ async function testGarbageInputs() {
     [{}, 'object rỗng {}'],
     [[], 'mảng rỗng []'],
     ['!!!@@@', 'ký tự đặc biệt !!!@@@'],
-    ["SELECT * FROM users", 'SQL injection — cố hack database'],
-    ["<script>alert(1)</script>", 'XSS — cố chèn mã độc'],
+    ['SELECT * FROM users', 'SQL injection — cố hack database'],
+    ['<script>alert(1)</script>', 'XSS — cố chèn mã độc'],
     ['x'.repeat(10000), 'chuỗi siêu dài 10.000 ký tự'],
   ];
 
@@ -301,9 +464,24 @@ async function testGarbageInputs() {
     }
   }
 
-  try { getNextQuestion(null); test('Kịch bản bị null → hệ thống không crash', true); } catch { test('Kịch bản null', false, 'CRASH'); }
-  try { getNextQuestion({}); test('Kịch bản rỗng {} → hệ thống không crash', true); } catch { test('Kịch bản rỗng', false, 'CRASH'); }
-  try { getNextQuestion({ questions: [null] }); test('Câu hỏi bị null → hệ thống bỏ qua, không crash', true); } catch { test('Câu hỏi null', false, 'CRASH'); }
+  try {
+    getNextQuestion(null);
+    test('Kịch bản bị null → hệ thống không crash', true);
+  } catch {
+    test('Kịch bản null', false, 'CRASH');
+  }
+  try {
+    getNextQuestion({});
+    test('Kịch bản rỗng {} → hệ thống không crash', true);
+  } catch {
+    test('Kịch bản rỗng', false, 'CRASH');
+  }
+  try {
+    getNextQuestion({ questions: [null] });
+    test('Câu hỏi bị null → hệ thống bỏ qua, không crash', true);
+  } catch {
+    test('Câu hỏi null', false, 'CRASH');
+  }
 
   endSuite();
 }
@@ -313,12 +491,38 @@ async function testCrossUserComparison() {
 
   const sliderScript = {
     scoring_rules: [
-      { conditions: [{ field: 's1', op: 'gte', value: 7 }], combine: 'and', severity: 'high', follow_up_hours: 1, needs_doctor: true, needs_family_alert: true },
-      { conditions: [{ field: 's1', op: 'gte', value: 4 }], combine: 'and', severity: 'medium', follow_up_hours: 3, needs_doctor: false, needs_family_alert: false },
-      { conditions: [{ field: 's1', op: 'lt', value: 4 }], combine: 'and', severity: 'low', follow_up_hours: 6, needs_doctor: false, needs_family_alert: false },
+      {
+        conditions: [{ field: 's1', op: 'gte', value: 7 }],
+        combine: 'and',
+        severity: 'high',
+        follow_up_hours: 1,
+        needs_doctor: true,
+        needs_family_alert: true,
+      },
+      {
+        conditions: [{ field: 's1', op: 'gte', value: 4 }],
+        combine: 'and',
+        severity: 'medium',
+        follow_up_hours: 3,
+        needs_doctor: false,
+        needs_family_alert: false,
+      },
+      {
+        conditions: [{ field: 's1', op: 'lt', value: 4 }],
+        combine: 'and',
+        severity: 'low',
+        follow_up_hours: 6,
+        needs_doctor: false,
+        needs_family_alert: false,
+      },
     ],
     condition_modifiers: [
-      { user_condition: 'tiểu đường', extra_conditions: [{ field: 's1', op: 'gte', value: 5 }], action: 'bump_severity', to: 'high' },
+      {
+        user_condition: 'tiểu đường',
+        extra_conditions: [{ field: 's1', op: 'gte', value: 5 }],
+        action: 'bump_severity',
+        to: 'high',
+      },
     ],
   };
   const answers = [{ question_id: 's1', answer: 5 }];
@@ -328,13 +532,36 @@ async function testCrossUserComparison() {
   const young = evaluateScript(sliderScript, answers, PROFILE_YOUNG);
   const nullP = evaluateScript(sliderScript, answers, PROFILE_NULL);
 
-  test(`Chú Hùng (68t, tiểu đường+tim) đau 5/10 → "${sevVN[elderly.severity]}" — bệnh nền nên phải cẩn thận hơn`, elderly.severity === 'high', `Lý do: tiểu đường modifier + cao tuổi`);
-  test(`Anh An (31t, khỏe mạnh) đau 5/10 → "${sevVN[young.severity]}" — không bệnh nền nên nhẹ hơn`, young.severity === 'medium', `Không có modifier`);
-  test(`User không có hồ sơ, đau 5/10 → "${sevVN[nullP.severity]}" — mặc định an toàn`, nullP.severity === 'medium');
-  test('Người cao tuổi có bệnh nền PHẢI được đánh giá nghiêm trọng hơn người trẻ khỏe', elderly.severity === 'high' && young.severity === 'medium', `${sevVN[elderly.severity]} > ${sevVN[young.severity]}`);
+  test(
+    `Chú Hùng (68t, tiểu đường+tim) đau 5/10 → "${sevVN[elderly.severity]}" — bệnh nền nên phải cẩn thận hơn`,
+    elderly.severity === 'high',
+    `Lý do: tiểu đường modifier + cao tuổi`
+  );
+  test(
+    `Anh An (31t, khỏe mạnh) đau 5/10 → "${sevVN[young.severity]}" — không bệnh nền nên nhẹ hơn`,
+    young.severity === 'medium',
+    `Không có modifier`
+  );
+  test(
+    `User không có hồ sơ, đau 5/10 → "${sevVN[nullP.severity]}" — mặc định an toàn`,
+    nullP.severity === 'medium'
+  );
+  test(
+    'Người cao tuổi có bệnh nền PHẢI được đánh giá nghiêm trọng hơn người trẻ khỏe',
+    elderly.severity === 'high' && young.severity === 'medium',
+    `${sevVN[elderly.severity]} > ${sevVN[young.severity]}`
+  );
 
-  const elderlyLow = evaluateScript(sliderScript, [{ question_id: 's1', answer: 2 }], PROFILE_ELDERLY);
-  test('Chú Hùng (68t) dù đau chỉ 2/10 → vẫn KHÔNG được xếp "Nhẹ" (phải theo dõi)', elderlyLow.severity !== 'low', `Thực tế: ${sevVN[elderlyLow.severity]}`);
+  const elderlyLow = evaluateScript(
+    sliderScript,
+    [{ question_id: 's1', answer: 2 }],
+    PROFILE_ELDERLY
+  );
+  test(
+    'Chú Hùng (68t) dù đau chỉ 2/10 → vẫn KHÔNG được xếp "Nhẹ" (phải theo dõi)',
+    elderlyLow.severity !== 'low',
+    `Thực tế: ${sevVN[elderlyLow.severity]}`
+  );
 
   endSuite();
 }
@@ -342,25 +569,44 @@ async function testCrossUserComparison() {
 async function testDataIntegrity() {
   suite('Dữ liệu trong Database — Kiểm tra tính nhất quán');
 
-  const { rows: clusters } = await pool.query('SELECT * FROM problem_clusters WHERE user_id=$1 AND is_active=TRUE', [USER_ID]);
-  test(`Có ${clusters.length} nhóm triệu chứng đang hoạt động trong DB`, clusters.length > 0, `${clusters.length} nhóm`);
+  const { rows: clusters } = await pool.query(
+    'SELECT * FROM problem_clusters WHERE user_id=$1 AND is_active=TRUE',
+    [USER_ID]
+  );
+  test(
+    `Có ${clusters.length} nhóm triệu chứng đang hoạt động trong DB`,
+    clusters.length > 0,
+    `${clusters.length} nhóm`
+  );
 
-  const { rows: scripts } = await pool.query('SELECT * FROM triage_scripts WHERE user_id=$1 AND is_active=TRUE', [USER_ID]);
-  test(`Có ${scripts.length} kịch bản hỏi đang hoạt động trong DB`, scripts.length > 0, `${scripts.length} kịch bản`);
+  const { rows: scripts } = await pool.query(
+    'SELECT * FROM triage_scripts WHERE user_id=$1 AND is_active=TRUE',
+    [USER_ID]
+  );
+  test(
+    `Có ${scripts.length} kịch bản hỏi đang hoạt động trong DB`,
+    scripts.length > 0,
+    `${scripts.length} kịch bản`
+  );
 
   for (const c of clusters.slice(0, 5)) {
     const { rows: cs } = await pool.query(
       'SELECT script_type FROM triage_scripts WHERE user_id=$1 AND cluster_key=$2 AND is_active=TRUE',
       [USER_ID, c.cluster_key]
     );
-    const types = cs.map(s => s.script_type).sort();
+    const types = cs.map((s) => s.script_type).sort();
     const hasInitial = types.includes('initial');
     const hasFollowup = types.includes('followup');
-    test(`"${c.display_name}" — Có kịch bản hỏi lần đầu${hasFollowup ? ' + hỏi lại' : ''}`, hasInitial, types.join(' + '));
+    test(
+      `"${c.display_name}" — Có kịch bản hỏi lần đầu${hasFollowup ? ' + hỏi lại' : ''}`,
+      hasInitial,
+      types.join(' + ')
+    );
   }
 
   for (const s of scripts.slice(0, 5)) {
-    const isValid = s.script_data && typeof s.script_data === 'object' && Array.isArray(s.script_data.questions);
+    const isValid =
+      s.script_data && typeof s.script_data === 'object' && Array.isArray(s.script_data.questions);
     test(`Kịch bản "${s.cluster_key}" — Dữ liệu JSON hợp lệ, đọc được`, isValid);
   }
 
@@ -371,14 +617,22 @@ async function testDataIntegrity() {
 
 // Suite descriptions in Vietnamese
 const SUITE_DESCRIPTIONS = {
-  'Tạo kịch bản hỏi — 14 loại triệu chứng': 'Từ 14 triệu chứng phổ biến (đau đầu, đau bụng, chóng mặt...), hệ thống tự tạo kịch bản hỏi riêng. Mỗi kịch bản có: câu hỏi, lựa chọn, luật chấm điểm, mẫu kết luận.',
-  'Chạy kịch bản — Mô phỏng phiên check-in đầy đủ': 'Giả lập user trả lời từng câu hỏi trong kịch bản. Kiểm tra: hỏi đúng thứ tự, không bị lỗi giữa chừng, cuối cùng cho ra kết luận — tất cả KHÔNG gọi AI.',
-  'Chấm điểm mức độ — Kiểm tra ranh giới và bệnh nền': 'Đau 3/10 → Nhẹ, 5/10 → Trung bình, 8/10 → Nặng. Người tiểu đường đau 5/10 → tăng lên Nặng. Người 75 tuổi → không được xếp Nhẹ.',
-  'Triệu chứng lạ — Hệ thống xử lý khi user nói điều chưa biết': 'User nói "đau răng" nhưng DB chưa có → hệ thống hỏi 3 câu cơ bản → vẫn chấm điểm được → log lại → AI xử lý ban đêm → ngày mai có kịch bản riêng.',
-  'Phát hiện cấp cứu — Nhận diện triệu chứng nguy hiểm tính mạng': 'Đau ngực+khó thở → Nhồi máu cơ tim. Yếu nửa người → Đột quỵ. Co giật → Động kinh. Phát hiện bằng keyword, KHÔNG cần AI, phản hồi tức thì.',
-  'Bảo mật — Hệ thống không crash khi nhận dữ liệu rác': 'Gửi null, SQL injection, XSS, chuỗi 10.000 ký tự... Hệ thống phải xử lý an toàn, KHÔNG được crash hoặc lộ dữ liệu.',
-  'So sánh người dùng — Cùng triệu chứng, khác hồ sơ sức khỏe': 'Cùng đau 5/10: người 68 tuổi có tiểu đường → Nặng, người 31 tuổi khỏe mạnh → Trung bình. Đảm bảo người yếu hơn được ưu tiên chăm sóc.',
-  'Dữ liệu trong Database — Kiểm tra tính nhất quán': 'Mỗi nhóm triệu chứng phải có đủ kịch bản (hỏi lần đầu + hỏi lại). Dữ liệu JSON trong DB phải đọc được, không bị hỏng.',
+  'Tạo kịch bản hỏi — 14 loại triệu chứng':
+    'Từ 14 triệu chứng phổ biến (đau đầu, đau bụng, chóng mặt...), hệ thống tự tạo kịch bản hỏi riêng. Mỗi kịch bản có: câu hỏi, lựa chọn, luật chấm điểm, mẫu kết luận.',
+  'Chạy kịch bản — Mô phỏng phiên check-in đầy đủ':
+    'Giả lập user trả lời từng câu hỏi trong kịch bản. Kiểm tra: hỏi đúng thứ tự, không bị lỗi giữa chừng, cuối cùng cho ra kết luận — tất cả KHÔNG gọi AI.',
+  'Chấm điểm mức độ — Kiểm tra ranh giới và bệnh nền':
+    'Đau 3/10 → Nhẹ, 5/10 → Trung bình, 8/10 → Nặng. Người tiểu đường đau 5/10 → tăng lên Nặng. Người 75 tuổi → không được xếp Nhẹ.',
+  'Triệu chứng lạ — Hệ thống xử lý khi user nói điều chưa biết':
+    'User nói "đau răng" nhưng DB chưa có → hệ thống hỏi 3 câu cơ bản → vẫn chấm điểm được → log lại → AI xử lý ban đêm → ngày mai có kịch bản riêng.',
+  'Phát hiện cấp cứu — Nhận diện triệu chứng nguy hiểm tính mạng':
+    'Đau ngực+khó thở → Nhồi máu cơ tim. Yếu nửa người → Đột quỵ. Co giật → Động kinh. Phát hiện bằng keyword, KHÔNG cần AI, phản hồi tức thì.',
+  'Bảo mật — Hệ thống không crash khi nhận dữ liệu rác':
+    'Gửi null, SQL injection, XSS, chuỗi 10.000 ký tự... Hệ thống phải xử lý an toàn, KHÔNG được crash hoặc lộ dữ liệu.',
+  'So sánh người dùng — Cùng triệu chứng, khác hồ sơ sức khỏe':
+    'Cùng đau 5/10: người 68 tuổi có tiểu đường → Nặng, người 31 tuổi khỏe mạnh → Trung bình. Đảm bảo người yếu hơn được ưu tiên chăm sóc.',
+  'Dữ liệu trong Database — Kiểm tra tính nhất quán':
+    'Mỗi nhóm triệu chứng phải có đủ kịch bản (hỏi lần đầu + hỏi lại). Dữ liệu JSON trong DB phải đọc được, không bị hỏng.',
 };
 
 // Category grouping
@@ -557,21 +811,23 @@ function generateHTML() {
   </div>
 </div>
 
-${Object.entries(categories).map(([cat, catSuites]) => {
-  const ci = CATEGORY_LABELS[cat] || { label: cat, color: '#64748b', icon: '' };
-  const catPass = catSuites.reduce((s, suite) => s + suite.pass, 0);
-  const catTotal = catSuites.reduce((s, suite) => s + suite.pass + suite.fail, 0);
-  return `
+${Object.entries(categories)
+  .map(([cat, catSuites]) => {
+    const ci = CATEGORY_LABELS[cat] || { label: cat, color: '#64748b', icon: '' };
+    const catPass = catSuites.reduce((s, suite) => s + suite.pass, 0);
+    const catTotal = catSuites.reduce((s, suite) => s + suite.pass + suite.fail, 0);
+    return `
 <div class="category-section">
   <div class="category-header">
     <span class="category-icon">${ci.icon}</span>
     <span class="category-label" style="color:${ci.color}">${ci.label}</span>
     <span class="category-count">${catPass}/${catTotal} tests</span>
   </div>
-  ${catSuites.map(s => {
-    const desc = SUITE_DESCRIPTIONS[s.name] || '';
-    const hasFail = s.fail > 0;
-    return `
+  ${catSuites
+    .map((s) => {
+      const desc = SUITE_DESCRIPTIONS[s.name] || '';
+      const hasFail = s.fail > 0;
+      return `
   <div class="suite${hasFail ? ' open' : ''}">
     <div class="suite-header" onclick="this.parentElement.classList.toggle('open')">
       <div class="suite-status ${hasFail ? 'fail' : 'pass'}"></div>
@@ -587,7 +843,9 @@ ${Object.entries(categories).map(([cat, catSuites]) => {
       </div>
     </div>
     <div class="suite-tests">
-      ${s.tests.map((t, ti) => `
+      ${s.tests
+        .map(
+          (t, ti) => `
       <div class="test-item${t.richDetail ? '' : ''}" ${t.richDetail ? `onclick="this.classList.toggle('expanded')"` : ''}>
         <div class="test-row ${t.status}">
           <span class="test-icon">${t.status === 'pass' ? '&#9989;' : '&#10060;'}</span>
@@ -596,12 +854,16 @@ ${Object.entries(categories).map(([cat, catSuites]) => {
           ${t.richDetail ? `<span class="test-expand-btn">&#9660; chi tiết</span>` : ''}
         </div>
         ${t.richDetail ? `<div class="test-rich">${t.richDetail}</div>` : ''}
-      </div>`).join('')}
+      </div>`
+        )
+        .join('')}
     </div>
   </div>`;
-  }).join('')}
+    })
+    .join('')}
 </div>`;
-}).join('')}
+  })
+  .join('')}
 
 <div class="explain-box">
   <div class="explain">
@@ -643,28 +905,44 @@ async function run() {
   await cleanup();
 
   await testScriptGeneration();
-  console.log(`  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`);
+  console.log(
+    `  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`
+  );
 
   await testScriptRunner();
-  console.log(`  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`);
+  console.log(
+    `  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`
+  );
 
   await testScoringEngine();
-  console.log(`  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`);
+  console.log(
+    `  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`
+  );
 
   await testFallbackFlow();
-  console.log(`  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`);
+  console.log(
+    `  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`
+  );
 
   await testEmergencyDetection();
-  console.log(`  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`);
+  console.log(
+    `  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`
+  );
 
   await testGarbageInputs();
-  console.log(`  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`);
+  console.log(
+    `  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`
+  );
 
   await testCrossUserComparison();
-  console.log(`  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`);
+  console.log(
+    `  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`
+  );
 
   await testDataIntegrity();
-  console.log(`  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`);
+  console.log(
+    `  ${currentSuite.name}: ${currentSuite.pass}/${currentSuite.pass + currentSuite.fail}`
+  );
 
   // Generate HTML
   const html = generateHTML();
@@ -690,7 +968,7 @@ async function run() {
   await pool.end();
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('CRASHED:', err);
   pool.end();
   process.exit(1);

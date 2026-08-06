@@ -1,6 +1,10 @@
 ﻿const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
-const { postEvent, getStateHandler, ackEscalation } = require('../controllers/carePulse.controller');
+const {
+  postEvent,
+  getStateHandler,
+  ackEscalation,
+} = require('../controllers/carePulse.controller');
 
 function carePulseRoutes(pool) {
   const router = express.Router();

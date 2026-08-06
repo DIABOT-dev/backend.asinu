@@ -12,7 +12,6 @@
 const { getUserScript, getScript } = require('./script.service');
 const { getNextQuestion } = require('../../core/checkin/script-runner');
 const { detectCombo } = require('../../core/checkin/combo-detector');
-const { evaluateScript } = require('../../core/checkin/scoring-engine');
 const {
   getProfile,
   createSession,
@@ -76,8 +75,10 @@ async function _buildContext(pool, userId) {
 
   // 5. Check if today already has a session (follow-up indicator)
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
-  const todaySession = recentSessions.find(s => {
-    const sessionDate = new Date(s.created_at).toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const todaySession = recentSessions.find((s) => {
+    const sessionDate = new Date(s.created_at).toLocaleDateString('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+    });
     return sessionDate === today && s.is_completed;
   });
 
@@ -134,7 +135,7 @@ async function getAgentScript(pool, userId) {
   }
 
   // 5. Detect combos from all cluster display names
-  const symptomTexts = context.clusters.map(c => c.display_name);
+  const symptomTexts = context.clusters.map((c) => c.display_name);
   const comboResult = detectCombo(symptomTexts, context.profile);
 
   // 6. Build decisions log
@@ -231,7 +232,14 @@ async function startAgentCheckin(pool, userId, status, symptomInput) {
   }
 
   // 5. Create session
-  const session = await createSession(pool, userId, script.id, topCluster.clusterKey, sessionType, status);
+  const session = await createSession(
+    pool,
+    userId,
+    script.id,
+    topCluster.clusterKey,
+    sessionType,
+    status
+  );
 
   // 6. Decide question modifiers
   const scriptData = script.script_data;
@@ -240,9 +248,8 @@ async function startAgentCheckin(pool, userId, status, symptomInput) {
   // 7. Build modified questions list
   let modifiedScriptData = scriptData;
   if (questionModifiers.addBefore.length > 0 || questionModifiers.addAfter.length > 0) {
-    const existingQuestions = sessionType === 'followup'
-      ? (scriptData.followup_questions || [])
-      : (scriptData.questions || []);
+    const existingQuestions =
+      sessionType === 'followup' ? scriptData.followup_questions || [] : scriptData.questions || [];
 
     const modifiedQuestions = [
       ...questionModifiers.addBefore,
@@ -263,7 +270,7 @@ async function startAgentCheckin(pool, userId, status, symptomInput) {
   });
 
   // 9. Detect combos
-  const symptomTexts = context.clusters.map(c => c.display_name);
+  const symptomTexts = context.clusters.map((c) => c.display_name);
   if (symptomInput) symptomTexts.push(symptomInput);
   const comboResult = detectCombo(symptomTexts, context.profile);
 
@@ -336,11 +343,7 @@ async function processAgentAnswer(pool, userId, sessionId, questionId, answer) {
     const existingQuestions = scriptData[qKey] || [];
     modifiedScriptData = {
       ...scriptData,
-      [qKey]: [
-        ...questionModifiers.addBefore,
-        ...existingQuestions,
-        ...questionModifiers.addAfter,
-      ],
+      [qKey]: [...questionModifiers.addBefore, ...existingQuestions, ...questionModifiers.addAfter],
     };
   }
 

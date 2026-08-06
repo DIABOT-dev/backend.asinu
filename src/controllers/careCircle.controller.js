@@ -39,7 +39,11 @@ async function createInvitation(pool, req, res) {
   // Validate request body
   const parsed = careCircleInvitationSchema.safeParse(req.body || {});
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)), details: parsed.error.issues });
+    return res.status(400).json({
+      ok: false,
+      error: t('error.invalid_data', getLang(req)),
+      details: parsed.error.issues,
+    });
   }
 
   // Call service
@@ -178,7 +182,12 @@ async function updateConnectionPermissions(pool, req, res) {
   if (!permissions || typeof permissions !== 'object') {
     return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
   }
-  const result = await serviceUpdateConnectionPermissions(pool, connectionId, req.user.id, permissions);
+  const result = await serviceUpdateConnectionPermissions(
+    pool,
+    connectionId,
+    req.user.id,
+    permissions
+  );
   if (!result.ok) {
     return res.status(result.statusCode || 400).json({ ok: false, error: result.error });
   }
@@ -201,7 +210,7 @@ async function getCaregiverLogs(pool, req, res) {
     }
 
     const logs = await serviceGetCaregiverLogs(pool, patientId, 7);
-    const patientName = await getPatientName(pool, patientId) || 'Patient';
+    const patientName = (await getPatientName(pool, patientId)) || 'Patient';
 
     return res.json({ ok: true, patientName, logs });
   } catch (err) {
@@ -267,7 +276,7 @@ async function getMemberHealthSummary(pool, req, res) {
         highlights: report.highlights || [],
         responseRate: report.responseRate || 0,
         avgCheckinHour: report.avgCheckinHour || 0,
-      }
+      },
     });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

@@ -44,8 +44,9 @@ function phoneSearchRateLimit(pool) {
         return res.status(429).json({
           ok: false,
           code: 'PHONE_SEARCH_LIMIT',
-          error: t('error.phone_search_limit', getLang(req)) ||
-                 'Đã đạt giới hạn tìm kiếm số điện thoại trong ngày.',
+          error:
+            t('error.phone_search_limit', getLang(req)) ||
+            'Đã đạt giới hạn tìm kiếm số điện thoại trong ngày.',
           limit,
           used: count,
         });

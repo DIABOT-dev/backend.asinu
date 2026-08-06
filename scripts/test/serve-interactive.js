@@ -55,7 +55,7 @@ const server = http.createServer((req, res) => {
   }
 
   // Serve static files
-  let filePath = pathname === '/' ? '/test-flows-report.html' : decodeURIComponent(pathname);
+  const filePath = pathname === '/' ? '/test-flows-report.html' : decodeURIComponent(pathname);
   const fullPath = path.join(STATIC_DIR, filePath);
   const ext = path.extname(fullPath);
   const contentTypes = {

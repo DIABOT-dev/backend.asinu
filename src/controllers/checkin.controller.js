@@ -3,10 +3,18 @@ const caregiverStatusService = require('../services/care-circle/caregiver-status
 const engagementService = require('../services/profile/engagement.service');
 const { markActive } = require('../services/profile/lifecycle.service');
 const { t, getLang } = require('../i18n');
-const { BODY_LOCATIONS, getLocationOptions, getSymptomsForLocation, getSymptomsForLocations } = require('../services/checkin/body-location');
+const {
+  BODY_LOCATIONS,
+  getLocationOptions,
+  getSymptomsForLocation,
+} = require('../services/checkin/body-location');
 
 async function startCheckinHandler(pool, req, res) {
-  const { status, body_locations: bodyLocations, body_location_other: bodyLocationOther } = req.body;
+  const {
+    status,
+    body_locations: bodyLocations,
+    body_location_other: bodyLocationOther,
+  } = req.body;
   // Backward compat: nếu FE cũ gửi body_location single → wrap vào array
   let locations = bodyLocations;
   if (!locations && req.body.body_location) {
@@ -21,7 +29,7 @@ async function startCheckinHandler(pool, req, res) {
     if (!Array.isArray(locations)) {
       return res.status(400).json({ ok: false, error: 'body_locations must be an array' });
     }
-    const invalid = locations.find(l => !BODY_LOCATIONS.includes(l));
+    const invalid = locations.find((l) => !BODY_LOCATIONS.includes(l));
     if (invalid) {
       return res.status(400).json({ ok: false, error: `invalid body_location: ${invalid}` });
     }
@@ -39,7 +47,7 @@ async function startCheckinHandler(pool, req, res) {
     const session = await checkinService.startCheckin(pool, req.user.id, status, locations, other);
     // Update lifecycle before responding so a re-engagement cron cannot read
     // the old inactive/999-day state after the user has checked in.
-    await markActive(pool, req.user.id).catch(err =>
+    await markActive(pool, req.user.id).catch((err) =>
       console.warn('[Lifecycle] markActive failed:', err.message)
     );
     return res.json({ ok: true, session });
@@ -54,7 +62,7 @@ async function startCheckinHandler(pool, req, res) {
  */
 async function getLocationsHandler(pool, req, res) {
   const lang = getLang(req);
-  const locations = getLocationOptions(lang).map(loc => ({
+  const locations = getLocationOptions(lang).map((loc) => ({
     ...loc,
     symptoms: getSymptomsForLocation(loc.key, lang),
   }));
@@ -68,7 +76,8 @@ async function followUpHandler(pool, req, res) {
   }
   try {
     const session = await checkinService.recordFollowUp(pool, req.user.id, checkin_id, status);
-    if (!session) return res.status(404).json({ ok: false, error: t('error.session_not_found', getLang(req)) });
+    if (!session)
+      return res.status(404).json({ ok: false, error: t('error.session_not_found', getLang(req)) });
     if (session.flow_state === 'resolved' && session.current_status !== status) {
       // Was already resolved before this call — return it as-is
       return res.json({ ok: true, session, already_resolved: true });
@@ -81,10 +90,14 @@ async function followUpHandler(pool, req, res) {
 
 async function triageHandler(pool, req, res) {
   const { checkin_id, previous_answers = [] } = req.body;
-  if (!checkin_id) return res.status(400).json({ ok: false, error: t('error.missing_checkin_id', getLang(req)) });
+  if (!checkin_id)
+    return res.status(400).json({ ok: false, error: t('error.missing_checkin_id', getLang(req)) });
   try {
     const result = await checkinService.processTriageStep(
-      pool, req.user.id, checkin_id, previous_answers
+      pool,
+      req.user.id,
+      checkin_id,
+      previous_answers
     );
     return res.json({ ok: true, ...result });
   } catch (err) {
@@ -107,11 +120,9 @@ async function emergencyHandler(pool, req, res) {
     const result = await checkinService.triggerEmergency(pool, req.user.id, location);
     // Emergency is always urgent — tell the client whether anyone is on
     // the other end to receive the alert (MVP audit FIX #4).
-    const caregiverStatus = await caregiverStatusService.buildCaregiverStatus(
-      pool,
-      req.user.id,
-      { riskTier: 'emergency' }
-    );
+    const caregiverStatus = await caregiverStatusService.buildCaregiverStatus(pool, req.user.id, {
+      riskTier: 'emergency',
+    });
     return res.json({ ...result, ...caregiverStatus });
   } catch (err) {
     return res.status(500).json({ ok: false, error: err.message });

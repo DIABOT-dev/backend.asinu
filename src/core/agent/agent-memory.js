@@ -29,7 +29,16 @@
  * @param {number} [confidence] - 0.00-1.00
  * @param {Date}   [expiresAt]  - optional expiry
  */
-async function remember(pool, userId, type, key, content, source = 'system', confidence = 1.0, expiresAt = null) {
+async function remember(
+  pool,
+  userId,
+  type,
+  key,
+  content,
+  source = 'system',
+  confidence = 1.0,
+  expiresAt = null
+) {
   const { rows } = await pool.query(
     `INSERT INTO agent_checkin_memory (user_id, memory_type, memory_key, content, confidence, source, expires_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7)

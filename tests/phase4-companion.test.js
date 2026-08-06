@@ -28,16 +28,31 @@ let totalFail = 0;
 const failures = [];
 
 function assert(condition, name) {
-  if (condition) { totalPass++; console.log(`  PASS ✓ ${name}`); }
-  else { totalFail++; failures.push(name); console.log(`  FAIL ✗ ${name}`); }
+  if (condition) {
+    totalPass++;
+    console.log(`  PASS ✓ ${name}`);
+  } else {
+    totalFail++;
+    failures.push(name);
+    console.log(`  FAIL ✗ ${name}`);
+  }
 }
 
 function get(path) {
   return new Promise((resolve, reject) => {
-    http.get('http://localhost:3000' + path, res => {
-      let d = ''; res.on('data', c => d += c);
-      res.on('end', () => { try { resolve({ s: res.statusCode, b: JSON.parse(d) }); } catch { resolve({ s: res.statusCode, b: d }); } });
-    }).on('error', reject);
+    http
+      .get('http://localhost:3000' + path, (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => {
+          try {
+            resolve({ s: res.statusCode, b: JSON.parse(d) });
+          } catch {
+            resolve({ s: res.statusCode, b: d });
+          }
+        });
+      })
+      .on('error', reject);
   });
 }
 
@@ -52,7 +67,12 @@ async function testContinuity() {
 
   // 1.1 3+ ngày tired + có symptom → same_symptom_3d
   const c1 = selectContinuityPrefix(
-    { topSymptom: { display_name: 'đau đầu', trend: 'stable' }, consecutiveTiredDays: 3, lastSeverity: 'low' }, USER
+    {
+      topSymptom: { display_name: 'đau đầu', trend: 'stable' },
+      consecutiveTiredDays: 3,
+      lastSeverity: 'low',
+    },
+    USER
   );
   assert(c1 !== null, '1.1 3 tired days → has continuity');
   assert(c1.templateId === 'continuity_same_3d', '1.2 templateId = continuity_same_3d');
@@ -61,44 +81,75 @@ async function testContinuity() {
 
   // 1.5 Symptom improving → continuity_improving
   const c2 = selectContinuityPrefix(
-    { topSymptom: { display_name: 'ho', trend: 'decreasing' }, consecutiveTiredDays: 0, lastSeverity: 'low' }, USER
+    {
+      topSymptom: { display_name: 'ho', trend: 'decreasing' },
+      consecutiveTiredDays: 0,
+      lastSeverity: 'low',
+    },
+    USER
   );
-  assert(c2 !== null && c2.templateId === 'continuity_improving', '1.5 Improving → continuity_improving');
+  assert(
+    c2 !== null && c2.templateId === 'continuity_improving',
+    '1.5 Improving → continuity_improving'
+  );
   assert(c2.text.includes('ho'), '1.6 Contains symptom "ho"');
 
   // 1.7 Last severity high → was_severe
   const c3 = selectContinuityPrefix(
-    { topSymptom: null, consecutiveTiredDays: 0, lastSeverity: 'high' }, USER
+    { topSymptom: null, consecutiveTiredDays: 0, lastSeverity: 'high' },
+    USER
   );
-  assert(c3 !== null && c3.templateId === 'continuity_was_severe', '1.7 High severity → was_severe');
+  assert(
+    c3 !== null && c3.templateId === 'continuity_was_severe',
+    '1.7 High severity → was_severe'
+  );
 
   // 1.8 2 tired days + symptom → same_symptom_2d
   const c4 = selectContinuityPrefix(
-    { topSymptom: { display_name: 'mệt', trend: 'stable' }, consecutiveTiredDays: 2, lastSeverity: 'low' }, USER
+    {
+      topSymptom: { display_name: 'mệt', trend: 'stable' },
+      consecutiveTiredDays: 2,
+      lastSeverity: 'low',
+    },
+    USER
   );
   assert(c4 !== null && c4.templateId === 'continuity_same_2d', '1.8 2 tired days → same_2d');
 
   // 1.9 No data → null
   const c5 = selectContinuityPrefix(
-    { topSymptom: null, consecutiveTiredDays: 0, lastSeverity: null }, USER
+    { topSymptom: null, consecutiveTiredDays: 0, lastSeverity: null },
+    USER
   );
   assert(c5 === null, '1.9 No data → null (no continuity)');
 
   // 1.10 Priority: 3d > improving > severe > 2d
   const c6 = selectContinuityPrefix(
-    { topSymptom: { display_name: 'x', trend: 'decreasing' }, consecutiveTiredDays: 3, lastSeverity: 'high' }, USER
+    {
+      topSymptom: { display_name: 'x', trend: 'decreasing' },
+      consecutiveTiredDays: 3,
+      lastSeverity: 'high',
+    },
+    USER
   );
   assert(c6.templateId === 'continuity_same_3d', '1.10 3d beats improving/severe');
 
   // 1.11 English mode
   const c7 = selectContinuityPrefix(
-    { topSymptom: { display_name: 'headache', trend: 'stable' }, consecutiveTiredDays: 2, lastSeverity: 'low' }, USER_EN
+    {
+      topSymptom: { display_name: 'headache', trend: 'stable' },
+      consecutiveTiredDays: 2,
+      lastSeverity: 'low',
+    },
+    USER_EN
   );
   assert(c7 !== null && !c7.text.includes('chú'), '1.11 EN: no Vietnamese');
 
   // 1.12 No unreplaced vars
   const allPrefixes = [c1, c2, c3, c4, c7].filter(Boolean);
-  assert(allPrefixes.every(c => !c.text.includes('{')), '1.12 No unreplaced {vars}');
+  assert(
+    allPrefixes.every((c) => !c.text.includes('{')),
+    '1.12 No unreplaced {vars}'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -156,7 +207,10 @@ async function testEmpathy() {
 
   // 2.14 No unreplaced vars
   const allEmpathy = [e1, e2, e3, e4, e5, e6, e9, e10].filter(Boolean);
-  assert(allEmpathy.every(e => !e.text.includes('{')), '2.14 No unreplaced {vars}');
+  assert(
+    allEmpathy.every((e) => !e.text.includes('{')),
+    '2.14 No unreplaced {vars}'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -166,58 +220,65 @@ async function testProgress() {
   console.log('\n══════ SUITE 3: Progress Feedback ══════');
 
   // 3.1 Severity improved (high → low)
-  const p1 = generateProgressFeedback(
-    { topSymptom: null, lastSeverity: 'high' }, 'low', USER
-  );
+  const p1 = generateProgressFeedback({ topSymptom: null, lastSeverity: 'high' }, 'low', USER);
   assert(p1.templateId === 'progress_severity_improved', '3.1 high→low = severity_improved');
   assert(p1.text.includes('nhẹ hơn'), '3.2 Contains "nhẹ hơn"');
 
   // 3.3 Severity same
-  const p2 = generateProgressFeedback(
-    { topSymptom: null, lastSeverity: 'medium' }, 'medium', USER
-  );
+  const p2 = generateProgressFeedback({ topSymptom: null, lastSeverity: 'medium' }, 'medium', USER);
   assert(p2.templateId === 'progress_severity_same', '3.3 medium→medium = severity_same');
 
   // 3.4 Symptom improving
   const p3 = generateProgressFeedback(
-    { topSymptom: { display_name: 'ho', trend: 'decreasing' }, lastSeverity: null }, null, USER
+    { topSymptom: { display_name: 'ho', trend: 'decreasing' }, lastSeverity: null },
+    null,
+    USER
   );
   assert(p3.templateId === 'progress_improving', '3.4 Trend decreasing → improving');
   assert(p3.text.includes('ho'), '3.5 Contains symptom "ho"');
 
   // 3.6 Symptom worsening
   const p4 = generateProgressFeedback(
-    { topSymptom: { display_name: 'sốt', trend: 'increasing' }, lastSeverity: null }, null, USER
+    { topSymptom: { display_name: 'sốt', trend: 'increasing' }, lastSeverity: null },
+    null,
+    USER
   );
   assert(p4.templateId === 'progress_worsening', '3.6 Trend increasing → worsening');
 
   // 3.7 Symptom stable
   const p5 = generateProgressFeedback(
-    { topSymptom: { display_name: 'mệt', trend: 'stable' }, lastSeverity: null }, null, USER
+    { topSymptom: { display_name: 'mệt', trend: 'stable' }, lastSeverity: null },
+    null,
+    USER
   );
   assert(p5.templateId === 'progress_stable', '3.7 Trend stable → stable');
 
   // 3.8 No data → no_data
-  const p6 = generateProgressFeedback(
-    { topSymptom: null, lastSeverity: null }, null, USER
-  );
+  const p6 = generateProgressFeedback({ topSymptom: null, lastSeverity: null }, null, USER);
   assert(p6.templateId === 'progress_no_data', '3.8 No data → no_data');
 
   // 3.9 Priority: severity comparison > trend
   const p7 = generateProgressFeedback(
-    { topSymptom: { display_name: 'đau', trend: 'increasing' }, lastSeverity: 'high' }, 'low', USER
+    { topSymptom: { display_name: 'đau', trend: 'increasing' }, lastSeverity: 'high' },
+    'low',
+    USER
   );
   assert(p7.templateId === 'progress_severity_improved', '3.9 Severity comparison beats trend');
 
   // 3.10 English
   const p8 = generateProgressFeedback(
-    { topSymptom: { display_name: 'cough', trend: 'decreasing' }, lastSeverity: null }, null, USER_EN
+    { topSymptom: { display_name: 'cough', trend: 'decreasing' }, lastSeverity: null },
+    null,
+    USER_EN
   );
   assert(!p8.text.includes('chú'), '3.10 EN: no Vietnamese');
 
   // 3.11 No unreplaced vars
   const allProgress = [p1, p2, p3, p4, p5, p6, p7, p8];
-  assert(allProgress.every(p => !p.text.includes('{')), '3.11 No unreplaced {vars}');
+  assert(
+    allProgress.every((p) => !p.text.includes('{')),
+    '3.11 No unreplaced {vars}'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -226,7 +287,11 @@ async function testProgress() {
 async function testApplyIllusionPhase4() {
   console.log('\n══════ SUITE 4: applyIllusion + Phase 4 ══════');
 
-  const ctx = { topSymptom: { display_name: 'đau đầu', trend: 'stable' }, consecutiveTiredDays: 3, lastSeverity: 'medium' };
+  const ctx = {
+    topSymptom: { display_name: 'đau đầu', trend: 'stable' },
+    consecutiveTiredDays: 3,
+    lastSeverity: 'medium',
+  };
   const scriptData = {
     greeting: 'Chào bạn',
     questions: [
@@ -240,7 +305,10 @@ async function testApplyIllusionPhase4() {
   // 4.1 Step 0 → has _continuity
   const r0 = applyIllusion(
     { isDone: false, question: scriptData.questions[0], currentStep: 0, totalSteps: 2 },
-    scriptData, ctx, USER, {}
+    scriptData,
+    ctx,
+    USER,
+    {}
   );
   assert(r0._continuity !== null && r0._continuity !== undefined, '4.1 Step 0 has _continuity');
   assert(r0._continuity.templateId === 'continuity_same_3d', '4.2 Continuity = same_3d');
@@ -251,7 +319,10 @@ async function testApplyIllusionPhase4() {
   // 4.4 Step 1 with lastAnswer → has _empathy
   const r1 = applyIllusion(
     { isDone: false, question: scriptData.questions[1], currentStep: 1, totalSteps: 2 },
-    scriptData, ctx, USER, { lastAnswer: { question_id: 'q1', answer: 3 } }
+    scriptData,
+    ctx,
+    USER,
+    { lastAnswer: { question_id: 'q1', answer: 3 } }
   );
   assert(r1._empathy !== undefined, '4.4 Step 1 has _empathy');
   assert(r1._empathy.templateId === 'empathy_positive', '4.5 Slider 3 → empathy_positive');
@@ -262,14 +333,20 @@ async function testApplyIllusionPhase4() {
   // 4.7 Conclusion → has _progress
   const rEnd = applyIllusion(
     { isDone: true, conclusion: { severity: 'low' }, currentStep: 2, totalSteps: 2 },
-    scriptData, ctx, USER, {}
+    scriptData,
+    ctx,
+    USER,
+    {}
   );
   assert(rEnd._progress !== undefined, '4.7 Conclusion has _progress');
   assert(rEnd._progress.templateId === 'progress_severity_improved', '4.8 medium→low = improved');
 
   // 4.9 Conclusion _illusion says applied
   assert(rEnd._illusion.applied === true, '4.9 Conclusion _illusion.applied = true');
-  assert(rEnd._illusion.reason === 'conclusion_with_progress', '4.10 Reason = conclusion_with_progress');
+  assert(
+    rEnd._illusion.reason === 'conclusion_with_progress',
+    '4.10 Reason = conclusion_with_progress'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -282,12 +359,18 @@ async function testIntegration() {
   const { rows } = await pool.query(
     `SELECT script_data FROM triage_scripts WHERE user_id = 4 AND is_active = TRUE ORDER BY created_at DESC LIMIT 1`
   );
-  if (rows.length === 0) { console.log('  SKIP — no script'); totalPass += 5; return; }
+  if (rows.length === 0) {
+    console.log('  SKIP — no script');
+    totalPass += 5;
+    return;
+  }
   const scriptData = rows[0].script_data;
 
   // 5.1 Step 0 with illusion → continuity present
   const r0 = getNextQuestionWithIllusion(scriptData, [], {
-    profile: USER, illusionContext: ctx, user: USER,
+    profile: USER,
+    illusionContext: ctx,
+    user: USER,
   });
   if (r0._continuity) {
     assert(r0._continuity.text.length > 0, '5.1 Continuity text non-empty');
@@ -298,9 +381,15 @@ async function testIntegration() {
   // 5.2 Step 1 with lastAnswer → empathy present
   const firstQ = (scriptData.followup_questions || scriptData.questions || [])[0];
   if (firstQ) {
-    const r1 = getNextQuestionWithIllusion(scriptData,
+    const r1 = getNextQuestionWithIllusion(
+      scriptData,
       [{ question_id: firstQ.id, answer: 'Vẫn vậy' }],
-      { profile: USER, illusionContext: ctx, user: USER, lastAnswer: { question_id: firstQ.id, answer: 'Vẫn vậy' } }
+      {
+        profile: USER,
+        illusionContext: ctx,
+        user: USER,
+        lastAnswer: { question_id: firstQ.id, answer: 'Vẫn vậy' },
+      }
     );
     if (r1._empathy) {
       assert(r1._empathy.text.length > 0, '5.2 Empathy text non-empty');
@@ -315,7 +404,9 @@ async function testIntegration() {
   const allQs = scriptData.followup_questions || scriptData.questions || [];
   const allAns = allQs.map((q, i) => ({ question_id: q.id, answer: i === 0 ? 5 : 'Vẫn vậy' }));
   const rEnd = getNextQuestionWithIllusion(scriptData, allAns, {
-    profile: USER, illusionContext: ctx, user: USER,
+    profile: USER,
+    illusionContext: ctx,
+    user: USER,
   });
   if (rEnd.isDone && rEnd._progress) {
     assert(rEnd._progress.text.length > 0, '5.3 Progress text non-empty');
@@ -345,9 +436,13 @@ async function testApi() {
   // 6.2 Continuity present
   if (r.b.illusion?.continuity) {
     assert(r.b.illusion.continuity.text.length > 0, '6.2 Continuity text in API');
-    assert(r.b.illusion.continuity.templateId.startsWith('continuity_'), '6.3 Continuity templateId');
+    assert(
+      r.b.illusion.continuity.templateId.startsWith('continuity_'),
+      '6.3 Continuity templateId'
+    );
   } else {
-    assert(true, '6.2 (no continuity)'); assert(true, '6.3 (skip)');
+    assert(true, '6.2 (no continuity)');
+    assert(true, '6.3 (skip)');
   }
 
   // 6.4 Empathy present
@@ -355,7 +450,8 @@ async function testApi() {
     assert(r.b.step1_empathy.text.length > 0, '6.4 Empathy text in API');
     assert(r.b.step1_empathy.templateId.startsWith('empathy_'), '6.5 Empathy templateId');
   } else {
-    assert(true, '6.4 (no empathy)'); assert(true, '6.5 (skip)');
+    assert(true, '6.4 (no empathy)');
+    assert(true, '6.5 (skip)');
   }
 
   // 6.6 Progress present
@@ -363,12 +459,19 @@ async function testApi() {
     assert(r.b.conclusion_progress.text.length > 0, '6.6 Progress text in API');
     assert(r.b.conclusion_progress.templateId.startsWith('progress_'), '6.7 Progress templateId');
   } else {
-    assert(true, '6.6 (no progress)'); assert(true, '6.7 (skip)');
+    assert(true, '6.6 (no progress)');
+    assert(true, '6.7 (skip)');
   }
 
   // 6.8 Concurrent
-  const results = await Promise.all([get('/api/health/illusion-preview/4'), get('/api/health/illusion-preview/4')]);
-  assert(results.every(r => r.s === 200), '6.8 Concurrent OK');
+  const results = await Promise.all([
+    get('/api/health/illusion-preview/4'),
+    get('/api/health/illusion-preview/4'),
+  ]);
+  assert(
+    results.every((r) => r.s === 200),
+    '6.8 Concurrent OK'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -379,36 +482,50 @@ async function testTemplateSafety() {
 
   // 7.1 All continuity templates have id, vi, en
   const cTemplates = Object.values(CONTINUITY_PREFIXES);
-  assert(cTemplates.every(t => t.id && t.vi && t.en), '7.1 Continuity templates complete (id, vi, en)');
+  assert(
+    cTemplates.every((t) => t.id && t.vi && t.en),
+    '7.1 Continuity templates complete (id, vi, en)'
+  );
 
   // 7.2 All progress templates have id, vi, en
   const pTemplates = Object.values(PROGRESS_TEMPLATES);
-  assert(pTemplates.every(t => t.id && t.vi && t.en), '7.2 Progress templates complete');
+  assert(
+    pTemplates.every((t) => t.id && t.vi && t.en),
+    '7.2 Progress templates complete'
+  );
 
   // 7.3 All empathy responses have id, vi[], en[]
   const eResponses = Object.values(EMPATHY_RESPONSES);
-  assert(eResponses.every(r => r.id && Array.isArray(r.vi) && r.vi.length > 0 && Array.isArray(r.en) && r.en.length > 0),
-    '7.3 Empathy responses complete');
+  assert(
+    eResponses.every(
+      (r) =>
+        r.id && Array.isArray(r.vi) && r.vi.length > 0 && Array.isArray(r.en) && r.en.length > 0
+    ),
+    '7.3 Empathy responses complete'
+  );
 
   // 7.4 Unique IDs across all templates
   const allIds = [
-    ...cTemplates.map(t => t.id),
-    ...pTemplates.map(t => t.id),
-    ...eResponses.map(r => r.id),
+    ...cTemplates.map((t) => t.id),
+    ...pTemplates.map((t) => t.id),
+    ...eResponses.map((r) => r.id),
   ];
   assert(allIds.length === new Set(allIds).size, '7.4 All IDs unique');
 
   // 7.5 No banned keywords in any template
   const { BANNED_KEYWORDS } = require('../src/core/checkin/illusion-layer');
   const allTexts = [
-    ...cTemplates.flatMap(t => [t.vi, t.en]),
-    ...pTemplates.flatMap(t => [t.vi, t.en]),
-    ...eResponses.flatMap(r => [...r.vi, ...r.en]),
+    ...cTemplates.flatMap((t) => [t.vi, t.en]),
+    ...pTemplates.flatMap((t) => [t.vi, t.en]),
+    ...eResponses.flatMap((r) => [...r.vi, ...r.en]),
   ];
   let safe = true;
   for (const text of allTexts) {
     for (const kw of BANNED_KEYWORDS) {
-      if (text.toLowerCase().includes(kw.toLowerCase())) { safe = false; break; }
+      if (text.toLowerCase().includes(kw.toLowerCase())) {
+        safe = false;
+        break;
+      }
     }
   }
   assert(safe, '7.5 No banned keywords in Phase 4 templates');
@@ -428,14 +545,14 @@ async function testEdgeCases() {
   assert(e10 !== null && e10.templateId === 'empathy_severe', '8.2 Slider 10 → severe');
 
   // 8.3 Progress with severity high → high (no change but not improved)
-  const p = generateProgressFeedback(
-    { topSymptom: null, lastSeverity: 'high' }, 'high', USER
-  );
+  const p = generateProgressFeedback({ topSymptom: null, lastSeverity: 'high' }, 'high', USER);
   assert(p.templateId === 'progress_severity_same', '8.3 high→high = severity_same');
 
   // 8.4 Progress with no lastSeverity but has symptom
   const p2 = generateProgressFeedback(
-    { topSymptom: { display_name: 'test', trend: 'stable' }, lastSeverity: null }, 'low', USER
+    { topSymptom: { display_name: 'test', trend: 'stable' }, lastSeverity: null },
+    'low',
+    USER
   );
   assert(p2.templateId === 'progress_stable', '8.4 No last severity → uses trend');
 
@@ -449,7 +566,8 @@ async function testEdgeCases() {
 
   // 8.7 Continuity with 1 tired day + no symptom → null
   const c = selectContinuityPrefix(
-    { topSymptom: null, consecutiveTiredDays: 1, lastSeverity: 'low' }, USER
+    { topSymptom: null, consecutiveTiredDays: 1, lastSeverity: 'low' },
+    USER
   );
   assert(c === null, '8.7 1 tired day + no symptom → no continuity');
 }
@@ -472,7 +590,9 @@ async function run() {
   await testEdgeCases();
 
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log(`║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`);
+  console.log(
+    `║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`
+  );
   if (totalFail > 0) {
     console.log('║  FAILURES:                                       ║');
     for (const f of failures) console.log(`║  - ${f.substring(0, 46).padEnd(46)} ║`);
@@ -483,4 +603,8 @@ async function run() {
   process.exit(totalFail > 0 ? 1 : 0);
 }
 
-run().catch(err => { console.error('CRASHED:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASHED:', err);
+  pool.end();
+  process.exit(1);
+});

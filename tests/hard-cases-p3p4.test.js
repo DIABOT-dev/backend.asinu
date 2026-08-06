@@ -28,7 +28,11 @@ const {
   EMPATHY_RESPONSES,
   PROGRESS_TEMPLATES,
 } = require('../src/core/checkin/illusion-layer');
-const { getNextQuestion, getNextQuestionWithIllusion, validateScript } = require('../src/core/checkin/script-runner');
+const {
+  getNextQuestion,
+  getNextQuestionWithIllusion,
+  validateScript,
+} = require('../src/core/checkin/script-runner');
 const { getHonorifics } = require('../src/lib/honorifics');
 
 let totalPass = 0;
@@ -36,8 +40,14 @@ let totalFail = 0;
 const failures = [];
 
 function assert(condition, name) {
-  if (condition) { totalPass++; console.log(`  PASS ✓ ${name}`); }
-  else { totalFail++; failures.push(name); console.log(`  FAIL ✗ ${name}`); }
+  if (condition) {
+    totalPass++;
+    console.log(`  PASS ✓ ${name}`);
+  } else {
+    totalFail++;
+    failures.push(name);
+    console.log(`  FAIL ✗ ${name}`);
+  }
 }
 
 // ─── Test users ────────────────────────────────────────────────────────────
@@ -53,9 +63,19 @@ function make5QuestionScript() {
     greeting: '{callName} ơi, {selfRef} hỏi thăm {honorific} nhé',
     questions: [
       { id: 'q1', text: 'Đau mức nào?', type: 'slider', min: 0, max: 10 },
-      { id: 'q2', text: 'Từ khi nào bạn bị vậy?', type: 'single_choice', options: ['Vừa mới', 'Vài giờ', 'Vài ngày'] },
+      {
+        id: 'q2',
+        text: 'Từ khi nào bạn bị vậy?',
+        type: 'single_choice',
+        options: ['Vừa mới', 'Vài giờ', 'Vài ngày'],
+      },
       { id: 'q3', text: 'Có nặng hơn không?', type: 'single_choice', options: ['Có', 'Không'] },
-      { id: 'q4', text: 'So với lúc trước, bạn thấy thế nào?', type: 'single_choice', options: ['Đỡ hơn', 'Như cũ', 'Nặng hơn'] },
+      {
+        id: 'q4',
+        text: 'So với lúc trước, bạn thấy thế nào?',
+        type: 'single_choice',
+        options: ['Đỡ hơn', 'Như cũ', 'Nặng hơn'],
+      },
       { id: 'q5', text: 'Có triệu chứng mới nào không?', type: 'free_text' },
     ],
     scoring_rules: [
@@ -88,9 +108,18 @@ async function testMultiStepFlow() {
   console.log('\n══════ SUITE 1: applyIllusion full multi-step flow ══════');
 
   const script = make5QuestionScript();
-  const ctx = makeCtx({ topSymptom: { display_name: 'đau đầu', trend: 'stable' }, consecutiveTiredDays: 2 });
+  const ctx = makeCtx({
+    topSymptom: { display_name: 'đau đầu', trend: 'stable' },
+    consecutiveTiredDays: 2,
+  });
   const answers = [];
-  const lastAnswers = [null, { question_id: 'q1', answer: 5 }, { question_id: 'q2', answer: 'Vài giờ' }, { question_id: 'q3', answer: 'Không' }, { question_id: 'q4', answer: 'Đỡ hơn' }];
+  const lastAnswers = [
+    null,
+    { question_id: 'q1', answer: 5 },
+    { question_id: 'q2', answer: 'Vài giờ' },
+    { question_id: 'q3', answer: 'Không' },
+    { question_id: 'q4', answer: 'Đỡ hơn' },
+  ];
 
   for (let step = 0; step < 5; step++) {
     const base = getNextQuestion(script, answers, { profile: USER_HUNG });
@@ -111,7 +140,10 @@ async function testMultiStepFlow() {
     }
 
     // Advance
-    answers.push({ question_id: base.question.id, answer: lastAnswers[step + 1]?.answer || 'test' });
+    answers.push({
+      question_id: base.question.id,
+      answer: lastAnswers[step + 1]?.answer || 'test',
+    });
   }
 
   // After 5 answers → conclusion
@@ -119,7 +151,10 @@ async function testMultiStepFlow() {
   const concludeResult = applyIllusion(conclusion, script, ctx, USER_HUNG);
   assert(concludeResult.isDone === true, '1.16 After 5 answers → isDone');
   assert(concludeResult._progress !== undefined, '1.17 Conclusion has _progress');
-  assert(concludeResult._illusion.reason === 'conclusion_with_progress', '1.18 reason = conclusion_with_progress');
+  assert(
+    concludeResult._illusion.reason === 'conclusion_with_progress',
+    '1.18 reason = conclusion_with_progress'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -171,7 +206,12 @@ async function testNullGreeting() {
 async function testEmptyQuestions() {
   console.log('\n══════ SUITE 3: applyIllusion with empty questions ══════');
 
-  const script = { greeting: 'Hello', questions: [], scoring_rules: [], conclusion_templates: { low: { summary: 'OK' } } };
+  const script = {
+    greeting: 'Hello',
+    questions: [],
+    scoring_rules: [],
+    conclusion_templates: { low: { summary: 'OK' } },
+  };
   const ctx = makeCtx();
 
   const base = getNextQuestion(script, [], { profile: USER_HUNG });
@@ -193,7 +233,8 @@ async function testNoDoubleMatch() {
   const ctx = makeCtx();
 
   // Text that contains words matching MULTIPLE rewrite patterns at once
-  const multiMatchText = 'Đau mức nào, từ khi nào, có nặng hơn không, so với lúc trước, triệu chứng mới?';
+  const multiMatchText =
+    'Đau mức nào, từ khi nào, có nặng hơn không, so với lúc trước, triệu chứng mới?';
   const q = { id: 'multi', text: multiMatchText };
   const result = rewriteQuestion(q, ctx, USER_HUNG);
 
@@ -213,7 +254,7 @@ async function testNoDoubleMatch() {
   assert(matchCount >= 3, `4.6 Multi-text matches ${matchCount} patterns (at least 3)`);
 
   // But result has exactly ONE templateId
-  const allTemplateIds = Object.values(QUESTION_REWRITES).map(r => r.id);
+  const allTemplateIds = Object.values(QUESTION_REWRITES).map((r) => r.id);
   assert(allTemplateIds.includes(result.templateId), '4.7 templateId is a valid known rewrite id');
 }
 
@@ -228,12 +269,18 @@ async function testEmpathyMixedAnswers() {
   const r1 = selectEmpathyResponse(mixed, USER_HUNG);
   assert(r1 !== null, '5.1 Mixed answer produces empathy');
   // "đỡ hơn" is checked first in positiveWords → should classify as improving
-  assert(r1.templateId === 'empathy_improving', '5.2 "Đỡ hơn nhưng vẫn đau" → positive wins (first-match)');
+  assert(
+    r1.templateId === 'empathy_improving',
+    '5.2 "Đỡ hơn nhưng vẫn đau" → positive wins (first-match)'
+  );
 
   // "Nặng hơn nhưng đỡ hơn rồi" — severe first in text but positive checked first in code
   const mixed2 = { question_id: 'q1', answer: 'Nặng hơn nhưng đỡ hơn rồi' };
   const r2 = selectEmpathyResponse(mixed2, USER_HUNG);
-  assert(r2.templateId === 'empathy_improving', '5.3 "Nặng hơn nhưng đỡ hơn rồi" → positive wins (code order)');
+  assert(
+    r2.templateId === 'empathy_improving',
+    '5.3 "Nặng hơn nhưng đỡ hơn rồi" → positive wins (code order)'
+  );
 
   // Pure severe
   const severe = { question_id: 'q1', answer: 'Nặng hơn nhiều' };
@@ -314,29 +361,41 @@ async function testProgressSeverityMatrix() {
   const severities = ['low', 'medium', 'high'];
   const expectedTemplates = {
     // [last, current] → expected
-    'low_low': 'progress_severity_same',     // curr === prev && curr > 0 → but low=1 > 0
-    'low_medium': null,                      // curr > prev → no severity match, falls to trend
-    'low_high': null,                        // curr > prev → falls to trend
-    'medium_low': 'progress_severity_improved', // curr < prev
-    'medium_medium': 'progress_severity_same',
-    'medium_high': null,                     // curr > prev → falls to trend
-    'high_low': 'progress_severity_improved',
-    'high_medium': 'progress_severity_improved',
-    'high_high': 'progress_severity_same',
+    low_low: 'progress_severity_same', // curr === prev && curr > 0 → but low=1 > 0
+    low_medium: null, // curr > prev → no severity match, falls to trend
+    low_high: null, // curr > prev → falls to trend
+    medium_low: 'progress_severity_improved', // curr < prev
+    medium_medium: 'progress_severity_same',
+    medium_high: null, // curr > prev → falls to trend
+    high_low: 'progress_severity_improved',
+    high_medium: 'progress_severity_improved',
+    high_high: 'progress_severity_same',
   };
 
   let testIdx = 1;
   for (const last of severities) {
     for (const current of severities) {
-      const ctx = makeCtx({ lastSeverity: last, topSymptom: { display_name: 'đau đầu', trend: 'stable' } });
+      const ctx = makeCtx({
+        lastSeverity: last,
+        topSymptom: { display_name: 'đau đầu', trend: 'stable' },
+      });
       const result = generateProgressFeedback(ctx, current, USER_HUNG);
       const key = `${last}_${current}`;
 
-      assert(result !== null && result.text.length > 0, `7.${testIdx} [${last}→${current}] produces text`);
-      assert(result.templateId !== undefined, `7.${testIdx}b [${last}→${current}] has templateId: ${result.templateId}`);
+      assert(
+        result !== null && result.text.length > 0,
+        `7.${testIdx} [${last}→${current}] produces text`
+      );
+      assert(
+        result.templateId !== undefined,
+        `7.${testIdx}b [${last}→${current}] has templateId: ${result.templateId}`
+      );
 
       if (expectedTemplates[key]) {
-        assert(result.templateId === expectedTemplates[key], `7.${testIdx}c [${last}→${current}] → ${expectedTemplates[key]}`);
+        assert(
+          result.templateId === expectedTemplates[key],
+          `7.${testIdx}c [${last}→${current}] → ${expectedTemplates[key]}`
+        );
       }
 
       testIdx++;
@@ -344,7 +403,11 @@ async function testProgressSeverityMatrix() {
   }
 
   // No lastSeverity, no currentSeverity, no topSymptom → no_data
-  const noData = generateProgressFeedback(makeCtx({ lastSeverity: null, topSymptom: null }), null, USER_HUNG);
+  const noData = generateProgressFeedback(
+    makeCtx({ lastSeverity: null, topSymptom: null }),
+    null,
+    USER_HUNG
+  );
   assert(noData.templateId === 'progress_no_data', '7.28 null+null → progress_no_data');
 }
 
@@ -390,7 +453,10 @@ async function testContinuityPriority() {
   const c4 = selectContinuityPrefix(ctx4, USER_HUNG);
   // topSymptom is null, so same_symptom_3d and same_symptom_2d won't fire
   // improving won't fire (no topSymptom), was_severe fires
-  assert(c4.templateId === 'continuity_was_severe', '8.4 tired(2d)+severe(no symptom) → was_severe');
+  assert(
+    c4.templateId === 'continuity_was_severe',
+    '8.4 tired(2d)+severe(no symptom) → was_severe'
+  );
 
   // Combo: tired(2d) + symptom(stable) + low severity → same_symptom_2d
   const ctx5 = makeCtx({
@@ -434,10 +500,17 @@ async function testAllBannedKeywords() {
   // 9.1 Each individual banned keyword triggers failure
   for (let i = 0; i < BANNED_KEYWORDS.length; i++) {
     const keyword = BANNED_KEYWORDS[i];
-    const output = { displayText: `Bạn nên ${keyword} ngay`, originalQuestionId: 'q1', templateId: 'test' };
+    const output = {
+      displayText: `Bạn nên ${keyword} ngay`,
+      originalQuestionId: 'q1',
+      templateId: 'test',
+    };
     const v = validateOutput(output, { id: 'q1' });
     assert(!v.valid, `9.1.${i} Banned keyword "${keyword}" caught`);
-    assert(v.errors.some(e => e.includes(keyword)), `9.1.${i}b Error mentions "${keyword}"`);
+    assert(
+      v.errors.some((e) => e.includes(keyword)),
+      `9.1.${i}b Error mentions "${keyword}"`
+    );
   }
 
   // 9.2 Text containing ALL banned keywords at once
@@ -445,15 +518,26 @@ async function testAllBannedKeywords() {
   const outputAll = { displayText: allBannedText, originalQuestionId: 'q1', templateId: 'test' };
   const vAll = validateOutput(outputAll, { id: 'q1' });
   assert(!vAll.valid, '9.2 All banned keywords → invalid');
-  assert(vAll.errors.length >= BANNED_KEYWORDS.length, `9.3 Errors count (${vAll.errors.length}) >= banned count (${BANNED_KEYWORDS.length})`);
+  assert(
+    vAll.errors.length >= BANNED_KEYWORDS.length,
+    `9.3 Errors count (${vAll.errors.length}) >= banned count (${BANNED_KEYWORDS.length})`
+  );
 
   // 9.4 Banned keyword in mixed case
-  const mixedCase = { displayText: 'Bạn nên Ngừng Thuốc', originalQuestionId: 'q1', templateId: 'test' };
+  const mixedCase = {
+    displayText: 'Bạn nên Ngừng Thuốc',
+    originalQuestionId: 'q1',
+    templateId: 'test',
+  };
   const vMixed = validateOutput(mixedCase, { id: 'q1' });
   assert(!vMixed.valid, '9.4 Mixed case banned keyword caught');
 
   // 9.5 Clean text passes
-  const clean = { displayText: 'Chú thấy đau mức nào?', originalQuestionId: 'q1', templateId: 'test' };
+  const clean = {
+    displayText: 'Chú thấy đau mức nào?',
+    originalQuestionId: 'q1',
+    templateId: 'test',
+  };
   const vClean = validateOutput(clean, { id: 'q1' });
   assert(vClean.valid, '9.5 Clean text passes');
 }
@@ -506,7 +590,10 @@ async function testGreetingEdgeCases() {
   // 10.8 Ctx with no topSymptom, no tired days → default greeting
   const ctxEmpty = makeCtx({ topSymptom: null, consecutiveTiredDays: 0 });
   const gDefault = rewriteGreeting(originalGreeting, ctxEmpty, USER_NONAME);
-  assert(gDefault.templateId === 'greeting_default', '10.8 Empty user + empty ctx → default greeting');
+  assert(
+    gDefault.templateId === 'greeting_default',
+    '10.8 Empty user + empty ctx → default greeting'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -528,25 +615,39 @@ async function testImmutability() {
 
   // 11.1 Original base question object should NOT be mutated
   // (applyIllusion spreads output but creates new question object)
-  assert(base.question.text === originalQuestion.text || base.question.text !== result.question.text,
-    '11.1 Checking original question reference');
+  assert(
+    base.question.text === originalQuestion.text || base.question.text !== result.question.text,
+    '11.1 Checking original question reference'
+  );
 
   // 11.2 Script data not mutated
   assert(JSON.stringify(script) === JSON.stringify(originalScript), '11.2 scriptData not mutated');
 
   // 11.3 Script questions array not mutated
-  assert(script.questions.length === originalScript.questions.length, '11.3 questions array length unchanged');
+  assert(
+    script.questions.length === originalScript.questions.length,
+    '11.3 questions array length unchanged'
+  );
   for (let i = 0; i < script.questions.length; i++) {
-    assert(script.questions[i].text === originalScript.questions[i].text, `11.4.${i} question[${i}].text unchanged`);
+    assert(
+      script.questions[i].text === originalScript.questions[i].text,
+      `11.4.${i} question[${i}].text unchanged`
+    );
   }
 
   // 11.5 Nested options array not mutated
-  assert(JSON.stringify(script.questions[1].options) === JSON.stringify(originalScript.questions[1].options),
-    '11.5 Nested options array not mutated');
+  assert(
+    JSON.stringify(script.questions[1].options) ===
+      JSON.stringify(originalScript.questions[1].options),
+    '11.5 Nested options array not mutated'
+  );
 
   // 11.6 Result has new question object (not same reference)
   // The spread in applyIllusion creates a new object
-  assert(result.question._template_id !== undefined, '11.6 Result question has _template_id (new fields added)');
+  assert(
+    result.question._template_id !== undefined,
+    '11.6 Result question has _template_id (new fields added)'
+  );
   assert(result.question.type === originalQuestion.type, '11.7 Result preserves original type');
 }
 
@@ -606,9 +707,9 @@ async function testEmpathyDeterminism() {
     { question_id: 'q1', answer: 'Đỡ hơn rồi', question_type: 'free_text' },
     { question_id: 'q2', answer: 'Nặng hơn', question_type: 'free_text' },
     { question_id: 'q3', answer: 'Vẫn vậy', question_type: 'free_text' },
-    { question_id: 'q4', answer: 5, question_type: 'slider' },         // numeric mild
-    { question_id: 'q5', answer: 2, question_type: 'slider' },         // numeric positive
-    { question_id: 'q6', answer: 9, question_type: 'slider' },         // numeric severe
+    { question_id: 'q4', answer: 5, question_type: 'slider' }, // numeric mild
+    { question_id: 'q5', answer: 2, question_type: 'slider' }, // numeric positive
+    { question_id: 'q6', answer: 9, question_type: 'slider' }, // numeric severe
   ];
 
   for (let a = 0; a < answers.length; a++) {
@@ -670,7 +771,10 @@ async function testProgressUndefinedTrend() {
     topSymptom: { display_name: 'đau', trend: undefined },
   });
   const result5 = generateProgressFeedback(ctx5, 'low', USER_HUNG);
-  assert(result5.templateId === 'progress_severity_improved', '14.6 severity beats undefined trend');
+  assert(
+    result5.templateId === 'progress_severity_improved',
+    '14.6 severity beats undefined trend'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -688,14 +792,30 @@ async function testEmptyTextValidation() {
   // 15.2 validateOutput catches empty displayText
   const v = validateOutput(result, q);
   assert(!v.valid, '15.2 Empty displayText → validation fails');
-  assert(v.errors.some(e => e.includes('empty')), '15.3 Error mentions "empty"');
+  assert(
+    v.errors.some((e) => e.includes('empty')),
+    '15.3 Error mentions "empty"'
+  );
 
   // 15.4 applyIllusion with empty-text question → validation_failed fallback
-  const script = { greeting: 'Hi', questions: [{ id: 'q_empty', text: '', type: 'slider', min: 0, max: 10 }], scoring_rules: [], conclusion_templates: {} };
-  const base = { isDone: false, question: { id: 'q_empty', text: '', type: 'slider', min: 0, max: 10 }, currentStep: 0, totalSteps: 1 };
+  const script = {
+    greeting: 'Hi',
+    questions: [{ id: 'q_empty', text: '', type: 'slider', min: 0, max: 10 }],
+    scoring_rules: [],
+    conclusion_templates: {},
+  };
+  const base = {
+    isDone: false,
+    question: { id: 'q_empty', text: '', type: 'slider', min: 0, max: 10 },
+    currentStep: 0,
+    totalSteps: 1,
+  };
   const illusionResult = applyIllusion(base, script, ctx, USER_HUNG);
   assert(illusionResult._illusion.applied === false, '15.4 Empty text → illusion not applied');
-  assert(illusionResult._illusion.reason === 'validation_failed', '15.5 reason = validation_failed');
+  assert(
+    illusionResult._illusion.reason === 'validation_failed',
+    '15.5 reason = validation_failed'
+  );
   assert(illusionResult.question.type === 'slider', '15.6 Original type preserved on fallback');
 
   // 15.7 Whitespace-only text
@@ -741,7 +861,9 @@ async function run() {
   await testEmptyTextValidation();
 
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log(`║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`);
+  console.log(
+    `║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`
+  );
   if (totalFail > 0) {
     console.log('║  FAILURES:                                       ║');
     for (const f of failures) console.log(`║  - ${f.substring(0, 46).padEnd(46)} ║`);
@@ -752,4 +874,8 @@ async function run() {
   process.exit(totalFail > 0 ? 1 : 0);
 }
 
-run().catch(err => { console.error('CRASHED:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASHED:', err);
+  pool.end();
+  process.exit(1);
+});

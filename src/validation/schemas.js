@@ -22,9 +22,7 @@ const onboardingIssueItemSchema = z
     }
   });
 
-const onboardingIssueListSchema = z.array(
-  z.union([z.string(), onboardingIssueItemSchema])
-);
+const onboardingIssueListSchema = z.array(z.union([z.string(), onboardingIssueItemSchema]));
 
 const onboardingProfileSchema = z
   .object({
@@ -87,7 +85,16 @@ const escalationAckSchema = z.object({
 });
 
 const logBaseSchema = z.object({
-  log_type: z.enum(['glucose', 'bp', 'weight', 'water', 'meal', 'insulin', 'medication', 'care_pulse']),
+  log_type: z.enum([
+    'glucose',
+    'bp',
+    'weight',
+    'water',
+    'meal',
+    'insulin',
+    'medication',
+    'care_pulse',
+  ]),
   occurred_at: z.string().min(1),
   source: z.string().optional(),
   note: z.string().optional().nullable(),

@@ -42,8 +42,8 @@ function parseSymptoms(rawInput) {
   // Use regex with word boundaries for Vietnamese connectors to avoid splitting mid-word
   const parts = rawInput
     .split(/[,+]|\s+và\s+|\s+kèm\s+|\s+với\s+/i)
-    .map(s => s.trim())
-    .filter(s => s.length > 0);
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 
   return parts;
 }
@@ -176,10 +176,14 @@ function aggregateSeverity(results = [], combos = []) {
 
   // Default followUpHours if none provided
   if (minFollowUp === Infinity) {
-    minFollowUp = worstSeverity === 'critical' ? 0.5
-      : worstSeverity === 'high' ? 1
-      : worstSeverity === 'medium' ? 3
-      : 6;
+    minFollowUp =
+      worstSeverity === 'critical'
+        ? 0.5
+        : worstSeverity === 'high'
+          ? 1
+          : worstSeverity === 'medium'
+            ? 3
+            : 6;
   }
 
   return {

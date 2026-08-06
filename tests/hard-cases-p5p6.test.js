@@ -12,7 +12,11 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 const re = require('../src/services/notification/reengagement.service');
 const cache = require('../src/services/checkin/script-cache.service');
-const { runNightlyCycle, processSemiActiveWithTimeout, MAX_CYCLE_MS } = require('../src/services/checkin/rnd-cycle.service');
+const {
+  runNightlyCycle,
+  processSemiActiveWithTimeout,
+  MAX_CYCLE_MS,
+} = require('../src/services/checkin/rnd-cycle.service');
 const lifecycle = require('../src/services/profile/lifecycle.service');
 
 let totalPass = 0;
@@ -20,20 +24,26 @@ let totalFail = 0;
 const failures = [];
 
 function assert(condition, name) {
-  if (condition) { totalPass++; console.log(`  PASS ✓ ${name}`); }
-  else { totalFail++; failures.push(name); console.log(`  FAIL ✗ ${name}`); }
+  if (condition) {
+    totalPass++;
+    console.log(`  PASS ✓ ${name}`);
+  } else {
+    totalFail++;
+    failures.push(name);
+    console.log(`  FAIL ✗ ${name}`);
+  }
 }
 
 // ─── Test users for honorific coverage ──────────────────────────────────────
-const USER_CHU   = { id: 4, birth_year: 1960, gender: 'nam',  display_name: 'Chú Hùng', lang: 'vi' };  // 60+ male → chú
-const USER_CO    = { id: 3, birth_year: 1958, gender: 'nữ',   display_name: 'Cô Lan',   lang: 'vi' };  // 60+ female → cô
-const USER_ANH   = { id: 2, birth_year: 1980, gender: 'nam',  display_name: 'Anh Minh', lang: 'vi' };  // 40-59 male → anh
-const USER_CHI   = { id: 1, birth_year: 1982, gender: 'nữ',   display_name: 'Chị Hoa',  lang: 'vi' };  // 40-59 female → chị
-const USER_BAN   = { id: 1, birth_year: 2005, gender: 'nữ',   display_name: 'Mai',       lang: 'vi' };  // <25 → bạn
+const USER_CHU = { id: 4, birth_year: 1960, gender: 'nam', display_name: 'Chú Hùng', lang: 'vi' }; // 60+ male → chú
+const USER_CO = { id: 3, birth_year: 1958, gender: 'nữ', display_name: 'Cô Lan', lang: 'vi' }; // 60+ female → cô
+const USER_ANH = { id: 2, birth_year: 1980, gender: 'nam', display_name: 'Anh Minh', lang: 'vi' }; // 40-59 male → anh
+const USER_CHI = { id: 1, birth_year: 1982, gender: 'nữ', display_name: 'Chị Hoa', lang: 'vi' }; // 40-59 female → chị
+const USER_BAN = { id: 1, birth_year: 2005, gender: 'nữ', display_name: 'Mai', lang: 'vi' }; // <25 → bạn
 
 // Cluster key for cache tests
-let TEST_CLUSTER_KEY = 'hard_case_cluster';
-let TEST_SCRIPT_ID = null;
+const TEST_CLUSTER_KEY = 'hard_case_cluster';
+const TEST_SCRIPT_ID = null;
 
 // ─── DB backup/restore helpers ──────────────────────────────────────────────
 const backups = {};
@@ -45,7 +55,9 @@ async function backupTable(table, where = '1=1') {
 
 async function restoreNotifications() {
   // Clean up any test notifications we inserted
-  await pool.query(`DELETE FROM notifications WHERE type IN ('reengagement', 'caregiver_alert') AND data->>'hard_case_test' = 'true'`);
+  await pool.query(
+    `DELETE FROM notifications WHERE type IN ('reengagement', 'caregiver_alert') AND data->>'hard_case_test' = 'true'`
+  );
 }
 
 async function cleanupTestScripts() {
@@ -116,50 +128,80 @@ async function test2_templateCombinations() {
   console.log('\n══════ TEST 2: selectReengagementTemplate 9 combos ══════');
 
   // Contexts
-  const ctxSymptom    = { topSymptom: { display_name: 'Đau đầu' }, lastSeverity: 'low' };
-  const ctxSevere     = { topSymptom: null, lastSeverity: 'high' };
-  const ctxDefault    = { topSymptom: null, lastSeverity: 'low' };
-  const ctxSymSevere  = { topSymptom: { display_name: 'Đau đầu' }, lastSeverity: 'high' };
+  const ctxSymptom = { topSymptom: { display_name: 'Đau đầu' }, lastSeverity: 'low' };
+  const ctxSevere = { topSymptom: null, lastSeverity: 'high' };
+  const ctxDefault = { topSymptom: null, lastSeverity: 'low' };
+  const ctxSymSevere = { topSymptom: { display_name: 'Đau đầu' }, lastSeverity: 'high' };
 
   // gentle × symptom
   const g1 = re.selectReengagementTemplate(ctxSymptom, { level: 'gentle' });
-  assert(g1 && g1.template.id === 'reengage_d2_gentle_symptom', '2.1 gentle+symptom → d2_gentle_with_symptom');
+  assert(
+    g1 && g1.template.id === 'reengage_d2_gentle_symptom',
+    '2.1 gentle+symptom → d2_gentle_with_symptom'
+  );
 
   // gentle × severe (no symptom) → falls to no_symptom
   const g2 = re.selectReengagementTemplate(ctxSevere, { level: 'gentle' });
-  assert(g2 && g2.template.id === 'reengage_d2_gentle', '2.2 gentle+severe(no symptom) → d2_gentle_no_symptom');
+  assert(
+    g2 && g2.template.id === 'reengage_d2_gentle',
+    '2.2 gentle+severe(no symptom) → d2_gentle_no_symptom'
+  );
 
   // gentle × default
   const g3 = re.selectReengagementTemplate(ctxDefault, { level: 'gentle' });
-  assert(g3 && g3.template.id === 'reengage_d2_gentle', '2.3 gentle+default → d2_gentle_no_symptom');
+  assert(
+    g3 && g3.template.id === 'reengage_d2_gentle',
+    '2.3 gentle+default → d2_gentle_no_symptom'
+  );
 
   // concerned × symptom
   const c1 = re.selectReengagementTemplate(ctxSymptom, { level: 'concerned' });
-  assert(c1 && c1.template.id === 'reengage_d4_concerned_symptom', '2.4 concerned+symptom → d4_concerned_with_symptom');
+  assert(
+    c1 && c1.template.id === 'reengage_d4_concerned_symptom',
+    '2.4 concerned+symptom → d4_concerned_with_symptom'
+  );
 
   // concerned × severe (no symptom) → d4_concerned_was_severe
   const c2 = re.selectReengagementTemplate(ctxSevere, { level: 'concerned' });
-  assert(c2 && c2.template.id === 'reengage_d4_concerned_severe', '2.5 concerned+severe → d4_concerned_was_severe');
+  assert(
+    c2 && c2.template.id === 'reengage_d4_concerned_severe',
+    '2.5 concerned+severe → d4_concerned_was_severe'
+  );
 
   // concerned × default
   const c3 = re.selectReengagementTemplate(ctxDefault, { level: 'concerned' });
-  assert(c3 && c3.template.id === 'reengage_d4_concerned', '2.6 concerned+default → d4_concerned_default');
+  assert(
+    c3 && c3.template.id === 'reengage_d4_concerned',
+    '2.6 concerned+default → d4_concerned_default'
+  );
 
   // worried × symptom
   const w1 = re.selectReengagementTemplate(ctxSymptom, { level: 'worried' });
-  assert(w1 && w1.template.id === 'reengage_d7_worried_symptom', '2.7 worried+symptom → d7_worried_with_symptom');
+  assert(
+    w1 && w1.template.id === 'reengage_d7_worried_symptom',
+    '2.7 worried+symptom → d7_worried_with_symptom'
+  );
 
   // worried × severe (no symptom) → falls to default (no severe branch for worried)
   const w2 = re.selectReengagementTemplate(ctxSevere, { level: 'worried' });
-  assert(w2 && w2.template.id === 'reengage_d7_worried', '2.8 worried+severe(no symptom) → d7_worried_default');
+  assert(
+    w2 && w2.template.id === 'reengage_d7_worried',
+    '2.8 worried+severe(no symptom) → d7_worried_default'
+  );
 
   // worried × default
   const w3 = re.selectReengagementTemplate(ctxDefault, { level: 'worried' });
-  assert(w3 && w3.template.id === 'reengage_d7_worried', '2.9 worried+default → d7_worried_default');
+  assert(
+    w3 && w3.template.id === 'reengage_d7_worried',
+    '2.9 worried+default → d7_worried_default'
+  );
 
   // BONUS: concerned + symptom + severe → symptom takes priority
   const c4 = re.selectReengagementTemplate(ctxSymSevere, { level: 'concerned' });
-  assert(c4 && c4.template.id === 'reengage_d4_concerned_symptom', '2.10 concerned+symptom+severe → symptom wins');
+  assert(
+    c4 && c4.template.id === 'reengage_d4_concerned_symptom',
+    '2.10 concerned+symptom+severe → symptom wins'
+  );
 
   // urgent always returns d8_urgent regardless of context
   const u1 = re.selectReengagementTemplate(ctxSymptom, { level: 'urgent' });
@@ -240,7 +282,7 @@ async function test4_careCircleDedup() {
   const mockSendAndSave = async (p, guardian, type, title, text, data) => {
     sendCount++;
     await p.query(
-        `INSERT INTO notifications (user_id, type, title, message, data, created_at)
+      `INSERT INTO notifications (user_id, type, title, message, data, created_at)
        VALUES ($1, $2, $3, $4, $5, NOW())`,
       [guardian.id, type, title, text, JSON.stringify({ ...data, hard_case_test: 'true' })]
     );
@@ -285,11 +327,11 @@ async function test5_multipleGuardians() {
     [String(patientId)]
   );
 
-  let sentGuardianIds = [];
+  const sentGuardianIds = [];
   const mockSendAndSave = async (p, guardian, type, title, text, data) => {
     sentGuardianIds.push(guardian.id);
     await p.query(
-        `INSERT INTO notifications (user_id, type, title, message, data, created_at)
+      `INSERT INTO notifications (user_id, type, title, message, data, created_at)
        VALUES ($1, $2, $3, $4, $5, NOW())`,
       [guardian.id, type, title, text, JSON.stringify({ ...data, hard_case_test: 'true' })]
     );
@@ -298,7 +340,10 @@ async function test5_multipleGuardians() {
 
   const sent = await re.sendCareCircleAlert(pool, mockSendAndSave, patientId, 'Chú Hùng', 10);
   assert(sent >= 2, '5.1 multiple guardians → at least 2 sent');
-  assert(sentGuardianIds.includes(1) && sentGuardianIds.includes(2), '5.2 both guardian 1 and 2 got alert');
+  assert(
+    sentGuardianIds.includes(1) && sentGuardianIds.includes(2),
+    '5.2 both guardian 1 and 2 got alert'
+  );
 
   // Cleanup
   await pool.query(
@@ -328,7 +373,7 @@ async function test6_runReengagementDedup() {
 
   const mockSendAndSave = async (p, user, type, title, text, data) => {
     await p.query(
-        `INSERT INTO notifications (user_id, type, title, message, data, created_at)
+      `INSERT INTO notifications (user_id, type, title, message, data, created_at)
        VALUES ($1, $2, $3, $4, $5, NOW())`,
       [user.id, type, title, text, JSON.stringify({ ...data, hard_case_test: 'true' })]
     );
@@ -483,7 +528,10 @@ async function test11_immediateTimeout() {
 
   const result = await processSemiActiveWithTimeout(pool, semiActiveIds, longAgo);
 
-  assert(result.skipped === semiActiveIds.length, `11.1 all ${semiActiveIds.length} skipped (got ${result.skipped})`);
+  assert(
+    result.skipped === semiActiveIds.length,
+    `11.1 all ${semiActiveIds.length} skipped (got ${result.skipped})`
+  );
   assert(result.usersProcessed === 0, '11.2 0 users processed');
   assert(result.fallbacksProcessed === 0, '11.3 0 fallbacks processed');
 }
@@ -542,8 +590,14 @@ async function test13_nightlyCycleLogs() {
 
   const log = after[0];
   if (log.status === 'completed') {
-    assert(log.elapsed_ms !== null && log.elapsed_ms >= 0, `13.2 elapsed_ms recorded (${log.elapsed_ms})`);
-    assert(log.active_processed !== null, `13.3 active_processed recorded (${log.active_processed})`);
+    assert(
+      log.elapsed_ms !== null && log.elapsed_ms >= 0,
+      `13.2 elapsed_ms recorded (${log.elapsed_ms})`
+    );
+    assert(
+      log.active_processed !== null,
+      `13.3 active_processed recorded (${log.active_processed})`
+    );
     assert(log.users_processed !== null, `13.4 users_processed recorded (${log.users_processed})`);
   } else {
     // Failed due to external deps — verify log still has started_at + status
@@ -569,10 +623,19 @@ async function test14_globalReuseStats() {
   );
 
   const stats = await cache.getGlobalReuseStats(pool);
-  assert(stats.total_active_scripts >= 2, `14.1 total_active_scripts >= 2 (got ${stats.total_active_scripts})`);
+  assert(
+    stats.total_active_scripts >= 2,
+    `14.1 total_active_scripts >= 2 (got ${stats.total_active_scripts})`
+  );
   assert(stats.total_reuses >= 30, `14.2 total_reuses >= 30 (got ${stats.total_reuses})`);
-  assert(stats.scripts_reused_at_least_once >= 2, `14.3 scripts_reused_at_least_once >= 2 (got ${stats.scripts_reused_at_least_once})`);
-  assert(parseFloat(stats.avg_reuse_count) > 0, `14.4 avg_reuse_count > 0 (got ${stats.avg_reuse_count})`);
+  assert(
+    stats.scripts_reused_at_least_once >= 2,
+    `14.3 scripts_reused_at_least_once >= 2 (got ${stats.scripts_reused_at_least_once})`
+  );
+  assert(
+    parseFloat(stats.avg_reuse_count) > 0,
+    `14.4 avg_reuse_count > 0 (got ${stats.avg_reuse_count})`
+  );
 
   // Cleanup
   await cleanupTestScripts();
@@ -592,7 +655,10 @@ async function test15_nonExistentUserStats() {
   assert(stats.total_reuses === 0, `15.3 total_reuses=0 (got ${stats.total_reuses})`);
   assert(stats.reused_scripts === 0, `15.4 reused_scripts=0 (got ${stats.reused_scripts})`);
   // max_reuses may be null for no rows — that's acceptable
-  assert(stats.max_reuses === null || stats.max_reuses === 0, `15.5 max_reuses=0 or null (got ${stats.max_reuses})`);
+  assert(
+    stats.max_reuses === null || stats.max_reuses === 0,
+    `15.5 max_reuses=0 or null (got ${stats.max_reuses})`
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -619,8 +685,8 @@ async function test16_priorityOrdering() {
   const active = await lifecycle.getUsersBySegment(pool, 'active');
   const semiActive = await lifecycle.getUsersBySegment(pool, 'semi_active');
 
-  const activeIds = active.map(u => u.user_id);
-  const semiActiveIds = semiActive.map(u => u.user_id);
+  const activeIds = active.map((u) => u.user_id);
+  const semiActiveIds = semiActive.map((u) => u.user_id);
 
   assert(activeIds.includes(1), '16.1 user 1 in active segment');
   assert(semiActiveIds.includes(2), '16.2 user 2 in semi_active segment');
@@ -629,7 +695,10 @@ async function test16_priorityOrdering() {
   const tightStart = new Date(Date.now() - MAX_CYCLE_MS + 100); // almost expired
   const semiResult = await processSemiActiveWithTimeout(pool, semiActiveIds, tightStart);
   // With barely any time left, semi_active may get partially/fully skipped
-  assert(semiResult.skipped >= 0, `16.3 semi_active may be skipped under tight timeout (skipped=${semiResult.skipped})`);
+  assert(
+    semiResult.skipped >= 0,
+    `16.3 semi_active may be skipped under tight timeout (skipped=${semiResult.skipped})`
+  );
 
   // Verify active was never subject to timeout logic (no skipped field for active)
   // This is structural: active users are processed without timeout in runNightlyCycle
@@ -652,7 +721,9 @@ async function main() {
   console.log('╚══════════════════════════════════════════════════════════════╝');
 
   // Save initial lifecycle state for restore
-  const { rows: origLifecycle } = await pool.query(`SELECT * FROM user_lifecycle WHERE user_id IN (1,2,3,4)`);
+  const { rows: origLifecycle } = await pool.query(
+    `SELECT * FROM user_lifecycle WHERE user_id IN (1,2,3,4)`
+  );
 
   try {
     // Clean start
@@ -693,7 +764,7 @@ async function main() {
     console.log(`  TOTAL: ${totalPass + totalFail}  |  PASS: ${totalPass}  |  FAIL: ${totalFail}`);
     if (failures.length > 0) {
       console.log('  FAILURES:');
-      failures.forEach(f => console.log(`    - ${f}`));
+      failures.forEach((f) => console.log(`    - ${f}`));
     }
     console.log('══════════════════════════════════════════════════════════════\n');
 
@@ -702,7 +773,7 @@ async function main() {
   }
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('FATAL:', err);
   pool.end().then(() => process.exit(2));
 });

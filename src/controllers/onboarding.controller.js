@@ -7,8 +7,11 @@ const { createClustersFromOnboarding } = require('../services/checkin/script.ser
 async function upsertOnboardingProfile(pool, req, res) {
   const parsed = onboardingRequestSchema.safeParse(req.body);
   if (!parsed.success) {
-
-    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)), details: parsed.error.issues });
+    return res.status(400).json({
+      ok: false,
+      error: t('error.invalid_data', getLang(req)),
+      details: parsed.error.issues,
+    });
   }
 
   const { user_id: payloadUserId, profile } = parsed.data;
@@ -24,7 +27,6 @@ async function upsertOnboardingProfile(pool, req, res) {
     const savedProfile = await onboardingService.upsertProfile(pool, userId, profile);
     return res.status(200).json({ ok: true, profile: savedProfile });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -75,7 +77,9 @@ async function onboardingCompleteV2(pool, req, res) {
       const variants = getPhoneVariants(normalizePhoneNumber(phone.trim()));
       const isDuplicate = await onboardingService.checkPhoneDuplicate(pool, variants, req.user.id);
       if (isDuplicate) {
-        return res.status(409).json({ ok: false, error: t('auth.phone_already_used', getLang(req)) });
+        return res
+          .status(409)
+          .json({ ok: false, error: t('auth.phone_already_used', getLang(req)) });
       }
     }
     const saved = await onboardingService.upsertProfileV2(pool, req.user.id, req.body);
@@ -86,7 +90,7 @@ async function onboardingCompleteV2(pool, req, res) {
       ...(Array.isArray(req.body.medical_conditions) ? req.body.medical_conditions : []),
     ].filter(Boolean);
     if (symptoms.length > 0) {
-      createClustersFromOnboarding(pool, req.user.id, symptoms).catch(err =>
+      createClustersFromOnboarding(pool, req.user.id, symptoms).catch((err) =>
         console.error('[Onboarding] Failed to create clusters:', err.message)
       );
     }

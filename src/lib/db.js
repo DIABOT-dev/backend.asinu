@@ -16,9 +16,7 @@ const MAX_QUERY_PREVIEW = 240;
 function preview(sql) {
   if (typeof sql !== 'string') return '<non-string-query>';
   const trimmed = sql.replace(/\s+/g, ' ').trim();
-  return trimmed.length > MAX_QUERY_PREVIEW
-    ? trimmed.slice(0, MAX_QUERY_PREVIEW) + '…'
-    : trimmed;
+  return trimmed.length > MAX_QUERY_PREVIEW ? trimmed.slice(0, MAX_QUERY_PREVIEW) + '…' : trimmed;
 }
 
 function createPool(opts) {

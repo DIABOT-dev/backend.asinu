@@ -11,9 +11,9 @@ const { t } = require('../../src/i18n');
  */
 const extractConditionsList = (items) => {
   if (!Array.isArray(items)) return [];
-  
+
   return items
-    .map(item => {
+    .map((item) => {
       if (typeof item === 'string') return item;
       if (item && typeof item === 'object') {
         return item.other_text || item.label || item.key || '';
@@ -29,7 +29,7 @@ const extractConditionsList = (items) => {
  * @returns {string} - Health context description
  */
 const buildHealthContext = (params) => {
-  const { logsSummary, profile, riskLevel, mood } = params || {};
+  const { logsSummary, profile, riskLevel: _riskLevel, mood: _mood } = params || {};
   const parts = [];
 
   // **ƯU TIÊN CAO NHẤT: Chỉ số sức khỏe gần nhất**
@@ -38,27 +38,27 @@ const buildHealthContext = (params) => {
       const g = logsSummary.latest_glucose;
       const value = g.value;
       let status = t('context.status_normal');
-      
+
       if (value > 180) status = t('context.status_very_high');
       else if (value > 140) status = t('context.status_slightly_high');
       else if (value < 70) status = t('context.status_low');
       else if (value < 100) status = t('context.status_good');
-      
+
       parts.push(t('context.glucose_status', 'vi', { value, unit: g.unit || 'mg/dL', status }));
     }
-    
+
     if (logsSummary.latest_bp) {
       const bp = logsSummary.latest_bp;
       const sys = bp.systolic;
       const dia = bp.diastolic;
       let status = t('context.status_normal');
-      
+
       if (sys >= 180 || dia >= 110) status = t('context.status_very_high');
       else if (sys >= 140 || dia >= 90) status = t('context.status_high');
       else if (sys >= 130 || dia >= 85) status = t('context.status_slightly_high');
       else if (sys < 90 || dia < 60) status = t('context.status_low');
       else status = t('context.status_good');
-      
+
       parts.push(t('context.bp_status', 'vi', { sys, dia, status }));
     }
   }
@@ -101,16 +101,16 @@ const buildQuestionPrompt = (questionType, healthContext) => {
  */
 const cleanQuestionText = (text) => {
   if (!text) return '';
-  
+
   let cleaned = text.trim();
-  
+
   // Remove common prefixes
   cleaned = cleaned.replace(/^(CÂU HỎI:|Câu hỏi:|Question:)\s*/i, '');
   cleaned = cleaned.replace(/^["']|["']$/g, ''); // Remove quotes
-  
+
   // Take only first line if multiple lines
   const firstLine = cleaned.split('\n')[0].trim();
-  
+
   return firstLine || text.trim();
 };
 
@@ -126,12 +126,12 @@ const generateMoodQuestion = async (pool, userId, phase, context) => {
   try {
     const healthContext = buildHealthContext(context);
     const prompt = buildQuestionPrompt('mood', healthContext);
-    
+
     const aiResponse = await getOpenAIReply({
       message: prompt,
       userId: userId.toString(),
       sessionId: `question-gen-${userId}-${Date.now()}`,
-      temperature: 0.7 // Balanced creativity for questions
+      temperature: 0.7, // Balanced creativity for questions
     });
 
     const questionText = cleanQuestionText(aiResponse.reply);
@@ -143,15 +143,15 @@ const generateMoodQuestion = async (pool, userId, phase, context) => {
       options: [
         { value: 'OK', label: t('brain.mood_ok') },
         { value: 'TIRED', label: t('brain.mood_tired') },
-        { value: 'NOT_OK', label: t('brain.mood_not_ok') }
+        { value: 'NOT_OK', label: t('brain.mood_not_ok') },
       ],
       phase_in_day: phase || null,
       generated_by_ai: true,
-      ai_provider: 'openai'
+      ai_provider: 'openai',
     };
   } catch (error) {
     console.error('[questionGenerator] Error generating mood question:', error);
-    
+
     // Fallback to default
     return {
       id: 'mood',
@@ -160,10 +160,10 @@ const generateMoodQuestion = async (pool, userId, phase, context) => {
       options: [
         { value: 'OK', label: t('brain.mood_ok') },
         { value: 'TIRED', label: t('brain.mood_tired') },
-        { value: 'NOT_OK', label: t('brain.mood_not_ok') }
+        { value: 'NOT_OK', label: t('brain.mood_not_ok') },
       ],
       phase_in_day: phase || null,
-      generated_by_ai: false
+      generated_by_ai: false,
     };
   }
 };
@@ -180,15 +180,15 @@ const generateFollowupQuestion = async (pool, userId, phase, context) => {
   try {
     const healthContext = buildHealthContext({
       ...context,
-      mood: context.previousMood
+      mood: context.previousMood,
     });
     const prompt = buildQuestionPrompt('followup', healthContext);
-    
+
     const aiResponse = await getOpenAIReply({
       message: prompt,
       userId: userId.toString(),
       sessionId: `question-gen-${userId}-${Date.now()}`,
-      temperature: 0.7
+      temperature: 0.7,
     });
 
     const questionText = cleanQuestionText(aiResponse.reply);
@@ -200,15 +200,15 @@ const generateFollowupQuestion = async (pool, userId, phase, context) => {
       options: [
         { value: 'OK', label: t('brain.mood_ok') },
         { value: 'TIRED', label: t('brain.mood_tired') },
-        { value: 'NOT_OK', label: t('brain.mood_not_ok') }
+        { value: 'NOT_OK', label: t('brain.mood_not_ok') },
       ],
       phase_in_day: phase || null,
       generated_by_ai: true,
-      ai_provider: 'openai'
+      ai_provider: 'openai',
     };
   } catch (error) {
     console.error('[questionGenerator] Error generating followup question:', error);
-    
+
     // Fallback to default
     return {
       id: 'mood',
@@ -217,10 +217,10 @@ const generateFollowupQuestion = async (pool, userId, phase, context) => {
       options: [
         { value: 'OK', label: t('brain.mood_ok') },
         { value: 'TIRED', label: t('brain.mood_tired') },
-        { value: 'NOT_OK', label: t('brain.mood_not_ok') }
+        { value: 'NOT_OK', label: t('brain.mood_not_ok') },
       ],
       phase_in_day: phase || null,
-      generated_by_ai: false
+      generated_by_ai: false,
     };
   }
 };
@@ -237,18 +237,18 @@ const generateSymptomQuestion = async (pool, userId, context) => {
     // Thêm context từ previous answer
     let healthContext = buildHealthContext(context);
     const previousMoodText = context.previousAnswer?.text || '';
-    
+
     if (previousMoodText) {
       healthContext += ` ${t('context.previous_answer', 'vi', { text: previousMoodText })}`;
     }
 
     const prompt = buildQuestionPrompt('symptom', healthContext);
-    
+
     const aiResponse = await getOpenAIReply({
       message: prompt,
       userId: userId.toString(),
       sessionId: `question-gen-${userId}-${Date.now()}`,
-      temperature: 0.7
+      temperature: 0.7,
     });
 
     const questionText = cleanQuestionText(aiResponse.reply);
@@ -266,20 +266,20 @@ const generateSymptomQuestion = async (pool, userId, context) => {
         { value: 'fever', label: t('brain.symptom_fever') },
         { value: 'headache', label: t('brain.symptom_headache') },
         { value: 'nausea', label: t('brain.symptom_nausea') },
-        { value: 'other', label: t('brain.symptom_other') }
+        { value: 'other', label: t('brain.symptom_other') },
       ],
       severity_options: [
         { value: 'mild', label: t('brain.severity_mild') },
         { value: 'moderate', label: t('brain.severity_moderate') },
-        { value: 'severe', label: t('brain.severity_severe') }
+        { value: 'severe', label: t('brain.severity_severe') },
       ],
       generated_by_ai: true,
       ai_provider: 'openai',
-      context_from: previousMoodText ? 'previous_mood' : 'health_data'
+      context_from: previousMoodText ? 'previous_mood' : 'health_data',
     };
   } catch (error) {
     console.error('[questionGenerator] Error generating symptom question:', error);
-    
+
     // Fallback to default
     return {
       id: 'symptom_severity',
@@ -293,14 +293,14 @@ const generateSymptomQuestion = async (pool, userId, context) => {
         { value: 'fever', label: t('brain.symptom_fever') },
         { value: 'headache', label: t('brain.symptom_headache') },
         { value: 'nausea', label: t('brain.symptom_nausea') },
-        { value: 'other', label: t('brain.symptom_other') }
+        { value: 'other', label: t('brain.symptom_other') },
       ],
       severity_options: [
         { value: 'mild', label: t('brain.severity_mild') },
         { value: 'moderate', label: t('brain.severity_moderate') },
-        { value: 'severe', label: t('brain.severity_severe') }
+        { value: 'severe', label: t('brain.severity_severe') },
       ],
-      generated_by_ai: false
+      generated_by_ai: false,
     };
   }
 };
@@ -313,10 +313,10 @@ const generateSymptomQuestion = async (pool, userId, context) => {
 const aiAssessRiskAndDecision = async (pool, userId, context) => {
   try {
     const { logsSummary, profile, moodHistory, currentMood, symptoms, symptomSeverity } = context;
-    
+
     // Build comprehensive context for AI
     let healthContext = buildHealthContext({ logsSummary, profile });
-    
+
     // Add mood history
     if (moodHistory) {
       healthContext += `\n\n${t('context.mood_history_title')}:`;
@@ -325,26 +325,26 @@ const aiAssessRiskAndDecision = async (pool, userId, context) => {
       healthContext += `\n- ${t('context.tired_count')}: ${moodHistory.tiredCount}`;
       healthContext += `\n- ${t('context.trend')}: ${moodHistory.trend || t('context.unknown')}`;
     }
-    
+
     // Current session
     healthContext += `\n\n${t('context.current_session')}:`;
     healthContext += `\n- ${t('context.current_mood')}: ${currentMood === 'OK' ? t('brain.mood_ok') : currentMood === 'TIRED' ? t('brain.mood_tired') : currentMood === 'NOT_OK' ? t('brain.mood_not_ok') : t('brain.not_answered')}`;
-    
+
     if (symptoms && symptoms.length > 0) {
       const symptomLabels = {
-        'chest_pain': t('brain.symptom_chest_pain'),
-        'shortness_of_breath': t('brain.symptom_shortness_of_breath'),
-        'dizziness': t('brain.symptom_dizziness'),
-        'fever': t('brain.symptom_fever'),
-        'headache': t('brain.symptom_headache'),
-        'nausea': t('brain.symptom_nausea'),
-        'none': t('brain.symptom_none_short'),
-        'other': t('brain.symptom_other')
+        chest_pain: t('brain.symptom_chest_pain'),
+        shortness_of_breath: t('brain.symptom_shortness_of_breath'),
+        dizziness: t('brain.symptom_dizziness'),
+        fever: t('brain.symptom_fever'),
+        headache: t('brain.symptom_headache'),
+        nausea: t('brain.symptom_nausea'),
+        none: t('brain.symptom_none_short'),
+        other: t('brain.symptom_other'),
       };
-      healthContext += `\n- ${t('context.symptoms_label')}: ${symptoms.map(s => symptomLabels[s] || s).join(', ')}`;
+      healthContext += `\n- ${t('context.symptoms_label')}: ${symptoms.map((s) => symptomLabels[s] || s).join(', ')}`;
       healthContext += `\n- ${t('context.severity_label')}: ${symptomSeverity === 'severe' ? t('brain.severity_severe') : symptomSeverity === 'moderate' ? t('brain.severity_moderate') : t('brain.severity_mild')}`;
     }
-    
+
     // Profile info
     if (profile) {
       if (profile.age) healthContext += `\n- ${t('context.age_label')}: ${profile.age}`;
@@ -355,32 +355,32 @@ const aiAssessRiskAndDecision = async (pool, userId, context) => {
         }
       }
     }
-    
+
     const prompt = t('prompt.risk_assessment', 'vi', { healthContext });
 
     const aiResponse = await getOpenAIReply({
       message: prompt,
       userId: userId.toString(),
       sessionId: `risk-assess-${userId}-${Date.now()}`,
-      temperature: 0.3 // Low temperature for consistent decisions
+      temperature: 0.3, // Low temperature for consistent decisions
     });
 
     // Parse AI response
     const responseText = aiResponse.reply.trim();
-    
+
     // Try to extract JSON from response
-    let jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error(t('error.ai_invalid_json'));
     }
-    
+
     const parsed = JSON.parse(jsonMatch[0]);
-    
+
     console.log(`[aiAssessRiskAndDecision] AI Decision for userId ${userId}:`);
     console.log(`  - Risk: ${parsed.risk_tier} (score: ${parsed.risk_score})`);
     console.log(`  - Notify caregiver: ${parsed.notify_caregiver}`);
     console.log(`  - Reasoning: ${parsed.reasoning}`);
-    
+
     return {
       risk_tier: parsed.risk_tier || 'LOW',
       risk_score: parsed.risk_score || 0,
@@ -389,17 +389,17 @@ const aiAssessRiskAndDecision = async (pool, userId, context) => {
       outcome_text: parsed.outcome_text || t('outcome.thanks'),
       recommended_action: parsed.recommended_action || t('outcome.continue_monitoring'),
       assessed_by: 'AI',
-      ai_provider: 'openai'
+      ai_provider: 'openai',
     };
   } catch (error) {
     console.error('[aiAssessRiskAndDecision] Error:', error);
-    
+
     // Fallback: Rule-based với logic mạnh hơn cho mood history
     const { moodHistory, currentMood, symptoms, symptomSeverity } = context;
-    
+
     let score = 0;
-    let reasons = [];
-    
+    const reasons = [];
+
     // Mood history impact - QUAN TRỌNG
     if (moodHistory) {
       if (moodHistory.notOkCount >= 2) {
@@ -409,7 +409,7 @@ const aiAssessRiskAndDecision = async (pool, userId, context) => {
         score += 20;
         reasons.push(t('fallback.not_ok_recent'));
       }
-      
+
       if (moodHistory.tiredCount >= 2) {
         score += 30;
         reasons.push(t('fallback.tired_48h', 'vi', { count: moodHistory.tiredCount }));
@@ -418,7 +418,7 @@ const aiAssessRiskAndDecision = async (pool, userId, context) => {
         reasons.push(t('fallback.tired_recent'));
       }
     }
-    
+
     // Current mood
     if (currentMood === 'NOT_OK') {
       score += 20;
@@ -427,7 +427,7 @@ const aiAssessRiskAndDecision = async (pool, userId, context) => {
       score += 10;
       reasons.push(t('fallback.current_tired'));
     }
-    
+
     // Symptoms - QUAN TRỌNG
     if (symptoms && symptoms.length > 0) {
       if (symptoms.includes('chest_pain') && symptoms.includes('shortness_of_breath')) {
@@ -443,7 +443,7 @@ const aiAssessRiskAndDecision = async (pool, userId, context) => {
         score += 15;
         reasons.push(t('fallback.dizziness'));
       }
-      
+
       // Severity multiplier
       if (symptomSeverity === 'severe') {
         score = Math.min(100, score * 1.5);
@@ -452,30 +452,30 @@ const aiAssessRiskAndDecision = async (pool, userId, context) => {
         score = Math.min(100, score * 1.2);
       }
     }
-    
+
     score = Math.min(100, Math.max(0, score));
-    
+
     let tier = 'LOW';
     if (score >= 60) tier = 'HIGH';
     else if (score >= 35) tier = 'MEDIUM';
-    
+
     const shouldNotify = tier === 'HIGH' || (tier === 'MEDIUM' && moodHistory?.notOkCount >= 2);
-    
+
     return {
       risk_tier: tier,
       risk_score: score,
       notify_caregiver: shouldNotify,
       ai_reasoning: `Fallback assessment: ${reasons.join(', ')}`,
-      outcome_text: tier === 'HIGH' 
-        ? t('outcome.high_risk')
-        : tier === 'MEDIUM'
-        ? t('outcome.medium_risk')
-        : t('outcome.low_risk'),
-      recommended_action: tier === 'HIGH'
-        ? t('outcome.action_contact_now')
-        : t('outcome.action_continue_rest'),
+      outcome_text:
+        tier === 'HIGH'
+          ? t('outcome.high_risk')
+          : tier === 'MEDIUM'
+            ? t('outcome.medium_risk')
+            : t('outcome.low_risk'),
+      recommended_action:
+        tier === 'HIGH' ? t('outcome.action_contact_now') : t('outcome.action_continue_rest'),
       assessed_by: 'fallback-rules',
-      ai_provider: null
+      ai_provider: null,
     };
   }
 };
@@ -486,5 +486,5 @@ module.exports = {
   generateSymptomQuestion,
   buildHealthContext,
   aiAssessRiskAndDecision,
-  extractConditionsList
+  extractConditionsList,
 };

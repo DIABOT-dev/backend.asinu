@@ -4,7 +4,11 @@
  * Round 3 — Scoring accuracy tests across all severity levels, profiles, and modifiers.
  */
 
-const { evaluateScript, evaluateFollowUp, applyModifiers } = require('../src/services/checkin/scoring-engine');
+const {
+  evaluateScript,
+  evaluateFollowUp,
+  applyModifiers,
+} = require('../src/services/checkin/scoring-engine');
 const { getNextQuestion } = require('../src/services/checkin/script-runner');
 
 // ─── Test infrastructure ──────────────────────────────────────────────────────
@@ -31,13 +35,44 @@ function assert(testName, actual, expected, extraInfo) {
 const scriptA = {
   questions: [{ id: 's1', text: 'Đau mức nào?', type: 'slider', min: 0, max: 10 }],
   scoring_rules: [
-    { conditions: [{ field: 's1', op: 'gte', value: 7 }], combine: 'and', severity: 'high', follow_up_hours: 1, needs_doctor: true, needs_family_alert: true },
-    { conditions: [{ field: 's1', op: 'gte', value: 4 }], combine: 'and', severity: 'medium', follow_up_hours: 3, needs_doctor: false, needs_family_alert: false },
-    { conditions: [{ field: 's1', op: 'lt', value: 4 }], combine: 'and', severity: 'low', follow_up_hours: 6, needs_doctor: false, needs_family_alert: false },
+    {
+      conditions: [{ field: 's1', op: 'gte', value: 7 }],
+      combine: 'and',
+      severity: 'high',
+      follow_up_hours: 1,
+      needs_doctor: true,
+      needs_family_alert: true,
+    },
+    {
+      conditions: [{ field: 's1', op: 'gte', value: 4 }],
+      combine: 'and',
+      severity: 'medium',
+      follow_up_hours: 3,
+      needs_doctor: false,
+      needs_family_alert: false,
+    },
+    {
+      conditions: [{ field: 's1', op: 'lt', value: 4 }],
+      combine: 'and',
+      severity: 'low',
+      follow_up_hours: 6,
+      needs_doctor: false,
+      needs_family_alert: false,
+    },
   ],
   condition_modifiers: [
-    { user_condition: 'tiểu đường', extra_conditions: [{ field: 's1', op: 'gte', value: 5 }], action: 'bump_severity', to: 'high' },
-    { user_condition: 'tim mạch', extra_conditions: [{ field: 's1', op: 'gte', value: 3 }], action: 'bump_severity', to: 'high' },
+    {
+      user_condition: 'tiểu đường',
+      extra_conditions: [{ field: 's1', op: 'gte', value: 5 }],
+      action: 'bump_severity',
+      to: 'high',
+    },
+    {
+      user_condition: 'tim mạch',
+      extra_conditions: [{ field: 's1', op: 'gte', value: 3 }],
+      action: 'bump_severity',
+      to: 'high',
+    },
   ],
   conclusion_templates: {
     low: { summary: 'Nhẹ', recommendation: 'R', close_message: 'C' },
@@ -58,9 +93,33 @@ const scriptB = {
     { id: 'm2', text: 'Q', type: 'single_choice', options: ['có', 'không'] },
   ],
   scoring_rules: [
-    { conditions: [{ field: 'm1', op: 'gte', value: 7 }, { field: 'm2', op: 'eq', value: 'có' }], combine: 'and', severity: 'high', follow_up_hours: 1, needs_doctor: true, needs_family_alert: true },
-    { conditions: [{ field: 'm1', op: 'gte', value: 7 }], combine: 'or', severity: 'high', follow_up_hours: 1, needs_doctor: true, needs_family_alert: false },
-    { conditions: [{ field: 'm1', op: 'gte', value: 4 }], combine: 'and', severity: 'medium', follow_up_hours: 3, needs_doctor: false, needs_family_alert: false },
+    {
+      conditions: [
+        { field: 'm1', op: 'gte', value: 7 },
+        { field: 'm2', op: 'eq', value: 'có' },
+      ],
+      combine: 'and',
+      severity: 'high',
+      follow_up_hours: 1,
+      needs_doctor: true,
+      needs_family_alert: true,
+    },
+    {
+      conditions: [{ field: 'm1', op: 'gte', value: 7 }],
+      combine: 'or',
+      severity: 'high',
+      follow_up_hours: 1,
+      needs_doctor: true,
+      needs_family_alert: false,
+    },
+    {
+      conditions: [{ field: 'm1', op: 'gte', value: 4 }],
+      combine: 'and',
+      severity: 'medium',
+      follow_up_hours: 3,
+      needs_doctor: false,
+      needs_family_alert: false,
+    },
   ],
   condition_modifiers: [],
   conclusion_templates: {
@@ -152,11 +211,16 @@ console.log('\n═══ B. Profile Modifier Combinations ═══\n');
   assert('Tim mạch + score 2 → LOW (below modifier threshold)', r5.severity, 'low');
 
   // Both conditions + score 5 → HIGH
-  const r6 = evaluateScript(scriptA, [ans('s1', 5)], { medical_conditions: ['tiểu đường', 'tim mạch'] });
+  const r6 = evaluateScript(scriptA, [ans('s1', 5)], {
+    medical_conditions: ['tiểu đường', 'tim mạch'],
+  });
   assert('Both conditions + score 5 → HIGH', r6.severity, 'high');
 
   // Age 68 + conditions + MEDIUM base (score 5) → HIGH (elderly bump)
-  const r7 = evaluateScript(scriptA, [ans('s1', 4)], { medical_conditions: ['viêm khớp'], age: 68 });
+  const r7 = evaluateScript(scriptA, [ans('s1', 4)], {
+    medical_conditions: ['viêm khớp'],
+    age: 68,
+  });
   assert('Age 68 + conditions + MEDIUM → HIGH (elderly bump)', r7.severity, 'high');
 
   // Age 68 + conditions + LOW + no rules matched + has answers → MEDIUM (safety bump)
@@ -165,15 +229,36 @@ console.log('\n═══ B. Profile Modifier Combinations ═══\n');
   const scriptNoMatch = {
     ...scriptA,
     scoring_rules: [
-      { conditions: [{ field: 's1', op: 'gte', value: 99 }], combine: 'and', severity: 'high', follow_up_hours: 1, needs_doctor: true, needs_family_alert: true },
+      {
+        conditions: [{ field: 's1', op: 'gte', value: 99 }],
+        combine: 'and',
+        severity: 'high',
+        follow_up_hours: 1,
+        needs_doctor: true,
+        needs_family_alert: true,
+      },
     ],
   };
-  const r8 = evaluateScript(scriptNoMatch, [ans('s1', 2)], { medical_conditions: ['tiểu đường'], age: 68 });
-  assert('Age 68 + conditions + LOW (no rules matched) → MEDIUM (safety bump)', r8.severity, 'medium');
-  assert('Safety bump modifiersApplied contains elderly note', r8.modifiersApplied.length > 0, true);
+  const r8 = evaluateScript(scriptNoMatch, [ans('s1', 2)], {
+    medical_conditions: ['tiểu đường'],
+    age: 68,
+  });
+  assert(
+    'Age 68 + conditions + LOW (no rules matched) → MEDIUM (safety bump)',
+    r8.severity,
+    'medium'
+  );
+  assert(
+    'Safety bump modifiersApplied contains elderly note',
+    r8.modifiersApplied.length > 0,
+    true
+  );
 
   // Age 45 + conditions + MEDIUM → stays MEDIUM (not elderly)
-  const r9 = evaluateScript(scriptA, [ans('s1', 4)], { medical_conditions: ['viêm khớp'], age: 45 });
+  const r9 = evaluateScript(scriptA, [ans('s1', 4)], {
+    medical_conditions: ['viêm khớp'],
+    age: 45,
+  });
   assert('Age 45 + conditions + MEDIUM → stays MEDIUM (not elderly)', r9.severity, 'medium');
 
   // Age 68 + no conditions + MEDIUM → stays MEDIUM (no conditions)
@@ -313,12 +398,14 @@ console.log('\n═══ E. Edge Cases ═══\n');
 // ═══════════════════════════════════════════════════════════════════════════════
 
 console.log('\n═══════════════════════════════════════════════');
-console.log(`  ROUND 3 RESULTS: ${passed} passed, ${failed} failed out of ${passed + failed} tests`);
+console.log(
+  `  ROUND 3 RESULTS: ${passed} passed, ${failed} failed out of ${passed + failed} tests`
+);
 console.log('═══════════════════════════════════════════════');
 
 if (failures.length > 0) {
   console.log('\nFailed tests:');
-  failures.forEach(f => console.log(`  - ${f}`));
+  failures.forEach((f) => console.log(`  - ${f}`));
 }
 
 process.exit(failed > 0 ? 1 : 0);

@@ -46,10 +46,10 @@ async function deleteFeedback(pool, feedbackId) {
  * Update feedback type for an existing record
  */
 async function updateFeedbackType(pool, feedbackId, newType) {
-  await pool.query(
-    'UPDATE chat_feedback SET feedback_type=$1, updated_at=NOW() WHERE id=$2',
-    [newType, feedbackId]
-  );
+  await pool.query('UPDATE chat_feedback SET feedback_type=$1, updated_at=NOW() WHERE id=$2', [
+    newType,
+    feedbackId,
+  ]);
 }
 
 /**

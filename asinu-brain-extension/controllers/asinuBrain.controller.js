@@ -1,5 +1,16 @@
-const { answerSchema, emergencySchema, emergencyTriageAnswerSchema } = require('../validation/asinuBrain.schemas');
-const { getNextState, submitAnswer, getTimeline, postEmergency, startEmergencyTriage, submitEmergencyTriageAnswer } = require('../services/asinuBrain.service');
+const {
+  answerSchema,
+  emergencySchema,
+  emergencyTriageAnswerSchema,
+} = require('../validation/asinuBrain.schemas');
+const {
+  getNextState,
+  submitAnswer,
+  getTimeline,
+  postEmergency,
+  startEmergencyTriage,
+  submitEmergencyTriageAnswer,
+} = require('../services/asinuBrain.service');
 const { t, getLang } = require('../../src/i18n');
 
 async function getNextHandler(pool, req, res) {
@@ -18,7 +29,11 @@ async function postAnswerHandler(pool, req, res) {
   }
   const parsed = answerSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_payload', getLang(req)), details: parsed.error.issues });
+    return res.status(400).json({
+      ok: false,
+      error: t('error.invalid_payload', getLang(req)),
+      details: parsed.error.issues,
+    });
   }
 
   try {
@@ -46,7 +61,11 @@ async function postEmergencyHandler(pool, req, res) {
   }
   const parsed = emergencySchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_payload', getLang(req)), details: parsed.error.issues });
+    return res.status(400).json({
+      ok: false,
+      error: t('error.invalid_payload', getLang(req)),
+      details: parsed.error.issues,
+    });
   }
 
   try {
@@ -74,7 +93,11 @@ async function submitEmergencyTriageAnswerHandler(pool, req, res) {
   }
   const parsed = emergencyTriageAnswerSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_payload', getLang(req)), details: parsed.error.issues });
+    return res.status(400).json({
+      ok: false,
+      error: t('error.invalid_payload', getLang(req)),
+      details: parsed.error.issues,
+    });
   }
   try {
     const result = await submitEmergencyTriageAnswer(pool, req.userId, parsed.data);
@@ -91,5 +114,5 @@ module.exports = {
   getTimelineHandler,
   postEmergencyHandler,
   startEmergencyTriageHandler,
-  submitEmergencyTriageAnswerHandler
+  submitEmergencyTriageAnswerHandler,
 };

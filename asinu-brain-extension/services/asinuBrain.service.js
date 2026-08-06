@@ -2,19 +2,21 @@ const crypto = require('crypto');
 const { calculateRisk } = require('../risk/AsinuRiskEngine');
 const { assessClinicalRisk } = require('../risk/AsinuRiskEngineC');
 const { computePsV1, DEFAULT_CONFIG } = require('../risk/AsinuRiskEngineB');
-const { sendPushNotification } = require('../../src/services/notification/push.notification.service');
+const {
+  sendPushNotification,
+} = require('../../src/services/notification/push.notification.service');
 const { t } = require('../../src/i18n');
 const {
   generateMoodQuestion,
   generateFollowupQuestion,
   generateSymptomQuestion,
-  aiAssessRiskAndDecision
+  aiAssessRiskAndDecision,
 } = require('./questionGenerator.service');
 const {
   generateNextStepOrAssess,
   startHealthCheck,
   generateEmergencyTriageStep,
-  craftPersonalizedEmergencyMessage
+  craftPersonalizedEmergencyMessage,
 } = require('./aiHealthAssessment.service');
 
 // Flag để bật/tắt AI Dynamic Mode
@@ -26,7 +28,7 @@ const SHADOW_ENV_KEYS = ['ASINU_SHADOW_MODE', 'SHADOW_MODE'];
 const MOOD_OPTIONS = [
   { value: 'OK', label: t('brain.mood_ok') },
   { value: 'TIRED', label: t('brain.mood_tired') },
-  { value: 'NOT_OK', label: t('brain.mood_not_ok') }
+  { value: 'NOT_OK', label: t('brain.mood_not_ok') },
 ];
 
 const SYMPTOM_OPTIONS = [
@@ -37,13 +39,13 @@ const SYMPTOM_OPTIONS = [
   { value: 'fever', label: t('brain.symptom_fever') },
   { value: 'headache', label: t('brain.symptom_headache') },
   { value: 'nausea', label: t('brain.symptom_nausea') },
-  { value: 'other', label: t('brain.symptom_other') }
+  { value: 'other', label: t('brain.symptom_other') },
 ];
 
 const SEVERITY_OPTIONS = [
   { value: 'mild', label: t('brain.severity_mild') },
   { value: 'moderate', label: t('brain.severity_moderate') },
-  { value: 'severe', label: t('brain.severity_severe') }
+  { value: 'severe', label: t('brain.severity_severe') },
 ];
 
 const buildMoodQuestion = (text, phase) => ({
@@ -51,10 +53,10 @@ const buildMoodQuestion = (text, phase) => ({
   type: 'single_choice',
   text,
   options: MOOD_OPTIONS,
-  phase_in_day: phase || null
+  phase_in_day: phase || null,
 });
 
-const QUESTIONS = {
+const _QUESTIONS = {
   mood_morning: buildMoodQuestion(t('brain.question_how_are_you'), 'MORNING'),
   mood_followup: (phase) => buildMoodQuestion(t('brain.question_feeling_better'), phase || 'NOON'),
   symptom_severity: {
@@ -62,8 +64,8 @@ const QUESTIONS = {
     type: 'symptom_severity',
     text: t('brain.question_symptoms'),
     symptoms: SYMPTOM_OPTIONS,
-    severity_options: SEVERITY_OPTIONS
-  }
+    severity_options: SEVERITY_OPTIONS,
+  },
 };
 
 const HIGH_RISK_KEYWORDS = [
@@ -79,10 +81,13 @@ const HIGH_RISK_KEYWORDS = [
   'asthma',
   'tim mach',
   'tieu duong',
-  'huyet ap'
+  'huyet ap',
 ];
 
-const normalizeText = (value) => String(value || '').toLowerCase().trim();
+const normalizeText = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .trim();
 
 const extractConditions = (profile) => {
   const list = [];
@@ -149,7 +154,8 @@ const deriveFrailtyTier = (profile) => {
   const exercise = normalizeText(profile.exercise_freq);
 
   if (flexibility.includes('low') || flexibility.includes('limited')) score += 1;
-  if (stairs.includes('poor') || stairs.includes('hard') || stairs.includes('difficult')) score += 1;
+  if (stairs.includes('poor') || stairs.includes('hard') || stairs.includes('difficult'))
+    score += 1;
   if (exercise.includes('never') || exercise.includes('rare')) score += 1;
 
   if (score >= 3) return 2;
@@ -255,13 +261,7 @@ const upsertRiskPersistence = async (pool, userId, payload) => {
        streak_ok_days = EXCLUDED.streak_ok_days,
        updated_at = NOW()
      RETURNING *`,
-    [
-      userId,
-      payload.risk_score,
-      payload.risk_tier,
-      payload.last_updated_at,
-      payload.streak_ok_days
-    ]
+    [userId, payload.risk_score, payload.risk_tier, payload.last_updated_at, payload.streak_ok_days]
   );
   return result.rows[0];
 };
@@ -281,7 +281,7 @@ const getSnapshotForSession = async (pool, sessionId) => {
 const createSnapshot = async (pool, sessionId, userId, snapshot) => {
   await pool.query(
     `INSERT INTO asinu_brain_context_snapshots (session_id, user_id, snapshot_json)
-     VALUES ($1, $2, $3)` ,
+     VALUES ($1, $2, $3)`,
     [sessionId, userId, snapshot || {}]
   );
 };
@@ -297,16 +297,16 @@ const getConversationHistory = async (pool, sessionId) => {
      ORDER BY created_at ASC`,
     [sessionId]
   );
-  
+
   const history = [];
   let currentQuestion = null;
-  
+
   for (const row of result.rows) {
     if (row.payload?.question_text) {
       // Đây là question event
       currentQuestion = {
         question: row.payload.question_text,
-        options: row.payload.options || []
+        options: row.payload.options || [],
       };
     }
     if (row.payload?.option_id || row.payload?.value || row.payload?.text_input) {
@@ -318,7 +318,7 @@ const getConversationHistory = async (pool, sessionId) => {
         history.push({
           ...currentQuestion,
           answer,
-          answerLabel
+          answerLabel,
         });
         currentQuestion = null;
       } else {
@@ -326,12 +326,12 @@ const getConversationHistory = async (pool, sessionId) => {
         history.push({
           question: `${t('brain.question_label')} ${history.length + 1}`,
           answer,
-          answerLabel
+          answerLabel,
         });
       }
     }
   }
-  
+
   return history;
 };
 
@@ -381,7 +381,7 @@ const fetchLogsSummary = async (pool, userId) => {
   return {
     counts: countsResult.rows,
     latest_glucose: latestGlucose.rows[0] || null,
-    latest_bp: latestBp.rows[0] || null
+    latest_bp: latestBp.rows[0] || null,
   };
 };
 
@@ -392,13 +392,13 @@ const ensureSnapshot = async (pool, sessionId, userId) => {
   const [profile, logsSummary, persistence] = await Promise.all([
     fetchOnboardingProfile(pool, userId),
     fetchLogsSummary(pool, userId),
-    getRiskPersistence(pool, userId)
+    getRiskPersistence(pool, userId),
   ]);
 
   const snapshot = {
     onboarding: profile,
     logs_summary: logsSummary,
-    risk_persistence: persistence
+    risk_persistence: persistence,
   };
 
   await createSnapshot(pool, sessionId, userId, snapshot);
@@ -431,7 +431,7 @@ const scheduleAt = (now, hours, minutes) => {
 const computeNextDue = (path, phase, now) => {
   // TESTING MODE: Tắt tạm thời - đặt lại thành true để bật lại 30 giây
   const TESTING_MODE = false;
-  
+
   if (TESTING_MODE) {
     console.log('[computeNextDue] TESTING MODE: Next question in 30 seconds');
     if (path === 'GREEN') return new Date(now.getTime() + 30 * 1000);
@@ -439,7 +439,7 @@ const computeNextDue = (path, phase, now) => {
     if (path === 'RED') return new Date(now.getTime() + 30 * 1000);
     return new Date(now.getTime() + 30 * 1000);
   }
-  
+
   // Production mode: thời gian bình thường
   if (path === 'GREEN') return scheduleAt(now, 20, 30);
   if (path === 'YELLOW') {
@@ -502,7 +502,7 @@ const generateId = () => {
 const recordEvent = async (pool, { sessionId, userId, eventType, questionId, payload }) => {
   await pool.query(
     `INSERT INTO asinu_brain_events (session_id, user_id, event_type, question_id, payload)
-     VALUES ($1, $2, $3, $4, $5)` ,
+     VALUES ($1, $2, $3, $4, $5)`,
     [sessionId, userId, eventType, questionId || null, payload || {}]
   );
 };
@@ -511,7 +511,7 @@ const recordOutcome = async (pool, { sessionId, userId, outcome }) => {
   const { risk_tier, notify_caregiver, outcome_text, recommended_action, metadata } = outcome;
   await pool.query(
     `INSERT INTO asinu_brain_outcomes (session_id, user_id, risk_level, notify_caregiver, recommended_action, outcome_text, metadata)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)` ,
+     VALUES ($1, $2, $3, $4, $5, $6, $7)`,
     [
       sessionId,
       userId,
@@ -519,7 +519,7 @@ const recordOutcome = async (pool, { sessionId, userId, outcome }) => {
       notify_caregiver,
       recommended_action || null,
       outcome_text || null,
-      metadata || {}
+      metadata || {},
     ]
   );
 };
@@ -671,7 +671,7 @@ const createTracker = async (pool, userId, payload) => {
       payload.next_due_at || null,
       payload.cooldown_until || null,
       payload.dismissed_until || null,
-      payload.last_prompt_at || null
+      payload.last_prompt_at || null,
     ]
   );
   return result.rows[0];
@@ -700,7 +700,7 @@ const updateTracker = async (pool, trackerId, payload) => {
       payload.cooldown_until || null,
       payload.dismissed_until || null,
       payload.last_prompt_at || null,
-      payload.status || null
+      payload.status || null,
     ]
   );
   return result.rows[0] || null;
@@ -743,7 +743,7 @@ const getMoodHistory48h = async (pool, userId) => {
     const moodValue = parseMoodValue(row.payload);
     total += 1;
     moods.push({ mood: moodValue, at: row.created_at });
-    
+
     if (moodValue === 'NOT_OK') notOkCount += 1;
     else if (moodValue === 'TIRED') tiredCount += 1;
     else if (moodValue === 'OK') okCount += 1;
@@ -753,7 +753,7 @@ const getMoodHistory48h = async (pool, userId) => {
   let trend = 'STABLE';
   if (moods.length >= 2) {
     const recent = moods.slice(0, 2); // 2 câu trả lời gần nhất
-    const recentBad = recent.filter(m => m.mood === 'NOT_OK' || m.mood === 'TIRED').length;
+    const recentBad = recent.filter((m) => m.mood === 'NOT_OK' || m.mood === 'TIRED').length;
     if (recentBad === 2) trend = 'WORSENING';
     else if (recentBad === 0) trend = 'IMPROVING';
   }
@@ -764,7 +764,7 @@ const getMoodHistory48h = async (pool, userId) => {
     tiredCount,
     okCount,
     trend,
-    moods // Raw data for AI analysis
+    moods, // Raw data for AI analysis
   };
 };
 
@@ -820,7 +820,7 @@ const buildSignal = async (pool, userId, sessionId) => {
     getMoodCounts(pool, userId),
     getAnswerForQuestion(pool, sessionId, 'mood'),
     getAnswerForQuestion(pool, sessionId, 'symptom_severity'),
-    getNotOkCount48h(pool, userId)
+    getNotOkCount48h(pool, userId),
   ]);
 
   const todayMood = parseMoodValue(lastMoodAnswer?.payload);
@@ -837,11 +837,11 @@ const buildSignal = async (pool, userId, sessionId) => {
     today_mood: todayMood,
     has_chest_pain: symptomList.includes('chest_pain'),
     has_shortness: symptomList.includes('shortness_of_breath'),
-    not_ok_48h: notOk48h
+    not_ok_48h: notOk48h,
   };
 };
 
-const buildOutcomePayload = (riskResult) => {
+const _buildOutcomePayload = (riskResult) => {
   let outcomeText = t('brain.outcome_thanks');
   let action = t('brain.outcome_continue_monitoring');
 
@@ -860,8 +860,8 @@ const buildOutcomePayload = (riskResult) => {
     recommended_action: action,
     metadata: {
       trend: riskResult.trend,
-      explain_codes: riskResult.explain_codes
-    }
+      explain_codes: riskResult.explain_codes,
+    },
   };
 };
 
@@ -871,7 +871,8 @@ const buildEngineBInput = ({ profile, logsSummary, riskResult, signal, lastEvent
   if (signal?.has_chest_pain && signal?.has_shortness) acuteFlag = 2;
   else if (signal?.severity_score >= 3 || signal?.not_ok_48h >= 2) acuteFlag = 1;
 
-  const logsMissing = !logsSummary || !Array.isArray(logsSummary.counts) || logsSummary.counts.length === 0;
+  const logsMissing =
+    !logsSummary || !Array.isArray(logsSummary.counts) || logsSummary.counts.length === 0;
   let missingSignal = logsMissing ? 1 : 0;
   if (lastEventAt) {
     const diff = Date.now() - new Date(lastEventAt).getTime();
@@ -888,7 +889,7 @@ const buildEngineBInput = ({ profile, logsSummary, riskResult, signal, lastEvent
     age_band: deriveAgeBand(profile?.age),
     comorbidity_tier: deriveComorbidityTier(profile),
     frailty_tier: deriveFrailtyTier(profile),
-    profile_verified: isProfileVerified(profile)
+    profile_verified: isProfileVerified(profile),
   };
 };
 
@@ -917,19 +918,16 @@ const writeAuditRecord = async (pool, payload) => {
       JSON.stringify(payload.output || {}),
       JSON.stringify(payload.explainability_payload || {}),
       payload.notification_sent,
-      payload.channel || null
+      payload.channel || null,
     ]
   );
 };
 
 const notifyCaregivers = async (pool, userId, { title, message, data }) => {
   // Lấy thông tin user để có tên
-  const userResult = await pool.query(
-    'SELECT full_name, email FROM users WHERE id = $1',
-    [userId]
-  );
+  const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [userId]);
   const userName = userResult.rows[0]?.full_name || userResult.rows[0]?.email || `User ${userId}`;
-  
+
   // Lấy caregivers kèm theo relationship_type và xác định ai là requester
   const caregiversResult = await pool.query(
     `SELECT 
@@ -951,24 +949,24 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
   // Đảo ngược mối quan hệ: nếu patient đặt caregiver là "Bố" thì caregiver nhìn patient là "Con"
   const reverseRelationship = (relationshipType) => {
     if (!relationshipType) return null;
-    
+
     const reverseMap = {
       // Cha mẹ <-> Con cái
-      'bo': t('brain.reverse_rel.child'),
-      'Bố': t('brain.reverse_rel.child'),
-      'me': t('brain.reverse_rel.child'),
-      'Mẹ': t('brain.reverse_rel.child'),
+      bo: t('brain.reverse_rel.child'),
+      Bố: t('brain.reverse_rel.child'),
+      me: t('brain.reverse_rel.child'),
+      Mẹ: t('brain.reverse_rel.child'),
       'con-trai': t('brain.reverse_rel.parent'),
       'Con trai': t('brain.reverse_rel.parent'),
       'con-gai': t('brain.reverse_rel.parent'),
       'Con gái': t('brain.reverse_rel.parent'),
-      
+
       // Vợ chồng (đối xứng)
-      'vo': t('brain.reverse_rel.husband'),
-      'Vợ': t('brain.reverse_rel.husband'),
-      'chong': t('brain.reverse_rel.wife'),
-      'Chồng': t('brain.reverse_rel.wife'),
-      
+      vo: t('brain.reverse_rel.husband'),
+      Vợ: t('brain.reverse_rel.husband'),
+      chong: t('brain.reverse_rel.wife'),
+      Chồng: t('brain.reverse_rel.wife'),
+
       // Anh chị em
       'anh-trai': t('brain.reverse_rel.younger_sibling'),
       'Anh trai': t('brain.reverse_rel.younger_sibling'),
@@ -978,7 +976,7 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
       'Em trai': t('brain.reverse_rel.older_sibling'),
       'em-gai': t('brain.reverse_rel.older_sibling'),
       'Em gái': t('brain.reverse_rel.older_sibling'),
-      
+
       // Ông bà <-> Cháu
       'ong-noi': t('brain.reverse_rel.grandchild'),
       'Ông nội': t('brain.reverse_rel.grandchild'),
@@ -988,34 +986,34 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
       'Ông ngoại': t('brain.reverse_rel.grandchild'),
       'ba-ngoai': t('brain.reverse_rel.grandchild'),
       'Bà ngoại': t('brain.reverse_rel.grandchild'),
-      
+
       // Bạn bè, người yêu (đối xứng)
       'ban-than': t('brain.reverse_rel.best_friend'),
       'Bạn thân': t('brain.reverse_rel.best_friend'),
       'nguoi-yeu': t('brain.reverse_rel.lover'),
       'Người yêu': t('brain.reverse_rel.lover'),
     };
-    
+
     return reverseMap[relationshipType] || null;
   };
 
   // Lấy label gốc cho relationship
   const getOriginalLabel = (relationshipType) => {
     if (!relationshipType) return null;
-    
+
     const labelMap = {
-      'bo': t('brain.original_rel.father'),
-      'Bố': t('brain.original_rel.father'),
-      'me': t('brain.original_rel.mother'),
-      'Mẹ': t('brain.original_rel.mother'),
+      bo: t('brain.original_rel.father'),
+      Bố: t('brain.original_rel.father'),
+      me: t('brain.original_rel.mother'),
+      Mẹ: t('brain.original_rel.mother'),
       'con-trai': t('brain.original_rel.son'),
       'Con trai': t('brain.original_rel.son'),
       'con-gai': t('brain.original_rel.daughter'),
       'Con gái': t('brain.original_rel.daughter'),
-      'vo': t('brain.original_rel.wife'),
-      'Vợ': t('brain.original_rel.wife'),
-      'chong': t('brain.original_rel.husband'),
-      'Chồng': t('brain.original_rel.husband'),
+      vo: t('brain.original_rel.wife'),
+      Vợ: t('brain.original_rel.wife'),
+      chong: t('brain.original_rel.husband'),
+      Chồng: t('brain.original_rel.husband'),
       'anh-trai': t('brain.original_rel.older_brother'),
       'Anh trai': t('brain.original_rel.older_brother'),
       'chi-gai': t('brain.original_rel.older_sister'),
@@ -1037,13 +1035,13 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
       'nguoi-yeu': t('brain.original_rel.lover'),
       'Người yêu': t('brain.original_rel.lover'),
     };
-    
+
     return labelMap[relationshipType] || null;
   };
 
   // Xác định relationship label theo góc nhìn của caregiver
   const getRelationshipForCaregiver = (relationshipType, patientIsRequester) => {
-    // Nếu patient là requester (người đặt relationship) 
+    // Nếu patient là requester (người đặt relationship)
     // → caregiver nhìn patient theo relationship đảo ngược
     // Ví dụ: Patient đặt caregiver là "Bố" → caregiver nhìn patient là "Con"
     if (patientIsRequester) {
@@ -1054,18 +1052,18 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
     // Ví dụ: Caregiver đặt patient là "Bố" → caregiver nhìn patient là "Bố"
     return getOriginalLabel(relationshipType) || t('brain.relative_label');
   };
-  
+
   // 1. TẠO IN-APP NOTIFICATION cho mọi người thân (personalized)
   for (const caregiver of caregiversResult.rows) {
     const relationLabel = getRelationshipForCaregiver(
-      caregiver.relationship_type, 
+      caregiver.relationship_type,
       caregiver.patient_is_requester
     );
-    
+
     // Personalize message với mối quan hệ
     const personalizedTitle = title.replace(userName, relationLabel);
     const personalizedMessage = message.replace(new RegExp(userName, 'g'), relationLabel);
-    
+
     await pool.query(
       `INSERT INTO notifications (
         user_id, type, title, message, data, is_read, created_at
@@ -1081,15 +1079,15 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
           relationship: relationLabel,
           alertType: data?.alertType || 'general',
           severity: data?.severity || 'medium',
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         }),
-        false
+        false,
       ]
     );
   }
-  
+
   // 2. GỬI PUSH NOTIFICATION (personalized cho từng người)
-  const caregiverIds = caregiversResult.rows.map(r => r.caregiver_id);
+  const caregiverIds = caregiversResult.rows.map((r) => r.caregiver_id);
   const tokensResult = await pool.query(
     `SELECT id, push_token FROM users WHERE id = ANY($1) AND push_token IS NOT NULL`,
     [caregiverIds]
@@ -1097,17 +1095,17 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
 
   let pushNotified = false;
   for (const tokenRow of tokensResult.rows) {
-    const caregiver = caregiversResult.rows.find(c => c.caregiver_id === tokenRow.id);
+    const caregiver = caregiversResult.rows.find((c) => c.caregiver_id === tokenRow.id);
     if (!caregiver || !tokenRow.push_token) continue;
-    
+
     // Sử dụng cùng logic như in-app notification
     const relationLabel = getRelationshipForCaregiver(
-      caregiver.relationship_type, 
+      caregiver.relationship_type,
       caregiver.patient_is_requester
     );
     const personalizedTitle = title.replace(userName, relationLabel);
     const personalizedMessage = message.replace(new RegExp(userName, 'g'), relationLabel);
-    
+
     const response = await sendPushNotification(
       [tokenRow.push_token],
       personalizedTitle,
@@ -1118,39 +1116,41 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
         patientName: userName,
         relationship: relationLabel,
         type: 'health_alert',
-        screen: 'notifications'
+        screen: 'notifications',
       }
     );
     if (response.ok) pushNotified = true;
   }
-  
-  console.log(`[notifyCaregivers] Notified ${caregiverIds.length} caregivers (in-app + push: ${pushNotified})`);
+
+  console.log(
+    `[notifyCaregivers] Notified ${caregiverIds.length} caregivers (in-app + push: ${pushNotified})`
+  );
   console.log(`[notifyCaregivers] ALERT SENT - Risk: ${data.riskLevel}, Patient: ${userName}`);
-  
+
   return {
     notified: true,
     inAppCreated: caregiverIds.length,
     pushSent: pushNotified,
     status: 'NOTIFIED',
-    message: `Created ${caregiverIds.length} in-app notifications${pushNotified ? ' and sent push' : ''}.`
+    message: `Created ${caregiverIds.length} in-app notifications${pushNotified ? ' and sent push' : ''}.`,
   };
 };
 
 const buildDecisionPayload = (engineBOutput) => ({
   level: engineBOutput.decision_label,
-  code: engineBOutput.decision
+  code: engineBOutput.decision,
 });
 
 /**
  * Kiểm tra xem hôm nay user đã có logs chưa
  * Return { hasLogs: boolean, message: string }
  */
-const checkTodayLogs = async (pool, userId) => {
+const _checkTodayLogs = async (pool, userId) => {
   // Dùng timezone VN (UTC+7) để xác định "hôm nay"
   // hoặc dùng CURRENT_DATE của PostgreSQL (theo timezone server)
-  
+
   console.log(`[checkTodayLogs] Checking logs for userId: ${userId}`);
-  
+
   // Check glucose logs hôm nay
   const glucoseResult = await pool.query(
     `SELECT COUNT(*) FROM logs_common lc
@@ -1159,7 +1159,7 @@ const checkTodayLogs = async (pool, userId) => {
        AND DATE(lc.occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = CURRENT_DATE`,
     [userId]
   );
-  
+
   // Check blood pressure logs hôm nay
   const bpResult = await pool.query(
     `SELECT COUNT(*) FROM logs_common lc
@@ -1168,50 +1168,52 @@ const checkTodayLogs = async (pool, userId) => {
        AND DATE(lc.occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = CURRENT_DATE`,
     [userId]
   );
-  
+
   const hasGlucose = parseInt(glucoseResult.rows[0].count) > 0;
   const hasBP = parseInt(bpResult.rows[0].count) > 0;
-  
-  console.log(`[checkTodayLogs] userId ${userId} - Glucose logs today: ${glucoseResult.rows[0].count}, BP logs today: ${bpResult.rows[0].count}`);
+
+  console.log(
+    `[checkTodayLogs] userId ${userId} - Glucose logs today: ${glucoseResult.rows[0].count}, BP logs today: ${bpResult.rows[0].count}`
+  );
   console.log(`[checkTodayLogs] userId ${userId} - hasGlucose: ${hasGlucose}, hasBP: ${hasBP}`);
-  
+
   if (!hasGlucose && !hasBP) {
     console.log(`[checkTodayLogs] userId ${userId} - NO LOGS TODAY (neither glucose nor BP)`);
     return {
       hasLogs: false,
       message: t('brain.missing_both'),
-      missingTypes: [t('brain.missing_type_glucose'), t('brain.missing_type_bp')]
+      missingTypes: [t('brain.missing_type_glucose'), t('brain.missing_type_bp')],
     };
   }
-  
+
   if (!hasGlucose) {
     console.log(`[checkTodayLogs] userId ${userId} - MISSING GLUCOSE (has BP only)`);
     return {
       hasLogs: false,
       message: t('brain.missing_glucose'),
-      missingTypes: [t('brain.missing_type_glucose')]
+      missingTypes: [t('brain.missing_type_glucose')],
     };
   }
-  
+
   if (!hasBP) {
     console.log(`[checkTodayLogs] userId ${userId} - MISSING BP (has glucose only)`);
     return {
       hasLogs: false,
       message: t('brain.missing_bp'),
-      missingTypes: [t('brain.missing_type_bp')]
+      missingTypes: [t('brain.missing_type_bp')],
     };
   }
-  
+
   console.log(`[checkTodayLogs] userId ${userId} - HAS ALL LOGS OK (glucose + BP)`);
   return { hasLogs: true };
 };
 
 const getNextState = async (pool, userId) => {
   const now = new Date();
-  
+
   // KHÔNG chặn user vì thiếu logs - chỉ dùng logs làm tiêu chí đánh giá
   // Engine C sẽ gracefully degrade khi không có logs
-  
+
   const tracker = await getActiveTracker(pool, userId);
   const session = await ensureSession(pool, userId, null, tracker);
   const snapshot = await ensureSnapshot(pool, session.id, userId);
@@ -1219,67 +1221,67 @@ const getNextState = async (pool, userId) => {
   // ========== AI DYNAMIC MODE ==========
   if (AI_DYNAMIC_MODE) {
     console.log(`[getNextState] AI_DYNAMIC_MODE enabled for user ${userId}`);
-    
+
     // Kiểm tra nếu đang giữ prompt
     if (shouldHoldPrompt(tracker, now)) {
       return {
         should_ask: false,
         session_id: session.id,
         decision: { level: 'NONE', code: 0 },
-        notification_sent: false
+        notification_sent: false,
       };
     }
-    
+
     // Lấy conversation history và mood history
     const [conversationHistory, moodHistory] = await Promise.all([
       getConversationHistory(pool, session.id),
-      getMoodHistory48h(pool, userId)
+      getMoodHistory48h(pool, userId),
     ]);
-    
+
     console.log(`[getNextState] Conversation history length: ${conversationHistory.length}`);
-    
+
     // Gọi AI để sinh câu hỏi đầu tiên hoặc tiếp theo
     const aiResult = await startHealthCheck({
       userId,
       profile: snapshot?.onboarding,
       logsSummary: snapshot?.logs_summary,
-      moodHistory
+      moodHistory,
     });
-    
+
     if (aiResult.continue) {
       // AI muốn hỏi thêm
       const question = aiResult.question;
-      
+
       // Record question event với đầy đủ thông tin
       await recordEvent(pool, {
         sessionId: session.id,
         userId,
         eventType: 'question',
         questionId: question.id,
-        payload: { 
+        payload: {
           question_text: question.text,
           options: question.options,
           step: question.step,
-          generated_by_ai: question.generated_by_ai
-        }
+          generated_by_ai: question.generated_by_ai,
+        },
       });
-      
+
       await touchSession(pool, session.id, question.id);
-      
+
       if (tracker) {
         await updateTracker(pool, tracker.id, {
           last_prompt_at: now,
-          locked_session_id: session.id
+          locked_session_id: session.id,
         });
       } else {
         await createTracker(pool, userId, {
           current_path: 'GREEN', // Bắt đầu với GREEN, sẽ update dựa vào assessment
           locked_session_id: session.id,
           last_prompt_at: now,
-          status: 'ACTIVE'
+          status: 'ACTIVE',
         });
       }
-      
+
       return {
         should_ask: true,
         session_id: session.id,
@@ -1287,15 +1289,15 @@ const getNextState = async (pool, userId) => {
           id: question.id,
           type: question.type,
           text: question.text,
-          options: question.options
+          options: question.options,
         },
         question_flow: {
           step: question.step || 1,
           total: 7, // Max 7 câu
-          mode: 'dynamic' // Đánh dấu là dynamic mode
+          mode: 'dynamic', // Đánh dấu là dynamic mode
         },
         decision: { level: 'NONE', code: 0 },
-        notification_sent: false
+        notification_sent: false,
       };
     } else {
       // AI đã đánh giá xong (không có hội thoại nào)
@@ -1304,30 +1306,33 @@ const getNextState = async (pool, userId) => {
         should_ask: false,
         session_id: session.id,
         decision: { level: 'NONE', code: 0 },
-        notification_sent: false
+        notification_sent: false,
       };
     }
   }
-  
+
   // ========== LEGACY MODE (fallback) ==========
-  const [lastEvent, lastAnswer, lastEventAt] = await Promise.all([
+  const [_lastEvent, lastAnswer, lastEventAt] = await Promise.all([
     getLastEvent(pool, session.id),
     getLastAnswer(pool, session.id),
-    getLastBrainEventAt(pool, userId)
+    getLastBrainEventAt(pool, userId),
   ]);
 
   // Build question flow với context từ previous answers
   let pendingQuestion = null;
-  let questionFlow = {
+  const questionFlow = {
     step: 1,
     total: 1,
-    previousAnswers: {}
+    previousAnswers: {},
   };
 
   if (lastAnswer?.question_id === 'mood') {
     const moodValue = parseMoodValue(lastAnswer.payload);
-    questionFlow.previousAnswers.mood = { value: moodValue, text: MOOD_OPTIONS.find(o => o.value === moodValue)?.label };
-    
+    questionFlow.previousAnswers.mood = {
+      value: moodValue,
+      text: MOOD_OPTIONS.find((o) => o.value === moodValue)?.label,
+    };
+
     if (moodValue && moodValue !== 'OK') {
       const symptomAnswer = await getAnswerForQuestion(pool, session.id, 'symptom_severity');
       if (!symptomAnswer) {
@@ -1338,7 +1343,7 @@ const getNextState = async (pool, userId) => {
           logsSummary: snapshot?.logs_summary,
           profile: snapshot?.onboarding,
           mood: moodValue,
-          previousAnswer: questionFlow.previousAnswers.mood // Pass context
+          previousAnswer: questionFlow.previousAnswers.mood, // Pass context
         });
       }
     }
@@ -1356,7 +1361,7 @@ const getNextState = async (pool, userId) => {
       question = await generateMoodQuestion(pool, userId, 'MORNING', {
         logsSummary: snapshot?.logs_summary,
         profile: snapshot?.onboarding,
-        riskLevel: snapshot?.risk_persistence?.risk_tier
+        riskLevel: snapshot?.risk_persistence?.risk_tier,
       });
       shouldAsk = true;
     } else {
@@ -1366,7 +1371,7 @@ const getNextState = async (pool, userId) => {
         logsSummary: snapshot?.logs_summary,
         profile: snapshot?.onboarding,
         riskLevel: snapshot?.risk_persistence?.risk_tier,
-        previousMood: lastAnswer ? parseMoodValue(lastAnswer.payload) : null
+        previousMood: lastAnswer ? parseMoodValue(lastAnswer.payload) : null,
       });
       shouldAsk = true;
     }
@@ -1378,7 +1383,7 @@ const getNextState = async (pool, userId) => {
       userId,
       eventType: 'question',
       questionId: question.id,
-      payload: { phase_in_day: question.phase_in_day || null }
+      payload: { phase_in_day: question.phase_in_day || null },
     });
 
     await touchSession(pool, session.id, question.id);
@@ -1386,34 +1391,34 @@ const getNextState = async (pool, userId) => {
     if (tracker) {
       await updateTracker(pool, tracker.id, {
         last_prompt_at: now,
-        phase_in_day: question.phase_in_day || tracker.phase_in_day
+        phase_in_day: question.phase_in_day || tracker.phase_in_day,
       });
     }
   }
 
   const signal = await buildSignal(pool, userId, session.id);
-  
+
   // Sử dụng Engine C - đánh giá dựa trên chỉ số lâm sàng thực tế
   const clinicalRisk = assessClinicalRisk({
     glucose: snapshot?.logs_summary?.latest_glucose,
     bloodPressure: snapshot?.logs_summary?.latest_bp,
     mood: signal?.today_mood,
-    symptoms: [] // Sẽ lấy từ answers nếu có
+    symptoms: [], // Sẽ lấy từ answers nếu có
   });
-  
+
   // Giữ lại calculateRisk cũ để backward compatible
   const riskResult = {
     ...calculateRisk({
       profile: snapshot?.onboarding,
       persistence: snapshot?.risk_persistence,
-      signal
+      signal,
     }),
     // Override bằng kết quả từ Engine C
     risk_tier: clinicalRisk.risk_tier,
     risk_score: clinicalRisk.risk_score,
     notify_caregiver: clinicalRisk.notify_caregiver,
     clinical_assessment: clinicalRisk.clinical_assessment,
-    engine_version: 'C'
+    engine_version: 'C',
   };
 
   const { configVersion, params, shadowMode } = await loadActiveConfig(pool);
@@ -1422,7 +1427,7 @@ const getNextState = async (pool, userId) => {
     logsSummary: snapshot?.logs_summary,
     riskResult,
     signal,
-    lastEventAt
+    lastEventAt,
   });
   const engineBOutput = computePsV1(engineBInput, params);
 
@@ -1430,27 +1435,30 @@ const getNextState = async (pool, userId) => {
   // Không gửi ở đây vì user chưa trả lời xong
   let notificationSent = false;
   const shouldNotify = !shadowMode && engineBOutput.decision >= 2 && !pendingQuestion;
-  
+
   if (shouldNotify) {
     // Session đã hoàn thành (không còn pending question)
     // Lấy tên bệnh nhân - sẽ được replace bằng mối quan hệ trong notifyCaregivers
-    const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [userId]);
+    const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [
+      userId,
+    ]);
     const patientName = userResult.rows[0]?.full_name || t('brain.relative_fallback');
-    
+
     const notifyResult = await notifyCaregivers(pool, userId, {
-      title: engineBOutput.decision >= 3 
-        ? t('brain.emergency_title', 'vi', { name: patientName })
-        : t('brain.warning_title', 'vi', { name: patientName }),
+      title:
+        engineBOutput.decision >= 3
+          ? t('brain.emergency_title', 'vi', { name: patientName })
+          : t('brain.warning_title', 'vi', { name: patientName }),
       message:
         engineBOutput.decision >= 3
           ? t('brain.emergency_msg', 'vi', { name: patientName })
           : t('brain.warning_msg', 'vi', { name: patientName }),
-      data: { 
-        type: 'health_alert', 
+      data: {
+        type: 'health_alert',
         level: engineBOutput.decision_label,
         session_id: session.id,
-        timestamp: now.toISOString()
-      }
+        timestamp: now.toISOString(),
+      },
     });
     notificationSent = notifyResult.notified;
   }
@@ -1469,15 +1477,15 @@ const getNextState = async (pool, userId) => {
       decision_label: engineBOutput.decision_label,
       weights_used: engineBOutput.weights_used,
       thresholds_used: engineBOutput.thresholds_used,
-      points: engineBOutput.points
+      points: engineBOutput.points,
     },
     output: {
       decision: engineBOutput.decision,
-      decision_label: engineBOutput.decision_label
+      decision_label: engineBOutput.decision_label,
     },
     explainability_payload: engineBOutput.explainability,
     notification_sent: notificationSent,
-    channel: 'api/asinu-brain/next'
+    channel: 'api/asinu-brain/next',
   });
 
   return {
@@ -1487,21 +1495,21 @@ const getNextState = async (pool, userId) => {
     question_flow: questionFlow, // Thêm flow info cho UI
     decision: buildDecisionPayload(engineBOutput),
     explainability: engineBOutput.explainability,
-    notification_sent: notificationSent
+    notification_sent: notificationSent,
   };
 };
 
 const submitAnswer = async (pool, userId, payload) => {
   const session = await ensureSession(pool, userId, payload.session_id, null);
   const snapshot = await ensureSnapshot(pool, session.id, userId);
-  
+
   // ========== AI DYNAMIC MODE ==========
   if (AI_DYNAMIC_MODE) {
     console.log(`[submitAnswer] AI_DYNAMIC_MODE - Question: ${payload.question_id}`);
-    
+
     // Lấy label cho answer từ question nếu có
-    let answerLabel = payload.answer?.label || payload.answer?.option_id || payload.answer?.value;
-    
+    const answerLabel = payload.answer?.label || payload.answer?.option_id || payload.answer?.value;
+
     // Record answer event
     await recordEvent(pool, {
       sessionId: session.id,
@@ -1510,35 +1518,35 @@ const submitAnswer = async (pool, userId, payload) => {
       questionId: payload.question_id,
       payload: {
         ...payload.answer,
-        label: answerLabel
-      }
+        label: answerLabel,
+      },
     });
-    
+
     await markSessionAnswered(pool, session.id);
-    
+
     // Lấy conversation history và mood history
     const [conversationHistory, moodHistory] = await Promise.all([
       getConversationHistory(pool, session.id),
-      getMoodHistory48h(pool, userId)
+      getMoodHistory48h(pool, userId),
     ]);
-    
+
     console.log(`[submitAnswer] Processing answer, history length: ${conversationHistory.length}`);
-    
+
     // Gọi AI để quyết định bước tiếp theo
     const aiResult = await generateNextStepOrAssess({
       userId,
       conversationHistory,
       profile: snapshot?.onboarding,
       logsSummary: snapshot?.logs_summary,
-      moodHistory
+      moodHistory,
     });
-    
+
     console.log(`[submitAnswer] AI Result: continue=${aiResult.continue}`);
-    
+
     if (aiResult.continue) {
       // AI muốn hỏi thêm
       const question = aiResult.question;
-      
+
       // Record question event
       await recordEvent(pool, {
         sessionId: session.id,
@@ -1549,40 +1557,42 @@ const submitAnswer = async (pool, userId, payload) => {
           question_text: question.text,
           options: question.options,
           step: question.step,
-          generated_by_ai: question.generated_by_ai
-        }
+          generated_by_ai: question.generated_by_ai,
+        },
       });
-      
+
       await touchSession(pool, session.id, question.id);
-      
+
       return {
         session_id: session.id,
         question: {
           id: question.id,
           type: question.type,
           text: question.text,
-          options: question.options
+          options: question.options,
         },
         question_flow: {
           step: question.step || conversationHistory.length + 1,
           total: 7,
-          mode: 'dynamic'
-        }
+          mode: 'dynamic',
+        },
       };
     } else {
       // AI đã đánh giá xong
       const assessment = aiResult.assessment;
       console.log(`[submitAnswer] AI Assessment:`, assessment);
-      
+
       // Update risk persistence
       await upsertRiskPersistence(pool, userId, {
         risk_score: assessment.risk_score,
         risk_tier: assessment.risk_tier,
         last_updated_at: new Date(),
-        streak_ok_days: assessment.risk_tier === 'LOW' ? 
-          (snapshot?.risk_persistence?.streak_ok_days || 0) + 1 : 0
+        streak_ok_days:
+          assessment.risk_tier === 'LOW'
+            ? (snapshot?.risk_persistence?.streak_ok_days || 0) + 1
+            : 0,
       });
-      
+
       const outcome = {
         risk_tier: assessment.risk_tier,
         notify_caregiver: assessment.notify_caregiver,
@@ -1592,74 +1602,84 @@ const submitAnswer = async (pool, userId, payload) => {
           ai_reasoning: aiResult.reasoning,
           assessed_by: assessment.assessed_by || 'AI',
           total_questions: assessment.total_questions,
-          summary: assessment.summary
-        }
+          summary: assessment.summary,
+        },
       };
-      
+
       await recordOutcome(pool, { sessionId: session.id, userId, outcome });
-      
+
       // GỬI THÔNG BÁO nếu AI quyết định
       if (assessment.notify_caregiver) {
         console.log(`[submitAnswer] AI decided to SEND ALERT to caregiver`);
         console.log(`  - Risk: ${assessment.risk_tier}, Score: ${assessment.risk_score}`);
         console.log(`  - Reason: ${assessment.summary}`);
-        
+
         // Lấy tên bệnh nhân để notifyCaregivers replace bằng mối quan hệ
-        const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [userId]);
+        const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [
+          userId,
+        ]);
         const patientName = userResult.rows[0]?.full_name || t('brain.relative_fallback');
-        
+
         await notifyCaregivers(pool, userId, {
-          title: assessment.risk_tier === 'HIGH' 
-            ? t('brain.emergency_check_title', 'vi', { name: patientName })
-            : t('brain.warning_title', 'vi', { name: patientName }),
+          title:
+            assessment.risk_tier === 'HIGH'
+              ? t('brain.emergency_check_title', 'vi', { name: patientName })
+              : t('brain.warning_title', 'vi', { name: patientName }),
           message: `${patientName} ${assessment.summary || t('brain.need_health_check')}`,
           data: {
             riskLevel: assessment.risk_tier,
             sessionId: session.id,
-            severity: assessment.risk_tier === 'HIGH' ? 'critical' : 'medium'
-          }
+            severity: assessment.risk_tier === 'HIGH' ? 'critical' : 'medium',
+          },
         });
       }
-      
+
       // Update tracker
       const tracker = await getActiveTracker(pool, userId);
       const nextDue = computeNextDue(
-        assessment.risk_tier === 'HIGH' ? 'RED' : 
-        assessment.risk_tier === 'MEDIUM' ? 'YELLOW' : 'GREEN',
+        assessment.risk_tier === 'HIGH'
+          ? 'RED'
+          : assessment.risk_tier === 'MEDIUM'
+            ? 'YELLOW'
+            : 'GREEN',
         null,
         new Date()
       );
-      
+
       if (tracker) {
         await updateTracker(pool, tracker.id, {
-          current_path: assessment.risk_tier === 'HIGH' ? 'RED' : 
-                        assessment.risk_tier === 'MEDIUM' ? 'YELLOW' : 'GREEN',
+          current_path:
+            assessment.risk_tier === 'HIGH'
+              ? 'RED'
+              : assessment.risk_tier === 'MEDIUM'
+                ? 'YELLOW'
+                : 'GREEN',
           next_due_at: nextDue,
-          locked_session_id: session.id
+          locked_session_id: session.id,
         });
       }
-      
+
       await closeSession(pool, session.id, payload.question_id);
-      
+
       return {
         session_id: session.id,
         outcome: {
           risk_tier: assessment.risk_tier,
           outcome_text: assessment.outcome_text,
           recommended_action: assessment.recommended_action,
-          notify_caregiver: assessment.notify_caregiver
-        }
+          notify_caregiver: assessment.notify_caregiver,
+        },
       };
     }
   }
-  
+
   // ========== LEGACY MODE (fallback) ==========
   await recordEvent(pool, {
     sessionId: session.id,
     userId,
     eventType: 'answer',
     questionId: payload.question_id,
-    payload: payload.answer
+    payload: payload.answer,
   });
 
   await markSessionAnswered(pool, session.id);
@@ -1670,7 +1690,12 @@ const submitAnswer = async (pool, userId, payload) => {
   if (payload.question_id === 'mood') {
     const moodValue = parseMoodValue(payload.answer);
     const path = derivePathFromMood(moodValue);
-    const nextPhase = path === 'YELLOW' ? advanceYellowPhase(tracker?.phase_in_day) : path === 'GREEN' ? 'NIGHT' : null;
+    const nextPhase =
+      path === 'YELLOW'
+        ? advanceYellowPhase(tracker?.phase_in_day)
+        : path === 'GREEN'
+          ? 'NIGHT'
+          : null;
     const nextDue = computeNextDue(path, nextPhase, new Date());
 
     if (tracker) {
@@ -1679,7 +1704,7 @@ const submitAnswer = async (pool, userId, payload) => {
         phase_in_day: nextPhase,
         locked_session_id: session.id,
         next_due_at: nextDue,
-        status: 'ACTIVE'
+        status: 'ACTIVE',
       });
     } else {
       await createTracker(pool, userId, {
@@ -1688,14 +1713,14 @@ const submitAnswer = async (pool, userId, payload) => {
         locked_session_id: session.id,
         next_due_at: nextDue,
         last_prompt_at: new Date(),
-        status: 'ACTIVE'
+        status: 'ACTIVE',
       });
     }
 
     if (moodValue === 'OK') {
       // Lấy mood history để AI đánh giá
       const moodHistory = await getMoodHistory48h(pool, userId);
-      
+
       // SỬ DỤNG AI để đánh giá và quyết định
       const aiDecision = await aiAssessRiskAndDecision(pool, userId, {
         logsSummary: legacySnapshot?.logs_summary,
@@ -1703,16 +1728,16 @@ const submitAnswer = async (pool, userId, payload) => {
         moodHistory,
         currentMood: 'OK',
         symptoms: [],
-        symptomSeverity: null
+        symptomSeverity: null,
       });
-      
+
       console.log(`[submitAnswer] AI Decision for mood=OK:`, aiDecision);
-      
+
       await upsertRiskPersistence(pool, userId, {
         risk_score: aiDecision.risk_score,
         risk_tier: aiDecision.risk_tier,
         last_updated_at: new Date(),
-        streak_ok_days: (legacySnapshot?.risk_persistence?.streak_ok_days || 0) + 1
+        streak_ok_days: (legacySnapshot?.risk_persistence?.streak_ok_days || 0) + 1,
       });
 
       const outcome = {
@@ -1722,22 +1747,22 @@ const submitAnswer = async (pool, userId, payload) => {
         recommended_action: aiDecision.recommended_action,
         metadata: {
           ai_reasoning: aiDecision.ai_reasoning,
-          assessed_by: aiDecision.assessed_by
-        }
+          assessed_by: aiDecision.assessed_by,
+        },
       };
-      
+
       await recordOutcome(pool, { sessionId: session.id, userId, outcome });
-      
+
       // GỬI THÔNG BÁO cho người thân nếu AI quyết định
       if (aiDecision.notify_caregiver) {
         console.log(`[submitAnswer] AI decided to SEND ALERT to caregiver`);
         await notifyCaregivers(pool, userId, {
           title: t('brain.alert_need_check'),
           message: aiDecision.ai_reasoning,
-          data: { riskLevel: aiDecision.risk_tier, sessionId: session.id }
+          data: { riskLevel: aiDecision.risk_tier, sessionId: session.id },
         });
       }
-      
+
       await closeSession(pool, session.id, payload.question_id);
       return { session_id: session.id, outcome };
     }
@@ -1747,23 +1772,21 @@ const submitAnswer = async (pool, userId, payload) => {
     const symptomQuestion = await generateSymptomQuestion(pool, userId, {
       logsSummary: legacySnapshot?.logs_summary,
       profile: legacySnapshot?.onboarding,
-      mood: moodValue
+      mood: moodValue,
     });
     return { session_id: session.id, question: symptomQuestion };
   }
 
   if (payload.question_id === 'symptom_severity') {
     // Lấy symptoms từ answer
-    const symptomsList = Array.isArray(payload.answer?.option_id)
-      ? payload.answer.option_id
-      : [];
+    const symptomsList = Array.isArray(payload.answer?.option_id) ? payload.answer.option_id : [];
     const symptomSeverity = payload.answer?.value;
-    
+
     // Lấy mood history để AI đánh giá
     const moodHistory = await getMoodHistory48h(pool, userId);
     const lastMoodAnswer = await getAnswerForQuestion(pool, session.id, 'mood');
     const currentMood = parseMoodValue(lastMoodAnswer?.payload);
-    
+
     // SỬ DỤNG AI để đánh giá và quyết định
     const aiDecision = await aiAssessRiskAndDecision(pool, userId, {
       logsSummary: legacySnapshot?.logs_summary,
@@ -1771,19 +1794,21 @@ const submitAnswer = async (pool, userId, payload) => {
       moodHistory,
       currentMood,
       symptoms: symptomsList,
-      symptomSeverity
+      symptomSeverity,
     });
-    
+
     console.log(`[submitAnswer] AI Decision for symptoms:`, aiDecision);
     console.log(`  - Symptoms: ${symptomsList.join(', ')}`);
     console.log(`  - Severity: ${symptomSeverity}`);
-    console.log(`  - Mood history: ${moodHistory.tiredCount} tired, ${moodHistory.notOkCount} not_ok in 48h`);
-    
+    console.log(
+      `  - Mood history: ${moodHistory.tiredCount} tired, ${moodHistory.notOkCount} not_ok in 48h`
+    );
+
     await upsertRiskPersistence(pool, userId, {
       risk_score: aiDecision.risk_score,
       risk_tier: aiDecision.risk_tier,
       last_updated_at: new Date(),
-      streak_ok_days: 0 // Reset vì có symptoms
+      streak_ok_days: 0, // Reset vì có symptoms
     });
 
     const outcome = {
@@ -1795,41 +1820,42 @@ const submitAnswer = async (pool, userId, payload) => {
         ai_reasoning: aiDecision.ai_reasoning,
         assessed_by: aiDecision.assessed_by,
         symptoms: symptomsList,
-        severity: symptomSeverity
-      }
+        severity: symptomSeverity,
+      },
     };
-    
+
     await recordOutcome(pool, { sessionId: session.id, userId, outcome });
-    
+
     // GỬI THÔNG BÁO cho người thân nếu AI quyết định
     if (aiDecision.notify_caregiver) {
       console.log(`[submitAnswer] AI decided to SEND ALERT to caregiver`);
       console.log(`  - Risk: ${aiDecision.risk_tier}, Score: ${aiDecision.risk_score}`);
       console.log(`  - Reason: ${aiDecision.ai_reasoning}`);
-      
+
       await notifyCaregivers(pool, userId, {
         title: t('brain.emergency_health_alert'),
         message: t('brain.need_check_reason', 'vi', { reason: aiDecision.ai_reasoning }),
-        data: { 
-          riskLevel: aiDecision.risk_tier, 
+        data: {
+          riskLevel: aiDecision.risk_tier,
           sessionId: session.id,
           symptoms: symptomsList,
-          severity: symptomSeverity
-        }
+          severity: symptomSeverity,
+        },
       });
     }
-    
+
     await closeSession(pool, session.id, payload.question_id);
 
     if (tracker) {
-      const nextPhase = tracker.current_path === 'YELLOW'
-        ? advanceYellowPhase(tracker.phase_in_day)
-        : tracker.phase_in_day;
+      const nextPhase =
+        tracker.current_path === 'YELLOW'
+          ? advanceYellowPhase(tracker.phase_in_day)
+          : tracker.phase_in_day;
       const nextDue = computeNextDue(tracker.current_path, nextPhase, new Date());
       await updateTracker(pool, tracker.id, {
         phase_in_day: nextPhase,
         next_due_at: nextDue,
-        locked_session_id: session.id
+        locked_session_id: session.id,
       });
     }
 
@@ -1860,7 +1886,7 @@ const getTimeline = async (pool, userId) => {
        FROM asinu_brain_outcomes
        WHERE user_id = $1`,
       [userId]
-    )
+    ),
   ]);
 
   const combined = [...eventsResult.rows, ...outcomesResult.rows].sort(
@@ -1883,7 +1909,7 @@ const startEmergencyTriage = async (pool, userId) => {
     userId,
     conversationHistory: [],
     profile,
-    logsSummary
+    logsSummary,
   });
 
   await recordEvent(pool, {
@@ -1891,7 +1917,11 @@ const startEmergencyTriage = async (pool, userId) => {
     userId,
     eventType: 'question',
     questionId: result.question.id,
-    payload: { question_text: result.question.text, options: result.question.options, emergency: true }
+    payload: {
+      question_text: result.question.text,
+      options: result.question.options,
+      emergency: true,
+    },
   });
 
   return { session_id: session.id, question: result.question };
@@ -1913,7 +1943,7 @@ const submitEmergencyTriageAnswer = async (pool, userId, payload) => {
     userId,
     eventType: 'answer',
     questionId: question_id,
-    payload: { ...answer, emergency: true }
+    payload: { ...answer, emergency: true },
   });
   await markSessionAnswered(pool, session.id);
 
@@ -1924,7 +1954,7 @@ const submitEmergencyTriageAnswer = async (pool, userId, payload) => {
     userId,
     conversationHistory,
     profile: snapshot?.onboarding || null,
-    logsSummary: snapshot?.logs_summary || null
+    logsSummary: snapshot?.logs_summary || null,
   });
 
   if (result.continue) {
@@ -1933,7 +1963,11 @@ const submitEmergencyTriageAnswer = async (pool, userId, payload) => {
       userId,
       eventType: 'question',
       questionId: result.question.id,
-      payload: { question_text: result.question.text, options: result.question.options, emergency: true }
+      payload: {
+        question_text: result.question.text,
+        options: result.question.options,
+        emergency: true,
+      },
     });
     return { isDone: false, question: result.question };
   }
@@ -1943,18 +1977,21 @@ const submitEmergencyTriageAnswer = async (pool, userId, payload) => {
   let notifyStatus = null;
 
   if (assessment.notify_caregiver) {
-    const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [userId]);
+    const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [
+      userId,
+    ]);
     const userName = userResult.rows[0]?.full_name || userResult.rows[0]?.email || `User ${userId}`;
 
     notifyStatus = await notifyCaregivers(pool, userId, {
       title: assessment.alert_title || `[KHẨN] ${userName}`,
-      message: assessment.alert_message || `${userName} đang mệt đột ngột và cần được kiểm tra ngay.`,
+      message:
+        assessment.alert_message || `${userName} đang mệt đột ngột và cần được kiểm tra ngay.`,
       data: {
         alertType: 'emergency',
         emergencyType: 'SUDDEN_TIRED',
         severity: assessment.risk_tier === 'HIGH' ? 'critical' : 'high',
-        requiresImmediate: assessment.risk_tier === 'HIGH'
-      }
+        requiresImmediate: assessment.risk_tier === 'HIGH',
+      },
     });
   }
 
@@ -1966,8 +2003,8 @@ const submitEmergencyTriageAnswer = async (pool, userId, payload) => {
       notify_caregiver: assessment.notify_caregiver,
       outcome_text: assessment.outcome_text,
       recommended_action: assessment.recommended_action,
-      metadata: { emergency_type: 'SUDDEN_TIRED', questions_asked: assessment.total_questions }
-    }
+      metadata: { emergency_type: 'SUDDEN_TIRED', questions_asked: assessment.total_questions },
+    },
   });
   await closeSession(pool, session.id, null);
 
@@ -1978,8 +2015,8 @@ const submitEmergencyTriageAnswer = async (pool, userId, payload) => {
       notify_caregiver: assessment.notify_caregiver,
       outcome_text: assessment.outcome_text,
       recommended_action: assessment.recommended_action,
-      caregiver_notified: notifyStatus?.notified || false
-    }
+      caregiver_notified: notifyStatus?.notified || false,
+    },
   };
 };
 
@@ -1992,7 +2029,7 @@ const postEmergency = async (pool, userId, payload) => {
     userId,
     eventType: 'emergency',
     questionId: null,
-    payload
+    payload,
   });
 
   await createTracker(pool, userId, {
@@ -2001,23 +2038,22 @@ const postEmergency = async (pool, userId, payload) => {
     locked_session_id: session.id,
     next_due_at: null,
     last_prompt_at: now,
-    status: 'ACTIVE'
+    status: 'ACTIVE',
   });
 
   const notifyNeeded = payload.type === 'VERY_UNWELL' || payload.type === 'ALERT_CAREGIVER';
   let notifyStatus = { status: 'LOGGED', message: t('error.emergency_logged') };
 
   if (notifyNeeded) {
-    const userResult = await pool.query(
-      'SELECT full_name, email FROM users WHERE id = $1',
-      [userId]
-    );
+    const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [
+      userId,
+    ]);
     const userName = userResult.rows[0]?.full_name || userResult.rows[0]?.email || `User ${userId}`;
 
     // Lấy profile + logs để AI soạn tin cá nhân hóa
     const [profile, logsSummary] = await Promise.all([
       fetchOnboardingProfile(pool, userId),
-      fetchLogsSummary(pool, userId)
+      fetchLogsSummary(pool, userId),
     ]);
 
     const aiMessage = await craftPersonalizedEmergencyMessage({
@@ -2025,7 +2061,7 @@ const postEmergency = async (pool, userId, payload) => {
       emergencyType: payload.type,
       userName,
       profile,
-      logsSummary
+      logsSummary,
     });
 
     notifyStatus = await notifyCaregivers(pool, userId, {
@@ -2037,8 +2073,8 @@ const postEmergency = async (pool, userId, payload) => {
         severity: 'critical',
         requiresImmediate: true,
         patientName: userName,
-        patientUserId: userId
-      }
+        patientUserId: userId,
+      },
     });
   }
 
@@ -2047,7 +2083,7 @@ const postEmergency = async (pool, userId, payload) => {
     notify_caregiver: notifyNeeded,
     outcome_text: t('brain.sos_acknowledged'),
     recommended_action: t('brain.sos_stay_calm'),
-    metadata: { emergency_type: payload.type }
+    metadata: { emergency_type: payload.type },
   };
 
   await recordOutcome(pool, { sessionId: session.id, userId, outcome });
@@ -2066,5 +2102,5 @@ module.exports = {
   getTimeline,
   postEmergency,
   startEmergencyTriage,
-  submitEmergencyTriageAnswer
+  submitEmergencyTriageAnswer,
 };

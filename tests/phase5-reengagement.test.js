@@ -18,25 +18,51 @@ let totalFail = 0;
 const failures = [];
 
 function assert(condition, name) {
-  if (condition) { totalPass++; console.log(`  PASS ✓ ${name}`); }
-  else { totalFail++; failures.push(name); console.log(`  FAIL ✗ ${name}`); }
+  if (condition) {
+    totalPass++;
+    console.log(`  PASS ✓ ${name}`);
+  } else {
+    totalFail++;
+    failures.push(name);
+    console.log(`  FAIL ✗ ${name}`);
+  }
 }
 
 function get(path) {
   return new Promise((resolve, reject) => {
-    http.get('http://localhost:3000' + path, res => {
-      let d = ''; res.on('data', c => d += c);
-      res.on('end', () => { try { resolve({ s: res.statusCode, b: JSON.parse(d) }); } catch { resolve({ s: res.statusCode, b: d }); } });
-    }).on('error', reject);
+    http
+      .get('http://localhost:3000' + path, (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => {
+          try {
+            resolve({ s: res.statusCode, b: JSON.parse(d) });
+          } catch {
+            resolve({ s: res.statusCode, b: d });
+          }
+        });
+      })
+      .on('error', reject);
   });
 }
 
 function post(path) {
   return new Promise((resolve, reject) => {
-    const req = http.request('http://localhost:3000' + path, { method: 'POST', headers: { 'Content-Type': 'application/json' } }, res => {
-      let d = ''; res.on('data', c => d += c);
-      res.on('end', () => { try { resolve({ s: res.statusCode, b: JSON.parse(d) }); } catch { resolve({ s: res.statusCode, b: d }); } });
-    });
+    const req = http.request(
+      'http://localhost:3000' + path,
+      { method: 'POST', headers: { 'Content-Type': 'application/json' } },
+      (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => {
+          try {
+            resolve({ s: res.statusCode, b: JSON.parse(d) });
+          } catch {
+            resolve({ s: res.statusCode, b: d });
+          }
+        });
+      }
+    );
     req.on('error', reject);
     req.end();
   });
@@ -330,8 +356,10 @@ async function testLifecycleTransitions() {
 
     const m = await re.generateReengagementMessage(pool, 1, USER_YOUNG);
     if (m) {
-      assert(m.escalation.level === expectedLevel,
-        `6 days=${days} → ${m.escalation.level} (expected ${expectedLevel})`);
+      assert(
+        m.escalation.level === expectedLevel,
+        `6 days=${days} → ${m.escalation.level} (expected ${expectedLevel})`
+      );
     } else {
       assert(false, `6 days=${days} → no message generated`);
     }
@@ -366,7 +394,10 @@ async function testApi() {
   assert(e4.b.escalation.level === 'worried', '7.4 6 days → worried');
 
   const e5 = await get('/api/health/escalation-level/10');
-  assert(e5.b.escalation.level === 'urgent' && e5.b.escalation.includeFamily === true, '7.5 10 days → urgent + family');
+  assert(
+    e5.b.escalation.level === 'urgent' && e5.b.escalation.includeFamily === true,
+    '7.5 10 days → urgent + family'
+  );
 
   // 7.6 Invalid days
   const e6 = await get('/api/health/escalation-level/abc');
@@ -395,7 +426,10 @@ async function testApi() {
     get('/api/health/reengagement-preview/1'),
     get('/api/health/reengagement-preview/3'),
   ]);
-  assert(results.every(r => r.s === 200), '7.12 3 concurrent OK');
+  assert(
+    results.every((r) => r.s === 200),
+    '7.12 3 concurrent OK'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -405,7 +439,9 @@ async function testRunReengagement() {
   console.log('\n══════ SUITE 8: runReengagement ══════');
 
   // Cleanup any existing reengagement notifications today
-  await pool.query(`DELETE FROM notifications WHERE type = 'reengagement' AND DATE(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = DATE(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')`);
+  await pool.query(
+    `DELETE FROM notifications WHERE type = 'reengagement' AND DATE(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = DATE(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')`
+  );
 
   // 8.1 First run
   const r1 = await post('/api/health/reengagement/run');
@@ -414,7 +450,9 @@ async function testRunReengagement() {
   assert(typeof r1.b.result.skipped === 'number', '8.3 skipped is number');
   assert(typeof r1.b.result.careAlertsSent === 'number', '8.4 careAlertsSent is number');
 
-  console.log(`  INFO: First run sent=${r1.b.result.sent}, skipped=${r1.b.result.skipped}, total=${r1.b.result.total}`);
+  console.log(
+    `  INFO: First run sent=${r1.b.result.sent}, skipped=${r1.b.result.skipped}, total=${r1.b.result.total}`
+  );
 
   // 8.5 Second run → should be all skipped (dedup)
   const r2 = await post('/api/health/reengagement/run');
@@ -432,7 +470,7 @@ async function testRunReengagement() {
 
   // 8.9 Each notification has templateId in data
   if (notifs.length > 0) {
-    const hasTemplateId = notifs.every(n => n.data && (n.data.templateId || n.data.level));
+    const hasTemplateId = notifs.every((n) => n.data && (n.data.templateId || n.data.level));
     assert(hasTemplateId, '8.9 All notifications have templateId/level metadata');
   } else {
     assert(true, '8.9 (no notifications to check)');
@@ -446,15 +484,23 @@ async function testCareCircleAlert() {
   console.log('\n══════ SUITE 9: Care-Circle Alert ══════');
 
   // 9.1 Care-circle table exists
-  const { rows: tables } = await pool.query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'care_circle'`);
+  const { rows: tables } = await pool.query(
+    `SELECT 1 FROM information_schema.tables WHERE table_name = 'care_circle'`
+  );
   assert(tables.length === 1, '9.1 care_circle table exists');
 
   // 9.2 sendCareCircleAlert is exported
   assert(typeof re.sendCareCircleAlert === 'function', '9.2 sendCareCircleAlert exported');
 
   // 9.3 Care-circle template exists
-  assert(re.REENGAGEMENT_TEMPLATES.care_circle_alert !== undefined, '9.3 care_circle_alert template exists');
-  assert(re.REENGAGEMENT_TEMPLATES.care_circle_alert.id === 'reengage_care_circle', '9.4 templateId correct');
+  assert(
+    re.REENGAGEMENT_TEMPLATES.care_circle_alert !== undefined,
+    '9.3 care_circle_alert template exists'
+  );
+  assert(
+    re.REENGAGEMENT_TEMPLATES.care_circle_alert.id === 'reengage_care_circle',
+    '9.4 templateId correct'
+  );
 
   // 9.5 Mock care-circle: create a guardian relationship
   // Find any other user (not 1) to be guardian
@@ -470,7 +516,10 @@ async function testCareCircleAlert() {
     );
 
     // Cleanup any prior alert
-    await pool.query(`DELETE FROM notifications WHERE user_id = $1 AND type = 'caregiver_alert' AND data->>'reengage_patient_id' = '1'`, [guardianId]);
+    await pool.query(
+      `DELETE FROM notifications WHERE user_id = $1 AND type = 'caregiver_alert' AND data->>'reengage_patient_id' = '1'`,
+      [guardianId]
+    );
 
     // Mock sendAndSave
     let captured = null;
@@ -498,8 +547,13 @@ async function testCareCircleAlert() {
     assert(sent2 === 0, '9.11 Second call → 0 (dedup 3 days)');
 
     // Cleanup
-    await pool.query(`DELETE FROM notifications WHERE user_id = $1 AND type = 'caregiver_alert' AND data->>'reengage_patient_id' = '1'`, [guardianId]);
-    await pool.query(`DELETE FROM care_circle WHERE patient_id = 1 AND guardian_id = $1`, [guardianId]);
+    await pool.query(
+      `DELETE FROM notifications WHERE user_id = $1 AND type = 'caregiver_alert' AND data->>'reengage_patient_id' = '1'`,
+      [guardianId]
+    );
+    await pool.query(`DELETE FROM care_circle WHERE patient_id = 1 AND guardian_id = $1`, [
+      guardianId,
+    ]);
   } else {
     console.log('  SKIP: no other users to use as guardian');
     totalPass += 7;
@@ -517,24 +571,38 @@ async function testTemplateSafety() {
   // 10.1 All templates have id, vi, en
   let allComplete = true;
   for (const t of allTemplates) {
-    if (!t.id || !t.vi || !t.en) { allComplete = false; break; }
+    if (!t.id || !t.vi || !t.en) {
+      allComplete = false;
+      break;
+    }
   }
   assert(allComplete, '10.1 All templates have id, vi, en');
 
   // 10.2 All template IDs unique
-  const ids = allTemplates.map(t => t.id);
+  const ids = allTemplates.map((t) => t.id);
   assert(ids.length === new Set(ids).size, '10.2 All IDs unique');
 
   // 10.3 All template IDs start with reengage_
-  assert(allTemplates.every(t => t.id.startsWith('reengage_')), '10.3 All IDs start with "reengage_"');
+  assert(
+    allTemplates.every((t) => t.id.startsWith('reengage_')),
+    '10.3 All IDs start with "reengage_"'
+  );
 
   // 10.4 No banned medical advice keywords
-  const banned = ['ngừng thuốc', 'bỏ thuốc', 'tự điều trị', 'không cần đi khám', 'stop taking', 'stop medication'];
+  const banned = [
+    'ngừng thuốc',
+    'bỏ thuốc',
+    'tự điều trị',
+    'không cần đi khám',
+    'stop taking',
+    'stop medication',
+  ];
   let safe = true;
   for (const t of allTemplates) {
     for (const kw of banned) {
       if (t.vi.toLowerCase().includes(kw) || t.en.toLowerCase().includes(kw)) {
-        safe = false; break;
+        safe = false;
+        break;
       }
     }
   }
@@ -555,7 +623,7 @@ async function testTemplateSafety() {
   }
 
   // 10.7 Each escalation level has at least one template (not counting care_circle)
-  const levels = new Set(allTemplates.filter(t => t.level !== 'family').map(t => t.level));
+  const levels = new Set(allTemplates.filter((t) => t.level !== 'family').map((t) => t.level));
   assert(levels.has('gentle'), '10.7 Has gentle templates');
   assert(levels.has('concerned'), '10.8 Has concerned templates');
   assert(levels.has('worried'), '10.9 Has worried templates');
@@ -573,17 +641,35 @@ async function testCodeIntegration() {
 
   // 11.1 reengagement.service.js exports
   assert(typeof re.runReengagement === 'function', '11.1 runReengagement exported');
-  assert(typeof re.generateReengagementMessage === 'function', '11.2 generateReengagementMessage exported');
-  assert(typeof re.buildReengagementContext === 'function', '11.3 buildReengagementContext exported');
-  assert(typeof re.selectReengagementTemplate === 'function', '11.4 selectReengagementTemplate exported');
-  assert(typeof re.renderReengagementMessage === 'function', '11.5 renderReengagementMessage exported');
+  assert(
+    typeof re.generateReengagementMessage === 'function',
+    '11.2 generateReengagementMessage exported'
+  );
+  assert(
+    typeof re.buildReengagementContext === 'function',
+    '11.3 buildReengagementContext exported'
+  );
+  assert(
+    typeof re.selectReengagementTemplate === 'function',
+    '11.4 selectReengagementTemplate exported'
+  );
+  assert(
+    typeof re.renderReengagementMessage === 'function',
+    '11.5 renderReengagementMessage exported'
+  );
   assert(typeof re.getEscalationLevel === 'function', '11.6 getEscalationLevel exported');
   assert(typeof re.sendCareCircleAlert === 'function', '11.7 sendCareCircleAlert exported');
   assert(re.REENGAGEMENT_TEMPLATES !== undefined, '11.8 REENGAGEMENT_TEMPLATES exported');
 
   // 11.9 basic.notification imports reengagement
-  const bn = fs.readFileSync(path.join(__dirname, '..', 'src', 'services', 'notification', 'basic.notification.service.js'), 'utf8');
-  assert(bn.includes("require('./reengagement.service')"), '11.9 basic.notification imports reengagement');
+  const bn = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'services', 'notification', 'basic.notification.service.js'),
+    'utf8'
+  );
+  assert(
+    bn.includes("require('./reengagement.service')"),
+    '11.9 basic.notification imports reengagement'
+  );
 
   // 11.10 runBasicNotifications calls runReengagement
   assert(bn.includes('runReengagement(pool, sendAndSave)'), '11.10 Cron calls runReengagement');
@@ -592,7 +678,10 @@ async function testCodeIntegration() {
   assert(bn.includes("reengagement: 'medium'"), '11.11 reengagement in TYPE_PRIORITY');
 
   // 11.12 health.routes has endpoints
-  const hr = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'health.routes.js'), 'utf8');
+  const hr = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'routes', 'health.routes.js'),
+    'utf8'
+  );
   assert(hr.includes('reengagement-preview'), '11.12 routes has reengagement-preview');
   assert(hr.includes('escalation-level'), '11.13 routes has escalation-level');
   assert(hr.includes('reengagement/run'), '11.14 routes has reengagement/run');
@@ -662,7 +751,9 @@ async function run() {
   await testDefensive();
 
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log(`║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`);
+  console.log(
+    `║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`
+  );
   if (totalFail > 0) {
     console.log('║  FAILURES:                                       ║');
     for (const f of failures) console.log(`║  - ${f.substring(0, 46).padEnd(46)} ║`);
@@ -673,4 +764,8 @@ async function run() {
   process.exit(totalFail > 0 ? 1 : 0);
 }
 
-run().catch(err => { console.error('CRASHED:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASHED:', err);
+  pool.end();
+  process.exit(1);
+});

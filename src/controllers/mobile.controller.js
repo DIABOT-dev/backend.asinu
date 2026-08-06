@@ -30,7 +30,9 @@ async function createMobileLog(pool, req, res) {
 
   const validation = validateMobileLog(req.body || {});
   if (!validation.ok) {
-    return res.status(400).json({ ok: false, error: validation.error, details: validation.details });
+    return res
+      .status(400)
+      .json({ ok: false, error: validation.error, details: validation.details });
   }
 
   const result = await mobileService.createLog(pool, req.user.id, validation.value);
@@ -46,7 +48,7 @@ async function getTodayLogs(pool, req, res) {
   res.set('Cache-Control', 'no-store');
 
   const result = await mobileService.getTodayLogs(pool, req.user.id, {
-    type: req.query.type
+    type: req.query.type,
   });
 
   if (!result.ok) {
@@ -61,7 +63,7 @@ async function getRecentLogs(pool, req, res) {
 
   const result = await mobileService.getRecentLogs(pool, req.user.id, {
     type: req.query.type,
-    limit: req.query.limit
+    limit: req.query.limit,
   });
 
   if (!result.ok) {

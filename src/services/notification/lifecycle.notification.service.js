@@ -40,7 +40,10 @@ async function runSubscriptionExpiringSoon(pool) {
   let sent = 0;
   for (const u of rows) {
     const lang = u.lang;
-    const days = Math.max(1, Math.ceil((new Date(u.subscription_expires_at) - new Date()) / (24 * 60 * 60 * 1000)));
+    const days = Math.max(
+      1,
+      Math.ceil((new Date(u.subscription_expires_at) - new Date()) / (24 * 60 * 60 * 1000))
+    );
     const expiresAt = new Date(u.subscription_expires_at).toISOString();
 
     // The notification scheduler is also the source of truth for the CRM
@@ -55,11 +58,13 @@ async function runSubscriptionExpiringSoon(pool) {
         status: 'expiring',
         expires_at: expiresAt,
       },
-      { event_id: `subscription.expiring:${u.id}:${expiresAt}` },
+      { event_id: `subscription.expiring:${u.id}:${expiresAt}` }
     );
 
     const ok = await sendAndSave(
-      pool, { id: u.id, push_token: u.push_token }, 'subscription_expiring_soon',
+      pool,
+      { id: u.id, push_token: u.push_token },
+      'subscription_expiring_soon',
       t('push.subscription_expiring_title', lang),
       t('push.subscription_expiring_body', lang, { days }),
       { expiresAt, days: String(days) }
@@ -94,7 +99,9 @@ async function runSubscriptionExpired(pool) {
   for (const u of rows) {
     const lang = u.lang;
     const ok = await sendAndSave(
-      pool, { id: u.id, push_token: u.push_token }, 'subscription_expired',
+      pool,
+      { id: u.id, push_token: u.push_token },
+      'subscription_expired',
       t('push.subscription_expired_title', lang),
       t('push.subscription_expired_body', lang),
       {}
@@ -102,12 +109,17 @@ async function runSubscriptionExpired(pool) {
     const expiresAt = u.subscription_expires_at
       ? new Date(u.subscription_expires_at).toISOString()
       : null;
-    emitCrmEventAsync(pool, 'subscription.expired', {
-      user_id: String(u.id),
-      state: 'churn',
-      status: 'expired',
-      expires_at: expiresAt,
-    }, { event_id: `subscription.expired:${u.id}:${expiresAt ?? 'unknown'}` });
+    emitCrmEventAsync(
+      pool,
+      'subscription.expired',
+      {
+        user_id: String(u.id),
+        state: 'churn',
+        status: 'expired',
+        expires_at: expiresAt,
+      },
+      { event_id: `subscription.expired:${u.id}:${expiresAt ?? 'unknown'}` }
+    );
     if (ok) sent++;
   }
   return { checked: rows.length, sent };
@@ -144,7 +156,9 @@ async function runWeeklyWellnessSummary(pool) {
     const lang = u.lang;
     const shortName = (u.name || '').split(/\s+/).pop() || u.name || '';
     const ok = await sendAndSave(
-      pool, { id: u.id, push_token: u.push_token }, 'weekly_wellness_summary',
+      pool,
+      { id: u.id, push_token: u.push_token },
+      'weekly_wellness_summary',
       t('push.weekly_wellness_title', lang),
       t('push.weekly_wellness_body', lang, { name: shortName, count: u.log_count }),
       { weekLogs: String(u.log_count) }
@@ -177,7 +191,9 @@ async function runProfileIncomplete(pool) {
   for (const u of rows) {
     const lang = u.lang;
     const ok = await sendAndSave(
-      pool, { id: u.id, push_token: u.push_token }, 'profile_incomplete',
+      pool,
+      { id: u.id, push_token: u.push_token },
+      'profile_incomplete',
       t('push.profile_incomplete_title', lang),
       t('push.profile_incomplete_body', lang),
       {}
@@ -192,13 +208,15 @@ async function runProfileIncomplete(pool) {
  */
 async function runDailyLifecycleNotifications(pool, { dayOfWeek = null } = {}) {
   const results = {
-    expiringSoon: await runSubscriptionExpiringSoon(pool).catch(e => ({ error: e.message })),
-    expired: await runSubscriptionExpired(pool).catch(e => ({ error: e.message })),
-    profileIncomplete: await runProfileIncomplete(pool).catch(e => ({ error: e.message })),
+    expiringSoon: await runSubscriptionExpiringSoon(pool).catch((e) => ({ error: e.message })),
+    expired: await runSubscriptionExpired(pool).catch((e) => ({ error: e.message })),
+    profileIncomplete: await runProfileIncomplete(pool).catch((e) => ({ error: e.message })),
   };
   // Weekly summary only on Sunday (dayOfWeek=0)
   if (dayOfWeek === 0) {
-    results.weeklyWellness = await runWeeklyWellnessSummary(pool).catch(e => ({ error: e.message }));
+    results.weeklyWellness = await runWeeklyWellnessSummary(pool).catch((e) => ({
+      error: e.message,
+    }));
   }
   return results;
 }

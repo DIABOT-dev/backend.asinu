@@ -1,7 +1,11 @@
 require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
 
 const { Pool } = require('pg');
-const { dispatchPendingNotifications, ensureUserFeed, runHealthFeedCycle } = require('../src/services/health_feed/service');
+const {
+  dispatchPendingNotifications,
+  ensureUserFeed,
+  runHealthFeedCycle,
+} = require('../src/services/health_feed/service');
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -100,7 +104,9 @@ async function ensureUserContext(pool, userId) {
 }
 
 async function resetHealthFeedState(pool, userId) {
-  await pool.query(`DELETE FROM notifications WHERE user_id = $1 AND type = 'health_feed'`, [userId]);
+  await pool.query(`DELETE FROM notifications WHERE user_id = $1 AND type = 'health_feed'`, [
+    userId,
+  ]);
   await pool.query(`DELETE FROM health_feed_notification_jobs WHERE user_id = $1`, [userId]);
   await pool.query(`DELETE FROM health_feed_feed_items WHERE user_id = $1`, [userId]);
   await pool.query(`DELETE FROM health_feed_user_flow WHERE user_id = $1`, [userId]);
@@ -228,35 +234,41 @@ async function main() {
     const dispatch = await dispatchPendingNotifications(pool);
     const summary = await getSummary(pool, userId);
 
-    console.log(JSON.stringify({
-      ok: true,
-      user,
-      reset,
-      cycle,
-      dispatch,
-      feedCount: feed.feed.length,
-      notificationCount: summary.notifications.length,
-      jobCount: summary.jobs.length,
-      feedItems: summary.feedItems.map((item) => ({
-        id: item.id,
-        title: item.title,
-        actionTarget: item.action_target,
-        createdAt: item.created_at,
-      })),
-      notifications: summary.notifications.map((item) => ({
-        id: item.id,
-        title: item.title,
-        priority: item.priority,
-        data: item.data,
-        createdAt: item.created_at,
-      })),
-      jobs: summary.jobs.map((item) => ({
-        id: item.id,
-        templateId: item.template_id,
-        status: item.status,
-        dispatchedAt: item.dispatched_at,
-      })),
-    }, null, 2));
+    console.log(
+      JSON.stringify(
+        {
+          ok: true,
+          user,
+          reset,
+          cycle,
+          dispatch,
+          feedCount: feed.feed.length,
+          notificationCount: summary.notifications.length,
+          jobCount: summary.jobs.length,
+          feedItems: summary.feedItems.map((item) => ({
+            id: item.id,
+            title: item.title,
+            actionTarget: item.action_target,
+            createdAt: item.created_at,
+          })),
+          notifications: summary.notifications.map((item) => ({
+            id: item.id,
+            title: item.title,
+            priority: item.priority,
+            data: item.data,
+            createdAt: item.created_at,
+          })),
+          jobs: summary.jobs.map((item) => ({
+            id: item.id,
+            templateId: item.template_id,
+            status: item.status,
+            dispatchedAt: item.dispatched_at,
+          })),
+        },
+        null,
+        2
+      )
+    );
   } finally {
     await pool.end();
   }

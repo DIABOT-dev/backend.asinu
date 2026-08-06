@@ -22,12 +22,13 @@ const {
  * be throwing away legit traffic.
  */
 const verifyLimiter = rateLimit({
-  windowMs: 60 * 1000,    // 1 minute
-  max: 20,                // 20 verify attempts per minute per user
+  windowMs: 60 * 1000, // 1 minute
+  max: 20, // 20 verify attempts per minute per user
   standardHeaders: true,
   legacyHeaders: false,
   message: { ok: false, code: 'RATE_LIMITED', error: 'Too many verification attempts; slow down.' },
-  keyGenerator: (req) => (req.user && req.user.id ? `iap-verify:user:${req.user.id}` : `iap-verify:ip:${req.ip}`),
+  keyGenerator: (req) =>
+    req.user && req.user.id ? `iap-verify:user:${req.user.id}` : `iap-verify:ip:${req.ip}`,
 });
 
 function iapRoutes(pool) {

@@ -1,4 +1,7 @@
-const { buildCaregiverStatus, userHasActiveCaregiver } = require('../../src/services/care-circle/caregiver-status.service');
+const {
+  buildCaregiverStatus,
+  userHasActiveCaregiver,
+} = require('../../src/services/care-circle/caregiver-status.service');
 
 function mockPool(rows) {
   return { query: jest.fn().mockResolvedValue({ rows }) };

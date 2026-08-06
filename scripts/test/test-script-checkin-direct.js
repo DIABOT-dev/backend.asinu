@@ -12,10 +12,18 @@ const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
 // Import all modules
-const { createClustersFromOnboarding, getUserScript, getScript } = require('../src/services/checkin/script.service');
+const {
+  createClustersFromOnboarding,
+  getUserScript,
+  getScript,
+} = require('../src/services/checkin/script.service');
 const { getNextQuestion, validateScript } = require('../src/services/checkin/script-runner');
 const { evaluateScript, evaluateFollowUp } = require('../src/services/checkin/scoring-engine');
-const { getFallbackScriptData, logFallback, matchCluster } = require('../src/services/checkin/fallback.service');
+const {
+  getFallbackScriptData,
+  logFallback,
+  matchCluster,
+} = require('../src/services/checkin/fallback.service');
 const { detectEmergency } = require('../src/services/checkin/emergency-detector');
 
 const TEST_USER_ID = 4; // Chú Hùng
@@ -51,7 +59,10 @@ async function run() {
 
   assert(clusters.length === 3, `Created ${clusters.length} clusters (expected 3)`);
   assert(clusters[0].cluster_key === 'fatigue', `Cluster 1: ${clusters[0].cluster_key} = fatigue`);
-  assert(clusters[1].cluster_key === 'dizziness', `Cluster 2: ${clusters[1].cluster_key} = dizziness`);
+  assert(
+    clusters[1].cluster_key === 'dizziness',
+    `Cluster 2: ${clusters[1].cluster_key} = dizziness`
+  );
   assert(clusters[0].source === 'onboarding', 'Source = onboarding');
   assert(clusters[0].priority > clusters[2].priority, 'First symptom has higher priority');
   console.log('');
@@ -63,15 +74,23 @@ async function run() {
     [TEST_USER_ID]
   );
 
-  assert(scripts.length >= 3, `${scripts.length} scripts created (>= 3 expected: initial + followup)`);
+  assert(
+    scripts.length >= 3,
+    `${scripts.length} scripts created (>= 3 expected: initial + followup)`
+  );
 
-  const dizzinessScript = scripts.find(s => s.cluster_key === 'dizziness' && s.script_type === 'initial');
+  const dizzinessScript = scripts.find(
+    (s) => s.cluster_key === 'dizziness' && s.script_type === 'initial'
+  );
   assert(!!dizzinessScript, 'Dizziness initial script exists');
 
   if (dizzinessScript) {
     const sd = dizzinessScript.script_data;
     assert(sd.questions && sd.questions.length > 0, `Has ${sd.questions.length} questions`);
-    assert(sd.scoring_rules && sd.scoring_rules.length > 0, `Has ${sd.scoring_rules.length} scoring rules`);
+    assert(
+      sd.scoring_rules && sd.scoring_rules.length > 0,
+      `Has ${sd.scoring_rules.length} scoring rules`
+    );
     assert(sd.conclusion_templates && sd.conclusion_templates.low, 'Has conclusion templates');
     assert(sd.followup_questions && sd.followup_questions.length > 0, 'Has follow-up questions');
     assert(sd.fallback_questions && sd.fallback_questions.length > 0, 'Has fallback questions');
@@ -87,7 +106,10 @@ async function run() {
   const userScript = await getUserScript(pool, TEST_USER_ID);
 
   assert(userScript !== null, 'getUserScript returned data');
-  assert(userScript.greeting && userScript.greeting.includes('Hùng'), `Greeting: "${userScript.greeting}"`);
+  assert(
+    userScript.greeting && userScript.greeting.includes('Hùng'),
+    `Greeting: "${userScript.greeting}"`
+  );
   assert(userScript.initial_options.length === 3, '3 initial options (ổn/mệt/rất mệt)');
   assert(userScript.clusters.length === 3, `${userScript.clusters.length} cluster entries`);
   assert(userScript.profile.medical_conditions.length > 0, 'Profile has medical conditions');
@@ -105,7 +127,7 @@ async function run() {
   };
 
   // Step 1: Get first question
-  let answers = [];
+  const answers = [];
   let step = getNextQuestion(scriptData, answers, { sessionType: 'initial', profile });
 
   assert(!step.isDone, 'Step 1: not done yet');
@@ -113,7 +135,9 @@ async function run() {
   assert(step.question.text.length > 0, `Step 1: "${step.question.text.substring(0, 50)}..."`);
   assert(step.currentStep === 0, 'currentStep = 0');
   console.log(`  📝 Q: "${step.question.text}"`);
-  console.log(`     Type: ${step.question.type}, Options: ${JSON.stringify(step.question.options || []).substring(0, 80)}`);
+  console.log(
+    `     Type: ${step.question.type}, Options: ${JSON.stringify(step.question.options || []).substring(0, 80)}`
+  );
 
   // Answer step 1
   const firstQType = step.question.type;
@@ -175,20 +199,33 @@ async function run() {
     assert(typeof c.followUpHours === 'number', `Follow-up: ${c.followUpHours}h`);
     assert(typeof c.needsDoctor === 'boolean', `Needs doctor: ${c.needsDoctor}`);
     assert(c.summary && c.summary.length > 0, `Summary: "${c.summary.substring(0, 60)}..."`);
-    assert(c.recommendation && c.recommendation.length > 0, `Recommendation: "${c.recommendation.substring(0, 60)}..."`);
-    assert(c.closeMessage && c.closeMessage.length > 0, `Close msg: "${c.closeMessage.substring(0, 60)}..."`);
+    assert(
+      c.recommendation && c.recommendation.length > 0,
+      `Recommendation: "${c.recommendation.substring(0, 60)}..."`
+    );
+    assert(
+      c.closeMessage && c.closeMessage.length > 0,
+      `Close msg: "${c.closeMessage.substring(0, 60)}..."`
+    );
     console.log('');
-    console.log(`  📊 RESULT: severity=${c.severity}, followUp=${c.followUpHours}h, doctor=${c.needsDoctor}, familyAlert=${c.needsFamilyAlert}`);
+    console.log(
+      `  📊 RESULT: severity=${c.severity}, followUp=${c.followUpHours}h, doctor=${c.needsDoctor}, familyAlert=${c.needsFamilyAlert}`
+    );
   }
   console.log('');
 
   // ─── Test 5: Scoring Engine — HIGH severity ──────────────────
   console.log('🔥 Test 5: Scoring Engine — test HIGH severity');
   const highAnswers = [
-    { question_id: scriptData.questions[0].id, answer: scriptData.questions[0].type === 'slider' ? 8 : 'nặng, phải nằm nghỉ' },
+    {
+      question_id: scriptData.questions[0].id,
+      answer: scriptData.questions[0].type === 'slider' ? 8 : 'nặng, phải nằm nghỉ',
+    },
   ];
   // Add a progression = worse answer if exists
-  const progressionQ = scriptData.questions.find(q => q.options && q.options.includes('có vẻ nặng hơn'));
+  const progressionQ = scriptData.questions.find(
+    (q) => q.options && q.options.includes('có vẻ nặng hơn')
+  );
   if (progressionQ) {
     highAnswers.push({ question_id: progressionQ.id, answer: 'có vẻ nặng hơn' });
   }
@@ -197,13 +234,18 @@ async function run() {
   assert(highResult.severity === 'high', `HIGH severity: ${highResult.severity}`);
   assert(highResult.needsDoctor === true, `Needs doctor: ${highResult.needsDoctor}`);
   assert(highResult.followUpHours <= 1, `Follow-up <= 1h: ${highResult.followUpHours}h`);
-  console.log(`  📊 severity=${highResult.severity}, doctor=${highResult.needsDoctor}, familyAlert=${highResult.needsFamilyAlert}`);
+  console.log(
+    `  📊 severity=${highResult.severity}, doctor=${highResult.needsDoctor}, familyAlert=${highResult.needsFamilyAlert}`
+  );
   console.log('');
 
   // ─── Test 6: Scoring Engine — LOW severity ───────────────────
   console.log('😌 Test 6: Scoring Engine — test LOW severity');
   const lowAnswers = [
-    { question_id: scriptData.questions[0].id, answer: scriptData.questions[0].type === 'slider' ? 2 : 'nhẹ, vẫn sinh hoạt được' },
+    {
+      question_id: scriptData.questions[0].id,
+      answer: scriptData.questions[0].type === 'slider' ? 2 : 'nhẹ, vẫn sinh hoạt được',
+    },
   ];
   const lowResult = evaluateScript(scriptData, lowAnswers, { medical_conditions: [] });
 
@@ -215,8 +257,10 @@ async function run() {
   // ─── Test 7: Condition modifier (tiểu đường bump) ────────────
   console.log('⚕️  Test 7: Condition modifier — tiểu đường bumps severity');
   // Find progression question in this script
-  const modProgQ = scriptData.questions.find(q => q.options && q.options.includes('có vẻ nặng hơn'));
-  const modSliderQ = scriptData.questions.find(q => q.type === 'slider');
+  const modProgQ = scriptData.questions.find(
+    (q) => q.options && q.options.includes('có vẻ nặng hơn')
+  );
+  const modSliderQ = scriptData.questions.find((q) => q.type === 'slider');
   let diabetesAnswers;
   if (modSliderQ) {
     // Script has slider → use slider value 5
@@ -226,30 +270,49 @@ async function run() {
     diabetesAnswers = [{ question_id: modProgQ.id, answer: 'vẫn như cũ' }];
   } else {
     // No suitable question → test with generic answers
-    diabetesAnswers = [{ question_id: scriptData.questions[0].id, answer: scriptData.questions[0].options?.[0] || 'test' }];
+    diabetesAnswers = [
+      {
+        question_id: scriptData.questions[0].id,
+        answer: scriptData.questions[0].options?.[0] || 'test',
+      },
+    ];
   }
   const diabetesProfile = { ...profile, medical_conditions: ['Tiểu đường'], age: 68 };
   const diabetesResult = evaluateScript(scriptData, diabetesAnswers, diabetesProfile);
 
   // With diabetes + elderly + conditions → should bump severity
-  const diabetesBumped = diabetesResult.severity !== 'low' || diabetesResult.modifiersApplied.length > 0;
-  assert(diabetesBumped, `Diabetes modifier → ${diabetesResult.severity} (modifiers: ${diabetesResult.modifiersApplied.join(', ') || 'elderly+conditions'})`);
-  console.log(`  📊 severity=${diabetesResult.severity}, modifiers=[${diabetesResult.modifiersApplied}]`);
+  const diabetesBumped =
+    diabetesResult.severity !== 'low' || diabetesResult.modifiersApplied.length > 0;
+  assert(
+    diabetesBumped,
+    `Diabetes modifier → ${diabetesResult.severity} (modifiers: ${diabetesResult.modifiersApplied.join(', ') || 'elderly+conditions'})`
+  );
+  console.log(
+    `  📊 severity=${diabetesResult.severity}, modifiers=[${diabetesResult.modifiersApplied}]`
+  );
   console.log('');
 
   // ─── Test 8: Follow-up evaluation ────────────────────────────
   console.log('🔄 Test 8: Follow-up scoring');
-  const fuBetter = evaluateFollowUp(scriptData, [
-    { question_id: 'fu1', answer: 'Đỡ hơn' },
-    { question_id: 'fu2', answer: 'Không' },
-  ], 'medium');
+  const fuBetter = evaluateFollowUp(
+    scriptData,
+    [
+      { question_id: 'fu1', answer: 'Đỡ hơn' },
+      { question_id: 'fu2', answer: 'Không' },
+    ],
+    'medium'
+  );
   assert(fuBetter.severity === 'low', `Better → low: ${fuBetter.severity}`);
   assert(fuBetter.action === 'monitoring', `Action: ${fuBetter.action}`);
 
-  const fuWorse = evaluateFollowUp(scriptData, [
-    { question_id: 'fu1', answer: 'Nặng hơn' },
-    { question_id: 'fu2', answer: 'Có' },
-  ], 'medium');
+  const fuWorse = evaluateFollowUp(
+    scriptData,
+    [
+      { question_id: 'fu1', answer: 'Nặng hơn' },
+      { question_id: 'fu2', answer: 'Có' },
+    ],
+    'medium'
+  );
   assert(fuWorse.severity === 'high', `Worse → high: ${fuWorse.severity}`);
   assert(fuWorse.action === 'escalate', `Action: ${fuWorse.action}`);
   assert(fuWorse.needsDoctor === true, 'Needs doctor when worse');
@@ -259,11 +322,17 @@ async function run() {
   console.log('❓ Test 9: Fallback — triệu chứng lạ');
   const fbScript = getFallbackScriptData();
   assert(fbScript.questions.length === 3, `Fallback has ${fbScript.questions.length} questions`);
-  assert(fbScript.scoring_rules.length >= 3, `Fallback has ${fbScript.scoring_rules.length} scoring rules`);
+  assert(
+    fbScript.scoring_rules.length >= 3,
+    `Fallback has ${fbScript.scoring_rules.length} scoring rules`
+  );
 
   // Test cluster matching
   const match1 = await matchCluster(pool, TEST_USER_ID, 'chóng mặt buổi sáng');
-  assert(match1.matched === true, `"chóng mặt buổi sáng" → matched cluster: ${match1.cluster?.cluster_key}`);
+  assert(
+    match1.matched === true,
+    `"chóng mặt buổi sáng" → matched cluster: ${match1.cluster?.cluster_key}`
+  );
 
   const match2 = await matchCluster(pool, TEST_USER_ID, 'đau sau tai');
   assert(match2.matched === false, '"đau sau tai" → no match (fallback needed)');
@@ -297,8 +366,11 @@ async function run() {
              TRUE, $6, $7, $8, $9, $10, NOW())
      RETURNING *`,
     [
-      TEST_USER_ID, dizzinessScript.id, 'dizziness',
-      JSON.stringify(answers), answers.length,
+      TEST_USER_ID,
+      dizzinessScript.id,
+      'dizziness',
+      JSON.stringify(answers),
+      answers.length,
       step.conclusion?.severity || 'medium',
       step.conclusion?.needsDoctor || false,
       step.conclusion?.followUpHours || 3,
@@ -323,10 +395,22 @@ async function run() {
   }
 
   console.log('\n📊 DB State:');
-  const { rows: clusterCount } = await pool.query('SELECT COUNT(*) FROM problem_clusters WHERE user_id = $1', [TEST_USER_ID]);
-  const { rows: scriptCount } = await pool.query('SELECT COUNT(*) FROM triage_scripts WHERE user_id = $1 AND is_active = TRUE', [TEST_USER_ID]);
-  const { rows: sessionCount } = await pool.query('SELECT COUNT(*) FROM script_sessions WHERE user_id = $1', [TEST_USER_ID]);
-  const { rows: fbCount } = await pool.query('SELECT COUNT(*) FROM fallback_logs WHERE user_id = $1', [TEST_USER_ID]);
+  const { rows: clusterCount } = await pool.query(
+    'SELECT COUNT(*) FROM problem_clusters WHERE user_id = $1',
+    [TEST_USER_ID]
+  );
+  const { rows: scriptCount } = await pool.query(
+    'SELECT COUNT(*) FROM triage_scripts WHERE user_id = $1 AND is_active = TRUE',
+    [TEST_USER_ID]
+  );
+  const { rows: sessionCount } = await pool.query(
+    'SELECT COUNT(*) FROM script_sessions WHERE user_id = $1',
+    [TEST_USER_ID]
+  );
+  const { rows: fbCount } = await pool.query(
+    'SELECT COUNT(*) FROM fallback_logs WHERE user_id = $1',
+    [TEST_USER_ID]
+  );
   console.log(`  problem_clusters: ${clusterCount[0].count}`);
   console.log(`  triage_scripts:   ${scriptCount[0].count}`);
   console.log(`  script_sessions:  ${sessionCount[0].count}`);
@@ -335,7 +419,7 @@ async function run() {
   await pool.end();
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('💥 Test crashed:', err);
   pool.end();
   process.exit(1);

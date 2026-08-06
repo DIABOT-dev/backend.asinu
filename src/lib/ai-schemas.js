@@ -14,16 +14,16 @@ const { z } = require('zod');
 const RiskTierSchema = z.enum(['HIGH', 'MEDIUM', 'LOW']);
 
 const RiskAssessmentSchema = z.object({
-  risk_tier:          RiskTierSchema,
-  risk_score:         z.number().min(0).max(100),
-  notify_caregiver:   z.boolean(),
-  reasoning:          z.string().min(1).max(2000),
-  outcome_text:       z.string().min(1).max(2000),
+  risk_tier: RiskTierSchema,
+  risk_score: z.number().min(0).max(100),
+  notify_caregiver: z.boolean(),
+  reasoning: z.string().min(1).max(2000),
+  outcome_text: z.string().min(1).max(2000),
   recommended_action: z.string().min(1).max(1000),
   // emergency-only fields
-  alert_title:        z.string().max(120).optional(),
-  alert_message:      z.string().max(1000).optional(),
-  summary:            z.string().max(1000).optional(),
+  alert_title: z.string().max(120).optional(),
+  alert_message: z.string().max(1000).optional(),
+  summary: z.string().max(1000).optional(),
 });
 
 const QuestionOptionSchema = z.object({
@@ -33,8 +33,8 @@ const QuestionOptionSchema = z.object({
 
 const AiQuestionSchema = z.union([
   z.object({
-    text:    z.string().min(1).max(800),
-    type:    z.literal('single_choice'),
+    text: z.string().min(1).max(800),
+    type: z.literal('single_choice'),
     options: z.array(QuestionOptionSchema).min(2).max(6),
   }),
   z.object({
@@ -45,14 +45,14 @@ const AiQuestionSchema = z.union([
 
 const TriageActionSchema = z.discriminatedUnion('action', [
   z.object({
-    action:    z.literal('ask'),
-    question:  AiQuestionSchema,
+    action: z.literal('ask'),
+    question: AiQuestionSchema,
     reasoning: z.string().max(1000).optional(),
   }),
   z.object({
-    action:     z.literal('assess'),
+    action: z.literal('assess'),
     assessment: RiskAssessmentSchema,
-    reasoning:  z.string().max(1000).optional(),
+    reasoning: z.string().max(1000).optional(),
   }),
 ]);
 
@@ -63,12 +63,12 @@ const TriageActionSchema = z.discriminatedUnion('action', [
 // output is rejected and the analyzer silently falls back to _emptyAnalysis,
 // erasing the whole analysis.
 const AnalysisQuestionSchema = z.object({
-  id:      z.string().min(1).max(40),
-  text:    z.string().min(1).max(800),
-  type:    z.enum(['single_choice', 'slider', 'free_text']).default('single_choice'),
+  id: z.string().min(1).max(40),
+  text: z.string().min(1).max(800),
+  type: z.enum(['single_choice', 'slider', 'free_text']).default('single_choice'),
   options: z.array(z.string()).optional(),
-  min:     z.number().optional(),
-  max:     z.number().optional(),
+  min: z.number().optional(),
+  max: z.number().optional(),
 });
 
 const AnalysisRuleSchema = z.object({
@@ -76,44 +76,46 @@ const AnalysisRuleSchema = z.object({
     .array(
       z.object({
         field: z.string().min(1),
-        op:    z.enum(['eq', 'neq', 'gte', 'lte', 'gt', 'lt', 'contains']),
+        op: z.enum(['eq', 'neq', 'gte', 'lte', 'gt', 'lt', 'contains']),
         value: z.unknown(),
       })
     )
     .default([]),
-  combine:            z.enum(['and', 'or']).optional(),
-  severity:           z.enum(['high', 'medium', 'low']).optional(),
-  follow_up_hours:    z.number().optional(),
-  needs_doctor:       z.boolean().optional(),
+  combine: z.enum(['and', 'or']).optional(),
+  severity: z.enum(['high', 'medium', 'low']).optional(),
+  follow_up_hours: z.number().optional(),
+  needs_doctor: z.boolean().optional(),
   needs_family_alert: z.boolean().optional(),
 });
 
 const ConclusionTemplateSchema = z.object({
-  summary:        z.string().optional(),
+  summary: z.string().optional(),
   recommendation: z.string().optional(),
-  close_message:  z.string().optional(),
+  close_message: z.string().optional(),
 });
 
-const SymptomAnalysisSchema = z.object({
-  understood:    z.string().min(1).max(200).optional(),
-  category:      z.string().max(80).optional(),
-  urgency:       z.enum(['emergency', 'urgent', 'moderate', 'mild', 'unknown']).default('unknown'),
-  possibleCauses: z.array(z.string().max(200)).default([]),
-  needsMoreInfo: z.boolean().optional(),
-  suggestedQuestions: z.array(AnalysisQuestionSchema).default([]),
-  scoringRules: z.array(AnalysisRuleSchema).default([]),
-  conclusionTemplates: z
-    .object({
-      low:    ConclusionTemplateSchema.optional(),
-      medium: ConclusionTemplateSchema.optional(),
-      high:   ConclusionTemplateSchema.optional(),
-    })
-    .partial()
-    .optional(),
-  clusterKey:  z.string().max(80).optional(),
-  displayName: z.string().max(200).optional(),
-  confidence:  z.number().min(0).max(1).optional(),
-}).passthrough(); // Allow extra fields the model invents — _normalizeAnalysis ignores them.
+const SymptomAnalysisSchema = z
+  .object({
+    understood: z.string().min(1).max(200).optional(),
+    category: z.string().max(80).optional(),
+    urgency: z.enum(['emergency', 'urgent', 'moderate', 'mild', 'unknown']).default('unknown'),
+    possibleCauses: z.array(z.string().max(200)).default([]),
+    needsMoreInfo: z.boolean().optional(),
+    suggestedQuestions: z.array(AnalysisQuestionSchema).default([]),
+    scoringRules: z.array(AnalysisRuleSchema).default([]),
+    conclusionTemplates: z
+      .object({
+        low: ConclusionTemplateSchema.optional(),
+        medium: ConclusionTemplateSchema.optional(),
+        high: ConclusionTemplateSchema.optional(),
+      })
+      .partial()
+      .optional(),
+    clusterKey: z.string().max(80).optional(),
+    displayName: z.string().max(200).optional(),
+    confidence: z.number().min(0).max(1).optional(),
+  })
+  .passthrough(); // Allow extra fields the model invents — _normalizeAnalysis ignores them.
 
 /**
  * Try to parse `raw` (string OR object) as JSON, then validate against

@@ -52,10 +52,9 @@ function assert(condition, name) {
 
 /** Back up lifecycle rows for user_ids, restore later */
 async function backupLifecycle(userIds) {
-  const { rows } = await pool.query(
-    `SELECT * FROM user_lifecycle WHERE user_id = ANY($1)`,
-    [userIds]
-  );
+  const { rows } = await pool.query(`SELECT * FROM user_lifecycle WHERE user_id = ANY($1)`, [
+    userIds,
+  ]);
   return rows;
 }
 
@@ -73,10 +72,9 @@ async function restoreLifecycle(backup) {
 
 /** Back up problem_clusters rows */
 async function backupClusters(userIds) {
-  const { rows } = await pool.query(
-    `SELECT * FROM problem_clusters WHERE user_id = ANY($1)`,
-    [userIds]
-  );
+  const { rows } = await pool.query(`SELECT * FROM problem_clusters WHERE user_id = ANY($1)`, [
+    userIds,
+  ]);
   return rows;
 }
 
@@ -87,17 +85,27 @@ async function restoreClusters(backup, userIds) {
       `INSERT INTO problem_clusters (id, user_id, cluster_key, display_name, trend, count_7d, priority, is_active, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        ON CONFLICT (id) DO NOTHING`,
-      [row.id, row.user_id, row.cluster_key, row.display_name, row.trend, row.count_7d, row.priority, row.is_active, row.created_at, row.updated_at]
+      [
+        row.id,
+        row.user_id,
+        row.cluster_key,
+        row.display_name,
+        row.trend,
+        row.count_7d,
+        row.priority,
+        row.is_active,
+        row.created_at,
+        row.updated_at,
+      ]
     );
   }
 }
 
 /** Back up script_sessions rows */
 async function backupSessions(userIds) {
-  const { rows } = await pool.query(
-    `SELECT * FROM script_sessions WHERE user_id = ANY($1)`,
-    [userIds]
-  );
+  const { rows } = await pool.query(`SELECT * FROM script_sessions WHERE user_id = ANY($1)`, [
+    userIds,
+  ]);
   return rows;
 }
 
@@ -108,7 +116,15 @@ async function restoreSessions(backup, userIds) {
       `INSERT INTO script_sessions (id, user_id, severity, needs_doctor, needs_family_alert, cluster_key, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (id) DO NOTHING`,
-      [row.id, row.user_id, row.severity, row.needs_doctor, row.needs_family_alert, row.cluster_key, row.created_at]
+      [
+        row.id,
+        row.user_id,
+        row.severity,
+        row.needs_doctor,
+        row.needs_family_alert,
+        row.cluster_key,
+        row.created_at,
+      ]
     );
   }
 }
@@ -132,11 +148,11 @@ async function testConcurrentMarkActive() {
     assert(results.length === 10, '1.1 All 10 concurrent calls resolved');
 
     // All should return segment=active
-    const allActive = results.every(r => r && r.segment === 'active');
+    const allActive = results.every((r) => r && r.segment === 'active');
     assert(allActive, '1.2 All results have segment=active');
 
     // All should have inactive_days=0
-    const allZero = results.every(r => r && r.inactive_days === 0);
+    const allZero = results.every((r) => r && r.inactive_days === 0);
     assert(allZero, '1.3 All results have inactive_days=0');
 
     // Final DB state should be consistent
@@ -188,7 +204,10 @@ async function testRapidSegmentTransitions() {
     assert(lc.segment === 'semi_active', '2.4 Transitioned to semi_active');
 
     // Verify the full sequence did not corrupt data
-    assert(typeof lc.inactive_days === 'number', '2.5 inactive_days still numeric after transitions');
+    assert(
+      typeof lc.inactive_days === 'number',
+      '2.5 inactive_days still numeric after transitions'
+    );
     assert(lc.last_checkin_at !== null, '2.6 last_checkin_at preserved');
   } finally {
     await restoreLifecycle(backup);
@@ -207,10 +226,18 @@ async function testUpdateAllSegmentsMixedDates() {
 
   try {
     // Set up: user1=today, user2=2days, user3=5days, user4=10days
-    await pool.query(`UPDATE user_lifecycle SET last_checkin_at = NOW(), inactive_days = 0 WHERE user_id = 1`);
-    await pool.query(`UPDATE user_lifecycle SET last_checkin_at = NOW() - INTERVAL '2 days', inactive_days = 2 WHERE user_id = 2`);
-    await pool.query(`UPDATE user_lifecycle SET last_checkin_at = NOW() - INTERVAL '5 days', inactive_days = 5 WHERE user_id = 3`);
-    await pool.query(`UPDATE user_lifecycle SET last_checkin_at = NOW() - INTERVAL '10 days', inactive_days = 10 WHERE user_id = 4`);
+    await pool.query(
+      `UPDATE user_lifecycle SET last_checkin_at = NOW(), inactive_days = 0 WHERE user_id = 1`
+    );
+    await pool.query(
+      `UPDATE user_lifecycle SET last_checkin_at = NOW() - INTERVAL '2 days', inactive_days = 2 WHERE user_id = 2`
+    );
+    await pool.query(
+      `UPDATE user_lifecycle SET last_checkin_at = NOW() - INTERVAL '5 days', inactive_days = 5 WHERE user_id = 3`
+    );
+    await pool.query(
+      `UPDATE user_lifecycle SET last_checkin_at = NOW() - INTERVAL '10 days', inactive_days = 10 WHERE user_id = 4`
+    );
 
     const stats = await updateAllSegments(pool);
 
@@ -288,7 +315,8 @@ async function testShouldGenerateScriptNoRows() {
 
     // Back up and delete triage_scripts for this user
     const { rows: scriptBackup } = await pool.query(
-      `SELECT * FROM triage_scripts WHERE user_id = $1`, [userId]
+      `SELECT * FROM triage_scripts WHERE user_id = $1`,
+      [userId]
     );
     await pool.query(`DELETE FROM triage_scripts WHERE user_id = $1`, [userId]);
 
@@ -325,8 +353,18 @@ async function testShouldGenerateScriptNoRows() {
         `INSERT INTO triage_scripts (id, user_id, cluster_id, cluster_key, script_type, script_data, generated_by, is_active, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          ON CONFLICT (id) DO NOTHING`,
-        [row.id, row.user_id, row.cluster_id, row.cluster_key, row.script_type,
-         JSON.stringify(row.script_data), row.generated_by, row.is_active, row.created_at, row.updated_at]
+        [
+          row.id,
+          row.user_id,
+          row.cluster_id,
+          row.cluster_key,
+          row.script_type,
+          JSON.stringify(row.script_data),
+          row.generated_by,
+          row.is_active,
+          row.created_at,
+          row.updated_at,
+        ]
       );
     }
   } finally {
@@ -346,10 +384,7 @@ async function testContextAllClustersInactive() {
 
   try {
     // Set all clusters to inactive
-    await pool.query(
-      `UPDATE problem_clusters SET is_active = FALSE WHERE user_id = $1`,
-      [userId]
-    );
+    await pool.query(`UPDATE problem_clusters SET is_active = FALSE WHERE user_id = $1`, [userId]);
 
     const ctx = await buildUserContext(pool, userId);
 
@@ -380,25 +415,37 @@ async function testGenerateMessageEnglishNoVietnamese() {
   };
 
   // Vietnamese character detection: common Vietnamese diacritics
-  const vietnamesePattern = /[\u00C0-\u00C3\u00C8-\u00CA\u00CC-\u00CD\u00D2-\u00D5\u00D9-\u00DA\u00DD\u00E0-\u00E3\u00E8-\u00EA\u00EC-\u00ED\u00F2-\u00F5\u00F9-\u00FA\u00FD\u0102-\u0103\u0110-\u0111\u0128-\u0129\u0168-\u0169\u01A0-\u01B0\u1EA0-\u1EF9]/;
+  const vietnamesePattern =
+    /[\u00C0-\u00C3\u00C8-\u00CA\u00CC-\u00CD\u00D2-\u00D5\u00D9-\u00DA\u00DD\u00E0-\u00E3\u00E8-\u00EA\u00EC-\u00ED\u00F2-\u00F5\u00F9-\u00FA\u00FD\u0102-\u0103\u0110-\u0111\u0128-\u0129\u0168-\u0169\u01A0-\u01B0\u1EA0-\u1EF9]/;
 
   const triggers = ['morning', 'afternoon', 'evening', 'alert_severity', 'alert_trend'];
 
   for (const trigger of triggers) {
     try {
-      const result = await generateMessage(pool, userId, trigger, englishUser, { tasks: 'take medicine' });
-      assert(typeof result.text === 'string' && result.text.length > 0,
-        `7.${triggers.indexOf(trigger) + 1}a ${trigger}: text is non-empty string`);
+      const result = await generateMessage(pool, userId, trigger, englishUser, {
+        tasks: 'take medicine',
+      });
+      assert(
+        typeof result.text === 'string' && result.text.length > 0,
+        `7.${triggers.indexOf(trigger) + 1}a ${trigger}: text is non-empty string`
+      );
       // Note: alert templates may contain Vietnamese symptom names from DB context (data-dependent)
       // Only check non-alert triggers for Vietnamese leaks
       if (!trigger.startsWith('alert_')) {
-        assert(!vietnamesePattern.test(result.text),
-          `7.${triggers.indexOf(trigger) + 1}b ${trigger}: no Vietnamese characters in English output`);
+        assert(
+          !vietnamesePattern.test(result.text),
+          `7.${triggers.indexOf(trigger) + 1}b ${trigger}: no Vietnamese characters in English output`
+        );
       } else {
-        assert(true, `7.${triggers.indexOf(trigger) + 1}b ${trigger}: alert may contain DB symptom (OK)`);
+        assert(
+          true,
+          `7.${triggers.indexOf(trigger) + 1}b ${trigger}: alert may contain DB symptom (OK)`
+        );
       }
-      assert(typeof result.templateId === 'string',
-        `7.${triggers.indexOf(trigger) + 1}c ${trigger}: has templateId`);
+      assert(
+        typeof result.templateId === 'string',
+        `7.${triggers.indexOf(trigger) + 1}c ${trigger}: has templateId`
+      );
     } catch (err) {
       assert(false, `7.${triggers.indexOf(trigger) + 1} ${trigger}: threw error — ${err.message}`);
     }
@@ -421,10 +468,14 @@ async function testMorningTemplateSeverityBoundary() {
   };
 
   const resultMedium = selectMorningTemplate(ctxMedium);
-  assert(resultMedium.template.id !== 'morning_high_severity',
-    '8.1 severity=medium does NOT trigger high_severity template');
-  assert(resultMedium.template.id === 'morning_default',
-    '8.2 severity=medium with no symptoms => default template');
+  assert(
+    resultMedium.template.id !== 'morning_high_severity',
+    '8.1 severity=medium does NOT trigger high_severity template'
+  );
+  assert(
+    resultMedium.template.id === 'morning_default',
+    '8.2 severity=medium with no symptoms => default template'
+  );
 
   // severity=high SHOULD trigger high_severity
   const ctxHigh = {
@@ -435,8 +486,10 @@ async function testMorningTemplateSeverityBoundary() {
   };
 
   const resultHigh = selectMorningTemplate(ctxHigh);
-  assert(resultHigh.template.id === 'morning_high_severity',
-    '8.3 severity=high triggers high_severity template');
+  assert(
+    resultHigh.template.id === 'morning_high_severity',
+    '8.3 severity=high triggers high_severity template'
+  );
 
   // severity=low should NOT trigger high_severity
   const ctxLow = {
@@ -446,8 +499,10 @@ async function testMorningTemplateSeverityBoundary() {
     streakOkDays: 0,
   };
   const resultLow = selectMorningTemplate(ctxLow);
-  assert(resultLow.template.id !== 'morning_high_severity',
-    '8.4 severity=low does NOT trigger high_severity');
+  assert(
+    resultLow.template.id !== 'morning_high_severity',
+    '8.4 severity=low does NOT trigger high_severity'
+  );
 
   // severity=null
   const ctxNull = {
@@ -457,8 +512,10 @@ async function testMorningTemplateSeverityBoundary() {
     streakOkDays: 0,
   };
   const resultNull = selectMorningTemplate(ctxNull);
-  assert(resultNull.template.id !== 'morning_high_severity',
-    '8.5 severity=null does NOT trigger high_severity');
+  assert(
+    resultNull.template.id !== 'morning_high_severity',
+    '8.5 severity=null does NOT trigger high_severity'
+  );
 
   // Edge: severity=high but also has symptom => high_severity wins (higher priority)
   const ctxHighWithSymptom = {
@@ -468,8 +525,10 @@ async function testMorningTemplateSeverityBoundary() {
     streakOkDays: 5,
   };
   const resultHighSymptom = selectMorningTemplate(ctxHighWithSymptom);
-  assert(resultHighSymptom.template.id === 'morning_high_severity',
-    '8.6 severity=high takes priority over symptom and streak');
+  assert(
+    resultHighSymptom.template.id === 'morning_high_severity',
+    '8.6 severity=high takes priority over symptom and streak'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -594,11 +653,16 @@ async function testBuildUserContextNulls() {
     assert(ctx.topSymptom === null, '11.2 topSymptom is null');
     assert(ctx.topClusters.length === 0, '11.3 topClusters is empty array');
     assert(ctx.lastSession === null, '11.4 lastSession is null');
-    assert(ctx.lastCheckin === null || ctx.lastCheckin !== undefined,
-      '11.5 lastCheckin handled (null or object)');
+    assert(
+      ctx.lastCheckin === null || ctx.lastCheckin !== undefined,
+      '11.5 lastCheckin handled (null or object)'
+    );
     assert(ctx.lifecycle.segment === 'inactive', '11.6 lifecycle segment is inactive');
     assert(typeof ctx.consecutiveTiredDays === 'number', '11.7 consecutiveTiredDays is number');
-    assert(typeof ctx.streakOkDays === 'number', '11.8 streakOkDays is number (even if table missing)');
+    assert(
+      typeof ctx.streakOkDays === 'number',
+      '11.8 streakOkDays is number (even if table missing)'
+    );
 
     // Verify selectMorningTemplate handles all-null context without crash
     const selection = selectMorningTemplate(ctx);
@@ -624,7 +688,7 @@ async function testConcurrentContextAndSegmentUpdate() {
   try {
     // Run 4 buildUserContext + 1 updateAllSegments concurrently
     const promises = [
-      ...userIds.map(uid => buildUserContext(pool, uid)),
+      ...userIds.map((uid) => buildUserContext(pool, uid)),
       updateAllSegments(pool),
     ];
 
@@ -640,8 +704,10 @@ async function testConcurrentContextAndSegmentUpdate() {
 
     // buildUserContext results should be valid objects
     for (let i = 0; i < 4; i++) {
-      assert(results[i] && typeof results[i] === 'object' && 'topSymptom' in results[i],
-        `12.3.${i + 1} buildUserContext(user ${userIds[i]}) returned valid context`);
+      assert(
+        results[i] && typeof results[i] === 'object' && 'topSymptom' in results[i],
+        `12.3.${i + 1} buildUserContext(user ${userIds[i]}) returned valid context`
+      );
     }
 
     // updateAllSegments result should have stats
@@ -649,10 +715,7 @@ async function testConcurrentContextAndSegmentUpdate() {
     assert(stats && typeof stats.total === 'number', '12.4 updateAllSegments returned valid stats');
 
     // Run it again to ensure idempotency
-    const secondRun = await Promise.all([
-      buildUserContext(pool, 1),
-      updateAllSegments(pool),
-    ]);
+    const secondRun = await Promise.all([buildUserContext(pool, 1), updateAllSegments(pool)]);
     assert(secondRun.length === 2, '12.5 Second concurrent run also succeeds');
   } catch (err) {
     assert(false, `12.X Concurrent operations failed: ${err.message}`);
@@ -690,7 +753,7 @@ async function main() {
   console.log(`TOTAL: ${totalPass + totalFail} tests | PASS: ${totalPass} | FAIL: ${totalFail}`);
   if (failures.length > 0) {
     console.log('\nFailed tests:');
-    failures.forEach(f => console.log('  - ' + f));
+    failures.forEach((f) => console.log('  - ' + f));
   }
   console.log('═══════════════════════════════════════════════════════════════');
 

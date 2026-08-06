@@ -1,11 +1,18 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
-const { alertCareCircle, runDailyMonitor, runUserMonitor } = require('../controllers/health.controller');
+const {
+  alertCareCircle,
+  runDailyMonitor,
+  runUserMonitor,
+} = require('../controllers/health.controller');
 const lifecycle = require('../services/profile/lifecycle.service');
 const notifIntel = require('../services/notification/notification-intelligence.service');
 const illusionLayer = require('../core/checkin/illusion-layer');
 const reengagement = require('../services/notification/reengagement.service');
-const { runReengagement, sendAndSave } = require('../services/notification/basic.notification.service');
+const {
+  runReengagement,
+  sendAndSave,
+} = require('../services/notification/basic.notification.service');
 const { getNextQuestion, getNextQuestionWithIllusion } = require('../core/checkin/script-runner');
 const scriptCache = require('../services/checkin/script-cache.service');
 const { runNightlyCycle } = require('../services/checkin/rnd-cycle.service');
@@ -37,7 +44,8 @@ function healthRoutes(pool) {
   // GET /api/health/lifecycle/:userId — lifecycle cho 1 user
   router.get('/lifecycle/:userId', async (req, res) => {
     const userId = parseInt(req.params.userId);
-    if (!userId || isNaN(userId)) return res.status(400).json({ ok: false, error: 'Invalid userId' });
+    if (!userId || isNaN(userId))
+      return res.status(400).json({ ok: false, error: 'Invalid userId' });
     try {
       const { rows } = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
       if (rows.length === 0) return res.status(404).json({ ok: false, error: 'User not found' });
@@ -61,7 +69,8 @@ function healthRoutes(pool) {
   // GET /api/health/lifecycle/check-script/:userId — kiểm tra user có nên generate script không
   router.get('/lifecycle/check-script/:userId', async (req, res) => {
     const userId = parseInt(req.params.userId);
-    if (!userId || isNaN(userId)) return res.status(400).json({ ok: false, error: 'Invalid userId' });
+    if (!userId || isNaN(userId))
+      return res.status(400).json({ ok: false, error: 'Invalid userId' });
     try {
       const { rows } = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
       if (rows.length === 0) return res.status(404).json({ ok: false, error: 'User not found' });
@@ -103,15 +112,21 @@ function healthRoutes(pool) {
   router.post('/ai/cache-test', async (req, res) => {
     const { messages, model } = req.body || {};
     if (!messages) return res.status(400).json({ ok: false, error: 'messages required' });
-    const result = await contextCache.getOrCallAI(messages, model || 'test', async () => {
-      return { text: 'cached test response', timestamp: Date.now() };
-    }, 60);
+    const result = await contextCache.getOrCallAI(
+      messages,
+      model || 'test',
+      async () => {
+        return { text: 'cached test response', timestamp: Date.now() };
+      },
+      60
+    );
     res.json({ ok: true, cacheHit: result.cacheHit, response: result.response });
   });
 
   // GET /api/health/ai/stream-test — test SSE streaming (with cached text)
   router.get('/ai/stream-test', async (req, res) => {
-    const text = 'Chú Hùng ơi, hôm nay chú thấy thế nào? Cháu muốn hỏi thăm chú nhé. Mấy hôm nay chú có đỡ hơn không?';
+    const text =
+      'Chú Hùng ơi, hôm nay chú thấy thế nào? Cháu muốn hỏi thăm chú nhé. Mấy hôm nay chú có đỡ hơn không?';
     await streamChunked(res, text, { chunkSize: 15, delayMs: 50, metadata: { source: 'test' } });
   });
 
@@ -128,10 +143,18 @@ function healthRoutes(pool) {
   // POST /api/health/ai/distillation-collect — test data collection
   router.post('/ai/distillation-collect', async (req, res) => {
     const { taskType, model, input, output } = req.body || {};
-    if (!taskType || !input || !output) return res.status(400).json({ ok: false, error: 'taskType, input, output required' });
+    if (!taskType || !input || !output)
+      return res.status(400).json({ ok: false, error: 'taskType, input, output required' });
     try {
       const quality = distillation.autoRateQuality(output);
-      const id = await distillation.collectOutput(pool, taskType, model || 'gpt-4o', input, output, quality);
+      const id = await distillation.collectOutput(
+        pool,
+        taskType,
+        model || 'gpt-4o',
+        input,
+        output,
+        quality
+      );
       res.json({ ok: true, id, quality });
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message });
@@ -162,7 +185,8 @@ function healthRoutes(pool) {
   // GET /api/health/cache/user/:userId — reuse stats for one user
   router.get('/cache/user/:userId', async (req, res) => {
     const userId = parseInt(req.params.userId);
-    if (!userId || isNaN(userId)) return res.status(400).json({ ok: false, error: 'Invalid userId' });
+    if (!userId || isNaN(userId))
+      return res.status(400).json({ ok: false, error: 'Invalid userId' });
     try {
       const { rows } = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
       if (rows.length === 0) return res.status(404).json({ ok: false, error: 'User not found' });
@@ -187,14 +211,20 @@ function healthRoutes(pool) {
   // POST /api/health/cache/reuse — reuse cached script for user+cluster (test endpoint)
   router.post('/cache/reuse', async (req, res) => {
     const { userId, clusterKey, scriptType } = req.body || {};
-    if (!userId || !clusterKey) return res.status(400).json({ ok: false, error: 'userId and clusterKey required' });
+    if (!userId || !clusterKey)
+      return res.status(400).json({ ok: false, error: 'userId and clusterKey required' });
     try {
       const result = await scriptCache.getOrReuseScript(pool, userId, clusterKey, {
         scriptType: scriptType || 'initial',
         allowGenerate: false,
       });
-      res.json({ ok: true, source: result.source, hasScript: !!result.script,
-                 reuseCount: result.script?.reuse_count, lastReusedAt: result.script?.last_reused_at });
+      res.json({
+        ok: true,
+        source: result.source,
+        hasScript: !!result.script,
+        reuseCount: result.script?.reuse_count,
+        lastReusedAt: result.script?.last_reused_at,
+      });
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message });
     }
@@ -213,9 +243,7 @@ function healthRoutes(pool) {
   // GET /api/health/rnd-cycle/last — last cycle log
   router.get('/rnd-cycle/last', async (req, res) => {
     try {
-      const { rows } = await pool.query(
-        `SELECT * FROM rnd_cycle_logs ORDER BY id DESC LIMIT 1`
-      );
+      const { rows } = await pool.query(`SELECT * FROM rnd_cycle_logs ORDER BY id DESC LIMIT 1`);
       res.json({ ok: true, log: rows[0] || null });
     } catch (err) {
       res.status(500).json({ ok: false, error: err.message });
@@ -226,7 +254,8 @@ function healthRoutes(pool) {
   // GET /api/health/reengagement-preview/:userId — preview message cho 1 user
   router.get('/reengagement-preview/:userId', async (req, res) => {
     const userId = parseInt(req.params.userId);
-    if (!userId || isNaN(userId)) return res.status(400).json({ ok: false, error: 'Invalid userId' });
+    if (!userId || isNaN(userId))
+      return res.status(400).json({ ok: false, error: 'Invalid userId' });
     try {
       const { rows: users } = await pool.query(
         `SELECT u.id, u.display_name, u.full_name,
@@ -234,7 +263,8 @@ function healthRoutes(pool) {
                 uop.birth_year, uop.gender
          FROM users u
          LEFT JOIN user_onboarding_profiles uop ON uop.user_id = u.id
-         WHERE u.id = $1`, [userId]
+         WHERE u.id = $1`,
+        [userId]
       );
       if (users.length === 0) return res.status(404).json({ ok: false, error: 'User not found' });
       const user = users[0];
@@ -243,7 +273,13 @@ function healthRoutes(pool) {
       const escalation = reengagement.getEscalationLevel(ctx.lifecycle.inactive_days);
 
       if (!escalation) {
-        return res.json({ ok: true, lifecycle: ctx.lifecycle, escalation: null, message: null, reason: 'user is active' });
+        return res.json({
+          ok: true,
+          lifecycle: ctx.lifecycle,
+          escalation: null,
+          message: null,
+          reason: 'user is active',
+        });
       }
 
       const result = await reengagement.generateReengagementMessage(pool, userId, user);
@@ -280,14 +316,16 @@ function healthRoutes(pool) {
   // GET /api/health/illusion-preview/:userId — preview illusion layer cho user
   router.get('/illusion-preview/:userId', async (req, res) => {
     const userId = parseInt(req.params.userId);
-    if (!userId || isNaN(userId)) return res.status(400).json({ ok: false, error: 'Invalid userId' });
+    if (!userId || isNaN(userId))
+      return res.status(400).json({ ok: false, error: 'Invalid userId' });
     try {
       // Get user profile
       const { rows: users } = await pool.query(
         `SELECT u.id, u.display_name, u.full_name, COALESCE(u.language_preference,'vi') AS lang,
                 uop.birth_year, uop.gender
          FROM users u JOIN user_onboarding_profiles uop ON uop.user_id = u.id
-         WHERE u.id = $1`, [userId]
+         WHERE u.id = $1`,
+        [userId]
       );
       if (users.length === 0) return res.status(404).json({ ok: false, error: 'User not found' });
       const user = users[0];
@@ -304,7 +342,12 @@ function healthRoutes(pool) {
       );
 
       if (scripts.length === 0) {
-        return res.json({ ok: true, context: ctx, message: 'No active script found', illusion: null });
+        return res.json({
+          ok: true,
+          context: ctx,
+          message: 'No active script found',
+          illusion: null,
+        });
       }
 
       const scriptData = scripts[0].script_data;
@@ -325,18 +368,22 @@ function healthRoutes(pool) {
 
       // Also get step 1 with empathy (simulate answering step 0)
       const lastAnswer = { question_id: 'fu1', answer: 'Vẫn vậy' };
-      const illusionStep1 = getNextQuestionWithIllusion(scriptData,
+      const illusionStep1 = getNextQuestionWithIllusion(
+        scriptData,
         [{ question_id: original.question?.id || 'q1', answer: 5 }],
         { sessionType: 'initial', profile: user, illusionContext: ctx, user, lastAnswer }
       );
 
       // Also get conclusion with progress
-      const allAnswers = (scriptData.questions || scriptData.followup_questions || []).map((q, i) =>
-        ({ question_id: q.id, answer: i === 0 ? 5 : 'Vẫn vậy' })
+      const allAnswers = (scriptData.questions || scriptData.followup_questions || []).map(
+        (q, i) => ({ question_id: q.id, answer: i === 0 ? 5 : 'Vẫn vậy' })
       );
-      const illusionConclusion = getNextQuestionWithIllusion(scriptData, allAnswers,
-        { sessionType: 'initial', profile: user, illusionContext: ctx, user }
-      );
+      const illusionConclusion = getNextQuestionWithIllusion(scriptData, allAnswers, {
+        sessionType: 'initial',
+        profile: user,
+        illusionContext: ctx,
+        user,
+      });
 
       res.json({
         ok: true,
@@ -365,16 +412,23 @@ function healthRoutes(pool) {
   router.get('/notif-preview/:userId/:triggerType', async (req, res) => {
     const userId = parseInt(req.params.userId);
     const { triggerType } = req.params;
-    if (!userId || isNaN(userId)) return res.status(400).json({ ok: false, error: 'Invalid userId' });
-    if (!['morning', 'afternoon', 'evening', 'alert_severity', 'alert_trend'].includes(triggerType)) {
-      return res.status(400).json({ ok: false, error: 'Invalid triggerType. Use: morning, afternoon, evening, alert_severity, alert_trend' });
+    if (!userId || isNaN(userId))
+      return res.status(400).json({ ok: false, error: 'Invalid userId' });
+    if (
+      !['morning', 'afternoon', 'evening', 'alert_severity', 'alert_trend'].includes(triggerType)
+    ) {
+      return res.status(400).json({
+        ok: false,
+        error: 'Invalid triggerType. Use: morning, afternoon, evening, alert_severity, alert_trend',
+      });
     }
     try {
       const { rows } = await pool.query(
         `SELECT u.id, u.display_name, u.full_name, COALESCE(u.language_preference,'vi') AS lang,
                 uop.birth_year, uop.gender
          FROM users u JOIN user_onboarding_profiles uop ON uop.user_id = u.id
-         WHERE u.id = $1`, [userId]
+         WHERE u.id = $1`,
+        [userId]
       );
       if (rows.length === 0) return res.status(404).json({ ok: false, error: 'User not found' });
       const msg = await notifIntel.generateMessage(pool, userId, triggerType, rows[0]);
@@ -387,7 +441,8 @@ function healthRoutes(pool) {
   // GET /api/health/notif-context/:userId — raw context cho debug
   router.get('/notif-context/:userId', async (req, res) => {
     const userId = parseInt(req.params.userId);
-    if (!userId || isNaN(userId)) return res.status(400).json({ ok: false, error: 'Invalid userId' });
+    if (!userId || isNaN(userId))
+      return res.status(400).json({ ok: false, error: 'Invalid userId' });
     try {
       const ctx = await notifIntel.buildUserContext(pool, userId);
       res.json({ ok: true, context: ctx });
@@ -399,7 +454,8 @@ function healthRoutes(pool) {
   // GET /api/health/notif-alerts/:userId — check if user has pending alerts
   router.get('/notif-alerts/:userId', async (req, res) => {
     const userId = parseInt(req.params.userId);
-    if (!userId || isNaN(userId)) return res.status(400).json({ ok: false, error: 'Invalid userId' });
+    if (!userId || isNaN(userId))
+      return res.status(400).json({ ok: false, error: 'Invalid userId' });
     try {
       const { rows } = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
       if (rows.length === 0) return res.status(404).json({ ok: false, error: 'User not found' });

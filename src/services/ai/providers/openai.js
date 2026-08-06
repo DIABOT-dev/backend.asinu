@@ -14,7 +14,14 @@ const { t } = require('../../../i18n');
  * @param {Object} params - { message, userId, sessionId, model, temperature }
  * @returns {Promise<Object>} - { reply, provider, meta }
  */
-async function getOpenAIReply({ message, userId, sessionId, model, temperature, maxTokens }) {
+async function getOpenAIReply({
+  message,
+  userId,
+  sessionId: _sessionId,
+  model,
+  temperature,
+  maxTokens,
+}) {
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
@@ -22,26 +29,30 @@ async function getOpenAIReply({ message, userId, sessionId, model, temperature, 
   }
 
   const selectedModel = model || process.env.OPENAI_MODEL || DEFAULT_MODEL;
-  const selectedTemp = temperature !== undefined ? temperature :
-    (process.env.OPENAI_TEMPERATURE ? parseFloat(process.env.OPENAI_TEMPERATURE) : DEFAULT_TEMPERATURE);
+  const selectedTemp =
+    temperature !== undefined
+      ? temperature
+      : process.env.OPENAI_TEMPERATURE
+        ? parseFloat(process.env.OPENAI_TEMPERATURE)
+        : DEFAULT_TEMPERATURE;
 
   const payload = {
     model: selectedModel,
     messages: [
       {
         role: 'system',
-        content: t('prompt.system_question')
+        content: t('prompt.system_question'),
       },
       {
         role: 'user',
-        content: String(message || '')
-      }
+        content: String(message || ''),
+      },
     ],
     temperature: selectedTemp,
     max_completion_tokens: maxTokens || 400, // Tăng mặc định để tránh truncate JSON
     top_p: 1,
     frequency_penalty: 0.3, // Tránh lặp từ
-    presence_penalty: 0.3
+    presence_penalty: 0.3,
   };
 
   // Optional: Add user identifier for better tracking
@@ -58,10 +69,10 @@ async function getOpenAIReply({ message, userId, sessionId, model, temperature, 
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(payload),
-      signal: controller.signal
+      signal: controller.signal,
     });
   } finally {
     clearTimeout(timeout);
@@ -70,26 +81,26 @@ async function getOpenAIReply({ message, userId, sessionId, model, temperature, 
   if (!response.ok) {
     const errorText = await response.text();
     let errorMessage = `OpenAI API error ${response.status}`;
-    
+
     try {
       const errorData = JSON.parse(errorText);
       errorMessage = errorData.error?.message || errorMessage;
     } catch (e) {
       errorMessage = errorText || errorMessage;
     }
-    
+
     throw new Error(errorMessage);
   }
 
   const data = await response.json();
-  
+
   // Validate response structure
   if (!data.choices || !data.choices[0] || !data.choices[0].message) {
     throw new Error('Invalid OpenAI response structure');
   }
 
   const reply = data.choices[0].message.content;
-  
+
   if (!reply || reply.trim().length === 0) {
     throw new Error('OpenAI returned empty response');
   }
@@ -98,17 +109,19 @@ async function getOpenAIReply({ message, userId, sessionId, model, temperature, 
   const meta = {
     model: data.model,
     finish_reason: data.choices[0].finish_reason,
-    tokens_used: data.usage ? {
-      prompt: data.usage.prompt_tokens,
-      completion: data.usage.completion_tokens,
-      total: data.usage.total_tokens
-    } : undefined
+    tokens_used: data.usage
+      ? {
+          prompt: data.usage.prompt_tokens,
+          completion: data.usage.completion_tokens,
+          total: data.usage.total_tokens,
+        }
+      : undefined,
   };
 
   return {
     reply: reply.trim(),
     provider: 'openai',
-    meta
+    meta,
   };
 }
 
@@ -135,7 +148,7 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
   for (const turn of history) {
     messages.push({
       role: turn.sender === 'user' ? 'user' : 'assistant',
-      content: turn.message
+      content: turn.message,
     });
   }
 
@@ -149,7 +162,7 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
     top_p: 0.95,
     frequency_penalty: 0.2,
     presence_penalty: 0.2,
-    ...(userId && { user: `user_${userId}` })
+    ...(userId && { user: `user_${userId}` }),
   };
 
   const body = JSON.stringify(payload);
@@ -168,9 +181,9 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
     try {
       response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
         body,
-        signal: controller.signal
+        signal: controller.signal,
       });
     } finally {
       clearTimeout(timeout);
@@ -193,14 +206,14 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
     return {
       reply: reply.trim(),
       provider: 'openai',
-      meta: { model: data.model, tokens_used: data.usage }
+      meta: { model: data.model, tokens_used: data.usage },
     };
   }
 
   return null;
 }
 
-async function getWhisperTranscription(audioBuffer, filename = 'audio.m4a', lang = 'vi') {
+async function getWhisperTranscription(audioBuffer, filename = 'audio.m4a', _lang = 'vi') {
   const endpoint = process.env.WHISPER_ENDPOINT || 'https://api.openai.com/v1/audio/transcriptions';
   const apiKey = process.env.WHISPER_API_KEY || process.env.OPENAI_API_KEY;
 
@@ -237,5 +250,5 @@ async function getWhisperTranscription(audioBuffer, filename = 'audio.m4a', lang
 module.exports = {
   getOpenAIReply,
   getOpenAIChatReply,
-  getWhisperTranscription
+  getWhisperTranscription,
 };

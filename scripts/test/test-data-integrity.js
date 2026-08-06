@@ -48,10 +48,14 @@ function assert(label, condition, detail) {
 // ─── Cleanup helper ────────────────────────────────────────────────────────
 
 async function cleanup() {
-  await pool.query('DELETE FROM script_sessions WHERE user_id = $1', [TEST_USER_ID]).catch(() => {});
+  await pool
+    .query('DELETE FROM script_sessions WHERE user_id = $1', [TEST_USER_ID])
+    .catch(() => {});
   await pool.query('DELETE FROM fallback_logs WHERE user_id = $1', [TEST_USER_ID]).catch(() => {});
   await pool.query('DELETE FROM triage_scripts WHERE user_id = $1', [TEST_USER_ID]).catch(() => {});
-  await pool.query('DELETE FROM problem_clusters WHERE user_id = $1', [TEST_USER_ID]).catch(() => {});
+  await pool
+    .query('DELETE FROM problem_clusters WHERE user_id = $1', [TEST_USER_ID])
+    .catch(() => {});
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -65,7 +69,9 @@ async function cleanup() {
     console.log(`  ${new Date().toISOString()}\n`);
 
     // Verify user exists
-    const { rows: userCheck } = await pool.query('SELECT id, full_name FROM users WHERE id = $1', [TEST_USER_ID]);
+    const { rows: userCheck } = await pool.query('SELECT id, full_name FROM users WHERE id = $1', [
+      TEST_USER_ID,
+    ]);
     if (userCheck.length === 0) {
       console.log('FATAL: user_id=4 not found in DB.');
       process.exit(1);
@@ -88,9 +94,11 @@ async function cleanup() {
        RETURNING *`,
       [TEST_USER_ID]
     );
-    assert('A1: Create cluster -> user_id correct',
+    assert(
+      'A1: Create cluster -> user_id correct',
       a1Rows[0]?.user_id === TEST_USER_ID,
-      `user_id=${a1Rows[0]?.user_id}`);
+      `user_id=${a1Rows[0]?.user_id}`
+    );
 
     // A2: Create triage_scripts referencing cluster_id
     const clusterId = a1Rows[0].id;
@@ -101,18 +109,23 @@ async function cleanup() {
        RETURNING *`,
       [TEST_USER_ID, clusterId, JSON.stringify(scriptData)]
     );
-    assert('A2: triage_scripts references cluster_id correctly',
+    assert(
+      'A2: triage_scripts references cluster_id correctly',
       a2Rows[0]?.cluster_id === clusterId,
-      `cluster_id=${a2Rows[0]?.cluster_id}, expected=${clusterId}`);
+      `cluster_id=${a2Rows[0]?.cluster_id}, expected=${clusterId}`
+    );
 
     // A3: Delete cluster -> scripts still exist (ON DELETE SET NULL)
     await pool.query('DELETE FROM problem_clusters WHERE id = $1', [clusterId]);
     const { rows: a3Check } = await pool.query(
-      'SELECT id, cluster_id FROM triage_scripts WHERE id = $1', [a2Rows[0].id]
+      'SELECT id, cluster_id FROM triage_scripts WHERE id = $1',
+      [a2Rows[0].id]
     );
-    assert('A3: Delete cluster -> scripts still exist (ON DELETE SET NULL)',
+    assert(
+      'A3: Delete cluster -> scripts still exist (ON DELETE SET NULL)',
       a3Check.length === 1 && a3Check[0].cluster_id === null,
-      `exists=${a3Check.length > 0}, cluster_id=${a3Check[0]?.cluster_id}`);
+      `exists=${a3Check.length > 0}, cluster_id=${a3Check[0]?.cluster_id}`
+    );
 
     // Cleanup for next tests
     await pool.query('DELETE FROM triage_scripts WHERE user_id = $1', [TEST_USER_ID]);
@@ -138,9 +151,11 @@ async function cleanup() {
       'SELECT count(*) FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2',
       [TEST_USER_ID, 'headache']
     );
-    assert('A4: Duplicate cluster ON CONFLICT -> only 1 row',
+    assert(
+      'A4: Duplicate cluster ON CONFLICT -> only 1 row',
       parseInt(a4Count[0].count) === 1,
-      `count=${a4Count[0].count}`);
+      `count=${a4Count[0].count}`
+    );
 
     // A5: Script with non-existent cluster_id -> should fail FK
     let a5Passed = false;
@@ -154,8 +169,11 @@ async function cleanup() {
     } catch (err) {
       a5Passed = err.message.includes('violates foreign key') || err.code === '23503';
     }
-    assert('A5: Script with non-existent cluster_id -> FK violation',
-      a5Passed, 'FK constraint enforced');
+    assert(
+      'A5: Script with non-existent cluster_id -> FK violation',
+      a5Passed,
+      'FK constraint enforced'
+    );
 
     // A6: UNIQUE constraint on triage_scripts (user_id, cluster_key, script_type) WHERE is_active=TRUE
     // Get the cluster we have
@@ -180,10 +198,14 @@ async function cleanup() {
       );
       a6Passed = false;
     } catch (err) {
-      a6Passed = err.message.includes('unique') || err.message.includes('duplicate') || err.code === '23505';
+      a6Passed =
+        err.message.includes('unique') || err.message.includes('duplicate') || err.code === '23505';
     }
-    assert('A6: UNIQUE constraint on active triage_scripts (user_id, cluster_key, script_type)',
-      a6Passed, 'unique index enforced');
+    assert(
+      'A6: UNIQUE constraint on active triage_scripts (user_id, cluster_key, script_type)',
+      a6Passed,
+      'unique index enforced'
+    );
 
     // Cleanup
     await pool.query('DELETE FROM triage_scripts WHERE user_id = $1', [TEST_USER_ID]);
@@ -199,8 +221,11 @@ async function cleanup() {
     } catch (err) {
       a7Passed = err.message.includes('violates foreign key') || err.code === '23503';
     }
-    assert('A7: Fallback log with non-existent user_id -> FK violation',
-      a7Passed, 'FK constraint enforced');
+    assert(
+      'A7: Fallback log with non-existent user_id -> FK violation',
+      a7Passed,
+      'FK constraint enforced'
+    );
 
     // A8: script_session with non-existent checkin_id -> should work (FK allows NULL, or SET NULL on delete)
     // Actually the FK references health_checkins(id), so non-existent should fail.
@@ -217,11 +242,13 @@ async function cleanup() {
     } catch (err) {
       a8Passed = false;
     }
-    assert('A8: script_session with NULL checkin_id -> allowed',
-      a8Passed, 'NULL FK accepted');
+    assert('A8: script_session with NULL checkin_id -> allowed', a8Passed, 'NULL FK accepted');
 
     // A9: Verify script_sessions.answers is valid JSONB after insertion
-    const testAnswers = [{ question_id: 'q1', answer: 5 }, { question_id: 'q2', answer: 'test' }];
+    const testAnswers = [
+      { question_id: 'q1', answer: 5 },
+      { question_id: 'q2', answer: 'test' },
+    ];
     const { rows: a9Rows } = await pool.query(
       `INSERT INTO script_sessions (user_id, cluster_key, session_type, answers)
        VALUES ($1, 'headache', 'initial', $2::jsonb)
@@ -229,9 +256,11 @@ async function cleanup() {
       [TEST_USER_ID, JSON.stringify(testAnswers)]
     );
     const a9Parsed = a9Rows[0]?.answers;
-    assert('A9: script_sessions.answers is valid JSONB',
+    assert(
+      'A9: script_sessions.answers is valid JSONB',
       Array.isArray(a9Parsed) && a9Parsed.length === 2 && a9Parsed[0].question_id === 'q1',
-      `type=${typeof a9Parsed}, len=${a9Parsed?.length}`);
+      `type=${typeof a9Parsed}, len=${a9Parsed?.length}`
+    );
 
     // A10: problem_clusters.priority is numeric and ordered correctly
     await pool.query('DELETE FROM problem_clusters WHERE user_id = $1', [TEST_USER_ID]);
@@ -247,9 +276,13 @@ async function cleanup() {
        WHERE user_id = $1 ORDER BY priority DESC`,
       [TEST_USER_ID]
     );
-    assert('A10: priority is numeric and ordered correctly',
-      a10Rows[0]?.cluster_key === 'c_high' && a10Rows[1]?.cluster_key === 'b_mid' && a10Rows[2]?.cluster_key === 'a_low',
-      `order: ${a10Rows.map(r => r.cluster_key + '=' + r.priority).join(', ')}`);
+    assert(
+      'A10: priority is numeric and ordered correctly',
+      a10Rows[0]?.cluster_key === 'c_high' &&
+        a10Rows[1]?.cluster_key === 'b_mid' &&
+        a10Rows[2]?.cluster_key === 'a_low',
+      `order: ${a10Rows.map((r) => r.cluster_key + '=' + r.priority).join(', ')}`
+    );
 
     // Cleanup A
     await cleanup();
@@ -263,11 +296,14 @@ async function cleanup() {
     const symptoms3 = ['đau đầu', 'chóng mặt', 'mệt mỏi'];
     const b1Clusters = await createClustersFromOnboarding(pool, TEST_USER_ID, symptoms3);
     const { rows: b1Count } = await pool.query(
-      'SELECT count(*) FROM problem_clusters WHERE user_id = $1', [TEST_USER_ID]
+      'SELECT count(*) FROM problem_clusters WHERE user_id = $1',
+      [TEST_USER_ID]
     );
-    assert('B1: createClustersFromOnboarding -> cluster count = symptom count',
+    assert(
+      'B1: createClustersFromOnboarding -> cluster count = symptom count',
       parseInt(b1Count[0].count) === symptoms3.length,
-      `symptoms=${symptoms3.length}, clusters=${b1Count[0].count}`);
+      `symptoms=${symptoms3.length}, clusters=${b1Count[0].count}`
+    );
 
     // B2: Each cluster has exactly 1 active initial script and 1 active followup script
     const { rows: b2Scripts } = await pool.query(
@@ -276,24 +312,34 @@ async function cleanup() {
        GROUP BY cluster_key, script_type`,
       [TEST_USER_ID]
     );
-    const b2InitialKeys = b2Scripts.filter(s => s.script_type === 'initial').map(s => s.cluster_key);
-    const b2FollowupKeys = b2Scripts.filter(s => s.script_type === 'followup').map(s => s.cluster_key);
-    const b2AllHaveOne = b2Scripts.every(s => parseInt(s.cnt) === 1);
-    assert('B2: Each cluster has exactly 1 active initial + 1 active followup',
+    const b2InitialKeys = b2Scripts
+      .filter((s) => s.script_type === 'initial')
+      .map((s) => s.cluster_key);
+    const b2FollowupKeys = b2Scripts
+      .filter((s) => s.script_type === 'followup')
+      .map((s) => s.cluster_key);
+    const b2AllHaveOne = b2Scripts.every((s) => parseInt(s.cnt) === 1);
+    assert(
+      'B2: Each cluster has exactly 1 active initial + 1 active followup',
       b2AllHaveOne && b2InitialKeys.length === 3 && b2FollowupKeys.length === 3,
-      `initial=${b2InitialKeys.length}, followup=${b2FollowupKeys.length}, allOne=${b2AllHaveOne}`);
+      `initial=${b2InitialKeys.length}, followup=${b2FollowupKeys.length}, allOne=${b2AllHaveOne}`
+    );
 
     // B3: After addCluster -> total clusters increased by 1
     const { rows: b3Before } = await pool.query(
-      'SELECT count(*) FROM problem_clusters WHERE user_id = $1', [TEST_USER_ID]
+      'SELECT count(*) FROM problem_clusters WHERE user_id = $1',
+      [TEST_USER_ID]
     );
     await addCluster(pool, TEST_USER_ID, 'gastric_pain', 'đau dạ dày', 'rnd_cycle');
     const { rows: b3After } = await pool.query(
-      'SELECT count(*) FROM problem_clusters WHERE user_id = $1', [TEST_USER_ID]
+      'SELECT count(*) FROM problem_clusters WHERE user_id = $1',
+      [TEST_USER_ID]
     );
-    assert('B3: addCluster -> total clusters +1',
+    assert(
+      'B3: addCluster -> total clusters +1',
       parseInt(b3After[0].count) === parseInt(b3Before[0].count) + 1,
-      `before=${b3Before[0].count}, after=${b3After[0].count}`);
+      `before=${b3Before[0].count}, after=${b3After[0].count}`
+    );
 
     // B4: After deactivating a cluster -> getUserScript excludes it
     await pool.query(
@@ -301,15 +347,20 @@ async function cleanup() {
       [TEST_USER_ID]
     );
     const b4Result = await getUserScript(pool, TEST_USER_ID);
-    const b4HasGastric = b4Result?.clusters?.some(c => c.cluster_key === 'gastric_pain');
-    assert('B4: Deactivated cluster excluded from getUserScript',
+    const b4HasGastric = b4Result?.clusters?.some((c) => c.cluster_key === 'gastric_pain');
+    assert(
+      'B4: Deactivated cluster excluded from getUserScript',
       !b4HasGastric,
-      `gastric_pain in clusters=${b4HasGastric}`);
+      `gastric_pain in clusters=${b4HasGastric}`
+    );
 
     // B5: After generating new script version -> old version is_active=FALSE
-    const b5ClusterRow = (await pool.query(
-      `SELECT * FROM problem_clusters WHERE user_id = $1 AND cluster_key = 'headache'`, [TEST_USER_ID]
-    )).rows[0];
+    const b5ClusterRow = (
+      await pool.query(
+        `SELECT * FROM problem_clusters WHERE user_id = $1 AND cluster_key = 'headache'`,
+        [TEST_USER_ID]
+      )
+    ).rows[0];
     // Generate again (which should deactivate old)
     await generateScriptForCluster(pool, TEST_USER_ID, b5ClusterRow);
     const { rows: b5Scripts } = await pool.query(
@@ -318,31 +369,39 @@ async function cleanup() {
        ORDER BY id DESC`,
       [TEST_USER_ID]
     );
-    const b5ActiveCount = b5Scripts.filter(s => s.is_active).length;
-    const b5InactiveCount = b5Scripts.filter(s => !s.is_active).length;
-    assert('B5: New script version -> old is_active=FALSE, only 1 active',
+    const b5ActiveCount = b5Scripts.filter((s) => s.is_active).length;
+    const b5InactiveCount = b5Scripts.filter((s) => !s.is_active).length;
+    assert(
+      'B5: New script version -> old is_active=FALSE, only 1 active',
       b5ActiveCount === 1 && b5InactiveCount >= 1,
-      `active=${b5ActiveCount}, inactive=${b5InactiveCount}, total=${b5Scripts.length}`);
+      `active=${b5ActiveCount}, inactive=${b5InactiveCount}, total=${b5Scripts.length}`
+    );
 
     // B6: Count active scripts for ACTIVE clusters = count active clusters x 2 (initial + followup)
     // Note: deactivated clusters may still have active scripts (by design, for audit).
     // We count only scripts whose cluster_key belongs to an active cluster.
     const { rows: b6Clusters } = await pool.query(
-      'SELECT cluster_key FROM problem_clusters WHERE user_id = $1 AND is_active = TRUE', [TEST_USER_ID]
+      'SELECT cluster_key FROM problem_clusters WHERE user_id = $1 AND is_active = TRUE',
+      [TEST_USER_ID]
     );
-    const b6ActiveKeys = b6Clusters.map(c => c.cluster_key);
+    const b6ActiveKeys = b6Clusters.map((c) => c.cluster_key);
     const { rows: b6Scripts } = await pool.query(
       `SELECT count(*) FROM triage_scripts
        WHERE user_id = $1 AND is_active = TRUE AND cluster_key = ANY($2)`,
       [TEST_USER_ID, b6ActiveKeys]
     );
     const b6Expected = b6ActiveKeys.length * 2;
-    assert('B6: Active scripts for active clusters = active clusters x 2',
+    assert(
+      'B6: Active scripts for active clusters = active clusters x 2',
       parseInt(b6Scripts[0].count) === b6Expected,
-      `active_clusters=${b6ActiveKeys.length}, scripts=${b6Scripts[0].count}, expected=${b6Expected}`);
+      `active_clusters=${b6ActiveKeys.length}, scripts=${b6Scripts[0].count}, expected=${b6Expected}`
+    );
 
     // B7: Fallback log with answers -> answers JSONB is parseable
-    const b7Answers = [{ question_id: 'fb1', answer: 6 }, { question_id: 'fb2', answer: 'Vừa mới' }];
+    const b7Answers = [
+      { question_id: 'fb1', answer: 6 },
+      { question_id: 'fb2', answer: 'Vừa mới' },
+    ];
     await logFallback(pool, TEST_USER_ID, 'đau răng', null, b7Answers);
     const { rows: b7Check } = await pool.query(
       `SELECT fallback_answers FROM fallback_logs WHERE user_id = $1 AND raw_input = 'đau răng'
@@ -350,9 +409,11 @@ async function cleanup() {
       [TEST_USER_ID]
     );
     const b7Parsed = b7Check[0]?.fallback_answers;
-    assert('B7: Fallback log answers JSONB parseable with correct structure',
+    assert(
+      'B7: Fallback log answers JSONB parseable with correct structure',
       Array.isArray(b7Parsed) && b7Parsed.length === 2 && b7Parsed[0].question_id === 'fb1',
-      `type=${typeof b7Parsed}, len=${b7Parsed?.length}`);
+      `type=${typeof b7Parsed}, len=${b7Parsed?.length}`
+    );
 
     // B8: markFallbackProcessed -> all fields updated atomically
     const { rows: b8Row } = await pool.query(
@@ -365,13 +426,15 @@ async function cleanup() {
         'SELECT status, ai_label, ai_cluster_key, ai_confidence, processed_at FROM fallback_logs WHERE id = $1',
         [b8Row[0].id]
       );
-      assert('B8: markFallbackProcessed -> all fields updated atomically',
+      assert(
+        'B8: markFallbackProcessed -> all fields updated atomically',
         b8Check[0]?.status === 'processed' &&
-        b8Check[0]?.ai_label === 'tooth_pain' &&
-        b8Check[0]?.ai_cluster_key === 'dental_pain' &&
-        parseFloat(b8Check[0]?.ai_confidence) === 0.85 &&
-        b8Check[0]?.processed_at !== null,
-        `status=${b8Check[0]?.status}, label=${b8Check[0]?.ai_label}, conf=${b8Check[0]?.ai_confidence}, processed_at=${b8Check[0]?.processed_at}`);
+          b8Check[0]?.ai_label === 'tooth_pain' &&
+          b8Check[0]?.ai_cluster_key === 'dental_pain' &&
+          parseFloat(b8Check[0]?.ai_confidence) === 0.85 &&
+          b8Check[0]?.processed_at !== null,
+        `status=${b8Check[0]?.status}, label=${b8Check[0]?.ai_label}, conf=${b8Check[0]?.ai_confidence}, processed_at=${b8Check[0]?.processed_at}`
+      );
     } else {
       assert('B8: markFallbackProcessed -> skipped (no fallback row)', false, 'no row found');
     }
@@ -385,7 +448,10 @@ async function cleanup() {
         { question_id: 'q3', answer: 'vài giờ trước' },
         { question_id: 'q4', answer: 'có vẻ nặng hơn' },
       ];
-      const b9Result = getNextQuestion(b9Script.script_data, b9Answers, { sessionType: 'initial', profile: {} });
+      const b9Result = getNextQuestion(b9Script.script_data, b9Answers, {
+        sessionType: 'initial',
+        profile: {},
+      });
       // Even if not all q's answered, simulate completion by checking conclusion building
       const b9Scoring = evaluateScript(b9Script.script_data, b9Answers, {});
       const { rows: b9Session } = await pool.query(
@@ -395,16 +461,24 @@ async function cleanup() {
          VALUES ($1, 'headache', 'initial', $2::jsonb, TRUE,
            $3, $4, $5, $6, 'test summary', 'test recommendation', 'test close', NOW())
          RETURNING *`,
-        [TEST_USER_ID, JSON.stringify(b9Answers),
-         b9Scoring.severity, b9Scoring.needsDoctor, b9Scoring.needsFamilyAlert, b9Scoring.followUpHours]
+        [
+          TEST_USER_ID,
+          JSON.stringify(b9Answers),
+          b9Scoring.severity,
+          b9Scoring.needsDoctor,
+          b9Scoring.needsFamilyAlert,
+          b9Scoring.followUpHours,
+        ]
       );
-      assert('B9: Script session completion -> conclusion fields populated',
+      assert(
+        'B9: Script session completion -> conclusion fields populated',
         b9Session[0]?.conclusion_summary !== null &&
-        b9Session[0]?.conclusion_recommendation !== null &&
-        b9Session[0]?.conclusion_close_message !== null &&
-        b9Session[0]?.completed_at !== null &&
-        b9Session[0]?.severity !== null,
-        `severity=${b9Session[0]?.severity}, completed_at=${b9Session[0]?.completed_at}`);
+          b9Session[0]?.conclusion_recommendation !== null &&
+          b9Session[0]?.conclusion_close_message !== null &&
+          b9Session[0]?.completed_at !== null &&
+          b9Session[0]?.severity !== null,
+        `severity=${b9Session[0]?.severity}, completed_at=${b9Session[0]?.completed_at}`
+      );
     } else {
       assert('B9: Script session completion -> skipped', false, 'no headache script');
     }
@@ -435,11 +509,14 @@ async function cleanup() {
         [b10CheckinId]
       );
       const { rows: b10Verify } = await pool.query(
-        'SELECT triage_severity, triage_completed_at FROM health_checkins WHERE id = $1', [b10CheckinId]
+        'SELECT triage_severity, triage_completed_at FROM health_checkins WHERE id = $1',
+        [b10CheckinId]
       );
-      assert('B10: health_checkins updated when script session completes',
+      assert(
+        'B10: health_checkins updated when script session completes',
         b10Verify[0]?.triage_severity === 'medium' && b10Verify[0]?.triage_completed_at !== null,
-        `severity=${b10Verify[0]?.triage_severity}, triage_completed_at=${b10Verify[0]?.triage_completed_at}`);
+        `severity=${b10Verify[0]?.triage_severity}, triage_completed_at=${b10Verify[0]?.triage_completed_at}`
+      );
     } catch (err) {
       assert('B10: health_checkins updated when script session completes', false, err.message);
     }
@@ -459,7 +536,7 @@ async function cleanup() {
     const testComplaints = [...clinicalComplaints, genericComplaint];
 
     // Map complaint names to Vietnamese for onboarding
-    const complaintSymptoms = clinicalComplaints.map(c => c); // already Vietnamese
+    const complaintSymptoms = clinicalComplaints.map((c) => c); // already Vietnamese
     // Add generic
     complaintSymptoms.push(genericComplaint);
 
@@ -502,7 +579,8 @@ async function cleanup() {
         for (const q of sd.questions) {
           if (!q.id) subErrors.push(`question missing id`);
           if (!q.text || q.text.trim() === '') subErrors.push(`question ${q.id}: empty text`);
-          if (!validTypes.includes(q.type)) subErrors.push(`question ${q.id}: invalid type "${q.type}"`);
+          if (!validTypes.includes(q.type))
+            subErrors.push(`question ${q.id}: invalid type "${q.type}"`);
           if (qIds.has(q.id)) subErrors.push(`duplicate question id: ${q.id}`);
           qIds.add(q.id);
         }
@@ -514,8 +592,10 @@ async function cleanup() {
         } else {
           for (let ri = 0; ri < sd.scoring_rules.length; ri++) {
             const rule = sd.scoring_rules[ri];
-            if (!Array.isArray(rule.conditions)) subErrors.push(`scoring_rules[${ri}]: conditions not array`);
-            if (!validSeverities.includes(rule.severity)) subErrors.push(`scoring_rules[${ri}]: invalid severity "${rule.severity}"`);
+            if (!Array.isArray(rule.conditions))
+              subErrors.push(`scoring_rules[${ri}]: conditions not array`);
+            if (!validSeverities.includes(rule.severity))
+              subErrors.push(`scoring_rules[${ri}]: invalid severity "${rule.severity}"`);
           }
         }
 
@@ -528,9 +608,12 @@ async function cleanup() {
             if (!ct[level]) {
               subErrors.push(`conclusion_templates missing "${level}"`);
             } else {
-              if (!ct[level].summary) subErrors.push(`conclusion_templates.${level} missing summary`);
-              if (!ct[level].recommendation) subErrors.push(`conclusion_templates.${level} missing recommendation`);
-              if (!ct[level].close_message) subErrors.push(`conclusion_templates.${level} missing close_message`);
+              if (!ct[level].summary)
+                subErrors.push(`conclusion_templates.${level} missing summary`);
+              if (!ct[level].recommendation)
+                subErrors.push(`conclusion_templates.${level} missing recommendation`);
+              if (!ct[level].close_message)
+                subErrors.push(`conclusion_templates.${level} missing close_message`);
             }
           }
         }
@@ -552,7 +635,7 @@ async function cleanup() {
         if (Array.isArray(sd?.scoring_rules)) {
           for (let ri = 0; ri < sd.scoring_rules.length; ri++) {
             const rule = sd.scoring_rules[ri];
-            for (const cond of (rule.conditions || [])) {
+            for (const cond of rule.conditions || []) {
               if (cond.field && !qIds.has(cond.field)) {
                 subErrors.push(`scoring_rules[${ri}]: field "${cond.field}" not in question IDs`);
               }
@@ -588,7 +671,7 @@ async function cleanup() {
 
     // D1: Create 5 clusters in parallel -> all created, no duplicates
     const d1Keys = ['d_headache', 'd_dizziness', 'd_fatigue', 'd_chest_pain', 'd_back_pain'];
-    const d1Promises = d1Keys.map(key =>
+    const d1Promises = d1Keys.map((key) =>
       pool.query(
         `INSERT INTO problem_clusters (user_id, cluster_key, display_name, source, priority)
          VALUES ($1, $2, $3, 'test', 1)
@@ -602,22 +685,28 @@ async function cleanup() {
       `SELECT count(*) FROM problem_clusters WHERE user_id = $1 AND cluster_key LIKE 'd_%'`,
       [TEST_USER_ID]
     );
-    assert('D1: 5 clusters in parallel -> all created, no duplicates',
+    assert(
+      'D1: 5 clusters in parallel -> all created, no duplicates',
       parseInt(d1Count[0].count) === 5,
-      `count=${d1Count[0].count}`);
+      `count=${d1Count[0].count}`
+    );
 
     // D2: Log 10 fallbacks in parallel -> all saved
     const d2Promises = Array.from({ length: 10 }, (_, i) =>
-      logFallback(pool, TEST_USER_ID, `parallel_symptom_${i}`, null, [{ question_id: 'fb1', answer: i }])
+      logFallback(pool, TEST_USER_ID, `parallel_symptom_${i}`, null, [
+        { question_id: 'fb1', answer: i },
+      ])
     );
     await Promise.all(d2Promises);
     const { rows: d2Count } = await pool.query(
       `SELECT count(*) FROM fallback_logs WHERE user_id = $1 AND raw_input LIKE 'parallel_symptom_%'`,
       [TEST_USER_ID]
     );
-    assert('D2: 10 fallbacks in parallel -> all saved',
+    assert(
+      'D2: 10 fallbacks in parallel -> all saved',
       parseInt(d2Count[0].count) === 10,
-      `count=${d2Count[0].count}`);
+      `count=${d2Count[0].count}`
+    );
 
     // D3: Update cluster stats + get script in parallel -> no race condition
     // First create a real cluster with script
@@ -634,8 +723,11 @@ async function cleanup() {
     } catch (err) {
       d3NoError = false;
     }
-    assert('D3: Update stats + getUserScript in parallel -> no race condition',
-      d3NoError, 'no errors');
+    assert(
+      'D3: Update stats + getUserScript in parallel -> no race condition',
+      d3NoError,
+      'no errors'
+    );
 
     // D4: Create cluster + getUserScript in parallel -> consistent state
     let d4NoError = true;
@@ -648,12 +740,21 @@ async function cleanup() {
     } catch (err) {
       d4NoError = false;
     }
-    assert('D4: addCluster + getUserScript in parallel -> consistent state',
-      d4NoError, 'both returned valid data');
+    assert(
+      'D4: addCluster + getUserScript in parallel -> consistent state',
+      d4NoError,
+      'both returned valid data'
+    );
 
     // D5: Two addCluster calls with same key in parallel -> only 1 created (ON CONFLICT)
-    await pool.query('DELETE FROM triage_scripts WHERE user_id = $1 AND cluster_key = $2', [TEST_USER_ID, 'dup_test']);
-    await pool.query('DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2', [TEST_USER_ID, 'dup_test']);
+    await pool.query('DELETE FROM triage_scripts WHERE user_id = $1 AND cluster_key = $2', [
+      TEST_USER_ID,
+      'dup_test',
+    ]);
+    await pool.query('DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2', [
+      TEST_USER_ID,
+      'dup_test',
+    ]);
     let d5NoError = true;
     try {
       await Promise.all([
@@ -668,9 +769,11 @@ async function cleanup() {
       'SELECT count(*) FROM problem_clusters WHERE user_id = $1 AND cluster_key = $2',
       [TEST_USER_ID, 'dup_test']
     );
-    assert('D5: Two addCluster same key in parallel -> only 1 row',
+    assert(
+      'D5: Two addCluster same key in parallel -> only 1 row',
       parseInt(d5Count[0].count) === 1,
-      `count=${d5Count[0].count}`);
+      `count=${d5Count[0].count}`
+    );
 
     // D6: markFallbackProcessed twice on same row -> second is idempotent
     await logFallback(pool, TEST_USER_ID, 'd6_test_symptom', null, []);
@@ -682,11 +785,14 @@ async function cleanup() {
       await markFallbackProcessed(pool, d6Row[0].id, 'label1', 'key1', 0.9, null);
       await markFallbackProcessed(pool, d6Row[0].id, 'label2', 'key2', 0.95, null);
       const { rows: d6Check } = await pool.query(
-        'SELECT status, ai_label, ai_confidence FROM fallback_logs WHERE id = $1', [d6Row[0].id]
+        'SELECT status, ai_label, ai_confidence FROM fallback_logs WHERE id = $1',
+        [d6Row[0].id]
       );
-      assert('D6: markFallbackProcessed twice -> second overwrites (idempotent)',
+      assert(
+        'D6: markFallbackProcessed twice -> second overwrites (idempotent)',
         d6Check[0]?.ai_label === 'label2' && parseFloat(d6Check[0]?.ai_confidence) === 0.95,
-        `label=${d6Check[0]?.ai_label}, conf=${d6Check[0]?.ai_confidence}`);
+        `label=${d6Check[0]?.ai_label}, conf=${d6Check[0]?.ai_confidence}`
+      );
     } else {
       assert('D6: markFallbackProcessed twice', false, 'no fallback row');
     }
@@ -694,35 +800,43 @@ async function cleanup() {
     // D7: Generate script while reading script -> reader gets valid data
     let d7NoError = true;
     try {
-      const d7Cluster = (await pool.query(
-        `SELECT * FROM problem_clusters WHERE user_id = $1 AND cluster_key = 'headache'`, [TEST_USER_ID]
-      )).rows[0];
+      const d7Cluster = (
+        await pool.query(
+          `SELECT * FROM problem_clusters WHERE user_id = $1 AND cluster_key = 'headache'`,
+          [TEST_USER_ID]
+        )
+      ).rows[0];
       if (d7Cluster) {
         const [, d7Read] = await Promise.all([
           generateScriptForCluster(pool, TEST_USER_ID, d7Cluster),
           getScript(pool, TEST_USER_ID, 'headache', 'initial'),
         ]);
         // Reader should get either old or new valid script (not corrupt)
-        d7NoError = d7Read === null || (d7Read.script_data && typeof d7Read.script_data === 'object');
+        d7NoError =
+          d7Read === null || (d7Read.script_data && typeof d7Read.script_data === 'object');
       }
     } catch (err) {
       d7NoError = false;
     }
-    assert('D7: Generate script while reading -> reader gets valid data',
-      d7NoError, 'no corruption');
+    assert(
+      'D7: Generate script while reading -> reader gets valid data',
+      d7NoError,
+      'no corruption'
+    );
 
     // D8: Delete cluster while getUserScript running -> no crash
     let d8NoError = true;
     try {
       await Promise.all([
-        pool.query(`DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = 'dup_test'`, [TEST_USER_ID]),
+        pool.query(`DELETE FROM problem_clusters WHERE user_id = $1 AND cluster_key = 'dup_test'`, [
+          TEST_USER_ID,
+        ]),
         getUserScript(pool, TEST_USER_ID),
       ]);
     } catch (err) {
       d8NoError = false;
     }
-    assert('D8: Delete cluster while getUserScript running -> no crash',
-      d8NoError, 'no errors');
+    assert('D8: Delete cluster while getUserScript running -> no crash', d8NoError, 'no errors');
 
     // ═══════════════════════════════════════════════════════════════════════
     // E. DATA CLEANUP AND LIFECYCLE (7 tests)
@@ -739,18 +853,22 @@ async function cleanup() {
       [TEST_USER_ID]
     );
     const e1Result = await getUserScript(pool, TEST_USER_ID);
-    assert('E1: Deactivate 2 of 5 -> getUserScript returns 3',
+    assert(
+      'E1: Deactivate 2 of 5 -> getUserScript returns 3',
       e1Result?.clusters?.length === 3,
-      `clusters=${e1Result?.clusters?.length}`);
+      `clusters=${e1Result?.clusters?.length}`
+    );
 
     // E2: Deactivated cluster's scripts still in DB (for audit)
     const { rows: e2Scripts } = await pool.query(
       `SELECT count(*) FROM triage_scripts WHERE user_id = $1 AND cluster_key IN ('dizziness', 'fatigue')`,
       [TEST_USER_ID]
     );
-    assert('E2: Deactivated cluster scripts still in DB (audit trail)',
+    assert(
+      'E2: Deactivated cluster scripts still in DB (audit trail)',
       parseInt(e2Scripts[0].count) > 0,
-      `count=${e2Scripts[0].count}`);
+      `count=${e2Scripts[0].count}`
+    );
 
     // E3: Re-activate cluster -> getUserScript returns 4 again
     await pool.query(
@@ -758,9 +876,11 @@ async function cleanup() {
       [TEST_USER_ID]
     );
     const e3Result = await getUserScript(pool, TEST_USER_ID);
-    assert('E3: Re-activate cluster -> getUserScript returns 4',
+    assert(
+      'E3: Re-activate cluster -> getUserScript returns 4',
       e3Result?.clusters?.length === 4,
-      `clusters=${e3Result?.clusters?.length}`);
+      `clusters=${e3Result?.clusters?.length}`
+    );
 
     // E4: Fallback log lifecycle: pending -> processed -> verify can't go back to pending
     // (we test that status can be set, but typically the service doesn't allow regression)
@@ -769,15 +889,21 @@ async function cleanup() {
       `SELECT id, status FROM fallback_logs WHERE user_id = $1 AND raw_input = 'e4_lifecycle_test' LIMIT 1`,
       [TEST_USER_ID]
     );
-    assert('E4a: Fallback starts as pending',
-      e4Row[0]?.status === 'pending', `status=${e4Row[0]?.status}`);
+    assert(
+      'E4a: Fallback starts as pending',
+      e4Row[0]?.status === 'pending',
+      `status=${e4Row[0]?.status}`
+    );
     await markFallbackProcessed(pool, e4Row[0].id, 'test', 'test_key', 0.8, null);
     const { rows: e4After } = await pool.query(
-      'SELECT status, processed_at FROM fallback_logs WHERE id = $1', [e4Row[0].id]
+      'SELECT status, processed_at FROM fallback_logs WHERE id = $1',
+      [e4Row[0].id]
     );
-    assert('E4b: Fallback lifecycle pending -> processed',
+    assert(
+      'E4b: Fallback lifecycle pending -> processed',
       e4After[0]?.status === 'processed' && e4After[0]?.processed_at !== null,
-      `status=${e4After[0]?.status}, processed_at=${e4After[0]?.processed_at}`);
+      `status=${e4After[0]?.status}, processed_at=${e4After[0]?.processed_at}`
+    );
 
     // E5: Script session lifecycle: created -> answers added -> completed
     const { rows: e5Session } = await pool.query(
@@ -802,16 +928,24 @@ async function cleanup() {
       [e5Id]
     );
     const { rows: e5Final } = await pool.query(
-      'SELECT is_completed, completed_at, severity FROM script_sessions WHERE id = $1', [e5Id]
+      'SELECT is_completed, completed_at, severity FROM script_sessions WHERE id = $1',
+      [e5Id]
     );
-    assert('E5: Script session lifecycle -> completed_at set',
-      e5Final[0]?.is_completed === true && e5Final[0]?.completed_at !== null && e5Final[0]?.severity === 'medium',
-      `completed=${e5Final[0]?.is_completed}, completed_at=${e5Final[0]?.completed_at}, severity=${e5Final[0]?.severity}`);
+    assert(
+      'E5: Script session lifecycle -> completed_at set',
+      e5Final[0]?.is_completed === true &&
+        e5Final[0]?.completed_at !== null &&
+        e5Final[0]?.severity === 'medium',
+      `completed=${e5Final[0]?.is_completed}, completed_at=${e5Final[0]?.completed_at}, severity=${e5Final[0]?.severity}`
+    );
 
     // E6: Old scripts (is_active=FALSE) don't interfere with new scripts
-    const e6Cluster = (await pool.query(
-      `SELECT * FROM problem_clusters WHERE user_id = $1 AND cluster_key = 'headache'`, [TEST_USER_ID]
-    )).rows[0];
+    const e6Cluster = (
+      await pool.query(
+        `SELECT * FROM problem_clusters WHERE user_id = $1 AND cluster_key = 'headache'`,
+        [TEST_USER_ID]
+      )
+    ).rows[0];
     if (e6Cluster) {
       await generateScriptForCluster(pool, TEST_USER_ID, e6Cluster);
       const e6Active = await getScript(pool, TEST_USER_ID, 'headache', 'initial');
@@ -819,10 +953,12 @@ async function cleanup() {
         `SELECT id, is_active FROM triage_scripts WHERE user_id = $1 AND cluster_key = 'headache' AND script_type = 'initial'`,
         [TEST_USER_ID]
       );
-      const e6ActiveIds = e6All.filter(s => s.is_active).map(s => s.id);
-      assert('E6: Old scripts (is_active=FALSE) dont interfere -> only 1 active returned',
+      const e6ActiveIds = e6All.filter((s) => s.is_active).map((s) => s.id);
+      assert(
+        'E6: Old scripts (is_active=FALSE) dont interfere -> only 1 active returned',
         e6ActiveIds.length === 1 && e6Active?.id === e6ActiveIds[0],
-        `activeIds=${e6ActiveIds.join(',')}, getScript.id=${e6Active?.id}, total=${e6All.length}`);
+        `activeIds=${e6ActiveIds.join(',')}, getScript.id=${e6Active?.id}, total=${e6All.length}`
+      );
     } else {
       assert('E6: Old scripts test', false, 'no headache cluster');
     }
@@ -830,23 +966,29 @@ async function cleanup() {
     // E7: Verify no orphaned rows after full lifecycle
     // Delete all clusters -> scripts should still exist (SET NULL), sessions still exist
     const { rows: e7BeforeScripts } = await pool.query(
-      'SELECT count(*) FROM triage_scripts WHERE user_id = $1', [TEST_USER_ID]
+      'SELECT count(*) FROM triage_scripts WHERE user_id = $1',
+      [TEST_USER_ID]
     );
     const { rows: e7BeforeSessions } = await pool.query(
-      'SELECT count(*) FROM script_sessions WHERE user_id = $1', [TEST_USER_ID]
+      'SELECT count(*) FROM script_sessions WHERE user_id = $1',
+      [TEST_USER_ID]
     );
     await pool.query('DELETE FROM problem_clusters WHERE user_id = $1', [TEST_USER_ID]);
     const { rows: e7AfterScripts } = await pool.query(
-      'SELECT count(*) FROM triage_scripts WHERE user_id = $1', [TEST_USER_ID]
+      'SELECT count(*) FROM triage_scripts WHERE user_id = $1',
+      [TEST_USER_ID]
     );
     const { rows: e7AfterSessions } = await pool.query(
-      'SELECT count(*) FROM script_sessions WHERE user_id = $1', [TEST_USER_ID]
+      'SELECT count(*) FROM script_sessions WHERE user_id = $1',
+      [TEST_USER_ID]
     );
     // Scripts still exist (ON DELETE SET NULL on cluster_id), sessions still exist
-    assert('E7: No orphaned rows after lifecycle (scripts/sessions survive cluster deletion)',
+    assert(
+      'E7: No orphaned rows after lifecycle (scripts/sessions survive cluster deletion)',
       parseInt(e7AfterScripts[0].count) === parseInt(e7BeforeScripts[0].count) &&
-      parseInt(e7AfterSessions[0].count) === parseInt(e7BeforeSessions[0].count),
-      `scripts: before=${e7BeforeScripts[0].count} after=${e7AfterScripts[0].count}, sessions: before=${e7BeforeSessions[0].count} after=${e7AfterSessions[0].count}`);
+        parseInt(e7AfterSessions[0].count) === parseInt(e7BeforeSessions[0].count),
+      `scripts: before=${e7BeforeScripts[0].count} after=${e7AfterScripts[0].count}, sessions: before=${e7BeforeSessions[0].count} after=${e7AfterSessions[0].count}`
+    );
 
     // ── Final cleanup ──
     await cleanup();

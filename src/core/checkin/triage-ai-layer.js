@@ -9,14 +9,11 @@
 
 const { callTextAi } = require('../../services/ai/ai.service');
 const { getHonorifics } = require('../../lib/honorifics');
-const { filterTriageResult } = require('../../services/ai/ai-safety.service');
-const { logAiInteraction } = require('../../services/ai/ai-logger.service');
-
-const CONCLUSION_MODEL = process.env.TRIAGE_CONCLUSION_MODEL || 'gpt-4o';
+const _CONCLUSION_MODEL = process.env.TRIAGE_CONCLUSION_MODEL || 'gpt-4o';
 
 // ─── Question Templates (có dấu tiếng Việt) ─────────────────────────────────
 
-function formatQuestion(engineResult, profile, previousAnswers = []) {
+function formatQuestion(engineResult, profile, _previousAnswers = []) {
   const h = getHonorifics({
     birth_year: profile.birth_year,
     gender: profile.gender,
@@ -32,17 +29,23 @@ function formatQuestion(engineResult, profile, previousAnswers = []) {
   // Lấy bodyLocations từ engineResult để inject vào greeting (T2 → T3 awareness).
   // Map enum key → label tiếng Việt.
   const LOCATION_LABEL_VI = {
-    head: 'đầu', chest: 'ngực', abdomen: 'bụng', limbs: 'tay chân',
-    skin: 'da', whole_body: 'toàn thân', mental: 'tinh thần',
+    head: 'đầu',
+    chest: 'ngực',
+    abdomen: 'bụng',
+    limbs: 'tay chân',
+    skin: 'da',
+    whole_body: 'toàn thân',
+    mental: 'tinh thần',
   };
   const locKeys = Array.isArray(engineResult.bodyLocations) ? engineResult.bodyLocations : [];
-  const locLabels = locKeys.map(k => LOCATION_LABEL_VI[k] || k).filter(Boolean);
+  const locLabels = locKeys.map((k) => LOCATION_LABEL_VI[k] || k).filter(Boolean);
   const locOther = (engineResult.bodyLocationOther || '').trim();
   // Build location phrase: "đầu" / "đầu, ngực" / "đầu, ngực, bụng" + " và '<other>'"
   let locPhrase = '';
   if (locLabels.length === 1) locPhrase = locLabels[0];
   else if (locLabels.length === 2) locPhrase = `${locLabels[0]} và ${locLabels[1]}`;
-  else if (locLabels.length >= 3) locPhrase = `${locLabels.slice(0, -1).join(', ')} và ${locLabels[locLabels.length - 1]}`;
+  else if (locLabels.length >= 3)
+    locPhrase = `${locLabels.slice(0, -1).join(', ')} và ${locLabels[locLabels.length - 1]}`;
   if (locOther) locPhrase = locPhrase ? `${locPhrase}, ${locOther}` : locOther;
 
   switch (step) {
@@ -129,34 +132,28 @@ const EMERGENCY_CONCLUSIONS = {
   },
   mi: {
     summary: (h) => `${h.Honorific} có triệu chứng nghi nhồi máu cơ tim.`,
-    recommendation: (h) =>
+    recommendation: (_h) =>
       `🚨 GỌI CẤP CỨU 115 NGAY. Trong khi chờ: ngồi nghỉ, nới lỏng quần áo, nhai 1 viên aspirin nếu có và không dị ứng.`,
-    closeMessage: (h) =>
-      `${h.selfRef} đã thông báo cho người thân. Gọi 115 ngay.`,
+    closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân. Gọi 115 ngay.`,
   },
   meningitis: {
     summary: () => `Sốt cao kèm cứng cổ, nghi viêm màng não.`,
-    recommendation: () =>
-      `🚨 ĐẾN BỆNH VIỆN NGAY. Viêm màng não cần điều trị khẩn cấp.`,
+    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY. Viêm màng não cần điều trị khẩn cấp.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   pe: {
     summary: () => `Khó thở đột ngột kèm đau ngực, nghi tắc mạch phổi.`,
-    recommendation: () =>
-      `🚨 GỌI CẤP CỨU 115. Nằm nghỉ, không cử động nhiều.`,
+    recommendation: () => `🚨 GỌI CẤP CỨU 115. Nằm nghỉ, không cử động nhiều.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   cauda_equina: {
-    summary: () =>
-      `Đau lưng kèm rối loạn tiểu tiện, nghi hội chứng chùm đuôi ngựa.`,
-    recommendation: () =>
-      `🚨 ĐẾN BỆNH VIỆN NGAY. Cần phẫu thuật khẩn cấp trong vòng 24-48h.`,
+    summary: () => `Đau lưng kèm rối loạn tiểu tiện, nghi hội chứng chùm đuôi ngựa.`,
+    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY. Cần phẫu thuật khẩn cấp trong vòng 24-48h.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   hemorrhage: {
     summary: () => `Nôn ra máu hoặc phân đen, nghi xuất huyết tiêu hóa.`,
-    recommendation: () =>
-      `🚨 ĐẾN BỆNH VIỆN NGAY. Không ăn uống. Nằm nghỉ chờ xe cấp cứu.`,
+    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY. Không ăn uống. Nằm nghỉ chờ xe cấp cứu.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   dengue: {
@@ -166,10 +163,8 @@ const EMERGENCY_CONCLUSIONS = {
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   dka: {
-    summary: () =>
-      `Tiểu đường kèm khát nước, buồn nôn, nghi nhiễm toan ceton.`,
-    recommendation: () =>
-      `🚨 ĐẾN BỆNH VIỆN NGAY. Uống nước, kiểm tra đường huyết nếu có máy.`,
+    summary: () => `Tiểu đường kèm khát nước, buồn nôn, nghi nhiễm toan ceton.`,
+    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY. Uống nước, kiểm tra đường huyết nếu có máy.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   seizure: {
@@ -215,21 +210,19 @@ async function generateConclusion(state, profile, lang = 'vi', pool = null) {
   return _generateConclusionWithGPT(state, profile, h, lang, pool);
 }
 
-async function _generateConclusionWithGPT(state, profile, h, lang, pool) {
+async function _generateConclusionWithGPT(state, profile, h, _lang, _pool) {
   const prompt = _buildConclusionPrompt(state, profile, h);
-  const startMs = Date.now();
-  let tokensUsed = 0;
 
   try {
     const response = await callTextAi({
-      system: 'Bạn là trợ lý y tế Asinu. Chỉ trả về JSON. Không chẩn đoán. Không kê đơn. Luôn khuyên gặp bác sĩ khi cần. Trả lời có dấu tiếng Việt đầy đủ.',
+      system:
+        'Bạn là trợ lý y tế Asinu. Chỉ trả về JSON. Không chẩn đoán. Không kê đơn. Luôn khuyên gặp bác sĩ khi cần. Trả lời có dấu tiếng Việt đầy đủ.',
       prompt,
       temperature: 0.3,
       maxTokens: 400,
     });
 
     const raw = response.content;
-    tokensUsed = response.usage?.total || 0;
     const parsed = _parseJSON(raw);
     if (!parsed) throw new Error('GPT returned invalid JSON');
 
@@ -311,7 +304,11 @@ function _parseJSON(raw) {
   } catch {
     const match = raw.match(/\{[\s\S]*\}/);
     if (match) {
-      try { return JSON.parse(match[0]); } catch { return null; }
+      try {
+        return JSON.parse(match[0]);
+      } catch {
+        return null;
+      }
     }
     return null;
   }
@@ -360,7 +357,12 @@ CHỈ JSON.`;
     if (!jsonMatch) return null;
 
     const parsed = JSON.parse(jsonMatch[0]);
-    if (!Array.isArray(parsed.associatedSymptoms) || !Array.isArray(parsed.redFlags) || !Array.isArray(parsed.causes)) return null;
+    if (
+      !Array.isArray(parsed.associatedSymptoms) ||
+      !Array.isArray(parsed.redFlags) ||
+      !Array.isArray(parsed.causes)
+    )
+      return null;
 
     const result = {
       associatedSymptoms: parsed.associatedSymptoms,
@@ -369,7 +371,9 @@ CHỈ JSON.`;
     };
 
     _mappingCache.set(key, result);
-    console.log(`[AI Mapping] Generated for "${symptom}": ${result.associatedSymptoms.length} associated, ${result.redFlags.length} redFlags, ${result.causes.length} causes`);
+    console.log(
+      `[AI Mapping] Generated for "${symptom}": ${result.associatedSymptoms.length} associated, ${result.redFlags.length} redFlags, ${result.causes.length} causes`
+    );
     return result;
   } catch (err) {
     console.error(`[AI Mapping] Failed for "${symptom}":`, err.message);
@@ -397,7 +401,8 @@ async function classifySymptomSeverity(symptom, profile = {}) {
   if (!symptom) return { severity: 'mild', needsFamilyAlert: false, needsDoctor: false };
 
   const conditions = (profile.medical_conditions || []).join(', ') || 'không';
-  const age = profile.age || (profile.birth_year ? new Date().getFullYear() - profile.birth_year : null);
+  const age =
+    profile.age || (profile.birth_year ? new Date().getFullYear() - profile.birth_year : null);
   const cacheKey = `${symptom.toLowerCase().trim()}|${conditions}|${age || '?'}`;
 
   if (_severityCache.has(cacheKey)) return _severityCache.get(cacheKey);
@@ -442,13 +447,23 @@ CHỈ JSON.`;
     if (!jsonMatch) {
       // Fail-safe: nếu AI fail → treat as urgent để gọi bác sĩ (không dám
       // assume mild khi không chắc)
-      return { severity: 'urgent', reason: 'AI unavailable', needsFamilyAlert: false, needsDoctor: true };
+      return {
+        severity: 'urgent',
+        reason: 'AI unavailable',
+        needsFamilyAlert: false,
+        needsDoctor: true,
+      };
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
     const validSeverities = ['emergency', 'urgent', 'moderate', 'mild'];
     if (!validSeverities.includes(parsed.severity)) {
-      return { severity: 'urgent', reason: 'invalid response', needsFamilyAlert: false, needsDoctor: true };
+      return {
+        severity: 'urgent',
+        reason: 'invalid response',
+        needsFamilyAlert: false,
+        needsDoctor: true,
+      };
     }
 
     const result = {
@@ -464,7 +479,12 @@ CHỈ JSON.`;
   } catch (err) {
     console.error(`[AI Safety] classify failed for "${symptom}":`, err.message);
     // Fail-safe: AI down → urgent (bắt user đi khám) thay vì silent miss
-    return { severity: 'urgent', reason: 'AI error fail-safe', needsFamilyAlert: false, needsDoctor: true };
+    return {
+      severity: 'urgent',
+      reason: 'AI error fail-safe',
+      needsFamilyAlert: false,
+      needsDoctor: true,
+    };
   }
 }
 

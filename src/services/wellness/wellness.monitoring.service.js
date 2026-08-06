@@ -1,7 +1,7 @@
 /**
  * Wellness Monitoring Service
  * Hệ thống theo dõi sức khỏe và thói quen người dùng
- * 
+ *
  * Chức năng:
  * 1. Ghi lại hoạt động người dùng (mở app, mood, số đo)
  * 2. Tính điểm wellness 0-100
@@ -9,7 +9,6 @@
  * 4. Gửi alert cho người thân khi cần
  */
 
-const { randomUUID } = require('crypto');
 const { t } = require('../../i18n');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
 const { sendAndSave } = require('../notification/basic.notification.service');
@@ -29,16 +28,16 @@ const DEFAULT_CONFIG = {
   weight_consistency: 25,
   weight_mood: 30,
   weight_engagement: 20,
-  weight_health_data: 25
+  weight_health_data: 25,
 };
 
 // Mood values
 const MOOD_VALUES = {
-  'OK': 100,
-  'TIRED': 50,
-  'NOT_OK': 20,
-  'NORMAL': 80,
-  'EMERGENCY': 0
+  OK: 100,
+  TIRED: 50,
+  NOT_OK: 20,
+  NORMAL: 80,
+  EMERGENCY: 0,
 };
 
 // =====================================================
@@ -125,10 +124,10 @@ async function updateWellnessStateFromActivity(client, userId, activityType, act
       );
       break;
 
-    case 'MOOD_CHECK':
+    case 'MOOD_CHECK': {
       const mood = activityData.mood || 'NORMAL';
       const isNegative = mood === 'NOT_OK' || mood === 'EMERGENCY';
-      
+
       await client.query(
         `UPDATE user_wellness_state 
          SET last_response_at = NOW(),
@@ -142,6 +141,7 @@ async function updateWellnessStateFromActivity(client, userId, activityType, act
         [userId, isNegative]
       );
       break;
+    }
 
     case 'QUESTION_ANSWERED':
       await client.query(
@@ -208,14 +208,14 @@ async function updateDailySummary(client, userId, date, activityType, activityDa
   );
 
   let updateQuery = '';
-  let params = [userId, date];
+  const params = [userId, date];
 
   switch (activityType) {
     case 'APP_OPEN':
       updateQuery = 'app_opens = app_opens + 1';
       break;
 
-    case 'MOOD_CHECK':
+    case 'MOOD_CHECK': {
       const mood = activityData.mood || 'NORMAL';
       updateQuery = 'mood_checks = mood_checks + 1';
       if (mood === 'OK' || mood === 'NORMAL') {
@@ -226,6 +226,7 @@ async function updateDailySummary(client, userId, date, activityType, activityDa
         updateQuery += ', mood_negative = mood_negative + 1';
       }
       break;
+    }
 
     case 'QUESTION_ANSWERED':
       updateQuery = 'questions_answered = questions_answered + 1';
@@ -286,10 +287,9 @@ async function calculateWellnessScore(client, userId) {
   const config = await ensureWellnessConfig(client, userId);
 
   // Get wellness state
-  const stateResult = await client.query(
-    'SELECT * FROM user_wellness_state WHERE user_id = $1',
-    [userId]
-  );
+  const stateResult = await client.query('SELECT * FROM user_wellness_state WHERE user_id = $1', [
+    userId,
+  ]);
   const state = stateResult.rows[0] || {};
 
   // Get recent activities (last 7 days)
@@ -322,16 +322,17 @@ async function calculateWellnessScore(client, userId) {
     consistency: config.weight_consistency || DEFAULT_CONFIG.weight_consistency,
     mood: config.weight_mood || DEFAULT_CONFIG.weight_mood,
     engagement: config.weight_engagement || DEFAULT_CONFIG.weight_engagement,
-    health: config.weight_health_data || DEFAULT_CONFIG.weight_health_data
+    health: config.weight_health_data || DEFAULT_CONFIG.weight_health_data,
   };
 
   const totalWeight = weights.consistency + weights.mood + weights.engagement + weights.health;
-  
+
   const score = Math.round(
     (consistencyScore * weights.consistency +
-     moodScore * weights.mood +
-     engagementScore * weights.engagement +
-     healthScore * weights.health) / totalWeight
+      moodScore * weights.mood +
+      engagementScore * weights.engagement +
+      healthScore * weights.health) /
+      totalWeight
   );
 
   const status = scoreToStatus(score, config);
@@ -341,7 +342,7 @@ async function calculateWellnessScore(client, userId) {
     mood: moodScore,
     engagement: engagementScore,
     health: healthScore,
-    weights
+    weights,
   };
 
   // Save score
@@ -386,7 +387,7 @@ function calculateConsistencyScore(state, summaries) {
   score += streakBonus;
 
   // Daily app opens: at least 1 per day = good
-  const daysWithActivity = summaries.filter(s => s.app_opens > 0).length;
+  const daysWithActivity = summaries.filter((s) => s.app_opens > 0).length;
   const consistencyRate = summaries.length > 0 ? daysWithActivity / summaries.length : 0;
   score += Math.round(consistencyRate * 25);
 
@@ -396,17 +397,17 @@ function calculateConsistencyScore(state, summaries) {
 /**
  * Tính điểm mood
  */
-function calculateMoodScore(activities, summaries) {
+function calculateMoodScore(activities, _summaries) {
   // Get mood checks from activities
-  const moodChecks = activities.filter(a => a.activity_type === 'MOOD_CHECK');
-  
+  const moodChecks = activities.filter((a) => a.activity_type === 'MOOD_CHECK');
+
   if (moodChecks.length === 0) {
     // No mood data - neutral score
     return 60;
   }
 
   let totalMoodValue = 0;
-  moodChecks.forEach(check => {
+  moodChecks.forEach((check) => {
     const mood = check.activity_data?.mood || 'NORMAL';
     totalMoodValue += MOOD_VALUES[mood] || 50;
   });
@@ -425,11 +426,13 @@ function calculateEngagementScore(state, activities) {
   score -= noResponsePenalty;
 
   // Bonus for answered questions
-  const answeredCount = activities.filter(a => a.activity_type === 'QUESTION_ANSWERED').length;
+  const answeredCount = activities.filter((a) => a.activity_type === 'QUESTION_ANSWERED').length;
   score += Math.min(30, answeredCount * 5);
 
   // Bonus for health measurements
-  const measurementCount = activities.filter(a => a.activity_type === 'HEALTH_MEASUREMENT').length;
+  const measurementCount = activities.filter(
+    (a) => a.activity_type === 'HEALTH_MEASUREMENT'
+  ).length;
   score += Math.min(20, measurementCount * 3);
 
   return Math.min(100, Math.max(0, score));
@@ -438,9 +441,9 @@ function calculateEngagementScore(state, activities) {
 /**
  * Tính điểm health data
  */
-function calculateHealthDataScore(activities, summaries) {
+function calculateHealthDataScore(activities, _summaries) {
   // If no health measurements, return neutral
-  const measurements = activities.filter(a => a.activity_type === 'HEALTH_MEASUREMENT');
+  const measurements = activities.filter((a) => a.activity_type === 'HEALTH_MEASUREMENT');
   if (measurements.length === 0) {
     return 70; // Neutral - no negative but room for improvement
   }
@@ -466,10 +469,9 @@ async function shouldPromptUser(client, userId) {
   const config = await ensureWellnessConfig(client, userId);
 
   // Get current state
-  const stateResult = await client.query(
-    'SELECT * FROM user_wellness_state WHERE user_id = $1',
-    [userId]
-  );
+  const stateResult = await client.query('SELECT * FROM user_wellness_state WHERE user_id = $1', [
+    userId,
+  ]);
   const state = stateResult.rows[0];
 
   if (!state) {
@@ -478,8 +480,15 @@ async function shouldPromptUser(client, userId) {
 
   // Rule 1: Respect cooldown
   const minutesSinceLastPrompt = minutesSince(state.last_prompt_at);
-  if (minutesSinceLastPrompt < (config.prompt_cooldown_minutes || DEFAULT_CONFIG.prompt_cooldown_minutes)) {
-    return { shouldPrompt: false, reason: 'cooldown', minutesRemaining: config.prompt_cooldown_minutes - minutesSinceLastPrompt };
+  if (
+    minutesSinceLastPrompt <
+    (config.prompt_cooldown_minutes || DEFAULT_CONFIG.prompt_cooldown_minutes)
+  ) {
+    return {
+      shouldPrompt: false,
+      reason: 'cooldown',
+      minutesRemaining: config.prompt_cooldown_minutes - minutesSinceLastPrompt,
+    };
   }
 
   // Rule 2: Check daily limit
@@ -502,7 +511,8 @@ async function shouldPromptUser(client, userId) {
   if (state.current_status === 'MONITOR') {
     // Only prompt if been a while since last response
     const minutesSinceResponse = minutesSince(state.last_response_at);
-    if (minutesSinceResponse > 240) { // 4 hours
+    if (minutesSinceResponse > 240) {
+      // 4 hours
       return { shouldPrompt: true, reason: 'monitor_no_activity', promptType: 'mood_check' };
     }
     return { shouldPrompt: false, reason: 'monitor_recent_activity' };
@@ -550,10 +560,9 @@ async function recordPrompt(client, userId, promptType, promptMessage, triggered
 async function shouldAlertCaregiver(client, userId) {
   const config = await ensureWellnessConfig(client, userId);
 
-  const stateResult = await client.query(
-    'SELECT * FROM user_wellness_state WHERE user_id = $1',
-    [userId]
-  );
+  const stateResult = await client.query('SELECT * FROM user_wellness_state WHERE user_id = $1', [
+    userId,
+  ]);
   const state = stateResult.rows[0];
 
   if (!state) {
@@ -568,7 +577,7 @@ async function shouldAlertCaregiver(client, userId) {
   );
   const lastAlertAt = lastAlertResult.rows[0]?.created_at;
   const hoursSinceAlert = hoursSince(lastAlertAt);
-  
+
   if (hoursSinceAlert < (config.alert_cooldown_hours || DEFAULT_CONFIG.alert_cooldown_hours)) {
     return { shouldAlert: false, reason: 'alert_cooldown' };
   }
@@ -579,7 +588,10 @@ async function shouldAlertCaregiver(client, userId) {
   // theo lang của RECIPIENT (caregiver) thay vì hardcode 'vi'.
 
   // Rule 2: Multiple no responses
-  if (state.consecutive_no_response >= (config.alert_after_no_response || DEFAULT_CONFIG.alert_after_no_response)) {
+  if (
+    state.consecutive_no_response >=
+    (config.alert_after_no_response || DEFAULT_CONFIG.alert_after_no_response)
+  ) {
     return {
       shouldAlert: true,
       reason: 'no_response',
@@ -590,7 +602,10 @@ async function shouldAlertCaregiver(client, userId) {
   }
 
   // Rule 3: DANGER status
-  if (state.current_status === 'DANGER' && (config.alert_on_danger ?? DEFAULT_CONFIG.alert_on_danger)) {
+  if (
+    state.current_status === 'DANGER' &&
+    (config.alert_on_danger ?? DEFAULT_CONFIG.alert_on_danger)
+  ) {
     return {
       shouldAlert: true,
       reason: 'danger_status',
@@ -661,7 +676,15 @@ async function fireCaregiverPushAlerts(pool, alerts) {
   }
 }
 
-async function sendCaregiverAlert(client, userId, alertType, titleSpec, messageSpec, triggeredBy, contextData = {}) {
+async function sendCaregiverAlert(
+  client,
+  userId,
+  alertType,
+  titleSpec,
+  messageSpec,
+  triggeredBy,
+  contextData = {}
+) {
   // titleSpec / messageSpec: chấp nhận 2 dạng để backward-compat:
   //   1. string → render trực tiếp (legacy, sẽ là cùng 1 lang cho mọi CG)
   //   2. { key, params } → render PER caregiver lang (đa ngôn ngữ đúng)
@@ -698,7 +721,16 @@ async function sendCaregiverAlert(client, userId, alertType, titleSpec, messageS
        (user_id, caregiver_user_id, connection_id, alert_type, title, message, context_data, triggered_by, alert_status, sent_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'sent', NOW())
        RETURNING *`,
-      [userId, caregiver.caregiver_id, caregiver.connection_id, alertType, localizedTitle, localizedMessage, JSON.stringify(contextData), triggeredBy]
+      [
+        userId,
+        caregiver.caregiver_id,
+        caregiver.connection_id,
+        alertType,
+        localizedTitle,
+        localizedMessage,
+        JSON.stringify(contextData),
+        triggeredBy,
+      ]
     );
     alerts.push(result.rows[0]);
   }
@@ -755,22 +787,24 @@ async function evaluateUserWellness(pool, userId, options = {}) {
       scoreUpdated: true,
       score: scoreResult.score,
       status: scoreResult.status,
-      statusChanged: scoreResult.previousStatus && scoreResult.status !== scoreResult.previousStatus,
+      statusChanged:
+        scoreResult.previousStatus && scoreResult.status !== scoreResult.previousStatus,
       prompt: null,
-      alert: null
+      alert: null,
     };
 
     // Execute prompt if needed
     if (promptDecision.shouldPrompt && options.executePrompt !== false) {
-      const promptMessage = promptDecision.promptType === 'mood_check' 
-        ? t('wellness.how_are_you')
-        : t('wellness.need_help');
-      
+      const promptMessage =
+        promptDecision.promptType === 'mood_check'
+          ? t('wellness.how_are_you')
+          : t('wellness.need_help');
+
       actions.prompt = await recordPrompt(
-        client, 
-        userId, 
-        promptDecision.promptType, 
-        promptMessage, 
+        client,
+        userId,
+        promptDecision.promptType,
+        promptMessage,
         promptDecision.reason
       );
     }
@@ -781,16 +815,19 @@ async function evaluateUserWellness(pool, userId, options = {}) {
         'SELECT * FROM user_wellness_state WHERE user_id = $1',
         [userId]
       );
-      
+
       // Pass key+params spec thay vì rendered text → sendCaregiverAlert sẽ
       // render theo lang của TỪNG caregiver (đa ngôn ngữ).
       const titleSpec = {
-        key: alertDecision.alertType === 'URGENT' ? 'wellness.attention_needed' : 'wellness.monitoring_alert',
+        key:
+          alertDecision.alertType === 'URGENT'
+            ? 'wellness.attention_needed'
+            : 'wellness.monitoring_alert',
         params: {},
       };
       const messageSpec = alertDecision.messageKey
         ? { key: alertDecision.messageKey, params: alertDecision.messageParams || {} }
-        : (alertDecision.message || '');
+        : alertDecision.message || '';
       actions.alert = await sendCaregiverAlert(
         client,
         userId,
@@ -801,7 +838,7 @@ async function evaluateUserWellness(pool, userId, options = {}) {
         {
           score: scoreResult.score,
           status: scoreResult.status,
-          state: stateResult.rows[0]
+          state: stateResult.rows[0],
         }
       );
     }
@@ -823,7 +860,7 @@ async function evaluateUserWellness(pool, userId, options = {}) {
       ...actions,
       breakdown: scoreResult.breakdown,
       promptDecision,
-      alertDecision
+      alertDecision,
     };
   } catch (err) {
     await client.query('ROLLBACK');
@@ -849,10 +886,9 @@ async function getWellnessState(pool, userId) {
   try {
     await ensureWellnessState(client, userId);
 
-    const result = await client.query(
-      'SELECT * FROM user_wellness_state WHERE user_id = $1',
-      [userId]
-    );
+    const result = await client.query('SELECT * FROM user_wellness_state WHERE user_id = $1', [
+      userId,
+    ]);
     const state = result.rows[0];
     await cacheSet(`wellness:state:${userId}`, state, 180); // 3 min
     return state;
@@ -953,10 +989,7 @@ async function acknowledgeAlert(pool, alertId, acknowledgedBy) {
 async function ackAlertWithPermission(pool, alertId, userId) {
   try {
     // Get alert
-    const alertResult = await pool.query(
-      'SELECT * FROM caregiver_alerts WHERE id = $1',
-      [alertId]
-    );
+    const alertResult = await pool.query('SELECT * FROM caregiver_alerts WHERE id = $1', [alertId]);
 
     if (alertResult.rows.length === 0) {
       return { ok: false, error: t('wellness.alert_not_found'), statusCode: 404 };
@@ -987,11 +1020,10 @@ async function ackAlertWithPermission(pool, alertId, userId) {
       alert: {
         id: updated.id,
         status: updated.alert_status,
-        acknowledgedAt: updated.acknowledged_at
-      }
+        acknowledgedAt: updated.acknowledged_at,
+      },
     };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -1000,32 +1032,32 @@ module.exports = {
   // Activity logging
   logUserActivity,
   updateWellnessStateFromActivity,
-  
+
   // Score calculation
   calculateWellnessScore,
   scoreToStatus,
-  
+
   // Decision making
   shouldPromptUser,
   shouldAlertCaregiver,
   recordPrompt,
-  
+
   // Alert management
   sendCaregiverAlert,
   acknowledgeAlert,
   ackAlertWithPermission,
-  
+
   // Main evaluation
   evaluateUserWellness,
-  
+
   // Getters
   getWellnessState,
   getWellnessHistory,
   getDailySummaries,
   getCaregiverAlerts,
   getAlertsForCaregiver,
-  
+
   // Helpers
   ensureWellnessState,
-  ensureWellnessConfig
+  ensureWellnessConfig,
 };

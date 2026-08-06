@@ -92,7 +92,7 @@ async function getCrmUserPayload(pool, userId) {
        FROM users u
        LEFT JOIN user_onboarding_profiles uop ON uop.user_id = u.id
       WHERE u.id = $1`,
-    [userId],
+    [userId]
   );
   const user = result.rows[0];
   if (!user) return null;
@@ -117,14 +117,17 @@ async function emitAppSessionStarted(pool, userId, provider = 'app') {
   const sessionId = `asinu:${userId}:${crypto.randomUUID()}`;
   const payload = { user_id: String(userId), session_id: sessionId, source_platform: provider };
   await Promise.all([
-    emitCrmEventAsync(pool, 'session.started', payload, { event_id: `session.started:${sessionId}` }),
+    emitCrmEventAsync(pool, 'session.started', payload, {
+      event_id: `session.started:${sessionId}`,
+    }),
     emitCrmEventAsync(pool, 'app.opened', payload, { event_id: `app.opened:${sessionId}` }),
   ]);
 }
 
 async function emitUserCreated(pool, userId) {
   const payload = await getCrmUserPayload(pool, userId);
-  if (payload) await emitCrmEventAsync(pool, 'user.created', payload, { event_id: `user.created:${userId}` });
+  if (payload)
+    await emitCrmEventAsync(pool, 'user.created', payload, { event_id: `user.created:${userId}` });
 }
 
 async function emitPrivacyConsentAccepted(pool, userId, version = 'v1.0.0') {
@@ -137,7 +140,7 @@ async function emitPrivacyConsentAccepted(pool, userId, version = 'v1.0.0') {
       status: 'accepted',
       version,
     },
-    { event_id: `consent.updated:privacy_policy:${userId}:${version}` },
+    { event_id: `consent.updated:privacy_policy:${userId}:${version}` }
   );
 }
 
@@ -151,11 +154,9 @@ async function emitPrivacyConsentAccepted(pool, userId, version = 'v1.0.0') {
  * @returns {Object} - { ok: true, token, user }
  */
 function issueJwt(user) {
-  const token = jwt.sign(
-    { id: user.id, email: user.email },
-    JWT_SECRET,
-    { expiresIn: JWT_EXPIRES_IN }
-  );
+  const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
+    expiresIn: JWT_EXPIRES_IN,
+  });
   return {
     ok: true,
     token,
@@ -164,7 +165,7 @@ function issueJwt(user) {
       email: user.email,
       full_name: user.full_name || user.display_name || null,
       phone_number: user.phone_number || null,
-    }
+    },
   };
 }
 
@@ -224,7 +225,7 @@ async function verifySocialToken(provider, token) {
       const result = await fetchProviderJson(
         'https://www.googleapis.com/oauth2/v2/userinfo',
         { headers: { Authorization: `Bearer ${token}` } },
-        'google.userinfo',
+        'google.userinfo'
       );
       if (!result.ok) return { valid: false };
 
@@ -252,7 +253,7 @@ async function verifySocialToken(provider, token) {
         const keys = await getApplePublicKeys();
         if (!keys) return { valid: false };
 
-        const appleKey = keys.find(k => k.kid === kid);
+        const appleKey = keys.find((k) => k.kid === kid);
         if (!appleKey) {
           console.error('[Apple Auth] No matching key for kid:', kid);
           return { valid: false };
@@ -274,7 +275,7 @@ async function verifySocialToken(provider, token) {
           profile: {
             email: decoded.email || undefined,
             sub: decoded.sub,
-          }
+          },
         };
       } catch (appleErr) {
         console.error('[Apple Auth] Token verification failed:', appleErr.message);
@@ -286,7 +287,7 @@ async function verifySocialToken(provider, token) {
       const result = await fetchProviderJson(
         'https://graph.zalo.me/v2.0/me?fields=id,name,picture',
         { headers: { access_token: token } },
-        'zalo.profile',
+        'zalo.profile'
       );
       if (!result.ok) return { valid: false };
 
@@ -302,7 +303,6 @@ async function verifySocialToken(provider, token) {
 
     return { valid: true };
   } catch (err) {
-
     return { valid: false };
   }
 }
@@ -402,7 +402,15 @@ async function createUserWithEmail(pool, email, passwordHash) {
  * @param {string|null} fullName - Name supplied by the provider, when available
  * @returns {Promise<Object>} - Created user
  */
-async function createUserWithProvider(pool, idColumn, providerId, provider, email, phoneNumber, fullName) {
+async function createUserWithProvider(
+  pool,
+  idColumn,
+  providerId,
+  provider,
+  email,
+  phoneNumber,
+  fullName
+) {
   const result = await pool.query(
     `INSERT INTO users (${idColumn}, email, phone_number, full_name, auth_provider, consent_accepted_at, consent_version)
      VALUES ($1, $2, $3, $4, $5, NOW(), 'v1.0.0')
@@ -455,7 +463,7 @@ const DEFAULT_MISSIONS = [
   { mission_key: 'log_meal', goal: 3 },
   { mission_key: 'log_insulin', goal: 1 },
   { mission_key: 'log_medication', goal: 1 },
-  { mission_key: 'daily_checkin', goal: 1 }
+  { mission_key: 'daily_checkin', goal: 1 },
 ];
 
 /**
@@ -466,7 +474,7 @@ const DEFAULT_MISSIONS = [
  */
 async function initializeDefaultMissions(pool, userId) {
   try {
-    const insertPromises = DEFAULT_MISSIONS.map(mission =>
+    const insertPromises = DEFAULT_MISSIONS.map((mission) =>
       pool.query(
         `INSERT INTO user_missions (user_id, mission_key, status, progress, goal)
          VALUES ($1, $2, 'active', 0, $3)
@@ -475,10 +483,7 @@ async function initializeDefaultMissions(pool, userId) {
       )
     );
     await Promise.all(insertPromises);
-
-  } catch (err) {
-
-  }
+  } catch (err) {}
 }
 
 // =====================================================
@@ -515,7 +520,7 @@ function getPhoneVariants(phoneNumber) {
     normalized,
     normalized.startsWith('0') ? '+84' + normalized.substring(1) : normalized,
     normalized.startsWith('84') ? '+' + normalized : normalized,
-    normalized.startsWith('+84') ? normalized : '+84' + normalized
+    normalized.startsWith('+84') ? normalized : '+84' + normalized,
   ];
 }
 
@@ -536,16 +541,16 @@ function getPhoneVariants(phoneNumber) {
 async function registerByEmail(pool, email, password, phoneNumber, fullName, displayName) {
   try {
     const normalizedEmail = String(email).trim().toLowerCase();
-    
+
     // Check if email exists
     const existingEmail = await findUserByEmail(pool, normalizedEmail);
     if (existingEmail) {
       return { ok: false, error: t('auth.email_already_registered') };
     }
-    
+
     // Hash password
     const passwordHash = await hashPassword(password);
-    
+
     // Normalize phone if provided
     let finalPhone = null;
     if (phoneNumber) {
@@ -561,7 +566,7 @@ async function registerByEmail(pool, email, password, phoneNumber, fullName, dis
         return { ok: false, error: t('auth.phone_already_used') };
       }
     }
-    
+
     // Insert user
     const result = await pool.query(
       `INSERT INTO users (email, phone_number, password_hash, full_name, display_name, auth_provider, consent_accepted_at, consent_version)
@@ -574,23 +579,22 @@ async function registerByEmail(pool, email, password, phoneNumber, fullName, dis
     if (!result.rows[0]) {
       return { ok: false, error: t('auth.email_already_registered') };
     }
-    
+
     const user = result.rows[0];
-    
+
     // Initialize default missions
     await initializeDefaultMissions(pool, user.id);
     await emitUserCreated(pool, user.id);
     await emitPrivacyConsentAccepted(pool, user.id);
-    
+
     const token_response = issueJwt(user);
     await emitAppSessionStarted(pool, user.id, 'email');
-    return { 
-      ok: true, 
-      token: token_response.token, 
-      user: token_response.user 
+    return {
+      ok: true,
+      token: token_response.token,
+      user: token_response.user,
     };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -606,7 +610,7 @@ async function loginByEmail(pool, identifier, password) {
   try {
     const isEmail = identifier.includes('@');
     let user;
-    
+
     if (isEmail) {
       const normalizedEmail = String(identifier).trim().toLowerCase();
       user = await findUserByEmail(pool, normalizedEmail);
@@ -619,25 +623,24 @@ async function loginByEmail(pool, identifier, password) {
       );
       user = result.rows[0];
     }
-    
+
     if (!user) {
       return { ok: false, error: t('auth.invalid_credentials') };
     }
-    
+
     const isValid = await comparePassword(password, user.password_hash);
     if (!isValid) {
       return { ok: false, error: t('auth.invalid_credentials') };
     }
-    
+
     const token_response = issueJwt(user);
     await emitAppSessionStarted(pool, user.id, 'email');
-    return { 
-      ok: true, 
-      token: token_response.token, 
-      user: token_response.user 
+    return {
+      ok: true,
+      token: token_response.token,
+      user: token_response.user,
     };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -662,12 +665,18 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
       // without overwriting a name the user already chose in the app.
       const normalizedName = String(fullName || '').trim();
       if (normalizedName && !String(existing.full_name || '').trim()) {
-        await pool.query('UPDATE users SET full_name = $1 WHERE id = $2', [normalizedName, existing.id]);
+        await pool.query('UPDATE users SET full_name = $1 WHERE id = $2', [
+          normalizedName,
+          existing.id,
+        ]);
         existing.full_name = normalizedName;
       }
       if (email && !String(existing.email || '').trim()) {
         const normalizedEmail = String(email).trim().toLowerCase();
-        await pool.query('UPDATE users SET email = $1 WHERE id = $2', [normalizedEmail, existing.id]);
+        await pool.query('UPDATE users SET email = $1 WHERE id = $2', [
+          normalizedEmail,
+          existing.id,
+        ]);
         existing.email = normalizedEmail;
       }
       const token_response = issueJwt(existing);
@@ -675,7 +684,7 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
       return {
         ok: true,
         token: token_response.token,
-        user: token_response.user
+        user: token_response.user,
       };
     }
 
@@ -691,10 +700,16 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
       // social provider. Link the new provider instead of creating a duplicate.
       if (emailUser.rows.length > 0) {
         const linkedUser = emailUser.rows[0];
-        await pool.query(`UPDATE users SET ${idColumn} = $1 WHERE id = $2`, [providerId, linkedUser.id]);
+        await pool.query(`UPDATE users SET ${idColumn} = $1 WHERE id = $2`, [
+          providerId,
+          linkedUser.id,
+        ]);
         const normalizedName = String(fullName || '').trim();
         if (normalizedName && !String(linkedUser.full_name || '').trim()) {
-          await pool.query('UPDATE users SET full_name = $1 WHERE id = $2', [normalizedName, linkedUser.id]);
+          await pool.query('UPDATE users SET full_name = $1 WHERE id = $2', [
+            normalizedName,
+            linkedUser.id,
+          ]);
           linkedUser.full_name = normalizedName;
         }
         const linkedPayload = await getCrmUserPayload(pool, linkedUser.id);
@@ -706,22 +721,29 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
     }
 
     // Create new user
-    const newUser = await createUserWithProvider(pool, idColumn, providerId, provider, email, phoneNumber, fullName);
-    
+    const newUser = await createUserWithProvider(
+      pool,
+      idColumn,
+      providerId,
+      provider,
+      email,
+      phoneNumber,
+      fullName
+    );
+
     // Initialize default missions
     await initializeDefaultMissions(pool, newUser.id);
     await emitUserCreated(pool, newUser.id);
     await emitPrivacyConsentAccepted(pool, newUser.id);
-    
+
     const token_response = issueJwt(newUser);
     await emitAppSessionStarted(pool, newUser.id, provider);
-    return { 
-      ok: true, 
-      token: token_response.token, 
-      user: token_response.user 
+    return {
+      ok: true,
+      token: token_response.token,
+      user: token_response.user,
     };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -759,10 +781,12 @@ async function getCurrentUser(pool, userId) {
  * Returns null if the input is not a valid full phone (no partial matches).
  */
 function normalizeVietnamesePhone(raw) {
-  const cleaned = String(raw || '').trim().replace(/[\s\-()]/g, '');
+  const cleaned = String(raw || '')
+    .trim()
+    .replace(/[\s\-()]/g, '');
   if (/^0\d{9}$/.test(cleaned)) return cleaned;
   if (/^\+84\d{9}$/.test(cleaned)) return '0' + cleaned.slice(3);
-  if (/^84\d{9}$/.test(cleaned))  return '0' + cleaned.slice(2);
+  if (/^84\d{9}$/.test(cleaned)) return '0' + cleaned.slice(2);
   return null;
 }
 
@@ -790,9 +814,12 @@ async function searchUsers(pool, currentUserId, query) {
       [currentUserId, phone]
     );
 
-    return result.rows.map(user => ({
+    return result.rows.map((user) => ({
       id: String(user.id),
-      name: user.display_name || user.full_name || (user.email ? user.email.split('@')[0] : `User ${user.id}`),
+      name:
+        user.display_name ||
+        user.full_name ||
+        (user.email ? user.email.split('@')[0] : `User ${user.id}`),
       email: null,
       phone: user.phone_number || null,
     }));
@@ -807,7 +834,7 @@ async function logout(pool, userId) {
     pool,
     'session.ended',
     { user_id: String(userId), status: 'ended', source_platform: 'app' },
-    { event_id: `session.ended:${userId}:${Date.now()}` },
+    { event_id: `session.ended:${userId}:${Date.now()}` }
   );
 }
 
@@ -819,15 +846,15 @@ module.exports = {
   // JWT
   issueJwt,
   verifyJwt,
-  
+
   // Password
   hashPassword,
   comparePassword,
-  
+
   // Social auth
   verifySocialToken,
   generateProviderId,
-  
+
   // User operations
   findUserByEmail,
   findUserById,
@@ -836,11 +863,11 @@ module.exports = {
   createUserWithEmail,
   createUserWithProvider,
   createOrUpdateUserWithPhone,
-  
+
   // Phone utilities
   normalizePhoneNumber,
   getPhoneVariants,
-  
+
   // Register/Login
   registerByEmail,
   loginByEmail,

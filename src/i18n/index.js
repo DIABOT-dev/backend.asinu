@@ -1,7 +1,7 @@
 /**
  * Backend i18n Module
  * Simple translation function for internationalized messages
- * 
+ *
  * Usage:
  *   const { t } = require('../i18n');
  *   t('error.server', 'vi')           → 'Lỗi server'

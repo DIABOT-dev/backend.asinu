@@ -12,7 +12,7 @@ const {
   googleInitiate,
   googleCallback,
   searchUsers,
-  verifyToken
+  verifyToken,
 } = require('../controllers/auth.controller');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { phoneSearchRateLimit } = require('../middleware/phone-search.middleware');
@@ -35,7 +35,9 @@ function authRoutes(pool) {
   router.get('/me', requireAuth, (req, res) => getMe(pool, req, res));
   router.post('/verify', requireAuth, (req, res) => verifyToken(pool, req, res));
   // Phone search is rate-limited per user/day to prevent enumeration (MVP audit #5).
-  router.get('/users/search', requireAuth, phoneSearchRateLimit(pool), (req, res) => searchUsers(pool, req, res));
+  router.get('/users/search', requireAuth, phoneSearchRateLimit(pool), (req, res) =>
+    searchUsers(pool, req, res)
+  );
 
   return router;
 }

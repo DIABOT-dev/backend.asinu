@@ -4,7 +4,11 @@
  */
 
 const { t, getLang } = require('../i18n');
-const { evaluateAndApplyEvent, getState, acknowledgeEscalation } = require('../services/health/carePulse.aps.service');
+const {
+  evaluateAndApplyEvent,
+  getState,
+  acknowledgeEscalation,
+} = require('../services/health/carePulse.aps.service');
 const { carePulseEventSchema, escalationAckSchema } = require('../validation/validation.schemas');
 
 /**
@@ -15,14 +19,18 @@ async function postEvent(pool, req, res) {
   // Validate request
   const parsed = carePulseEventSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)), details: parsed.error.issues });
+    return res.status(400).json({
+      ok: false,
+      error: t('error.invalid_data', getLang(req)),
+      details: parsed.error.issues,
+    });
   }
 
   try {
     const result = await evaluateAndApplyEvent(pool, {
       userId: req.user.id,
       event: parsed.data,
-      now: new Date()
+      now: new Date(),
     });
 
     return res.status(200).json({
@@ -32,10 +40,9 @@ async function postEvent(pool, req, res) {
       tier: result.tier,
       reasons: result.reasons,
       actions: result.actions,
-      state_name: result.state.currentStatus
+      state_name: result.state.currentStatus,
     });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -53,10 +60,9 @@ async function getStateHandler(pool, req, res) {
       aps: state.aps,
       tier: state.tier,
       reasons: state.reasons,
-      state_name: state.currentStatus
+      state_name: state.currentStatus,
     });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -69,7 +75,11 @@ async function ackEscalation(pool, req, res) {
   // Validate request
   const parsed = escalationAckSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)), details: parsed.error.issues });
+    return res.status(400).json({
+      ok: false,
+      error: t('error.invalid_data', getLang(req)),
+      details: parsed.error.issues,
+    });
   }
 
   // Call service
@@ -86,5 +96,5 @@ async function ackEscalation(pool, req, res) {
 module.exports = {
   postEvent,
   getStateHandler,
-  ackEscalation
+  ackEscalation,
 };

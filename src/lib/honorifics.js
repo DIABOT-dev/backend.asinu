@@ -15,8 +15,12 @@ function getHonorifics(user) {
     const callName = name || 'you';
     const Callname = callName.charAt(0).toUpperCase() + callName.slice(1);
     return {
-      honorific: 'you', selfRef: 'I', callName,
-      Honorific: 'You', SelfRef: 'I', CallName: Callname,
+      honorific: 'you',
+      selfRef: 'I',
+      callName,
+      Honorific: 'You',
+      SelfRef: 'I',
+      CallName: Callname,
     };
   }
 
@@ -28,9 +32,16 @@ function getHonorifics(user) {
   let selfRef = 'mình';
 
   if (age) {
-    if (age >= 60) { honorific = isMale ? 'chú' : 'cô'; selfRef = 'cháu'; }
-    else if (age >= 40) { honorific = isMale ? 'anh' : 'chị'; selfRef = 'em'; }
-    else if (age >= 25) { honorific = isMale ? 'anh' : 'chị'; selfRef = 'mình'; }
+    if (age >= 60) {
+      honorific = isMale ? 'chú' : 'cô';
+      selfRef = 'cháu';
+    } else if (age >= 40) {
+      honorific = isMale ? 'anh' : 'chị';
+      selfRef = 'em';
+    } else if (age >= 25) {
+      honorific = isMale ? 'anh' : 'chị';
+      selfRef = 'mình';
+    }
   }
 
   const callName = name ? `${honorific} ${name}` : honorific;

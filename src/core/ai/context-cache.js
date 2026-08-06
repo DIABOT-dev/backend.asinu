@@ -20,18 +20,18 @@ const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
 // ─── TTL configs ────────────────────────────────────────────────────────────
 
 const TTL = {
-  system_prompt: 86400,    // 24h — system prompt hiếm khi thay đổi
-  user_context: 3600,      // 1h — health context thay đổi khi check-in
-  ai_response: 1800,       // 30m — same question → same answer
-  triage_question: 300,    // 5m — triage questions change with answers
+  system_prompt: 86400, // 24h — system prompt hiếm khi thay đổi
+  user_context: 3600, // 1h — health context thay đổi khi check-in
+  ai_response: 1800, // 30m — same question → same answer
+  triage_question: 300, // 5m — triage questions change with answers
 };
 
 // ─── Hash function ──────────────────────────────────────────────────────────
 
 function hashKey(prefix, ...parts) {
-  const content = parts.map(p =>
-    typeof p === 'object' ? JSON.stringify(p) : String(p || '')
-  ).join('|');
+  const content = parts
+    .map((p) => (typeof p === 'object' ? JSON.stringify(p) : String(p || '')))
+    .join('|');
   const hash = crypto.createHash('sha256').update(content).digest('hex').substring(0, 16);
   return `ctx:${prefix}:${hash}`;
 }
@@ -132,12 +132,15 @@ function getCacheStats() {
   return {
     ..._stats,
     total,
-    hitRate: total > 0 ? Math.round(_stats.hits / total * 100) : 0,
+    hitRate: total > 0 ? Math.round((_stats.hits / total) * 100) : 0,
     estimatedTokensSaved: _stats.hits * 1500, // avg ~1500 tokens/cached call
   };
 }
 
-function resetCacheStats() { _stats.hits = 0; _stats.misses = 0; }
+function resetCacheStats() {
+  _stats.hits = 0;
+  _stats.misses = 0;
+}
 
 // ─── Exports ────────────────────────────────────────────────────────────────
 

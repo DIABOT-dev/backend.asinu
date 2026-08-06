@@ -25,13 +25,20 @@ const { filterTriageResult } = require('../ai/ai-safety.service');
 const { logAiInteraction } = require('../ai/ai-logger.service');
 const logger = require('../../lib/logger');
 const triageV2 = require('./checkin.triage.v2');
-const { routeForTriage } = require('../../core/ai/model-router');
-const { getOrCallAI, getCacheStats } = require('../../core/ai/context-cache');
-const { collectOutput, autoRateQuality } = require('../../core/ai/distillation');
+const { routeForTriage: _routeForTriage } = require('../../core/ai/model-router');
+const {
+  getOrCallAI: _getOrCallAI,
+  getCacheStats: _getCacheStats,
+} = require('../../core/ai/context-cache');
+const {
+  collectOutput: _collectOutput,
+  autoRateQuality: _autoRateQuality,
+} = require('../../core/ai/distillation');
 const console = { log: logger.debug, error: logger.error };
 
 // Normalize answer: array → string, null-safe
-const safeAns = (answer) => (Array.isArray(answer) ? answer.join(', ') : String(answer || '')).toLowerCase();
+const safeAns = (answer) =>
+  (Array.isArray(answer) ? answer.join(', ') : String(answer || '')).toLowerCase();
 
 let _client = null;
 function getClient() {
@@ -43,30 +50,55 @@ function getClient() {
 
 function formatGlucose(rows) {
   if (!rows.length) return null;
-  return rows.map(r => {
-    const d = new Date(r.occurred_at).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' });
-    return `${r.value} ${r.unit}${r.context ? ' (' + r.context + ')' : ''} - ${d}`;
-  }).join('; ');
+  return rows
+    .map((r) => {
+      const d = new Date(r.occurred_at).toLocaleDateString('vi-VN', {
+        weekday: 'short',
+        day: '2-digit',
+        month: '2-digit',
+      });
+      return `${r.value} ${r.unit}${r.context ? ' (' + r.context + ')' : ''} - ${d}`;
+    })
+    .join('; ');
 }
 
 function formatBP(rows) {
   if (!rows.length) return null;
-  return rows.map(r => {
-    const d = new Date(r.occurred_at).toLocaleDateString('vi-VN', { weekday: 'short', day: '2-digit', month: '2-digit' });
-    return `${r.systolic}/${r.diastolic}${r.pulse ? ' nhịp ' + r.pulse : ''} - ${d}`;
-  }).join('; ');
+  return rows
+    .map((r) => {
+      const d = new Date(r.occurred_at).toLocaleDateString('vi-VN', {
+        weekday: 'short',
+        day: '2-digit',
+        month: '2-digit',
+      });
+      return `${r.systolic}/${r.diastolic}${r.pulse ? ' nhịp ' + r.pulse : ''} - ${d}`;
+    })
+    .join('; ');
 }
 
 function formatPreviousCheckins(rows) {
   if (!rows.length) return null;
-  return rows.map(r => {
-    const d = new Date(r.session_date).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-    const sev = r.triage_severity === 'high' ? 'nghiêm trọng' : r.triage_severity === 'medium' ? 'vừa' : 'nhẹ';
-    const st = r.initial_status === 'very_tired' ? 'rất mệt'
-      : r.initial_status === 'specific_concern' ? 'có triệu chứng'
-      : 'hơi mệt';
-    return `[${d}] ${st} → mức ${sev}: ${r.triage_summary || ''}`;
-  }).join('\n');
+  return rows
+    .map((r) => {
+      const d = new Date(r.session_date).toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit',
+      });
+      const sev =
+        r.triage_severity === 'high'
+          ? 'nghiêm trọng'
+          : r.triage_severity === 'medium'
+            ? 'vừa'
+            : 'nhẹ';
+      const st =
+        r.initial_status === 'very_tired'
+          ? 'rất mệt'
+          : r.initial_status === 'specific_concern'
+            ? 'có triệu chứng'
+            : 'hơi mệt';
+      return `[${d}] ${st} → mức ${sev}: ${r.triage_summary || ''}`;
+    })
+    .join('\n');
 }
 
 // ─── Continuity message ───────────────────────────────────────────────────────
@@ -80,9 +112,12 @@ function buildContinuityMessage(yesterdaySession, lang = 'vi') {
   const { initial_status, triage_summary } = yesterdaySession;
   if (initial_status === 'fine') return null;
 
-  const statusKey = initial_status === 'very_tired' ? 'checkinAi.status_very_unwell'
-    : initial_status === 'specific_concern' ? 'checkinAi.status_specific_concern'
-    : 'checkinAi.status_slightly_unwell';
+  const statusKey =
+    initial_status === 'very_tired'
+      ? 'checkinAi.status_very_unwell'
+      : initial_status === 'specific_concern'
+        ? 'checkinAi.status_specific_concern'
+        : 'checkinAi.status_slightly_unwell';
   const statusLabel = t(statusKey, lang);
 
   if (triage_summary) {
@@ -99,9 +134,9 @@ function buildContinuityMessage(yesterdaySession, lang = 'vi') {
  * Normal: 6–12h | Slightly unwell: 3–4h | Very unwell: 1–2h
  */
 function calcFollowUpHours(severity, answerCount = 0) {
-  if (severity === 'low') return answerCount === 0 ? 8 : 6;        // bình thường: 6-8h
-  if (severity === 'medium') return answerCount === 0 ? 3 : 4;     // hơi mệt: 3-4h
-  return answerCount === 0 ? 1 : 2;                                 // rất mệt: 1-2h
+  if (severity === 'low') return answerCount === 0 ? 8 : 6; // bình thường: 6-8h
+  if (severity === 'medium') return answerCount === 0 ? 3 : 4; // hơi mệt: 3-4h
+  return answerCount === 0 ? 1 : 2; // rất mệt: 1-2h
 }
 
 // ─── Fallback questions (when OpenAI API fails) ─────────────────────────────
@@ -110,34 +145,98 @@ const FALLBACK_QUESTIONS = {
   initial: {
     vi: [
       // TYPE 2 — Severity (calibrated to "hơi mệt" — no "rất nặng" here)
-      { question: 'Mức độ mệt của bạn hiện tại thế nào?', options: ['nhẹ', 'trung bình', 'khá nặng'], multiSelect: false },
+      {
+        question: 'Mức độ mệt của bạn hiện tại thế nào?',
+        options: ['nhẹ', 'trung bình', 'khá nặng'],
+        multiSelect: false,
+      },
       // TYPE 3 — Symptoms
-      { question: 'Bạn đang gặp triệu chứng nào?', options: ['mệt mỏi', 'chóng mặt', 'đau đầu', 'buồn nôn', 'khát nước', 'không rõ'], multiSelect: true },
+      {
+        question: 'Bạn đang gặp triệu chứng nào?',
+        options: ['mệt mỏi', 'chóng mặt', 'đau đầu', 'buồn nôn', 'khát nước', 'không rõ'],
+        multiSelect: true,
+      },
       // TYPE 4 — Onset
-      { question: 'Tình trạng này bắt đầu từ khi nào?', options: ['vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua'], multiSelect: false },
+      {
+        question: 'Tình trạng này bắt đầu từ khi nào?',
+        options: ['vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua'],
+        multiSelect: false,
+      },
       // TYPE 7 — Cause
-      { question: 'Bạn nghĩ điều gì có thể dẫn đến tình trạng này?', options: ['ngủ ít', 'bỏ bữa', 'căng thẳng', 'quên uống thuốc', 'không rõ'], multiSelect: true },
+      {
+        question: 'Bạn nghĩ điều gì có thể dẫn đến tình trạng này?',
+        options: ['ngủ ít', 'bỏ bữa', 'căng thẳng', 'quên uống thuốc', 'không rõ'],
+        multiSelect: true,
+      },
       // TYPE 8 — Action
-      { question: 'Bạn đã làm gì để cải thiện chưa?', options: ['nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì'], multiSelect: true },
+      {
+        question: 'Bạn đã làm gì để cải thiện chưa?',
+        options: ['nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì'],
+        multiSelect: true,
+      },
     ],
     en: [
-      { question: 'How severe is your tiredness right now?', options: ['mild', 'moderate', 'quite severe'], multiSelect: false },
-      { question: 'What symptoms are you experiencing?', options: ['fatigue', 'dizziness', 'headache', 'nausea', 'thirst', 'not sure'], multiSelect: true },
-      { question: 'When did this start?', options: ['just now', 'a few hours ago', 'since morning', 'since yesterday'], multiSelect: false },
-      { question: 'What might have caused this?', options: ['lack of sleep', 'skipped meals', 'stress', 'missed medication', 'not sure'], multiSelect: true },
-      { question: 'Have you done anything to feel better?', options: ['rested', 'ate something', 'drank water', 'took medication', 'nothing yet'], multiSelect: true },
+      {
+        question: 'How severe is your tiredness right now?',
+        options: ['mild', 'moderate', 'quite severe'],
+        multiSelect: false,
+      },
+      {
+        question: 'What symptoms are you experiencing?',
+        options: ['fatigue', 'dizziness', 'headache', 'nausea', 'thirst', 'not sure'],
+        multiSelect: true,
+      },
+      {
+        question: 'When did this start?',
+        options: ['just now', 'a few hours ago', 'since morning', 'since yesterday'],
+        multiSelect: false,
+      },
+      {
+        question: 'What might have caused this?',
+        options: ['lack of sleep', 'skipped meals', 'stress', 'missed medication', 'not sure'],
+        multiSelect: true,
+      },
+      {
+        question: 'Have you done anything to feel better?',
+        options: ['rested', 'ate something', 'drank water', 'took medication', 'nothing yet'],
+        multiSelect: true,
+      },
     ],
   },
   followup: {
     vi: [
-      { question: 'So với lần trước, bạn cảm thấy thế nào?', options: ['đã đỡ hơn', 'vẫn như cũ', 'mệt hơn trước'], multiSelect: false },
-      { question: 'Bạn có thêm triệu chứng nào mới không?', options: ['đau đầu', 'chóng mặt', 'buồn nôn', 'khó thở', 'không có gì thêm'], multiSelect: true },
-      { question: 'Bạn đã nghỉ ngơi hoặc ăn uống gì chưa?', options: ['đã nghỉ ngơi', 'đã ăn uống', 'đã uống thuốc', 'chưa làm gì'], multiSelect: true },
+      {
+        question: 'So với lần trước, bạn cảm thấy thế nào?',
+        options: ['đã đỡ hơn', 'vẫn như cũ', 'mệt hơn trước'],
+        multiSelect: false,
+      },
+      {
+        question: 'Bạn có thêm triệu chứng nào mới không?',
+        options: ['đau đầu', 'chóng mặt', 'buồn nôn', 'khó thở', 'không có gì thêm'],
+        multiSelect: true,
+      },
+      {
+        question: 'Bạn đã nghỉ ngơi hoặc ăn uống gì chưa?',
+        options: ['đã nghỉ ngơi', 'đã ăn uống', 'đã uống thuốc', 'chưa làm gì'],
+        multiSelect: true,
+      },
     ],
     en: [
-      { question: 'Compared to before, how are you feeling now?', options: ['better', 'about the same', 'worse'], multiSelect: false },
-      { question: 'Do you have any new symptoms?', options: ['headache', 'dizziness', 'nausea', 'shortness of breath', 'nothing new'], multiSelect: true },
-      { question: 'Have you rested or eaten anything?', options: ['rested', 'ate something', 'took medication', 'nothing yet'], multiSelect: true },
+      {
+        question: 'Compared to before, how are you feeling now?',
+        options: ['better', 'about the same', 'worse'],
+        multiSelect: false,
+      },
+      {
+        question: 'Do you have any new symptoms?',
+        options: ['headache', 'dizziness', 'nausea', 'shortness of breath', 'nothing new'],
+        multiSelect: true,
+      },
+      {
+        question: 'Have you rested or eaten anything?',
+        options: ['rested', 'ate something', 'took medication', 'nothing yet'],
+        multiSelect: true,
+      },
     ],
   },
 };
@@ -156,11 +255,19 @@ function getFallbackQuestion(status, phase, lang, previousAnswers = [], profile 
   const age = profile.birth_year ? new Date().getFullYear() - parseInt(profile.birth_year) : null;
   const gender = (profile.gender || '').toLowerCase();
   const isMale = gender.includes('nam') || gender === 'male';
-  let hon = 'bạn', self = 'mình';
+  let hon = 'bạn',
+    self = 'mình';
   if (lang === 'vi' && age) {
-    if (age >= 60) { hon = isMale ? 'chú' : 'cô'; self = 'cháu'; }
-    else if (age >= 40) { hon = isMale ? 'anh' : 'chị'; self = 'em'; }
-    else if (age >= 25) { hon = isMale ? 'anh' : 'chị'; self = 'mình'; }
+    if (age >= 60) {
+      hon = isMale ? 'chú' : 'cô';
+      self = 'cháu';
+    } else if (age >= 40) {
+      hon = isMale ? 'anh' : 'chị';
+      self = 'em';
+    } else if (age >= 25) {
+      hon = isMale ? 'anh' : 'chị';
+      self = 'mình';
+    }
   }
   const fixBan = (text) => {
     if (!text || lang !== 'vi' || hon === 'bạn') return text;
@@ -169,14 +276,17 @@ function getFallbackQuestion(status, phase, lang, previousAnswers = [], profile 
 
   // [Bug 4 fix] Nếu user vừa nói "có thêm triệu chứng mới" → hỏi triệu chứng gì,
   // không nhảy sang câu kế tiếp trong array fallback.
-  const lastAnswerStr = String(previousAnswers[previousAnswers.length - 1]?.answer || '').toLowerCase();
+  const lastAnswerStr = String(
+    previousAnswers[previousAnswers.length - 1]?.answer || ''
+  ).toLowerCase();
   if (/(thêm.*triệu chứng|triệu chứng.*mới|new symptom|another symptom)/i.test(lastAnswerStr)) {
     const Hon = hon.charAt(0).toUpperCase() + hon.slice(1);
     return {
       isDone: false,
-      question: lang === 'en'
-        ? 'What new symptom are you experiencing? Please describe.'
-        : `${Hon} cho ${self} biết triệu chứng mới đó là gì nhé?`,
+      question:
+        lang === 'en'
+          ? 'What new symptom are you experiencing? Please describe.'
+          : `${Hon} cho ${self} biết triệu chứng mới đó là gì nhé?`,
       options: [],
       multiSelect: false,
       allowFreeText: true,
@@ -250,16 +360,20 @@ async function getNextTriageQuestionLegacy({
 
   const age = profile.birth_year
     ? new Date().getFullYear() - parseInt(profile.birth_year)
-    : (profile.age ? parseInt(profile.age) : null);
+    : profile.age
+      ? parseInt(profile.age)
+      : null;
 
   const conditions = Array.isArray(profile.medical_conditions)
-    ? profile.medical_conditions.filter(c => c && c !== 'Không có').join(', ')
-    : (profile.medical_conditions || '');
+    ? profile.medical_conditions.filter((c) => c && c !== 'Không có').join(', ')
+    : profile.medical_conditions || '';
 
   // ── Health context ──
   const glucoseStr = formatGlucose(healthContext.recentGlucose || []);
-  const bpStr      = formatBP(healthContext.recentBP || []);
-  const weightStr  = healthContext.latestWeight ? `${healthContext.latestWeight.weight_kg} kg` : null;
+  const bpStr = formatBP(healthContext.recentBP || []);
+  const weightStr = healthContext.latestWeight
+    ? `${healthContext.latestWeight.weight_kg} kg`
+    : null;
   const prevCheckinsStr = formatPreviousCheckins(healthContext.previousCheckins || []);
 
   // [G4 FIX] Detect dangerous vital signs and inject alert into context
@@ -268,12 +382,21 @@ async function getNextTriageQuestionLegacy({
   const recentBP = healthContext.recentBP || [];
   if (recentGlucose.length > 0) {
     const latest = recentGlucose[0];
-    if (latest.value > 250) vitalAlerts.push(`⚠️ GLUCOSE RẤT CAO: ${latest.value} ${latest.unit} → ưu tiên hỏi triệu chứng hạ/tăng đường huyết, severity tối thiểu HIGH`);
-    else if (latest.value < 70) vitalAlerts.push(`⚠️ GLUCOSE RẤT THẤP: ${latest.value} ${latest.unit} → nguy cơ hạ đường huyết, severity tối thiểu HIGH`);
+    if (latest.value > 250)
+      vitalAlerts.push(
+        `⚠️ GLUCOSE RẤT CAO: ${latest.value} ${latest.unit} → ưu tiên hỏi triệu chứng hạ/tăng đường huyết, severity tối thiểu HIGH`
+      );
+    else if (latest.value < 70)
+      vitalAlerts.push(
+        `⚠️ GLUCOSE RẤT THẤP: ${latest.value} ${latest.unit} → nguy cơ hạ đường huyết, severity tối thiểu HIGH`
+      );
   }
   if (recentBP.length > 0) {
     const latest = recentBP[0];
-    if (latest.systolic >= 180 || latest.diastolic >= 110) vitalAlerts.push(`⚠️ HUYẾT ÁP NGUY HIỂM: ${latest.systolic}/${latest.diastolic} → severity tối thiểu HIGH, hỏi đau đầu/hoa mắt/khó thở`);
+    if (latest.systolic >= 180 || latest.diastolic >= 110)
+      vitalAlerts.push(
+        `⚠️ HUYẾT ÁP NGUY HIỂM: ${latest.systolic}/${latest.diastolic} → severity tối thiểu HIGH, hỏi đau đầu/hoa mắt/khó thở`
+      );
   }
 
   // Symptom frequency + medication adherence (new context)
@@ -282,8 +405,8 @@ async function getNextTriageQuestionLegacy({
 
   const healthDataLines = [
     glucoseStr && `- Glucose 7 ngày gần đây: ${glucoseStr}`,
-    bpStr      && `- Huyết áp 7 ngày gần đây: ${bpStr}`,
-    weightStr  && `- Cân nặng: ${weightStr}`,
+    bpStr && `- Huyết áp 7 ngày gần đây: ${bpStr}`,
+    weightStr && `- Cân nặng: ${weightStr}`,
     medAdherenceStr && `- ${medAdherenceStr}`,
   ].filter(Boolean);
 
@@ -304,41 +427,152 @@ async function getNextTriageQuestionLegacy({
   const usedTypes = new Set();
   const knownSymptoms = new Set();
 
-  const allAnswers = [...previousAnswers, ...previousTriageMessages.map(m => ({ question: m.question, answer: m.answer }))];
+  const allAnswers = [
+    ...previousAnswers,
+    ...previousTriageMessages.map((m) => ({ question: m.question, answer: m.answer })),
+  ];
   for (const a of allAnswers) {
     const q = (a.question || '').toLowerCase();
     const ans = safeAns(a.answer);
 
     // Detect TYPE from question content
-    if (q.includes('mức độ') || q.includes('how severe') || q.includes('khó chịu') || q.includes('nặng thế nào')) usedTypes.add(2);
-    if (q.includes('triệu chứng') || q.includes('symptoms') || q.includes('tình trạng nào') || q.includes('gặp phải') || q.includes('đang bị gì')) usedTypes.add(3);
-    if (q.includes('bắt đầu') || q.includes('when did') || q.includes('từ khi nào') || q.includes('từ bao giờ') || q.includes('từ lúc nào') || q.includes('bao lâu rồi')) usedTypes.add(4);
-    if (q.includes('thay đổi') || q.includes('diễn tiến') || q.includes('progression') || q.includes('có nặng hơn') || q.includes('có đỡ') || q.includes('đỡ hơn') || q.includes('vẫn vậy') || q.includes('nặng hơn chưa')) usedTypes.add(5);
-    if (q.includes('nguy hiểm') || q.includes('khó thở') || q.includes('đau ngực') || q.includes('red flag') || q.includes('dấu hiệu nào') || q.includes('tức ngực') || q.includes('warning')) usedTypes.add(6);
-    if (q.includes('nguyên nhân') || q.includes('cause') || q.includes('dẫn đến') || q.includes('ngủ ít') || q.includes('bỏ bữa') || q.includes('căng thẳng') || q.includes('gần đây')) usedTypes.add(7);
-    if (q.includes('đã làm') || q.includes('action') || q.includes('cải thiện') || q.includes('have you done') || q.includes('nghỉ ngơi hay') || q.includes('uống thuốc gì chưa')) usedTypes.add(8);
-    if (q.includes('thường xuyên') || q.includes('hay bị') || q.includes('how often') || q.includes('lần đầu') || q.includes('có hay xảy ra')) usedTypes.add(10);
-    if (q.includes('uống thuốc') || q.includes('medication') || q.includes('thuốc')) usedTypes.add(11);
+    if (
+      q.includes('mức độ') ||
+      q.includes('how severe') ||
+      q.includes('khó chịu') ||
+      q.includes('nặng thế nào')
+    )
+      usedTypes.add(2);
+    if (
+      q.includes('triệu chứng') ||
+      q.includes('symptoms') ||
+      q.includes('tình trạng nào') ||
+      q.includes('gặp phải') ||
+      q.includes('đang bị gì')
+    )
+      usedTypes.add(3);
+    if (
+      q.includes('bắt đầu') ||
+      q.includes('when did') ||
+      q.includes('từ khi nào') ||
+      q.includes('từ bao giờ') ||
+      q.includes('từ lúc nào') ||
+      q.includes('bao lâu rồi')
+    )
+      usedTypes.add(4);
+    if (
+      q.includes('thay đổi') ||
+      q.includes('diễn tiến') ||
+      q.includes('progression') ||
+      q.includes('có nặng hơn') ||
+      q.includes('có đỡ') ||
+      q.includes('đỡ hơn') ||
+      q.includes('vẫn vậy') ||
+      q.includes('nặng hơn chưa')
+    )
+      usedTypes.add(5);
+    if (
+      q.includes('nguy hiểm') ||
+      q.includes('khó thở') ||
+      q.includes('đau ngực') ||
+      q.includes('red flag') ||
+      q.includes('dấu hiệu nào') ||
+      q.includes('tức ngực') ||
+      q.includes('warning')
+    )
+      usedTypes.add(6);
+    if (
+      q.includes('nguyên nhân') ||
+      q.includes('cause') ||
+      q.includes('dẫn đến') ||
+      q.includes('ngủ ít') ||
+      q.includes('bỏ bữa') ||
+      q.includes('căng thẳng') ||
+      q.includes('gần đây')
+    )
+      usedTypes.add(7);
+    if (
+      q.includes('đã làm') ||
+      q.includes('action') ||
+      q.includes('cải thiện') ||
+      q.includes('have you done') ||
+      q.includes('nghỉ ngơi hay') ||
+      q.includes('uống thuốc gì chưa')
+    )
+      usedTypes.add(8);
+    if (
+      q.includes('thường xuyên') ||
+      q.includes('hay bị') ||
+      q.includes('how often') ||
+      q.includes('lần đầu') ||
+      q.includes('có hay xảy ra')
+    )
+      usedTypes.add(10);
+    if (q.includes('uống thuốc') || q.includes('medication') || q.includes('thuốc'))
+      usedTypes.add(11);
 
     // Fallback: detect TYPE from answer content (what user replied)
-    if (!usedTypes.has(4) && (ans.includes('vừa mới') || ans.includes('vài giờ') || ans.includes('từ sáng') || ans.includes('từ hôm qua') || ans.includes('vài ngày'))) usedTypes.add(4);
-    if (!usedTypes.has(5) && (ans.includes('đỡ dần') || ans.includes('đỡ hơn') || ans.includes('vẫn như cũ') || ans.includes('vẫn vậy') || ans.includes('nặng hơn'))) usedTypes.add(5);
-    if (!usedTypes.has(7) && (ans.includes('ngủ ít') || ans.includes('bỏ bữa') || ans.includes('căng thẳng') || ans.includes('quên thuốc') || ans.includes('vận động') || ans.includes('sai tư thế') || ans.includes('bê vác') || ans.includes('ngã') || ans.includes('đứng dậy nhanh') || ans.includes('trời nóng') || ans.includes('làm việc nhiều'))) usedTypes.add(7);
-    if (!usedTypes.has(8) && (ans.includes('nghỉ ngơi') || ans.includes('uống nước') || ans.includes('chưa làm gì') || ans.includes('uống thuốc'))) usedTypes.add(8);
+    if (
+      !usedTypes.has(4) &&
+      (ans.includes('vừa mới') ||
+        ans.includes('vài giờ') ||
+        ans.includes('từ sáng') ||
+        ans.includes('từ hôm qua') ||
+        ans.includes('vài ngày'))
+    )
+      usedTypes.add(4);
+    if (
+      !usedTypes.has(5) &&
+      (ans.includes('đỡ dần') ||
+        ans.includes('đỡ hơn') ||
+        ans.includes('vẫn như cũ') ||
+        ans.includes('vẫn vậy') ||
+        ans.includes('nặng hơn'))
+    )
+      usedTypes.add(5);
+    if (
+      !usedTypes.has(7) &&
+      (ans.includes('ngủ ít') ||
+        ans.includes('bỏ bữa') ||
+        ans.includes('căng thẳng') ||
+        ans.includes('quên thuốc') ||
+        ans.includes('vận động') ||
+        ans.includes('sai tư thế') ||
+        ans.includes('bê vác') ||
+        ans.includes('ngã') ||
+        ans.includes('đứng dậy nhanh') ||
+        ans.includes('trời nóng') ||
+        ans.includes('làm việc nhiều'))
+    )
+      usedTypes.add(7);
+    if (
+      !usedTypes.has(8) &&
+      (ans.includes('nghỉ ngơi') ||
+        ans.includes('uống nước') ||
+        ans.includes('chưa làm gì') ||
+        ans.includes('uống thuốc'))
+    )
+      usedTypes.add(8);
 
     // Extract symptoms from answers to TYPE 3 / TYPE 6
     if (usedTypes.has(3) || usedTypes.has(6)) {
-      ans.split(/,|;/).map(s => s.trim()).filter(Boolean).forEach(s => knownSymptoms.add(s));
+      ans
+        .split(/,|;/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((s) => knownSymptoms.add(s));
     }
   }
 
-  const usedTypesStr = usedTypes.size > 0
-    ? `TYPEs đã dùng trong phiên này: ${[...usedTypes].map(n => `TYPE ${n}`).join(', ')} → KHÔNG hỏi lại các TYPE này.`
-    : 'Chưa hỏi TYPE nào.';
+  const usedTypesStr =
+    usedTypes.size > 0
+      ? `TYPEs đã dùng trong phiên này: ${[...usedTypes].map((n) => `TYPE ${n}`).join(', ')} → KHÔNG hỏi lại các TYPE này.`
+      : 'Chưa hỏi TYPE nào.';
 
-  const knownSymptomsStr = knownSymptoms.size > 0
-    ? `Triệu chứng user đã khai: ${[...knownSymptoms].join(', ')} → KHÔNG đưa vào options ở câu hỏi tiếp theo.`
-    : '';
+  const knownSymptomsStr =
+    knownSymptoms.size > 0
+      ? `Triệu chứng user đã khai: ${[...knownSymptoms].join(', ')} → KHÔNG đưa vào options ở câu hỏi tiếp theo.`
+      : '';
 
   // ── Xưng hô theo tuổi + giới tính ──
   const gender = (profile.gender || '').toLowerCase();
@@ -346,9 +580,16 @@ async function getNextTriageQuestionLegacy({
   let honorific = 'bạn';
   let selfRef = 'mình';
   if (lang === 'vi' && age) {
-    if (age >= 60) { honorific = isMale ? 'chú' : 'cô'; selfRef = 'cháu'; }
-    else if (age >= 40) { honorific = isMale ? 'anh' : 'chị'; selfRef = 'em'; }
-    else if (age >= 25) { honorific = isMale ? 'anh' : 'chị'; selfRef = 'mình'; }
+    if (age >= 60) {
+      honorific = isMale ? 'chú' : 'cô';
+      selfRef = 'cháu';
+    } else if (age >= 40) {
+      honorific = isMale ? 'anh' : 'chị';
+      selfRef = 'em';
+    } else if (age >= 25) {
+      honorific = isMale ? 'anh' : 'chị';
+      selfRef = 'mình';
+    }
   }
 
   // Lấy tên ngắn (tên riêng) từ profile
@@ -360,22 +601,26 @@ async function getNextTriageQuestionLegacy({
   const CallName = callName.charAt(0).toUpperCase() + callName.slice(1);
   const Honorific = honorific.charAt(0).toUpperCase() + honorific.slice(1);
 
-  const honorificRule = lang === 'vi'
-    ? `\nCÁCH XƯNG HÔ (BẮT BUỘC):
+  const honorificRule =
+    lang === 'vi'
+      ? `\nCÁCH XƯNG HÔ (BẮT BUỘC):
 - Gọi người dùng: "${CallName}" (có tên) hoặc "${Honorific}" (không tên). LUÔN viết hoa chữ đầu câu.
 - Xưng: "${selfRef}".
 - VD đầu câu: "${CallName} ơi, ..." hoặc "${Honorific} ơi, ..."
 - 🚫 CẤM dùng "bạn" trong MỌI field (question, summary, recommendation, closeMessage) nếu đã có xưng hô "${honorific}". Luôn dùng "${honorific}" thay "bạn".
 - KHÔNG viết thường đầu câu: "chú ơi" ← SAI, "${Honorific} ơi" ← ĐÚNG.`
-    : '';
+      : '';
 
   // ── Tạo system prompt theo phase ──
   let systemPrompt;
 
   const isSpecificConcern = status === 'specific_concern';
-  const statusLabel = status === 'very_tired' ? 'rất không khoẻ'
-    : isSpecificConcern ? 'có triệu chứng cụ thể muốn hỏi'
-    : 'hơi không khoẻ';
+  const statusLabel =
+    status === 'very_tired'
+      ? 'rất không khoẻ'
+      : isSpecificConcern
+        ? 'có triệu chứng cụ thể muốn hỏi'
+        : 'hơi không khoẻ';
 
   const prevTriageDetail = previousTriageMessages.length
     ? `Chi tiết Q&A lần trước trong ngày:\n${previousTriageMessages.map((m, i) => `  Q${i + 1}: "${m.question}" → "${m.answer}"`).join('\n')}`
@@ -388,11 +633,14 @@ async function getNextTriageQuestionLegacy({
   // [G8] Medication status
   const tookMed = healthContext.tookMedicationToday;
   const medStatus = conditions
-    ? (tookMed ? '- Thuốc hôm nay: ĐÃ uống ✓' : '- Thuốc hôm nay: CHƯA uống ⚠️ → cân nhắc hỏi TYPE 11 nếu relevant')
+    ? tookMed
+      ? '- Thuốc hôm nay: ĐÃ uống ✓'
+      : '- Thuốc hôm nay: CHƯA uống ⚠️ → cân nhắc hỏi TYPE 11 nếu relevant'
     : '';
 
   // ── Build continuity instruction ──
-  const hasPrevCheckins = healthContext.previousCheckins && healthContext.previousCheckins.length > 0;
+  const hasPrevCheckins =
+    healthContext.previousCheckins && healthContext.previousCheckins.length > 0;
   const hasSymptomFreq = healthContext.symptomFrequencyContext;
   const hasMedAdherence = healthContext.medicationAdherenceContext;
 
@@ -433,14 +681,16 @@ ${knownSymptomsStr || '(Chưa biết triệu chứng cụ thể)'}
 Còn lại tối đa: ${maxQuestions - answerCount} câu${answerCount >= maxQuestions - 1 ? ' — ĐÂY LÀ CÂU CUỐI, BẮT BUỘC isDone=true' : ''}.
 ${answerCount < minQuestions ? `⛔ CHƯA ĐỦ ${minQuestions} CÂU TỐI THIỂU — isDone PHẢI là false (trừ red flag).` : `✓ Đã đủ câu tối thiểu, có thể kết luận nếu đã rõ.`}`;
 
-  const minQRule = ''; // đã tích hợp vào contextBlock, không cần inject riêng
-
   // ── Pre-compute progression flags (dùng chung cho cả initial + followup) ──
-  const userSaidGettingBetter = previousAnswers.some(a =>
-    ['đang đỡ', 'đỡ dần', 'đỡ rồi', 'đã đỡ', 'getting better'].some(kw => safeAns(a.answer).includes(kw))
+  const userSaidGettingBetter = previousAnswers.some((a) =>
+    ['đang đỡ', 'đỡ dần', 'đỡ rồi', 'đã đỡ', 'getting better'].some((kw) =>
+      safeAns(a.answer).includes(kw)
+    )
   );
-  const userSaidGettingWorse = previousAnswers.some(a =>
-    ['nặng hơn', 'tệ hơn', 'mệt hơn', 'getting worse', 'worse'].some(kw => safeAns(a.answer).includes(kw))
+  const userSaidGettingWorse = previousAnswers.some((a) =>
+    ['nặng hơn', 'tệ hơn', 'mệt hơn', 'getting worse', 'worse'].some((kw) =>
+      safeAns(a.answer).includes(kw)
+    )
   );
 
   if (isFollowUp) {
@@ -453,33 +703,73 @@ ${answerCount < minQuestions ? `⛔ CHƯA ĐỦ ${minQuestions} CÂU TỐI THI�
     const usedLayers = new Set();
     for (const a of previousAnswers) {
       const q = a.question.toLowerCase();
-      if (q.includes('so với') || q.includes('thế nào rồi') || q.includes('compared to') || q.includes('how are you now')) usedLayers.add(1);
-      if (q.includes('triệu chứng') || q.includes('symptom') || q.includes('thêm') || q.includes('new')) usedLayers.add(2);
-      if (q.includes('nghỉ ngơi') || q.includes('đã làm') || q.includes('rested') || q.includes('action')) usedLayers.add(3);
+      if (
+        q.includes('so với') ||
+        q.includes('thế nào rồi') ||
+        q.includes('compared to') ||
+        q.includes('how are you now')
+      )
+        usedLayers.add(1);
+      if (
+        q.includes('triệu chứng') ||
+        q.includes('symptom') ||
+        q.includes('thêm') ||
+        q.includes('new')
+      )
+        usedLayers.add(2);
+      if (
+        q.includes('nghỉ ngơi') ||
+        q.includes('đã làm') ||
+        q.includes('rested') ||
+        q.includes('action')
+      )
+        usedLayers.add(3);
     }
-    const layersLeft = [1, 2, 3].filter(l => !usedLayers.has(l));
+    const layersLeft = [1, 2, 3].filter((l) => !usedLayers.has(l));
 
     // Build initial symptom context from triage summary AND triage messages for follow-up
     const symptomParts = [];
-    if (previousSessionSummary) symptomParts.push(`Tóm tắt lần check-in trước: "${previousSessionSummary}"`);
+    if (previousSessionSummary)
+      symptomParts.push(`Tóm tắt lần check-in trước: "${previousSessionSummary}"`);
     if (previousTriageMessages.length > 0) {
-      symptomParts.push(`Chi tiết Q&A lần trước:\n${previousTriageMessages.map((m, i) => `  Q${i + 1}: "${m.question}" → "${m.answer}"`).join('\n')}`);
+      symptomParts.push(
+        `Chi tiết Q&A lần trước:\n${previousTriageMessages.map((m, i) => `  Q${i + 1}: "${m.question}" → "${m.answer}"`).join('\n')}`
+      );
     }
     if (knownSymptomsStr) symptomParts.push(knownSymptomsStr);
-    const initialSymptomContext = symptomParts.length > 0
-      ? symptomParts.join('\n')
-      : 'Không có thông tin triệu chứng từ lần trước.';
+    const initialSymptomContext =
+      symptomParts.length > 0
+        ? symptomParts.join('\n')
+        : 'Không có thông tin triệu chứng từ lần trước.';
 
     // Detect if user already said "improved" in this session
-    const IMPROVED_ANSWERS = ['đã đỡ', 'đỡ nhiều', 'đỡ rồi', 'đã đỡ nhiều', 'hết rồi', 'ổn rồi', 'better', 'improved', 'đang đỡ', 'đã đỡ hơn'];
-    const userSaidImproved = previousAnswers.some(a =>
-      IMPROVED_ANSWERS.some(kw => safeAns(a.answer).includes(kw))
+    const IMPROVED_ANSWERS = [
+      'đã đỡ',
+      'đỡ nhiều',
+      'đỡ rồi',
+      'đã đỡ nhiều',
+      'hết rồi',
+      'ổn rồi',
+      'better',
+      'improved',
+      'đang đỡ',
+      'đã đỡ hơn',
+    ];
+    const userSaidImproved = previousAnswers.some((a) =>
+      IMPROVED_ANSWERS.some((kw) => safeAns(a.answer).includes(kw))
     );
 
     // Detect if user said "worse"
-    const WORSENED_ANSWERS = ['mệt hơn', 'nặng hơn', 'tệ hơn', 'worse', 'getting worse', 'mệt hơn trước'];
-    const userSaidWorsened = previousAnswers.some(a =>
-      WORSENED_ANSWERS.some(kw => safeAns(a.answer).includes(kw))
+    const WORSENED_ANSWERS = [
+      'mệt hơn',
+      'nặng hơn',
+      'tệ hơn',
+      'worse',
+      'getting worse',
+      'mệt hơn trước',
+    ];
+    const userSaidWorsened = previousAnswers.some((a) =>
+      WORSENED_ANSWERS.some((kw) => safeAns(a.answer).includes(kw))
     );
 
     systemPrompt = `Bạn là Asinu — người đồng hành sức khoẻ, đang hỏi thăm lại ${honorific} sau lần check-in trước.
@@ -499,22 +789,28 @@ ${initialSymptomContext}
 ${contextBlock}
 
 === LUỒNG XỬ LÝ FOLLOW-UP (tuân thủ CHÍNH XÁC) ===
-${userSaidImproved ? `
+${
+  userSaidImproved
+    ? `
 ████████████████████████████████████████████████████
 █  🟢 USER ĐÃ NÓI ĐỠ RỒI                         █
 █  → BẮT BUỘC isDone=true NGAY LẬP TỨC            █
 █  → progression=improved, severity=low              █
 █  → KHÔNG ĐƯỢC hỏi thêm BẤT KỲ câu nào            █
 ████████████████████████████████████████████████████
-` : userSaidWorsened ? `
+`
+    : userSaidWorsened
+      ? `
 ████████████████████████████████████████████████████
 █  🔴 USER NÓI NẶNG HƠN → Cần đánh giá thêm       █
 █  → Hỏi LỚP 2 (triệu chứng mới) nếu chưa hỏi    █
 █  → Chú ý red flag                                  █
 ████████████████████████████████████████████████████
-` : ''}
+`
+      : ''
+}
 
-Hỏi theo thứ tự 3 LỚP. Lớp chưa hỏi: ${layersLeft.length > 0 ? layersLeft.map(l => `LỚP ${l}`).join(', ') : 'đã hỏi hết → isDone=true'}.
+Hỏi theo thứ tự 3 LỚP. Lớp chưa hỏi: ${layersLeft.length > 0 ? layersLeft.map((l) => `LỚP ${l}`).join(', ') : 'đã hỏi hết → isDone=true'}.
 
 ─── LỚP 1: TRẠNG THÁI SO VỚI LẦN TRƯỚC ${usedLayers.has(1) ? '✅ ĐÃ HỎI' : '⬜ CHƯA HỎI → hỏi ngay'} ───
   Mục đích: So sánh tình trạng hiện tại với lần check-in trước.
@@ -574,7 +870,6 @@ Câu hỏi: {"isDone":false,"question":"...","options":["opt1","opt2"],"multiSel
 Kết luận: {"isDone":true,"progression":"improved|same|worsened","summary":"tóm tắt triệu chứng","severity":"low|medium|high","recommendation":"lời khuyên cá nhân hóa","needsDoctor":false,"needsFamilyAlert":false,"hasRedFlag":false,"followUpHours":6,"closeMessage":"${selfRef} sẽ hỏi lại ${honorific} sau X tiếng nhé."}
 
 LANGUAGE: ${lang === 'en' ? 'English' : 'Vietnamese'}.`;
-
   } else {
     // ══════════════════════════════════════════════════════════════════
     // GIAI ĐOẠN 2: LÀM RÕ TÌNH TRẠNG (Clinical Interview — 11 TYPE y khoa)
@@ -690,7 +985,9 @@ ${userSaidGettingBetter ? `\n🟢 ${honorific} nói ĐANG ĐỠ → cân nhắc 
 ${userSaidGettingWorse ? `\n🔴 ${honorific} nói NẶNG HƠN → BẮT BUỘC hỏi red flag trước khi kết luận.` : ''}
 
 === THỨ TỰ CÂU HỎI THEO STATUS ===
-${isSpecificConcern ? `
+${
+  isSpecificConcern
+    ? `
 ┌─── CÓ VẤN ĐỀ CỤ THỂ ────────────────────────────────────────────┐
 │ ① TYPE 3 — MÔ TẢ (multiSelect=true, allowFreeText=true)          │
 │   "${Honorific} đang gặp vấn đề gì?"                              │
@@ -702,7 +999,9 @@ ${isSpecificConcern ? `
 │ ⑤ TYPE 2 — Mức độ (nếu chưa rõ severity)                          │
 │ ⑥ TYPE 6 — Red flag (nếu cần) hoặc TYPE 7 — Nguyên nhân          │
 │ ⑦ Kết luận                                                         │
-└────────────────────────────────────────────────────────────────────┘` : isVeryUnwell ? `
+└────────────────────────────────────────────────────────────────────┘`
+    : isVeryUnwell
+      ? `
 ┌─── RẤT MỆT (ưu tiên phát hiện nguy hiểm) ──────────────────────┐
 │ ① TYPE 3 — Triệu chứng (multiSelect=true, allowFreeText=true)   │
 │   "${Honorific} đang gặp triệu chứng nào?"                        │
@@ -729,7 +1028,8 @@ ${isSpecificConcern ? `
 │ ⑤ TYPE 5 — Diễn tiến (multiSelect=false)                          │
 │ ⑥ TYPE 7 — Nguyên nhân                                            │
 │ ⑦ Kết luận                                                        │
-└──────────────────────────────────────────────────────────────────┘` : `
+└──────────────────────────────────────────────────────────────────┘`
+      : `
 ┌─── HƠI MỆT (đánh giá chi tiết) ────────────────────────────────┐
 │ ① TYPE 3 — Triệu chứng (multiSelect=true, allowFreeText=true)   │
 │   "${Honorific} đang gặp triệu chứng nào?"                        │
@@ -756,24 +1056,43 @@ ${isSpecificConcern ? `
 │   Options: nghỉ ngơi / ăn uống / uống nước / uống thuốc          │
 │            / chưa làm gì                                           │
 │ ⑥ Kết luận nếu đã đủ thông tin                                    │
-└──────────────────────────────────────────────────────────────────┘`}
+└──────────────────────────────────────────────────────────────────┘`
+}
 
 === CÁ NHÂN HÓA (quan trọng) ===
-${conditions ? `🏥 Bệnh nền: ${conditions}
+${
+  conditions
+    ? `🏥 Bệnh nền: ${conditions}
    → Ưu tiên hỏi triệu chứng liên quan bệnh nền.
-   → Kết luận phải đề cập ảnh hưởng đến bệnh nền nếu relevant.` : '- Không có bệnh nền ghi nhận.'}
-${prevCheckinsStr ? `📋 Lịch sử gần (BẮT BUỘC ĐỌC VÀ DÙNG):
+   → Kết luận phải đề cập ảnh hưởng đến bệnh nền nếu relevant.`
+    : '- Không có bệnh nền ghi nhận.'
+}
+${
+  prevCheckinsStr
+    ? `📋 Lịch sử gần (BẮT BUỘC ĐỌC VÀ DÙNG):
 ${prevCheckinsStr}
    🔴 BẮT BUỘC: Câu hỏi ĐẦU TIÊN PHẢI nhắc lại triệu chứng từ lần check-in trước.
    VD: "${CallName} ơi, lần trước ${honorific} có nói bị [TÊN TRIỆU CHỨNG NGẮN ≤4 từ], hôm nay ${honorific} thấy thế nào?"
    ⚠️ Chỉ điền TÊN triệu chứng (vd "đau đầu", "chóng mặt"), KHÔNG copy nguyên summary/recommendation/template.
    🔴 Nếu triệu chứng lặp lại nhiều ngày → severity PHẢI tăng 1 bậc + nhắc "${selfRef} thấy ${honorific} bị [triệu chứng] mấy ngày liên tục rồi".
-   🔴 Recommendation kết luận PHẢI đề cập pattern nếu có.` : '- Chưa có lịch sử check-in trước.'}
-${hasSymptomFreq ? `📊 Tần suất triệu chứng (BẮT BUỘC DÙNG trong recommendation):
+   🔴 Recommendation kết luận PHẢI đề cập pattern nếu có.`
+    : '- Chưa có lịch sử check-in trước.'
+}
+${
+  hasSymptomFreq
+    ? `📊 Tần suất triệu chứng (BẮT BUỘC DÙNG trong recommendation):
 ${healthContext.symptomFrequencyContext}
-   → Nếu có ↑ tăng → PHẢI nhắc trong kết luận: "Triệu chứng [X] đang có xu hướng tăng trong tuần qua".` : ''}
-${hasMedAdherence ? `💊 ${healthContext.medicationAdherenceContext}
-   → Nếu có ⚠️ bỏ thuốc → PHẢI nhắc trong recommendation: "Nhớ uống thuốc đều ${honorific} nhé".` : (medStatus ? `💊 ${medStatus}` : '')}
+   → Nếu có ↑ tăng → PHẢI nhắc trong kết luận: "Triệu chứng [X] đang có xu hướng tăng trong tuần qua".`
+    : ''
+}
+${
+  hasMedAdherence
+    ? `💊 ${healthContext.medicationAdherenceContext}
+   → Nếu có ⚠️ bỏ thuốc → PHẢI nhắc trong recommendation: "Nhớ uống thuốc đều ${honorific} nhé".`
+    : medStatus
+      ? `💊 ${medStatus}`
+      : ''
+}
 
 === NGUYÊN TẮC CỨNG (VI PHẠM = LỖI HỆ THỐNG) ===
 
@@ -883,16 +1202,19 @@ QUY TẮC TỐI THƯỢNG (vi phạm = lỗi hệ thống):
 6. Giọng điệu: ấm áp, chuyên nghiệp, dễ hiểu cho người lớn tuổi.
 Trả lời JSON only.`;
 
-    response = await getClient().chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: systemRole },
-        { role: 'user', content: systemPrompt },
-      ],
-      max_completion_tokens: 500,
-      temperature: 0.2,
-      response_format: { type: 'json_object' },
-    }, { signal: controller.signal });
+    response = await getClient().chat.completions.create(
+      {
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemRole },
+          { role: 'user', content: systemPrompt },
+        ],
+        max_completion_tokens: 500,
+        temperature: 0.2,
+        response_format: { type: 'json_object' },
+      },
+      { signal: controller.signal }
+    );
 
     clearTimeout(timeout);
     raw = response.choices[0]?.message?.content || '{}';
@@ -912,7 +1234,10 @@ Trả lời JSON only.`;
       }).catch(() => {}); // fire-and-forget
     }
   } catch (apiErr) {
-    console.error(`[TriageAI] OpenAI API failed (phase=${phase}, answers=${answerCount}):`, apiErr?.message || apiErr);
+    console.error(
+      `[TriageAI] OpenAI API failed (phase=${phase}, answers=${answerCount}):`,
+      apiErr?.message || apiErr
+    );
     console.log(`[TriageAI] Using fallback question instead of blocking checkin flow.`);
 
     // Log fallback AI call
@@ -933,78 +1258,143 @@ Trả lời JSON only.`;
     return getFallbackQuestion(status, phase, lang, previousAnswers, profile);
   }
 
-  console.log(`[TriageAI] phase=${phase}, answers=${answerCount}/${maxQuestions}, min=${minQuestions}, raw:`, raw);
+  console.log(
+    `[TriageAI] phase=${phase}, answers=${answerCount}/${maxQuestions}, min=${minQuestions}, raw:`,
+    raw
+  );
   try {
     let parsed = JSON.parse(raw);
 
     // ── Server-side enforcement: force isDone if at max questions ──
     if (!parsed.isDone && answerCount >= maxQuestions) {
-      console.log(`[TriageAI] ⛔ Max questions reached (${answerCount}/${maxQuestions}). Forcing conclusion.`);
-      const allSymptoms = previousAnswers.map(a => safeAns(a.answer)).join(', ');
+      console.log(
+        `[TriageAI] ⛔ Max questions reached (${answerCount}/${maxQuestions}). Forcing conclusion.`
+      );
+      const allSymptoms = previousAnswers.map((a) => safeAns(a.answer)).join(', ');
       parsed = {
         isDone: true,
         summary: allSymptoms,
         severity: isVeryUnwell ? 'high' : 'medium',
-        recommendation: lang === 'en'
-          ? 'Please rest and monitor your condition. See a doctor if symptoms worsen.'
-          : `${Honorific} nghỉ ngơi và theo dõi thêm nhé. Nếu tình trạng nặng hơn, ${honorific} nên đi khám bác sĩ.`,
+        recommendation:
+          lang === 'en'
+            ? 'Please rest and monitor your condition. See a doctor if symptoms worsen.'
+            : `${Honorific} nghỉ ngơi và theo dõi thêm nhé. Nếu tình trạng nặng hơn, ${honorific} nên đi khám bác sĩ.`,
         needsDoctor: isVeryUnwell,
         needsFamilyAlert: false,
         hasRedFlag: false,
         followUpHours: calcFollowUpHours(isVeryUnwell ? 'high' : 'medium', answerCount),
-        closeMessage: lang === 'en'
-          ? `I'll check back in a few hours.`
-          : `${selfRef.charAt(0).toUpperCase() + selfRef.slice(1)} sẽ hỏi lại ${honorific} sau nhé.`,
+        closeMessage:
+          lang === 'en'
+            ? `I'll check back in a few hours.`
+            : `${selfRef.charAt(0).toUpperCase() + selfRef.slice(1)} sẽ hỏi lại ${honorific} sau nhé.`,
       };
     }
 
     // ── Server-side enforcement: block early isDone ──
     // Allow early isDone in follow-up if user says they've improved
-    const IMPROVED_KW = ['đã đỡ', 'đỡ nhiều', 'đỡ rồi', 'hết rồi', 'ổn rồi', 'better', 'improved', 'đang đỡ'];
-    const userImproved = phase === 'followup' && previousAnswers.some(a =>
-      IMPROVED_KW.some(kw => safeAns(a.answer).includes(kw))
-    );
+    const IMPROVED_KW = [
+      'đã đỡ',
+      'đỡ nhiều',
+      'đỡ rồi',
+      'hết rồi',
+      'ổn rồi',
+      'better',
+      'improved',
+      'đang đỡ',
+    ];
+    const userImproved =
+      phase === 'followup' &&
+      previousAnswers.some((a) => IMPROVED_KW.some((kw) => safeAns(a.answer).includes(kw)));
     // ── Follow-up: force isDone if user said improved but AI didn't comply ──
     if (userImproved && !parsed.isDone) {
-      console.log(`[TriageAI] 🟢 User said improved but AI didn't set isDone=true. Forcing conclusion.`);
-      const allSymptoms = previousAnswers.map(a => a.answer).join(', ');
+      console.log(
+        `[TriageAI] 🟢 User said improved but AI didn't set isDone=true. Forcing conclusion.`
+      );
+      const allSymptoms = previousAnswers.map((a) => a.answer).join(', ');
       parsed = {
         isDone: true,
         progression: 'improved',
         summary: allSymptoms,
         severity: 'low',
-        recommendation: lang === 'en'
-          ? 'Good to hear you\'re feeling better! Keep resting and I\'ll check back later.'
-          : `${selfRef} vui vì ${honorific} đã đỡ hơn! Tiếp tục nghỉ ngơi nhé, ${selfRef} sẽ hỏi lại sau 💙`,
+        recommendation:
+          lang === 'en'
+            ? "Good to hear you're feeling better! Keep resting and I'll check back later."
+            : `${selfRef} vui vì ${honorific} đã đỡ hơn! Tiếp tục nghỉ ngơi nhé, ${selfRef} sẽ hỏi lại sau 💙`,
         needsDoctor: false,
         needsFamilyAlert: false,
         hasRedFlag: false,
         followUpHours: 6,
-        closeMessage: lang === 'en' ? 'I\'ll check back in about 6 hours.' : `${selfRef} sẽ hỏi lại ${honorific} sau khoảng 6 tiếng nhé.`,
+        closeMessage:
+          lang === 'en'
+            ? "I'll check back in about 6 hours."
+            : `${selfRef} sẽ hỏi lại ${honorific} sau khoảng 6 tiếng nhé.`,
       };
     }
     if (parsed.isDone && answerCount < minQuestions && !parsed.hasRedFlag && !userImproved) {
-      console.log(`[TriageAI] ⛔ Blocked early isDone (${answerCount}/${minQuestions} min). Forcing continue with unused TYPE.`);
+      console.log(
+        `[TriageAI] ⛔ Blocked early isDone (${answerCount}/${minQuestions} min). Forcing continue with unused TYPE.`
+      );
       // Pick a TYPE not yet used
       const fallbackByType = {
-        5: { q: lang === 'en' ? 'How has your condition changed since it started?'
+        5: {
+          q:
+            lang === 'en'
+              ? 'How has your condition changed since it started?'
               : `Từ lúc bắt đầu đến giờ ${honorific} thấy đỡ hơn chưa, hay vẫn vậy? 💙`,
-             opts: lang === 'en' ? ['getting better', 'about the same', 'getting worse'] : ['đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn'], multi: false },
-        7: { q: lang === 'en' ? 'What might have caused this?'
+          opts:
+            lang === 'en'
+              ? ['getting better', 'about the same', 'getting worse']
+              : ['đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn'],
+          multi: false,
+        },
+        7: {
+          q:
+            lang === 'en'
+              ? 'What might have caused this?'
               : `${Honorific} có nhớ gần đây ngủ ít, bỏ bữa hay căng thẳng gì không? 🤔`,
-             opts: lang === 'en' ? ['lack of sleep', 'skipped meals', 'stress', 'missed medication', 'not sure'] : ['ngủ ít', 'bỏ bữa', 'căng thẳng', 'quên uống thuốc', 'không rõ'], multi: true },
-        8: { q: lang === 'en' ? 'Have you done anything to feel better?'
+          opts:
+            lang === 'en'
+              ? ['lack of sleep', 'skipped meals', 'stress', 'missed medication', 'not sure']
+              : ['ngủ ít', 'bỏ bữa', 'căng thẳng', 'quên uống thuốc', 'không rõ'],
+          multi: true,
+        },
+        8: {
+          q:
+            lang === 'en'
+              ? 'Have you done anything to feel better?'
               : `${Honorific} có nghỉ ngơi hay uống thuốc gì chưa? 💊`,
-             opts: lang === 'en' ? ['rested', 'ate something', 'drank water', 'took medication', 'nothing yet'] : ['nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì'], multi: true },
-        2: { q: lang === 'en' ? 'How severe is your discomfort right now?'
+          opts:
+            lang === 'en'
+              ? ['rested', 'ate something', 'drank water', 'took medication', 'nothing yet']
+              : ['nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì'],
+          multi: true,
+        },
+        2: {
+          q:
+            lang === 'en'
+              ? 'How severe is your discomfort right now?'
               : `${Honorific} thấy mức độ khó chịu hiện tại thế nào? 🩺`,
-             opts: lang === 'en' ? ['moderate', 'quite severe', 'very severe']
-              : isVeryUnwell ? ['trung bình', 'khá nặng', 'rất nặng'] : ['nhẹ', 'trung bình', 'khá nặng', 'rất nặng'], multi: false },
-        10: { q: lang === 'en' ? 'Does this happen often?'
+          opts:
+            lang === 'en'
+              ? ['moderate', 'quite severe', 'very severe']
+              : isVeryUnwell
+                ? ['trung bình', 'khá nặng', 'rất nặng']
+                : ['nhẹ', 'trung bình', 'khá nặng', 'rất nặng'],
+          multi: false,
+        },
+        10: {
+          q:
+            lang === 'en'
+              ? 'Does this happen often?'
               : `Tình trạng này ${honorific} có hay bị không? 🤔`,
-              opts: lang === 'en' ? ['first time', 'occasionally', 'often', 'more often recently'] : ['lần đầu', 'thỉnh thoảng', 'hay bị', 'gần đây bị nhiều hơn'], multi: false },
+          opts:
+            lang === 'en'
+              ? ['first time', 'occasionally', 'often', 'more often recently']
+              : ['lần đầu', 'thỉnh thoảng', 'hay bị', 'gần đây bị nhiều hơn'],
+          multi: false,
+        },
       };
-      const nextType = [5, 7, 8, 2, 10].find(t => !usedTypes.has(t));
+      const nextType = [5, 7, 8, 2, 10].find((t) => !usedTypes.has(t));
       const fb = fallbackByType[nextType] || fallbackByType[7];
       parsed = { isDone: false, question: fb.q, options: fb.opts, multiSelect: fb.multi };
     }
@@ -1013,11 +1403,19 @@ Trả lời JSON only.`;
     // If user explicitly answered "rất nặng" / "very severe" in any triage answer,
     // severity must be at least "high" — AI must not downgrade it to medium/low.
     if (parsed.isDone) {
-      const HIGH_SEVERITY_KEYWORDS = ['rất nặng', 'very severe', 'rất tệ', 'rất khó chịu', 'cực kỳ'];
-      const answersText = previousAnswers.map(a => safeAns(a.answer)).join(' ');
-      if (HIGH_SEVERITY_KEYWORDS.some(kw => answersText.includes(kw))) {
+      const HIGH_SEVERITY_KEYWORDS = [
+        'rất nặng',
+        'very severe',
+        'rất tệ',
+        'rất khó chịu',
+        'cực kỳ',
+      ];
+      const answersText = previousAnswers.map((a) => safeAns(a.answer)).join(' ');
+      if (HIGH_SEVERITY_KEYWORDS.some((kw) => answersText.includes(kw))) {
         if (parsed.severity !== 'high') {
-          console.log(`[TriageAI] ⚠️ Severity override: AI returned "${parsed.severity}" but answers contain high-severity keyword → forcing "high"`);
+          console.log(
+            `[TriageAI] ⚠️ Severity override: AI returned "${parsed.severity}" but answers contain high-severity keyword → forcing "high"`
+          );
           parsed.severity = 'high';
         }
       }
@@ -1027,42 +1425,91 @@ Trả lời JSON only.`;
     if (!parsed.isDone && parsed.question && usedTypes.size > 0) {
       const q = parsed.question.toLowerCase();
       let detectedType = null;
-      if (q.includes('triệu chứng') || q.includes('symptoms') || q.includes('tình trạng nào') || q.includes('gặp phải')) detectedType = 3;
-      else if (q.includes('mức độ') || q.includes('how severe') || q.includes('khó chịu')) detectedType = 2;
-      else if (q.includes('bắt đầu') || q.includes('từ khi nào') || q.includes('từ lúc nào') || q.includes('when did')) detectedType = 4;
-      else if (q.includes('thay đổi') || q.includes('đỡ hơn') || q.includes('nặng hơn') || q.includes('diễn tiến')) detectedType = 5;
+      if (
+        q.includes('triệu chứng') ||
+        q.includes('symptoms') ||
+        q.includes('tình trạng nào') ||
+        q.includes('gặp phải')
+      )
+        detectedType = 3;
+      else if (q.includes('mức độ') || q.includes('how severe') || q.includes('khó chịu'))
+        detectedType = 2;
+      else if (
+        q.includes('bắt đầu') ||
+        q.includes('từ khi nào') ||
+        q.includes('từ lúc nào') ||
+        q.includes('when did')
+      )
+        detectedType = 4;
+      else if (
+        q.includes('thay đổi') ||
+        q.includes('đỡ hơn') ||
+        q.includes('nặng hơn') ||
+        q.includes('diễn tiến')
+      )
+        detectedType = 5;
 
       if (detectedType && usedTypes.has(detectedType)) {
         console.log(`[TriageAI] ⛔ TYPE ${detectedType} repeat blocked. Forcing next unused TYPE.`);
         // Pick next TYPE from flow order that hasn't been used
         const flowOrder = status === 'very_tired' ? [3, 6, 2, 4, 5, 7, 8] : [3, 4, 5, 7, 8, 2, 10];
-        const nextType = flowOrder.find(t => !usedTypes.has(t));
+        const nextType = flowOrder.find((t) => !usedTypes.has(t));
         const primarySymptom = [...knownSymptoms][0] || '';
         const fallbackByType = {
-          4: { q: lang === 'en' ? `When did these symptoms start?`
+          4: {
+            q:
+              lang === 'en'
+                ? `When did these symptoms start?`
                 : primarySymptom
                   ? `${Honorific} bị các triệu chứng trên từ lúc nào vậy? ${Honorific} chọn hoặc cho ${selfRef} biết thời gian chính xác nhé 😊`
                   : `${Honorific} bị từ lúc nào vậy? ${Honorific} chọn hoặc cho ${selfRef} biết thời gian chính xác nhé 😊`,
-               opts: lang === 'en' ? ['just now', 'a few hours ago', 'since morning', 'since yesterday', 'a few days']
+            opts:
+              lang === 'en'
+                ? ['just now', 'a few hours ago', 'since morning', 'since yesterday', 'a few days']
                 : ['vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua', 'vài ngày nay'],
-               multi: false, freeText: true },
-          5: { q: lang === 'en' ? 'Has your condition changed since it started?'
+            multi: false,
+            freeText: true,
+          },
+          5: {
+            q:
+              lang === 'en'
+                ? 'Has your condition changed since it started?'
                 : `Từ lúc bắt đầu đến giờ ${honorific} thấy đỡ hơn chưa, hay vẫn vậy? 💙`,
-               opts: lang === 'en' ? ['getting better', 'about the same', 'getting worse']
+            opts:
+              lang === 'en'
+                ? ['getting better', 'about the same', 'getting worse']
                 : ['đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn'],
-               multi: false, freeText: false },
+            multi: false,
+            freeText: false,
+          },
           7: (() => {
             const sym = (primarySymptom || '').toLowerCase();
             const isPain = sym.includes('đau') || sym.includes('nhức');
-            const isMuscle = sym.includes('vai') || sym.includes('lưng') || sym.includes('cổ') || sym.includes('tay') || sym.includes('chân') || sym.includes('khớp');
-            const isStomach = sym.includes('bụng') || sym.includes('dạ dày') || sym.includes('buồn nôn') || sym.includes('tiêu chảy');
+            const isMuscle =
+              sym.includes('vai') ||
+              sym.includes('lưng') ||
+              sym.includes('cổ') ||
+              sym.includes('tay') ||
+              sym.includes('chân') ||
+              sym.includes('khớp');
+            const isStomach =
+              sym.includes('bụng') ||
+              sym.includes('dạ dày') ||
+              sym.includes('buồn nôn') ||
+              sym.includes('tiêu chảy');
             const isHeadache = sym.includes('đầu');
             const isDizzy = sym.includes('chóng mặt') || sym.includes('hoa mắt');
             const isFatigue = sym.includes('mệt') || sym.includes('uể oải');
             let q7, o7;
             if (isStomach) {
               q7 = `${Honorific} có ăn gì lạ, đồ cay, hay uống thuốc lúc bụng đói không? 🤔`;
-              o7 = ['ăn đồ lạ', 'ăn đồ cay/nóng', 'uống thuốc lúc đói', 'ăn không sạch', 'không rõ'];
+              o7 = [
+                'ăn đồ lạ',
+                'ăn đồ cay/nóng',
+                'uống thuốc lúc đói',
+                'ăn không sạch',
+                'không rõ',
+              ];
             } else if (isHeadache) {
               q7 = `${Honorific} có nhớ gần đây ngủ ít, quên thuốc hay làm việc căng thẳng không? 🤔`;
               o7 = ['ngủ ít', 'quên thuốc huyết áp', 'nhìn màn hình lâu', 'căng thẳng', 'không rõ'];
@@ -1079,102 +1526,249 @@ Trả lời JSON only.`;
               q7 = `${Honorific} có nhớ gần đây có gì bất thường không? 🤔`;
               o7 = ['ngủ ít', 'bỏ bữa', 'quên thuốc', 'vận động nặng', 'không rõ'];
             }
-            return { q: lang === 'en' ? 'What might have caused this?' : q7,
-              opts: lang === 'en' ? ['lack of sleep', 'skipped meals', 'heavy activity', 'missed medication', 'not sure'] : o7,
-              multi: true, freeText: true };
+            return {
+              q: lang === 'en' ? 'What might have caused this?' : q7,
+              opts:
+                lang === 'en'
+                  ? [
+                      'lack of sleep',
+                      'skipped meals',
+                      'heavy activity',
+                      'missed medication',
+                      'not sure',
+                    ]
+                  : o7,
+              multi: true,
+              freeText: true,
+            };
           })(),
-          8: { q: lang === 'en' ? 'Have you done anything to feel better?'
+          8: {
+            q:
+              lang === 'en'
+                ? 'Have you done anything to feel better?'
                 : `${Honorific} có nghỉ ngơi hay uống thuốc gì chưa? 💊`,
-               opts: lang === 'en' ? ['rested', 'ate something', 'drank water', 'took medication', 'nothing yet']
+            opts:
+              lang === 'en'
+                ? ['rested', 'ate something', 'drank water', 'took medication', 'nothing yet']
                 : ['nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì'],
-               multi: true, freeText: false },
-          2: { q: lang === 'en' ? 'How severe is it right now?'
+            multi: true,
+            freeText: false,
+          },
+          2: {
+            q:
+              lang === 'en'
+                ? 'How severe is it right now?'
                 : `${Honorific} thấy mức độ khó chịu hiện tại thế nào? 🩺`,
-               opts: lang === 'en' ? ['mild', 'moderate', 'quite severe']
+            opts:
+              lang === 'en'
+                ? ['mild', 'moderate', 'quite severe']
                 : ['nhẹ', 'trung bình', 'khá nặng'],
-               multi: false, freeText: false },
+            multi: false,
+            freeText: false,
+          },
           6: (() => {
             const sym = (primarySymptom || '').toLowerCase();
-            const isGI = sym.includes('bụng') || sym.includes('dạ dày') || sym.includes('buồn nôn') || sym.includes('tiêu chảy');
+            const isGI =
+              sym.includes('bụng') ||
+              sym.includes('dạ dày') ||
+              sym.includes('buồn nôn') ||
+              sym.includes('tiêu chảy');
             let q6, o6;
             if (isGI) {
               q6 = `Ngoài ra ${honorific} có dấu hiệu nào dưới đây không? 🩺`;
-              o6 = ['nôn ra máu', 'đi ngoài phân đen', 'sốt cao', 'bụng cứng/chướng', 'đau dữ dội', 'không có'];
+              o6 = [
+                'nôn ra máu',
+                'đi ngoài phân đen',
+                'sốt cao',
+                'bụng cứng/chướng',
+                'đau dữ dội',
+                'không có',
+              ];
             } else {
               q6 = `Ngoài ra ${honorific} có thấy dấu hiệu nào dưới đây không? 🩺`;
               o6 = ['đau ngực', 'khó thở', 'hoa mắt', 'vã mồ hôi', 'ngất', 'không có'];
             }
-            return { q: lang === 'en' ? 'Do you have any of these warning signs?' : q6,
-              opts: lang === 'en' ? ['chest pain', 'shortness of breath', 'fainting', 'cold sweat', 'none'] : o6,
-              multi: true, freeText: false };
+            return {
+              q: lang === 'en' ? 'Do you have any of these warning signs?' : q6,
+              opts:
+                lang === 'en'
+                  ? ['chest pain', 'shortness of breath', 'fainting', 'cold sweat', 'none']
+                  : o6,
+              multi: true,
+              freeText: false,
+            };
           })(),
-          10: { q: lang === 'en' ? 'Does this happen often?'
+          10: {
+            q:
+              lang === 'en'
+                ? 'Does this happen often?'
                 : `Tình trạng này ${honorific} có hay bị không? 🤔`,
-               opts: lang === 'en' ? ['first time', 'occasionally', 'often', 'more often recently']
+            opts:
+              lang === 'en'
+                ? ['first time', 'occasionally', 'often', 'more often recently']
                 : ['lần đầu', 'thỉnh thoảng', 'hay bị', 'gần đây bị nhiều hơn'],
-               multi: false, freeText: false },
+            multi: false,
+            freeText: false,
+          },
         };
         const fb = fallbackByType[nextType] || fallbackByType[4];
-        parsed = { isDone: false, question: fb.q, options: fb.opts, multiSelect: fb.multi, allowFreeText: fb.freeText || false };
+        parsed = {
+          isDone: false,
+          question: fb.q,
+          options: fb.opts,
+          multiSelect: fb.multi,
+          allowFreeText: fb.freeText || false,
+        };
       }
     }
 
     // ── Red flag symptoms in answers → force TYPE 6 if not yet asked ──
     const RED_FLAG_IN_ANSWERS = [
       // Cardiac
-      'tức ngực', 'đau ngực', 'khó thở', 'hoa mắt', 'vã mồ hôi', 'ngất',
-      'chest pain', 'shortness of breath',
+      'tức ngực',
+      'đau ngực',
+      'khó thở',
+      'hoa mắt',
+      'vã mồ hôi',
+      'ngất',
+      'chest pain',
+      'shortness of breath',
       // GI
-      'nôn ra máu', 'phân đen', 'bụng cứng', 'vomiting blood', 'black stool',
+      'nôn ra máu',
+      'phân đen',
+      'bụng cứng',
+      'vomiting blood',
+      'black stool',
       // Neurological
-      'yếu nửa người', 'nói ngọng', 'méo miệng', 'tê liệt',
-      'facial droop', 'slurred speech', 'weakness one side',
+      'yếu nửa người',
+      'nói ngọng',
+      'méo miệng',
+      'tê liệt',
+      'facial droop',
+      'slurred speech',
+      'weakness one side',
       // MSK
-      'yếu cơ', 'muscle weakness',
+      'yếu cơ',
+      'muscle weakness',
       // Fever-related
-      'cứng cổ', 'stiff neck',
+      'cứng cổ',
+      'stiff neck',
     ];
-    const answersHaveRedFlag = previousAnswers.some(a => RED_FLAG_IN_ANSWERS.some(rf => safeAns(a.answer).includes(rf)));
-    const shouldForceRedFlag = !parsed.isDone && !usedTypes.has(6) && (userSaidGettingWorse || answersHaveRedFlag);
+    const answersHaveRedFlag = previousAnswers.some((a) =>
+      RED_FLAG_IN_ANSWERS.some((rf) => safeAns(a.answer).includes(rf))
+    );
+    const shouldForceRedFlag =
+      !parsed.isDone && !usedTypes.has(6) && (userSaidGettingWorse || answersHaveRedFlag);
     if (shouldForceRedFlag) {
       const q = (parsed.question || '').toLowerCase();
-      const isRedFlagQ = q.includes('dấu hiệu') || q.includes('nguy hiểm') || q.includes('đau ngực') || q.includes('khó thở') || q.includes('red flag');
+      const isRedFlagQ =
+        q.includes('dấu hiệu') ||
+        q.includes('nguy hiểm') ||
+        q.includes('đau ngực') ||
+        q.includes('khó thở') ||
+        q.includes('red flag');
       if (!isRedFlagQ) {
         // Detect primary symptom category to choose appropriate red flag set
-        const allAnswersText = previousAnswers.map(a => safeAns(a.answer)).join(' ');
-        const isGISymptom = /đau bụng|đau dạ dày|tiêu chảy|nôn|buồn nôn|stomach|abdominal|nausea|vomit/.test(allAnswersText);
-        const isNeuroSymptom = /đau đầu|chóng mặt|tê|numbness|headache|dizziness|tê bì/.test(allAnswersText);
-        const isMSKSymptom = /đau vai|đau lưng|đau khớp|đau cơ|đau chân|đau tay|back pain|joint|muscle/.test(allAnswersText);
+        const allAnswersText = previousAnswers.map((a) => safeAns(a.answer)).join(' ');
+        const isGISymptom =
+          /đau bụng|đau dạ dày|tiêu chảy|nôn|buồn nôn|stomach|abdominal|nausea|vomit/.test(
+            allAnswersText
+          );
+        const isNeuroSymptom = /đau đầu|chóng mặt|tê|numbness|headache|dizziness|tê bì/.test(
+          allAnswersText
+        );
+        const isMSKSymptom =
+          /đau vai|đau lưng|đau khớp|đau cơ|đau chân|đau tay|back pain|joint|muscle/.test(
+            allAnswersText
+          );
         const hasFeverSymptom = /sốt|fever/.test(allAnswersText);
 
         let redFlagOpts, redFlagOptsEn, category;
         if (isGISymptom) {
           category = 'GI';
-          redFlagOpts = ['nôn ra máu', 'phân đen', 'sốt cao', 'bụng cứng', 'đau dữ dội', 'không có'];
-          redFlagOptsEn = ['vomiting blood', 'black stool', 'high fever', 'rigid abdomen', 'severe pain', 'none'];
+          redFlagOpts = [
+            'nôn ra máu',
+            'phân đen',
+            'sốt cao',
+            'bụng cứng',
+            'đau dữ dội',
+            'không có',
+          ];
+          redFlagOptsEn = [
+            'vomiting blood',
+            'black stool',
+            'high fever',
+            'rigid abdomen',
+            'severe pain',
+            'none',
+          ];
         } else if (isNeuroSymptom) {
           category = 'neuro';
-          redFlagOpts = ['yếu nửa người', 'nói ngọng', 'méo miệng', 'tê liệt', 'cứng cổ', 'không có'];
-          redFlagOptsEn = ['weakness one side', 'slurred speech', 'facial droop', 'numbness/paralysis', 'stiff neck', 'none'];
+          redFlagOpts = [
+            'yếu nửa người',
+            'nói ngọng',
+            'méo miệng',
+            'tê liệt',
+            'cứng cổ',
+            'không có',
+          ];
+          redFlagOptsEn = [
+            'weakness one side',
+            'slurred speech',
+            'facial droop',
+            'numbness/paralysis',
+            'stiff neck',
+            'none',
+          ];
         } else if (isMSKSymptom) {
           category = 'MSK';
-          redFlagOpts = ['tê liệt', 'yếu cơ', 'sưng đỏ nóng', 'sốt', 'mất kiểm soát tiểu tiện', 'không có'];
-          redFlagOptsEn = ['numbness/paralysis', 'muscle weakness', 'redness/swelling/warmth', 'fever', 'loss of bladder control', 'none'];
+          redFlagOpts = [
+            'tê liệt',
+            'yếu cơ',
+            'sưng đỏ nóng',
+            'sốt',
+            'mất kiểm soát tiểu tiện',
+            'không có',
+          ];
+          redFlagOptsEn = [
+            'numbness/paralysis',
+            'muscle weakness',
+            'redness/swelling/warmth',
+            'fever',
+            'loss of bladder control',
+            'none',
+          ];
         } else if (hasFeverSymptom) {
           category = 'fever';
           redFlagOpts = ['cứng cổ', 'phát ban', 'khó thở', 'lú lẫn', 'co giật', 'không có'];
-          redFlagOptsEn = ['stiff neck', 'rash', 'shortness of breath', 'confusion', 'seizure', 'none'];
+          redFlagOptsEn = [
+            'stiff neck',
+            'rash',
+            'shortness of breath',
+            'confusion',
+            'seizure',
+            'none',
+          ];
         } else {
           category = 'cardiac/general';
           redFlagOpts = ['đau ngực', 'khó thở', 'hoa mắt', 'vã mồ hôi', 'ngất', 'không có'];
-          redFlagOptsEn = ['chest pain', 'shortness of breath', 'blurred vision', 'cold sweat', 'fainting', 'none'];
+          redFlagOptsEn = [
+            'chest pain',
+            'shortness of breath',
+            'blurred vision',
+            'cold sweat',
+            'fainting',
+            'none',
+          ];
         }
 
         console.log(`[TriageAI] ⚠️ Forcing TYPE 6 red flag question (category: ${category})`);
         parsed = {
           isDone: false,
-          question: lang === 'en' ? `Do you have any of these warning signs?`
-            : `Ngoài ra ${honorific} có thấy dấu hiệu nào dưới đây không? 🩺`,
+          question:
+            lang === 'en'
+              ? `Do you have any of these warning signs?`
+              : `Ngoài ra ${honorific} có thấy dấu hiệu nào dưới đây không? 🩺`,
           options: lang === 'en' ? redFlagOptsEn : redFlagOpts,
           multiSelect: true,
           allowFreeText: false,
@@ -1186,24 +1780,50 @@ Trả lời JSON only.`;
     // Prevent AI from mixing option types (e.g. severity words in symptom question)
     if (!parsed.isDone && parsed.options && parsed.question) {
       const q = parsed.question.toLowerCase();
-      const SEVERITY_WORDS = ['nhẹ', 'trung bình', 'khá nặng', 'rất nặng', 'mild', 'moderate', 'severe'];
-      const SYMPTOM_WORDS = ['mệt mỏi', 'chóng mặt', 'đau đầu', 'buồn nôn', 'fatigue', 'dizziness', 'headache', 'nausea'];
-      const isSymptomQ = q.includes('triệu chứng') || q.includes('tình trạng nào') || q.includes('symptoms') || q.includes('experiencing');
-      const isSeverityQ = q.includes('mức độ') || q.includes('how severe') || q.includes('nặng thế nào');
+      const SEVERITY_WORDS = [
+        'nhẹ',
+        'trung bình',
+        'khá nặng',
+        'rất nặng',
+        'mild',
+        'moderate',
+        'severe',
+      ];
+      const SYMPTOM_WORDS = [
+        'mệt mỏi',
+        'chóng mặt',
+        'đau đầu',
+        'buồn nôn',
+        'fatigue',
+        'dizziness',
+        'headache',
+        'nausea',
+      ];
+      const isSymptomQ =
+        q.includes('triệu chứng') ||
+        q.includes('tình trạng nào') ||
+        q.includes('symptoms') ||
+        q.includes('experiencing');
+      const isSeverityQ =
+        q.includes('mức độ') || q.includes('how severe') || q.includes('nặng thế nào');
 
       if (isSymptomQ) {
         // Remove severity words from symptom question options
-        const filtered = parsed.options.filter(o => !SEVERITY_WORDS.includes(o.toLowerCase().trim()));
+        const filtered = parsed.options.filter(
+          (o) => !SEVERITY_WORDS.includes(o.toLowerCase().trim())
+        );
         if (filtered.length >= 2) parsed.options = filtered;
       } else if (isSeverityQ) {
         // Remove symptom words from severity question options
-        const filtered = parsed.options.filter(o => !SYMPTOM_WORDS.some(sw => o.toLowerCase().includes(sw)));
+        const filtered = parsed.options.filter(
+          (o) => !SYMPTOM_WORDS.some((sw) => o.toLowerCase().includes(sw))
+        );
         if (filtered.length >= 2) parsed.options = filtered;
       }
 
       // Ensure options don't contain already-known symptoms
       if (knownSymptoms.size > 0 && isSymptomQ) {
-        const filtered = parsed.options.filter(o => !knownSymptoms.has(o.toLowerCase().trim()));
+        const filtered = parsed.options.filter((o) => !knownSymptoms.has(o.toLowerCase().trim()));
         if (filtered.length >= 2) parsed.options = filtered;
       }
     }
@@ -1211,24 +1831,67 @@ Trả lời JSON only.`;
     // ── TYPE 6 options override: if AI asked red flag but used wrong set for the symptom ──
     if (!parsed.isDone && parsed.options && parsed.question) {
       const q = parsed.question.toLowerCase();
-      const isRedFlagQ = q.includes('dấu hiệu') || q.includes('nguy hiểm') || q.includes('warning') || (q.includes('đau ngực') && q.includes('khó thở'));
-      if (isRedFlagQ && parsed.options.some(o => o.includes('không có') || o.includes('none'))) {
-        const allAnswersText = previousAnswers.map(a => safeAns(a.answer)).join(' ');
+      const isRedFlagQ =
+        q.includes('dấu hiệu') ||
+        q.includes('nguy hiểm') ||
+        q.includes('warning') ||
+        (q.includes('đau ngực') && q.includes('khó thở'));
+      if (isRedFlagQ && parsed.options.some((o) => o.includes('không có') || o.includes('none'))) {
+        const allAnswersText = previousAnswers.map((a) => safeAns(a.answer)).join(' ');
         const isGI = /đau bụng|dạ dày|tiêu chảy|nôn|buồn nôn/.test(allAnswersText);
         const isNeuro = /đau đầu|chóng mặt|tê|tê bì|tê tay/.test(allAnswersText);
         const isMSK = /đau vai|đau lưng|đau khớp|đau cổ|đau chân|đau tay/.test(allAnswersText);
         const isFever = /sốt/.test(allAnswersText);
 
-        if (isGI && !parsed.options.some(o => o.includes('nôn ra máu') || o.includes('phân đen'))) {
+        if (
+          isGI &&
+          !parsed.options.some((o) => o.includes('nôn ra máu') || o.includes('phân đen'))
+        ) {
           console.log('[TriageAI] Override red flag options → GI set');
-          parsed.options = ['nôn ra máu', 'phân đen', 'sốt cao', 'bụng cứng', 'đau dữ dội', 'không có'];
-        } else if (isNeuro && !parsed.options.some(o => o.includes('yếu nửa') || o.includes('nói ngọng') || o.includes('méo miệng'))) {
+          parsed.options = [
+            'nôn ra máu',
+            'phân đen',
+            'sốt cao',
+            'bụng cứng',
+            'đau dữ dội',
+            'không có',
+          ];
+        } else if (
+          isNeuro &&
+          !parsed.options.some(
+            (o) => o.includes('yếu nửa') || o.includes('nói ngọng') || o.includes('méo miệng')
+          )
+        ) {
           console.log('[TriageAI] Override red flag options → Neuro set');
-          parsed.options = ['yếu nửa người', 'nói ngọng', 'méo miệng', 'mờ mắt đột ngột', 'cứng cổ + sốt', 'không có'];
-        } else if (isMSK && !parsed.options.some(o => o.includes('tê liệt') || o.includes('yếu cơ') || o.includes('tiểu tiện'))) {
+          parsed.options = [
+            'yếu nửa người',
+            'nói ngọng',
+            'méo miệng',
+            'mờ mắt đột ngột',
+            'cứng cổ + sốt',
+            'không có',
+          ];
+        } else if (
+          isMSK &&
+          !parsed.options.some(
+            (o) => o.includes('tê liệt') || o.includes('yếu cơ') || o.includes('tiểu tiện')
+          )
+        ) {
           console.log('[TriageAI] Override red flag options → MSK set');
-          parsed.options = ['tê liệt', 'yếu cơ', 'sưng đỏ nóng', 'sốt', 'mất kiểm soát tiểu tiện', 'không có'];
-        } else if (isFever && !parsed.options.some(o => o.includes('cứng cổ') || o.includes('phát ban') || o.includes('co giật'))) {
+          parsed.options = [
+            'tê liệt',
+            'yếu cơ',
+            'sưng đỏ nóng',
+            'sốt',
+            'mất kiểm soát tiểu tiện',
+            'không có',
+          ];
+        } else if (
+          isFever &&
+          !parsed.options.some(
+            (o) => o.includes('cứng cổ') || o.includes('phát ban') || o.includes('co giật')
+          )
+        ) {
           console.log('[TriageAI] Override red flag options → Fever set');
           parsed.options = ['cứng cổ', 'phát ban', 'khó thở', 'lú lẫn', 'co giật', 'không có'];
         }
@@ -1238,18 +1901,41 @@ Trả lời JSON only.`;
     // ── Hallucination guard: if AI mentions a symptom user never reported in onset/progression questions, fix it ──
     if (!parsed.isDone && parsed.question && knownSymptoms.size > 0) {
       const q = parsed.question.toLowerCase();
-      const isOnsetOrProgressionQ = q.includes('bắt đầu') || q.includes('từ khi nào') || q.includes('when did')
-        || q.includes('thay đổi') || q.includes('diễn tiến') || q.includes('thế nào rồi');
+      const isOnsetOrProgressionQ =
+        q.includes('bắt đầu') ||
+        q.includes('từ khi nào') ||
+        q.includes('when did') ||
+        q.includes('thay đổi') ||
+        q.includes('diễn tiến') ||
+        q.includes('thế nào rồi');
       if (isOnsetOrProgressionQ) {
         // Check if question mentions a symptom user never reported
-        const COMMON_SYMPTOMS = ['đau đầu', 'chóng mặt', 'buồn nôn', 'mệt mỏi', 'khát nước', 'ăn không ngon',
-          'đau bụng', 'khó thở', 'đau ngực', 'hoa mắt', 'mất ngủ', 'sốt',
-          'headache', 'dizziness', 'nausea', 'fatigue', 'chest pain'];
-        const mentionedInQ = COMMON_SYMPTOMS.filter(s => q.includes(s));
-        const unmentionedByUser = mentionedInQ.filter(s => !knownSymptoms.has(s));
+        const COMMON_SYMPTOMS = [
+          'đau đầu',
+          'chóng mặt',
+          'buồn nôn',
+          'mệt mỏi',
+          'khát nước',
+          'ăn không ngon',
+          'đau bụng',
+          'khó thở',
+          'đau ngực',
+          'hoa mắt',
+          'mất ngủ',
+          'sốt',
+          'headache',
+          'dizziness',
+          'nausea',
+          'fatigue',
+          'chest pain',
+        ];
+        const mentionedInQ = COMMON_SYMPTOMS.filter((s) => q.includes(s));
+        const unmentionedByUser = mentionedInQ.filter((s) => !knownSymptoms.has(s));
         if (unmentionedByUser.length > 0 && knownSymptoms.size > 0) {
           // Replace with the first known symptom that's in COMMON_SYMPTOMS list (not raw free text)
-          const knownCommon = COMMON_SYMPTOMS.filter(s => [...knownSymptoms].some(ks => ks.includes(s)));
+          const knownCommon = COMMON_SYMPTOMS.filter((s) =>
+            [...knownSymptoms].some((ks) => ks.includes(s))
+          );
           const primarySymptom = knownCommon[0] || [...knownSymptoms][0];
           // Only replace if primarySymptom is short (actual symptom name, not free text)
           if (primarySymptom.length > 30) return; // skip if it's a long free text answer
@@ -1257,7 +1943,9 @@ Trả lời JSON only.`;
           for (const wrong of unmentionedByUser) {
             fixedQ = fixedQ.replace(new RegExp(wrong, 'gi'), primarySymptom);
           }
-          console.log(`[TriageAI] ⚠️ Hallucination fix: replaced "${unmentionedByUser.join(', ')}" with "${primarySymptom}" in question`);
+          console.log(
+            `[TriageAI] ⚠️ Hallucination fix: replaced "${unmentionedByUser.join(', ')}" with "${primarySymptom}" in question`
+          );
           parsed.question = fixedQ;
         }
       }
@@ -1266,22 +1954,42 @@ Trả lời JSON only.`;
     // ── Self-validation: fix common AI mistakes before returning ──
     if (!parsed.isDone && parsed.question && parsed.options) {
       const q = parsed.question.toLowerCase();
-      const opts = parsed.options.map(o => o.toLowerCase());
+      const opts = parsed.options.map((o) => o.toLowerCase());
 
       // 1. Onset question (TYPE 4): nếu user chọn nhiều triệu chứng nhưng AI chỉ nhắc 1
-      const isOnsetQ = q.includes('từ lúc nào') || q.includes('từ khi nào') || q.includes('bắt đầu từ') || q.includes('when did');
+      const isOnsetQ =
+        q.includes('từ lúc nào') ||
+        q.includes('từ khi nào') ||
+        q.includes('bắt đầu từ') ||
+        q.includes('when did');
       if (isOnsetQ && knownSymptoms.size > 1) {
         // Kiểm tra AI có chỉ nhắc 1 triệu chứng không
-        const COMMON_SYMPTOMS = ['đau đầu', 'chóng mặt', 'buồn nôn', 'mệt mỏi', 'khát nước', 'ăn không ngon',
-          'đau bụng', 'khó thở', 'đau ngực', 'hoa mắt', 'mất ngủ', 'sốt', 'tức ngực', 'vã mồ hôi'];
-        const mentionedInQ = COMMON_SYMPTOMS.filter(s => q.includes(s));
+        const COMMON_SYMPTOMS = [
+          'đau đầu',
+          'chóng mặt',
+          'buồn nôn',
+          'mệt mỏi',
+          'khát nước',
+          'ăn không ngon',
+          'đau bụng',
+          'khó thở',
+          'đau ngực',
+          'hoa mắt',
+          'mất ngủ',
+          'sốt',
+          'tức ngực',
+          'vã mồ hôi',
+        ];
+        const mentionedInQ = COMMON_SYMPTOMS.filter((s) => q.includes(s));
         if (mentionedInQ.length === 1) {
           // Thay bằng "các triệu chứng trên"
           let fixedQ = parsed.question;
           for (const sym of mentionedInQ) {
             fixedQ = fixedQ.replace(new RegExp(sym, 'gi'), 'các triệu chứng trên');
           }
-          console.log(`[TriageAI] ⚠️ Onset fix: user có ${knownSymptoms.size} triệu chứng nhưng AI chỉ nhắc "${mentionedInQ[0]}" → đổi thành "các triệu chứng trên"`);
+          console.log(
+            `[TriageAI] ⚠️ Onset fix: user có ${knownSymptoms.size} triệu chứng nhưng AI chỉ nhắc "${mentionedInQ[0]}" → đổi thành "các triệu chứng trên"`
+          );
           parsed.question = fixedQ;
         }
         // Force allowFreeText=true cho onset (nhập thời gian chính xác)
@@ -1292,14 +2000,41 @@ Trả lời JSON only.`;
       }
 
       // 2. multiSelect validation dựa theo loại options
-      const TIME_OPTS = ['vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua', 'vài ngày nay', 'just now', 'few hours ago'];
-      const PROGRESSION_OPTS = ['đang đỡ', 'đỡ dần', 'vẫn như cũ', 'vẫn vậy', 'nặng hơn', 'getting better', 'same', 'worse'];
-      const SEVERITY_OPTS = ['nhẹ', 'trung bình', 'khá nặng', 'rất nặng', 'mild', 'moderate', 'severe'];
-      const isTimeOpts = opts.some(o => TIME_OPTS.some(t => o.includes(t)));
-      const isProgressionOpts = opts.some(o => PROGRESSION_OPTS.some(p => o.includes(p)));
-      const isSeverityOpts = opts.some(o => SEVERITY_OPTS.some(s => o === s))
-        || (q.includes('mức') && (q.includes('nào') || q.includes('độ')))
-        || q.includes('nặng thế nào') || q.includes('how severe');
+      const TIME_OPTS = [
+        'vừa mới',
+        'vài giờ trước',
+        'từ sáng',
+        'từ hôm qua',
+        'vài ngày nay',
+        'just now',
+        'few hours ago',
+      ];
+      const PROGRESSION_OPTS = [
+        'đang đỡ',
+        'đỡ dần',
+        'vẫn như cũ',
+        'vẫn vậy',
+        'nặng hơn',
+        'getting better',
+        'same',
+        'worse',
+      ];
+      const SEVERITY_OPTS = [
+        'nhẹ',
+        'trung bình',
+        'khá nặng',
+        'rất nặng',
+        'mild',
+        'moderate',
+        'severe',
+      ];
+      const isTimeOpts = opts.some((o) => TIME_OPTS.some((t) => o.includes(t)));
+      const isProgressionOpts = opts.some((o) => PROGRESSION_OPTS.some((p) => o.includes(p)));
+      const isSeverityOpts =
+        opts.some((o) => SEVERITY_OPTS.some((s) => o === s)) ||
+        (q.includes('mức') && (q.includes('nào') || q.includes('độ'))) ||
+        q.includes('nặng thế nào') ||
+        q.includes('how severe');
       // Các loại chỉ chọn 1 → force multiSelect=false
       if ((isTimeOpts || isProgressionOpts || isSeverityOpts) && parsed.multiSelect === true) {
         console.log(`[TriageAI] ⚠️ multiSelect fix: forced multiSelect=false`);
@@ -1307,11 +2042,17 @@ Trả lời JSON only.`;
       }
       // very_tired: severity options không được có "nhẹ"
       if (isVeryUnwell && isSeverityOpts) {
-        const filtered = parsed.options.filter(o => !['nhẹ', 'mild'].includes(o.toLowerCase().trim()));
+        const filtered = parsed.options.filter(
+          (o) => !['nhẹ', 'mild'].includes(o.toLowerCase().trim())
+        );
         if (filtered.length >= 2) {
           parsed.options = filtered;
           // Đảm bảo có "rất nặng"
-          if (!filtered.some(o => o.toLowerCase().includes('rất nặng') || o.toLowerCase().includes('very severe'))) {
+          if (
+            !filtered.some(
+              (o) => o.toLowerCase().includes('rất nặng') || o.toLowerCase().includes('very severe')
+            )
+          ) {
             parsed.options.push(lang === 'en' ? 'very severe' : 'rất nặng');
           }
           console.log(`[TriageAI] ⚠️ very_tired severity fix: removed "nhẹ", ensured "rất nặng"`);
@@ -1319,15 +2060,20 @@ Trả lời JSON only.`;
       }
 
       // 3. Chống trùng lặp: nếu question có 2 câu hỏi cùng ý
-      const sentences = parsed.question.split(/[?？]/).filter(s => s.trim().length > 5);
+      const sentences = parsed.question.split(/[?？]/).filter((s) => s.trim().length > 5);
       if (sentences.length >= 2) {
         const s1 = sentences[0].toLowerCase();
         const s2 = sentences[1].toLowerCase();
         const OVERLAP_PAIRS = [
-          ['thay đổi', 'đỡ hơn'], ['thay đổi', 'vẫn vậy'], ['thay đổi', 'nặng hơn'],
-          ['đỡ hơn', 'đỡ dần'], ['thế nào', 'đỡ hơn chưa'],
+          ['thay đổi', 'đỡ hơn'],
+          ['thay đổi', 'vẫn vậy'],
+          ['thay đổi', 'nặng hơn'],
+          ['đỡ hơn', 'đỡ dần'],
+          ['thế nào', 'đỡ hơn chưa'],
         ];
-        const isDuplicate = OVERLAP_PAIRS.some(([a, b]) => (s1.includes(a) && s2.includes(b)) || (s1.includes(b) && s2.includes(a)));
+        const isDuplicate = OVERLAP_PAIRS.some(
+          ([a, b]) => (s1.includes(a) && s2.includes(b)) || (s1.includes(b) && s2.includes(a))
+        );
         if (isDuplicate) {
           // Giữ câu đầu, bỏ câu sau
           parsed.question = sentences[0].trim() + '?';
@@ -1342,7 +2088,7 @@ Trả lời JSON only.`;
     // ══════════════════════════════════════════════════════════════════
     if (parsed.isDone) {
       const condLower = (conditions || '').toLowerCase();
-      const answersJoined = previousAnswers.map(a => safeAns(a.answer)).join(' ');
+      const answersJoined = previousAnswers.map((a) => safeAns(a.answer)).join(' ');
 
       // ── Detect clinical signals from answers ──
       const hasHypertension = condLower.includes('huyết áp') || condLower.includes('hypertension');
@@ -1353,7 +2099,6 @@ Trả lời JSON only.`;
 
       const hasHeadacheDizziness = /đau đầu|chóng mặt|headache|dizziness/.test(answersJoined);
       const isWorsening = /nặng hơn|tệ hơn|mệt hơn|worse|xấu hơn/.test(answersJoined);
-      const isImproving = /đỡ dần|đang đỡ|đã đỡ|đỡ rồi|đỡ hơn|getting better/.test(answersJoined);
       const missedMeds = /quên thuốc|quên uống|missed med|bỏ thuốc/.test(answersJoined);
       const hasThirst = /khát nước|thirst/.test(answersJoined);
       const hasChestPain = /tức ngực|đau ngực|chest pain|chest tight/.test(answersJoined);
@@ -1366,7 +2111,10 @@ Trả lời JSON only.`;
       const hasFever = /sốt|fever/.test(answersJoined);
 
       // ══ RULE 1: Red flag symptoms → severity=high (bất kể AI nói gì) ══
-      if ((hasChestPain || hasBreathingIssue || hasFainting || hasSweating) && parsed.severity !== 'high') {
+      if (
+        (hasChestPain || hasBreathingIssue || hasFainting || hasSweating) &&
+        parsed.severity !== 'high'
+      ) {
         console.log(`[Clinical] ⚠️ Red flag symptom detected → severity=high`);
         parsed.severity = 'high';
         parsed.needsDoctor = true;
@@ -1384,7 +2132,9 @@ Trả lời JSON only.`;
       if (hasHypertension && hasHeadacheDizziness) {
         // 3a: + nặng hơn → high (nghi tăng huyết áp cấp)
         if (isWorsening && parsed.severity !== 'high') {
-          console.log(`[Clinical] ⚠️ Hypertension + headache + worsening → high (possible hypertensive urgency)`);
+          console.log(
+            `[Clinical] ⚠️ Hypertension + headache + worsening → high (possible hypertensive urgency)`
+          );
           parsed.severity = 'high';
           parsed.needsDoctor = true;
         }
@@ -1402,7 +2152,9 @@ Trả lời JSON only.`;
         if (hasThirst) {
           if (parsed.severity === 'low') parsed.severity = 'medium';
           parsed.needsDoctor = true;
-          console.log(`[Clinical] ⚠️ Diabetes + thirst → possible hyperglycemia → medium, needsDoctor`);
+          console.log(
+            `[Clinical] ⚠️ Diabetes + thirst → possible hyperglycemia → medium, needsDoctor`
+          );
         }
         // 4b: quên thuốc → luôn needsDoctor + at least medium
         if (missedMeds) {
@@ -1451,7 +2203,11 @@ Trả lời JSON only.`;
       }
 
       // ══ RULE 8b: Elderly + bệnh nền + severity medium trở lên → luôn needsDoctor ══
-      if (isElderly && hasAnyCondition && (parsed.severity === 'medium' || parsed.severity === 'high')) {
+      if (
+        isElderly &&
+        hasAnyCondition &&
+        (parsed.severity === 'medium' || parsed.severity === 'high')
+      ) {
         if (!parsed.needsDoctor) {
           console.log(`[Clinical] ⚠️ Elderly + conditions + medium/high severity → needsDoctor`);
           parsed.needsDoctor = true;
@@ -1470,11 +2226,21 @@ Trả lời JSON only.`;
       // ══ RULE 8d: Dangerous symptom COMBINATIONS → severity=high ══
       const hasStomachPain = /đau bụng|đau dạ dày|stomach|abdominal/.test(answersJoined);
       const hasBackPain = /đau lưng|back pain/.test(answersJoined);
-      const hasLegSwelling = /sưng chân|sưng cẳng chân|phù chân|leg swell|swollen leg/.test(answersJoined);
+      const hasLegSwelling = /sưng chân|sưng cẳng chân|phù chân|leg swell|swollen leg/.test(
+        answersJoined
+      );
       const hasStiffNeck = /cứng cổ|stiff neck/.test(answersJoined);
-      const hasHemiplegia = /yếu nửa người|liệt nửa người|tê nửa người|weakness one side|hemiplegia/.test(answersJoined);
-      const hasSlurredSpeech = /nói ngọng|méo miệng|slurred speech|facial droop/.test(answersJoined);
-      const hasBladderLoss = /mất kiểm soát tiểu|không kiểm soát.*tiểu|tiểu không tự chủ|loss of bladder|incontinence/.test(answersJoined);
+      const hasHemiplegia =
+        /yếu nửa người|liệt nửa người|tê nửa người|weakness one side|hemiplegia/.test(
+          answersJoined
+        );
+      const hasSlurredSpeech = /nói ngọng|méo miệng|slurred speech|facial droop/.test(
+        answersJoined
+      );
+      const hasBladderLoss =
+        /mất kiểm soát tiểu|không kiểm soát.*tiểu|tiểu không tự chủ|loss of bladder|incontinence/.test(
+          answersJoined
+        );
       const hasSyncope = /ngất|bất tỉnh|syncope|passed out/.test(answersJoined);
 
       // 8d-1: đau ngực + buồn nôn + vã mồ hôi → MI (myocardial infarction)
@@ -1487,7 +2253,9 @@ Trả lời JSON only.`;
       }
       // 8d-2: đau đầu + sốt + cứng cổ → meningitis
       if (hasHeadacheDizziness && hasFever && hasStiffNeck && parsed.severity !== 'high') {
-        console.log(`[Clinical] 🚨 Headache + fever + stiff neck → possible meningitis → severity=high`);
+        console.log(
+          `[Clinical] 🚨 Headache + fever + stiff neck → possible meningitis → severity=high`
+        );
         parsed.severity = 'high';
         parsed.needsDoctor = true;
         parsed.hasRedFlag = true;
@@ -1495,7 +2263,9 @@ Trả lời JSON only.`;
       }
       // 8d-3: khó thở + sưng chân → PE (pulmonary embolism)
       if (hasBreathingIssue && hasLegSwelling && parsed.severity !== 'high') {
-        console.log(`[Clinical] 🚨 Shortness of breath + leg swelling → possible PE → severity=high`);
+        console.log(
+          `[Clinical] 🚨 Shortness of breath + leg swelling → possible PE → severity=high`
+        );
         parsed.severity = 'high';
         parsed.needsDoctor = true;
         parsed.hasRedFlag = true;
@@ -1503,7 +2273,9 @@ Trả lời JSON only.`;
       }
       // 8d-4: đau lưng + mất kiểm soát tiểu tiện → cauda equina syndrome
       if (hasBackPain && hasBladderLoss && parsed.severity !== 'high') {
-        console.log(`[Clinical] 🚨 Back pain + loss of bladder control → possible cauda equina → severity=high`);
+        console.log(
+          `[Clinical] 🚨 Back pain + loss of bladder control → possible cauda equina → severity=high`
+        );
         parsed.severity = 'high';
         parsed.needsDoctor = true;
         parsed.hasRedFlag = true;
@@ -1519,7 +2291,9 @@ Trả lời JSON only.`;
       }
       // 8d-6: đau bụng + ngất → internal hemorrhage
       if (hasStomachPain && hasSyncope && parsed.severity !== 'high') {
-        console.log(`[Clinical] 🚨 Abdominal pain + syncope → possible internal hemorrhage → severity=high`);
+        console.log(
+          `[Clinical] 🚨 Abdominal pain + syncope → possible internal hemorrhage → severity=high`
+        );
         parsed.severity = 'high';
         parsed.needsDoctor = true;
         parsed.hasRedFlag = true;
@@ -1534,7 +2308,7 @@ Trả lời JSON only.`;
 
       // ══ RULE 10: "rất nặng" answer → severity=high bắt buộc ══
       const HIGH_KW = ['rất nặng', 'very severe', 'rất tệ', 'cực kỳ'];
-      if (HIGH_KW.some(kw => answersJoined.includes(kw)) && parsed.severity !== 'high') {
+      if (HIGH_KW.some((kw) => answersJoined.includes(kw)) && parsed.severity !== 'high') {
         console.log(`[Clinical] ⚠️ User said "rất nặng" → forced severity=high`);
         parsed.severity = 'high';
       }
@@ -1585,7 +2359,10 @@ Trả lời JSON only.`;
       if (parsed.closeMessage && parsed.followUpHours) {
         const h = parsed.followUpHours;
         parsed.closeMessage = parsed.closeMessage.replace(/sau\s+\d+\s+tiếng/g, `sau ${h} tiếng`);
-        parsed.closeMessage = parsed.closeMessage.replace(/sau khoảng\s+\d+\s+tiếng/g, `sau ${h} tiếng`);
+        parsed.closeMessage = parsed.closeMessage.replace(
+          /sau khoảng\s+\d+\s+tiếng/g,
+          `sau ${h} tiếng`
+        );
       }
     }
     // Apply AI safety filter
@@ -1610,4 +2387,10 @@ Trả lời JSON only.`;
   }
 }
 
-module.exports = { getNextTriageQuestion, buildContinuityMessage, calcFollowUpHours, getFallbackQuestion, getNextTriageQuestionLegacy };
+module.exports = {
+  getNextTriageQuestion,
+  buildContinuityMessage,
+  calcFollowUpHours,
+  getFallbackQuestion,
+  getNextTriageQuestionLegacy,
+};

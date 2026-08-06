@@ -18,10 +18,10 @@
 // ─── Segment thresholds (ngày) ──────────────────────────────────────────────
 
 const SEGMENT_THRESHOLDS = {
-  active: 1,       // <= 1 ngày
-  semi_active: 3,  // 2-3 ngày
-  inactive: 7,     // 4-7 ngày
-  churned: Infinity // >7 ngày
+  active: 1, // <= 1 ngày
+  semi_active: 3, // 2-3 ngày
+  inactive: 7, // 4-7 ngày
+  churned: Infinity, // >7 ngày
 };
 
 // ─── Calculate segment from inactive days ───────────────────────────────────
@@ -36,10 +36,7 @@ function calculateSegment(inactiveDays) {
 // ─── Get lifecycle for a single user ────────────────────────────────────────
 
 async function getLifecycle(pool, userId) {
-  const { rows } = await pool.query(
-    `SELECT * FROM user_lifecycle WHERE user_id = $1`,
-    [userId]
-  );
+  const { rows } = await pool.query(`SELECT * FROM user_lifecycle WHERE user_id = $1`, [userId]);
 
   if (rows.length === 0) {
     // User chưa có record → tạo mới
@@ -48,7 +45,10 @@ async function getLifecycle(pool, userId) {
 
   // Legacy rows used 999 for users who had never checked in. That is not a
   // real inactivity duration and must not be exposed to notification logic.
-  if (rows[0].last_checkin_at == null && (rows[0].inactive_days !== 0 || rows[0].segment !== 'active')) {
+  if (
+    rows[0].last_checkin_at == null &&
+    (rows[0].inactive_days !== 0 || rows[0].segment !== 'active')
+  ) {
     const { rows: normalized } = await pool.query(
       `UPDATE user_lifecycle
           SET inactive_days = 0, segment = 'active', updated_at = NOW()
@@ -176,7 +176,7 @@ async function getActiveUserIds(pool) {
   const { rows } = await pool.query(
     `SELECT user_id FROM user_lifecycle WHERE segment IN ('active', 'semi_active')`
   );
-  return rows.map(r => r.user_id);
+  return rows.map((r) => r.user_id);
 }
 
 // ─── Check if user should get script generation ─────────────────────────────
@@ -195,7 +195,8 @@ async function shouldGenerateScript(pool, userId) {
       [userId]
     );
     if (rows.length === 0) return true; // Chưa có script → generate
-    const daysSinceScript = (Date.now() - new Date(rows[0].created_at).getTime()) / (1000 * 60 * 60 * 24);
+    const daysSinceScript =
+      (Date.now() - new Date(rows[0].created_at).getTime()) / (1000 * 60 * 60 * 24);
     return daysSinceScript > 7;
   }
 

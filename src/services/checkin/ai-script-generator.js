@@ -35,8 +35,18 @@ const STANDARD_FOLLOWUP_QUESTIONS = [
 
 const STANDARD_FALLBACK_QUESTIONS = [
   { id: 'fb1', text: 'Đau mức nào?', type: 'slider', min: 0, max: 10 },
-  { id: 'fb2', text: 'Từ khi nào?', type: 'single_choice', options: ['Vừa mới', 'Vài giờ trước', 'Từ sáng', 'Từ hôm qua', 'Vài ngày'] },
-  { id: 'fb3', text: 'Nặng hơn không?', type: 'single_choice', options: ['Đang đỡ', 'Vẫn vậy', 'Nặng hơn'] },
+  {
+    id: 'fb2',
+    text: 'Từ khi nào?',
+    type: 'single_choice',
+    options: ['Vừa mới', 'Vài giờ trước', 'Từ sáng', 'Từ hôm qua', 'Vài ngày'],
+  },
+  {
+    id: 'fb3',
+    text: 'Nặng hơn không?',
+    type: 'single_choice',
+    options: ['Đang đỡ', 'Vẫn vậy', 'Nặng hơn'],
+  },
 ];
 
 // ─── Generate script from AI analysis ───────────────────────────────────────
@@ -55,7 +65,7 @@ function generateFromAnalysis(analysis, profile = {}) {
   }
 
   // Build questions: tag each with cluster key
-  const questions = analysis.suggestedQuestions.map(q => ({
+  const questions = analysis.suggestedQuestions.map((q) => ({
     ...q,
     cluster: analysis.clusterKey,
   }));
@@ -138,19 +148,20 @@ async function saveGeneratedScript(pool, userId, clusterKey, displayName, script
   );
   const script = scriptRows[0];
 
-  console.log(`[AIScriptGen] Saved script for user=${userId}, cluster=${clusterKey}, script_id=${script.id}`);
+  console.log(
+    `[AIScriptGen] Saved script for user=${userId}, cluster=${clusterKey}, script_id=${script.id}`
+  );
 
   return { cluster, script };
 }
 
 // ─── Condition modifiers builder ────────────────────────────────────────────
 
-function _buildConditionModifiers(questions, profile) {
+function _buildConditionModifiers(questions, _profile) {
   const modifiers = [];
-  const conditions = profile.conditions || profile.medical_conditions || [];
 
   // Find the first slider question (severity indicator)
-  const sliderQ = questions.find(q => q.type === 'slider');
+  const sliderQ = questions.find((q) => q.type === 'slider');
   const sliderField = sliderQ ? sliderQ.id : null;
 
   // Diabetes: lower threshold for severity bump
@@ -191,9 +202,7 @@ function _buildConditionModifiers(questions, profile) {
 
 // ─── Fallback script (when AI analysis is incomplete) ───────────────────────
 
-function _buildFallbackScript(analysis, profile) {
-  const displayName = (analysis && analysis.displayName) || 'triệu chứng';
-
+function _buildFallbackScript(_analysis, _profile) {
   return {
     greeting: `{CallName} ơi, {selfRef} hỏi thăm {honorific} thêm nhé`,
     questions: STANDARD_FALLBACK_QUESTIONS,

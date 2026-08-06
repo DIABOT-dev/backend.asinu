@@ -57,7 +57,7 @@ async function getBalance(pool, req, res) {
  * Get user transaction history
  */
 async function getHistory(pool, req, res) {
-  const page  = Math.max(1, parseInt(req.query.page)  || 1);
+  const page = Math.max(1, parseInt(req.query.page) || 1);
   const limit = Math.min(50, parseInt(req.query.limit) || 20);
   try {
     const result = await paymentService.getHistory(pool, req.user.id, { page, limit });

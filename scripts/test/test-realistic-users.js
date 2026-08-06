@@ -25,9 +25,21 @@ const {
 } = require('../src/services/checkin/script.service');
 
 const { getNextQuestion, validateScript } = require('../src/services/checkin/script-runner');
-const { evaluateScript, evaluateFollowUp, applyModifiers } = require('../src/services/checkin/scoring-engine');
-const { getFallbackScriptData, logFallback, matchCluster } = require('../src/services/checkin/fallback.service');
-const { detectEmergency, isRedFlag, getRedFlags } = require('../src/services/checkin/emergency-detector');
+const {
+  evaluateScript,
+  evaluateFollowUp,
+  applyModifiers,
+} = require('../src/services/checkin/scoring-engine');
+const {
+  getFallbackScriptData,
+  logFallback,
+  matchCluster,
+} = require('../src/services/checkin/fallback.service');
+const {
+  detectEmergency,
+  isRedFlag,
+  getRedFlags,
+} = require('../src/services/checkin/emergency-detector');
 const { resolveComplaint, listComplaints } = require('../src/services/checkin/clinical-mapping');
 
 const USER_ID = 4;
@@ -38,7 +50,9 @@ let totalPass = 0;
 let totalFail = 0;
 const perUser = {};
 
-function initUser(name) { perUser[name] = { pass: 0, fail: 0 }; }
+function initUser(name) {
+  perUser[name] = { pass: 0, fail: 0 };
+}
 
 function pass(user, msg) {
   totalPass++;
@@ -94,7 +108,7 @@ async function setupProfile(profile) {
  * Run a script session with provided answers, return conclusion.
  */
 function runScriptSession(scriptData, answers, profile, sessionType = 'initial') {
-  let currentAnswers = [];
+  const currentAnswers = [];
 
   for (const ans of answers) {
     const next = getNextQuestion(scriptData, currentAnswers, { sessionType, profile });
@@ -105,7 +119,8 @@ function runScriptSession(scriptData, answers, profile, sessionType = 'initial')
   // Fill remaining questions with defaults
   let next = getNextQuestion(scriptData, currentAnswers, { sessionType, profile });
   while (!next.isDone) {
-    const defaultAns = next.question.options?.[0] ?? (next.question.type === 'slider' ? 3 : 'không rõ');
+    const defaultAns =
+      next.question.options?.[0] ?? (next.question.type === 'slider' ? 3 : 'không rõ');
     currentAnswers.push({ question_id: next.question.id, answer: defaultAns });
     next = getNextQuestion(scriptData, currentAnswers, { sessionType, profile });
   }
@@ -145,14 +160,21 @@ async function testUser1() {
   if (dzScript) {
     const dzData = dzScript.script_data;
     // Mild answers: pick non-danger options
-    const conclusion1 = runScriptSession(dzData, [
-      'lâng lâng, lơ lửng',  // q1: mild type
-      'khi đứng dậy',        // q2: benign trigger
-      'không có',             // q3: no associated symptoms
-    ], profile);
-    console.log(`    severity=${conclusion1.severity}, modifiers=${JSON.stringify(conclusion1.modifiersApplied)}`);
+    const conclusion1 = runScriptSession(
+      dzData,
+      [
+        'lâng lâng, lơ lửng', // q1: mild type
+        'khi đứng dậy', // q2: benign trigger
+        'không có', // q3: no associated symptoms
+      ],
+      profile
+    );
+    console.log(
+      `    severity=${conclusion1.severity}, modifiers=${JSON.stringify(conclusion1.modifiersApplied)}`
+    );
     // Elderly+conditions: low -> medium (safety bump since no rule matched)
-    assert(U,
+    assert(
+      U,
       conclusion1.severity === 'medium',
       'elderly+4 conditions: low bumped to medium (default safety)',
       `FAIL expected medium got ${conclusion1.severity}`
@@ -168,8 +190,11 @@ async function testUser1() {
   if (jpScript) {
     const jpData = jpScript.script_data;
     const conclusion2 = runScriptSession(jpData, [], profile); // default answers
-    console.log(`    severity=${conclusion2.severity}, modifiers=${JSON.stringify(conclusion2.modifiersApplied)}`);
-    assert(U,
+    console.log(
+      `    severity=${conclusion2.severity}, modifiers=${JSON.stringify(conclusion2.modifiersApplied)}`
+    );
+    assert(
+      U,
       conclusion2.severity === 'high',
       'elderly+4 conditions bumps joint_pain to high',
       `FAIL expected high got ${conclusion2.severity}`
@@ -180,8 +205,11 @@ async function testUser1() {
   subheader('Test 1b: Fallback script slider=5 → elderly bumps medium->high');
   const fbData = getFallbackScriptData();
   const conclusionFb = runScriptSession(fbData, [5, 'Từ sáng', 'Vẫn vậy'], profile);
-  console.log(`    fallback slider=5: severity=${conclusionFb.severity}, modifiers=${JSON.stringify(conclusionFb.modifiersApplied)}`);
-  assert(U,
+  console.log(
+    `    fallback slider=5: severity=${conclusionFb.severity}, modifiers=${JSON.stringify(conclusionFb.modifiersApplied)}`
+  );
+  assert(
+    U,
     conclusionFb.severity === 'high',
     'fallback slider=5: elderly+conditions bumps medium->high',
     `FAIL expected high got ${conclusionFb.severity}`
@@ -198,7 +226,8 @@ async function testUser1() {
     const fuResult = evaluateFollowUp(fuScript.script_data, fuAnswers, 'high');
     console.log(`    followup severity=${fuResult.severity}, action=${fuResult.action}`);
     // "Vẫn vậy" with previous high -> stays high (continue_followup)
-    assert(U,
+    assert(
+      U,
       fuResult.severity === 'high',
       'follow-up "Vẫn vậy" keeps high severity for elderly',
       `FAIL expected high got ${fuResult.severity}`
@@ -214,7 +243,9 @@ async function testUser1() {
   assert(U, redFlag === true, 'ngất is detected as red flag', 'FAIL ngất not detected as red flag');
 
   const emergency = detectEmergency(['ngất', 'chóng mặt'], profile);
-  console.log(`    detectEmergency(["ngất","chóng mặt"]): isEmergency=${emergency.isEmergency}, type=${emergency.type}`);
+  console.log(
+    `    detectEmergency(["ngất","chóng mặt"]): isEmergency=${emergency.isEmergency}, type=${emergency.type}`
+  );
   pass(U, 'emergency detector runs without crash for elderly');
 
   // Test 5: Fallback "đau hông" -> fallback works, severity bumped
@@ -223,8 +254,11 @@ async function testUser1() {
   console.log(`    matchCluster("đau hông"): matched=${matchHip.matched}`);
 
   const fbConclusion = runScriptSession(fbData, [5, 'Từ sáng', 'Vẫn vậy'], profile);
-  console.log(`    fallback severity=${fbConclusion.severity}, modifiers=${JSON.stringify(fbConclusion.modifiersApplied)}`);
-  assert(U,
+  console.log(
+    `    fallback severity=${fbConclusion.severity}, modifiers=${JSON.stringify(fbConclusion.modifiersApplied)}`
+  );
+  assert(
+    U,
     fbConclusion.severity === 'high',
     'fallback with elderly+conditions: medium bumped to high',
     `FAIL expected high got ${fbConclusion.severity}`
@@ -267,8 +301,11 @@ async function testUser2() {
     const hdData = hdScript.script_data;
     // Mild answers for headache (non-slider script)
     const conclusion1 = runScriptSession(hdData, [], profile); // all defaults
-    console.log(`    severity=${conclusion1.severity}, modifiers=${JSON.stringify(conclusion1.modifiersApplied)}`);
-    assert(U,
+    console.log(
+      `    severity=${conclusion1.severity}, modifiers=${JSON.stringify(conclusion1.modifiersApplied)}`
+    );
+    assert(
+      U,
       conclusion1.severity === 'low',
       'young healthy: low severity for mild headache',
       `FAIL expected low got ${conclusion1.severity}`
@@ -279,8 +316,11 @@ async function testUser2() {
     subheader('Test 2: Same fallback slider=5 -> LOWER for young healthy vs elderly');
     const fbData = getFallbackScriptData();
     const conclusion2 = runScriptSession(fbData, [5, 'Từ sáng', 'Vẫn vậy'], profile);
-    console.log(`    Anh Minh fallback slider=5: severity=${conclusion2.severity} (Bà Lan would be HIGH)`);
-    assert(U,
+    console.log(
+      `    Anh Minh fallback slider=5: severity=${conclusion2.severity} (Bà Lan would be HIGH)`
+    );
+    assert(
+      U,
       conclusion2.severity === 'medium',
       'young healthy: fallback slider=5 stays medium (no elderly bump)',
       `FAIL expected medium got ${conclusion2.severity}`
@@ -295,7 +335,8 @@ async function testUser2() {
   const fbData = getFallbackScriptData();
   const fbConclusion = runScriptSession(fbData, [3, 'Vừa mới', 'Đang đỡ'], profile);
   console.log(`    fallback severity=${fbConclusion.severity}`);
-  assert(U,
+  assert(
+    U,
     fbConclusion.severity === 'low',
     'young healthy fallback: low severity',
     `FAIL expected low got ${fbConclusion.severity}`
@@ -307,7 +348,8 @@ async function testUser2() {
   console.log(`    matchCluster: matched=${matchStress.matched}`);
   const fbConclusion2 = runScriptSession(fbData, [2, 'Vài ngày', 'Vẫn vậy'], profile);
   console.log(`    fallback severity=${fbConclusion2.severity}`);
-  assert(U,
+  assert(
+    U,
     fbConclusion2.severity === 'low',
     'mixed English input handled without crash',
     `FAIL unexpected severity ${fbConclusion2.severity}`
@@ -319,7 +361,8 @@ async function testUser2() {
   console.log(`    matchCluster("headache"): matched=${matchEn.matched}`);
   if (matchEn.matched) {
     console.log(`    cluster_key=${matchEn.cluster.cluster_key}`);
-    assert(U,
+    assert(
+      U,
       matchEn.cluster.cluster_key === 'headache',
       'English "headache" matches headache cluster key',
       'FAIL wrong cluster matched'
@@ -348,16 +391,25 @@ async function testUser3() {
 
   await cleanUser();
   await setupProfile(profile);
-  await createClustersFromOnboarding(pool, USER_ID, ['mệt mỏi', 'chóng mặt', 'tê tay chân', 'đau đầu', 'khó thở']);
+  await createClustersFromOnboarding(pool, USER_ID, [
+    'mệt mỏi',
+    'chóng mặt',
+    'tê tay chân',
+    'đau đầu',
+    'khó thở',
+  ]);
 
   // Test 1: Day 1 — "mệt mỏi" with fallback slider -> diabetes+elderly bump
   // Clinical-mapping scripts have no slider, so use fallback for diabetes modifier test
   subheader('Test 1: Day 1 — fallback slider=5 -> diabetes+elderly bump');
   const fbData = getFallbackScriptData();
   const conclusion1 = runScriptSession(fbData, [5, 'Từ sáng', 'Vẫn vậy'], profile);
-  console.log(`    severity=${conclusion1.severity}, modifiers=${JSON.stringify(conclusion1.modifiersApplied)}`);
+  console.log(
+    `    severity=${conclusion1.severity}, modifiers=${JSON.stringify(conclusion1.modifiersApplied)}`
+  );
   // Diabetes modifier: slider>=5 bumps to high. Then elderly+conditions also kicks.
-  assert(U,
+  assert(
+    U,
     conclusion1.severity === 'high',
     'diabetes+elderly modifier bumps fallback slider=5 to high',
     `FAIL expected high got ${conclusion1.severity}`
@@ -370,9 +422,12 @@ async function testUser3() {
 
   if (fatScript) {
     const conclusion1b = runScriptSession(fatScript.script_data, [], profile); // defaults
-    console.log(`    severity=${conclusion1b.severity}, modifiers=${JSON.stringify(conclusion1b.modifiersApplied)}`);
+    console.log(
+      `    severity=${conclusion1b.severity}, modifiers=${JSON.stringify(conclusion1b.modifiersApplied)}`
+    );
     // No rule matched -> low. Elderly+conditions -> medium (safety).
-    assert(U,
+    assert(
+      U,
       conclusion1b.severity === 'medium',
       'clinical script: elderly+conditions -> medium safety bump',
       `FAIL expected medium got ${conclusion1b.severity}`
@@ -389,7 +444,8 @@ async function testUser3() {
     ];
     const fuResult = evaluateFollowUp(fuScript.script_data, fuAnswers, 'high');
     console.log(`    severity=${fuResult.severity}, action=${fuResult.action}`);
-    assert(U,
+    assert(
+      U,
       fuResult.severity === 'low',
       'follow-up "Đỡ hơn" drops to low',
       `FAIL expected low got ${fuResult.severity}`
@@ -401,8 +457,11 @@ async function testUser3() {
   // Test 3: Day 2 — "chóng mặt" with diabetes context (fallback slider)
   subheader('Test 3: Day 2 — chóng mặt with diabetes (fallback slider=5)');
   const conclusion3 = runScriptSession(fbData, [5, 'Vài giờ trước', 'Vẫn vậy'], profile);
-  console.log(`    severity=${conclusion3.severity}, modifiers=${JSON.stringify(conclusion3.modifiersApplied)}`);
-  assert(U,
+  console.log(
+    `    severity=${conclusion3.severity}, modifiers=${JSON.stringify(conclusion3.modifiersApplied)}`
+  );
+  assert(
+    U,
     conclusion3.severity === 'high',
     'dizziness with diabetes+elderly -> high via fallback',
     `FAIL expected high got ${conclusion3.severity}`
@@ -427,7 +486,8 @@ async function testUser3() {
   await addCluster(pool, USER_ID, 'gastric_pain', 'đau dạ dày', 'rnd_cycle');
   const matchAfterRnd = await matchCluster(pool, USER_ID, 'đau dạ dày');
   console.log(`    After R&D: matchCluster("đau dạ dày"): matched=${matchAfterRnd.matched}`);
-  assert(U,
+  assert(
+    U,
     matchAfterRnd.matched,
     'after R&D creates cluster, đau dạ dày matches',
     'FAIL đau dạ dày still no match after R&D'
@@ -448,24 +508,41 @@ async function testUser3() {
   subheader('Test 7: Sequential follow-ups: better -> same -> worse');
   const fuData = fuScript?.script_data || getFallbackScriptData();
 
-  const fu7a = evaluateFollowUp(fuData, [
-    { question_id: 'fu1', answer: 'Đỡ hơn' },
-    { question_id: 'fu2', answer: 'Không' },
-  ], 'medium');
+  const fu7a = evaluateFollowUp(
+    fuData,
+    [
+      { question_id: 'fu1', answer: 'Đỡ hơn' },
+      { question_id: 'fu2', answer: 'Không' },
+    ],
+    'medium'
+  );
   console.log(`    Step 1 (better): severity=${fu7a.severity}, action=${fu7a.action}`);
   assert(U, fu7a.severity === 'low', 'better -> drops to low', `FAIL got ${fu7a.severity}`);
 
-  const fu7b = evaluateFollowUp(fuData, [
-    { question_id: 'fu1', answer: 'Vẫn vậy' },
-    { question_id: 'fu2', answer: 'Không' },
-  ], 'low');
+  const fu7b = evaluateFollowUp(
+    fuData,
+    [
+      { question_id: 'fu1', answer: 'Vẫn vậy' },
+      { question_id: 'fu2', answer: 'Không' },
+    ],
+    'low'
+  );
   console.log(`    Step 2 (same, prev=low): severity=${fu7b.severity}, action=${fu7b.action}`);
-  assert(U, fu7b.severity === 'low', 'same with prev=low -> stays low', `FAIL got ${fu7b.severity}`);
+  assert(
+    U,
+    fu7b.severity === 'low',
+    'same with prev=low -> stays low',
+    `FAIL got ${fu7b.severity}`
+  );
 
-  const fu7c = evaluateFollowUp(fuData, [
-    { question_id: 'fu1', answer: 'Nặng hơn' },
-    { question_id: 'fu2', answer: 'Có' },
-  ], 'low');
+  const fu7c = evaluateFollowUp(
+    fuData,
+    [
+      { question_id: 'fu1', answer: 'Nặng hơn' },
+      { question_id: 'fu2', answer: 'Có' },
+    ],
+    'low'
+  );
   console.log(`    Step 3 (worse): severity=${fu7c.severity}, action=${fu7c.action}`);
   assert(U, fu7c.severity === 'high', 'worse -> escalates to high', `FAIL got ${fu7c.severity}`);
 }
@@ -512,10 +589,16 @@ async function testUser4() {
   await addCluster(pool, USER_ID, 'headache', 'đau đầu', 'rnd_cycle');
   const nextDayScript = await getUserScript(pool, USER_ID);
   console.log(`    After R&D: getUserScript: ${nextDayScript ? 'has data' : 'null'}`);
-  assert(U, nextDayScript !== null, 'after R&D creates cluster, getUserScript returns data', 'FAIL still null');
+  assert(
+    U,
+    nextDayScript !== null,
+    'after R&D creates cluster, getUserScript returns data',
+    'FAIL still null'
+  );
 
   if (nextDayScript) {
-    assert(U,
+    assert(
+      U,
       nextDayScript.clusters.length > 0,
       `has ${nextDayScript.clusters.length} cluster(s)`,
       'FAIL no clusters in result'
@@ -537,7 +620,12 @@ async function testUser4() {
   subheader('Test 5: Emergency during first check-in');
   const emergency = detectEmergency(['đau ngực', 'khó thở', 'vã mồ hôi'], profile);
   console.log(`    isEmergency=${emergency.isEmergency}, type=${emergency.type}`);
-  assert(U, emergency.isEmergency, 'MI emergency detected for first-time user', 'FAIL emergency not detected');
+  assert(
+    U,
+    emergency.isEmergency,
+    'MI emergency detected for first-time user',
+    'FAIL emergency not detected'
+  );
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -604,12 +692,14 @@ async function testUser5() {
     try {
       // Build answers matching the script's actual questions
       const qs = hdScript.script_data.questions || [];
-      const answers = qs.map(q => ({
+      const answers = qs.map((q) => ({
         question_id: q.id,
         answer: q.options?.[0] ?? 3,
       }));
       const result = evaluateScript(hdScript.script_data, answers, profile);
-      console.log(`    severity=${result.severity}, modifiers=${JSON.stringify(result.modifiersApplied)}`);
+      console.log(
+        `    severity=${result.severity}, modifiers=${JSON.stringify(result.modifiersApplied)}`
+      );
       assert(U, result.severity !== undefined, 'evaluateScript works with null profile', 'FAIL');
     } catch (err) {
       fail(U, `evaluateScript CRASHED: ${err.message}`);
@@ -642,7 +732,12 @@ async function testUser5() {
   try {
     const emergency = detectEmergency(['đau ngực', 'khó thở'], profile);
     console.log(`    isEmergency=${emergency.isEmergency}, type=${emergency.type}`);
-    assert(U, emergency !== undefined, 'emergency detection works with null profile fields', 'FAIL');
+    assert(
+      U,
+      emergency !== undefined,
+      'emergency detection works with null profile fields',
+      'FAIL'
+    );
   } catch (err) {
     fail(U, `Emergency detection CRASHED with profile fields null: ${err.message}`);
   }
@@ -654,7 +749,10 @@ async function testUser5() {
     pass(U, 'emergency detection handles null profile object gracefully');
   } catch (err) {
     // This is a REAL BUG: detectEmergency crashes when profile is null
-    fail(U, `Emergency detection CRASHED with null profile object: ${err.message} (BUG: should guard against null)`);
+    fail(
+      U,
+      `Emergency detection CRASHED with null profile object: ${err.message} (BUG: should guard against null)`
+    );
   }
 }
 
@@ -669,27 +767,37 @@ async function testCrossComparison() {
 
   const profiles = {
     BaLan: {
-      birth_year: 1951, gender: 'Nữ', full_name: 'Nguyễn Thị Lan',
+      birth_year: 1951,
+      gender: 'Nữ',
+      full_name: 'Nguyễn Thị Lan',
       medical_conditions: ['Tiểu đường type 2', 'Cao huyết áp', 'Suy thận', 'Loãng xương'],
       age: 75,
     },
     AnhMinh: {
-      birth_year: 1991, gender: 'Nam', full_name: 'Trần Văn Minh',
+      birth_year: 1991,
+      gender: 'Nam',
+      full_name: 'Trần Văn Minh',
       medical_conditions: [],
       age: 35,
     },
     ChuTung: {
-      birth_year: 1964, gender: 'Nam', full_name: 'Lê Văn Tùng',
+      birth_year: 1964,
+      gender: 'Nam',
+      full_name: 'Lê Văn Tùng',
       medical_conditions: ['Tiểu đường'],
       age: 62,
     },
     CoHuong: {
-      birth_year: 1971, gender: 'Nữ', full_name: 'Phạm Thị Hương',
+      birth_year: 1971,
+      gender: 'Nữ',
+      full_name: 'Phạm Thị Hương',
       medical_conditions: ['Cao huyết áp'],
       age: 55,
     },
     EdgeUser: {
-      birth_year: null, gender: null, full_name: null,
+      birth_year: null,
+      gender: null,
+      full_name: null,
       medical_conditions: null,
       age: null,
     },
@@ -708,7 +816,8 @@ async function testCrossComparison() {
 
   const SEVERITY_ORDER = { low: 0, medium: 1, high: 2, critical: 3 };
   const lanHigher = SEVERITY_ORDER[resLan.severity] > SEVERITY_ORDER[resMinh.severity];
-  assert(U,
+  assert(
+    U,
     lanHigher,
     'Bà Lan gets HIGHER severity than Anh Minh (same answers)',
     `FAIL Bà Lan=${resLan.severity} vs Minh=${resMinh.severity}`
@@ -717,8 +826,11 @@ async function testCrossComparison() {
   // Test 2: Chú Tùng (62, diabetes) -> diabetes modifier bumps slider=5
   subheader('Test 2: Chú Tùng — diabetes bump via fallback slider');
   const resTung = runScriptSession(fbData, moderateAnswers, profiles.ChuTung);
-  console.log(`    Chú Tùng (62, diabetes): severity=${resTung.severity}, modifiers=${JSON.stringify(resTung.modifiersApplied)}`);
-  assert(U,
+  console.log(
+    `    Chú Tùng (62, diabetes): severity=${resTung.severity}, modifiers=${JSON.stringify(resTung.modifiersApplied)}`
+  );
+  assert(
+    U,
     resTung.severity === 'high',
     'diabetes + elderly bumps Chú Tùng to high',
     `FAIL expected high got ${resTung.severity}`
@@ -729,9 +841,12 @@ async function testCrossComparison() {
   // So hypertension doesn't bump via fallback. She's also age=55 (<60), so no elderly bump.
   subheader('Test 3: Cô Hương — hypertension profile');
   const resHuong = runScriptSession(fbData, moderateAnswers, profiles.CoHuong);
-  console.log(`    Cô Hương (55, hypertension): severity=${resHuong.severity}, modifiers=${JSON.stringify(resHuong.modifiersApplied)}`);
+  console.log(
+    `    Cô Hương (55, hypertension): severity=${resHuong.severity}, modifiers=${JSON.stringify(resHuong.modifiersApplied)}`
+  );
   // No diabetes modifier matches, age < 60 -> stays medium
-  assert(U,
+  assert(
+    U,
     resHuong.severity === 'medium',
     'hypertension user without specific modifier stays at medium (correct behavior)',
     `FAIL expected medium got ${resHuong.severity}`
@@ -744,7 +859,8 @@ async function testCrossComparison() {
     console.log(`    Edge user (null): severity=${resEdge.severity}`);
     assert(U, resEdge.severity !== undefined, 'edge user produces valid severity', 'FAIL');
     // Null age, null conditions -> base medium from slider rule, no bumps
-    assert(U,
+    assert(
+      U,
       resEdge.severity === 'medium',
       'null profile gets base medium (no bumps applied)',
       `FAIL expected medium got ${resEdge.severity}`
@@ -768,7 +884,8 @@ async function testCrossComparison() {
       allEscalate = false;
     }
   }
-  assert(U,
+  assert(
+    U,
     allEscalate,
     '"Nặng hơn" escalates to HIGH for all profiles',
     'FAIL some profiles did not escalate'
@@ -802,14 +919,16 @@ async function run() {
     const status = counts.fail === 0 ? 'ALL PASS' : `${counts.fail} FAIL`;
     console.log(`  ${user.padEnd(12)} ${counts.pass}/${total} passed   [${status}]`);
   }
-  console.log(`\n  ${'TOTAL'.padEnd(12)} ${totalPass}/${totalPass + totalFail} passed   [${totalFail === 0 ? 'ALL PASS' : `${totalFail} FAIL`}]`);
+  console.log(
+    `\n  ${'TOTAL'.padEnd(12)} ${totalPass}/${totalPass + totalFail} passed   [${totalFail === 0 ? 'ALL PASS' : `${totalFail} FAIL`}]`
+  );
   console.log();
 
   await pool.end();
   process.exit(totalFail > 0 ? 1 : 0);
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('FATAL:', err);
   pool.end();
   process.exit(1);

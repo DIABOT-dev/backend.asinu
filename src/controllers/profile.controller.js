@@ -20,7 +20,9 @@ async function changePassword(pool, req, res) {
     return res.status(400).json({ ok: false, error: t('error.password_too_short', getLang(req)) });
   }
   if (newPassword === currentPassword) {
-    return res.status(400).json({ ok: false, error: t('error.password_same_as_old', getLang(req)) });
+    return res
+      .status(400)
+      .json({ ok: false, error: t('error.password_same_as_old', getLang(req)) });
   }
 
   const { rows } = await pool.query(
@@ -33,17 +35,21 @@ async function changePassword(pool, req, res) {
 
   const valid = await comparePassword(currentPassword, rows[0].password_hash);
   if (!valid) {
-    return res.status(401).json({ ok: false, error: t('error.password_current_wrong', getLang(req)) });
+    return res
+      .status(401)
+      .json({ ok: false, error: t('error.password_current_wrong', getLang(req)) });
   }
 
   const newHash = await hashPassword(newPassword);
-  await pool.query(`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`, [newHash, req.user.id]);
+  await pool.query(`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`, [
+    newHash,
+    req.user.id,
+  ]);
 
   return res.status(200).json({ ok: true, message: t('success.password_changed', getLang(req)) });
 }
 
 async function getProfile(pool, req, res) {
-
   if (!req.user?.id) {
     return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
@@ -63,7 +69,17 @@ async function updateProfile(pool, req, res) {
     return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
 
-  const { name, phone, dateOfBirth, gender, heightCm, weightKg, bloodType, chronicDiseases, language } = req.body || {};
+  const {
+    name,
+    phone,
+    dateOfBirth,
+    gender,
+    heightCm,
+    weightKg,
+    bloodType,
+    chronicDiseases,
+    language,
+  } = req.body || {};
   const result = await profileService.updateProfile(pool, req.user.id, {
     name,
     phone,
@@ -73,7 +89,7 @@ async function updateProfile(pool, req, res) {
     weightKg,
     bloodType,
     chronicDiseases,
-    language
+    language,
   });
 
   if (!result.ok) {
@@ -112,10 +128,14 @@ async function uploadAvatarHandler(pool, req, res) {
     });
   } catch (error) {
     if (error?.code === 'CLOUDINARY_NOT_CONFIGURED') {
-      return res.status(503).json({ ok: false, error: 'Avatar upload is not configured', code: error.code });
+      return res
+        .status(503)
+        .json({ ok: false, error: 'Avatar upload is not configured', code: error.code });
     }
     console.error('[uploadAvatar] failed:', { code: error?.code, message: error?.message });
-    return res.status(502).json({ ok: false, error: 'Avatar upload failed', code: 'AVATAR_UPLOAD_FAILED' });
+    return res
+      .status(502)
+      .json({ ok: false, error: 'Avatar upload failed', code: 'AVATAR_UPLOAD_FAILED' });
   }
 }
 
@@ -180,7 +200,10 @@ async function featureFlagsHandler(pool, req, res) {
   // to decide which tier-specific limits to surface.
   let premium = false;
   try {
-    premium = await require('../services/payment/subscription.service').isPremium(pool, req.user?.id);
+    premium = await require('../services/payment/subscription.service').isPremium(
+      pool,
+      req.user?.id
+    );
   } catch {
     premium = false;
   }
@@ -204,10 +227,7 @@ async function featureFlagsHandler(pool, req, res) {
   // The chatbot is *effectively* available to this user only if all
   // three gates are satisfied. FE uses this single boolean to decide
   // whether to render the chat entry point at all.
-  const chatbotAvailable =
-    chatbotEnabled &&
-    (!chatbotPremiumOnly || premium) &&
-    dailyLimit > 0;
+  const chatbotAvailable = chatbotEnabled && (!chatbotPremiumOnly || premium) && dailyLimit > 0;
 
   return res.json({
     // Legacy keys — keep so older FE builds don't break.

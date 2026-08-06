@@ -28,21 +28,27 @@ const DEFAULT_PERMISSIONS = {
 
 const emitCareCircleChange = (pool, connection, status = connection?.status) => {
   if (!connection?.id || connection.requester_id == null || connection.addressee_id == null) return;
-  const changeMarker = connection.updated_at || connection.accepted_at || connection.created_at || 'unknown';
-  emitCrmEventAsync(pool, 'care_circle.updated', {
-    // The patient is the primary CRM contact for a relationship event. Keep
-    // both directional ids below so the CRM can render the full connection.
-    user_id: String(connection.requester_id),
-    connection_id: String(connection.id),
-    patient_user_id: String(connection.requester_id),
-    caregiver_user_id: String(connection.addressee_id),
-    relationship_type: connection.relationship_type || null,
-    role: connection.role || null,
-    can_receive_alerts: Boolean(connection.permissions?.can_receive_alerts),
-    status,
-  }, {
-    event_id: `care_circle.updated:${connection.id}:${status}:${String(changeMarker)}`,
-  });
+  const changeMarker =
+    connection.updated_at || connection.accepted_at || connection.created_at || 'unknown';
+  emitCrmEventAsync(
+    pool,
+    'care_circle.updated',
+    {
+      // The patient is the primary CRM contact for a relationship event. Keep
+      // both directional ids below so the CRM can render the full connection.
+      user_id: String(connection.requester_id),
+      connection_id: String(connection.id),
+      patient_user_id: String(connection.requester_id),
+      caregiver_user_id: String(connection.addressee_id),
+      relationship_type: connection.relationship_type || null,
+      role: connection.role || null,
+      can_receive_alerts: Boolean(connection.permissions?.can_receive_alerts),
+      status,
+    },
+    {
+      event_id: `care_circle.updated:${connection.id}:${status}:${String(changeMarker)}`,
+    }
+  );
 };
 
 // =====================================================
@@ -61,7 +67,7 @@ function normalizePermissions(input) {
   return {
     can_view_logs: Boolean(input.can_view_logs),
     can_receive_alerts: Boolean(input.can_receive_alerts),
-    can_ack_escalation: Boolean(input.can_ack_escalation)
+    can_ack_escalation: Boolean(input.can_ack_escalation),
   };
 }
 
@@ -155,8 +161,9 @@ async function createInvitation(pool, requesterId, data) {
     // when they next sign in. sendAndSave inserts the DB record first and
     // only attempts a push if the token looks like an Expo token, so it's
     // safe to call with push_token: null.
-    pool.query('SELECT push_token, language_preference FROM users WHERE id = $1', [addressee_id])
-      .then(r => {
+    pool
+      .query('SELECT push_token, language_preference FROM users WHERE id = $1', [addressee_id])
+      .then((r) => {
         const addressee = r.rows[0];
         if (!addressee) return; // user genuinely doesn't exist — skip
         const lang = addressee.language_preference || 'vi';
@@ -225,7 +232,6 @@ async function getInvitations(pool, userId, direction = 'all') {
     );
     return { ok: true, invitations: result.rows };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -254,7 +260,9 @@ async function acceptInvitation(pool, invitationId, userId) {
       [userId]
     );
     const addresseeIsPremium = await isPremium(pool, userId);
-    const addresseeLimit = addresseeIsPremium ? PREMIUM_CONNECTION_LIMIT : FREE_TIER_CONNECTION_LIMIT;
+    const addresseeLimit = addresseeIsPremium
+      ? PREMIUM_CONNECTION_LIMIT
+      : FREE_TIER_CONNECTION_LIMIT;
     if (Number(addresseeCount[0].count) >= addresseeLimit) {
       await client.query('ROLLBACK');
       return {
@@ -303,23 +311,39 @@ async function acceptInvitation(pool, invitationId, userId) {
     const accepterName = await getUserDisplayName(pool, userId);
 
     // Send push + save in-app notification (non-blocking)
-    pool.query('SELECT id, push_token, language_preference FROM users WHERE id = $1', [connection.requester_id])
-      .then(r => {
+    pool
+      .query('SELECT id, push_token, language_preference FROM users WHERE id = $1', [
+        connection.requester_id,
+      ])
+      .then((r) => {
         const requester = r.rows[0];
         if (!requester) return;
         const lang = requester.language_preference || 'vi';
         const title = t('push.accepted_title', lang);
         const body = t('push.accepted_body', lang, { name: accepterName });
-        return sendAndSave(pool, { id: requester.id, push_token: requester.push_token }, 'care_circle_accepted', title, body, {
-          accepterName,
-          connectionId: String(connection.id),
-        });
+        return sendAndSave(
+          pool,
+          { id: requester.id, push_token: requester.push_token },
+          'care_circle_accepted',
+          title,
+          body,
+          {
+            accepterName,
+            connectionId: String(connection.id),
+          }
+        );
       })
       .catch(() => {});
 
     return { ok: true, connection };
   } catch (err) {
-    console.error('[acceptInvitation] failed:', { invitationId, userId, code: err?.code, message: err?.message, stack: err?.stack });
+    console.error('[acceptInvitation] failed:', {
+      invitationId,
+      userId,
+      code: err?.code,
+      message: err?.message,
+      stack: err?.stack,
+    });
     await client.query('ROLLBACK').catch(() => {});
     return { ok: false, error: t('error.server') };
   } finally {
@@ -353,23 +377,39 @@ async function rejectInvitation(pool, invitationId, userId) {
 
     // Notify the requester that their invite was declined (non-blocking)
     const rejecterName = await getUserDisplayName(pool, userId);
-    pool.query('SELECT id, push_token, language_preference FROM users WHERE id = $1', [invitation.requester_id])
-      .then(r => {
+    pool
+      .query('SELECT id, push_token, language_preference FROM users WHERE id = $1', [
+        invitation.requester_id,
+      ])
+      .then((r) => {
         const requester = r.rows[0];
         if (!requester) return;
         const lang = requester.language_preference || 'vi';
         const title = t('push.rejected_title', lang);
         const body = t('push.rejected_body', lang, { name: rejecterName });
-        return sendAndSave(pool, { id: requester.id, push_token: requester.push_token }, 'care_circle_rejected', title, body, {
-          rejecterName,
-          invitationId: String(invitation.id),
-        });
+        return sendAndSave(
+          pool,
+          { id: requester.id, push_token: requester.push_token },
+          'care_circle_rejected',
+          title,
+          body,
+          {
+            rejecterName,
+            invitationId: String(invitation.id),
+          }
+        );
       })
       .catch(() => {});
 
     return { ok: true, invitation };
   } catch (err) {
-    console.error('[rejectInvitation] failed:', { invitationId, userId, code: err?.code, message: err?.message, stack: err?.stack });
+    console.error('[rejectInvitation] failed:', {
+      invitationId,
+      userId,
+      code: err?.code,
+      message: err?.message,
+      stack: err?.stack,
+    });
     return { ok: false, error: t('error.server') };
   }
 }
@@ -429,7 +469,6 @@ async function getConnections(pool, userId) {
     );
     return { ok: true, connections: result.rows };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -458,29 +497,43 @@ async function deleteConnection(pool, connectionId, userId) {
 
     const connection = result.rows[0];
     emitCareCircleChange(pool, connection, 'inactive');
-    const otherUserId = Number(connection.requester_id) === Number(userId)
-      ? connection.addressee_id
-      : connection.requester_id;
+    const otherUserId =
+      Number(connection.requester_id) === Number(userId)
+        ? connection.addressee_id
+        : connection.requester_id;
 
     // Notify the other user that the connection was removed (non-blocking)
     const removerName = await getUserDisplayName(pool, userId);
-    pool.query('SELECT id, push_token, language_preference FROM users WHERE id = $1', [otherUserId])
-      .then(r => {
+    pool
+      .query('SELECT id, push_token, language_preference FROM users WHERE id = $1', [otherUserId])
+      .then((r) => {
         const other = r.rows[0];
         if (!other) return;
         const lang = other.language_preference || 'vi';
         const title = t('push.removed_title', lang);
         const body = t('push.removed_body', lang, { name: removerName });
-        return sendAndSave(pool, { id: other.id, push_token: other.push_token }, 'care_circle_removed', title, body, {
-          removerName,
-          connectionId: String(connection.id),
-        });
+        return sendAndSave(
+          pool,
+          { id: other.id, push_token: other.push_token },
+          'care_circle_removed',
+          title,
+          body,
+          {
+            removerName,
+            connectionId: String(connection.id),
+          }
+        );
       })
       .catch(() => {});
 
     return { ok: true, connection };
   } catch (err) {
-    console.error('[deleteConnection] failed:', { connectionId, userId, code: err?.code, message: err?.message });
+    console.error('[deleteConnection] failed:', {
+      connectionId,
+      userId,
+      code: err?.code,
+      message: err?.message,
+    });
     return { ok: false, error: t('error.server') };
   }
 }
@@ -559,7 +612,6 @@ async function updateConnection(pool, connectionId, userId, data) {
     emitCareCircleChange(pool, rows[0], 'active');
     return { ok: true, connection: rows[0] };
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -608,25 +660,34 @@ async function updateConnectionPermissions(pool, connectionId, userId, newPermis
     emitCareCircleChange(pool, conn, 'active');
 
     // Notify the OTHER user that their permissions changed (non-blocking)
-    const otherUserId = Number(conn.requester_id) === Number(userId)
-      ? conn.addressee_id : conn.requester_id;
+    const otherUserId =
+      Number(conn.requester_id) === Number(userId) ? conn.addressee_id : conn.requester_id;
     const changerName = await getUserDisplayName(pool, userId);
-    pool.query('SELECT id, push_token, language_preference FROM users WHERE id = $1', [otherUserId])
-      .then(r => {
+    pool
+      .query('SELECT id, push_token, language_preference FROM users WHERE id = $1', [otherUserId])
+      .then((r) => {
         const other = r.rows[0];
         if (!other) return;
         const lang = other.language_preference || 'vi';
-        return sendAndSave(pool, { id: other.id, push_token: other.push_token },
+        return sendAndSave(
+          pool,
+          { id: other.id, push_token: other.push_token },
           'care_circle_permission_changed',
           t('push.permission_changed_title', lang),
           t('push.permission_changed_body', lang, { name: changerName }),
-          { changerName, connectionId: String(conn.id) });
+          { changerName, connectionId: String(conn.id) }
+        );
       })
       .catch(() => {});
 
     return { ok: true, connection: conn };
   } catch (err) {
-    console.error('[updateConnectionPermissions] failed:', { connectionId, userId, code: err?.code, message: err?.message });
+    console.error('[updateConnectionPermissions] failed:', {
+      connectionId,
+      userId,
+      code: err?.code,
+      message: err?.message,
+    });
     return { ok: false, error: t('error.server') };
   }
 }
@@ -703,10 +764,9 @@ async function getCaregiverCheckins(pool, patientId, days = 14) {
  * @returns {Promise<string>} - Display name
  */
 async function getPatientName(pool, patientId) {
-  const { rows } = await pool.query(
-    `SELECT display_name, full_name FROM users WHERE id = $1`,
-    [patientId]
-  );
+  const { rows } = await pool.query(`SELECT display_name, full_name FROM users WHERE id = $1`, [
+    patientId,
+  ]);
   return rows[0]?.display_name || rows[0]?.full_name || '';
 }
 

@@ -2,32 +2,57 @@
 /**
  * Test vòng đời thực tế:
  *   Ngày 1: triệu chứng mới → fallback → log
- *   Đêm:   R&D cycle → AI gắn nhãn → tạo cluster + script  
+ *   Đêm:   R&D cycle → AI gắn nhãn → tạo cluster + script
  *   Ngày 2: triệu chứng cũ → match → chạy script cached
  */
 require('dotenv').config();
 const { Pool } = require('pg');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const { getUserScript, getScript, createClustersFromOnboarding, addCluster } = require('../src/services/checkin/script.service');
+const {
+  getUserScript,
+  getScript,
+  createClustersFromOnboarding,
+  addCluster,
+} = require('../src/services/checkin/script.service');
 const { getNextQuestion } = require('../src/services/checkin/script-runner');
-const { getFallbackScriptData, logFallback, matchCluster, getPendingFallbacks, markFallbackProcessed } = require('../src/services/checkin/fallback.service');
+const {
+  getFallbackScriptData,
+  logFallback,
+  matchCluster,
+  getPendingFallbacks,
+  markFallbackProcessed,
+} = require('../src/services/checkin/fallback.service');
 const { detectEmergency } = require('../src/services/checkin/emergency-detector');
 const { labelSymptom } = require('../src/services/checkin/rnd-cycle.service');
 
 const USER_ID = 4;
 const PROFILE = {
-  birth_year: 1958, gender: 'Nam', full_name: 'Trần Văn Hùng',
-  display_name: 'Chú Hùng', medical_conditions: ['Tiểu đường', 'Cao huyết áp'], age: 68,
+  birth_year: 1958,
+  gender: 'Nam',
+  full_name: 'Trần Văn Hùng',
+  display_name: 'Chú Hùng',
+  medical_conditions: ['Tiểu đường', 'Cao huyết áp'],
+  age: 68,
 };
 
-let pass = 0, fail = 0;
+let pass = 0,
+  fail = 0;
 function assert(cond, label) {
-  if (cond) { console.log(`  ✅ ${label}`); pass++; }
-  else { console.log(`  ❌ ${label}`); fail++; }
+  if (cond) {
+    console.log(`  ✅ ${label}`);
+    pass++;
+  } else {
+    console.log(`  ❌ ${label}`);
+    fail++;
+  }
 }
-function header(t) { console.log(`\n${'═'.repeat(65)}\n  ${t}\n${'═'.repeat(65)}`); }
-function step(t) { console.log(`\n  ▸ ${t}`); }
+function header(t) {
+  console.log(`\n${'═'.repeat(65)}\n  ${t}\n${'═'.repeat(65)}`);
+}
+function step(t) {
+  console.log(`\n  ▸ ${t}`);
+}
 
 async function run() {
   // ── Clean up ──
@@ -46,7 +71,7 @@ async function run() {
   step('App GET /checkin/script → lấy script cached');
   const dayOne = await getUserScript(pool, USER_ID);
   console.log(`    Greeting: "${dayOne.greeting}"`);
-  console.log(`    Clusters: ${dayOne.clusters.map(c => c.display_name).join(', ')}`);
+  console.log(`    Clusters: ${dayOne.clusters.map((c) => c.display_name).join(', ')}`);
   assert(dayOne.clusters.length === 3, 'Có 3 clusters: mệt mỏi, chóng mặt, tê tay chân');
 
   step('Chú Hùng chọn "Hơi mệt" → nhập: "đau dạ dày"');
@@ -61,7 +86,7 @@ async function run() {
   step('Backend: chạy FALLBACK script (3 câu cơ bản, 0 AI call)');
   const fbScript = getFallbackScriptData();
   const fbAnswers = [];
-  
+
   // Câu 1: Đau mức nào?
   let q = getNextQuestion(fbScript, fbAnswers, { sessionType: 'initial', profile: PROFILE });
   console.log(`    Q1: "${q.question.text}" (${q.question.type})`);
@@ -83,15 +108,18 @@ async function run() {
   // Conclusion
   q = getNextQuestion(fbScript, fbAnswers, { sessionType: 'initial', profile: PROFILE });
   assert(q.isDone, 'Fallback hoàn thành → có kết quả');
-  console.log(`    📊 Severity: ${q.conclusion.severity}, Follow-up: ${q.conclusion.followUpHours}h`);
+  console.log(
+    `    📊 Severity: ${q.conclusion.severity}, Follow-up: ${q.conclusion.followUpHours}h`
+  );
   assert(q.conclusion.severity !== undefined, 'Có severity dù là fallback');
   assert(q.conclusion.followUpHours > 0, 'Có follow-up plan');
 
   step('Backend: log fallback vào DB (KHÔNG gọi AI)');
   await logFallback(pool, USER_ID, 'đau dạ dày', null, fbAnswers);
-  
+
   const { rows: logs1 } = await pool.query(
-    "SELECT * FROM fallback_logs WHERE user_id=$1 AND raw_input='đau dạ dày'", [USER_ID]
+    "SELECT * FROM fallback_logs WHERE user_id=$1 AND raw_input='đau dạ dày'",
+    [USER_ID]
   );
   assert(logs1.length === 1, 'Fallback log lưu DB: 1 row');
   assert(logs1[0].status === 'pending', 'Status = pending (chờ R&D cycle)');
@@ -110,7 +138,7 @@ async function run() {
 
   step('R&D cycle đọc fallback_logs (status=pending)');
   const pending = await getPendingFallbacks(pool);
-  const userPending = pending.filter(p => p.user_id === USER_ID);
+  const userPending = pending.filter((p) => p.user_id === USER_ID);
   assert(userPending.length >= 1, `Có ${userPending.length} fallback pending cho user ${USER_ID}`);
 
   step('R&D cycle: AI gắn nhãn "đau dạ dày"');
@@ -121,16 +149,16 @@ async function run() {
     { cluster_key: 'dizziness', display_name: 'chóng mặt' },
     { cluster_key: 'tê_tay_chân', display_name: 'tê tay chân' },
   ];
-  
+
   // Simulate what AI would return
   const aiLabel = {
     label: 'đau dạ dày',
     clusterKey: 'gastric_pain',
     displayName: 'đau dạ dày',
     confidence: 0.92,
-    matchExisting: null,  // không match cluster cũ → tạo mới
+    matchExisting: null, // không match cluster cũ → tạo mới
   };
-  
+
   console.log(`    AI label: "${aiLabel.label}"`);
   console.log(`    Cluster key: ${aiLabel.clusterKey}`);
   console.log(`    Confidence: ${aiLabel.confidence}`);
@@ -145,11 +173,17 @@ async function run() {
   step('Verify: script tự sinh cho cluster mới');
   const newScript = await getScript(pool, USER_ID, 'gastric_pain', 'initial');
   assert(newScript !== null, 'Script initial đã sinh');
-  assert(newScript.script_data.questions.length > 0, `Script có ${newScript.script_data.questions.length} questions`);
-  assert(newScript.script_data.scoring_rules.length > 0, `Script có ${newScript.script_data.scoring_rules.length} scoring rules`);
-  
+  assert(
+    newScript.script_data.questions.length > 0,
+    `Script có ${newScript.script_data.questions.length} questions`
+  );
+  assert(
+    newScript.script_data.scoring_rules.length > 0,
+    `Script có ${newScript.script_data.scoring_rules.length} scoring rules`
+  );
+
   console.log(`    📜 Script gastric_pain:`);
-  newScript.script_data.questions.forEach(qq => {
+  newScript.script_data.questions.forEach((qq) => {
     console.log(`       ${qq.id}: "${qq.text}" (${qq.type})`);
     if (qq.options) console.log(`           options: ${qq.options.join(' | ')}`);
   });
@@ -159,16 +193,20 @@ async function run() {
 
   step('R&D cycle: mark fallback processed');
   await markFallbackProcessed(pool, logs1[0].id, 'đau dạ dày', 'gastric_pain', 0.92, newCluster.id);
-  
+
   const { rows: logsAfter } = await pool.query(
-    "SELECT status, ai_label, ai_cluster_key, ai_confidence, merged_to_cluster_id FROM fallback_logs WHERE id=$1",
+    'SELECT status, ai_label, ai_cluster_key, ai_confidence, merged_to_cluster_id FROM fallback_logs WHERE id=$1',
     [logs1[0].id]
   );
   assert(logsAfter[0].status === 'merged', 'Fallback status → merged');
   assert(logsAfter[0].ai_label === 'đau dạ dày', 'AI label lưu đúng');
   assert(logsAfter[0].ai_cluster_key === 'gastric_pain', 'AI cluster_key lưu đúng');
   assert(parseFloat(logsAfter[0].ai_confidence) === 0.92, 'AI confidence lưu đúng');
-  assert(logsAfter[0].merged_to_cluster_id === newCluster.id.toString() || logsAfter[0].merged_to_cluster_id == newCluster.id, 'Linked to new cluster');
+  assert(
+    logsAfter[0].merged_to_cluster_id === newCluster.id.toString() ||
+      String(logsAfter[0].merged_to_cluster_id) === String(newCluster.id),
+    'Linked to new cluster'
+  );
 
   console.log('\n  📌 TỔNG KẾT R&D CYCLE:');
   console.log('     → Đọc fallback "đau dạ dày" → AI gắn nhãn');
@@ -183,10 +221,16 @@ async function run() {
   step('App GET /checkin/script → lấy script cached');
   const dayTwo = await getUserScript(pool, USER_ID);
   console.log(`    Greeting: "${dayTwo.greeting}"`);
-  console.log(`    Clusters: ${dayTwo.clusters.map(c => c.display_name).join(', ')}`);
+  console.log(`    Clusters: ${dayTwo.clusters.map((c) => c.display_name).join(', ')}`);
   assert(dayTwo.clusters.length === 4, 'Giờ có 4 clusters (thêm đau dạ dày)');
-  assert(dayTwo.clusters.some(c => c.display_name === 'đau dạ dày'), 'Cluster "đau dạ dày" xuất hiện');
-  assert(dayTwo.clusters.find(c => c.display_name === 'đau dạ dày').has_script, 'Cluster "đau dạ dày" CÓ script');
+  assert(
+    dayTwo.clusters.some((c) => c.display_name === 'đau dạ dày'),
+    'Cluster "đau dạ dày" xuất hiện'
+  );
+  assert(
+    dayTwo.clusters.find((c) => c.display_name === 'đau dạ dày').has_script,
+    'Cluster "đau dạ dày" CÓ script'
+  );
 
   step('Chú Hùng chọn "Hơi mệt" → nhập: "đau dạ dày"');
   step('Backend: matchCluster("đau dạ dày")');
@@ -215,7 +259,11 @@ async function run() {
       assert(next.conclusion.summary.length > 0, 'Có summary từ template');
     } else {
       stepCount++;
-      const ans = next.question.options ? next.question.options[0] : (next.question.type === 'slider' ? 5 : 'test');
+      const ans = next.question.options
+        ? next.question.options[0]
+        : next.question.type === 'slider'
+          ? 5
+          : 'test';
       console.log(`    Q${stepCount}: "${next.question.text}" → "${ans}"`);
       gpAnswers.push({ question_id: next.question.id, answer: ans });
     }
@@ -231,7 +279,10 @@ async function run() {
   const match3 = await matchCluster(pool, USER_ID, 'dạ dày đau quá');
   assert(match3.matched, '"dạ dày đau quá" MATCH cluster gastric_pain (token matching)');
   if (match3.matched) {
-    assert(match3.cluster.cluster_key === 'gastric_pain', `Match đúng: ${match3.cluster.cluster_key}`);
+    assert(
+      match3.cluster.cluster_key === 'gastric_pain',
+      `Match đúng: ${match3.cluster.cluster_key}`
+    );
     console.log('    → Chạy script gastric_pain → 0 AI call');
   }
 
@@ -257,14 +308,14 @@ async function run() {
   // ═══════════════════════════════════════════════════════════════════
   header('SO SÁNH: Ngày 1 vs Ngày 2 khi nói "đau dạ dày"');
   // ═══════════════════════════════════════════════════════════════════
-  
+
   console.log(`
   ┌─────────────────────┬──────────────────────────────┬──────────────────────────────┐
   │                     │ NGÀY 1 (chưa có script)      │ NGÀY 2 (đã có script)        │
   ├─────────────────────┼──────────────────────────────┼──────────────────────────────┤
   │ matchCluster()      │ ❌ Không match               │ ✅ Match → gastric_pain      │
   │ Script dùng         │ Fallback (3 câu chung)       │ Script riêng (${gpData.questions.length} câu chuyên)   │
-  │ Câu hỏi            │ Đau mức nào? Từ khi nào?     │ ${gpData.questions[0]?.text?.substring(0,28)}...│
+  │ Câu hỏi            │ Đau mức nào? Từ khi nào?     │ ${gpData.questions[0]?.text?.substring(0, 28)}...│
   │ AI calls            │ 0                            │ 0                            │
   │ Chất lượng          │ Cơ bản (generic)             │ Chuyên sâu (clinical-based)  │
   │ Log fallback        │ ✅ Có (chờ R&D)              │ Không cần                    │
@@ -280,26 +331,38 @@ async function run() {
     [USER_ID]
   );
   console.log('  problem_clusters:');
-  allClusters.forEach(c => console.log(`    ${c.is_active ? '🟢' : '⚫'} ${c.cluster_key} — "${c.display_name}" (${c.source})`));
+  allClusters.forEach((c) =>
+    console.log(
+      `    ${c.is_active ? '🟢' : '⚫'} ${c.cluster_key} — "${c.display_name}" (${c.source})`
+    )
+  );
 
   const { rows: allScripts } = await pool.query(
     'SELECT cluster_key, script_type, is_active, generated_by FROM triage_scripts WHERE user_id=$1 ORDER BY cluster_key, script_type',
     [USER_ID]
   );
   console.log('\n  triage_scripts:');
-  allScripts.forEach(s => console.log(`    ${s.is_active ? '🟢' : '⚫'} ${s.cluster_key} (${s.script_type}) — by ${s.generated_by}`));
+  allScripts.forEach((s) =>
+    console.log(
+      `    ${s.is_active ? '🟢' : '⚫'} ${s.cluster_key} (${s.script_type}) — by ${s.generated_by}`
+    )
+  );
 
   const { rows: allFallbacks } = await pool.query(
     'SELECT raw_input, status, ai_label, ai_cluster_key FROM fallback_logs WHERE user_id=$1',
     [USER_ID]
   );
   console.log('\n  fallback_logs:');
-  allFallbacks.forEach(f => console.log(`    ${f.status === 'merged' ? '✅' : '⏳'} "${f.raw_input}" → ${f.status} ${f.ai_cluster_key ? '→ ' + f.ai_cluster_key : ''}`));
+  allFallbacks.forEach((f) =>
+    console.log(
+      `    ${f.status === 'merged' ? '✅' : '⏳'} "${f.raw_input}" → ${f.status} ${f.ai_cluster_key ? '→ ' + f.ai_cluster_key : ''}`
+    )
+  );
 
   // ═══════════════════════════════════════════════════════════════════
   header(`KẾT QUẢ: ${pass} passed, ${fail} failed`);
   // ═══════════════════════════════════════════════════════════════════
-  
+
   if (fail === 0) {
     console.log('\n  🎉 TOÀN BỘ VÒNG ĐỜI HOẠT ĐỘNG ĐÚNG');
     console.log('     Triệu chứng mới → fallback → log → R&D → cluster → script → match');
@@ -308,7 +371,7 @@ async function run() {
   await pool.end();
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('💥', err);
   pool.end();
   process.exit(1);

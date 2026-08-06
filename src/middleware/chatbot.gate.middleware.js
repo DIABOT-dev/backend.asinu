@@ -40,13 +40,16 @@ function chatbotGate(pool) {
       return res.status(403).json({
         ok: false,
         code: 'CHATBOT_DISABLED',
-        error: t('error.chatbot_disabled', lang) || 'Tính năng chatbot sẽ được mở trong phiên bản sau.',
+        error:
+          t('error.chatbot_disabled', lang) || 'Tính năng chatbot sẽ được mở trong phiên bản sau.',
       });
     }
 
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ ok: false, code: 'UNAUTHORIZED', error: t('error.unauthenticated', lang) });
+      return res
+        .status(401)
+        .json({ ok: false, code: 'UNAUTHORIZED', error: t('error.unauthenticated', lang) });
     }
 
     // 2) Premium-only gate
@@ -77,7 +80,9 @@ function chatbotGate(pool) {
         return res.status(429).json({
           ok: false,
           code: 'CHATBOT_DAILY_LIMIT_EXCEEDED',
-          error: t('error.chatbot_daily_limit', lang) || `Bạn đã đạt giới hạn ${dailyLimit} tin nhắn hôm nay.`,
+          error:
+            t('error.chatbot_daily_limit', lang) ||
+            `Bạn đã đạt giới hạn ${dailyLimit} tin nhắn hôm nay.`,
           daily_limit: dailyLimit,
           daily_used: used,
         });
@@ -88,7 +93,9 @@ function chatbotGate(pool) {
       return res.status(429).json({
         ok: false,
         code: 'CHATBOT_DAILY_LIMIT_EXCEEDED',
-        error: t('error.chatbot_daily_limit_zero', lang) || 'Tính năng chatbot không khả dụng cho gói hiện tại.',
+        error:
+          t('error.chatbot_daily_limit_zero', lang) ||
+          'Tính năng chatbot không khả dụng cho gói hiện tại.',
         daily_limit: 0,
       });
     }
@@ -104,7 +111,9 @@ function chatbotGate(pool) {
         return res.status(429).json({
           ok: false,
           code: 'CHATBOT_TOKEN_LIMIT_EXCEEDED',
-          error: t('error.chatbot_token_limit', lang) || 'Bạn đã đạt giới hạn token chatbot trong tháng.',
+          error:
+            t('error.chatbot_token_limit', lang) ||
+            'Bạn đã đạt giới hạn token chatbot trong tháng.',
           monthly_token_limit: monthlyLimit,
           monthly_token_used: used,
         });

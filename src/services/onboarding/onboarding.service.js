@@ -34,21 +34,21 @@ const issueLabel = (item) => {
  */
 const normalizeStringList = (items) => {
   if (!Array.isArray(items)) return [];
-  
+
   const result = [];
   const seen = new Set();
-  
+
   for (const item of items) {
     const label = issueLabel(item);
     if (!label) continue;
-    
+
     const key = label.toLowerCase();
     if (seen.has(key)) continue;
-    
+
     seen.add(key);
     result.push(label);
   }
-  
+
   return result;
 };
 
@@ -59,26 +59,26 @@ const normalizeStringList = (items) => {
  */
 const normalizeJointIssues = (items) => {
   if (!Array.isArray(items)) return [];
-  
+
   const result = [];
   const seen = new Set();
-  
+
   for (const item of items) {
     if (!item || typeof item !== 'object') continue;
-    
+
     const key = normalizeText(item.key);
     const label = normalizeText(item.label);
     const otherText = item.other_text ? normalizeText(item.other_text) : null;
-    
+
     if (!key || !label) continue;
-    
+
     const dedupeKey = `${key.toLowerCase()}|${label.toLowerCase()}|${(otherText || '').toLowerCase()}`;
     if (seen.has(dedupeKey)) continue;
-    
+
     seen.add(dedupeKey);
     result.push(otherText ? { key, label, other_text: otherText } : { key, label });
   }
-  
+
   return result;
 };
 
@@ -196,10 +196,9 @@ async function upsertProfile(pool, userId, profile) {
  * @returns {Promise<Object|null>} - Profile or null
  */
 async function getProfile(pool, userId) {
-  const result = await pool.query(
-    'SELECT * FROM user_onboarding_profiles WHERE user_id = $1',
-    [userId]
-  );
+  const result = await pool.query('SELECT * FROM user_onboarding_profiles WHERE user_id = $1', [
+    userId,
+  ]);
   return result.rows[0] || null;
 }
 
@@ -210,9 +209,9 @@ async function getProfile(pool, userId) {
  * @param {Object} aiProfile - Profile object từ AI
  */
 async function upsertProfileFromAI(pool, userId, aiProfile) {
-  const medical  = Array.isArray(aiProfile.medical_conditions)  ? aiProfile.medical_conditions  : [];
-  const symptoms = Array.isArray(aiProfile.chronic_symptoms)    ? aiProfile.chronic_symptoms    : [];
-  const joints   = Array.isArray(aiProfile.joint_issues)        ? aiProfile.joint_issues        : [];
+  const medical = Array.isArray(aiProfile.medical_conditions) ? aiProfile.medical_conditions : [];
+  const symptoms = Array.isArray(aiProfile.chronic_symptoms) ? aiProfile.chronic_symptoms : [];
+  const joints = Array.isArray(aiProfile.joint_issues) ? aiProfile.joint_issues : [];
 
   const result = await pool.query(
     `INSERT INTO user_onboarding_profiles (
@@ -248,20 +247,20 @@ async function upsertProfileFromAI(pool, userId, aiProfile) {
     RETURNING *`,
     [
       userId,
-      aiProfile.age         || null,
-      aiProfile.gender      || null,
-      aiProfile.goal        || null,
-      aiProfile.body_type   || null,
+      aiProfile.age || null,
+      aiProfile.gender || null,
+      aiProfile.goal || null,
+      aiProfile.body_type || null,
       JSON.stringify(medical),
       JSON.stringify(symptoms),
       JSON.stringify(joints),
-      aiProfile.exercise_freq       || null,
-      aiProfile.sleep_duration      || null,
-      aiProfile.water_intake        || null,
-      aiProfile.checkup_freq        || null,
-      aiProfile.flexibility         || null,
-      aiProfile.stairs_performance  || null,
-      aiProfile.walking_habit       || null,
+      aiProfile.exercise_freq || null,
+      aiProfile.sleep_duration || null,
+      aiProfile.water_intake || null,
+      aiProfile.checkup_freq || null,
+      aiProfile.flexibility || null,
+      aiProfile.stairs_performance || null,
+      aiProfile.walking_habit || null,
       JSON.stringify(aiProfile),
     ]
   );
@@ -301,14 +300,16 @@ function calcRiskScore(data) {
     'Mỡ máu': 15,
     'Tiền đình': 10,
     'Đau dạ dày': 10,
-    'Gout': 10,
+    Gout: 10,
   };
-  diseases.forEach(d => { score += DISEASE_SCORES[d] || 10; });
+  diseases.forEach((d) => {
+    score += DISEASE_SCORES[d] || 10;
+  });
 
   const h = parseFloat(data.height_cm);
   const w = parseFloat(data.weight_kg);
   if (h > 0 && w > 0) {
-    const bmi = w / ((h / 100) ** 2);
+    const bmi = w / (h / 100) ** 2;
     if (bmi >= 30) score += 20;
     else if (bmi >= 25) score += 10;
   }
@@ -489,7 +490,9 @@ async function upsertProfileV2(pool, userId, data) {
         status: 'accepted',
         version: consentResult.rows[0].consent_version || 'v1.0.0',
       },
-      { event_id: `consent.updated:privacy_policy:${userId}:${consentResult.rows[0].consent_version || 'v1.0.0'}` },
+      {
+        event_id: `consent.updated:privacy_policy:${userId}:${consentResult.rows[0].consent_version || 'v1.0.0'}`,
+      }
     );
   }
 

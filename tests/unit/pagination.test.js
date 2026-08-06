@@ -1,4 +1,9 @@
-const { parsePagination, parseCursor, buildPageResponse, MAX_LIMIT } = require('../../src/lib/pagination');
+const {
+  parsePagination,
+  parseCursor,
+  buildPageResponse,
+  MAX_LIMIT,
+} = require('../../src/lib/pagination');
 
 describe('parsePagination', () => {
   test('returns defaults for empty query', () => {

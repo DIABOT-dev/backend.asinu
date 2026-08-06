@@ -4,7 +4,11 @@
  */
 
 const { t, getLang } = require('../i18n');
-const { getActiveConnections, getUserName, insertAlertNotifications } = require('../services/health/health-alert.service');
+const {
+  getActiveConnections,
+  getUserName,
+  insertAlertNotifications,
+} = require('../services/health/health-alert.service');
 
 /**
  * POST /api/health/alert-care-circle
@@ -21,7 +25,7 @@ async function alertCareCircle(pool, req, res) {
       return res.status(200).json({
         ok: true,
         message: t('careCircle.no_care_circle', getLang(req)),
-        notified: 0
+        notified: 0,
       });
     }
 
@@ -38,7 +42,7 @@ async function alertCareCircle(pool, req, res) {
         icon: alertData.icon || (alertData.severity === 'critical' ? 'alert-circle' : 'warning'),
         sourceUserId: userId,
         sourceUserName: userName,
-        ...alertData
+        ...alertData,
       },
     };
 
@@ -49,14 +53,12 @@ async function alertCareCircle(pool, req, res) {
       message: t('health.alert_sent_count', getLang(req), { count: connections.length }),
       notified: connections.length,
       alertType: alertData.alertType,
-      severity: alertData.severity
+      severity: alertData.severity,
     });
-
   } catch (error) {
-
     return res.status(500).json({
       ok: false,
-      error: t('health.alert_send_error', getLang(req))
+      error: t('health.alert_send_error', getLang(req)),
     });
   }
 }
@@ -73,7 +75,9 @@ async function runDailyMonitor(pool, req, res) {
   try {
     const { runDailyHealthMonitoring } = require('../services/health/health.monitoring.service');
     const result = await runDailyHealthMonitoring(pool);
-    return res.status(200).json({ ok: true, message: t('health.daily_check_complete', getLang(req)), ...result });
+    return res
+      .status(200)
+      .json({ ok: true, message: t('health.daily_check_complete', getLang(req)), ...result });
   } catch (error) {
     return res.status(500).json({ ok: false, error: t('health.daily_check_error', getLang(req)) });
   }
@@ -95,7 +99,9 @@ async function runUserMonitor(pool, req, res) {
     }
     const { runHealthMonitoringForUser } = require('../services/health/health.monitoring.service');
     await runHealthMonitoringForUser(pool, userId);
-    return res.status(200).json({ ok: true, message: t('health.user_check_complete', getLang(req), { userId }) });
+    return res
+      .status(200)
+      .json({ ok: true, message: t('health.user_check_complete', getLang(req), { userId }) });
   } catch (error) {
     return res.status(500).json({ ok: false, error: t('health.user_check_error', getLang(req)) });
   }

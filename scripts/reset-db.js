@@ -47,7 +47,10 @@ async function reset() {
 
     // 4. Run all migrations
     const migrationsDir = path.join(__dirname, '..', 'db', 'migrations');
-    const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+    const files = fs
+      .readdirSync(migrationsDir)
+      .filter((f) => f.endsWith('.sql'))
+      .sort();
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS schema_migrations (

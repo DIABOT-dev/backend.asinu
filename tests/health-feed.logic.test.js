@@ -1,7 +1,13 @@
 'use strict';
 
 const { DEFAULT_TIMEZONE, resolveTimezone } = require('../src/services/health_feed/config');
-const { FLOWS, buildFlowPlan, getSelfFlow, hasAlert, selectContentForPlan } = require('../src/services/health_feed/logic');
+const {
+  FLOWS,
+  buildFlowPlan,
+  getSelfFlow,
+  hasAlert,
+  selectContentForPlan,
+} = require('../src/services/health_feed/logic');
 
 describe('health feed logic', () => {
   test('defaults timezone to Vietnam when user timezone missing', () => {
@@ -41,13 +47,69 @@ describe('health feed logic', () => {
 
   test('selects mixed feed respecting limits and unique content', () => {
     const catalog = [
-      { id: 'f1', target_flow: FLOWS.FAMILY, status: 'active', content_type: 'family_note', target_conditions: [], topic_category: 'family', engagement_score: 50 },
-      { id: 'f2', target_flow: FLOWS.FAMILY, status: 'active', content_type: 'family_note', target_conditions: [], topic_category: 'family', engagement_score: 49 },
-      { id: 'f3', target_flow: FLOWS.FAMILY, status: 'active', content_type: 'family_note', target_conditions: [], topic_category: 'family', engagement_score: 48 },
-      { id: 's1', target_flow: FLOWS.NURTURE, status: 'active', content_type: 'article', target_conditions: [], topic_category: 'diet', engagement_score: 50 },
-      { id: 's2', target_flow: FLOWS.NURTURE, status: 'active', content_type: 'article', target_conditions: [], topic_category: 'exercise', engagement_score: 49 },
-      { id: 's3', target_flow: FLOWS.NURTURE, status: 'active', content_type: 'article', target_conditions: [], topic_category: 'medication', engagement_score: 48 },
-      { id: 's4', target_flow: FLOWS.NURTURE, status: 'active', content_type: 'article', target_conditions: [], topic_category: 'mental', engagement_score: 47 },
+      {
+        id: 'f1',
+        target_flow: FLOWS.FAMILY,
+        status: 'active',
+        content_type: 'family_note',
+        target_conditions: [],
+        topic_category: 'family',
+        engagement_score: 50,
+      },
+      {
+        id: 'f2',
+        target_flow: FLOWS.FAMILY,
+        status: 'active',
+        content_type: 'family_note',
+        target_conditions: [],
+        topic_category: 'family',
+        engagement_score: 49,
+      },
+      {
+        id: 'f3',
+        target_flow: FLOWS.FAMILY,
+        status: 'active',
+        content_type: 'family_note',
+        target_conditions: [],
+        topic_category: 'family',
+        engagement_score: 48,
+      },
+      {
+        id: 's1',
+        target_flow: FLOWS.NURTURE,
+        status: 'active',
+        content_type: 'article',
+        target_conditions: [],
+        topic_category: 'diet',
+        engagement_score: 50,
+      },
+      {
+        id: 's2',
+        target_flow: FLOWS.NURTURE,
+        status: 'active',
+        content_type: 'article',
+        target_conditions: [],
+        topic_category: 'exercise',
+        engagement_score: 49,
+      },
+      {
+        id: 's3',
+        target_flow: FLOWS.NURTURE,
+        status: 'active',
+        content_type: 'article',
+        target_conditions: [],
+        topic_category: 'medication',
+        engagement_score: 48,
+      },
+      {
+        id: 's4',
+        target_flow: FLOWS.NURTURE,
+        status: 'active',
+        content_type: 'article',
+        target_conditions: [],
+        topic_category: 'mental',
+        engagement_score: 47,
+      },
     ];
     const context = {
       segment: 'semi_active',
@@ -78,11 +140,51 @@ describe('health feed logic', () => {
 
   test('fills self-only feed up to limit instead of stopping after one item', () => {
     const catalog = [
-      { id: 'a1', target_flow: FLOWS.NURTURE, status: 'active', content_type: 'article', target_conditions: [], topic_category: 'diet', engagement_score: 50 },
-      { id: 'a2', target_flow: FLOWS.NURTURE, status: 'active', content_type: 'article', target_conditions: [], topic_category: 'exercise', engagement_score: 49 },
-      { id: 'a3', target_flow: FLOWS.NURTURE, status: 'active', content_type: 'article', target_conditions: [], topic_category: 'medication', engagement_score: 48 },
-      { id: 'a4', target_flow: FLOWS.NURTURE, status: 'active', content_type: 'article', target_conditions: [], topic_category: 'mental', engagement_score: 47 },
-      { id: 'a5', target_flow: FLOWS.NURTURE, status: 'active', content_type: 'article', target_conditions: [], topic_category: 'general', engagement_score: 46 },
+      {
+        id: 'a1',
+        target_flow: FLOWS.NURTURE,
+        status: 'active',
+        content_type: 'article',
+        target_conditions: [],
+        topic_category: 'diet',
+        engagement_score: 50,
+      },
+      {
+        id: 'a2',
+        target_flow: FLOWS.NURTURE,
+        status: 'active',
+        content_type: 'article',
+        target_conditions: [],
+        topic_category: 'exercise',
+        engagement_score: 49,
+      },
+      {
+        id: 'a3',
+        target_flow: FLOWS.NURTURE,
+        status: 'active',
+        content_type: 'article',
+        target_conditions: [],
+        topic_category: 'medication',
+        engagement_score: 48,
+      },
+      {
+        id: 'a4',
+        target_flow: FLOWS.NURTURE,
+        status: 'active',
+        content_type: 'article',
+        target_conditions: [],
+        topic_category: 'mental',
+        engagement_score: 47,
+      },
+      {
+        id: 'a5',
+        target_flow: FLOWS.NURTURE,
+        status: 'active',
+        content_type: 'article',
+        target_conditions: [],
+        topic_category: 'general',
+        engagement_score: 46,
+      },
     ];
     const context = {
       segment: 'semi_active',

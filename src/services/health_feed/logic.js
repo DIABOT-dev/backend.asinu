@@ -50,13 +50,25 @@ function buildFlowPlan(context, now = new Date()) {
 
   if (mixedEligible) {
     return [
-      { flow: FLOWS.FAMILY, limit: 2, patientIds: caregivers.map((p) => p.patient_id), label: 'family' },
+      {
+        flow: FLOWS.FAMILY,
+        limit: 2,
+        patientIds: caregivers.map((p) => p.patient_id),
+        label: 'family',
+      },
       { flow: selfFlow, limit: 3, patientId: null, label: 'self' },
     ];
   }
 
   if (caregivers.length > 0) {
-    return [{ flow: FLOWS.FAMILY, limit: 5, patientIds: caregivers.map((p) => p.patient_id), label: 'family-only' }];
+    return [
+      {
+        flow: FLOWS.FAMILY,
+        limit: 5,
+        patientIds: caregivers.map((p) => p.patient_id),
+        label: 'family-only',
+      },
+    ];
   }
 
   return [{ flow: selfFlow, limit: 5, patientId: null, label: 'self-only' }];
@@ -76,7 +88,8 @@ function isSunday(timeParts) {
 function createCandidateScore(content, context, slotIndex, preferredTopics) {
   let score = Number(content.engagement_score || 0);
   if (Number(content.flow_step || 0) === Number(context.current_step || 1)) score += 80;
-  if (content.target_cluster_key && content.target_cluster_key === context.top_cluster?.cluster_key) score += 120;
+  if (content.target_cluster_key && content.target_cluster_key === context.top_cluster?.cluster_key)
+    score += 120;
   if (content.topic_category && preferredTopics.includes(content.topic_category)) {
     score += Math.max(0, 40 - preferredTopics.indexOf(content.topic_category) * 10);
   }
@@ -84,13 +97,21 @@ function createCandidateScore(content, context, slotIndex, preferredTopics) {
   return score;
 }
 
-function selectContentForPlan({ catalog, context, historyKeys, dismissedKeys, activeKeys, nowParts }) {
+function selectContentForPlan({
+  catalog,
+  context,
+  historyKeys,
+  dismissedKeys,
+  activeKeys,
+  nowParts,
+}) {
   const preferredTopics = topicPriority(context);
   const selected = [];
   const usedTopics = new Set();
   const usedContentIds = new Set();
   const poolForPlan = (plan) => {
-    const patientIds = Array.isArray(plan.patientIds) && plan.patientIds.length > 0 ? plan.patientIds : [null];
+    const patientIds =
+      Array.isArray(plan.patientIds) && plan.patientIds.length > 0 ? plan.patientIds : [null];
     if (plan.flow === FLOWS.FAMILY) return patientIds;
     return Array.from({ length: plan.limit }, () => null);
   };
@@ -108,9 +129,15 @@ function selectContentForPlan({ catalog, context, historyKeys, dismissedKeys, ac
         .filter((content) => !activeKeys.has(`${content.id}:${patientId || 'self'}`))
         .filter((content) => {
           if (!content.target_conditions?.length) return true;
-          return content.target_conditions.some((condition) => normalizeConditions(context.medical_conditions).includes(condition));
+          return content.target_conditions.some((condition) =>
+            normalizeConditions(context.medical_conditions).includes(condition)
+          );
         })
-        .filter((content) => !content.target_cluster_key || content.target_cluster_key === context.top_cluster?.cluster_key)
+        .filter(
+          (content) =>
+            !content.target_cluster_key ||
+            content.target_cluster_key === context.top_cluster?.cluster_key
+        )
         .filter((content) => {
           if (plan.flow === FLOWS.NURTURE && usedTopics.has(content.topic_category)) return false;
           if (plan.flow === FLOWS.REACTIVATE || plan.flow === FLOWS.WINBACK) return true;
@@ -119,7 +146,11 @@ function selectContentForPlan({ catalog, context, historyKeys, dismissedKeys, ac
           }
           return true;
         })
-        .sort((a, b) => createCandidateScore(b, context, selected.length, preferredTopics) - createCandidateScore(a, context, selected.length, preferredTopics));
+        .sort(
+          (a, b) =>
+            createCandidateScore(b, context, selected.length, preferredTopics) -
+            createCandidateScore(a, context, selected.length, preferredTopics)
+        );
 
       const chosen = candidates[0];
       if (!chosen) continue;

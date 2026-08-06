@@ -5,11 +5,7 @@
     "birth_year": 1958,
     "gender": "Nam",
     "full_name": "Tran Van Hung",
-    "medical_conditions": [
-      "Tieu duong",
-      "Cao huyet ap",
-      "Tim mach"
-    ],
+    "medical_conditions": ["Tieu duong", "Cao huyet ap", "Tim mach"],
     "age": 68
   },
   "summary": {

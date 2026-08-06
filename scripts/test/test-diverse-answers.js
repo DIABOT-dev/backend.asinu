@@ -18,7 +18,12 @@ const { execSync } = require('child_process');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const { createClustersFromOnboarding, getUserScript, getScript, toClusterKey } = require('../src/services/checkin/script.service');
+const {
+  createClustersFromOnboarding,
+  getUserScript,
+  getScript,
+  toClusterKey,
+} = require('../src/services/checkin/script.service');
 const { getNextQuestion, validateScript } = require('../src/services/checkin/script-runner');
 const { evaluateScript, evaluateFollowUp } = require('../src/services/checkin/scoring-engine');
 const { getFallbackScriptData, matchCluster } = require('../src/services/checkin/fallback.service');
@@ -28,11 +33,46 @@ const { listComplaints } = require('../src/services/checkin/clinical-mapping');
 const USER_ID = 4;
 
 const PROFILES = {
-  elderly_sick: { name: 'Bà Lan (75t, 4 bệnh nền)', birth_year: 1951, gender: 'Nữ', full_name: 'Nguyễn Thị Lan', medical_conditions: ['Tiểu đường type 2', 'Cao huyết áp', 'Suy tim', 'Loãng xương'], age: 75 },
-  elderly_one: { name: 'Chú Hùng (68t, tiểu đường)', birth_year: 1958, gender: 'Nam', full_name: 'Trần Văn Hùng', medical_conditions: ['Tiểu đường'], age: 68 },
-  middle_healthy: { name: 'Chị Hương (50t, huyết áp)', birth_year: 1976, gender: 'Nữ', full_name: 'Phạm Thị Hương', medical_conditions: ['Cao huyết áp'], age: 50 },
-  young_healthy: { name: 'Anh Minh (30t, khỏe)', birth_year: 1996, gender: 'Nam', full_name: 'Nguyễn Văn Minh', medical_conditions: [], age: 30 },
-  no_profile: { name: 'User mới (không có hồ sơ)', birth_year: null, gender: null, full_name: null, medical_conditions: [], age: null },
+  elderly_sick: {
+    name: 'Bà Lan (75t, 4 bệnh nền)',
+    birth_year: 1951,
+    gender: 'Nữ',
+    full_name: 'Nguyễn Thị Lan',
+    medical_conditions: ['Tiểu đường type 2', 'Cao huyết áp', 'Suy tim', 'Loãng xương'],
+    age: 75,
+  },
+  elderly_one: {
+    name: 'Chú Hùng (68t, tiểu đường)',
+    birth_year: 1958,
+    gender: 'Nam',
+    full_name: 'Trần Văn Hùng',
+    medical_conditions: ['Tiểu đường'],
+    age: 68,
+  },
+  middle_healthy: {
+    name: 'Chị Hương (50t, huyết áp)',
+    birth_year: 1976,
+    gender: 'Nữ',
+    full_name: 'Phạm Thị Hương',
+    medical_conditions: ['Cao huyết áp'],
+    age: 50,
+  },
+  young_healthy: {
+    name: 'Anh Minh (30t, khỏe)',
+    birth_year: 1996,
+    gender: 'Nam',
+    full_name: 'Nguyễn Văn Minh',
+    medical_conditions: [],
+    age: 30,
+  },
+  no_profile: {
+    name: 'User mới (không có hồ sơ)',
+    birth_year: null,
+    gender: null,
+    full_name: null,
+    medical_conditions: [],
+    age: null,
+  },
 };
 
 // ─── Answer strategies ─────────────────────────────────────────
@@ -43,16 +83,19 @@ function pickAnswer(question, strategy) {
   switch (strategy) {
     case 'mildest': // Chọn nhẹ nhất
       if (type === 'slider') return question.min || 0;
-      if (opts.length > 0) return opts.find(o => o.includes('không') || o.includes('nhẹ')) || opts[0];
+      if (opts.length > 0)
+        return opts.find((o) => o.includes('không') || o.includes('nhẹ')) || opts[0];
       return 'không có gì';
 
     case 'worst': // Chọn nặng nhất
       if (type === 'slider') return question.max || 10;
       if (opts.length > 0) {
         // Pick last non-"không" option or option with "nặng"/"dữ dội"/"liên tục"
-        const severe = opts.find(o => o.includes('nặng') || o.includes('dữ dội') || o.includes('liên tục'));
+        const severe = opts.find(
+          (o) => o.includes('nặng') || o.includes('dữ dội') || o.includes('liên tục')
+        );
         if (severe) return severe;
-        const last = opts.filter(o => !o.includes('không có') && !o.includes('không rõ'));
+        const last = opts.filter((o) => !o.includes('không có') && !o.includes('không rõ'));
         return last.length > 0 ? last[last.length - 1] : opts[opts.length - 1];
       }
       return 'rất nặng';
@@ -67,10 +110,14 @@ function pickAnswer(question, strategy) {
       if (opts.length > 0) return opts[Math.floor(Math.random() * opts.length)];
       return 'không rõ';
 
-    case 'skip': // Chọn "không có" / "không rõ" nếu có
+    case 'skip': {
+      // Chọn "không có" / "không rõ" nếu có
       if (type === 'slider') return 1;
-      const skip = opts.find(o => o.includes('không có') || o.includes('không rõ') || o.includes('không'));
+      const skip = opts.find(
+        (o) => o.includes('không có') || o.includes('không rõ') || o.includes('không')
+      );
       return skip || opts[0] || '';
+    }
 
     default:
       return opts[0] || (type === 'slider' ? 5 : 'test');
@@ -149,7 +196,10 @@ async function run() {
         if (!step.isDone || !step.conclusion) {
           totalFail++;
           issues.push(`${c} + ${profile.name} + ${strategyLabel}: KHÔNG HOÀN THÀNH`);
-          addResult(c, profile.name, strategy, strategyLabel, conversation, { severity: 'ERROR', error: true });
+          addResult(c, profile.name, strategy, strategyLabel, conversation, {
+            severity: 'ERROR',
+            error: true,
+          });
           continue;
         }
 
@@ -160,7 +210,12 @@ async function run() {
         let safetyNote = '';
 
         // Rule: elderly + conditions + worst answers should NOT be LOW
-        if (profile.age >= 60 && (profile.medical_conditions || []).length > 0 && strategy === 'worst' && con.severity === 'low') {
+        if (
+          profile.age >= 60 &&
+          (profile.medical_conditions || []).length > 0 &&
+          strategy === 'worst' &&
+          con.severity === 'low'
+        ) {
           safe = false;
           safetyNote = 'NGUY HIỂM: Người cao tuổi + bệnh nền + trả lời nặng nhất nhưng xếp Nhẹ';
         }
@@ -173,10 +228,12 @@ async function run() {
 
         // Rule: mildest + young healthy should be LOW
         if (strategy === 'mildest' && profileKey === 'young_healthy' && con.severity === 'high') {
-          safetyNote = 'GHI CHÚ: Người trẻ khỏe + trả lời nhẹ nhất nhưng xếp Nặng (có thể do câu hỏi)';
+          safetyNote =
+            'GHI CHÚ: Người trẻ khỏe + trả lời nhẹ nhất nhưng xếp Nặng (có thể do câu hỏi)';
         }
 
-        if (safe) totalPass++; else totalFail++;
+        if (safe) totalPass++;
+        else totalFail++;
 
         addResult(c, profile.name, strategy, strategyLabel, conversation, {
           severity: con.severity,
@@ -196,7 +253,7 @@ async function run() {
   console.log(`\n\nTổng: ${totalTests} test | ${totalPass} đạt | ${totalFail} lỗi\n`);
   if (issues.length) {
     console.log('LỖI:');
-    issues.forEach(i => console.log(`  ❌ ${i}`));
+    issues.forEach((i) => console.log(`  ❌ ${i}`));
   }
 
   // ─── Generate HTML ───────────────────────────────────────────
@@ -204,7 +261,9 @@ async function run() {
   const reportPath = path.join(__dirname, '..', 'test-report.html');
   fs.writeFileSync(reportPath, html);
   console.log(`\nReport: ${reportPath}`);
-  try { execSync(`open "${reportPath}"`); } catch {}
+  try {
+    execSync(`open "${reportPath}"`);
+  } catch {}
 
   await pool.end();
 }
@@ -324,12 +383,13 @@ function generateHTML(results, totalTests, totalPass, totalFail, complaints) {
   <button class="filter-btn" onclick="filterBy('issue')">Chỉ có vấn đề</button>
 </div>
 
-${Object.entries(byComplaint).map(([complaint, items]) => {
-  const passCount = items.filter(i => i.conclusion.safe !== false).length;
-  const failCount = items.filter(i => i.conclusion.safe === false).length;
-  const hasIssue = failCount > 0;
+${Object.entries(byComplaint)
+  .map(([complaint, items]) => {
+    const passCount = items.filter((i) => i.conclusion.safe !== false).length;
+    const failCount = items.filter((i) => i.conclusion.safe === false).length;
+    const hasIssue = failCount > 0;
 
-  return `
+    return `
 <div class="complaint-section${hasIssue ? ' open' : ''}" data-complaint="${complaint}">
   <div class="complaint-header" onclick="this.parentElement.classList.toggle('open')">
     <span style="font-size:18px">${hasIssue ? '⚠️' : '✅'}</span>
@@ -338,11 +398,12 @@ ${Object.entries(byComplaint).map(([complaint, items]) => {
     <span class="complaint-arrow">▶</span>
   </div>
   <div class="complaint-body">
-    ${items.map((item, idx) => {
-      const c = item.conclusion;
-      const sev = c.severity || 'low';
-      return `
-    <div class="scenario" data-strategy="${item.strategy}" data-profile="${Object.keys(PROFILES).find(k => PROFILES[k].name === item.profileName) || ''}" data-issue="${c.safe === false ? 'yes' : 'no'}">
+    ${items
+      .map((item, idx) => {
+        const c = item.conclusion;
+        const sev = c.severity || 'low';
+        return `
+    <div class="scenario" data-strategy="${item.strategy}" data-profile="${Object.keys(PROFILES).find((k) => PROFILES[k].name === item.profileName) || ''}" data-issue="${c.safe === false ? 'yes' : 'no'}">
       <div class="scenario-header" onclick="this.parentElement.classList.toggle('open')">
         <span class="scenario-profile">${item.profileName}</span>
         <span class="scenario-strategy">${item.strategyLabel}</span>
@@ -355,13 +416,17 @@ ${Object.entries(byComplaint).map(([complaint, items]) => {
       </div>
       <div class="scenario-detail">
         <div style="margin-bottom:6px"><b>💬 Hội thoại:</b></div>
-        ${item.conversation.map((cv, i) => `
+        ${item.conversation
+          .map(
+            (cv, i) => `
           <div class="convo-line">
-            <span class="convo-q"><b>Câu ${i+1}:</b> ${cv.q}</span>
+            <span class="convo-q"><b>Câu ${i + 1}:</b> ${cv.q}</span>
             ${cv.options ? `<div class="convo-opts">Lựa chọn: ${cv.options.join(' | ')}</div>` : ''}
             <div class="convo-a">→ <b>${cv.answer}</b></div>
           </div>
-        `).join('')}
+        `
+          )
+          .join('')}
         <div class="result-box" style="background:${sevBg[sev]};border-left:3px solid ${sevColor[sev]}">
           <b>Kết quả:</b> <span style="color:${sevColor[sev]};font-weight:700">${sevVN[sev]}</span>
           | Hẹn lại: <b>${c.followUpHours || '?'}h</b>
@@ -373,10 +438,12 @@ ${Object.entries(byComplaint).map(([complaint, items]) => {
         ${c.safetyNote ? `<div class="safety-warn">⚠️ ${c.safetyNote}</div>` : ''}
       </div>
     </div>`;
-    }).join('')}
+      })
+      .join('')}
   </div>
 </div>`;
-}).join('')}
+  })
+  .join('')}
 
 <div class="footer">
   Asinu Health — Test đa dạng | ${totalTests} kịch bản | ${complaints.length} triệu chứng × ${Object.keys(PROFILES).length} profile × 5 cách trả lời
@@ -415,4 +482,8 @@ document.querySelectorAll('.scenario[data-issue="yes"]').forEach(s => s.classLis
 </html>`;
 }
 
-run().catch(err => { console.error('CRASH:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASH:', err);
+  pool.end();
+  process.exit(1);
+});

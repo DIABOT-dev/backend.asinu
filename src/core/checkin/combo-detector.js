@@ -15,7 +15,10 @@ const DANGER_COMBOS = [
   {
     id: 'stroke_risk',
     name: 'Nghi đột quỵ',
-    symptoms: [['đau đầu', 'nhức đầu'], ['mờ mắt', 'mắt mờ', 'nhìn đôi', 'mất thị lực']],
+    symptoms: [
+      ['đau đầu', 'nhức đầu'],
+      ['mờ mắt', 'mắt mờ', 'nhìn đôi', 'mất thị lực'],
+    ],
     match: 'all',
     severity: 'critical',
     action: 'Gọi cấp cứu 115 ngay. Yếu nửa người + đau đầu + mờ mắt là dấu hiệu đột quỵ.',
@@ -26,7 +29,10 @@ const DANGER_COMBOS = [
   {
     id: 'appendicitis_risk',
     name: 'Nghi viêm ruột thừa',
-    symptoms: [['đau bụng', 'đau bụng dưới'], ['sốt', 'sốt cao']],
+    symptoms: [
+      ['đau bụng', 'đau bụng dưới'],
+      ['sốt', 'sốt cao'],
+    ],
     match: 'all',
     severity: 'high',
     action: 'Đi khám bác sĩ NGAY hôm nay. Đau bụng dưới bên phải kèm sốt có thể là viêm ruột thừa.',
@@ -51,7 +57,8 @@ const DANGER_COMBOS = [
     symptoms: [['đau đầu', 'nhức đầu'], ['chóng mặt'], ['buồn nôn', 'nôn']],
     match: 'all',
     severity: 'high',
-    action: 'Đo huyết áp ngay nếu có máy. Nếu > 180/120 → gọi cấp cứu. Nằm nghỉ, uống thuốc huyết áp nếu có.',
+    action:
+      'Đo huyết áp ngay nếu có máy. Nếu > 180/120 → gọi cấp cứu. Nằm nghỉ, uống thuốc huyết áp nếu có.',
     needsDoctor: true,
     needsFamilyAlert: true,
     followUpHours: 1,
@@ -62,7 +69,8 @@ const DANGER_COMBOS = [
     symptoms: [['ho'], ['sốt', 'sốt cao'], ['đau họng', 'đau cổ họng']],
     match: 'all',
     severity: 'medium',
-    action: 'Nghỉ ngơi, uống nhiều nước ấm, uống hạ sốt. Nếu sốt > 39°C hoặc ho ra đờm vàng → đi khám.',
+    action:
+      'Nghỉ ngơi, uống nhiều nước ấm, uống hạ sốt. Nếu sốt > 39°C hoặc ho ra đờm vàng → đi khám.',
     needsDoctor: false,
     needsFamilyAlert: false,
     followUpHours: 3,
@@ -100,10 +108,14 @@ const DANGER_COMBOS = [
   {
     id: 'fatigue_weight_loss',
     name: 'Mệt mỏi + sụt cân — cần xét nghiệm',
-    symptoms: [['mệt mỏi', 'mệt'], ['sụt cân', 'giảm cân', 'ăn không ngon']],
+    symptoms: [
+      ['mệt mỏi', 'mệt'],
+      ['sụt cân', 'giảm cân', 'ăn không ngon'],
+    ],
     match: 'all',
     severity: 'medium',
-    action: 'Nên đi xét nghiệm máu tổng quát. Mệt mỏi kéo dài kèm sụt cân cần kiểm tra tuyến giáp, đường huyết, thiếu máu.',
+    action:
+      'Nên đi xét nghiệm máu tổng quát. Mệt mỏi kéo dài kèm sụt cân cần kiểm tra tuyến giáp, đường huyết, thiếu máu.',
     needsDoctor: true,
     needsFamilyAlert: false,
     followUpHours: 3,
@@ -154,14 +166,14 @@ function detectCombo(symptomTexts, profile = {}) {
     if (combo.match === 'all') {
       // Special case: diabetic_warning with diabetes → match 2 of 3 groups
       if (combo.id === 'diabetic_warning' && hasDiabetes) {
-        const groupMatches = combo.symptoms.filter(group =>
-          group.some(kw => combinedText.includes(kw.toLowerCase()))
+        const groupMatches = combo.symptoms.filter((group) =>
+          group.some((kw) => combinedText.includes(kw.toLowerCase()))
         );
         isMatch = groupMatches.length >= 2;
       } else {
         // Standard: ALL groups must have at least 1 match
-        isMatch = combo.symptoms.every(group =>
-          group.some(kw => combinedText.includes(kw.toLowerCase()))
+        isMatch = combo.symptoms.every((group) =>
+          group.some((kw) => combinedText.includes(kw.toLowerCase()))
         );
       }
     }

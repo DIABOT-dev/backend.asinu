@@ -32,12 +32,23 @@ function mockReq(userId, body = {}, query = {}) {
 }
 
 function mockRes() {
-  let _status = 200, _json = null;
+  let _status = 200,
+    _json = null;
   return {
-    status(code) { _status = code; return this; },
-    json(data) { _json = data; return this; },
-    getStatus() { return _status; },
-    getData() { return _json; },
+    status(code) {
+      _status = code;
+      return this;
+    },
+    json(data) {
+      _json = data;
+      return this;
+    },
+    getStatus() {
+      return _status;
+    },
+    getData() {
+      return _json;
+    },
   };
 }
 
@@ -58,7 +69,10 @@ async function cleanup() {
   await pool.query('DELETE FROM problem_clusters WHERE user_id = $1', [TEST_USER_ID]);
   await pool.query('DELETE FROM fallback_logs WHERE user_id = $1', [TEST_USER_ID]);
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
-  await pool.query('DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2', [TEST_USER_ID, today]);
+  await pool.query('DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2', [
+    TEST_USER_ID,
+    today,
+  ]);
 }
 
 async function run() {
@@ -106,7 +120,10 @@ async function run() {
     const req = mockReq(TEST_USER_ID, { symptoms: ['dau dau', 'chong mat'] });
     const res = mockRes();
     await createClustersHandler(pool, req, res);
-    assert(res.getStatus() === 200 && res.getData().ok === true, 'A4: Duplicate call -> no error (idempotent)');
+    assert(
+      res.getStatus() === 200 && res.getData().ok === true,
+      'A4: Duplicate call -> no error (idempotent)'
+    );
   }
 
   console.log('');
@@ -116,7 +133,9 @@ async function run() {
   // ═══════════════════════════════════════════════════════════════
   await cleanup();
   {
-    const req = mockReq(TEST_USER_ID, { symptoms: ['\u0111au \u0111\u1ea7u', 'ch\u00f3ng m\u1eb7t'] });
+    const req = mockReq(TEST_USER_ID, {
+      symptoms: ['\u0111au \u0111\u1ea7u', 'ch\u00f3ng m\u1eb7t'],
+    });
     const res = mockRes();
     await createClustersHandler(pool, req, res);
   }
@@ -205,7 +224,10 @@ async function run() {
     const res = mockRes();
     await startScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.ok === true && d.is_fallback === true, `C4: unknown symptom -> is_fallback:${d.is_fallback}`);
+    assert(
+      d.ok === true && d.is_fallback === true,
+      `C4: unknown symptom -> is_fallback:${d.is_fallback}`
+    );
     assert(d.session_id, 'C4: session_id present even for fallback');
   }
 
@@ -221,11 +243,17 @@ async function run() {
   }
   // C5b: With proper Vietnamese diacritics
   {
-    const req = mockReq(TEST_USER_ID, { status: 'tired', symptom_input: '\u0111au ng\u1ef1c kh\u00f3 th\u1edf' });
+    const req = mockReq(TEST_USER_ID, {
+      status: 'tired',
+      symptom_input: '\u0111au ng\u1ef1c kh\u00f3 th\u1edf',
+    });
     const res = mockRes();
     await startScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.ok === true && d.is_emergency === true, `C5b: "dau nguc kho tho" (diacritics) -> is_emergency:${d.is_emergency}`);
+    assert(
+      d.ok === true && d.is_emergency === true,
+      `C5b: "dau nguc kho tho" (diacritics) -> is_emergency:${d.is_emergency}`
+    );
   }
 
   // C6: status="invalid"
@@ -254,7 +282,7 @@ async function run() {
     // Check DB for health_checkins flow_state
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
     // Allow async DB write to complete
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 200));
     const { rows } = await pool.query(
       'SELECT flow_state FROM health_checkins WHERE user_id = $1 AND session_date = $2 ORDER BY id DESC LIMIT 1',
       [TEST_USER_ID, today]
@@ -274,7 +302,7 @@ async function run() {
 
   // Start a fresh session for answer tests
   let testSessionId;
-  let testQuestions = [];
+  const testQuestions = [];
   {
     const req = mockReq(TEST_USER_ID, { status: 'tired', cluster_key: 'headache' });
     const res = mockRes();
@@ -292,7 +320,11 @@ async function run() {
     else if (q.options && q.options.length > 0) answerVal = q.options[0];
     else answerVal = 'test answer';
 
-    const req = mockReq(TEST_USER_ID, { session_id: testSessionId, question_id: q.id, answer: answerVal });
+    const req = mockReq(TEST_USER_ID, {
+      session_id: testSessionId,
+      question_id: q.id,
+      answer: answerVal,
+    });
     const res = mockRes();
     await answerScriptHandler(pool, req, res);
     const d = res.getData();
@@ -315,14 +347,21 @@ async function run() {
       else if (q.options && q.options.length > 0) answerVal = q.options[0];
       else answerVal = 'some answer';
 
-      const req = mockReq(TEST_USER_ID, { session_id: testSessionId, question_id: q.id, answer: answerVal });
+      const req = mockReq(TEST_USER_ID, {
+        session_id: testSessionId,
+        question_id: q.id,
+        answer: answerVal,
+      });
       const res = mockRes();
       await answerScriptHandler(pool, req, res);
       const d = res.getData();
       if (d.isDone) {
         done = true;
         assert(d.isDone === true, 'D2: all questions answered -> isDone:true');
-        assert(d.conclusion && d.conclusion.severity, `D2: conclusion has severity: ${d.conclusion.severity}`);
+        assert(
+          d.conclusion && d.conclusion.severity,
+          `D2: conclusion has severity: ${d.conclusion.severity}`
+        );
       } else if (d.question) {
         testQuestions.push(d.question);
       } else {
@@ -331,7 +370,11 @@ async function run() {
     }
     if (!done) {
       // Already done from D1 if very few questions
-      const checkReq = mockReq(TEST_USER_ID, { session_id: testSessionId, question_id: 'dummy', answer: 'x' });
+      const checkReq = mockReq(TEST_USER_ID, {
+        session_id: testSessionId,
+        question_id: 'dummy',
+        answer: 'x',
+      });
       const checkRes = mockRes();
       await answerScriptHandler(pool, checkReq, checkRes);
       // If session is already completed it returns 400
@@ -367,11 +410,18 @@ async function run() {
 
   // D6: Already completed session
   {
-    const req = mockReq(TEST_USER_ID, { session_id: testSessionId, question_id: 'q1', answer: 'test' });
+    const req = mockReq(TEST_USER_ID, {
+      session_id: testSessionId,
+      question_id: 'q1',
+      answer: 'test',
+    });
     const res = mockRes();
     await answerScriptHandler(pool, req, res);
     assert(res.getStatus() === 400, 'D6: already completed session -> 400');
-    assert(res.getData().error.includes('already completed'), 'D6: error mentions already completed');
+    assert(
+      res.getData().error.includes('already completed'),
+      'D6: error mentions already completed'
+    );
   }
 
   // D7: Emergency answer text -> is_emergency:true
@@ -387,20 +437,22 @@ async function run() {
     const req = mockReq(TEST_USER_ID, {
       session_id: emergSessionId,
       question_id: emergQ.id,
-      answer: '\u0111au ng\u1ef1c kh\u00f3 th\u1edf',  // "dau nguc kho tho" with diacritics
+      answer: '\u0111au ng\u1ef1c kh\u00f3 th\u1edf', // "dau nguc kho tho" with diacritics
     });
     const res = mockRes();
     await answerScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.ok === true && d.is_emergency === true, `D7: emergency answer -> is_emergency:${d.is_emergency}`);
+    assert(
+      d.ok === true && d.is_emergency === true,
+      `D7: emergency answer -> is_emergency:${d.is_emergency}`
+    );
   }
 
   // D8: Verify session saved in script_sessions after completion
   {
-    const { rows } = await pool.query(
-      'SELECT * FROM script_sessions WHERE id = $1',
-      [testSessionId]
-    );
+    const { rows } = await pool.query('SELECT * FROM script_sessions WHERE id = $1', [
+      testSessionId,
+    ]);
     assert(rows.length === 1, 'D8: session exists in DB');
     assert(rows[0].is_completed === true, 'D8: session is_completed = true');
     assert(rows[0].severity !== null, `D8: severity saved: ${rows[0].severity}`);
@@ -410,14 +462,16 @@ async function run() {
   // D9: Verify health_checkins updated with triage_severity
   {
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 200));
     const { rows } = await pool.query(
       'SELECT * FROM health_checkins WHERE user_id = $1 AND session_date = $2 ORDER BY id DESC LIMIT 1',
       [TEST_USER_ID, today]
     );
     if (rows.length > 0) {
-      assert(rows[0].triage_severity !== null || rows[0].flow_state !== null,
-        `D9: health_checkins updated, triage_severity=${rows[0].triage_severity}, flow_state=${rows[0].flow_state}`);
+      assert(
+        rows[0].triage_severity !== null || rows[0].flow_state !== null,
+        `D9: health_checkins updated, triage_severity=${rows[0].triage_severity}, flow_state=${rows[0].flow_state}`
+      );
     } else {
       assert(false, 'D9: no health_checkins row found');
     }
@@ -442,7 +496,7 @@ async function run() {
 
   // E2: No session today for different user
   {
-    const req = mockReq(99999);  // non-existent user
+    const req = mockReq(99999); // non-existent user
     const res = mockRes();
     await getSessionHandler(pool, req, res);
     const d = res.getData();
@@ -457,8 +511,10 @@ async function run() {
     const d = res.getData();
     // The latest session might be the emergency one or the completed one
     assert(d.session.is_completed === true, `E3: is_completed = ${d.session.is_completed}`);
-    assert(d.session.severity !== null && d.session.severity !== undefined,
-      `E3: severity = ${d.session.severity}`);
+    assert(
+      d.session.severity !== null && d.session.severity !== undefined,
+      `E3: severity = ${d.session.severity}`
+    );
   }
 
   console.log('');
@@ -473,7 +529,9 @@ async function run() {
 
   // F1: createClusters
   {
-    const req = mockReq(TEST_USER_ID, { symptoms: ['\u0111au \u0111\u1ea7u', 'ch\u00f3ng m\u1eb7t'] });
+    const req = mockReq(TEST_USER_ID, {
+      symptoms: ['\u0111au \u0111\u1ea7u', 'ch\u00f3ng m\u1eb7t'],
+    });
     const res = mockRes();
     await createClustersHandler(pool, req, res);
     const d = res.getData();
@@ -495,7 +553,7 @@ async function run() {
 
   // F3: startScript
   let flowSessionId;
-  let flowQuestions = [];
+  const flowQuestions = [];
   {
     const req = mockReq(TEST_USER_ID, { status: 'tired', cluster_key: 'headache' });
     const res = mockRes();
@@ -520,7 +578,11 @@ async function run() {
       else if (q.options && q.options.length > 0) answerVal = q.options[0];
       else answerVal = 'test input';
 
-      const req = mockReq(TEST_USER_ID, { session_id: flowSessionId, question_id: q.id, answer: answerVal });
+      const req = mockReq(TEST_USER_ID, {
+        session_id: flowSessionId,
+        question_id: q.id,
+        answer: answerVal,
+      });
       const res = mockRes();
       await answerScriptHandler(pool, req, res);
       const d = res.getData();
@@ -550,10 +612,9 @@ async function run() {
 
   // F8: Check DB: script_sessions row
   {
-    const { rows } = await pool.query(
-      'SELECT * FROM script_sessions WHERE id = $1',
-      [flowSessionId]
-    );
+    const { rows } = await pool.query('SELECT * FROM script_sessions WHERE id = $1', [
+      flowSessionId,
+    ]);
     assert(rows.length === 1, 'F8: session row exists in DB');
     assert(rows[0].severity !== null, `F8: severity = ${rows[0].severity}`);
     assert(rows[0].conclusion_summary !== null, `F8: conclusion_summary present`);
@@ -667,7 +728,7 @@ async function run() {
   process.exit(failed > 0 ? 1 : 0);
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('Test crashed:', err);
   pool.end().then(() => process.exit(1));
 });

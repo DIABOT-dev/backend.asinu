@@ -11,10 +11,13 @@ const HIGH_RISK_KEYWORDS = [
   'asthma',
   'tim mach',
   'tieu duong',
-  'huyet ap'
+  'huyet ap',
 ];
 
-const normalizeText = (value) => String(value || '').toLowerCase().trim();
+const normalizeText = (value) =>
+  String(value || '')
+    .toLowerCase()
+    .trim();
 
 const extractConditions = (profile) => {
   const list = [];
@@ -138,10 +141,10 @@ const calculateRisk = ({ profile, persistence, signal }) => {
     trend,
     explain_codes,
     notify_caregiver,
-    streak_ok_days
+    streak_ok_days,
   };
 };
 
 module.exports = {
-  calculateRisk
+  calculateRisk,
 };

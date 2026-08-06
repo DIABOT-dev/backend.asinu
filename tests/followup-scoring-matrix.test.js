@@ -10,7 +10,9 @@
 'use strict';
 
 // Minimal dotenv — won't crash if .env is missing
-try { require('dotenv').config(); } catch (_) {}
+try {
+  require('dotenv').config();
+} catch (_) {}
 
 const { evaluateFollowUp } = require('../src/core/checkin/scoring-engine');
 const { localMatch } = require('../src/core/agent/ai-answer-parser');
@@ -187,7 +189,9 @@ for (const prevSev of PREVIOUS_SEVERITIES) {
       // is safer than under-alerting.
       if (statusOpt === 'Nặng hơn' && newSympOpt === 'Có' && prevSev !== 'high') {
         if (result.needsDoctor === true) {
-          console.log(`  ⚠️  SPEC vs CODE: ${label} — needsDoctor=${result.needsDoctor} (code is more cautious than spec: always true for worse+newSymptoms, spec says only when prev=HIGH)`);
+          console.log(
+            `  ⚠️  SPEC vs CODE: ${label} — needsDoctor=${result.needsDoctor} (code is more cautious than spec: always true for worse+newSymptoms, spec says only when prev=HIGH)`
+          );
         }
       }
 
@@ -214,19 +218,30 @@ for (const prevSev of PREVIOUS_SEVERITIES) {
 
 // Print matrix table
 console.log('');
-console.log('┌──────────┬───────────┬──────────┬──────────┬─────────────┬──────────┬───────────────┬─────────────────┐');
-console.log('│ Prev Sev │ Status    │ New Symp │ Severity │ FollowUpHrs │ Doctor   │ FamilyAlert   │ Action          │');
-console.log('├──────────┼───────────┼──────────┼──────────┼─────────────┼──────────┼───────────────┼─────────────────┤');
+console.log(
+  '┌──────────┬───────────┬──────────┬──────────┬─────────────┬──────────┬───────────────┬─────────────────┐'
+);
+console.log(
+  '│ Prev Sev │ Status    │ New Symp │ Severity │ FollowUpHrs │ Doctor   │ FamilyAlert   │ Action          │'
+);
+console.log(
+  '├──────────┼───────────┼──────────┼──────────┼─────────────┼──────────┼───────────────┼─────────────────┤'
+);
 for (const row of matrixRows) {
   if (row.error) {
-    console.log(`│ ${row.prevSev.padEnd(8)} │ ${row.statusOpt.padEnd(9)} │ ${row.newSympOpt.padEnd(8)} │ CRASH    │             │          │               │                 │`);
+    console.log(
+      `│ ${row.prevSev.padEnd(8)} │ ${row.statusOpt.padEnd(9)} │ ${row.newSympOpt.padEnd(8)} │ CRASH    │             │          │               │                 │`
+    );
   } else {
     const r = row.result;
-    console.log(`│ ${row.prevSev.padEnd(8)} │ ${row.statusOpt.padEnd(9)} │ ${row.newSympOpt.padEnd(8)} │ ${r.severity.padEnd(8)} │ ${String(r.followUpHours).padEnd(11)} │ ${String(r.needsDoctor).padEnd(8)} │ ${String(r.needsFamilyAlert).padEnd(13)} │ ${(r.action || '').padEnd(15)} │`);
+    console.log(
+      `│ ${row.prevSev.padEnd(8)} │ ${row.statusOpt.padEnd(9)} │ ${row.newSympOpt.padEnd(8)} │ ${r.severity.padEnd(8)} │ ${String(r.followUpHours).padEnd(11)} │ ${String(r.needsDoctor).padEnd(8)} │ ${String(r.needsFamilyAlert).padEnd(13)} │ ${(r.action || '').padEnd(15)} │`
+    );
   }
 }
-console.log('└──────────┴───────────┴──────────┴──────────┴─────────────┴──────────┴───────────────┴─────────────────┘');
-
+console.log(
+  '└──────────┴───────────┴──────────┴──────────┴─────────────┴──────────┴───────────────┴─────────────────┘'
+);
 
 // ─── PART 2: Free-text Variants ──────────────────────────────────────────────
 
@@ -265,9 +280,9 @@ const worseVariants = [
 ];
 
 const allVariants = [
-  ...betterVariants.map(v => ({ ...v, category: 'better' })),
-  ...sameVariants.map(v => ({ ...v, category: 'same' })),
-  ...worseVariants.map(v => ({ ...v, category: 'worse' })),
+  ...betterVariants.map((v) => ({ ...v, category: 'better' })),
+  ...sameVariants.map((v) => ({ ...v, category: 'same' })),
+  ...worseVariants.map((v) => ({ ...v, category: 'worse' })),
 ];
 
 const variantResults = [];
@@ -388,11 +403,12 @@ for (const variant of worseVariants) {
       }
     }
 
-    const flag = (parseResult.parsed === variant.expected) ? '✅' : '⚠️ ';
-    console.log(`  ${flag} "${variant.text}"+Có prev=${prevSev} → sev=${result.severity} doctor=${result.needsDoctor} family=${result.needsFamilyAlert} (parsed as "${statusForEval}")`);
+    const flag = parseResult.parsed === variant.expected ? '✅' : '⚠️ ';
+    console.log(
+      `  ${flag} "${variant.text}"+Có prev=${prevSev} → sev=${result.severity} doctor=${result.needsDoctor} family=${result.needsFamilyAlert} (parsed as "${statusForEval}")`
+    );
   }
 }
-
 
 // ─── PART 3: Summary ─────────────────────────────────────────────────────────
 
@@ -433,7 +449,9 @@ for (const variant of allVariants) {
     parsedOk++;
   } else {
     parseFail++;
-    parseMisses.push(`"${variant.text}" → expected "${variant.expected}", got "${parseResult.parsed}"`);
+    parseMisses.push(
+      `"${variant.text}" → expected "${variant.expected}", got "${parseResult.parsed}"`
+    );
   }
 }
 console.log(`    Matched correctly: ${parsedOk}/${allVariants.length}`);

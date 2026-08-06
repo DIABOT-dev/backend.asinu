@@ -9,8 +9,11 @@
  */
 
 const { sendPushNotification } = require('./push.notification.service');
-const { runCheckinFollowUps, runMorningCheckin, runAlertConfirmationFollowUps } = require('../checkin/checkin.service');
-const { t } = require('../../i18n');
+const {
+  runCheckinFollowUps,
+  runMorningCheckin,
+  runAlertConfirmationFollowUps,
+} = require('../checkin/checkin.service');
 const { getHonorifics } = require('../../lib/honorifics');
 const { generateMessage } = require('./notification-intelligence.service');
 const { runReengagement } = require('./reengagement.service');
@@ -71,8 +74,15 @@ const remindersEnabled = () => `COALESCE(np.reminders_enabled, true) = true`;
 
 function nowVN() {
   const fmt = new Intl.DateTimeFormat('en-US', {
-    timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, hourCycle: 'h23',
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    hourCycle: 'h23',
   });
   const parts = {};
   for (const { type, value } of fmt.formatToParts(new Date())) parts[type] = value;
@@ -80,12 +90,18 @@ function nowVN() {
   const y = Number(parts.year);
   const m = Number(parts.month);
   const d = Number(parts.day);
-  let hh = Number(parts.hour);
+  const hh = Number(parts.hour);
   const mm = Number(parts.minute);
   const ss = Number(parts.second);
 
-  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d) ||
-      !Number.isFinite(hh) || !Number.isFinite(mm) || !Number.isFinite(ss)) {
+  if (
+    !Number.isFinite(y) ||
+    !Number.isFinite(m) ||
+    !Number.isFinite(d) ||
+    !Number.isFinite(hh) ||
+    !Number.isFinite(mm) ||
+    !Number.isFinite(ss)
+  ) {
     return new Date();
   }
 
@@ -108,23 +124,33 @@ function nowVN() {
  */
 // Reminder types that should be spaced apart (5 min gap between any two)
 const REMINDER_TYPES = new Set([
-  'reminder_morning_summary', 'reminder_afternoon', 'reminder_evening_summary',
-  'reminder_log_morning', 'reminder_log_evening',
-  'reminder_glucose', 'reminder_bp', 'reminder_medication_morning', 'reminder_medication_evening',
-  'morning_checkin', 'streak_7', 'streak_14', 'streak_30', 'weekly_recap',
+  'reminder_morning_summary',
+  'reminder_afternoon',
+  'reminder_evening_summary',
+  'reminder_log_morning',
+  'reminder_log_evening',
+  'reminder_glucose',
+  'reminder_bp',
+  'reminder_medication_morning',
+  'reminder_medication_evening',
+  'morning_checkin',
+  'streak_7',
+  'streak_14',
+  'streak_30',
+  'weekly_recap',
 ]);
 const CROSS_TYPE_GAP_MINUTES = 5;
 
 // Notification chỉ in-app (không push) — vẫn insert DB để hiện trong
 // notification bell, nhưng KHÔNG gửi push tránh spam điện thoại user.
 const IN_APP_ONLY_TYPES = new Set([
-  'wallet_topup_success',         // app đã có UI confirm khi nạp xong
-  'wallet_low_balance',           // nudge nhẹ — chỉ banner trong wallet screen
+  'wallet_topup_success', // app đã có UI confirm khi nạp xong
+  'wallet_low_balance', // nudge nhẹ — chỉ banner trong wallet screen
   'care_circle_permission_changed', // ít khi xảy ra, in-app badge đủ
-  'profile_incomplete',           // onboarding nudge — show banner trong home
-  'weekly_wellness_summary',      // weekly content — chỉ tạo report card trong /report
-  'reengagement',                 // đã có nhiều reminder routines
-  'engagement',                   // tương tự
+  'profile_incomplete', // onboarding nudge — show banner trong home
+  'weekly_wellness_summary', // weekly content — chỉ tạo report card trong /report
+  'reengagement', // đã có nhiều reminder routines
+  'engagement', // tương tự
 ]);
 
 async function sendAndSave(pool, userOrId, type, title, body, data = {}, overridePriority = null) {
@@ -187,15 +213,7 @@ async function sendAndSave(pool, userOrId, type, title, body, data = {}, overrid
 
 // ─── Personalization helpers ──────────────────────────────────────
 
-function getUserName(user) {
-  const full = user.display_name || user.full_name || '';
-  if (!full) return '';
-  // Lấy tên ngắn (tên cuối) cho notification title ngắn gọn
-  const parts = full.trim().split(/\s+/);
-  return parts[parts.length - 1];
-}
-
-function getGreeting(lang, hour) {
+function _getGreeting(lang, hour) {
   if (hour < 12) return lang === 'en' ? 'Good morning' : 'Chào buổi sáng';
   if (hour < 18) return lang === 'en' ? 'Good afternoon' : 'Chào buổi chiều';
   return lang === 'en' ? 'Good evening' : 'Chào buổi tối';
@@ -227,13 +245,14 @@ const NOT_SENT_TODAY = (type) => `
         AND DATE(n.created_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
     )`;
 
-const NO_LOG_TODAY = (logType = null) => logType
-  ? `AND NOT EXISTS (
+const _NO_LOG_TODAY = (logType = null) =>
+  logType
+    ? `AND NOT EXISTS (
       SELECT 1 FROM logs_common lc
       WHERE lc.user_id = u.id AND lc.log_type = '${logType}'
         AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
     )`
-  : `AND NOT EXISTS (
+    : `AND NOT EXISTS (
       SELECT 1 FROM logs_common lc
       WHERE lc.user_id = u.id
         AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
@@ -243,7 +262,8 @@ const NO_LOG_TODAY = (logType = null) => logType
 
 async function runMorningSummary(pool, hour, minute) {
   // Query all users whose morning time matches, not yet sent today
-  const { rows } = await pool.query(`
+  const { rows } = await pool.query(
+    `
     SELECT u.id, u.push_token,
            COALESCE(u.language_preference,'vi') AS lang,
            u.display_name, u.full_name,
@@ -287,23 +307,32 @@ async function runMorningSummary(pool, hour, minute) {
         WHERE n.user_id = u.id AND n.type = 'reminder_morning_summary'
           AND DATE(n.created_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
       )
-  `, [hour, minute]);
+  `,
+    [hour, minute]
+  );
 
   let sent = 0;
   for (const user of rows) {
-    const name = getUserName(user);
-    const { honorific, selfRef, callName, Honorific, CallName, SelfRef } = getHonorifics(user);
+    const { honorific, CallName } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
     const isEn = user.lang === 'en';
 
     // Build task list based on what user needs to do today
     const tasks = [];
     if (conditions.hasDiabetes && user.no_glucose_today) {
-      const prev = user.last_glucose ? (isEn ? ` (last: ${user.last_glucose})` : ` (gần nhất: ${user.last_glucose})`) : '';
+      const prev = user.last_glucose
+        ? isEn
+          ? ` (last: ${user.last_glucose})`
+          : ` (gần nhất: ${user.last_glucose})`
+        : '';
       tasks.push(isEn ? `blood glucose${prev}` : `đo đường huyết${prev}`);
     }
     if (conditions.hasHypertension && user.no_bp_today) {
-      const prev = user.last_bp ? (isEn ? ` (last: ${user.last_bp})` : ` (gần nhất: ${user.last_bp})`) : '';
+      const prev = user.last_bp
+        ? isEn
+          ? ` (last: ${user.last_bp})`
+          : ` (gần nhất: ${user.last_bp})`
+        : '';
       tasks.push(isEn ? `blood pressure${prev}` : `đo huyết áp${prev}`);
     }
     if (conditions.hasAny && user.no_medication_today) {
@@ -316,17 +345,21 @@ async function runMorningSummary(pool, hour, minute) {
     // Skip if nothing to remind
     if (tasks.length === 0) continue;
 
-    const title = isEn
-      ? '☀️ Morning health update'
-      : '☀️ Cập nhật sức khỏe buổi sáng';
+    const title = isEn ? '☀️ Morning health update' : '☀️ Cập nhật sức khỏe buổi sáng';
 
     // Personalized body from Intelligence Layer
     let body;
     try {
-      const msg = await generateMessage(pool, user.id, 'morning', user, { tasks: tasks.join(', ') });
-      body = msg.text + (tasks.length > 0
-        ? (isEn ? ` Still to do: ${tasks.join(', ')}.` : ` Còn thiếu: ${tasks.join(', ')}.`)
-        : '');
+      const msg = await generateMessage(pool, user.id, 'morning', user, {
+        tasks: tasks.join(', '),
+      });
+      body =
+        msg.text +
+        (tasks.length > 0
+          ? isEn
+            ? ` Still to do: ${tasks.join(', ')}.`
+            : ` Còn thiếu: ${tasks.join(', ')}.`
+          : '');
     } catch {
       // Fallback
       if (user.last_symptom) {
@@ -346,11 +379,14 @@ async function runMorningSummary(pool, hour, minute) {
     if (conditions.hasHypertension && user.no_bp_today) missingTypes.push('blood_pressure');
     if (conditions.hasAny && user.no_medication_today) missingTypes.push('medication');
 
-    if (await sendAndSave(pool, user, 'reminder_morning_summary', title, body, {
-      type: 'reminder_morning_summary',
-      missingTypes,
-      firstMissing: missingTypes[0] || 'checkin',
-    })) sent++;
+    if (
+      await sendAndSave(pool, user, 'reminder_morning_summary', title, body, {
+        type: 'reminder_morning_summary',
+        missingTypes,
+        firstMissing: missingTypes[0] || 'checkin',
+      })
+    )
+      sent++;
   }
   return { type: 'morning_summary', total: rows.length, sent };
 }
@@ -358,21 +394,21 @@ async function runMorningSummary(pool, hour, minute) {
 // ─── 2. Afternoon reminder (NEW — uses afternoon_time) ───────────
 
 async function runAfternoon(pool, hour, minute) {
-  const { rows } = await pool.query(`
+  const { rows } = await pool.query(
+    `
     ${USER_SELECT}
     AND ${afternoonMatch(14)}
     ${NOT_SENT_TODAY('reminder_afternoon')}
-  `, [hour, minute]);
+  `,
+    [hour, minute]
+  );
 
   let sent = 0;
   for (const user of rows) {
-    const name = getUserName(user);
-    const { honorific, selfRef, callName, Honorific, CallName, SelfRef } = getHonorifics(user);
+    const { CallName } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
     const isEn = user.lang === 'en';
-    const title = isEn
-      ? '🌤️ Afternoon health update'
-      : '🌤️ Cập nhật sức khỏe buổi chiều';
+    const title = isEn ? '🌤️ Afternoon health update' : '🌤️ Cập nhật sức khỏe buổi chiều';
     // Personalized body from Intelligence Layer
     let body;
     try {
@@ -394,11 +430,18 @@ async function runAfternoon(pool, hour, minute) {
           : `${CallName} ơi, nghỉ một chút và uống nước trước khi tiếp tục ngày nhé.`;
       }
     }
-    const target = conditions.hasDiabetes ? 'glucose' : conditions.hasHypertension ? 'blood_pressure' : 'home';
-    if (await sendAndSave(pool, user, 'reminder_afternoon', title, body, {
-      type: 'reminder_afternoon',
-      target,
-    })) sent++;
+    const target = conditions.hasDiabetes
+      ? 'glucose'
+      : conditions.hasHypertension
+        ? 'blood_pressure'
+        : 'home';
+    if (
+      await sendAndSave(pool, user, 'reminder_afternoon', title, body, {
+        type: 'reminder_afternoon',
+        target,
+      })
+    )
+      sent++;
   }
   return { type: 'afternoon', total: rows.length, sent };
 }
@@ -406,7 +449,8 @@ async function runAfternoon(pool, hour, minute) {
 // ─── 3. Evening summary (merged: log + medication) ────────────────
 
 async function runEveningSummary(pool, hour, minute) {
-  const { rows } = await pool.query(`
+  const { rows } = await pool.query(
+    `
     SELECT u.id, u.push_token,
            COALESCE(u.language_preference,'vi') AS lang,
            u.display_name, u.full_name,
@@ -437,12 +481,13 @@ async function runEveningSummary(pool, hour, minute) {
         WHERE n.user_id = u.id AND n.type = 'reminder_evening_summary'
           AND DATE(n.created_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
       )
-  `, [hour, minute]);
+  `,
+    [hour, minute]
+  );
 
   let sent = 0;
   for (const user of rows) {
-    const name = getUserName(user);
-    const { honorific, selfRef, callName, Honorific, CallName, SelfRef } = getHonorifics(user);
+    const { honorific, CallName } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
     const isEn = user.lang === 'en';
 
@@ -456,14 +501,14 @@ async function runEveningSummary(pool, hour, minute) {
 
     if (tasks.length === 0) continue;
 
-    const title = isEn
-      ? '🌙 Evening health update'
-      : '🌙 Cập nhật sức khỏe buổi tối';
+    const title = isEn ? '🌙 Evening health update' : '🌙 Cập nhật sức khỏe buổi tối';
 
     // Personalized body from Intelligence Layer
     let body;
     try {
-      const msg = await generateMessage(pool, user.id, 'evening', user, { tasks: tasks.join(', ') });
+      const msg = await generateMessage(pool, user.id, 'evening', user, {
+        tasks: tasks.join(', '),
+      });
       body = msg.text + ' 🌙';
     } catch {
       // Fallback
@@ -482,11 +527,14 @@ async function runEveningSummary(pool, hour, minute) {
     if (conditions.hasAny && user.no_medication_today) missingTypes.push('medication');
     if (user.no_evening_log) missingTypes.push('log');
 
-    if (await sendAndSave(pool, user, 'reminder_evening_summary', title, body, {
-      type: 'reminder_evening_summary',
-      missingTypes,
-      firstMissing: missingTypes[0] || 'home',
-    })) sent++;
+    if (
+      await sendAndSave(pool, user, 'reminder_evening_summary', title, body, {
+        type: 'reminder_evening_summary',
+        missingTypes,
+        firstMissing: missingTypes[0] || 'home',
+      })
+    )
+      sent++;
   }
   return { type: 'evening_summary', total: rows.length, sent };
 }
@@ -498,27 +546,38 @@ async function runEveningSummary(pool, hour, minute) {
 const STREAK_MILESTONES = [7, 14, 30];
 
 async function getUserStreak(pool, userId) {
-  const { rows } = await pool.query(`
+  const { rows } = await pool.query(
+    `
     SELECT DISTINCT DATE(occurred_at AT TIME ZONE '${TZ}') AS log_date
     FROM logs_common WHERE user_id = $1 AND occurred_at >= NOW() - INTERVAL '35 days'
     ORDER BY log_date DESC
-  `, [userId]);
+  `,
+    [userId]
+  );
   if (!rows.length) return 0;
-  const today = nowVN(); today.setHours(0, 0, 0, 0);
-  let streak = 0, expected = new Date(today);
+  const today = nowVN();
+  today.setHours(0, 0, 0, 0);
+  let streak = 0;
+  const expected = new Date(today);
   for (const r of rows) {
-    const d = new Date(r.log_date); d.setHours(0, 0, 0, 0);
-    if (d.getTime() === expected.getTime()) { streak++; expected.setDate(expected.getDate() - 1); }
-    else if (d < expected) break;
+    const d = new Date(r.log_date);
+    d.setHours(0, 0, 0, 0);
+    if (d.getTime() === expected.getTime()) {
+      streak++;
+      expected.setDate(expected.getDate() - 1);
+    } else if (d < expected) break;
   }
   return streak;
 }
 
 async function runStreakMilestones(pool, hour, minute) {
-  const { rows: activeUsers } = await pool.query(`
+  const { rows: activeUsers } = await pool.query(
+    `
     ${USER_SELECT}
     AND ${morningMatch(8)}
-  `, [hour, minute]);
+  `,
+    [hour, minute]
+  );
 
   let sent = 0;
   for (const user of activeUsers) {
@@ -530,14 +589,11 @@ async function runStreakMilestones(pool, hour, minute) {
       [user.id, type]
     );
     if (already.length) continue;
-    const name = getUserName(user);
-    const { honorific, selfRef, CallName, Honorific } = getHonorifics(user);
-    const title = user.lang === 'en'
-      ? `Health log: ${streak} days`
-      : `Ghi log: ${streak} ngày`;
-    const body = user.lang === 'en'
-      ? `You logged health data for ${streak} days in a row. Keep the routine going.`
-      : `Bạn đã ghi log sức khỏe ${streak} ngày liên tiếp. Tiếp tục duy trì thói quen này.`;
+    const title = user.lang === 'en' ? `Health log: ${streak} days` : `Ghi log: ${streak} ngày`;
+    const body =
+      user.lang === 'en'
+        ? `You logged health data for ${streak} days in a row. Keep the routine going.`
+        : `Bạn đã ghi log sức khỏe ${streak} ngày liên tiếp. Tiếp tục duy trì thói quen này.`;
     if (await sendAndSave(pool, user, type, title, body, { streak })) sent++;
   }
   return { type: 'streak', total: activeUsers.length, sent };
@@ -563,28 +619,28 @@ async function runWeeklyRecap(pool) {
       [user.id]
     );
     const days = logDays[0]?.days || 0;
-    const name = getUserName(user);
-    const { honorific, selfRef, CallName, Honorific, SelfRef } = getHonorifics(user);
-    const title = user.lang === 'en'
-      ? 'Weekly health summary'
-      : 'Tổng kết sức khỏe tuần';
+    const title = user.lang === 'en' ? 'Weekly health summary' : 'Tổng kết sức khỏe tuần';
     let body;
     if (days === 7) {
-      body = user.lang === 'en'
-        ? 'You logged health data on all 7 days. This week\'s record is complete.'
-        : 'Bạn đã ghi log sức khỏe đủ 7/7 ngày. Dữ liệu tuần này đã đầy đủ.';
+      body =
+        user.lang === 'en'
+          ? "You logged health data on all 7 days. This week's record is complete."
+          : 'Bạn đã ghi log sức khỏe đủ 7/7 ngày. Dữ liệu tuần này đã đầy đủ.';
     } else if (days >= 5) {
-      body = user.lang === 'en'
-        ? `${days}/7 days logged this week. A few more updates will make next week easier to track.`
-        : `Bạn đã ghi log ${days}/7 ngày. Thêm vài lần cập nhật để theo dõi đều hơn tuần tới.`;
+      body =
+        user.lang === 'en'
+          ? `${days}/7 days logged this week. A few more updates will make next week easier to track.`
+          : `Bạn đã ghi log ${days}/7 ngày. Thêm vài lần cập nhật để theo dõi đều hơn tuần tới.`;
     } else if (days >= 3) {
-      body = user.lang === 'en'
-        ? `${days}/7 days logged this week. More regular updates will make your trend easier to follow.`
-        : `Bạn đã ghi log ${days}/7 ngày. Cập nhật đều hơn sẽ giúp theo dõi xu hướng rõ hơn.`;
+      body =
+        user.lang === 'en'
+          ? `${days}/7 days logged this week. More regular updates will make your trend easier to follow.`
+          : `Bạn đã ghi log ${days}/7 ngày. Cập nhật đều hơn sẽ giúp theo dõi xu hướng rõ hơn.`;
     } else {
-      body = user.lang === 'en'
-        ? `${days}/7 days logged this week. You can start a new record today.`
-        : `Tuần này có ${days}/7 ngày được ghi nhận. Bạn có thể bắt đầu cập nhật từ hôm nay.`;
+      body =
+        user.lang === 'en'
+          ? `${days}/7 days logged this week. You can start a new record today.`
+          : `Tuần này có ${days}/7 ngày được ghi nhận. Bạn có thể bắt đầu cập nhật từ hôm nay.`;
     }
     if (await sendAndSave(pool, user, 'weekly_recap', title, body, { days_logged: days })) sent++;
   }
@@ -594,10 +650,13 @@ async function runWeeklyRecap(pool) {
 // ─── Condition parser ─────────────────────────────────────────────
 
 function parseConditions(medicalConditions) {
-  const text = (Array.isArray(medicalConditions) ? medicalConditions.join(' ') : String(medicalConditions || '')).toLowerCase();
+  const text = (
+    Array.isArray(medicalConditions) ? medicalConditions.join(' ') : String(medicalConditions || '')
+  ).toLowerCase();
   return {
     hasDiabetes: text.includes('tiểu đường') || text.includes('diabetes'),
-    hasHypertension: text.includes('huyết áp') || text.includes('hypertension') || text.includes('blood pressure'),
+    hasHypertension:
+      text.includes('huyết áp') || text.includes('hypertension') || text.includes('blood pressure'),
     hasAny: text.length > 2 && text !== '[]',
   };
 }
@@ -626,12 +685,10 @@ async function runBasicNotifications(pool, forceHour = null, forceMinute = null)
   const vn = nowVN();
   const currentHour = vn.getHours();
   const currentMinute = vn.getMinutes();
-  const hour = forceHour !== null
-    ? Number(forceHour)
-    : (Number.isFinite(currentHour) ? currentHour : 0);
-  const minute = forceMinute !== null
-    ? Number(forceMinute)
-    : (Number.isFinite(currentMinute) ? currentMinute : 0);
+  const hour =
+    forceHour !== null ? Number(forceHour) : Number.isFinite(currentHour) ? currentHour : 0;
+  const minute =
+    forceMinute !== null ? Number(forceMinute) : Number.isFinite(currentMinute) ? currentMinute : 0;
   const dow = vn.getDay(); // 0 = Sunday
 
   // Quiet hours 22:00–05:00 VN: only run urgent jobs, skip all reminders
@@ -672,7 +729,10 @@ async function runBasicNotifications(pool, forceHour = null, forceMinute = null)
 
 // ─── 9. Context-based alerts (event-triggered, not time-based) ───
 
-const { checkAlertTriggers, generateMessage: genAlertMsg } = require('./notification-intelligence.service');
+const {
+  checkAlertTriggers,
+  generateMessage: genAlertMsg,
+} = require('./notification-intelligence.service');
 
 async function runContextAlerts(pool) {
   // Query active users with recent check-in activity
@@ -709,16 +769,16 @@ async function runContextAlerts(pool) {
       if (recent.length > 0) continue;
 
       const msg = await genAlertMsg(pool, user.id, result.trigger, user);
-      const { Honorific } = getHonorifics(user);
-      const title = user.lang === 'en'
-        ? 'Health alert'
-        : 'Cần chú ý sức khỏe';
+      const title = user.lang === 'en' ? 'Health alert' : 'Cần chú ý sức khỏe';
 
-      if (await sendAndSave(pool, user, notifType, title, msg.text, {
-        type: notifType,
-        templateId: msg.templateId,
-        trigger: result.trigger,
-      })) sent++;
+      if (
+        await sendAndSave(pool, user, notifType, title, msg.text, {
+          type: notifType,
+          templateId: msg.templateId,
+          trigger: result.trigger,
+        })
+      )
+        sent++;
     } catch (err) {
       console.warn(`[ContextAlert] Failed for user ${user.id}:`, err.message);
     }
@@ -726,4 +786,10 @@ async function runContextAlerts(pool) {
   return { type: 'context_alerts', total: users.length, sent };
 }
 
-module.exports = { runBasicNotifications, sendAndSave, getPreferredHour, runContextAlerts, runReengagement };
+module.exports = {
+  runBasicNotifications,
+  sendAndSave,
+  getPreferredHour,
+  runContextAlerts,
+  runReengagement,
+};

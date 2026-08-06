@@ -26,10 +26,9 @@ async function getNotifications(pool, userId, options = {}) {
       [userId, limit, offset]
     );
 
-    const countResult = await pool.query(
-      'SELECT COUNT(*) FROM notifications WHERE user_id = $1',
-      [userId]
-    );
+    const countResult = await pool.query('SELECT COUNT(*) FROM notifications WHERE user_id = $1', [
+      userId,
+    ]);
 
     const unreadResult = await pool.query(
       'SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false',
@@ -43,11 +42,10 @@ async function getNotifications(pool, userId, options = {}) {
         page,
         limit,
         total: parseInt(countResult.rows[0].count),
-        unreadCount: parseInt(unreadResult.rows[0].count)
-      }
+        unreadCount: parseInt(unreadResult.rows[0].count),
+      },
     };
   } catch (err) {
-
     return { ok: false, error: t('notification.cannot_get_list') };
   }
 }
@@ -75,7 +73,6 @@ async function markAsRead(pool, notificationId, userId) {
 
     return { ok: true, notification: result.rows[0] };
   } catch (err) {
-
     return { ok: false, error: t('notification.cannot_mark_read') };
   }
 }
@@ -98,7 +95,6 @@ async function markAllAsRead(pool, userId) {
 
     return { ok: true, markedCount: result.rows.length };
   } catch (err) {
-
     return { ok: false, error: t('notification.cannot_mark_all_read') };
   }
 }
@@ -110,10 +106,7 @@ async function markAllAsRead(pool, userId) {
  * @returns {Promise<string|null>} - Push token or null
  */
 async function getUserPushToken(pool, userId) {
-  const { rows } = await pool.query(
-    'SELECT push_token FROM users WHERE id = $1',
-    [userId]
-  );
+  const { rows } = await pool.query('SELECT push_token FROM users WHERE id = $1', [userId]);
   return rows[0]?.push_token || null;
 }
 
@@ -142,10 +135,10 @@ async function saveInAppNotification(pool, userId, type, title, message, data, p
  * @returns {Promise<void>}
  */
 async function deleteNotification(pool, notificationId, userId) {
-  const result = await pool.query(
-    'DELETE FROM notifications WHERE id = $1 AND user_id = $2',
-    [notificationId, userId]
-  );
+  const result = await pool.query('DELETE FROM notifications WHERE id = $1 AND user_id = $2', [
+    notificationId,
+    userId,
+  ]);
   return { deleted: result.rowCount > 0 };
 }
 
@@ -156,10 +149,7 @@ async function deleteNotification(pool, notificationId, userId) {
  * @returns {Promise<void>}
  */
 async function deleteAllNotifications(pool, userId) {
-  await pool.query(
-    'DELETE FROM notifications WHERE user_id = $1',
-    [userId]
-  );
+  await pool.query('DELETE FROM notifications WHERE user_id = $1', [userId]);
 }
 
 module.exports = {

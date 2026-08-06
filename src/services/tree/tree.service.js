@@ -6,20 +6,15 @@
 const { t } = require('../../i18n');
 const { cacheGet, cacheSet } = require('../../lib/redis');
 
-const DAYS_IN_WEEK = 7;
 const DAY_LABEL_KEYS = [
-  'tree.day_sun', 'tree.day_mon', 'tree.day_tue', 'tree.day_wed',
-  'tree.day_thu', 'tree.day_fri', 'tree.day_sat',
+  'tree.day_sun',
+  'tree.day_mon',
+  'tree.day_tue',
+  'tree.day_wed',
+  'tree.day_thu',
+  'tree.day_fri',
+  'tree.day_sat',
 ];
-
-function getStartOfWeek(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
 
 /**
  * Get tree summary with score, streak, missions
@@ -112,12 +107,11 @@ async function getTreeSummary(pool, userId) {
       score,
       streakDays,
       completedToday: completedCount,
-      totalMissions: totalMissions || 12
+      totalMissions: totalMissions || 12,
     };
     await cacheSet(`tree:summary:${userId}`, result, 1800); // 30 min
     return result;
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -159,14 +153,14 @@ async function getTreeHistory(pool, userId) {
       date.setDate(date.getDate() - i);
       const dateStr = date.toISOString().split('T')[0];
       const dayIndex = date.getDay();
-      
+
       const count = logsByDate[dateStr] || 0;
       // Convert count to a score (0-100)
       const value = Math.min(count * 25, 100);
-      
+
       history.push({
         label: t(DAY_LABEL_KEYS[dayIndex]),
-        value
+        value,
       });
     }
 
@@ -174,12 +168,11 @@ async function getTreeHistory(pool, userId) {
     await cacheSet(`tree:history:${userId}`, historyResult, 1800); // 30 min
     return historyResult;
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
 
 module.exports = {
   getTreeSummary,
-  getTreeHistory
+  getTreeHistory,
 };

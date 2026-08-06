@@ -71,7 +71,7 @@ const REENGAGEMENT_TEMPLATES = {
     id: 'reengage_d7_worried',
     level: 'worried',
     vi: '{CallName} ơi, đã {days} ngày chưa có cập nhật. Mở app ghi lại hôm nay để Asinu theo dõi tiếp nhé.',
-    en: 'There has been no update for {days} days. Open the app to record today\'s status.',
+    en: "There has been no update for {days} days. Open the app to record today's status.",
   },
 
   // D8+: urgent, churned
@@ -98,7 +98,7 @@ const REENGAGEMENT_TEMPLATES = {
  * Returns: { level, includeFamily, mentionSymptom }
  */
 function getEscalationLevel(inactiveDays) {
-  if (inactiveDays >= 8) return { level: 'urgent', includeFamily: true,  mentionSymptom: true };
+  if (inactiveDays >= 8) return { level: 'urgent', includeFamily: true, mentionSymptom: true };
   if (inactiveDays >= 5) return { level: 'worried', includeFamily: false, mentionSymptom: true };
   if (inactiveDays >= 3) return { level: 'concerned', includeFamily: false, mentionSymptom: true };
   if (inactiveDays >= 1) return { level: 'gentle', includeFamily: false, mentionSymptom: true };
@@ -168,7 +168,7 @@ function selectReengagementTemplate(ctx, escalation) {
 
 // ─── Render template ────────────────────────────────────────────────────────
 
-function renderReengagementMessage(template, ctx, user, escalation) {
+function renderReengagementMessage(template, ctx, user, _escalation) {
   const lang = user.lang || 'vi';
   const h = getHonorifics(user);
 
@@ -255,9 +255,15 @@ async function sendCareCircleAlert(pool, sendAndSave, patientId, patientName, in
     // Render message with relationship
     const lang = guardian.lang || 'vi';
     const { getPatientRoleForCaregiver } = require('../../lib/relation');
-    const patientDisplay = guardian.patient_side === 'requester'
-      ? getPatientRoleForCaregiver(guardian.relationship_type, patientName || 'người thân', lang, true)
-      : (patientName || 'người thân');
+    const patientDisplay =
+      guardian.patient_side === 'requester'
+        ? getPatientRoleForCaregiver(
+            guardian.relationship_type,
+            patientName || 'người thân',
+            lang,
+            true
+          )
+        : patientName || 'người thân';
 
     const tmpl = REENGAGEMENT_TEMPLATES.care_circle_alert;
     let text = lang === 'en' ? tmpl.en : tmpl.vi;
@@ -290,8 +296,9 @@ async function runReengagement(pool, sendAndSave) {
 
   // Re-engagement only applies to users who have completed at least one
   // check-in. This excludes legacy rows with no check-in and inactive_days=999.
-  const allUsers = [...semiActive, ...inactive, ...churned]
-    .filter((user) => user.last_checkin_at != null);
+  const allUsers = [...semiActive, ...inactive, ...churned].filter(
+    (user) => user.last_checkin_at != null
+  );
   let sent = 0;
   let careAlertsSent = 0;
   let skipped = 0;
@@ -331,7 +338,6 @@ async function runReengagement(pool, sendAndSave) {
       if (!result || !result.shouldSend) continue;
 
       // Send re-engagement push
-      const { Honorific } = getHonorifics(user);
       const title = user.lang === 'en' ? 'Health update' : 'Cập nhật sức khỏe';
 
       const ok = await sendAndSave(pool, user, 'reengagement', title, result.message.text, {
@@ -344,7 +350,13 @@ async function runReengagement(pool, sendAndSave) {
 
       // Care-circle alert if escalation level requires it
       if (result.escalation.includeFamily) {
-        const careSent = await sendCareCircleAlert(pool, sendAndSave, user.id, user.full_name || user.display_name, lc.inactive_days);
+        const careSent = await sendCareCircleAlert(
+          pool,
+          sendAndSave,
+          user.id,
+          user.full_name || user.display_name,
+          lc.inactive_days
+        );
         careAlertsSent += careSent;
       }
     } catch (err) {

@@ -17,17 +17,29 @@ function getPatientRoleForCaregiver(relType, patientName, lang = 'vi', capitaliz
   if (lang === 'en') return patientName; // English giữ nguyên tên
 
   // Normalize (xóa dấu, viết thường)
-  const r = String(relType).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const r = String(relType)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 
   // Mapping: addressee (caregiver's role vs patient) → patient's role (in caregiver's view)
   const reverseMap = {
-    'bo': 'con', 'me': 'con',
-    'ong noi': 'cháu', 'ba noi': 'cháu', 'ong ngoai': 'cháu', 'ba ngoai': 'cháu',
-    'anh trai': 'em', 'chi gai': 'em',
-    'em trai': 'anh/chị', 'em gai': 'anh/chị',
-    'vo': 'chồng', 'chong': 'vợ',
-    'con trai': 'bố/mẹ', 'con gai': 'bố/mẹ',
-    'ban than': 'bạn', 'nguoi yeu': 'người yêu',
+    bo: 'con',
+    me: 'con',
+    'ong noi': 'cháu',
+    'ba noi': 'cháu',
+    'ong ngoai': 'cháu',
+    'ba ngoai': 'cháu',
+    'anh trai': 'em',
+    'chi gai': 'em',
+    'em trai': 'anh/chị',
+    'em gai': 'anh/chị',
+    vo: 'chồng',
+    chong: 'vợ',
+    'con trai': 'bố/mẹ',
+    'con gai': 'bố/mẹ',
+    'ban than': 'bạn',
+    'nguoi yeu': 'người yêu',
   };
 
   const role = reverseMap[r];

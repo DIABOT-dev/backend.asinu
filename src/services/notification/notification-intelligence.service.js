@@ -55,10 +55,9 @@ async function buildUserContext(pool, userId) {
       [userId]
     ),
     // Streak OK days
-    pool.query(
-      `SELECT streak_ok_days, risk_tier FROM risk_persistence WHERE user_id = $1`,
-      [userId]
-    ).catch(() => ({ rows: [] })), // Table might not exist
+    pool
+      .query(`SELECT streak_ok_days, risk_tier FROM risk_persistence WHERE user_id = $1`, [userId])
+      .catch(() => ({ rows: [] })), // Table might not exist
   ]);
 
   const topClusters = clusterRes.rows;
@@ -81,12 +80,12 @@ async function buildUserContext(pool, userId) {
   }
 
   return {
-    topSymptom,           // { cluster_key, display_name, trend, count_7d }
-    topClusters,          // top 3 clusters
-    lastSession,          // { severity, needs_doctor, cluster_key }
-    lastCheckin,          // { session_date, initial_status, triage_summary }
+    topSymptom, // { cluster_key, display_name, trend, count_7d }
+    topClusters, // top 3 clusters
+    lastSession, // { severity, needs_doctor, cluster_key }
+    lastCheckin, // { session_date, initial_status, triage_summary }
     consecutiveTiredDays, // số ngày liên tiếp tired/very_tired
-    lifecycle,            // { segment, inactive_days }
+    lifecycle, // { segment, inactive_days }
     streakOkDays: risk.streak_ok_days || 0,
     riskTier: risk.risk_tier || null,
   };
@@ -116,12 +115,12 @@ const MORNING_TEMPLATES = {
   consecutive_tired: {
     id: 'morning_consecutive_tired',
     vi: '{CallName} ơi, {honorific} đã ghi nhận mệt mỏi {tiredDays} ngày liên tiếp. Hôm nay thấy thế nào? Cập nhật để Asinu theo dõi tiếp nhé.',
-    en: 'You\'ve recorded tiredness for {tiredDays} days in a row. Check in today to keep tracking it.',
+    en: "You've recorded tiredness for {tiredDays} days in a row. Check in today to keep tracking it.",
   },
   streak_good: {
     id: 'morning_streak_good',
     vi: '{CallName} đã ghi nhận sức khỏe ổn định {streakDays} ngày liên tiếp. Ghi thêm khi tiện để Asinu theo dõi tiếp nhé.',
-    en: 'You\'ve recorded stable health for {streakDays} days in a row. Keep checking in regularly.',
+    en: "You've recorded stable health for {streakDays} days in a row. Keep checking in regularly.",
   },
   high_severity: {
     id: 'morning_high_severity',
@@ -152,7 +151,7 @@ const EVENING_TEMPLATES = {
   default: {
     id: 'evening_default',
     vi: '{CallName} ơi, hôm nay còn thiếu {tasks}. Ghi thêm trước khi nghỉ để Asinu theo dõi đủ dữ liệu nhé.',
-    en: 'Still to do: {tasks}. Complete it before bed to finish today\'s record.',
+    en: "Still to do: {tasks}. Complete it before bed to finish today's record.",
   },
 };
 
@@ -225,12 +224,21 @@ function selectMorningTemplate(ctx) {
   if (ctx.topSymptom) {
     const trend = ctx.topSymptom.trend || 'stable';
     if (trend === 'increasing') {
-      return { template: MORNING_TEMPLATES.has_symptom_worsening, variables: { symptom: ctx.topSymptom.display_name } };
+      return {
+        template: MORNING_TEMPLATES.has_symptom_worsening,
+        variables: { symptom: ctx.topSymptom.display_name },
+      };
     }
     if (trend === 'decreasing') {
-      return { template: MORNING_TEMPLATES.has_symptom_improving, variables: { symptom: ctx.topSymptom.display_name } };
+      return {
+        template: MORNING_TEMPLATES.has_symptom_improving,
+        variables: { symptom: ctx.topSymptom.display_name },
+      };
     }
-    return { template: MORNING_TEMPLATES.has_symptom_stable, variables: { symptom: ctx.topSymptom.display_name } };
+    return {
+      template: MORNING_TEMPLATES.has_symptom_stable,
+      variables: { symptom: ctx.topSymptom.display_name },
+    };
   }
 
   // Default
@@ -331,7 +339,9 @@ async function generateMessage(pool, userId, triggerType, user, extraVars = {}) 
     case 'alert_severity':
       selection = {
         template: ALERT_TEMPLATES.severity_high,
-        variables: { symptom: ctx.lastSession?.cluster_key || ctx.topSymptom?.display_name || 'triệu chứng' },
+        variables: {
+          symptom: ctx.lastSession?.cluster_key || ctx.topSymptom?.display_name || 'triệu chứng',
+        },
       };
       break;
     case 'alert_trend':
@@ -361,7 +371,8 @@ async function checkAlertTriggers(pool, userId) {
   // Trigger 1: Severity cao gần đây
   if (ctx.lastSession && ctx.lastSession.severity === 'high') {
     // Chỉ trigger nếu session trong 24h gần đây
-    const hoursAgo = (Date.now() - new Date(ctx.lastSession.created_at).getTime()) / (1000 * 60 * 60);
+    const hoursAgo =
+      (Date.now() - new Date(ctx.lastSession.created_at).getTime()) / (1000 * 60 * 60);
     if (hoursAgo <= 24) {
       return { trigger: 'alert_severity', context: ctx };
     }

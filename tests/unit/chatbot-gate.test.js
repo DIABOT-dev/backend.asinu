@@ -57,7 +57,9 @@ describe('chatbotGate', () => {
     const { req, res, next } = makeReqRes();
     await chatbotGate(POOL)(req, res, next);
     expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'SUBSCRIPTION_REQUIRED' }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'SUBSCRIPTION_REQUIRED' })
+    );
   });
 
   test('blocks when daily limit reached', async () => {
@@ -66,7 +68,9 @@ describe('chatbotGate', () => {
     const { req, res, next } = makeReqRes();
     await chatbotGate(POOL)(req, res, next);
     expect(res.status).toHaveBeenCalledWith(429);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'CHATBOT_DAILY_LIMIT_EXCEEDED' }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'CHATBOT_DAILY_LIMIT_EXCEEDED' })
+    );
   });
 
   test('blocks when daily limit is zero (free tier off)', async () => {
@@ -75,7 +79,9 @@ describe('chatbotGate', () => {
     const { req, res, next } = makeReqRes();
     await chatbotGate(POOL)(req, res, next);
     expect(res.status).toHaveBeenCalledWith(429);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'CHATBOT_DAILY_LIMIT_EXCEEDED' }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'CHATBOT_DAILY_LIMIT_EXCEEDED' })
+    );
   });
 
   test('blocks when monthly token limit reached', async () => {
@@ -83,7 +89,9 @@ describe('chatbotGate', () => {
     const { req, res, next } = makeReqRes();
     await chatbotGate(POOL)(req, res, next);
     expect(res.status).toHaveBeenCalledWith(429);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'CHATBOT_TOKEN_LIMIT_EXCEEDED' }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'CHATBOT_TOKEN_LIMIT_EXCEEDED' })
+    );
   });
 
   test('passes through when below all limits', async () => {
@@ -103,6 +111,8 @@ describe('chatbotGate', () => {
     const { req, res, next } = makeReqRes();
     await chatbotGate(POOL)(req, res, next);
     expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'SUBSCRIPTION_REQUIRED' }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'SUBSCRIPTION_REQUIRED' })
+    );
   });
 });

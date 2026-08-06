@@ -16,7 +16,7 @@
 
 const OpenAI = require('openai');
 const { cacheGet, cacheSet } = require('../../lib/redis');
-const { isRedFlag, detectEmergency } = require('../../services/checkin/emergency-detector');
+const { detectEmergency } = require('../../services/checkin/emergency-detector');
 const { safeValidate, SymptomAnalysisSchema } = require('../../lib/ai-schemas');
 const medgemma = require('../../services/ai/providers/medgemma');
 const logger = require('../../lib/logger');
@@ -215,7 +215,9 @@ async function analyzeSymptom(rawInput, context = {}) {
     const duration = Date.now() - startTime;
     const usage = response.usage || {};
 
-    console.log(`[AIAnalyzer] AI call: provider=${response.provider}, model=${response.model}, tokens=${usage.total_tokens || '?'}, duration=${duration}ms, input="${input}"`);
+    console.log(
+      `[AIAnalyzer] AI call: provider=${response.provider}, model=${response.model}, tokens=${usage.total_tokens || '?'}, duration=${duration}ms, input="${input}"`
+    );
 
     // Parse + validate response against the SymptomAnalysis schema.
     // We don't trust the raw model output; if the shape is wrong we fall
@@ -320,7 +322,9 @@ async function quickUrgencyCheck(rawInput, context = {}) {
 
     const duration = Date.now() - startTime;
     const usage = response.usage || {};
-    console.log(`[AIAnalyzer] Quick urgency: provider=${response.provider}, model=${response.model}, tokens=${usage.total_tokens || '?'}, duration=${duration}ms`);
+    console.log(
+      `[AIAnalyzer] Quick urgency: provider=${response.provider}, model=${response.model}, tokens=${usage.total_tokens || '?'}, duration=${duration}ms`
+    );
 
     const raw = (response.content || '').trim();
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
@@ -328,7 +332,8 @@ async function quickUrgencyCheck(rawInput, context = {}) {
       const parsed = JSON.parse(jsonMatch[0]);
       const result = {
         urgency: ['emergency', 'urgent', 'moderate', 'mild'].includes(parsed.urgency)
-          ? parsed.urgency : 'mild',
+          ? parsed.urgency
+          : 'mild',
         reason: parsed.reason || 'AI classification',
         source: 'ai',
       };
@@ -341,7 +346,11 @@ async function quickUrgencyCheck(rawInput, context = {}) {
   }
 
   // 4. Fallback: mild
-  return { urgency: 'mild', reason: 'Default (no keyword match, AI unavailable)', source: 'keyword' };
+  return {
+    urgency: 'mild',
+    reason: 'Default (no keyword match, AI unavailable)',
+    source: 'keyword',
+  };
 }
 
 // ─── Prompt builders ────────────────────────────────────────────────────────
@@ -356,7 +365,9 @@ function _buildAnalysisPrompt(input, context) {
     parts.push(`bệnh nền: ${context.medical_conditions.join(', ')}`);
   }
   if (context.medications) {
-    const meds = Array.isArray(context.medications) ? context.medications.join(', ') : context.medications;
+    const meds = Array.isArray(context.medications)
+      ? context.medications.join(', ')
+      : context.medications;
     parts.push(`đang dùng thuốc: ${meds}`);
   }
 
@@ -368,7 +379,7 @@ function _buildAnalysisPrompt(input, context) {
   if (context.history && context.history.length > 0) {
     const historyStr = context.history
       .slice(0, 3)
-      .map(h => `- ${h.cluster || h.symptom}: ${h.severity || 'unknown'}`)
+      .map((h) => `- ${h.cluster || h.symptom}: ${h.severity || 'unknown'}`)
       .join('\n');
     prompt += `\nLịch sử gần đây:\n${historyStr}`;
   }
@@ -395,7 +406,8 @@ function _normalizeAnalysis(parsed, rawInput) {
     understood: parsed.understood || rawInput,
     category: parsed.category || 'general',
     urgency: ['emergency', 'urgent', 'moderate', 'mild', 'unknown'].includes(parsed.urgency)
-      ? parsed.urgency : 'unknown',
+      ? parsed.urgency
+      : 'unknown',
     possibleCauses: Array.isArray(parsed.possibleCauses) ? parsed.possibleCauses : [],
     needsMoreInfo: parsed.needsMoreInfo !== false, // default true
     suggestedQuestions: _normalizeQuestions(parsed.suggestedQuestions),
@@ -403,8 +415,8 @@ function _normalizeAnalysis(parsed, rawInput) {
     conclusionTemplates: _normalizeConclusionTemplates(parsed.conclusionTemplates),
     clusterKey: parsed.clusterKey || _slugify(parsed.understood || rawInput),
     displayName: parsed.displayName || parsed.understood || rawInput,
-    confidence: typeof parsed.confidence === 'number'
-      ? Math.min(1, Math.max(0, parsed.confidence)) : 0.5,
+    confidence:
+      typeof parsed.confidence === 'number' ? Math.min(1, Math.max(0, parsed.confidence)) : 0.5,
   };
 
   return result;
@@ -415,8 +427,18 @@ function _normalizeQuestions(questions) {
     // Return default questions if AI didn't provide any
     return [
       { id: 'aq1', text: '{Honorific} bị mức nào (0-10)?', type: 'slider', min: 0, max: 10 },
-      { id: 'aq2', text: 'Từ khi nào?', type: 'single_choice', options: ['Vừa mới', 'Vài giờ trước', 'Từ sáng', 'Từ hôm qua', 'Vài ngày'] },
-      { id: 'aq3', text: 'Nặng hơn không?', type: 'single_choice', options: ['Đang đỡ', 'Vẫn vậy', 'Nặng hơn'] },
+      {
+        id: 'aq2',
+        text: 'Từ khi nào?',
+        type: 'single_choice',
+        options: ['Vừa mới', 'Vài giờ trước', 'Từ sáng', 'Từ hôm qua', 'Vài ngày'],
+      },
+      {
+        id: 'aq3',
+        text: 'Nặng hơn không?',
+        type: 'single_choice',
+        options: ['Đang đỡ', 'Vẫn vậy', 'Nặng hơn'],
+      },
     ];
   }
 
@@ -425,7 +447,8 @@ function _normalizeQuestions(questions) {
       id: q.id || `aq${i + 1}`,
       text: q.text || `Câu hỏi ${i + 1}`,
       type: ['single_choice', 'multi_choice', 'slider', 'free_text'].includes(q.type)
-        ? q.type : 'single_choice',
+        ? q.type
+        : 'single_choice',
     };
 
     if (normalized.type === 'slider') {
@@ -434,8 +457,8 @@ function _normalizeQuestions(questions) {
     }
 
     if (['single_choice', 'multi_choice'].includes(normalized.type)) {
-      normalized.options = Array.isArray(q.options) && q.options.length > 0
-        ? q.options : ['Có', 'Không'];
+      normalized.options =
+        Array.isArray(q.options) && q.options.length > 0 ? q.options : ['Có', 'Không'];
     }
 
     return normalized;
@@ -481,12 +504,14 @@ function _normalizeScoringRules(rules) {
     ];
   }
 
-  return rules.map(r => ({
-    conditions: Array.isArray(r.conditions) ? r.conditions.map(c => ({
-      field: c.field || 'aq1',
-      op: c.op || 'eq',
-      value: c.value,
-    })) : [],
+  return rules.map((r) => ({
+    conditions: Array.isArray(r.conditions)
+      ? r.conditions.map((c) => ({
+          field: c.field || 'aq1',
+          op: c.op || 'eq',
+          value: c.value,
+        }))
+      : [],
     combine: r.combine || 'and',
     severity: ['critical', 'high', 'medium', 'low'].includes(r.severity) ? r.severity : 'medium',
     follow_up_hours: typeof r.follow_up_hours === 'number' ? r.follow_up_hours : 6,
@@ -558,19 +583,69 @@ function _emptyAnalysis(rawInput) {
     needsMoreInfo: true,
     suggestedQuestions: [
       { id: 'aq1', text: 'Đau mức nào?', type: 'slider', min: 0, max: 10 },
-      { id: 'aq2', text: 'Từ khi nào?', type: 'single_choice', options: ['Vừa mới', 'Vài giờ trước', 'Từ sáng', 'Từ hôm qua', 'Vài ngày'] },
-      { id: 'aq3', text: 'Nặng hơn không?', type: 'single_choice', options: ['Đang đỡ', 'Vẫn vậy', 'Nặng hơn'] },
+      {
+        id: 'aq2',
+        text: 'Từ khi nào?',
+        type: 'single_choice',
+        options: ['Vừa mới', 'Vài giờ trước', 'Từ sáng', 'Từ hôm qua', 'Vài ngày'],
+      },
+      {
+        id: 'aq3',
+        text: 'Nặng hơn không?',
+        type: 'single_choice',
+        options: ['Đang đỡ', 'Vẫn vậy', 'Nặng hơn'],
+      },
     ],
     scoringRules: [
-      { conditions: [{ field: 'aq1', op: 'gte', value: 7 }], combine: 'and', severity: 'high', follow_up_hours: 1, needs_doctor: true, needs_family_alert: true },
-      { conditions: [{ field: 'aq3', op: 'eq', value: 'Nặng hơn' }], combine: 'and', severity: 'high', follow_up_hours: 1, needs_doctor: true, needs_family_alert: false },
-      { conditions: [{ field: 'aq1', op: 'gte', value: 4 }], combine: 'and', severity: 'medium', follow_up_hours: 3, needs_doctor: false, needs_family_alert: false },
-      { conditions: [{ field: 'aq1', op: 'lt', value: 4 }], combine: 'and', severity: 'low', follow_up_hours: 6, needs_doctor: false, needs_family_alert: false },
+      {
+        conditions: [{ field: 'aq1', op: 'gte', value: 7 }],
+        combine: 'and',
+        severity: 'high',
+        follow_up_hours: 1,
+        needs_doctor: true,
+        needs_family_alert: true,
+      },
+      {
+        conditions: [{ field: 'aq3', op: 'eq', value: 'Nặng hơn' }],
+        combine: 'and',
+        severity: 'high',
+        follow_up_hours: 1,
+        needs_doctor: true,
+        needs_family_alert: false,
+      },
+      {
+        conditions: [{ field: 'aq1', op: 'gte', value: 4 }],
+        combine: 'and',
+        severity: 'medium',
+        follow_up_hours: 3,
+        needs_doctor: false,
+        needs_family_alert: false,
+      },
+      {
+        conditions: [{ field: 'aq1', op: 'lt', value: 4 }],
+        combine: 'and',
+        severity: 'low',
+        follow_up_hours: 6,
+        needs_doctor: false,
+        needs_family_alert: false,
+      },
     ],
     conclusionTemplates: {
-      low: { summary: '{Honorific} có triệu chứng nhẹ.', recommendation: 'Nghỉ ngơi, uống đủ nước.', close_message: '{selfRef} sẽ hỏi lại {honorific} tối nay nhé.' },
-      medium: { summary: '{Honorific} có triệu chứng trung bình.', recommendation: 'Theo dõi, nếu không đỡ nên đi khám.', close_message: '{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng.' },
-      high: { summary: '{Honorific} có triệu chứng nặng.', recommendation: '{Honorific} nên đi khám bác sĩ.', close_message: '{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng.' },
+      low: {
+        summary: '{Honorific} có triệu chứng nhẹ.',
+        recommendation: 'Nghỉ ngơi, uống đủ nước.',
+        close_message: '{selfRef} sẽ hỏi lại {honorific} tối nay nhé.',
+      },
+      medium: {
+        summary: '{Honorific} có triệu chứng trung bình.',
+        recommendation: 'Theo dõi, nếu không đỡ nên đi khám.',
+        close_message: '{selfRef} sẽ hỏi lại {honorific} sau 3 tiếng.',
+      },
+      high: {
+        summary: '{Honorific} có triệu chứng nặng.',
+        recommendation: '{Honorific} nên đi khám bác sĩ.',
+        close_message: '{selfRef} sẽ hỏi lại {honorific} sau 1 tiếng.',
+      },
     },
     clusterKey: _slugify(rawInput),
     displayName: rawInput || '',

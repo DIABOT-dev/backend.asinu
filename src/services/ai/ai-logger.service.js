@@ -59,9 +59,10 @@ async function logAiInteraction(pool, entry = {}) {
     } = entry;
 
     const success = entry.success != null ? entry.success : !error;
-    const estimatedCost = entry.estimatedCost != null
-      ? entry.estimatedCost
-      : estimateCost({ provider, model, inputTokens, outputTokens });
+    const estimatedCost =
+      entry.estimatedCost != null
+        ? entry.estimatedCost
+        : estimateCost({ provider, model, inputTokens, outputTokens });
 
     await pool.query(
       `INSERT INTO ai_logs (

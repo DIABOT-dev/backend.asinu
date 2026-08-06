@@ -27,7 +27,7 @@ function setupSSE(res) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
+    Connection: 'keep-alive',
     'X-Accel-Buffering': 'no', // nginx
   });
 }
@@ -120,7 +120,7 @@ async function streamChunked(res, text, options = {}) {
     const chunk = text.substring(i, i + chunkSize);
     sendSSE(res, 'chunk', { text: chunk });
     if (delayMs > 0) {
-      await new Promise(r => setTimeout(r, delayMs));
+      await new Promise((r) => setTimeout(r, delayMs));
     }
   }
 
@@ -135,12 +135,7 @@ async function streamChunked(res, text, options = {}) {
  * Returns full response at once.
  */
 async function callOpenAI(options = {}) {
-  const {
-    model = 'gpt-4o-mini',
-    messages = [],
-    temperature = 0.3,
-    max_tokens = 500,
-  } = options;
+  const { model = 'gpt-4o-mini', messages = [], temperature = 0.3, max_tokens = 500 } = options;
 
   const response = await getClient().chat.completions.create({
     model,

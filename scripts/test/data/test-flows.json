@@ -133,9 +133,7 @@
             "needsFamilyAlert": false,
             "hasRedFlag": false,
             "matchedRuleIndex": -1,
-            "modifiersApplied": [
-              "elderly+conditions → medium (safety)"
-            ],
+            "modifiersApplied": ["elderly+conditions → medium (safety)"],
             "summary": "Chú bị đau đầu mức trung bình, cần theo dõi thêm.",
             "recommendation": "Uống thuốc giảm đau (paracetamol) nếu có, nằm nghỉ nơi yên tĩnh, tránh ánh sáng mạnh. Nếu không đỡ sau 24h hoặc đau tăng → đi khám.",
             "closeMessage": "cháu sẽ hỏi lại chú sau 3 tiếng nhé."
@@ -216,9 +214,7 @@
             "needsFamilyAlert": false,
             "hasRedFlag": false,
             "matchedRuleIndex": -1,
-            "modifiersApplied": [
-              "elderly+conditions → medium (safety)"
-            ],
+            "modifiersApplied": ["elderly+conditions → medium (safety)"],
             "summary": "Chú bị đau đầu mức trung bình, cần theo dõi thêm.",
             "recommendation": "Uống thuốc giảm đau (paracetamol) nếu có, nằm nghỉ nơi yên tĩnh, tránh ánh sáng mạnh. Nếu không đỡ sau 24h hoặc đau tăng → đi khám.",
             "closeMessage": "cháu sẽ hỏi lại chú sau 3 tiếng nhé."
@@ -318,9 +314,7 @@
             "needsFamilyAlert": true,
             "hasRedFlag": false,
             "matchedRuleIndex": 4,
-            "modifiersApplied": [
-              "elderly+conditions → high"
-            ],
+            "modifiersApplied": ["elderly+conditions → high"],
             "summary": "Chú bị chóng mặt nặng, cần được bác sĩ đánh giá.",
             "recommendation": "🏥 Chú nên đi khám bác sĩ hôm nay. Chóng mặt nặng cần đo huyết áp và kiểm tra tai trong. Trong khi chờ: NẰM YÊN, không đi lại một mình.",
             "closeMessage": "cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé."
@@ -505,12 +499,7 @@
             {
               "q": "Chú mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "a": "trên 2 tuần"
             },
             {
@@ -557,9 +546,7 @@
             "needsFamilyAlert": true,
             "hasRedFlag": false,
             "matchedRuleIndex": 3,
-            "modifiersApplied": [
-              "elderly+conditions → high"
-            ],
+            "modifiersApplied": ["elderly+conditions → high"],
             "summary": "Chú bị mệt mỏi nặng, cần được bác sĩ đánh giá.",
             "recommendation": "🏥 Chú nên đi khám bác sĩ hôm nay. Mệt mỏi nặng cần xét nghiệm máu kiểm tra thiếu máu, đường huyết, tuyến giáp. Nằm nghỉ, không gắng sức.",
             "closeMessage": "cháu sẽ hỏi lại chú sau 1 tiếng. Đi khám sớm nhé."

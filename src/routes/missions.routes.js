@@ -3,7 +3,7 @@ const { requireAuth } = require('../middleware/auth.middleware');
 const {
   getMissionsHandler,
   getMissionHistoryHandler,
-  getMissionStatsHandler
+  getMissionStatsHandler,
 } = require('../controllers/missions.controller');
 
 function missionsRoutes(pool) {

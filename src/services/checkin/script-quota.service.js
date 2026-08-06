@@ -13,7 +13,7 @@
 const logger = require('../../lib/logger');
 const { isPremium } = require('../payment/subscription.service');
 
-const DEFAULT_FREE_LIMIT    = Number(process.env.SCRIPT_REGEN_LIMIT_FREE || 2);
+const DEFAULT_FREE_LIMIT = Number(process.env.SCRIPT_REGEN_LIMIT_FREE || 2);
 const DEFAULT_PREMIUM_LIMIT = Number(process.env.SCRIPT_REGEN_LIMIT_PREMIUM || 10);
 
 function thisMonthKey() {

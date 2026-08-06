@@ -29,7 +29,7 @@ async function getUserMemories(pool, userId) {
  */
 function formatMemoriesForPrompt(memories) {
   if (!memories.length) return '';
-  const lines = memories.map(m => `- [${m.category}] ${m.content}`);
+  const lines = memories.map((m) => `- [${m.category}] ${m.content}`);
   return `MEMORY (điều đã biết về người dùng từ các cuộc chat trước — dùng tự nhiên, KHÔNG nhắc lại y nguyên):\n${lines.join('\n')}`;
 }
 
@@ -43,14 +43,14 @@ async function extractAndSaveMemories(pool, userId, recentMessages) {
 
   // Lấy 10 tin nhắn gần nhất để phân tích
   const last10 = recentMessages.slice(-10);
-  const conversation = last10.map(m =>
-    `${m.sender === 'user' ? 'User' : 'AI'}: ${m.message}`
-  ).join('\n');
+  const conversation = last10
+    .map((m) => `${m.sender === 'user' ? 'User' : 'AI'}: ${m.message}`)
+    .join('\n');
 
   // Lấy memories hiện tại để AI biết đã nhớ gì rồi
   const existing = await getUserMemories(pool, userId);
   const existingText = existing.length
-    ? existing.map(m => `- [${m.category}] ${m.content}`).join('\n')
+    ? existing.map((m) => `- [${m.category}] ${m.content}`).join('\n')
     : 'Chưa có memory nào.';
 
   const prompt = `Phân tích đoạn chat và trích xuất ONLY điều quan trọng cần nhớ về người dùng.

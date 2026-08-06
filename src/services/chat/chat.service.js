@@ -9,15 +9,18 @@ const { t } = require('../../i18n');
 const { filterChatResponse } = require('../ai/ai-safety.service');
 const { logAiInteraction } = require('../ai/ai-logger.service');
 const logger = require('../../lib/logger');
-const { getUserMemories, formatMemoriesForPrompt, extractAndSaveMemories } = require('./memory.service');
+const {
+  getUserMemories,
+  formatMemoriesForPrompt,
+  extractAndSaveMemories,
+} = require('./memory.service');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 // =====================================================
 // CONSTANTS
 // =====================================================
 
-const FALLBACK_CONTEXT =
-  t('chat.fallback_context');
+const FALLBACK_CONTEXT = t('chat.fallback_context');
 
 // =====================================================
 // HELPERS
@@ -57,27 +60,27 @@ const formatIssueList = (items) => collectIssueItems(items).join(', ');
  */
 const buildOnboardingContext = (profile) => {
   if (!profile) return FALLBACK_CONTEXT;
-  
+
   const medical = formatIssueList(profile.medical_conditions);
   const symptoms = formatIssueList(profile.chronic_symptoms);
   const joints = formatIssueList(profile.joint_issues);
-  
+
   const notes = [];
   notes.push(`${t('chat.gender')}: ${profile.gender}. ${t('chat.age_group')}: ${profile.age}.`);
   notes.push(`${t('chat.goal')}: ${profile.goal}. ${t('chat.body_type')}: ${profile.body_type}.`);
-  
+
   if (medical) notes.push(`${t('chat.conditions')}: ${medical}.`);
   if (symptoms) notes.push(`${t('chat.symptoms')}: ${symptoms}.`);
   if (joints) notes.push(`${t('chat.joint_issues')}: ${joints}.`);
-  
+
   notes.push(
     `${t('chat.habits')}: ${t('chat.flexibility')} ${profile.flexibility}, ${t('chat.stairs')} ${profile.stairs_performance}, ` +
-    `${t('chat.exercise')} ${profile.exercise_freq}, ${t('chat.walking')} ${profile.walking_habit}, ` +
-    `${t('chat.water')} ${profile.water_intake}, ${t('chat.sleep')} ${profile.sleep_duration}.`
+      `${t('chat.exercise')} ${profile.exercise_freq}, ${t('chat.walking')} ${profile.walking_habit}, ` +
+      `${t('chat.water')} ${profile.water_intake}, ${t('chat.sleep')} ${profile.sleep_duration}.`
   );
-  
+
   notes.push(t('chat.reply_instruction'));
-  
+
   return notes.join(' ');
 };
 
@@ -88,11 +91,11 @@ const buildOnboardingContext = (profile) => {
  */
 const buildMentionHint = (profile) => {
   if (!profile) return '';
-  
+
   const symptoms = collectIssueItems(profile.chronic_symptoms);
   const joints = collectIssueItems(profile.joint_issues);
   const primarySymptom = symptoms[0] || joints[0] || '';
-  
+
   if (profile.goal && primarySymptom) {
     return t('chat.goal_and_symptom', 'vi', { goal: profile.goal, symptom: primarySymptom });
   }
@@ -113,13 +116,13 @@ const buildMentionHint = (profile) => {
  */
 const replyMentionsProfile = (reply, profile) => {
   if (!profile || !reply) return false;
-  
+
   const keywords = [
     profile.goal,
     ...collectIssueItems(profile.chronic_symptoms),
     ...collectIssueItems(profile.joint_issues),
   ].filter(Boolean);
-  
+
   const normalized = reply.toLowerCase();
   return keywords.some((item) => normalized.includes(String(item).toLowerCase()));
 };
@@ -143,7 +146,7 @@ const formatMessageWithContext = (message, context) => {
 const enhanceReplyWithProfile = (reply, profile) => {
   if (!profile) return reply;
   if (replyMentionsProfile(reply, profile)) return reply;
-  
+
   const hint = buildMentionHint(profile);
   if (hint) {
     return `${reply} ${hint}`;
@@ -172,14 +175,16 @@ const isQuestion = (text) => {
   if (!text) return false;
   if (/\?/.test(text)) return true;
   // Câu hỏi tiếng Việt hay bỏ dấu hỏi chấm
-  return /(\bkhông\s*$|\bchưa\s*$|\bsao\s*$|như thế nào|bao (nhiêu|lâu|giờ|lần)|mấy (giờ|lần|ngày|tuần)|lúc nào|khi nào|bao giờ|tại sao|vì sao|làm sao|ở đâu)/i.test(text.trim());
+  return /(\bkhông\s*$|\bchưa\s*$|\bsao\s*$|như thế nào|bao (nhiêu|lâu|giờ|lần)|mấy (giờ|lần|ngày|tuần)|lúc nào|khi nào|bao giờ|tại sao|vì sao|làm sao|ở đâu)/i.test(
+    text.trim()
+  );
 };
 
 /**
  * Kiểm tra xem tin nhắn cuối của AI có phải câu hỏi không.
  */
 const lastAiTurnWasQuestion = (history = []) => {
-  const lastAi = [...history].reverse().find(h => h.sender === 'assistant');
+  const lastAi = [...history].reverse().find((h) => h.sender === 'assistant');
   if (!lastAi) return false;
   return isQuestion(lastAi.message);
 };
@@ -189,7 +194,7 @@ const lastAiTurnWasQuestion = (history = []) => {
  * Bỏ qua user messages xen kẽ — kiểm tra các assistant turn gần nhất.
  */
 const countConsecutiveAiQuestions = (history = []) => {
-  const aiTurns = history.filter(h => h.sender === 'assistant').slice(-4);
+  const aiTurns = history.filter((h) => h.sender === 'assistant').slice(-4);
   let count = 0;
   for (const turn of [...aiTurns].reverse()) {
     if (isQuestion(turn.message)) count++;
@@ -206,7 +211,14 @@ const countConsecutiveAiQuestions = (history = []) => {
  * @param {Array} history - Full conversation history (for loop detection)
  * @returns {string} - System prompt
  */
-const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, history = [], lang = 'vi', memories = []) => {
+const buildSystemPrompt = (
+  profile,
+  historyLength = 0,
+  logsSummary = null,
+  history = [],
+  lang = 'vi',
+  memories = []
+) => {
   const isEn = lang === 'en';
   const lines = [];
 
@@ -220,11 +232,10 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
   }
   const gender = (profile?.gender || '').toLowerCase();
   const isMale = gender.includes('nam') || gender === 'male';
-  const isFemale = gender.includes('nữ') || gender === 'female';
 
   // Vietnamese honorific based on age + gender
   let honorific = 'bạn'; // default
-  let selfRef = 'mình';  // how Asinu refers to itself
+  let selfRef = 'mình'; // how Asinu refers to itself
   if (!isEn && userAge) {
     if (userAge >= 60) {
       // Elderly: cô/chú, xưng con/cháu
@@ -242,7 +253,9 @@ const buildSystemPrompt = (profile, historyLength = 0, logsSummary = null, histo
     // < 25: keep "bạn" / "mình"
   }
 
-  const honorificNote = isEn ? '' : `\nCÁCH XƯNG HÔ (bắt buộc tuân thủ): Gọi người dùng là "${honorific}", xưng "${selfRef}". VD: "${honorific} ơi, ${selfRef} nghe ${honorific} nói mà thấy lo quá." KHÔNG gọi "bạn" nếu đã có xưng hô khác.`;
+  const honorificNote = isEn
+    ? ''
+    : `\nCÁCH XƯNG HÔ (bắt buộc tuân thủ): Gọi người dùng là "${honorific}", xưng "${selfRef}". VD: "${honorific} ơi, ${selfRef} nghe ${honorific} nói mà thấy lo quá." KHÔNG gọi "bạn" nếu đã có xưng hô khác.`;
 
   // ── IDENTITY ─────────────────────────────────────────
   if (isEn) {
@@ -276,7 +289,9 @@ CRISIS REFERRAL — if user mentions:
 VOICE: warm, conversational. Use emoji 1-2 naturally (😊 💙). No markdown (**, *, ##). Reply in the same language the user uses.`);
   } else {
     // ── CHARACTER BIBLE (nhất quán, đầu prompt) ──
-    lines.push(`Bạn là Asinu — người đồng hành sức khoẻ ấm áp như cháu/em ruột trong gia đình. ${honorific} nhắn tin hỏi han, ${selfRef} ở đây để lắng nghe và chăm sóc.`);
+    lines.push(
+      `Bạn là Asinu — người đồng hành sức khoẻ ấm áp như cháu/em ruột trong gia đình. ${honorific} nhắn tin hỏi han, ${selfRef} ở đây để lắng nghe và chăm sóc.`
+    );
     lines.push(honorificNote);
 
     lines.push(`NGUYÊN TẮC TRẢ LỜI (BẮT BUỘC TUÂN THỦ):
@@ -363,69 +378,110 @@ CHUYỂN TUYẾN ĐẶC BIỆT — nếu ${honorific} nhắc đến:
 
   // ── USER PROFILE (background context) ────────────────
   if (profile) {
-    const medical  = formatIssueList(profile.medical_conditions);
+    const medical = formatIssueList(profile.medical_conditions);
     const symptoms = formatIssueList(profile.chronic_symptoms);
-    const joints   = formatIssueList(profile.joint_issues);
+    const joints = formatIssueList(profile.joint_issues);
 
     // User goals: V2 stores as JSONB array, V1 stores as string
-    const goalList = Array.isArray(profile.user_goal) && profile.user_goal.length
-      ? profile.user_goal.join(', ')
-      : (profile.goal || '');
+    const goalList =
+      Array.isArray(profile.user_goal) && profile.user_goal.length
+        ? profile.user_goal.join(', ')
+        : profile.goal || '';
 
     // Age: V2 uses birth_year, V1 uses age
     let ageDisplay = '';
     if (profile.birth_year) {
       const age = new Date().getFullYear() - parseInt(profile.birth_year);
-      ageDisplay = isEn ? `${age} years old (born ${profile.birth_year})` : `${age} tuổi (sinh ${profile.birth_year})`;
+      ageDisplay = isEn
+        ? `${age} years old (born ${profile.birth_year})`
+        : `${age} tuổi (sinh ${profile.birth_year})`;
     } else if (profile.age) {
       ageDisplay = isEn ? `age group ${profile.age}` : `nhóm tuổi ${profile.age}`;
     }
 
     const habits = [];
-    if (profile.exercise_freq)  habits.push(isEn ? `exercise ${profile.exercise_freq}` : `tập ${profile.exercise_freq}`);
-    if (profile.sleep_hours)    habits.push(isEn ? `sleep ${profile.sleep_hours}` : `ngủ ${profile.sleep_hours}`);
-    else if (profile.sleep_duration) habits.push(isEn ? `sleep ${profile.sleep_duration}` : `ngủ ${profile.sleep_duration}`);
-    if (profile.water_intake)   habits.push(isEn ? `water ${profile.water_intake}` : `nước ${profile.water_intake}`);
-    if (profile.walking_habit)  habits.push(isEn ? `walking ${profile.walking_habit}` : `đi bộ ${profile.walking_habit}`);
-    if (profile.meals_per_day)  habits.push(isEn ? `${profile.meals_per_day} meals/day` : `${profile.meals_per_day}/ngày`);
-    if (profile.dinner_time)    habits.push(isEn ? `dinner ${profile.dinner_time}` : `ăn tối ${profile.dinner_time}`);
-    if (profile.sweet_intake)   habits.push(isEn ? `sweets ${profile.sweet_intake}` : `đồ ngọt ${profile.sweet_intake}`);
+    if (profile.exercise_freq)
+      habits.push(isEn ? `exercise ${profile.exercise_freq}` : `tập ${profile.exercise_freq}`);
+    if (profile.sleep_hours)
+      habits.push(isEn ? `sleep ${profile.sleep_hours}` : `ngủ ${profile.sleep_hours}`);
+    else if (profile.sleep_duration)
+      habits.push(isEn ? `sleep ${profile.sleep_duration}` : `ngủ ${profile.sleep_duration}`);
+    if (profile.water_intake)
+      habits.push(isEn ? `water ${profile.water_intake}` : `nước ${profile.water_intake}`);
+    if (profile.walking_habit)
+      habits.push(isEn ? `walking ${profile.walking_habit}` : `đi bộ ${profile.walking_habit}`);
+    if (profile.meals_per_day)
+      habits.push(isEn ? `${profile.meals_per_day} meals/day` : `${profile.meals_per_day}/ngày`);
+    if (profile.dinner_time)
+      habits.push(isEn ? `dinner ${profile.dinner_time}` : `ăn tối ${profile.dinner_time}`);
+    if (profile.sweet_intake)
+      habits.push(isEn ? `sweets ${profile.sweet_intake}` : `đồ ngọt ${profile.sweet_intake}`);
     if (profile.post_meal_drowsy && profile.post_meal_drowsy !== 'Không') {
-      habits.push(isEn ? `post-meal drowsiness: ${profile.post_meal_drowsy}` : `buồn ngủ sau ăn: ${profile.post_meal_drowsy}`);
+      habits.push(
+        isEn
+          ? `post-meal drowsiness: ${profile.post_meal_drowsy}`
+          : `buồn ngủ sau ăn: ${profile.post_meal_drowsy}`
+      );
     }
 
     const profileParts = [];
-    if (profile.gender)          profileParts.push(isEn ? `gender ${profile.gender}` : `giới tính ${profile.gender}`);
-    if (ageDisplay)              profileParts.push(ageDisplay);
-    if (goalList)                profileParts.push(isEn ? `goal: ${goalList}` : `mục tiêu: ${goalList}`);
-    if (profile.body_type)       profileParts.push(isEn ? `body type: ${profile.body_type}` : `thể trạng: ${profile.body_type}`);
-    if (profile.height_cm)       profileParts.push(isEn ? `height ${profile.height_cm}cm` : `cao ${profile.height_cm}cm`);
-    if (profile.weight_kg)       profileParts.push(isEn ? `weight ${profile.weight_kg}kg` : `nặng ${profile.weight_kg}kg`);
-    if (profile.blood_type)      profileParts.push(isEn ? `blood type ${profile.blood_type}` : `nhóm máu ${profile.blood_type}`);
-    if (medical)                 profileParts.push(isEn ? `conditions: ${medical}` : `bệnh lý: ${medical}`);
-    if (symptoms)                profileParts.push(isEn ? `symptoms: ${symptoms}` : `triệu chứng: ${symptoms}`);
-    if (joints)                  profileParts.push(isEn ? `joint issues: ${joints}` : `vấn đề khớp: ${joints}`);
+    if (profile.gender)
+      profileParts.push(isEn ? `gender ${profile.gender}` : `giới tính ${profile.gender}`);
+    if (ageDisplay) profileParts.push(ageDisplay);
+    if (goalList) profileParts.push(isEn ? `goal: ${goalList}` : `mục tiêu: ${goalList}`);
+    if (profile.body_type)
+      profileParts.push(
+        isEn ? `body type: ${profile.body_type}` : `thể trạng: ${profile.body_type}`
+      );
+    if (profile.height_cm)
+      profileParts.push(isEn ? `height ${profile.height_cm}cm` : `cao ${profile.height_cm}cm`);
+    if (profile.weight_kg)
+      profileParts.push(isEn ? `weight ${profile.weight_kg}kg` : `nặng ${profile.weight_kg}kg`);
+    if (profile.blood_type)
+      profileParts.push(
+        isEn ? `blood type ${profile.blood_type}` : `nhóm máu ${profile.blood_type}`
+      );
+    if (medical) profileParts.push(isEn ? `conditions: ${medical}` : `bệnh lý: ${medical}`);
+    if (symptoms) profileParts.push(isEn ? `symptoms: ${symptoms}` : `triệu chứng: ${symptoms}`);
+    if (joints) profileParts.push(isEn ? `joint issues: ${joints}` : `vấn đề khớp: ${joints}`);
     if (profile.daily_medication && profile.daily_medication !== 'Không') {
-      profileParts.push(isEn ? `daily medication: ${profile.daily_medication}` : `dùng thuốc hàng ngày: ${profile.daily_medication}`);
+      profileParts.push(
+        isEn
+          ? `daily medication: ${profile.daily_medication}`
+          : `dùng thuốc hàng ngày: ${profile.daily_medication}`
+      );
     }
-    if (habits.length)           profileParts.push(isEn ? `habits: ${habits.join(', ')}` : `thói quen: ${habits.join(', ')}`);
+    if (habits.length)
+      profileParts.push(isEn ? `habits: ${habits.join(', ')}` : `thói quen: ${habits.join(', ')}`);
     if (profile.user_group) {
       const groupLabel = isEn
-        ? (profile.user_group === 'monitoring' ? 'needs close monitoring' : profile.user_group === 'metabolic_risk' ? 'metabolic risk' : 'good health')
-        : (profile.user_group === 'monitoring' ? 'cần theo dõi sát' : profile.user_group === 'metabolic_risk' ? 'nguy cơ chuyển hóa' : 'sức khoẻ tốt');
+        ? profile.user_group === 'monitoring'
+          ? 'needs close monitoring'
+          : profile.user_group === 'metabolic_risk'
+            ? 'metabolic risk'
+            : 'good health'
+        : profile.user_group === 'monitoring'
+          ? 'cần theo dõi sát'
+          : profile.user_group === 'metabolic_risk'
+            ? 'nguy cơ chuyển hóa'
+            : 'sức khoẻ tốt';
       profileParts.push(isEn ? `health group: ${groupLabel}` : `nhóm sức khoẻ: ${groupLabel}`);
     }
 
     if (profileParts.length) {
-      lines.push(isEn
-        ? `User info (already known — use as background, do NOT ask about any of this): ${profileParts.join('; ')}.`
-        : `Thông tin người dùng (đã biết sẵn — dùng làm nền tảng, KHÔNG hỏi lại bất kỳ điều nào đã có ở đây): ${profileParts.join('; ')}.`);
+      lines.push(
+        isEn
+          ? `User info (already known — use as background, do NOT ask about any of this): ${profileParts.join('; ')}.`
+          : `Thông tin người dùng (đã biết sẵn — dùng làm nền tảng, KHÔNG hỏi lại bất kỳ điều nào đã có ở đây): ${profileParts.join('; ')}.`
+      );
     }
     const mentionHint = buildMentionHint(profile);
     if (mentionHint) {
-      lines.push(isEn
-        ? `Personalization hint: ${mentionHint} — mention when relevant, not every time.`
-        : `Gợi ý cá nhân hóa: ${mentionHint} — đề cập khi phù hợp, không cần nhắc mọi lúc.`);
+      lines.push(
+        isEn
+          ? `Personalization hint: ${mentionHint} — mention when relevant, not every time.`
+          : `Gợi ý cá nhân hóa: ${mentionHint} — đề cập khi phù hợp, không cần nhắc mọi lúc.`
+      );
     }
   }
 
@@ -434,48 +490,117 @@ CHUYỂN TUYẾN ĐẶC BIỆT — nếu ${honorific} nhắc đến:
     const metrics = [];
     if (logsSummary.latest_glucose) {
       const g = logsSummary.latest_glucose;
-      const trend = logsSummary.glucose_trend ? (isEn ? ` (trend: ${logsSummary.glucose_trend})` : ` (xu hướng: ${logsSummary.glucose_trend})`) : '';
-      metrics.push(isEn ? `latest glucose ${g.value} ${g.unit || 'mg/dL'}${trend}` : `đường huyết gần nhất ${g.value} ${g.unit || 'mg/dL'}${trend}`);
+      const trend = logsSummary.glucose_trend
+        ? isEn
+          ? ` (trend: ${logsSummary.glucose_trend})`
+          : ` (xu hướng: ${logsSummary.glucose_trend})`
+        : '';
+      metrics.push(
+        isEn
+          ? `latest glucose ${g.value} ${g.unit || 'mg/dL'}${trend}`
+          : `đường huyết gần nhất ${g.value} ${g.unit || 'mg/dL'}${trend}`
+      );
     }
     if (logsSummary.latest_bp) {
       const bp = logsSummary.latest_bp;
-      const pulse = bp.pulse ? (isEn ? `, heart rate ${bp.pulse} bpm` : `, nhịp tim ${bp.pulse} bpm`) : '';
-      metrics.push(isEn ? `latest BP ${bp.systolic}/${bp.diastolic} mmHg${pulse}` : `huyết áp gần nhất ${bp.systolic}/${bp.diastolic} mmHg${pulse}`);
+      const pulse = bp.pulse
+        ? isEn
+          ? `, heart rate ${bp.pulse} bpm`
+          : `, nhịp tim ${bp.pulse} bpm`
+        : '';
+      metrics.push(
+        isEn
+          ? `latest BP ${bp.systolic}/${bp.diastolic} mmHg${pulse}`
+          : `huyết áp gần nhất ${bp.systolic}/${bp.diastolic} mmHg${pulse}`
+      );
     }
     if (logsSummary.latest_weight) {
       const w = logsSummary.latest_weight;
-      const bf = w.bodyfat_pct ? (isEn ? `, body fat ${w.bodyfat_pct}%` : `, mỡ ${w.bodyfat_pct}%`) : '';
-      metrics.push(isEn ? `latest weight ${w.weight_kg} kg${bf}` : `cân nặng gần nhất ${w.weight_kg} kg${bf}`);
+      const bf = w.bodyfat_pct
+        ? isEn
+          ? `, body fat ${w.bodyfat_pct}%`
+          : `, mỡ ${w.bodyfat_pct}%`
+        : '';
+      metrics.push(
+        isEn ? `latest weight ${w.weight_kg} kg${bf}` : `cân nặng gần nhất ${w.weight_kg} kg${bf}`
+      );
     }
     if (logsSummary.water_today_ml) {
-      metrics.push(isEn ? `water today ${logsSummary.water_today_ml} ml` : `nước uống hôm nay ${logsSummary.water_today_ml} ml`);
+      metrics.push(
+        isEn
+          ? `water today ${logsSummary.water_today_ml} ml`
+          : `nước uống hôm nay ${logsSummary.water_today_ml} ml`
+      );
     }
     if (logsSummary.recent_medications?.length) {
-      const meds = logsSummary.recent_medications.map(m => `${m.medication}${m.dose ? ' ' + m.dose : ''}`).join(', ');
+      const meds = logsSummary.recent_medications
+        .map((m) => `${m.medication}${m.dose ? ' ' + m.dose : ''}`)
+        .join(', ');
       metrics.push(isEn ? `current medications: ${meds}` : `thuốc đang dùng: ${meds}`);
     }
     if (metrics.length) {
-      lines.push(isEn
-        ? `Recorded health metrics (use as reference, do NOT ask about these): ${metrics.join('; ')}.`
-        : `Chỉ số sức khoẻ đã ghi nhận (dùng làm căn cứ trả lời, KHÔNG hỏi lại các thông số đã có): ${metrics.join('; ')}.`);
+      lines.push(
+        isEn
+          ? `Recorded health metrics (use as reference, do NOT ask about these): ${metrics.join('; ')}.`
+          : `Chỉ số sức khoẻ đã ghi nhận (dùng làm căn cứ trả lời, KHÔNG hỏi lại các thông số đã có): ${metrics.join('; ')}.`
+      );
     }
     // Cross-reference conditions + metrics
     if (profile) {
       const medical = formatIssueList(profile.medical_conditions).toLowerCase();
       const crossRefs = [];
-      if ((medical.includes('tiểu đường') || medical.includes('đái tháo đường') || medical.includes('diabetes')) && logsSummary.latest_glucose) {
+      if (
+        (medical.includes('tiểu đường') ||
+          medical.includes('đái tháo đường') ||
+          medical.includes('diabetes')) &&
+        logsSummary.latest_glucose
+      ) {
         const g = logsSummary.latest_glucose;
-        if (g.value > 180) crossRefs.push(isEn ? `glucose ${g.value} mg/dL exceeds post-meal target for diabetics (<180)` : `đường huyết ${g.value} mg/dL vượt ngưỡng sau ăn cho người tiểu đường (<180)`);
-        else if (g.value < 70) crossRefs.push(isEn ? `glucose ${g.value} mg/dL low, hypoglycemia risk` : `đường huyết ${g.value} mg/dL thấp, nguy cơ hạ đường huyết`);
-        else crossRefs.push(isEn ? `glucose ${g.value} mg/dL within acceptable range for diabetics` : `đường huyết ${g.value} mg/dL trong phạm vi chấp nhận cho người tiểu đường`);
+        if (g.value > 180)
+          crossRefs.push(
+            isEn
+              ? `glucose ${g.value} mg/dL exceeds post-meal target for diabetics (<180)`
+              : `đường huyết ${g.value} mg/dL vượt ngưỡng sau ăn cho người tiểu đường (<180)`
+          );
+        else if (g.value < 70)
+          crossRefs.push(
+            isEn
+              ? `glucose ${g.value} mg/dL low, hypoglycemia risk`
+              : `đường huyết ${g.value} mg/dL thấp, nguy cơ hạ đường huyết`
+          );
+        else
+          crossRefs.push(
+            isEn
+              ? `glucose ${g.value} mg/dL within acceptable range for diabetics`
+              : `đường huyết ${g.value} mg/dL trong phạm vi chấp nhận cho người tiểu đường`
+          );
       }
-      if ((medical.includes('huyết áp cao') || medical.includes('tăng huyết áp') || medical.includes('hypertension')) && logsSummary.latest_bp) {
+      if (
+        (medical.includes('huyết áp cao') ||
+          medical.includes('tăng huyết áp') ||
+          medical.includes('hypertension')) &&
+        logsSummary.latest_bp
+      ) {
         const bp = logsSummary.latest_bp;
-        if (bp.systolic >= 140 || bp.diastolic >= 90) crossRefs.push(isEn ? `BP ${bp.systolic}/${bp.diastolic} exceeds target for hypertension (<140/90)` : `huyết áp ${bp.systolic}/${bp.diastolic} vượt ngưỡng cho người THA (<140/90)`);
-        else crossRefs.push(isEn ? `BP ${bp.systolic}/${bp.diastolic} well controlled` : `huyết áp ${bp.systolic}/${bp.diastolic} đang kiểm soát tốt`);
+        if (bp.systolic >= 140 || bp.diastolic >= 90)
+          crossRefs.push(
+            isEn
+              ? `BP ${bp.systolic}/${bp.diastolic} exceeds target for hypertension (<140/90)`
+              : `huyết áp ${bp.systolic}/${bp.diastolic} vượt ngưỡng cho người THA (<140/90)`
+          );
+        else
+          crossRefs.push(
+            isEn
+              ? `BP ${bp.systolic}/${bp.diastolic} well controlled`
+              : `huyết áp ${bp.systolic}/${bp.diastolic} đang kiểm soát tốt`
+          );
       }
       if (crossRefs.length) {
-        lines.push(isEn ? `Cross-reference notes (use when relevant): ${crossRefs.join('; ')}.` : `Nhận xét kết hợp (dùng khi liên quan): ${crossRefs.join('; ')}.`);
+        lines.push(
+          isEn
+            ? `Cross-reference notes (use when relevant): ${crossRefs.join('; ')}.`
+            : `Nhận xét kết hợp (dùng khi liên quan): ${crossRefs.join('; ')}.`
+        );
       }
     }
   }
@@ -490,15 +615,33 @@ CHUYỂN TUYẾN ĐẶC BIỆT — nếu ${honorific} nhắc đến:
       const medLower = med.toLowerCase();
       const hasDiabetes = medLower.includes('tiểu đường') || medLower.includes('diabetes');
       const hasHypertension = medLower.includes('huyết áp') || medLower.includes('hypertension');
-      const hasHeart = medLower.includes('tim') || medLower.includes('heart') || medLower.includes('cardiac');
+      const hasHeart =
+        medLower.includes('tim') || medLower.includes('heart') || medLower.includes('cardiac');
 
       if (isEn) {
-        lines.push('⚠️ MEDICAL-FIRST RULE: User has ' + med + '. Filter ALL advice through their conditions. Safety > taste.');
+        lines.push(
+          '⚠️ MEDICAL-FIRST RULE: User has ' +
+            med +
+            '. Filter ALL advice through their conditions. Safety > taste.'
+        );
       } else {
-        lines.push('⚠️ NGUYÊN TẮC Y KHOA TRƯỚC TIÊN: Người dùng có ' + med + '. MỌI lời khuyên PHẢI an toàn cho bệnh nền. An toàn > ngon miệng.');
-        if (hasDiabetes) lines.push('🔴 TIỂU ĐƯỜNG: Người tiểu đường VẪN ăn được phở, xôi, chuối, cơm — chỉ cần kiểm soát lượng và kèm rau/protein. Khi hỏi "ăn X được không?" → trả lời thực tế (ăn được bao nhiêu, kèm gì), KHÔNG cấm tuyệt đối. Chỉ thật sự hạn chế: nước ngọt có đường, trà sữa, bánh kẹo ngọt. Ưu tiên: cơm gạo lứt, khoai lang, rau, cá, đậu phụ, trứng, trái cây ít ngọt.');
-        if (hasHypertension) lines.push('🔴 HUYẾT ÁP: Hạn chế muối, mắm nhiều, dưa muối, mì gói, đồ chiên nhiều dầu. Ưu tiên hấp/luộc, ít muối, cá, rau, trái cây giàu kali.');
-        if (hasHeart) lines.push('🔴 TIM MẠCH: CẤM mỡ bão hòa, nội tạng, đồ chiên, thịt quay. Dùng: cá omega-3, dầu ô liu, rau, hạt.');
+        lines.push(
+          '⚠️ NGUYÊN TẮC Y KHOA TRƯỚC TIÊN: Người dùng có ' +
+            med +
+            '. MỌI lời khuyên PHẢI an toàn cho bệnh nền. An toàn > ngon miệng.'
+        );
+        if (hasDiabetes)
+          lines.push(
+            '🔴 TIỂU ĐƯỜNG: Người tiểu đường VẪN ăn được phở, xôi, chuối, cơm — chỉ cần kiểm soát lượng và kèm rau/protein. Khi hỏi "ăn X được không?" → trả lời thực tế (ăn được bao nhiêu, kèm gì), KHÔNG cấm tuyệt đối. Chỉ thật sự hạn chế: nước ngọt có đường, trà sữa, bánh kẹo ngọt. Ưu tiên: cơm gạo lứt, khoai lang, rau, cá, đậu phụ, trứng, trái cây ít ngọt.'
+          );
+        if (hasHypertension)
+          lines.push(
+            '🔴 HUYẾT ÁP: Hạn chế muối, mắm nhiều, dưa muối, mì gói, đồ chiên nhiều dầu. Ưu tiên hấp/luộc, ít muối, cá, rau, trái cây giàu kali.'
+          );
+        if (hasHeart)
+          lines.push(
+            '🔴 TIM MẠCH: CẤM mỡ bão hòa, nội tạng, đồ chiên, thịt quay. Dùng: cá omega-3, dầu ô liu, rau, hạt.'
+          );
       }
     }
   }
@@ -509,40 +652,56 @@ CHUYỂN TUYẾN ĐẶC BIỆT — nếu ${honorific} nhắc đến:
   if (memories && memories.length > 0) {
     lines.push('');
     lines.push(formatMemoriesForPrompt(memories));
-    lines.push(isEn
-      ? 'Use memories naturally: reference past conversations, compare today vs before, show you remember them. Do NOT list memories back.'
-      : 'Dùng memory tự nhiên: nhắc lại cuộc chat trước, so sánh hôm nay vs trước đó, cho thấy mình nhớ họ. KHÔNG liệt kê memory ra.');
+    lines.push(
+      isEn
+        ? 'Use memories naturally: reference past conversations, compare today vs before, show you remember them. Do NOT list memories back.'
+        : 'Dùng memory tự nhiên: nhắc lại cuộc chat trước, so sánh hôm nay vs trước đó, cho thấy mình nhớ họ. KHÔNG liệt kê memory ra.'
+    );
   }
 
   // ── CONVERSATION STYLE ──────────────────────────────────
   if (historyLength === 0) {
-    lines.push(isEn ? 'First message: greet warmly, show you care, then address their concern.' : 'Tin nhắn đầu tiên: chào ấm áp, thể hiện quan tâm, rồi giúp họ.');
+    lines.push(
+      isEn
+        ? 'First message: greet warmly, show you care, then address their concern.'
+        : 'Tin nhắn đầu tiên: chào ấm áp, thể hiện quan tâm, rồi giúp họ.'
+    );
   }
 
   if (isEn) {
-    lines.push('How you talk: like texting a caring family member — warm, detailed, empathetic. ALWAYS show you care before giving advice. No **, *, ##. Reply in the same language the user uses.');
-    lines.push('About health: knowledgeable and frank. OTC meds like paracetamol — mention normally WITH duration limit + red flag conditions. Prescription meds — refuse and redirect to doctor. When uncertain about diagnosis, dosage, or drug interactions: BE HONEST. Say "I am not sure, please ask your doctor" instead of guessing. Honesty > sounding smart.');
+    lines.push(
+      'How you talk: like texting a caring family member — warm, detailed, empathetic. ALWAYS show you care before giving advice. No **, *, ##. Reply in the same language the user uses.'
+    );
+    lines.push(
+      'About health: knowledgeable and frank. OTC meds like paracetamol — mention normally WITH duration limit + red flag conditions. Prescription meds — refuse and redirect to doctor. When uncertain about diagnosis, dosage, or drug interactions: BE HONEST. Say "I am not sure, please ask your doctor" instead of guessing. Honesty > sounding smart.'
+    );
   }
   // VI: drug rule + uncertainty đã được nêu ở character bible khối trên.
 
   // ── STOP RULE ───────────────
-  lines.push(isEn
-    ? 'Always answer first, ask 1 follow-up question at the end. Reply length matches question complexity (greeting=2-3, simple=5-8, complex=8-12 sentences).'
-    : `Cuối mỗi reply LUÔN có 1 câu hỏi han nhẹ để ${honorific} chia sẻ tiếp. Tối đa 1 câu hỏi/lượt.`);
+  lines.push(
+    isEn
+      ? 'Always answer first, ask 1 follow-up question at the end. Reply length matches question complexity (greeting=2-3, simple=5-8, complex=8-12 sentences).'
+      : `Cuối mỗi reply LUÔN có 1 câu hỏi han nhẹ để ${honorific} chia sẻ tiếp. Tối đa 1 câu hỏi/lượt.`
+  );
 
   const consecutiveQuestions = countConsecutiveAiQuestions(history);
   const prevWasQuestion = lastAiTurnWasQuestion(history);
 
   if (consecutiveQuestions >= 2) {
     lines.push('');
-    lines.push(isEn
-      ? `LOOP WARNING: Already asked ${consecutiveQuestions} consecutive turns. MUST give a concrete answer NOW, do NOT ask more.`
-      : `CANH BAO VONG LAP: Da hoi lien tiep ${consecutiveQuestions} luot. PHAI tra loi cu the ngay, KHONG hoi them.`);
+    lines.push(
+      isEn
+        ? `LOOP WARNING: Already asked ${consecutiveQuestions} consecutive turns. MUST give a concrete answer NOW, do NOT ask more.`
+        : `CANH BAO VONG LAP: Da hoi lien tiep ${consecutiveQuestions} luot. PHAI tra loi cu the ngay, KHONG hoi them.`
+    );
   } else if (prevWasQuestion) {
     lines.push('');
-    lines.push(isEn
-      ? 'You asked a question last turn. This turn you MUST provide a concrete answer or advice first based on what the user just shared. Only ask 1 more question at the end if truly necessary.'
-      : 'Lượt trước bạn đã hỏi người dùng. Lần này PHẢI đưa ra câu trả lời hoặc lời khuyên cụ thể trước dựa trên thông tin người dùng vừa chia sẻ. Chỉ hỏi thêm tối đa 1 câu ở cuối nếu thực sự cần thiết.');
+    lines.push(
+      isEn
+        ? 'You asked a question last turn. This turn you MUST provide a concrete answer or advice first based on what the user just shared. Only ask 1 more question at the end if truly necessary.'
+        : 'Lượt trước bạn đã hỏi người dùng. Lần này PHẢI đưa ra câu trả lời hoặc lời khuyên cụ thể trước dựa trên thông tin người dùng vừa chia sẻ. Chỉ hỏi thêm tối đa 1 câu ở cuối nếu thực sự cần thiết.'
+    );
   }
 
   // ── FEW-SHOT (đặt cuối — LLM nhớ phần cuối nhất) ──
@@ -592,7 +751,12 @@ Asinu: "${honorific} ơi, đau ngực lan tay trái có thể là dấu hiệu n
  * @param {number} retentionDays - How many days back to fetch (based on subscription)
  * @returns {Promise<Array<{message: string, sender: string}>>}
  */
-async function getRecentHistory(pool, userId, limit = HISTORY_LIMIT, retentionDays = RETENTION_DAYS_FREE) {
+async function getRecentHistory(
+  pool,
+  userId,
+  limit = HISTORY_LIMIT,
+  retentionDays = RETENTION_DAYS_FREE
+) {
   const result = await pool.query(
     `SELECT message, sender FROM chat_histories
      WHERE user_id = $1
@@ -698,7 +862,13 @@ async function getHealthLogsSummary(pool, userId) {
       recent_medications: medResult.rows,
     };
   } catch (err) {
-    return { latest_glucose: null, latest_bp: null, latest_weight: null, water_today_ml: null, recent_medications: [] };
+    return {
+      latest_glucose: null,
+      latest_bp: null,
+      latest_weight: null,
+      water_today_ml: null,
+      recent_medications: [],
+    };
   }
 }
 
@@ -709,10 +879,9 @@ async function getHealthLogsSummary(pool, userId) {
  * @returns {Promise<Object|null>} - Profile or null
  */
 async function getOnboardingProfile(pool, userId) {
-  const result = await pool.query(
-    'SELECT * FROM user_onboarding_profiles WHERE user_id = $1',
-    [userId]
-  );
+  const result = await pool.query('SELECT * FROM user_onboarding_profiles WHERE user_id = $1', [
+    userId,
+  ]);
   return result.rows[0] || null;
 }
 
@@ -777,7 +946,9 @@ async function processChat(pool, userId, message, context = {}) {
     let logsSummary = null;
 
     // Determine user language + retention window
-    const { rows: [userRow] } = await pool.query(
+    const {
+      rows: [userRow],
+    } = await pool.query(
       'SELECT COALESCE(language_preference, $2) AS lang FROM users WHERE id = $1',
       [userId, 'vi']
     );
@@ -810,7 +981,6 @@ async function processChat(pool, userId, message, context = {}) {
         }
         finalMessage = formatMessageWithContext(message, contextText);
       } catch (err) {
-
         finalMessage = formatMessageWithContext(message, FALLBACK_CONTEXT);
       }
     } else {
@@ -824,17 +994,27 @@ async function processChat(pool, userId, message, context = {}) {
           getHealthLogsSummary(pool, userId),
           getUserMemories(pool, userId).catch(() => []),
         ]);
-        systemPrompt = buildSystemPrompt(onboardingProfile, conversationHistory.length, logsSummary, conversationHistory, userLang, userMemories);
-      } catch (err) {
-
-      }
+        systemPrompt = buildSystemPrompt(
+          onboardingProfile,
+          conversationHistory.length,
+          logsSummary,
+          conversationHistory,
+          userLang,
+          userMemories
+        );
+      } catch (err) {}
       await saveUserMessage(pool, userId, message, now);
     }
 
     // Get AI reply — pass conversation history and system prompt for Gemini
     const providerContext = { ...context, user_id: userId };
     const chatStartTime = Date.now();
-    const replyResult = await getChatReply(finalMessage, providerContext, conversationHistory, systemPrompt);
+    const replyResult = await getChatReply(
+      finalMessage,
+      providerContext,
+      conversationHistory,
+      systemPrompt
+    );
     const chatDuration = Date.now() - chatStartTime;
     const rawReply = replyResult.reply || '';
     // Strip markdown formatting (**, *, ##, _) so chat UI shows plain text
@@ -842,11 +1022,11 @@ async function processChat(pool, userId, message, context = {}) {
       .replace(/\*\*(.+?)\*\*/g, '$1')
       .replace(/\*(.+?)\*/g, '$1')
       .replace(/^#{1,6}\s+/gm, '')
-      .replace(/^[-–—]\s+/gm, '')       // xóa dấu gạch đầu dòng
-      .replace(/^[ \t]+/gm, '')          // xóa indent đầu dòng
+      .replace(/^[-–—]\s+/gm, '') // xóa dấu gạch đầu dòng
+      .replace(/^[ \t]+/gm, '') // xóa indent đầu dòng
       .replace(/__(.+?)__/g, '$1')
       .replace(/_(.+?)_/g, '$1')
-      .replace(/\n{3,}/g, '\n\n')        // giảm khoảng trắng thừa
+      .replace(/\n{3,}/g, '\n\n') // giảm khoảng trắng thừa
       .trim();
 
     // Apply AI safety filter
@@ -870,7 +1050,11 @@ async function processChat(pool, userId, message, context = {}) {
       rawTokens.completion ?? rawTokens.candidatesTokenCount ?? rawTokens.completion_tokens ?? 0
     );
     const totalTokens = Number(
-      rawTokens.total ?? rawTokens.totalTokenCount ?? rawTokens.total_tokens ?? (inputTokens + outputTokens) ?? 0
+      rawTokens.total ??
+        rawTokens.totalTokenCount ??
+        rawTokens.total_tokens ??
+        inputTokens + outputTokens ??
+        0
     );
 
     logger.debug('[Chat] reply generated', {
@@ -913,13 +1097,17 @@ async function processChat(pool, userId, message, context = {}) {
         status: 'completed',
         tokens_used: Number(totalTokens || 0),
       },
-      { event_id: `chat.used:${assistantRow?.id || `${userId}:${now.toISOString()}`}` },
+      { event_id: `chat.used:${assistantRow?.id || `${userId}:${now.toISOString()}`}` }
     );
 
     // Extract memories in background (fire-and-forget)
     if (conversationHistory && conversationHistory.length >= 4) {
-      const allMessages = [...conversationHistory, { message, sender: 'user' }, { message: reply, sender: 'assistant' }];
-      extractAndSaveMemories(pool, userId, allMessages).catch(err =>
+      const allMessages = [
+        ...conversationHistory,
+        { message, sender: 'user' },
+        { message: reply, sender: 'assistant' },
+      ];
+      extractAndSaveMemories(pool, userId, allMessages).catch((err) =>
         console.error('[Memory] Background extract failed:', err.message)
       );
     }

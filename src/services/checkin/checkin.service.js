@@ -20,9 +20,15 @@
 
 const { sendPushNotification } = require('../notification/push.notification.service');
 const { getPatientRoleForCaregiver } = require('../../lib/relation');
-const { getNextTriageQuestion, buildContinuityMessage, calcFollowUpHours } = require('./checkin.ai.service');
+const {
+  getNextTriageQuestion,
+  buildContinuityMessage,
+  calcFollowUpHours,
+} = require('./checkin.ai.service');
 const { saveSymptomLogs } = require('./symptom-tracker.service');
-const { dispatch: dispatchNotification } = require('../../core/notification/notification.orchestrator');
+const {
+  dispatch: dispatchNotification,
+} = require('../../core/notification/notification.orchestrator');
 const { trackEvent } = require('../profile/engagement.service');
 const { updateMissionProgress } = require('../missions/missions.service');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
@@ -74,7 +80,9 @@ async function sendCheckinNotification(pool, userId, pushToken, type, title, bod
   let dispatched = null;
   try {
     dispatched = await dispatchNotification(pool, { userId, type, title, body, data, priority });
-    console.log(`[NOTIF] dispatchNotification type=${type} userId=${userId} ok=${dispatched?.ok} id=${dispatched?.notificationId}`);
+    console.log(
+      `[NOTIF] dispatchNotification type=${type} userId=${userId} ok=${dispatched?.ok} id=${dispatched?.notificationId}`
+    );
   } catch (e) {
     console.error(`[NOTIF] dispatchNotification FAILED:`, e.message);
     return;
@@ -98,7 +106,7 @@ async function sendCheckinNotification(pool, userId, pushToken, type, title, bod
 const TZ = 'Asia/Ho_Chi_Minh';
 
 // Ngưỡng risk score để cảnh báo gia đình tự động
-const FAMILY_ALERT_RISK_THRESHOLD = 30;
+const _FAMILY_ALERT_RISK_THRESHOLD = 30;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -130,7 +138,7 @@ function hoursFromNow(h) {
   return new Date(Date.now() + h * 60 * 60 * 1000);
 }
 
-function todayVN() {
+function _todayVN() {
   return nowVN().toISOString().slice(0, 10);
 }
 
@@ -150,7 +158,7 @@ function calcNextCheckin(flowState, currentStatus, followUpCount = 0, followUpHo
   if (flowState === 'monitoring') return todayEvening9pm();
   // Nếu AI trả về followUpHours → dùng luôn
   if (followUpHoursFromAI) return hoursFromNow(followUpHoursFromAI);
-  if (flowState === 'high_alert')  return hoursFromNow(followUpCount === 0 ? 1 : 2);
+  if (flowState === 'high_alert') return hoursFromNow(followUpCount === 0 ? 1 : 2);
   // follow_up: first = 3h, subsequent = 4h
   return hoursFromNow(followUpCount === 0 ? 3 : 4);
 }
@@ -178,14 +186,13 @@ async function getYesterdaySession(pool, userId) {
 
 async function getTodayCheckin(pool, userId) {
   const [sessionRes, profileRes, yesterdaySession] = await Promise.all([
-    pool.query(
-      `SELECT * FROM health_checkins WHERE user_id = $1 AND session_date = $2`,
-      [userId, checkinDateVN()]
-    ),
-    pool.query(
-      `SELECT COALESCE(language_preference, 'vi') AS lang FROM users WHERE id = $1`,
-      [userId]
-    ),
+    pool.query(`SELECT * FROM health_checkins WHERE user_id = $1 AND session_date = $2`, [
+      userId,
+      checkinDateVN(),
+    ]),
+    pool.query(`SELECT COALESCE(language_preference, 'vi') AS lang FROM users WHERE id = $1`, [
+      userId,
+    ]),
     getYesterdaySession(pool, userId),
   ]);
 
@@ -206,9 +213,9 @@ async function startCheckin(pool, userId, status, bodyLocations = null, bodyLoca
   const date = checkinDateVN();
 
   let flowState;
-  if (status === 'fine')                                      flowState = 'monitoring';
+  if (status === 'fine') flowState = 'monitoring';
   else if (status === 'tired' || status === 'specific_concern') flowState = 'follow_up';
-  else                                                         flowState = 'high_alert';
+  else flowState = 'high_alert';
 
   const nextAt = calcNextCheckin(flowState, status, 0);
 
@@ -254,7 +261,7 @@ async function startCheckin(pool, userId, status, bodyLocations = null, bodyLoca
       status,
       flow_state: flowState,
     },
-    { event_id: `checkin.started:${userId}:${date}:${rows[0]?.updated_at || Date.now()}` },
+    { event_id: `checkin.started:${userId}:${date}:${rows[0]?.updated_at || Date.now()}` }
   );
 
   // Invalidate health score cache
@@ -305,7 +312,7 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
 
   // Count how many follow-up responses so far (dựa trên triage_messages đã có)
   const triageMessages = session.triage_messages || [];
-  const followUpCount = triageMessages.filter(m => m.role === 'user').length;
+  const followUpCount = triageMessages.filter((m) => m.role === 'user').length;
 
   const nextAt = calcNextCheckin(flowState, newStatus, followUpCount);
 
@@ -324,7 +331,9 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
   );
 
   // Track engagement event
-  trackEvent(pool, userId, 'checkin_response', { newStatus, flowState, isFollowUp: true }).catch(() => {});
+  trackEvent(pool, userId, 'checkin_response', { newStatus, flowState, isFollowUp: true }).catch(
+    () => {}
+  );
 
   return rows[0];
 }
@@ -349,57 +358,61 @@ async function getUserProfile(pool, userId) {
  * Get recent health metrics + previous checkin summaries for AI context.
  */
 async function getRecentHealthContext(pool, userId) {
-  const { getSymptomFrequencyContext, getMedicationAdherenceContext } = require('./symptom-tracker.service');
-  const [glucoseRes, bpRes, weightRes, checkinsRes, medRes, symptomFreqCtx, medAdherenceCtx] = await Promise.all([
-    // Glucose 7 ngày gần nhất (tối đa 5 bản ghi)
-    pool.query(
-      `SELECT gl.value, gl.unit, gl.context, lc.occurred_at
+  const {
+    getSymptomFrequencyContext,
+    getMedicationAdherenceContext,
+  } = require('./symptom-tracker.service');
+  const [glucoseRes, bpRes, weightRes, checkinsRes, medRes, symptomFreqCtx, medAdherenceCtx] =
+    await Promise.all([
+      // Glucose 7 ngày gần nhất (tối đa 5 bản ghi)
+      pool.query(
+        `SELECT gl.value, gl.unit, gl.context, lc.occurred_at
        FROM glucose_logs gl
        JOIN logs_common lc ON lc.id = gl.log_id
        WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '7 days'
        ORDER BY lc.occurred_at DESC LIMIT 5`,
-      [userId]
-    ),
-    // Huyết áp 7 ngày gần nhất (tối đa 5 bản ghi)
-    pool.query(
-      `SELECT bp.systolic, bp.diastolic, bp.pulse, lc.occurred_at
+        [userId]
+      ),
+      // Huyết áp 7 ngày gần nhất (tối đa 5 bản ghi)
+      pool.query(
+        `SELECT bp.systolic, bp.diastolic, bp.pulse, lc.occurred_at
        FROM blood_pressure_logs bp
        JOIN logs_common lc ON lc.id = bp.log_id
        WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '7 days'
        ORDER BY lc.occurred_at DESC LIMIT 5`,
-      [userId]
-    ),
-    // Cân nặng gần nhất
-    pool.query(
-      `SELECT wl.weight_kg, lc.occurred_at
+        [userId]
+      ),
+      // Cân nặng gần nhất
+      pool.query(
+        `SELECT wl.weight_kg, lc.occurred_at
        FROM weight_logs wl
        JOIN logs_common lc ON lc.id = wl.log_id
        WHERE lc.user_id = $1
        ORDER BY lc.occurred_at DESC LIMIT 1`,
-      [userId]
-    ),
-    // 3 lần checkin gần nhất (không tính hôm nay)
-    pool.query(
-      `SELECT session_date, initial_status, triage_summary, triage_severity
+        [userId]
+      ),
+      // 3 lần checkin gần nhất (không tính hôm nay)
+      pool.query(
+        `SELECT session_date, initial_status, triage_summary, triage_severity
        FROM health_checkins
        WHERE user_id = $1 AND triage_completed_at IS NOT NULL
        ORDER BY session_date DESC LIMIT 3`,
-      [userId]
-    ),
-    // [G8] Medication log today — check if user took medication
-    pool.query(
-      `SELECT lc.log_type, lc.occurred_at
+        [userId]
+      ),
+      // [G8] Medication log today — check if user took medication
+      pool.query(
+        `SELECT lc.log_type, lc.occurred_at
        FROM logs_common lc
        WHERE lc.user_id = $1 AND lc.log_type = 'medication'
          AND DATE(lc.occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = DATE(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
        LIMIT 1`,
-      [userId]
-    ),
-    // Symptom frequency context (from symptom_frequency table)
-    getSymptomFrequencyContext(pool, userId).catch(() => null),
-    // Medication adherence 7 days (from medication_adherence table)
-    getMedicationAdherenceContext(pool, userId).catch(() => null),
-  ]);
+        [userId]
+      ),
+      // Symptom frequency context (from symptom_frequency table)
+      getSymptomFrequencyContext(pool, userId).catch(() => null),
+      // Medication adherence 7 days (from medication_adherence table)
+      getMedicationAdherenceContext(pool, userId).catch(() => null),
+    ]);
 
   return {
     recentGlucose: glucoseRes.rows,
@@ -454,18 +467,30 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
 
   // ── Hard-coded red flag detection — bypass AI if user already reported danger signs ──
   const RED_FLAG_KEYWORDS = [
-    'khó thở', 'đau ngực', 'tức ngực', 'hoa mắt', 'đau ngực lan',
-    'vã mồ hôi', 'ngất', 'co giật', 'không thở được', 'tim đập nhanh',
-    'chest pain', 'difficulty breathing', 'shortness of breath', 'fainting',
-    'blurred vision', 'chest tightness',
+    'khó thở',
+    'đau ngực',
+    'tức ngực',
+    'hoa mắt',
+    'đau ngực lan',
+    'vã mồ hôi',
+    'ngất',
+    'co giật',
+    'không thở được',
+    'tim đập nhanh',
+    'chest pain',
+    'difficulty breathing',
+    'shortness of breath',
+    'fainting',
+    'blurred vision',
+    'chest tightness',
   ];
 
   const _safeAns = (v) => (Array.isArray(v) ? v.join(', ') : String(v || ''));
-  const allAnswerText = previousAnswers.map(a => _safeAns(a.answer).toLowerCase()).join(' ');
-  const hasRedFlagInAnswers = RED_FLAG_KEYWORDS.some(kw => allAnswerText.includes(kw));
+  const allAnswerText = previousAnswers.map((a) => _safeAns(a.answer).toLowerCase()).join(' ');
+  const hasRedFlagInAnswers = RED_FLAG_KEYWORDS.some((kw) => allAnswerText.includes(kw));
 
   if (hasRedFlagInAnswers) {
-    const allSymptoms = previousAnswers.map(a => _safeAns(a.answer)).join(', ');
+    const allSymptoms = previousAnswers.map((a) => _safeAns(a.answer)).join(', ');
     // Red-flag = đe doạ tính mạng → escalate severity='emergency' (không phải 'high'),
     // emergency_triggered=true (auto detect từ AI/triage, không cần SOS button).
     const urgentResult = {
@@ -473,9 +498,10 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
       isDone: true,
       summary: allSymptoms,
       severity: 'emergency',
-      recommendation: profile.lang === 'en'
-        ? '🚨 EMERGENCY — Call 115 or emergency services NOW. Family has been notified.'
-        : '🚨 KHẨN CẤP — Gọi 115 hoặc cấp cứu NGAY. Người thân đã được báo.',
+      recommendation:
+        profile.lang === 'en'
+          ? '🚨 EMERGENCY — Call 115 or emergency services NOW. Family has been notified.'
+          : '🚨 KHẨN CẤP — Gọi 115 hoặc cấp cứu NGAY. Người thân đã được báo.',
       needsDoctor: true,
       needsFamilyAlert: true,
       hasRedFlag: true,
@@ -491,8 +517,13 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
          emergency_triggered=true, flow_state='high_alert',
          updated_at=NOW()
        WHERE id=$5`,
-      [urgentResult.summary, urgentResult.severity, JSON.stringify(previousAnswers),
-       hoursFromNow(1), checkinId]
+      [
+        urgentResult.summary,
+        urgentResult.severity,
+        JSON.stringify(previousAnswers),
+        hoursFromNow(1),
+        checkinId,
+      ]
     );
 
     // Alert family immediately với alertType='emergency' (priority critical, cooldown 1min)
@@ -518,21 +549,26 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
 
   // For follow-up: pass previous triage Q&A so AI doesn't repeat questions
   const prevTriageMessages = isFollowUpPhase
-    ? (Array.isArray(session.triage_messages) ? session.triage_messages : [])
+    ? Array.isArray(session.triage_messages)
+      ? session.triage_messages
+      : []
     : [];
 
   let result = await getNextTriageQuestion({
-    status:                  isFollowUpPhase ? (session.current_status || session.initial_status) : session.initial_status,
-    phase:                   isFollowUpPhase ? 'followup' : 'initial',
-    lang:                    profile.lang || 'vi',
+    status: isFollowUpPhase
+      ? session.current_status || session.initial_status
+      : session.initial_status,
+    phase: isFollowUpPhase ? 'followup' : 'initial',
+    lang: profile.lang || 'vi',
     profile,
     healthContext,
     previousAnswers,
-    previousSessionSummary:  session.triage_summary || null,
-    previousTriageMessages:  prevTriageMessages,
-    bodyLocation:            session.body_location || null,
-    bodyLocations:           session.body_locations || (session.body_location ? [session.body_location] : null),
-    bodyLocationOther:       session.body_location_other || null,
+    previousSessionSummary: session.triage_summary || null,
+    previousTriageMessages: prevTriageMessages,
+    bodyLocation: session.body_location || null,
+    bodyLocations:
+      session.body_locations || (session.body_location ? [session.body_location] : null),
+    bodyLocationOther: session.body_location_other || null,
     pool,
     userId,
   });
@@ -540,21 +576,39 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
   // ── Double enforcement: block early isDone at service level too ──
   const minQForPhase = isFollowUp ? 2 : 5;
   // Follow-up: allow early conclusion if user says "improved" in layer 1
-  const IMPROVED_KEYWORDS = ['đã đỡ', 'đỡ nhiều', 'đỡ rồi', 'hết rồi', 'ổn rồi', 'better', 'improved', 'đang đỡ'];
-  const userImproved = isFollowUp && previousAnswers.some(a =>
-    IMPROVED_KEYWORDS.some(kw => _safeAns(a.answer).toLowerCase().includes(kw))
-  );
+  const IMPROVED_KEYWORDS = [
+    'đã đỡ',
+    'đỡ nhiều',
+    'đỡ rồi',
+    'hết rồi',
+    'ổn rồi',
+    'better',
+    'improved',
+    'đang đỡ',
+  ];
+  const userImproved =
+    isFollowUp &&
+    previousAnswers.some((a) =>
+      IMPROVED_KEYWORDS.some((kw) => _safeAns(a.answer).toLowerCase().includes(kw))
+    );
   // Nếu user vừa nói "có thêm triệu chứng mới" → KHÔNG cho conclude, phải hỏi
   // triệu chứng đó là gì rồi triage thêm. Tránh case: user khai có triệu chứng
   // mới nhưng AI kết luận "mức độ nhẹ" mà không hỏi gì.
-  const lastAnswerText = _safeAns(previousAnswers[previousAnswers.length - 1]?.answer || '').toLowerCase();
-  const justReportedNewSymptom = /(thêm.*triệu chứng|triệu chứng.*mới|new symptom|another symptom)/i.test(lastAnswerText)
-    && !/(không|không có|nothing|no)/i.test(lastAnswerText);
-  console.log(`[Triage] enforcement check: isDone=${result.isDone}, answers=${previousAnswers.length}, min=${minQForPhase}, hasRedFlag=${result.hasRedFlag}, isFollowUp=${isFollowUp}, userImproved=${userImproved}, newSymptomReported=${justReportedNewSymptom}`);
+  const lastAnswerText = _safeAns(
+    previousAnswers[previousAnswers.length - 1]?.answer || ''
+  ).toLowerCase();
+  const justReportedNewSymptom =
+    /(thêm.*triệu chứng|triệu chứng.*mới|new symptom|another symptom)/i.test(lastAnswerText) &&
+    !/(không|không có|nothing|no)/i.test(lastAnswerText);
+  console.log(
+    `[Triage] enforcement check: isDone=${result.isDone}, answers=${previousAnswers.length}, min=${minQForPhase}, hasRedFlag=${result.hasRedFlag}, isFollowUp=${isFollowUp}, userImproved=${userImproved}, newSymptomReported=${justReportedNewSymptom}`
+  );
 
   if (justReportedNewSymptom && !result.hasRedFlag) {
-    console.log(`[Triage] ⛔ User reported new symptom — force ask "what symptom" instead of concluding.`);
-    const Hon = (profile.honorific || 'bạn');
+    console.log(
+      `[Triage] ⛔ User reported new symptom — force ask "what symptom" instead of concluding.`
+    );
+    const Hon = profile.honorific || 'bạn';
     const HonCap = Hon.charAt(0).toUpperCase() + Hon.slice(1);
     const self = profile.selfRef || 'mình';
     result = {
@@ -565,18 +619,51 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
       multiSelect: false,
       allowFreeText: true,
     };
-  } else if (result.isDone && previousAnswers.length < minQForPhase && !result.hasRedFlag && !userImproved) {
-    console.log(`[Triage] ⛔ Service-level block: isDone at ${previousAnswers.length}/${minQForPhase}. Returning fallback.`);
+  } else if (
+    result.isDone &&
+    previousAnswers.length < minQForPhase &&
+    !result.hasRedFlag &&
+    !userImproved
+  ) {
+    console.log(
+      `[Triage] ⛔ Service-level block: isDone at ${previousAnswers.length}/${minQForPhase}. Returning fallback.`
+    );
     const fallbacks = [
-      { q: 'Từ lúc bắt đầu đến giờ, tình trạng có thay đổi không?', opts: ['đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn'], multi: false, types: [5] },
-      { q: 'Bạn nghĩ điều gì có thể dẫn đến tình trạng này?', opts: ['ngủ ít', 'bỏ bữa', 'căng thẳng', 'quên uống thuốc', 'không rõ'], multi: true, types: [7] },
-      { q: 'Bạn đã làm gì để cải thiện chưa?', opts: ['nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì'], multi: true, types: [8] },
-      { q: 'Mức độ khó chịu của bạn hiện tại thế nào?', opts: ['nhẹ', 'trung bình', 'khá nặng'], multi: false, types: [2] },
-      { q: 'Tình trạng này có hay xảy ra không?', opts: ['lần đầu', 'thỉnh thoảng', 'hay bị', 'gần đây bị nhiều hơn'], multi: false, types: [10] },
+      {
+        q: 'Từ lúc bắt đầu đến giờ, tình trạng có thay đổi không?',
+        opts: ['đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn'],
+        multi: false,
+        types: [5],
+      },
+      {
+        q: 'Bạn nghĩ điều gì có thể dẫn đến tình trạng này?',
+        opts: ['ngủ ít', 'bỏ bữa', 'căng thẳng', 'quên uống thuốc', 'không rõ'],
+        multi: true,
+        types: [7],
+      },
+      {
+        q: 'Bạn đã làm gì để cải thiện chưa?',
+        opts: ['nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì'],
+        multi: true,
+        types: [8],
+      },
+      {
+        q: 'Mức độ khó chịu của bạn hiện tại thế nào?',
+        opts: ['nhẹ', 'trung bình', 'khá nặng'],
+        multi: false,
+        types: [2],
+      },
+      {
+        q: 'Tình trạng này có hay xảy ra không?',
+        opts: ['lần đầu', 'thỉnh thoảng', 'hay bị', 'gần đây bị nhiều hơn'],
+        multi: false,
+        types: [10],
+      },
     ];
     // Find a question whose TYPE hasn't been used
-    const usedQs = new Set(previousAnswers.map(a => a.question.toLowerCase()));
-    const fb = fallbacks.find(f => !usedQs.has(f.q.toLowerCase())) || fallbacks[fallbacks.length - 1];
+    const usedQs = new Set(previousAnswers.map((a) => a.question.toLowerCase()));
+    const fb =
+      fallbacks.find((f) => !usedQs.has(f.q.toLowerCase())) || fallbacks[fallbacks.length - 1];
     result = { ok: true, isDone: false, question: fb.q, options: fb.opts, multiSelect: fb.multi };
   }
 
@@ -584,24 +671,25 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
   // Only apply after minQuestions met (don't cut short initial interview)
   if (!result.isDone && result.question && previousAnswers.length >= minQForPhase) {
     const newQ = result.question.toLowerCase();
-    const isDuplicate = previousAnswers.some(a => {
+    const isDuplicate = previousAnswers.some((a) => {
       const prevQ = a.question.toLowerCase();
-      const newWords = new Set(newQ.split(/\s+/).filter(w => w.length > 2));
-      const prevWords = prevQ.split(/\s+/).filter(w => w.length > 2);
+      const newWords = new Set(newQ.split(/\s+/).filter((w) => w.length > 2));
+      const prevWords = prevQ.split(/\s+/).filter((w) => w.length > 2);
       if (prevWords.length === 0) return false;
-      const overlap = prevWords.filter(w => newWords.has(w)).length;
+      const overlap = prevWords.filter((w) => newWords.has(w)).length;
       return overlap / prevWords.length > 0.7;
     });
 
     if (isDuplicate) {
-      const allSymptoms = previousAnswers.map(a => _safeAns(a.answer)).join(', ');
+      const allSymptoms = previousAnswers.map((a) => _safeAns(a.answer)).join(', ');
       result = {
         isDone: true,
         summary: allSymptoms,
         severity: isVeryUnwell ? 'high' : 'medium',
-        recommendation: profile.lang === 'en'
-          ? 'Thank you for sharing. Please rest and take care.'
-          : 'Cảm ơn bạn đã chia sẻ. Hãy nghỉ ngơi và theo dõi thêm nhé.',
+        recommendation:
+          profile.lang === 'en'
+            ? 'Thank you for sharing. Please rest and take care.'
+            : 'Cảm ơn bạn đã chia sẻ. Hãy nghỉ ngơi và theo dõi thêm nhé.',
         needsDoctor: false,
         needsFamilyAlert: false,
         hasRedFlag: false,
@@ -613,21 +701,42 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
   // ── Illusion Layer: enhance response with continuity/empathy/progress ──
   try {
     const illusionCtx = await buildCheckinContext(pool, userId);
-    const lastAnswer = previousAnswers.length > 0 ? previousAnswers[previousAnswers.length - 1] : null;
+    const lastAnswer =
+      previousAnswers.length > 0 ? previousAnswers[previousAnswers.length - 1] : null;
     const illusionUser = { id: userId, ...profile, lang: profile.lang || 'vi' };
 
     if (result.isDone) {
       // Conclusion: add progress feedback
       const enhanced = applyIllusion(
-        { isDone: true, conclusion: { severity: result.severity }, currentStep: previousAnswers.length, totalSteps: previousAnswers.length },
-        {}, illusionCtx, illusionUser, {}
+        {
+          isDone: true,
+          conclusion: { severity: result.severity },
+          currentStep: previousAnswers.length,
+          totalSteps: previousAnswers.length,
+        },
+        {},
+        illusionCtx,
+        illusionUser,
+        {}
       );
       if (enhanced._progress) result._progress = enhanced._progress;
     } else if (result.question) {
       // Question: add empathy + continuity
       const enhanced = applyIllusion(
-        { isDone: false, question: { id: `q${previousAnswers.length}`, text: result.question, type: 'single_choice' }, currentStep: previousAnswers.length, totalSteps: 8 },
-        { greeting: null }, illusionCtx, illusionUser, { lastAnswer }
+        {
+          isDone: false,
+          question: {
+            id: `q${previousAnswers.length}`,
+            text: result.question,
+            type: 'single_choice',
+          },
+          currentStep: previousAnswers.length,
+          totalSteps: 8,
+        },
+        { greeting: null },
+        illusionCtx,
+        illusionUser,
+        { lastAnswer }
       );
       if (enhanced._empathy) result._empathy = enhanced._empathy;
       if (enhanced._continuity) result._continuity = enhanced._continuity;
@@ -664,15 +773,22 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
          flow_state           = CASE WHEN $6 = TRUE THEN 'high_alert' ELSE flow_state END,
          updated_at           = NOW()
        WHERE id = $5`,
-      [result.summary, result.severity, JSON.stringify(previousAnswers), nextAt, checkinId, isEmergencyResult]
+      [
+        result.summary,
+        result.severity,
+        JSON.stringify(previousAnswers),
+        nextAt,
+        checkinId,
+        isEmergencyResult,
+      ]
     );
 
     // Safety override: severity='emergency' / 'high' → LUÔN cảnh báo người thân,
     // không phụ thuộc vào AI judgment. AI có thể sai. User safety > AI confidence.
     // Emergency dùng alertType='emergency' (priority critical, cooldown 1min).
     // High dùng alertType='caregiver_alert' (priority high, cooldown 30min).
-    const shouldAlertFamilyNow = result.needsFamilyAlert
-      || result.severity === 'high' || result.severity === 'emergency';
+    const shouldAlertFamilyNow =
+      result.needsFamilyAlert || result.severity === 'high' || result.severity === 'emergency';
     const alertType = result.severity === 'emergency' ? 'emergency' : 'caregiver_alert';
 
     if (shouldAlertFamilyNow) {
@@ -692,7 +808,9 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
         // Thông báo in-app cho chính user biết gia đình đã được nhắn
         const userLang = profile.lang || 'vi';
         await sendCheckinNotification(
-          pool, userId, null,
+          pool,
+          userId,
+          null,
           'caregiver_alert',
           t('checkin.family_notified_title', userLang),
           t('checkin.family_notified_body', userLang),
@@ -761,9 +879,10 @@ async function reactToTriageResult(pool, userId, checkinId, result) {
       );
       const lang = langRows[0]?.lang || 'vi';
       const title = lang === 'en' ? 'Doctor visit recommended' : 'Khuyến nghị khám bác sĩ';
-      const body = lang === 'en'
-        ? 'Based on your symptoms, you should see a doctor as soon as possible.'
-        : 'Bạn nên đi khám bác sĩ dựa trên các triệu chứng bạn mô tả.';
+      const body =
+        lang === 'en'
+          ? 'Based on your symptoms, you should see a doctor as soon as possible.'
+          : 'Bạn nên đi khám bác sĩ dựa trên các triệu chứng bạn mô tả.';
 
       await dispatchNotification(pool, {
         userId,
@@ -896,19 +1015,26 @@ async function triggerEmergency(pool, userId, location) {
     caregiversCount: caregivers.length,
   });
 
-  const locationStr = location
-    ? ` (${location.lat?.toFixed(4)}, ${location.lng?.toFixed(4)})`
-    : '';
-  const data = { type: 'emergency', userId: String(userId), location, patientPhone: user.phone_number || '' };
+  const locationStr = location ? ` (${location.lat?.toFixed(4)}, ${location.lng?.toFixed(4)})` : '';
+  const data = {
+    type: 'emergency',
+    userId: String(userId),
+    location,
+    patientPhone: user.phone_number || '',
+  };
 
   for (const cg of caregivers) {
     const cgLang = cg.lang || 'vi';
     // Title/body đều bắt đầu bằng {{name}} → viết hoa
-    const patientDisplay = cg.patient_side === 'requester'
-      ? getPatientRoleForCaregiver(cg.relationship_type, userName, cgLang, true)
-      : userName;
+    const patientDisplay =
+      cg.patient_side === 'requester'
+        ? getPatientRoleForCaregiver(cg.relationship_type, userName, cgLang, true)
+        : userName;
     const title = t('checkin.emergency_title', cgLang, { name: patientDisplay });
-    const body  = t('checkin.emergency_body', cgLang, { name: patientDisplay, location: locationStr });
+    const body = t('checkin.emergency_body', cgLang, {
+      name: patientDisplay,
+      location: locationStr,
+    });
     // Insert confirmation record so caregiver sees pending alert
     if (checkinId) {
       try {
@@ -930,8 +1056,13 @@ async function triggerEmergency(pool, userId, location) {
     }
 
     const result = await sendCheckinNotification(
-      pool, cg.id, cg.push_token || null,
-      'emergency', title, body, data
+      pool,
+      cg.id,
+      cg.push_token || null,
+      'emergency',
+      title,
+      body,
+      data
     );
     logger.debug('[SOS] notification dispatch complete', {
       userId,
@@ -966,9 +1097,10 @@ async function shouldAlertFamily(pool, userId, session) {
   );
 
   const history = historyRes.rows;
-  const avgNoResponse = history.length > 0
-    ? history.reduce((sum, h) => sum + (h.no_response_count || 0), 0) / history.length
-    : 0;
+  const avgNoResponse =
+    history.length > 0
+      ? history.reduce((sum, h) => sum + (h.no_response_count || 0), 0) / history.length
+      : 0;
 
   // 2. Check user age (elderly = more urgent)
   const profileRes = await pool.query(
@@ -981,7 +1113,14 @@ async function shouldAlertFamily(pool, userId, session) {
   const isElderly = age && age >= 65;
 
   // 3. Check time of day (night = more concerning)
-  const hour = parseInt(new Date().toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour: 'numeric', hour12: false }), 10);
+  const hour = parseInt(
+    new Date().toLocaleString('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour: 'numeric',
+      hour12: false,
+    }),
+    10
+  );
   const isNightTime = hour >= 22 || hour < 6;
 
   // 4. Check latest severity
@@ -997,9 +1136,12 @@ async function shouldAlertFamily(pool, userId, session) {
   const noResponseCount = session.no_response_count || 0;
 
   if (isHighSeverity) return { shouldAlert: true, reason: 'high_severity' };
-  if (isElderly && noResponseCount >= 1) return { shouldAlert: true, reason: 'elderly_no_response' };
-  if (isNightTime && noResponseCount >= 1) return { shouldAlert: true, reason: 'nighttime_no_response' };
-  if (avgNoResponse > 1 && noResponseCount >= 3) return { shouldAlert: true, reason: 'habitual_non_responder_exceeded' };
+  if (isElderly && noResponseCount >= 1)
+    return { shouldAlert: true, reason: 'elderly_no_response' };
+  if (isNightTime && noResponseCount >= 1)
+    return { shouldAlert: true, reason: 'nighttime_no_response' };
+  if (avgNoResponse > 1 && noResponseCount >= 3)
+    return { shouldAlert: true, reason: 'habitual_non_responder_exceeded' };
   if (noResponseCount >= 2) return { shouldAlert: true, reason: 'no_response_threshold' };
 
   return { shouldAlert: false, reason: 'within_tolerance' };
@@ -1049,12 +1191,15 @@ async function runCheckinFollowUps(pool) {
       // {{callName}}, {{CallName}}). Trước đây chỉ list 4 → template dùng
       // {{CallName}} (PascalCase) không được fill → render literal.
       const hParams = { ...h };
-      const msg = session.flow_state === 'high_alert'
-        ? t('checkin.followup_high_alert', sLang, hParams)
-        : t('checkin.followup_normal', sLang, hParams);
+      const msg =
+        session.flow_state === 'high_alert'
+          ? t('checkin.followup_high_alert', sLang, hParams)
+          : t('checkin.followup_normal', sLang, hParams);
 
       await sendCheckinNotification(
-        pool, session.user_id, session.push_token,
+        pool,
+        session.user_id,
+        session.push_token,
         'checkin_followup',
         t('checkin.followup_title', sLang, hParams),
         msg,
@@ -1077,7 +1222,9 @@ async function runCheckinFollowUps(pool) {
       if (doAlert) {
         await alertFamily(pool, session);
         escalated++;
-        console.log(`[runCheckinFollowUps] Smart alert triggered for user ${session.user_id}: ${alertDecision.reason}`);
+        console.log(
+          `[runCheckinFollowUps] Smart alert triggered for user ${session.user_id}: ${alertDecision.reason}`
+        );
       }
 
       // Still push + in-app user one more time
@@ -1085,9 +1232,14 @@ async function runCheckinFollowUps(pool) {
       const h2 = getHonorifics(session);
       // Spread honorifics + thêm name (short name từ full_name) cho templates
       // có {{name}}. Cover cả PascalCase variants {{CallName}} {{SelfRef}} {{Honorific}}.
-      const hParams2 = { ...h2, name: getShortName(session.display_name || session.full_name) || '' };
+      const hParams2 = {
+        ...h2,
+        name: getShortName(session.display_name || session.full_name) || '',
+      };
       await sendCheckinNotification(
-        pool, session.user_id, session.push_token,
+        pool,
+        session.user_id,
+        session.push_token,
         'checkin_followup_urgent',
         t('checkin.no_response_title', sLang2, hParams2),
         t('checkin.no_response_body', sLang2, hParams2),
@@ -1151,15 +1303,18 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
   let notifiedCount = 0;
   for (const cg of caregivers) {
     const cgLang = cg.lang || 'vi';
-    const patientDisplay = cg.patient_side === 'requester'
-      ? getPatientRoleForCaregiver(cg.relationship_type, name, cgLang, true)
-      : name;
-    const title = alertType === 'emergency'
-      ? t('checkin.emergency_title', cgLang, { name: patientDisplay })
-      : t('checkin.health_check_needed_title', cgLang);
-    const body = alertType === 'emergency'
-      ? t('checkin.emergency_family_body', cgLang, { name: patientDisplay })
-      : t('checkin.no_response_family_body', cgLang, { name: patientDisplay });
+    const patientDisplay =
+      cg.patient_side === 'requester'
+        ? getPatientRoleForCaregiver(cg.relationship_type, name, cgLang, true)
+        : name;
+    const title =
+      alertType === 'emergency'
+        ? t('checkin.emergency_title', cgLang, { name: patientDisplay })
+        : t('checkin.health_check_needed_title', cgLang);
+    const body =
+      alertType === 'emergency'
+        ? t('checkin.emergency_family_body', cgLang, { name: patientDisplay })
+        : t('checkin.no_response_family_body', cgLang, { name: patientDisplay });
 
     // Re-alert policy: cho phép gửi lại NẾU caregiver confirmed >30 phút trước
     // VÀ event hiện tại là high-severity (state vẫn nguy), HOẶC alertType escalate
@@ -1172,8 +1327,8 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
        WHERE checkin_id=$1 AND caregiver_id=$2`,
       [session.id, cg.id]
     );
-    const isEscalation = existing.length
-      && existing[0].alert_type === 'caregiver_alert' && alertType === 'emergency';
+    const isEscalation =
+      existing.length && existing[0].alert_type === 'caregiver_alert' && alertType === 'emergency';
     // Option B — phân biệt confirmed_action:
     //   - 'on_my_way' / 'called' = caregiver đã COMMIT hành động → KHÔNG re-alert
     //     bất kể bao lâu (trừ escalation severity).
@@ -1209,7 +1364,7 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
       //      với câu hỏi "vẫn cần action thực sự không?")
       //   3. Caregiver đã commit 'on_my_way'/'called' → KHÔNG reset, chỉ bump
       //      resent_count (nhưng case này đã filtered ở `continue` phía trên)
-      const shouldResetPending = isEscalation || (!wasCommitted);
+      const shouldResetPending = isEscalation || !wasCommitted;
       if (shouldResetPending) {
         await pool.query(
           `UPDATE caregiver_alert_confirmations
@@ -1233,11 +1388,12 @@ async function alertFamily(pool, session, alertType = 'caregiver_alert') {
       }
     }
 
-    await sendCheckinNotification(
-      pool, cg.id, cg.push_token || null,
-      alertType, title, body,
-      { alertId: String(alertId), patientId: String(session.user_id), checkinId: String(session.id), patientPhone: user.phone_number || '' }
-    );
+    await sendCheckinNotification(pool, cg.id, cg.push_token || null, alertType, title, body, {
+      alertId: String(alertId),
+      patientId: String(session.user_id),
+      checkinId: String(session.id),
+      patientPhone: user.phone_number || '',
+    });
     notifiedCount++;
   }
   return notifiedCount;
@@ -1295,20 +1451,24 @@ async function confirmCaregiverAlert(pool, caregiverId, alertId, action) {
 
   if (!skipNotify) {
     const { rows: cgRows } = await pool.query(
-      `SELECT display_name, full_name FROM users WHERE id=$1`, [caregiverId]
+      `SELECT display_name, full_name FROM users WHERE id=$1`,
+      [caregiverId]
     );
     const { rows: patientRows } = await pool.query(
       `SELECT COALESCE(language_preference,'vi') AS lang, push_token FROM users WHERE id=$1`,
       [alert.patient_id]
     );
     const pLang = patientRows[0]?.lang || 'vi';
-    const cgFullName = cgRows[0]?.display_name || cgRows[0]?.full_name || t('brain.relative_fallback', pLang);
+    const cgFullName =
+      cgRows[0]?.display_name || cgRows[0]?.full_name || t('brain.relative_fallback', pLang);
     const cgName = getShortName(cgFullName) || cgFullName;
     const actionKey = action === 'on_my_way' ? 'checkin.action_on_my_way' : 'checkin.action_seen';
     const actionLabel = t(actionKey, pLang);
 
     await sendCheckinNotification(
-      pool, alert.patient_id, patientRows[0]?.push_token || null,
+      pool,
+      alert.patient_id,
+      patientRows[0]?.push_token || null,
       'caregiver_confirmed',
       `${cgName} ${actionLabel}`,
       t('checkin.caregiver_confirmed_body', pLang, { name: cgName, action: actionLabel }),
@@ -1344,21 +1504,20 @@ async function getPendingCaregiverAlerts(pool, caregiverId) {
      ORDER BY cac.sent_at DESC`,
     [caregiverId, STALE_HOURS]
   );
-  return rows.map(r => {
+  return rows.map((r) => {
     const hoursSinceSent = Number(r.hours_since_sent) || 0;
     const sessionDone = ['resolved', 'monitoring'].includes(r.flow_state) || r.resolved_at;
     // 'active' nếu fresh + session active. Else 'missed'.
-    const state = (hoursSinceSent < ACTIVE_THRESHOLD_HOURS && !sessionDone)
-      ? 'active' : 'missed';
+    const state = hoursSinceSent < ACTIVE_THRESHOLD_HOURS && !sessionDone ? 'active' : 'missed';
     return {
-      alertId:       r.alert_id,
-      alertType:     r.alert_type,
-      sentAt:        r.sent_at,
-      checkinId:     r.checkin_id,
-      patientName:   r.full_name || r.display_name || t('brain.relative_fallback'),
+      alertId: r.alert_id,
+      alertType: r.alert_type,
+      sentAt: r.sent_at,
+      checkinId: r.checkin_id,
+      patientName: r.full_name || r.display_name || t('brain.relative_fallback'),
       currentStatus: r.current_status,
-      flowState:     r.flow_state,
-      state,         // 'active' | 'missed' — FE render UI khác nhau
+      flowState: r.flow_state,
+      state, // 'active' | 'missed' — FE render UI khác nhau
     };
   });
 }
@@ -1400,21 +1559,32 @@ async function runAlertConfirmationFollowUps(pool) {
     if (recentNotif.length > 0) continue;
 
     const cgLang = alert.cg_lang || 'vi';
-    const patientFullName = alert.patient_name || alert.patient_full_name || t('brain.relative_fallback', cgLang);
+    const patientFullName =
+      alert.patient_name || alert.patient_full_name || t('brain.relative_fallback', cgLang);
     const patientName = getShortName(patientFullName) || patientFullName;
-    const patientDisplay = alert.patient_side === 'requester'
-      ? getPatientRoleForCaregiver(alert.relationship_type, patientName, cgLang, true)
-      : patientName;
+    const patientDisplay =
+      alert.patient_side === 'requester'
+        ? getPatientRoleForCaregiver(alert.relationship_type, patientName, cgLang, true)
+        : patientName;
     const resendNum = alert.resent_count + 1;
-    const title = alert.alert_type === 'emergency'
-      ? t('checkin.reminder_emergency_title', cgLang)
-      : t('checkin.reminder_health_check_title', cgLang);
+    const title =
+      alert.alert_type === 'emergency'
+        ? t('checkin.reminder_emergency_title', cgLang)
+        : t('checkin.reminder_health_check_title', cgLang);
     const body = t('checkin.reminder_confirm_body', cgLang, { name: patientDisplay });
 
     await sendCheckinNotification(
-      pool, alert.caregiver_id, alert.push_token || null,
-      alert.alert_type, title, body,
-      { alertId: String(alert.id), patientId: String(alert.patient_id), checkinId: String(alert.checkin_id) }
+      pool,
+      alert.caregiver_id,
+      alert.push_token || null,
+      alert.alert_type,
+      title,
+      body,
+      {
+        alertId: String(alert.id),
+        patientId: String(alert.patient_id),
+        checkinId: String(alert.checkin_id),
+      }
     );
     await pool.query(
       `UPDATE caregiver_alert_confirmations SET resent_count=$1, resent_at=NOW() WHERE id=$2`,
@@ -1461,7 +1631,9 @@ async function runMorningCheckin(pool, hour) {
     // Spread toàn bộ honorifics — cover {{CallName}} {{SelfRef}} {{Honorific}} PascalCase
     const hParams = { ...h };
     await sendCheckinNotification(
-      pool, user.id, user.push_token,
+      pool,
+      user.id,
+      user.push_token,
       'morning_checkin',
       t('checkin.morning_title', user.lang, hParams),
       t('checkin.morning_body', user.lang, hParams),
@@ -1532,25 +1704,71 @@ async function getHealthReport(pool, userId, days = 7) {
     // Trích xuất triệu chứng từ triage_messages (chỉ giữ triệu chứng thực sự)
     const NON_SYMPTOM_ANSWERS = new Set([
       // Severity responses
-      'nhẹ', 'trung bình', 'khá nặng', 'rất nặng',
-      'mild', 'moderate', 'quite severe', 'very severe',
+      'nhẹ',
+      'trung bình',
+      'khá nặng',
+      'rất nặng',
+      'mild',
+      'moderate',
+      'quite severe',
+      'very severe',
       // Time responses
-      'vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua', 'vài tiếng trước',
-      'just now', 'a few hours ago', 'since morning', 'since yesterday',
+      'vừa mới',
+      'vài giờ trước',
+      'từ sáng',
+      'từ hôm qua',
+      'vài tiếng trước',
+      'just now',
+      'a few hours ago',
+      'since morning',
+      'since yesterday',
       // Status responses
-      'đã đỡ', 'vẫn vậy', 'mệt hơn', 'đã đỡ hơn', 'vẫn như cũ', 'mệt hơn trước',
-      'vẫn như lúc đầu', 'có vẻ nặng hơn', 'đang đỡ dần', 'vẫn giống lúc đầu',
-      'better', 'about the same', 'worse', 'getting better', 'getting worse',
+      'đã đỡ',
+      'vẫn vậy',
+      'mệt hơn',
+      'đã đỡ hơn',
+      'vẫn như cũ',
+      'mệt hơn trước',
+      'vẫn như lúc đầu',
+      'có vẻ nặng hơn',
+      'đang đỡ dần',
+      'vẫn giống lúc đầu',
+      'better',
+      'about the same',
+      'worse',
+      'getting better',
+      'getting worse',
       // Selection responses
-      'không có gì thêm', 'không có triệu chứng mới', 'không thêm gì',
+      'không có gì thêm',
+      'không có triệu chứng mới',
+      'không thêm gì',
       // Action responses
-      'nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì',
-      'đã nghỉ ngơi', 'đã ăn uống', 'đã uống thuốc',
+      'nghỉ ngơi',
+      'ăn uống',
+      'uống nước',
+      'uống thuốc',
+      'chưa làm gì',
+      'đã nghỉ ngơi',
+      'đã ăn uống',
+      'đã uống thuốc',
       // Cause responses
-      'ngủ ít', 'bỏ bữa', 'căng thẳng', 'quên uống thuốc', 'không rõ',
+      'ngủ ít',
+      'bỏ bữa',
+      'căng thẳng',
+      'quên uống thuốc',
+      'không rõ',
       // Generic / yes-no
-      'có', 'không', 'ổn', 'ok', 'đúng', 'rồi', 'chưa',
-      'không có', 'không có gì thêm', 'nothing new', 'nothing yet',
+      'có',
+      'không',
+      'ổn',
+      'ok',
+      'đúng',
+      'rồi',
+      'chưa',
+      'không có',
+      'không có gì thêm',
+      'nothing new',
+      'nothing yet',
     ]);
     const msgs = Array.isArray(s.triage_messages) ? s.triage_messages : [];
     for (const m of msgs) {
@@ -1574,7 +1792,9 @@ async function getHealthReport(pool, userId, days = 7) {
   const recentHalf = sessions.slice(0, half);
   const olderHalf = sessions.slice(half);
   const severityScore = { low: 1, medium: 2, high: 3 };
-  const avgRecent = recentHalf.reduce((s, r) => s + (severityScore[r.triage_severity] || 1), 0) / (recentHalf.length || 1);
+  const avgRecent =
+    recentHalf.reduce((s, r) => s + (severityScore[r.triage_severity] || 1), 0) /
+    (recentHalf.length || 1);
   const avgOlder = olderHalf.length
     ? olderHalf.reduce((s, r) => s + (severityScore[r.triage_severity] || 1), 0) / olderHalf.length
     : avgRecent;
@@ -1585,14 +1805,15 @@ async function getHealthReport(pool, userId, days = 7) {
 
   // Highlights
   const highlights = [];
-  const checkinDays = new Set(sessions.map(s => s.session_date)).size;
+  const checkinDays = new Set(sessions.map((s) => s.session_date)).size;
   highlights.push({ type: 'consistency', value: `${checkinDays}/${days}` });
-  if (severityDist.high > 0) highlights.push({ type: 'high_severity_days', value: severityDist.high });
+  if (severityDist.high > 0)
+    highlights.push({ type: 'high_severity_days', value: severityDist.high });
   if (trend === 'improving') highlights.push({ type: 'trend', value: 'improving' });
   if (trend === 'worsening') highlights.push({ type: 'trend', value: 'worsening' });
 
   // Session summaries cho UI
-  const sessionSummaries = sessions.map(s => ({
+  const sessionSummaries = sessions.map((s) => ({
     date: s.session_date,
     status: s.initial_status,
     severity: s.triage_severity,
@@ -1613,9 +1834,8 @@ async function getHealthReport(pool, userId, days = 7) {
   );
 
   const engagement = engagementRes.rows[0];
-  const responseRate = engagement.total > 0
-    ? Math.round((engagement.responded / engagement.total) * 100)
-    : 0;
+  const responseRate =
+    engagement.total > 0 ? Math.round((engagement.responded / engagement.total) * 100) : 0;
 
   return {
     totalDays: days,
@@ -1659,12 +1879,12 @@ async function getHealthScore(pool, userId) {
   // - status is "fine" (no triage needed), OR
   // - triage completed, OR
   // - flow_state is "monitoring" or "resolved" (backend already processed)
-  const checkinDone = checkin !== null && (
-    checkin.initial_status === 'fine'
-    || checkin.triage_completed_at !== null
-    || checkin.flow_state === 'monitoring'
-    || checkin.flow_state === 'resolved'
-  );
+  const checkinDone =
+    checkin !== null &&
+    (checkin.initial_status === 'fine' ||
+      checkin.triage_completed_at !== null ||
+      checkin.flow_state === 'monitoring' ||
+      checkin.flow_state === 'resolved');
 
   // 2. Latest glucose (last 24h)
   const { rows: glucoseRows } = await pool.query(
@@ -1692,19 +1912,49 @@ async function getHealthScore(pool, userId) {
   let level = 'ok';
 
   // Danger conditions
-  if (checkin?.emergency_triggered) { level = 'danger'; factors.push('emergency_triggered'); }
-  if (checkin?.triage_severity === 'emergency') { level = 'danger'; factors.push('triage_severity_emergency'); }
-  if (checkin?.triage_severity === 'high') { level = 'danger'; factors.push('triage_severity_high'); }
-  if (glucose !== null && glucose > 250) { level = 'danger'; factors.push('glucose_very_high'); }
-  if (glucose !== null && glucose < 70) { level = 'danger'; factors.push('glucose_very_low'); }
-  if (systolic !== null && systolic > 180) { level = 'danger'; factors.push('systolic_very_high'); }
+  if (checkin?.emergency_triggered) {
+    level = 'danger';
+    factors.push('emergency_triggered');
+  }
+  if (checkin?.triage_severity === 'emergency') {
+    level = 'danger';
+    factors.push('triage_severity_emergency');
+  }
+  if (checkin?.triage_severity === 'high') {
+    level = 'danger';
+    factors.push('triage_severity_high');
+  }
+  if (glucose !== null && glucose > 250) {
+    level = 'danger';
+    factors.push('glucose_very_high');
+  }
+  if (glucose !== null && glucose < 70) {
+    level = 'danger';
+    factors.push('glucose_very_low');
+  }
+  if (systolic !== null && systolic > 180) {
+    level = 'danger';
+    factors.push('systolic_very_high');
+  }
 
   // Monitor conditions (only upgrade if not already danger)
   if (level !== 'danger') {
-    if (checkin?.initial_status === 'tired') { level = 'monitor'; factors.push('status_tired'); }
-    if (checkin?.triage_severity === 'medium') { level = 'monitor'; factors.push('triage_severity_medium'); }
-    if (glucose !== null && glucose >= 200 && glucose <= 250) { level = 'monitor'; factors.push('glucose_high'); }
-    if (systolic !== null && systolic >= 140 && systolic <= 180) { level = 'monitor'; factors.push('systolic_high'); }
+    if (checkin?.initial_status === 'tired') {
+      level = 'monitor';
+      factors.push('status_tired');
+    }
+    if (checkin?.triage_severity === 'medium') {
+      level = 'monitor';
+      factors.push('triage_severity_medium');
+    }
+    if (glucose !== null && glucose >= 200 && glucose <= 250) {
+      level = 'monitor';
+      factors.push('glucose_high');
+    }
+    if (systolic !== null && systolic >= 140 && systolic <= 180) {
+      level = 'monitor';
+      factors.push('systolic_high');
+    }
   }
 
   const result = { level, factors, checkinDone };
@@ -1738,10 +1988,10 @@ async function simulateTimePassing(pool, userId) {
  */
 async function resetTodayCheckin(pool, userId) {
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
-  await pool.query(
-    `DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2`,
-    [userId, today]
-  );
+  await pool.query(`DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2`, [
+    userId,
+    today,
+  ]);
 }
 
 module.exports = {

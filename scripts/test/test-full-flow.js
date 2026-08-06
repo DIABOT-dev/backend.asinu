@@ -18,7 +18,11 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const { getUserScript, getScript } = require('../src/services/checkin/script.service');
 const { getNextQuestion } = require('../src/services/checkin/script-runner');
 const { evaluateScript, evaluateFollowUp } = require('../src/services/checkin/scoring-engine');
-const { getFallbackScriptData, logFallback, matchCluster } = require('../src/services/checkin/fallback.service');
+const {
+  getFallbackScriptData,
+  logFallback,
+  matchCluster,
+} = require('../src/services/checkin/fallback.service');
 const { detectEmergency } = require('../src/services/checkin/emergency-detector');
 
 const USER_ID = 4;
@@ -31,16 +35,28 @@ const PROFILE = {
   age: 68,
 };
 
-function header(text) { console.log(`\n${'═'.repeat(60)}\n  ${text}\n${'═'.repeat(60)}`); }
-function step(text) { console.log(`\n  ▸ ${text}`); }
-function result(label, value) { console.log(`    ${label}: ${typeof value === 'object' ? JSON.stringify(value) : value}`); }
-function warn(text) { console.log(`    ⚠️  ${text}`); }
-function ok(text) { console.log(`    ✅ ${text}`); }
-function fail(text) { console.log(`    ❌ ${text}`); }
+function header(text) {
+  console.log(`\n${'═'.repeat(60)}\n  ${text}\n${'═'.repeat(60)}`);
+}
+function step(text) {
+  console.log(`\n  ▸ ${text}`);
+}
+function result(label, value) {
+  console.log(`    ${label}: ${typeof value === 'object' ? JSON.stringify(value) : value}`);
+}
+function warn(text) {
+  console.log(`    ⚠️  ${text}`);
+}
+function ok(text) {
+  console.log(`    ✅ ${text}`);
+}
+function fail(text) {
+  console.log(`    ❌ ${text}`);
+}
 
 async function runScriptSession(scriptData, answers, profile, label) {
   step(`Chạy script: ${label}`);
-  let currentAnswers = [];
+  const currentAnswers = [];
 
   for (const ans of answers) {
     const next = getNextQuestion(scriptData, currentAnswers, { sessionType: 'initial', profile });
@@ -50,7 +66,9 @@ async function runScriptSession(scriptData, answers, profile, label) {
     }
 
     console.log(`    Q${currentAnswers.length + 1}: "${next.question.text}"`);
-    console.log(`        Type: ${next.question.type} | Options: ${(next.question.options || []).join(' | ')}`);
+    console.log(
+      `        Type: ${next.question.type} | Options: ${(next.question.options || []).join(' | ')}`
+    );
     console.log(`        → Chú Hùng chọn: "${ans}"`);
 
     currentAnswers.push({ question_id: next.question.id, answer: ans });
@@ -84,8 +102,8 @@ async function run() {
   step('7:00 sáng — Push notification → Chú Hùng mở app');
   const userScript = await getUserScript(pool, USER_ID);
   console.log(`    Greeting: "${userScript.greeting}"`);
-  console.log(`    Options: ${userScript.initial_options.map(o => o.label).join(' | ')}`);
-  console.log(`    Clusters: ${userScript.clusters.map(c => c.display_name).join(', ')}`);
+  console.log(`    Options: ${userScript.initial_options.map((o) => o.label).join(' | ')}`);
+  console.log(`    Clusters: ${userScript.clusters.map((c) => c.display_name).join(', ')}`);
 
   step('Chú Hùng chọn: "Hơi mệt"');
   step('App hiện danh sách cluster → Chú chọn: "chóng mặt"');
@@ -93,12 +111,17 @@ async function run() {
   const dzScript = await getScript(pool, USER_ID, 'dizziness', 'initial');
   const dzData = dzScript.script_data;
 
-  const conclusionA = await runScriptSession(dzData, [
-    'tối sầm mắt',               // Q1: kiểu chóng mặt
-    'khi đứng dậy',              // Q2: xuất hiện khi nào
-    'hoa mắt',                   // Q3: triệu chứng kèm (KHÔNG danger)
-    'có, thuốc huyết áp',        // Q4: thuốc
-  ], PROFILE, 'Chóng mặt — case bình thường');
+  const conclusionA = await runScriptSession(
+    dzData,
+    [
+      'tối sầm mắt', // Q1: kiểu chóng mặt
+      'khi đứng dậy', // Q2: xuất hiện khi nào
+      'hoa mắt', // Q3: triệu chứng kèm (KHÔNG danger)
+      'có, thuốc huyết áp', // Q4: thuốc
+    ],
+    PROFILE,
+    'Chóng mặt — case bình thường'
+  );
 
   step('📊 KẾT QUẢ SCORING (0 AI call):');
   result('Severity', conclusionA.severity);
@@ -114,12 +137,17 @@ async function run() {
   header('SCENARIO A2: Chóng mặt NẶNG — danger symptoms');
   // ═══════════════════════════════════════════════════════════════
 
-  const conclusionA2 = await runScriptSession(dzData, [
-    'quay cuồng (phòng quay)',    // Q1: kiểu nặng
-    'liên tục không ngừng',       // Q2: liên tục
-    'ngất hoặc suýt ngất',       // Q3: DANGER symptom!
-    'có, thuốc mới kê gần đây',  // Q4
-  ], PROFILE, 'Chóng mặt — danger symptom (ngất)');
+  const conclusionA2 = await runScriptSession(
+    dzData,
+    [
+      'quay cuồng (phòng quay)', // Q1: kiểu nặng
+      'liên tục không ngừng', // Q2: liên tục
+      'ngất hoặc suýt ngất', // Q3: DANGER symptom!
+      'có, thuốc mới kê gần đây', // Q4
+    ],
+    PROFILE,
+    'Chóng mặt — danger symptom (ngất)'
+  );
 
   step('📊 KẾT QUẢ SCORING:');
   result('Severity', conclusionA2.severity);
@@ -148,11 +176,16 @@ async function run() {
     step('Hệ thống chạy FALLBACK script (3 câu cơ bản, 0 AI)');
     const fbData = getFallbackScriptData();
 
-    const conclusionB = await runScriptSession(fbData, [
-      6,              // fb1: mức đau 6/10
-      'Từ sáng',     // fb2: từ khi nào
-      'Vẫn vậy',    // fb3: nặng hơn không
-    ], PROFILE, 'Fallback — đau bụng');
+    const conclusionB = await runScriptSession(
+      fbData,
+      [
+        6, // fb1: mức đau 6/10
+        'Từ sáng', // fb2: từ khi nào
+        'Vẫn vậy', // fb3: nặng hơn không
+      ],
+      PROFILE,
+      'Fallback — đau bụng'
+    );
 
     step('📊 KẾT QUẢ SCORING FALLBACK:');
     result('Severity', conclusionB.severity);
@@ -183,11 +216,16 @@ async function run() {
     warn('Triệu chứng hoàn toàn mới → FALLBACK + log R&D');
 
     const fbData = getFallbackScriptData();
-    const conclusionC = await runScriptSession(fbData, [
-      4,              // fb1: mức đau 4/10
-      'Vài ngày',    // fb2: từ khi nào
-      'Vẫn vậy',    // fb3: nặng hơn không
-    ], PROFILE, 'Fallback — đau sau tai');
+    const conclusionC = await runScriptSession(
+      fbData,
+      [
+        4, // fb1: mức đau 4/10
+        'Vài ngày', // fb2: từ khi nào
+        'Vẫn vậy', // fb3: nặng hơn không
+      ],
+      PROFILE,
+      'Fallback — đau sau tai'
+    );
 
     step('📊 KẾT QUẢ:');
     result('Severity', conclusionC.severity);
@@ -231,7 +269,9 @@ async function run() {
   step('3h sau → Push notification → Chú Hùng mở app');
   step('App load follow-up script (cached, 0 AI)');
 
-  const fuData = (await getScript(pool, USER_ID, 'dizziness', 'followup'))?.script_data || getFallbackScriptData();
+  const fuData =
+    (await getScript(pool, USER_ID, 'dizziness', 'followup'))?.script_data ||
+    getFallbackScriptData();
 
   const fuAnswersBetter = [
     { question_id: 'fu1', answer: 'Đỡ hơn' },
@@ -244,7 +284,9 @@ async function run() {
   result('Action', fuResultBetter.action);
   result('Follow-up', `${fuResultBetter.followUpHours}h`);
   result('Needs doctor', fuResultBetter.needsDoctor);
-  ok(`${fuResultBetter.action === 'monitoring' ? 'Chuyển về monitoring → hẹn 9h tối' : 'Tiếp tục follow-up'}`);
+  ok(
+    `${fuResultBetter.action === 'monitoring' ? 'Chuyển về monitoring → hẹn 9h tối' : 'Tiếp tục follow-up'}`
+  );
 
   // ═══════════════════════════════════════════════════════════════
   header('SCENARIO F: Follow-up sau 3h — Chú Hùng NẶNG HƠN');
@@ -316,12 +358,12 @@ async function run() {
     [USER_ID]
   );
   console.log('  📋 Fallback logs chờ xử lý:');
-  fbLogs.forEach(f => console.log(`     - "${f.raw_input}" (${f.status})`));
+  fbLogs.forEach((f) => console.log(`     - "${f.raw_input}" (${f.status})`));
 
   await pool.end();
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('💥 Crashed:', err);
   pool.end();
   process.exit(1);

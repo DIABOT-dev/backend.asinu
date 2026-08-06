@@ -48,7 +48,10 @@ async function testBuildUserContext() {
   // 1.1 User 4 — active user with clusters, sessions, checkins
   const ctx4 = await buildUserContext(pool, 4);
   assert(ctx4.topSymptom !== null, '1.1 User 4 has topSymptom');
-  assert(ctx4.topSymptom.display_name && ctx4.topSymptom.display_name.length > 0, '1.2 topSymptom has display_name');
+  assert(
+    ctx4.topSymptom.display_name && ctx4.topSymptom.display_name.length > 0,
+    '1.2 topSymptom has display_name'
+  );
   assert(ctx4.topSymptom.trend !== undefined, '1.3 topSymptom has trend');
   assert(Array.isArray(ctx4.topClusters), '1.4 topClusters is array');
   assert(ctx4.topClusters.length <= 3, '1.5 topClusters max 3');
@@ -89,7 +92,10 @@ async function testTemplateSelection() {
     topSymptom: null,
     streakOkDays: 0,
   });
-  assert(sel2.template.id === 'morning_consecutive_tired', '2.2 3 days tired → morning_consecutive_tired');
+  assert(
+    sel2.template.id === 'morning_consecutive_tired',
+    '2.2 3 days tired → morning_consecutive_tired'
+  );
   assert(sel2.variables.tiredDays === 3, '2.3 tiredDays variable = 3');
 
   // 2.4 Symptom worsening
@@ -99,7 +105,10 @@ async function testTemplateSelection() {
     topSymptom: { display_name: 'đau đầu', trend: 'increasing' },
     streakOkDays: 0,
   });
-  assert(sel3.template.id === 'morning_symptom_worsening', '2.4 Worsening → morning_symptom_worsening');
+  assert(
+    sel3.template.id === 'morning_symptom_worsening',
+    '2.4 Worsening → morning_symptom_worsening'
+  );
   assert(sel3.variables.symptom === 'đau đầu', '2.5 symptom variable = đau đầu');
 
   // 2.6 Symptom improving
@@ -109,7 +118,10 @@ async function testTemplateSelection() {
     topSymptom: { display_name: 'ho', trend: 'decreasing' },
     streakOkDays: 0,
   });
-  assert(sel4.template.id === 'morning_symptom_improving', '2.6 Improving → morning_symptom_improving');
+  assert(
+    sel4.template.id === 'morning_symptom_improving',
+    '2.6 Improving → morning_symptom_improving'
+  );
 
   // 2.7 Symptom stable
   const sel5 = selectMorningTemplate({
@@ -155,9 +167,15 @@ async function testTemplateSelection() {
   assert(selA2.template.id === 'afternoon_default', '2.13 Afternoon default');
 
   // 2.14 Evening templates
-  const selE1 = selectEveningTemplate({ topSymptom: { display_name: 'sốt', trend: 'decreasing' } }, 'uống thuốc');
+  const selE1 = selectEveningTemplate(
+    { topSymptom: { display_name: 'sốt', trend: 'decreasing' } },
+    'uống thuốc'
+  );
   assert(selE1.template.id === 'evening_improving', '2.14 Evening improving');
-  const selE2 = selectEveningTemplate({ topSymptom: { display_name: 'sốt', trend: 'stable' } }, 'uống thuốc');
+  const selE2 = selectEveningTemplate(
+    { topSymptom: { display_name: 'sốt', trend: 'stable' } },
+    'uống thuốc'
+  );
   assert(selE2.template.id === 'evening_has_symptom', '2.15 Evening has_symptom');
   const selE3 = selectEveningTemplate({ topSymptom: null }, 'uống thuốc');
   assert(selE3.template.id === 'evening_default', '2.16 Evening default');
@@ -171,7 +189,11 @@ async function testRenderMessage() {
 
   // 3.1 Vietnamese elderly male
   const user1 = { birth_year: 1960, gender: 'nam', display_name: 'Chú Hùng', lang: 'vi' };
-  const result1 = renderMessage(MORNING_TEMPLATES.has_symptom_stable, { symptom: 'đau đầu' }, user1);
+  const result1 = renderMessage(
+    MORNING_TEMPLATES.has_symptom_stable,
+    { symptom: 'đau đầu' },
+    user1
+  );
   assert(result1.text.includes('chú Hùng'), '3.1 Contains "chú Hùng"');
   assert(result1.text.includes('đau đầu'), '3.2 Contains symptom "đau đầu"');
   assert(result1.templateId === 'morning_symptom_stable', '3.3 templateId correct');
@@ -184,7 +206,11 @@ async function testRenderMessage() {
 
   // 3.6 English user
   const user3 = { birth_year: 1980, gender: 'male', display_name: 'John', lang: 'en' };
-  const result3 = renderMessage(MORNING_TEMPLATES.has_symptom_worsening, { symptom: 'headache' }, user3);
+  const result3 = renderMessage(
+    MORNING_TEMPLATES.has_symptom_worsening,
+    { symptom: 'headache' },
+    user3
+  );
   assert(result3.text.includes('John'), '3.6 English contains name');
   assert(result3.text.includes('headache'), '3.7 English contains symptom');
 
@@ -234,7 +260,9 @@ async function testGenerateMessage() {
   assert(msg2.templateId.startsWith('afternoon_'), '4.5 Afternoon templateId');
 
   // 4.6 Evening with tasks
-  const msg3 = await generateMessage(pool, 4, 'evening', user4, { tasks: 'uống thuốc, đo huyết áp' });
+  const msg3 = await generateMessage(pool, 4, 'evening', user4, {
+    tasks: 'uống thuốc, đo huyết áp',
+  });
   assert(msg3.templateId.startsWith('evening_'), '4.6 Evening templateId');
 
   // 4.7 Alert severity
@@ -254,7 +282,10 @@ async function testGenerateMessage() {
   const user3 = { id: 3, birth_year: 1960, gender: 'nam', display_name: 'Bác Ba', lang: 'vi' };
   const msg7 = await generateMessage(pool, 3, 'morning', user3);
   // Messages may differ based on context
-  assert(msg7.text !== msg1.text || msg7.templateId !== msg1.templateId || true, '4.10 Different users can get different messages');
+  assert(
+    msg7.text !== msg1.text || msg7.templateId !== msg1.templateId || true,
+    '4.10 Different users can get different messages'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -264,7 +295,9 @@ async function testCheckAlertTriggers() {
   console.log('\n══════ SUITE 5: checkAlertTriggers ══════');
 
   // Setup: ensure user 4 has a recent high severity session
-  await pool.query(`UPDATE script_sessions SET created_at = NOW(), severity = 'high' WHERE id = (SELECT id FROM script_sessions WHERE user_id = 4 ORDER BY id DESC LIMIT 1)`);
+  await pool.query(
+    `UPDATE script_sessions SET created_at = NOW(), severity = 'high' WHERE id = (SELECT id FROM script_sessions WHERE user_id = 4 ORDER BY id DESC LIMIT 1)`
+  );
 
   // 5.1 User 4 has high severity session → should trigger
   const result4 = await checkAlertTriggers(pool, 4);
@@ -282,17 +315,24 @@ async function testCheckAlertTriggers() {
   assert(result2 === null, '5.4 User 2 (no data) → no trigger');
 
   // 5.5 Make session old (> 24h) → severity trigger gone
-  await pool.query(`UPDATE script_sessions SET created_at = NOW() - INTERVAL '48 hours' WHERE user_id = 4`);
+  await pool.query(
+    `UPDATE script_sessions SET created_at = NOW() - INTERVAL '48 hours' WHERE user_id = 4`
+  );
   const result4old = await checkAlertTriggers(pool, 4);
   // Should NOT trigger alert_severity (session too old), but might trigger alert_trend
   if (result4old) {
-    assert(result4old.trigger !== 'alert_severity' || true, '5.5 Old session → not severity trigger');
+    assert(
+      result4old.trigger !== 'alert_severity' || true,
+      '5.5 Old session → not severity trigger'
+    );
   } else {
     assert(true, '5.5 Old session → no trigger (correct)');
   }
 
   // Restore
-  await pool.query(`UPDATE script_sessions SET created_at = NOW() WHERE id = (SELECT id FROM script_sessions WHERE user_id = 4 ORDER BY id DESC LIMIT 1)`);
+  await pool.query(
+    `UPDATE script_sessions SET created_at = NOW() WHERE id = (SELECT id FROM script_sessions WHERE user_id = 4 ORDER BY id DESC LIMIT 1)`
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -304,14 +344,19 @@ async function testApiEndpoints() {
   const http = require('http');
   function get(path) {
     return new Promise((resolve, reject) => {
-      http.get('http://localhost:3000' + path, res => {
-        let data = '';
-        res.on('data', c => data += c);
-        res.on('end', () => {
-          try { resolve({ status: res.statusCode, body: JSON.parse(data) }); }
-          catch { resolve({ status: res.statusCode, body: data }); }
-        });
-      }).on('error', reject);
+      http
+        .get('http://localhost:3000' + path, (res) => {
+          let data = '';
+          res.on('data', (c) => (data += c));
+          res.on('end', () => {
+            try {
+              resolve({ status: res.statusCode, body: JSON.parse(data) });
+            } catch {
+              resolve({ status: res.statusCode, body: data });
+            }
+          });
+        })
+        .on('error', reject);
     });
   }
 
@@ -428,12 +473,12 @@ async function testTemplateSafety() {
   assert(safe, '8.2 No templates contain dangerous medical advice');
 
   // 8.3 Template IDs are unique
-  const ids = allTemplates.map(t => t.id);
+  const ids = allTemplates.map((t) => t.id);
   const unique = new Set(ids);
   assert(ids.length === unique.size, '8.3 All template IDs are unique');
 
   // 8.4 Morning templates cover all expected scenarios
-  const morningIds = Object.values(MORNING_TEMPLATES).map(t => t.id);
+  const morningIds = Object.values(MORNING_TEMPLATES).map((t) => t.id);
   assert(morningIds.includes('morning_default'), '8.4 Has morning_default');
   assert(morningIds.includes('morning_high_severity'), '8.5 Has morning_high_severity');
   assert(morningIds.includes('morning_symptom_worsening'), '8.6 Has morning_symptom_worsening');
@@ -460,7 +505,9 @@ async function run() {
   await testTemplateSafety();
 
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log(`║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`);
+  console.log(
+    `║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`
+  );
   if (totalFail > 0) {
     console.log('║  FAILURES:                                       ║');
     for (const f of failures) console.log(`║  - ${f.substring(0, 46).padEnd(46)} ║`);
@@ -471,7 +518,7 @@ async function run() {
   process.exit(totalFail > 0 ? 1 : 0);
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('TEST RUNNER CRASHED:', err);
   pool.end();
   process.exit(1);

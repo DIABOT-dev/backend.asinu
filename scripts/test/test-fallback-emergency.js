@@ -77,9 +77,18 @@ function testGetFallbackScriptData() {
   assert('B3 Q1 type is slider', script.questions[0].type === 'slider');
   assert('B4 Q2 type is single_choice', script.questions[1].type === 'single_choice');
   assert('B5 Q3 type is single_choice', script.questions[2].type === 'single_choice');
-  assert('B6 has scoring_rules (>=3)', Array.isArray(script.scoring_rules) && script.scoring_rules.length >= 3);
-  assert('B7 has conclusion_templates', script.conclusion_templates && typeof script.conclusion_templates === 'object');
-  assert('B8 has followup_questions', Array.isArray(script.followup_questions) && script.followup_questions.length > 0);
+  assert(
+    'B6 has scoring_rules (>=3)',
+    Array.isArray(script.scoring_rules) && script.scoring_rules.length >= 3
+  );
+  assert(
+    'B7 has conclusion_templates',
+    script.conclusion_templates && typeof script.conclusion_templates === 'object'
+  );
+  assert(
+    'B8 has followup_questions',
+    Array.isArray(script.followup_questions) && script.followup_questions.length > 0
+  );
 }
 
 function testFallbackScriptExecution() {
@@ -118,28 +127,42 @@ async function testLogAndGetPending() {
   console.log('\n=== D. logFallback() + getPendingFallbacks() ===');
 
   // Clean up old test data
-  await pool.query("DELETE FROM fallback_logs WHERE user_id = 4 AND raw_input IN ('đau bụng', 'đau sau tai khi nhai', 'nhức răng')");
+  await pool.query(
+    "DELETE FROM fallback_logs WHERE user_id = 4 AND raw_input IN ('đau bụng', 'đau sau tai khi nhai', 'nhức răng')"
+  );
 
   await logFallback(pool, 4, 'đau bụng');
-  const { rows: r1 } = await pool.query("SELECT * FROM fallback_logs WHERE user_id = 4 AND raw_input = 'đau bụng' ORDER BY created_at DESC LIMIT 1");
+  const { rows: r1 } = await pool.query(
+    "SELECT * FROM fallback_logs WHERE user_id = 4 AND raw_input = 'đau bụng' ORDER BY created_at DESC LIMIT 1"
+  );
   assert('D1 "đau bụng" logged', r1.length > 0);
   assert('D2 status is pending', r1[0] && r1[0].status === 'pending');
 
   await logFallback(pool, 4, 'đau sau tai khi nhai');
-  const { rows: r2 } = await pool.query("SELECT * FROM fallback_logs WHERE user_id = 4 AND raw_input = 'đau sau tai khi nhai' ORDER BY created_at DESC LIMIT 1");
+  const { rows: r2 } = await pool.query(
+    "SELECT * FROM fallback_logs WHERE user_id = 4 AND raw_input = 'đau sau tai khi nhai' ORDER BY created_at DESC LIMIT 1"
+  );
   assert('D3 "đau sau tai khi nhai" logged', r2.length > 0);
 
   await logFallback(pool, 4, 'nhức răng');
-  const { rows: r3 } = await pool.query("SELECT * FROM fallback_logs WHERE user_id = 4 AND raw_input = 'nhức răng' ORDER BY created_at DESC LIMIT 1");
+  const { rows: r3 } = await pool.query(
+    "SELECT * FROM fallback_logs WHERE user_id = 4 AND raw_input = 'nhức răng' ORDER BY created_at DESC LIMIT 1"
+  );
   assert('D4 "nhức răng" logged', r3.length > 0);
 
   const pending = await getPendingFallbacks(pool);
-  const userPending = pending.filter(p => p.user_id === 4 && ['đau bụng', 'đau sau tai khi nhai', 'nhức răng'].includes(p.raw_input));
+  const userPending = pending.filter(
+    (p) =>
+      p.user_id === 4 && ['đau bụng', 'đau sau tai khi nhai', 'nhức răng'].includes(p.raw_input)
+  );
   assert('D5 getPendingFallbacks returns all 3', userPending.length === 3);
 
   // Verify Vietnamese diacritics stored correctly
   assert('D6 Vietnamese diacritics stored correctly', r1[0] && r1[0].raw_input === 'đau bụng');
-  assert('D7 Diacritics for "đau sau tai khi nhai"', r2[0] && r2[0].raw_input === 'đau sau tai khi nhai');
+  assert(
+    'D7 Diacritics for "đau sau tai khi nhai"',
+    r2[0] && r2[0].raw_input === 'đau sau tai khi nhai'
+  );
 }
 
 async function testMarkProcessed() {
@@ -163,13 +186,15 @@ async function testMarkProcessed() {
 
   // Mark second as merged (need a cluster id - get one from user 4)
   const { rows: clusters } = await pool.query(
-    "SELECT id FROM problem_clusters WHERE user_id = 4 AND is_active = TRUE LIMIT 1"
+    'SELECT id FROM problem_clusters WHERE user_id = 4 AND is_active = TRUE LIMIT 1'
   );
   const mergedClusterId = clusters.length > 0 ? clusters[0].id : null;
 
   if (mergedClusterId) {
     await markFallbackProcessed(pool, rows[1].id, 'ear_pain', 'ear_pain', 0.72, mergedClusterId);
-    const { rows: r2 } = await pool.query('SELECT * FROM fallback_logs WHERE id = $1', [rows[1].id]);
+    const { rows: r2 } = await pool.query('SELECT * FROM fallback_logs WHERE id = $1', [
+      rows[1].id,
+    ]);
     assert('E3 second status = merged', r2[0] && r2[0].status === 'merged');
     assert('E4 merged_to_cluster_id set', r2[0] && r2[0].merged_to_cluster_id !== null);
   } else {
@@ -179,7 +204,10 @@ async function testMarkProcessed() {
 
   // Check pending count
   const pending = await getPendingFallbacks(pool);
-  const userPending = pending.filter(p => p.user_id === 4 && ['đau bụng', 'đau sau tai khi nhai', 'nhức răng'].includes(p.raw_input));
+  const userPending = pending.filter(
+    (p) =>
+      p.user_id === 4 && ['đau bụng', 'đau sau tai khi nhai', 'nhức răng'].includes(p.raw_input)
+  );
   assert('E5 only 1 pending left', userPending.length === 1);
 }
 
@@ -196,13 +224,22 @@ function testEmergencyDetection() {
   assert('F3 SEIZURE: "co giật"', r3.isEmergency === true && r3.type === 'SEIZURE');
 
   const r4 = detectEmergency(['sốt cao', 'cứng cổ']);
-  assert('F4 MENINGITIS: "sốt cao" + "cứng cổ"', r4.isEmergency === true && r4.type === 'MENINGITIS');
+  assert(
+    'F4 MENINGITIS: "sốt cao" + "cứng cổ"',
+    r4.isEmergency === true && r4.type === 'MENINGITIS'
+  );
 
   const r5 = detectEmergency(['nôn ra máu']);
-  assert('F5 HEMORRHAGE: "nôn ra máu"', r5.isEmergency === true && r5.type === 'INTERNAL_HEMORRHAGE');
+  assert(
+    'F5 HEMORRHAGE: "nôn ra máu"',
+    r5.isEmergency === true && r5.type === 'INTERNAL_HEMORRHAGE'
+  );
 
   const r6 = detectEmergency(['khó thở', 'sưng mặt']);
-  assert('F6 ANAPHYLAXIS: "khó thở" + "sưng mặt"', r6.isEmergency === true && r6.type === 'ANAPHYLAXIS');
+  assert(
+    'F6 ANAPHYLAXIS: "khó thở" + "sưng mặt"',
+    r6.isEmergency === true && r6.type === 'ANAPHYLAXIS'
+  );
 
   // NOT emergency
   const r7 = detectEmergency(['hơi mệt']);
@@ -260,7 +297,9 @@ async function testEdgeCases() {
   // logFallback with null checkinId
   try {
     await logFallback(pool, 4, 'test_null_checkin', null, []);
-    const { rows } = await pool.query("SELECT * FROM fallback_logs WHERE user_id = 4 AND raw_input = 'test_null_checkin' ORDER BY created_at DESC LIMIT 1");
+    const { rows } = await pool.query(
+      "SELECT * FROM fallback_logs WHERE user_id = 4 AND raw_input = 'test_null_checkin' ORDER BY created_at DESC LIMIT 1"
+    );
     assert('H1 logFallback with null checkinId works', rows.length > 0);
   } catch (e) {
     assert('H1 logFallback with null checkinId works', false);
@@ -269,7 +308,9 @@ async function testEdgeCases() {
   // logFallback with empty fallbackAnswers
   try {
     await logFallback(pool, 4, 'test_empty_answers', null, []);
-    const { rows } = await pool.query("SELECT * FROM fallback_logs WHERE user_id = 4 AND raw_input = 'test_empty_answers' ORDER BY created_at DESC LIMIT 1");
+    const { rows } = await pool.query(
+      "SELECT * FROM fallback_logs WHERE user_id = 4 AND raw_input = 'test_empty_answers' ORDER BY created_at DESC LIMIT 1"
+    );
     assert('H2 logFallback with empty fallbackAnswers works', rows.length > 0);
   } catch (e) {
     assert('H2 logFallback with empty fallbackAnswers works', false);
@@ -282,7 +323,9 @@ async function testEdgeCases() {
   // Multiple logs for same symptom (no dedup)
   await logFallback(pool, 4, 'test_dedup', null, []);
   await logFallback(pool, 4, 'test_dedup', null, []);
-  const { rows: dedup } = await pool.query("SELECT * FROM fallback_logs WHERE user_id = 4 AND raw_input = 'test_dedup'");
+  const { rows: dedup } = await pool.query(
+    "SELECT * FROM fallback_logs WHERE user_id = 4 AND raw_input = 'test_dedup'"
+  );
   assert('H4 multiple logs same symptom all saved', dedup.length >= 2);
 }
 
@@ -312,7 +355,7 @@ async function main() {
   console.log('\n' + '='.repeat(50));
   console.log(`RESULTS: ${passed} passed, ${failed} failed, ${passed + failed} total`);
   console.log('='.repeat(50));
-  results.forEach(r => console.log(r));
+  results.forEach((r) => console.log(r));
   console.log('='.repeat(50));
 
   await pool.end();

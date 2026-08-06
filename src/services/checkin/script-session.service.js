@@ -7,7 +7,9 @@
  * All pool.query calls for script check-in sessions live here.
  */
 
-const { dispatch: dispatchNotification } = require('../../core/notification/notification.orchestrator');
+const {
+  dispatch: dispatchNotification,
+} = require('../../core/notification/notification.orchestrator');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 // ─── Profile helper ────────────────────────────────────────────────────────
@@ -39,7 +41,14 @@ async function getProfile(pool, userId) {
  * @param {string} status - 'tired' | 'very_tired'
  * @returns {Promise<object>} created session row
  */
-async function createSession(pool, userId, scriptId, clusterKey, sessionType = 'initial', status = 'tired') {
+async function createSession(
+  pool,
+  userId,
+  scriptId,
+  clusterKey,
+  sessionType = 'initial',
+  status = 'tired'
+) {
   // 1. Insert script_session
   const { rows: sessionRows } = await pool.query(
     `INSERT INTO script_sessions
@@ -66,10 +75,10 @@ async function createSession(pool, userId, scriptId, clusterKey, sessionType = '
     // 3. Link script session to checkin
     const checkinId = result.rows[0]?.id;
     if (checkinId) {
-      await pool.query(
-        `UPDATE script_sessions SET checkin_id = $1 WHERE id = $2`,
-        [checkinId, session.id]
-      );
+      await pool.query(`UPDATE script_sessions SET checkin_id = $1 WHERE id = $2`, [
+        checkinId,
+        session.id,
+      ]);
       session.checkin_id = checkinId;
     }
   } catch (_) {
@@ -86,7 +95,7 @@ async function createSession(pool, userId, scriptId, clusterKey, sessionType = '
       status,
       flow_state: flowState,
     },
-    { event_id: `checkin.started:${session.id}` },
+    { event_id: `checkin.started:${session.id}` }
   );
 
   return session;
@@ -169,10 +178,9 @@ async function completeSession(pool, sessionId, answers, conclusion) {
       conclusion.closeMessage,
     ]
   );
-  const result = await pool.query(
-    'SELECT user_id, checkin_id FROM script_sessions WHERE id = $1',
-    [sessionId],
-  );
+  const result = await pool.query('SELECT user_id, checkin_id FROM script_sessions WHERE id = $1', [
+    sessionId,
+  ]);
   const session = result.rows[0];
   if (session) {
     emitCrmEventAsync(
@@ -184,7 +192,7 @@ async function completeSession(pool, sessionId, answers, conclusion) {
         checkin_id: session.checkin_id ? String(session.checkin_id) : null,
         status: 'completed',
       },
-      { event_id: `checkin.completed:${sessionId}` },
+      { event_id: `checkin.completed:${sessionId}` }
     );
   }
 }
@@ -229,10 +237,9 @@ async function updateCheckinFromSession(pool, checkinId, severity, summary, foll
  * Get script_data by script ID.
  */
 async function getScriptDataById(pool, scriptId) {
-  const { rows } = await pool.query(
-    `SELECT script_data FROM triage_scripts WHERE id = $1`,
-    [scriptId]
-  );
+  const { rows } = await pool.query(`SELECT script_data FROM triage_scripts WHERE id = $1`, [
+    scriptId,
+  ]);
   return rows[0]?.script_data || null;
 }
 
@@ -253,7 +260,13 @@ async function setMultiSymptomMeta(pool, sessionId, multiSymptomData) {
 /**
  * Switch a session to the next cluster in a multi-symptom flow.
  */
-async function switchToNextCluster(pool, sessionId, nextClusterKey, nextScriptId, multiSymptomData) {
+async function switchToNextCluster(
+  pool,
+  sessionId,
+  nextClusterKey,
+  nextScriptId,
+  multiSymptomData
+) {
   await pool.query(
     `UPDATE script_sessions SET
        cluster_key = $2,
@@ -276,10 +289,9 @@ async function alertFamilyIfNeeded(pool, userId, checkinId, conclusion) {
   const { t } = require('../../i18n');
 
   // Check if already alerted today
-  const { rows } = await pool.query(
-    `SELECT family_alerted FROM health_checkins WHERE id = $1`,
-    [checkinId]
-  );
+  const { rows } = await pool.query(`SELECT family_alerted FROM health_checkins WHERE id = $1`, [
+    checkinId,
+  ]);
   if (rows[0]?.family_alerted) return;
 
   // Get patient name
@@ -311,15 +323,18 @@ async function alertFamilyIfNeeded(pool, userId, checkinId, conclusion) {
   for (const cg of caregivers) {
     if (!cg.push_token) continue;
     const cgLang = cg.cg_lang || 'vi';
-    const patientDisplay = cg.patient_side === 'requester'
-      ? getPatientRoleForCaregiver(cg.relationship_type, patientName, cgLang, true)
-      : patientName;
+    const patientDisplay =
+      cg.patient_side === 'requester'
+        ? getPatientRoleForCaregiver(cg.relationship_type, patientName, cgLang, true)
+        : patientName;
     try {
       await dispatchNotification(pool, {
         userId: cg.caregiver_id,
         type: 'caregiver_alert',
         title: t('checkin.health_check_needed_title', cgLang),
-        body: conclusion.summary || t('checkin.no_response_family_body', cgLang, { name: patientDisplay }),
+        body:
+          conclusion.summary ||
+          t('checkin.no_response_family_body', cgLang, { name: patientDisplay }),
         data: { patient_id: userId, checkin_id: checkinId, severity: conclusion.severity },
         priority: 'high',
       });

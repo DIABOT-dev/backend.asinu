@@ -19,7 +19,6 @@
  */
 
 const symptomMap = {
-
   // ═══════════════════════════════════════════════════════════════════════════
   // 1. ĐAU ĐẦU (Headache)
   // ═══════════════════════════════════════════════════════════════════════════
@@ -140,12 +139,24 @@ const symptomMap = {
     followUpQuestions: [
       {
         question: 'Đau bụng ở vị trí nào?',
-        options: ['vùng thượng vị (trên rốn)', 'quanh rốn', 'bụng dưới bên phải', 'bụng dưới bên trái', 'bụng dưới giữa', 'lan khắp bụng'],
+        options: [
+          'vùng thượng vị (trên rốn)',
+          'quanh rốn',
+          'bụng dưới bên phải',
+          'bụng dưới bên trái',
+          'bụng dưới giữa',
+          'lan khắp bụng',
+        ],
         multiSelect: false,
       },
       {
         question: 'Kiểu đau như thế nào?',
-        options: ['đau âm ỉ liên tục', 'đau quặn từng cơn', 'đau rát, nóng bỏng', 'đau tức, căng chướng'],
+        options: [
+          'đau âm ỉ liên tục',
+          'đau quặn từng cơn',
+          'đau rát, nóng bỏng',
+          'đau tức, căng chướng',
+        ],
         multiSelect: false,
       },
       {
@@ -155,7 +166,15 @@ const symptomMap = {
       },
       {
         question: 'Bạn có thêm triệu chứng nào?',
-        options: ['buồn nôn', 'tiêu chảy', 'táo bón', 'sốt', 'chướng bụng', 'tiểu buốt', 'không có'],
+        options: [
+          'buồn nôn',
+          'tiêu chảy',
+          'táo bón',
+          'sốt',
+          'chướng bụng',
+          'tiểu buốt',
+          'không có',
+        ],
         multiSelect: true,
       },
     ],
@@ -210,22 +229,46 @@ const symptomMap = {
     followUpQuestions: [
       {
         question: 'Chóng mặt kiểu nào?',
-        options: ['quay cuồng (phòng quay)', 'lâng lâng, lơ lửng', 'tối sầm mắt', 'mất thăng bằng, loạng choạng'],
+        options: [
+          'quay cuồng (phòng quay)',
+          'lâng lâng, lơ lửng',
+          'tối sầm mắt',
+          'mất thăng bằng, loạng choạng',
+        ],
         multiSelect: false,
       },
       {
         question: 'Chóng mặt xuất hiện khi nào?',
-        options: ['khi đứng dậy', 'khi xoay đầu', 'liên tục không ngừng', 'khi nằm nghiêng', 'bất kỳ lúc nào'],
+        options: [
+          'khi đứng dậy',
+          'khi xoay đầu',
+          'liên tục không ngừng',
+          'khi nằm nghiêng',
+          'bất kỳ lúc nào',
+        ],
         multiSelect: true,
       },
       {
         question: 'Bạn có thêm triệu chứng nào?',
-        options: ['buồn nôn', 'ù tai', 'hoa mắt', 'tim đập nhanh', 'vã mồ hôi', 'đau đầu', 'không có'],
+        options: [
+          'buồn nôn',
+          'ù tai',
+          'hoa mắt',
+          'tim đập nhanh',
+          'vã mồ hôi',
+          'đau đầu',
+          'không có',
+        ],
         multiSelect: true,
       },
       {
         question: 'Bạn có đang dùng thuốc huyết áp hoặc thuốc mới không?',
-        options: ['có, thuốc huyết áp', 'có, thuốc mới kê gần đây', 'không dùng thuốc gì', 'không rõ'],
+        options: [
+          'có, thuốc huyết áp',
+          'có, thuốc mới kê gần đây',
+          'không dùng thuốc gì',
+          'không rõ',
+        ],
         multiSelect: false,
       },
     ],
@@ -285,7 +328,12 @@ const symptomMap = {
       },
       {
         question: 'Mệt mỏi ảnh hưởng thế nào?',
-        options: ['vẫn sinh hoạt bình thường', 'phải nghỉ ngơi nhiều hơn', 'khó làm việc nhà', 'hầu như nằm cả ngày'],
+        options: [
+          'vẫn sinh hoạt bình thường',
+          'phải nghỉ ngơi nhiều hơn',
+          'khó làm việc nhà',
+          'hầu như nằm cả ngày',
+        ],
         multiSelect: false,
       },
       {
@@ -295,7 +343,12 @@ const symptomMap = {
       },
       {
         question: 'Giấc ngủ của bạn gần đây thế nào?',
-        options: ['ngủ đủ 6-8 tiếng', 'ngủ ít hơn 5 tiếng', 'ngủ chập chờn', 'thức dậy nhiều lần trong đêm'],
+        options: [
+          'ngủ đủ 6-8 tiếng',
+          'ngủ ít hơn 5 tiếng',
+          'ngủ chập chờn',
+          'thức dậy nhiều lần trong đêm',
+        ],
         multiSelect: false,
       },
     ],
@@ -349,12 +402,24 @@ const symptomMap = {
     followUpQuestions: [
       {
         question: 'Đau ngực kiểu nào?',
-        options: ['đau thắt, bóp chặt', 'đau nhói như kim đâm', 'đau tức nặng', 'đau rát, nóng bỏng', 'đau âm ỉ'],
+        options: [
+          'đau thắt, bóp chặt',
+          'đau nhói như kim đâm',
+          'đau tức nặng',
+          'đau rát, nóng bỏng',
+          'đau âm ỉ',
+        ],
         multiSelect: false,
       },
       {
         question: 'Đau ngực có lan ra chỗ khác không?',
-        options: ['lan ra cánh tay trái', 'lan lên hàm hoặc cổ', 'lan ra sau lưng', 'chỉ đau tại chỗ', 'không rõ'],
+        options: [
+          'lan ra cánh tay trái',
+          'lan lên hàm hoặc cổ',
+          'lan ra sau lưng',
+          'chỉ đau tại chỗ',
+          'không rõ',
+        ],
         multiSelect: true,
       },
       {
@@ -424,12 +489,23 @@ const symptomMap = {
     followUpQuestions: [
       {
         question: 'Khó thở xuất hiện khi nào?',
-        options: ['khi gắng sức (đi bộ, leo cầu thang)', 'khi nghỉ ngơi', 'khi nằm', 'về đêm', 'liên tục'],
+        options: [
+          'khi gắng sức (đi bộ, leo cầu thang)',
+          'khi nghỉ ngơi',
+          'khi nằm',
+          'về đêm',
+          'liên tục',
+        ],
         multiSelect: true,
       },
       {
         question: 'Mức độ khó thở?',
-        options: ['hơi khó thở khi hoạt động', 'khó thở khi làm việc nhẹ', 'khó thở ngay khi nghỉ', 'không nói được hết câu'],
+        options: [
+          'hơi khó thở khi hoạt động',
+          'khó thở khi làm việc nhẹ',
+          'khó thở ngay khi nghỉ',
+          'không nói được hết câu',
+        ],
         multiSelect: false,
       },
       {
@@ -491,12 +567,27 @@ const symptomMap = {
     followUpQuestions: [
       {
         question: 'Đau ở vị trí nào?',
-        options: ['vai', 'cổ', 'lưng trên', 'thắt lưng', 'khớp gối', 'khớp tay', 'hông', 'nhiều khớp'],
+        options: [
+          'vai',
+          'cổ',
+          'lưng trên',
+          'thắt lưng',
+          'khớp gối',
+          'khớp tay',
+          'hông',
+          'nhiều khớp',
+        ],
         multiSelect: true,
       },
       {
         question: 'Đau tăng khi nào?',
-        options: ['khi vận động', 'khi nghỉ ngơi', 'buổi sáng khi mới dậy', 'về đêm', 'khi thay đổi thời tiết'],
+        options: [
+          'khi vận động',
+          'khi nghỉ ngơi',
+          'buổi sáng khi mới dậy',
+          'về đêm',
+          'khi thay đổi thời tiết',
+        ],
         multiSelect: true,
       },
       {
@@ -513,8 +604,8 @@ const symptomMap = {
   },
 
   // Aliases for musculoskeletal
-  'đau lưng': null,  // resolved at runtime → uses 'đau vai'
-  'đau khớp': null,  // resolved at runtime → uses 'đau vai'
+  'đau lưng': null, // resolved at runtime → uses 'đau vai'
+  'đau khớp': null, // resolved at runtime → uses 'đau vai'
 
   // ═══════════════════════════════════════════════════════════════════════════
   // 8. TÊ TAY CHÂN / YẾU CƠ (Numbness / Weakness)
@@ -563,7 +654,14 @@ const symptomMap = {
     followUpQuestions: [
       {
         question: 'Tê ở vị trí nào?',
-        options: ['bàn tay, ngón tay', 'cánh tay', 'bàn chân, ngón chân', 'cả chân', 'một bên cơ thể', 'cả hai bên'],
+        options: [
+          'bàn tay, ngón tay',
+          'cánh tay',
+          'bàn chân, ngón chân',
+          'cả chân',
+          'một bên cơ thể',
+          'cả hai bên',
+        ],
         multiSelect: true,
       },
       {
@@ -658,12 +756,12 @@ const symptomMap = {
   },
 
   // Alias
-  'nôn': null, // resolved at runtime → uses 'buồn nôn'
+  nôn: null, // resolved at runtime → uses 'buồn nôn'
 
   // ═══════════════════════════════════════════════════════════════════════════
   // 10. SỐT (Fever)
   // ═══════════════════════════════════════════════════════════════════════════
-  'sốt': {
+  sốt: {
     associatedSymptoms: [
       { text: 'ớn lạnh, rét run', dangerLevel: 'normal' },
       { text: 'đau đầu', dangerLevel: 'normal' },
@@ -713,7 +811,13 @@ const symptomMap = {
     followUpQuestions: [
       {
         question: 'Nhiệt độ đo được bao nhiêu?',
-        options: ['37.5-38°C (sốt nhẹ)', '38-39°C (sốt vừa)', '39-40°C (sốt cao)', 'trên 40°C', 'chưa đo được'],
+        options: [
+          '37.5-38°C (sốt nhẹ)',
+          '38-39°C (sốt vừa)',
+          '39-40°C (sốt cao)',
+          'trên 40°C',
+          'chưa đo được',
+        ],
         multiSelect: false,
       },
       {
@@ -728,12 +832,26 @@ const symptomMap = {
       },
       {
         question: 'Bạn có thêm triệu chứng nào?',
-        options: ['ho', 'đau họng', 'sổ mũi', 'đau đầu', 'phát ban', 'đau sau mắt', 'tiểu buốt', 'không có'],
+        options: [
+          'ho',
+          'đau họng',
+          'sổ mũi',
+          'đau đầu',
+          'phát ban',
+          'đau sau mắt',
+          'tiểu buốt',
+          'không có',
+        ],
         multiSelect: true,
       },
       {
         question: 'Bạn đã uống thuốc hạ sốt chưa?',
-        options: ['đã uống paracetamol', 'đã uống thuốc khác', 'chưa uống gì', 'uống rồi nhưng không hạ'],
+        options: [
+          'đã uống paracetamol',
+          'đã uống thuốc khác',
+          'chưa uống gì',
+          'uống rồi nhưng không hạ',
+        ],
         multiSelect: false,
       },
     ],
@@ -742,7 +860,7 @@ const symptomMap = {
   // ═══════════════════════════════════════════════════════════════════════════
   // 11. HO (Cough)
   // ═══════════════════════════════════════════════════════════════════════════
-  'ho': {
+  ho: {
     associatedSymptoms: [
       { text: 'sốt', dangerLevel: 'warning' },
       { text: 'đau họng', dangerLevel: 'normal' },
@@ -853,7 +971,12 @@ const symptomMap = {
     followUpQuestions: [
       {
         question: 'Mất ngủ kiểu nào?',
-        options: ['khó đi vào giấc ngủ', 'ngủ được nhưng hay thức dậy giữa đêm', 'thức dậy quá sớm', 'ngủ không sâu'],
+        options: [
+          'khó đi vào giấc ngủ',
+          'ngủ được nhưng hay thức dậy giữa đêm',
+          'thức dậy quá sớm',
+          'ngủ không sâu',
+        ],
         multiSelect: true,
       },
       {
@@ -863,12 +986,26 @@ const symptomMap = {
       },
       {
         question: 'Bạn có thêm triệu chứng nào?',
-        options: ['lo lắng nhiều', 'buồn bã', 'mệt mỏi ban ngày', 'đau đầu', 'đau nhức', 'tiểu đêm', 'không có'],
+        options: [
+          'lo lắng nhiều',
+          'buồn bã',
+          'mệt mỏi ban ngày',
+          'đau đầu',
+          'đau nhức',
+          'tiểu đêm',
+          'không có',
+        ],
         multiSelect: true,
       },
       {
         question: 'Bạn đã thử gì để ngủ tốt hơn?',
-        options: ['uống thuốc ngủ', 'uống trà thảo mộc', 'tập thể dục', 'hạn chế cà phê', 'chưa thử gì'],
+        options: [
+          'uống thuốc ngủ',
+          'uống trà thảo mộc',
+          'tập thể dục',
+          'hạn chế cà phê',
+          'chưa thử gì',
+        ],
         multiSelect: true,
       },
     ],
@@ -936,7 +1073,13 @@ const symptomMap = {
       },
       {
         question: 'Bạn đã đo nhiệt độ chưa?',
-        options: ['không sốt', 'sốt nhẹ (37.5-38°C)', 'sốt vừa (38-39°C)', 'sốt cao (trên 39°C)', 'chưa đo'],
+        options: [
+          'không sốt',
+          'sốt nhẹ (37.5-38°C)',
+          'sốt vừa (38-39°C)',
+          'sốt cao (trên 39°C)',
+          'chưa đo',
+        ],
         multiSelect: false,
       },
     ],
@@ -995,12 +1138,23 @@ const symptomMap = {
       },
       {
         question: 'Phân như thế nào?',
-        options: ['lỏng nước', 'sệt, không thành khuôn', 'có nhầy', 'có máu hoặc nâu đen', 'không rõ'],
+        options: [
+          'lỏng nước',
+          'sệt, không thành khuôn',
+          'có nhầy',
+          'có máu hoặc nâu đen',
+          'không rõ',
+        ],
         multiSelect: false,
       },
       {
         question: 'Bạn có uống đủ nước không?',
-        options: ['uống bình thường', 'uống ít vì buồn nôn', 'không uống được gì', 'đang uống oresol'],
+        options: [
+          'uống bình thường',
+          'uống ít vì buồn nôn',
+          'không uống được gì',
+          'đang uống oresol',
+        ],
         multiSelect: false,
       },
       {
@@ -1010,7 +1164,12 @@ const symptomMap = {
       },
       {
         question: 'Bạn có ăn gì lạ gần đây không?',
-        options: ['có, ăn ngoài hàng quán', 'có, thức ăn để qua đêm', 'không, ăn uống bình thường', 'không rõ'],
+        options: [
+          'có, ăn ngoài hàng quán',
+          'có, thức ăn để qua đêm',
+          'không, ăn uống bình thường',
+          'không rõ',
+        ],
         multiSelect: false,
       },
     ],
@@ -1024,13 +1183,13 @@ const ALIASES = {
   'đau lưng': 'đau vai',
   'đau khớp': 'đau vai',
   'yếu cơ': 'tê tay chân',
-  'nôn': 'buồn nôn',
+  nôn: 'buồn nôn',
   'nôn ói': 'buồn nôn',
   'nhức đầu': 'đau đầu',
   'hoa mắt': 'chóng mặt',
-  'choáng': 'chóng mặt',
+  choáng: 'chóng mặt',
   'kiệt sức': 'mệt mỏi',
-  'mệt': 'mệt mỏi',
+  mệt: 'mệt mỏi',
   'đau bao tử': 'đau bụng',
   'đau dạ dày': 'đau bụng',
   'tê bì': 'tê tay chân',
@@ -1120,7 +1279,7 @@ function hasRedFlag(complaint, answers) {
   if (!flags.length) return false;
 
   const answerList = Array.isArray(answers) ? answers : [answers];
-  const normalizedFlags = flags.map(f => f.toLowerCase());
+  const normalizedFlags = flags.map((f) => f.toLowerCase());
 
   for (const ans of answerList) {
     const normalizedAns = (ans || '').toLowerCase();
@@ -1148,7 +1307,7 @@ function getAssociatedSymptoms(complaint, minLevel) {
 
   const levels = { danger: 3, warning: 2, normal: 1 };
   const minScore = levels[minLevel] || 1;
-  return symptoms.filter(s => (levels[s.dangerLevel] || 1) >= minScore);
+  return symptoms.filter((s) => (levels[s.dangerLevel] || 1) >= minScore);
 }
 
 /**
@@ -1176,7 +1335,7 @@ function getCauses(complaint) {
  * @returns {string[]}
  */
 function listComplaints() {
-  return Object.keys(symptomMap).filter(k => symptomMap[k] !== null);
+  return Object.keys(symptomMap).filter((k) => symptomMap[k] !== null);
 }
 
 module.exports = {

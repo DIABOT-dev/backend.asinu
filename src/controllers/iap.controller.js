@@ -21,7 +21,9 @@ async function verifyReceipt(pool, req, res) {
   const payload = req.body || {};
 
   if (!userId) {
-    return res.status(401).json({ ok: false, code: 'UNAUTHORIZED', error: t('error.unauthenticated', getLang(req)) });
+    return res
+      .status(401)
+      .json({ ok: false, code: 'UNAUTHORIZED', error: t('error.unauthenticated', getLang(req)) });
   }
   if (!payload.platform) {
     return res.status(400).json({ ok: false, code: 'INVALID_PAYLOAD', error: 'Missing platform' });

@@ -1,10 +1,10 @@
 /**
  * Health Monitoring Service
  * Kiểm tra các metrics sức khỏe và gửi cảnh báo qua notifications
- * 
+ *
  * Chạy cronjob hàng ngày để:
  * 1. Kiểm tra đường huyết, huyết áp bất thường
- * 2. Kiểm tra việc không ghi log quá lâu  
+ * 2. Kiểm tra việc không ghi log quá lâu
  * 3. Gửi thông báo cho care circle connections
  */
 
@@ -30,13 +30,13 @@ async function checkGlucoseAlerts(pool, userId) {
     );
 
     const glucoseLogs = result.rows;
-    
+
     if (glucoseLogs.length === 0) {
       return {
         type: 'no_glucose_data',
         severity: 'medium',
         message: t('health.no_glucose_24h'),
-        userId
+        userId,
       };
     }
 
@@ -51,7 +51,7 @@ async function checkGlucoseAlerts(pool, userId) {
         messageKey: 'health.glucose_high',
         messageParams: { value: glucose },
         userId,
-        value: glucose
+        value: glucose,
       };
     }
 
@@ -62,15 +62,15 @@ async function checkGlucoseAlerts(pool, userId) {
         messageKey: 'health.glucose_low',
         messageParams: { value: glucose },
         userId,
-        value: glucose
+        value: glucose,
       };
     }
 
     // Kiểm tra xu hướng tăng liên tục
     if (glucoseLogs.length >= 3) {
-      const isIncreasing = glucoseLogs.slice(0, 3).every((log, idx) =>
-        idx === 0 || log.value > glucoseLogs[idx - 1].value
-      );
+      const isIncreasing = glucoseLogs
+        .slice(0, 3)
+        .every((log, idx) => idx === 0 || log.value > glucoseLogs[idx - 1].value);
 
       if (isIncreasing && glucose > 180) {
         return {
@@ -79,21 +79,20 @@ async function checkGlucoseAlerts(pool, userId) {
           messageKey: 'health.glucose_trending_up',
           messageParams: { value: glucose },
           userId,
-          value: glucose
+          value: glucose,
         };
       }
     }
 
     return null;
   } catch (error) {
-
     return null;
   }
 }
 
 /**
  * Kiểm tra huyết áp bất thường
- * @param {object} pool - Database pool  
+ * @param {object} pool - Database pool
  * @param {number} userId - User ID cần kiểm tra
  * @returns {object|null} Alert object nếu có vấn đề
  */
@@ -109,7 +108,7 @@ async function checkBloodPressureAlerts(pool, userId) {
     );
 
     const bpLogs = result.rows;
-    
+
     if (bpLogs.length === 0) return null;
 
     const latestLog = bpLogs[0];
@@ -125,7 +124,7 @@ async function checkBloodPressureAlerts(pool, userId) {
         messageParams: { systolic, diastolic },
         userId,
         systolic,
-        diastolic
+        diastolic,
       };
     }
 
@@ -138,13 +137,12 @@ async function checkBloodPressureAlerts(pool, userId) {
         messageParams: { systolic, diastolic },
         userId,
         systolic,
-        diastolic
+        diastolic,
       };
     }
 
     return null;
   } catch (error) {
-
     return null;
   }
 }
@@ -152,7 +150,7 @@ async function checkBloodPressureAlerts(pool, userId) {
 /**
  * Kiểm tra việc không ghi log quá lâu
  * @param {object} pool - Database pool
- * @param {number} userId - User ID cần kiểm tra 
+ * @param {number} userId - User ID cần kiểm tra
  * @returns {object|null} Alert object nếu có vấn đề
  */
 async function checkInactivityAlerts(pool, userId) {
@@ -165,14 +163,14 @@ async function checkInactivityAlerts(pool, userId) {
     );
 
     const lastLogTime = result.rows[0]?.last_log_time;
-    
+
     if (!lastLogTime) {
       return {
         type: 'no_activity',
         severity: 'medium',
         messageKey: 'health.no_health_data',
         messageParams: {},
-        userId
+        userId,
       };
     }
 
@@ -185,13 +183,12 @@ async function checkInactivityAlerts(pool, userId) {
         messageKey: 'health.no_log_days',
         messageParams: { days: Math.floor(daysSinceLastLog) },
         userId,
-        daysSince: Math.floor(daysSinceLastLog)
+        daysSince: Math.floor(daysSinceLastLog),
       };
     }
 
     return null;
   } catch (error) {
-
     return null;
   }
 }
@@ -219,11 +216,10 @@ async function getCareCircleConnections(pool, userId) {
       [userId]
     );
 
-    const connections = result.rows.map(row => row.connection_user_id);
+    const connections = result.rows.map((row) => row.connection_user_id);
     await cacheSet(`care:connections:${userId}`, connections, 3600); // 1 hour
     return connections;
   } catch (error) {
-
     return [];
   }
 }
@@ -232,7 +228,7 @@ async function getCareCircleConnections(pool, userId) {
  * Tạo notification cho users
  * @param {object} pool - Database pool
  * @param {array} userIds - Danh sách user IDs nhận notification
- * @param {object} alert - Alert object 
+ * @param {object} alert - Alert object
  * @param {string} patientName - Tên người bệnh
  */
 async function createHealthNotifications(pool, userIds, alert, patientName) {
@@ -242,7 +238,7 @@ async function createHealthNotifications(pool, userIds, alert, patientName) {
       `SELECT id, COALESCE(language_preference, 'vi') AS lang FROM users WHERE id = ANY($1::int[])`,
       [userIds]
     );
-    const langMap = Object.fromEntries(langRows.map(r => [r.id, r.lang]));
+    const langMap = Object.fromEntries(langRows.map((r) => [r.id, r.lang]));
 
     for (const userId of userIds) {
       const userLang = langMap[userId] || 'vi';
@@ -265,23 +261,20 @@ async function createHealthNotifications(pool, userIds, alert, patientName) {
           // → giờ check trả messageKey + params, render lazy ở đây.
           alert.messageKey
             ? t(alert.messageKey, userLang, alert.messageParams || {})
-            : (alert.message || ''),
+            : alert.message || '',
           JSON.stringify({
             alertType: alert.type,
             severity: alert.severity,
             patientUserId: alert.userId,
             value: alert.value || null,
             systolic: alert.systolic || null,
-            diastolic: alert.diastolic || null
+            diastolic: alert.diastolic || null,
           }),
-          false
+          false,
         ]
       );
     }
-
-  } catch (error) {
-
-  }
+  } catch (error) {}
 }
 
 /**
@@ -292,18 +285,17 @@ async function createHealthNotifications(pool, userIds, alert, patientName) {
 async function runHealthMonitoringForUser(pool, userId) {
   try {
     // Lấy thông tin user
-    const userResult = await pool.query(
-      'SELECT full_name, email FROM users WHERE id = $1',
-      [userId]
-    );
+    const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [
+      userId,
+    ]);
 
     if (userResult.rows.length === 0) return;
-    
+
     const userName = userResult.rows[0].full_name || userResult.rows[0].email || `User ${userId}`;
 
     // Kiểm tra các loại cảnh báo
     const alerts = [];
-    
+
     const glucoseAlert = await checkGlucoseAlerts(pool, userId);
     if (glucoseAlert) alerts.push(glucoseAlert);
 
@@ -316,18 +308,14 @@ async function runHealthMonitoringForUser(pool, userId) {
     // Nếu có cảnh báo, gửi đến care circle
     if (alerts.length > 0) {
       const connections = await getCareCircleConnections(pool, userId);
-      
+
       if (connections.length > 0) {
         for (const alert of alerts) {
           await createHealthNotifications(pool, connections, alert, userName);
         }
       }
-
     }
-
-  } catch (error) {
-
-  }
+  } catch (error) {}
 }
 
 /**
@@ -336,7 +324,6 @@ async function runHealthMonitoringForUser(pool, userId) {
  */
 async function runDailyHealthMonitoring(pool) {
   try {
-
     // Lấy danh sách users có care circle connections
     const result = await pool.query(
       `SELECT DISTINCT 
@@ -349,21 +336,17 @@ async function runDailyHealthMonitoring(pool) {
        ORDER BY user_id`
     );
 
-    const userIds = [...new Set([
-      ...result.rows.map(r => r.user_id).filter(Boolean)
-    ])];
+    const userIds = [...new Set([...result.rows.map((r) => r.user_id).filter(Boolean)])];
 
     // Chạy monitoring cho từng user
     for (const userId of userIds) {
       await runHealthMonitoringForUser(pool, userId);
       // Delay ngắn để tránh overload
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise((resolve) => setTimeout(resolve, 100));
     }
 
     return { success: true, usersMonitored: userIds.length };
-
   } catch (error) {
-
     return { success: false, error: error.message };
   }
 }
@@ -375,5 +358,5 @@ module.exports = {
   getCareCircleConnections,
   createHealthNotifications,
   runHealthMonitoringForUser,
-  runDailyHealthMonitoring
+  runDailyHealthMonitoring,
 };

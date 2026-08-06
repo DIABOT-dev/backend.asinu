@@ -5,9 +5,15 @@
 
 const { NOTIF_MAP } = require('../constants');
 const notificationService = require('../services/notification/notification.service');
-const { runEngagementNotifications, previewEngagementNotification } = require('../services/notification/engagement.notification.service');
+const {
+  runEngagementNotifications,
+  previewEngagementNotification,
+} = require('../services/notification/engagement.notification.service');
 const { runBasicNotifications } = require('../services/notification/basic.notification.service');
-const { getPreferences, updatePreferences } = require('../services/notification/smart.schedule.service');
+const {
+  getPreferences,
+  updatePreferences,
+} = require('../services/notification/smart.schedule.service');
 const { t, getLang } = require('../i18n');
 
 /**
@@ -26,12 +32,17 @@ async function testNotificationHandler(pool, req, res) {
     const notif = NOTIF_MAP[type];
     if (!notif) return res.status(400).json({ ok: false, error: `Unknown type: ${type}` });
 
-    const result = await sendPushNotification(
-      [token], notif.title, notif.body, { type }
-    );
+    const result = await sendPushNotification([token], notif.title, notif.body, { type });
 
     // Also save to in-app notifications
-    await notificationService.saveInAppNotification(pool, req.user.id, type, notif.title, notif.body, { type, test: true });
+    await notificationService.saveInAppNotification(
+      pool,
+      req.user.id,
+      type,
+      notif.title,
+      notif.body,
+      { type, test: true }
+    );
 
     return res.json({ ok: true, type, title: notif.title, body: notif.body, pushResult: result });
   } catch (err) {
@@ -66,7 +77,7 @@ async function markAsRead(pool, req, res) {
   if (isNaN(notificationId)) {
     return res.status(400).json({
       ok: false,
-      error: t('error.invalid_notification_id', getLang(req))
+      error: t('error.invalid_notification_id', getLang(req)),
     });
   }
 
@@ -112,12 +123,24 @@ async function getNotificationPreferences(pool, req, res) {
  * Update notification preferences
  */
 async function updateNotificationPreferences(pool, req, res) {
-  const { morning_hour, evening_hour, water_hour, reminders_enabled,
-          morning_time, afternoon_time, evening_time } = req.body;
+  const {
+    morning_hour,
+    evening_hour,
+    water_hour,
+    reminders_enabled,
+    morning_time,
+    afternoon_time,
+    evening_time,
+  } = req.body;
 
-  const inRange = (v, min, max) => v === null || v === undefined || (Number.isInteger(v) && v >= min && v <= max);
+  const inRange = (v, min, max) =>
+    v === null || v === undefined || (Number.isInteger(v) && v >= min && v <= max);
   const validTime = (v) => v === null || v === undefined || /^\d{2}:\d{2}$/.test(v);
-  if (!inRange(morning_hour, 5, 11) || !inRange(evening_hour, 17, 23) || !inRange(water_hour, 10, 18)) {
+  if (
+    !inRange(morning_hour, 5, 11) ||
+    !inRange(evening_hour, 17, 23) ||
+    !inRange(water_hour, 10, 18)
+  ) {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
   }
   if (!validTime(morning_time) || !validTime(afternoon_time) || !validTime(evening_time)) {
@@ -128,8 +151,10 @@ async function updateNotificationPreferences(pool, req, res) {
     await updatePreferences(pool, req.user.id, {
       morning_hour: morning_hour ?? null,
       evening_hour: evening_hour ?? null,
-      water_hour:   water_hour   ?? null,
-      morning_time, afternoon_time, evening_time,
+      water_hour: water_hour ?? null,
+      morning_time,
+      afternoon_time,
+      evening_time,
       reminders_enabled: reminders_enabled !== undefined ? Boolean(reminders_enabled) : undefined,
     });
     const prefs = await getPreferences(pool, req.user.id);
@@ -190,7 +215,7 @@ async function runBasic(pool, req, res) {
       return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
     }
 
-    const forceHour   = req.body?.hour   !== undefined ? Number(req.body.hour)   : null;
+    const forceHour = req.body?.hour !== undefined ? Number(req.body.hour) : null;
     const forceMinute = req.body?.minute !== undefined ? Number(req.body.minute) : null;
     const result = await runBasicNotifications(pool, forceHour, forceMinute);
     return res.status(200).json(result);

@@ -36,5 +36,5 @@ async function getTreeHistory(pool, req, res) {
 
 module.exports = {
   getTreeSummary,
-  getTreeHistory
+  getTreeHistory,
 };

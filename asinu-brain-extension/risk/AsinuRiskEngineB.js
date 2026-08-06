@@ -5,16 +5,16 @@ const DEFAULT_CONFIG = {
   w2: 1,
   w3: 1,
   w4: 1,
-  trend_points_map: { '-1': -10, '0': 0, '1': 10 },
-  acute_points_map: { '0': 0, '1': 20, '2': 60 },
-  missing_points_map: { '0': 0, '1': 15 },
+  trend_points_map: { '-1': -10, 0: 0, 1: 10 },
+  acute_points_map: { 0: 0, 1: 20, 2: 60 },
+  missing_points_map: { 0: 0, 1: 15 },
   base_by_age: { U60: 30, '60_69': 40, '70_79': 50, '80P': 60 },
-  add_by_comorbidity: { '0': 0, '1': 10, '2': 20, '3': 30 },
-  add_by_frailty: { '0': 0, '1': 10, '2': 20 },
+  add_by_comorbidity: { 0: 0, 1: 10, 2: 20, 3: 30 },
+  add_by_frailty: { 0: 0, 1: 10, 2: 20 },
   missing_severity_threshold: 60,
   threshold_check_in: 20,
   threshold_notify: 45,
-  threshold_emergency: 70
+  threshold_emergency: 70,
 };
 
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
@@ -45,7 +45,7 @@ const normalizeConfig = (params = {}) => ({
   threshold_check_in: toNumber(params.threshold_check_in, DEFAULT_CONFIG.threshold_check_in),
   threshold_notify: toNumber(params.threshold_notify, DEFAULT_CONFIG.threshold_notify),
   threshold_emergency: toNumber(params.threshold_emergency, DEFAULT_CONFIG.threshold_emergency),
-  shadow_mode: params.shadow_mode
+  shadow_mode: params.shadow_mode,
 });
 
 const mapDecisionLabel = (decision) => {
@@ -118,8 +118,8 @@ const buildExplainability = (input, output) => {
     action: action.slice(0, 3),
     confidence: {
       level: confidenceLevel,
-      reasons: confidenceReasons
-    }
+      reasons: confidenceReasons,
+    },
   };
 };
 
@@ -161,7 +161,7 @@ const computePsV1 = (input, configOverrides = {}) => {
     trend_24h: input.trend_24h,
     acute_flag: input.acute_flag,
     missing_signal: input.missing_signal,
-    profile_verified: input.profile_verified
+    profile_verified: input.profile_verified,
   };
 
   if (input.acute_flag === 2) {
@@ -184,30 +184,30 @@ const computePsV1 = (input, configOverrides = {}) => {
     points: {
       trend_points: trendPoints,
       acute_points: acutePoints,
-      missing_points: missingPoints
+      missing_points: missingPoints,
     },
     weights_used: {
       w1: config.w1,
       w2: config.w2,
       w3: config.w3,
-      w4: config.w4
+      w4: config.w4,
     },
     thresholds_used: {
       check_in: config.threshold_check_in,
       notify_family: config.threshold_notify,
       emergency: config.threshold_emergency,
-      missing_severity_threshold: config.missing_severity_threshold
-    }
+      missing_severity_threshold: config.missing_severity_threshold,
+    },
   };
 
   return {
     ...output,
-    explainability: buildExplainability(input, output)
+    explainability: buildExplainability(input, output),
   };
 };
 
 module.exports = {
   DEFAULT_CONFIG,
   normalizeConfig,
-  computePsV1
+  computePsV1,
 };

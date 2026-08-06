@@ -16,18 +16,36 @@
  * No pool.query here — all DB access is in the service layer.
  */
 
-const { getUserScript, getScript, createClustersFromOnboarding } = require('../services/checkin/script.service');
+const {
+  getUserScript,
+  getScript,
+  createClustersFromOnboarding,
+} = require('../services/checkin/script.service');
 const { buildCaregiverStatus } = require('../services/care-circle/caregiver-status.service');
 const { markActive } = require('../services/profile/lifecycle.service');
 const { getNextQuestion } = require('../core/checkin/script-runner');
-const { getFallbackScriptData, logFallback, matchCluster } = require('../services/checkin/fallback.service');
+const {
+  getFallbackScriptData,
+  logFallback,
+  matchCluster,
+} = require('../services/checkin/fallback.service');
 const { detectEmergency } = require('../services/checkin/emergency-detector');
 const { saveSymptomLogs } = require('../services/checkin/symptom-tracker.service');
-const { parseSymptoms, analyzeMultiSymptom, aggregateSeverity } = require('../services/checkin/multi-symptom.service');
+const {
+  parseSymptoms,
+  analyzeMultiSymptom,
+  aggregateSeverity,
+} = require('../services/checkin/multi-symptom.service');
 const { analyzeSymptom } = require('../core/agent/ai-symptom-analyzer');
 const { parseAnswer } = require('../core/agent/ai-answer-parser');
-const { generateFromAnalysis, saveGeneratedScript } = require('../services/checkin/ai-script-generator');
-const { getScriptRegenStatus, recordRegeneration } = require('../services/checkin/script-quota.service');
+const {
+  generateFromAnalysis,
+  saveGeneratedScript,
+} = require('../services/checkin/ai-script-generator');
+const {
+  getScriptRegenStatus,
+  recordRegeneration,
+} = require('../services/checkin/script-quota.service');
 const {
   getProfile,
   createSession,
@@ -176,14 +194,20 @@ async function startScriptHandler(pool, req, res) {
     if (!script && symptom_input) {
       const quota = await getScriptRegenStatus(pool, userId);
       if (!quota.allowed) {
-        console.log(`[ScriptCheckin] Regen quota reached for user=${userId} (${quota.used}/${quota.limit}, tier=${quota.tier}) — using fallback`);
+        console.log(
+          `[ScriptCheckin] Regen quota reached for user=${userId} (${quota.used}/${quota.limit}, tier=${quota.tier}) — using fallback`
+        );
       } else {
         try {
-          console.log(`[ScriptCheckin] No cached script for "${symptom_input}", trying AI analysis...`);
+          console.log(
+            `[ScriptCheckin] No cached script for "${symptom_input}", trying AI analysis...`
+          );
           const aiContext = {
             age: profile.birth_year ? new Date().getFullYear() - profile.birth_year : null,
             gender: profile.gender,
-            medical_conditions: Array.isArray(profile.medical_conditions) ? profile.medical_conditions : [],
+            medical_conditions: Array.isArray(profile.medical_conditions)
+              ? profile.medical_conditions
+              : [],
             medications: profile.daily_medication || null,
           };
 
@@ -192,7 +216,8 @@ async function startScriptHandler(pool, req, res) {
           if (analysis && analysis.confidence > 0) {
             const scriptData = generateFromAnalysis(analysis, profile);
             const saved = await saveGeneratedScript(
-              pool, userId,
+              pool,
+              userId,
               analysis.clusterKey,
               analysis.displayName,
               scriptData
@@ -201,7 +226,9 @@ async function startScriptHandler(pool, req, res) {
             clusterKey = analysis.clusterKey;
             // Successful AI regeneration counts against monthly quota.
             recordRegeneration(pool, userId, analysis.clusterKey, 'new_symptom').catch(() => {});
-            console.log(`[ScriptCheckin] AI generated script: cluster=${clusterKey}, confidence=${analysis.confidence}, quota=${quota.used + 1}/${quota.limit}`);
+            console.log(
+              `[ScriptCheckin] AI generated script: cluster=${clusterKey}, confidence=${analysis.confidence}, quota=${quota.used + 1}/${quota.limit}`
+            );
           }
         } catch (aiErr) {
           console.error('[ScriptCheckin] AI analysis failed, using fallback:', aiErr.message);
@@ -218,11 +245,18 @@ async function startScriptHandler(pool, req, res) {
     }
 
     // Create script session (service handles checkin linkage)
-    const session = await createSession(pool, userId, script?.id || null, clusterKey, 'initial', status);
+    const session = await createSession(
+      pool,
+      userId,
+      script?.id || null,
+      clusterKey,
+      'initial',
+      status
+    );
 
     // Store multi-symptom context in session metadata if applicable
     if (multiSymptomResult && multiSymptomResult.matched.length > 1) {
-      const pendingClusters = multiSymptomResult.matched.slice(1).map(m => ({
+      const pendingClusters = multiSymptomResult.matched.slice(1).map((m) => ({
         cluster_key: m.cluster.cluster_key,
         script_id: m.script?.id || null,
         symptom: m.symptom,
@@ -264,7 +298,7 @@ async function startScriptHandler(pool, req, res) {
 
     // Include all matched clusters so app can run them sequentially
     if (multiSymptomResult && multiSymptomResult.matched.length > 1) {
-      response.all_clusters = multiSymptomResult.matched.map(m => ({
+      response.all_clusters = multiSymptomResult.matched.map((m) => ({
         cluster_key: m.cluster.cluster_key,
         display_name: m.cluster.display_name,
         symptom: m.symptom,
@@ -349,27 +383,33 @@ async function answerScriptHandler(pool, req, res) {
     const profile = await getProfile(pool, userId);
 
     // Find the current question to check if answer needs parsing
-    const allQuestions = session.session_type === 'followup'
-      ? (scriptData.followup_questions || [])
-      : (scriptData.questions || []);
-    const currentQuestion = allQuestions.find(q => q.id === question_id);
+    const allQuestions =
+      session.session_type === 'followup'
+        ? scriptData.followup_questions || []
+        : scriptData.questions || [];
+    const currentQuestion = allQuestions.find((q) => q.id === question_id);
 
     let parsedAnswer = answer;
     if (currentQuestion && answer != null) {
       const parseResult = await parseAnswer(String(answer), currentQuestion, { profile });
       if (parseResult.confidence > 0.3) {
         parsedAnswer = parseResult.parsed;
-        console.log(`[AnswerParser] "${answer}" → "${parsedAnswer}" (${parseResult.method}, conf=${parseResult.confidence})`);
+        console.log(
+          `[AnswerParser] "${answer}" → "${parsedAnswer}" (${parseResult.method}, conf=${parseResult.confidence})`
+        );
       }
     }
 
     // Add answer to session
-    const answers = [...(session.answers || []), {
-      question_id,
-      answer: parsedAnswer,
-      original_answer: answer !== parsedAnswer ? answer : undefined,
-      answered_at: new Date().toISOString(),
-    }];
+    const answers = [
+      ...(session.answers || []),
+      {
+        question_id,
+        answer: parsedAnswer,
+        original_answer: answer !== parsedAnswer ? answer : undefined,
+        answered_at: new Date().toISOString(),
+      },
+    ];
 
     // Get next question or conclusion (scriptData and profile already fetched above)
     const result = getNextQuestion(scriptData, answers, {
@@ -387,7 +427,8 @@ async function answerScriptHandler(pool, req, res) {
         multiMeta = session.score_details?.multi_symptom || null;
       } catch (_) {}
 
-      const hasMoreClusters = multiMeta &&
+      const hasMoreClusters =
+        multiMeta &&
         Array.isArray(multiMeta.pending_clusters) &&
         multiMeta.pending_clusters.length > 0;
 
@@ -395,7 +436,10 @@ async function answerScriptHandler(pool, req, res) {
         // Save current cluster result, move to next cluster
         const nextCluster = multiMeta.pending_clusters[0];
         const remainingClusters = multiMeta.pending_clusters.slice(1);
-        const completedClusters = [...(multiMeta.completed_clusters || []), nextCluster.cluster_key];
+        const completedClusters = [
+          ...(multiMeta.completed_clusters || []),
+          nextCluster.cluster_key,
+        ];
 
         // Store this cluster's result
         const clusterResults = multiMeta.cluster_results || [];
@@ -412,13 +456,19 @@ async function answerScriptHandler(pool, req, res) {
           ? await getScriptDataById(pool, nextCluster.script_id)
           : getFallbackScriptData();
 
-        await switchToNextCluster(pool, session_id, nextCluster.cluster_key, nextCluster.script_id, {
-          pending_clusters: remainingClusters,
-          combos: multiMeta.combos || [],
-          unmatched: multiMeta.unmatched || [],
-          completed_clusters: completedClusters,
-          cluster_results: clusterResults,
-        });
+        await switchToNextCluster(
+          pool,
+          session_id,
+          nextCluster.cluster_key,
+          nextCluster.script_id,
+          {
+            pending_clusters: remainingClusters,
+            combos: multiMeta.combos || [],
+            unmatched: multiMeta.unmatched || [],
+            completed_clusters: completedClusters,
+            cluster_results: clusterResults,
+          }
+        );
 
         // Get first question of next cluster's script
         const nextStep = getNextQuestion(nextScriptData, [], {
@@ -453,8 +503,10 @@ async function answerScriptHandler(pool, req, res) {
         const aggregated = aggregateSeverity(clusterResults, multiMeta.combos || []);
 
         // Override conclusion with aggregated values if aggregated is worse
-        if (['critical', 'high', 'medium', 'low'].indexOf(aggregated.severity) <
-            ['critical', 'high', 'medium', 'low'].indexOf(conclusion.severity)) {
+        if (
+          ['critical', 'high', 'medium', 'low'].indexOf(aggregated.severity) <
+          ['critical', 'high', 'medium', 'low'].indexOf(conclusion.severity)
+        ) {
           conclusion.severity = aggregated.severity;
           conclusion.followUpHours = aggregated.followUpHours;
           conclusion.needsDoctor = aggregated.needsDoctor;
@@ -476,7 +528,7 @@ async function answerScriptHandler(pool, req, res) {
         );
 
         // Save symptom logs for tracking
-        const triageMessages = answers.map(a => ({
+        const triageMessages = answers.map((a) => ({
           question: a.question_id,
           answer: a.answer,
         }));
@@ -571,7 +623,7 @@ async function createClustersHandler(pool, req, res) {
     const clusters = await createClustersFromOnboarding(pool, req.user.id, symptoms);
     return res.json({
       ok: true,
-      clusters: clusters.map(c => ({
+      clusters: clusters.map((c) => ({
         cluster_key: c.cluster_key,
         display_name: c.display_name,
       })),

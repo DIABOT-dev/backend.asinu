@@ -5,7 +5,11 @@
 
 const { t, getLang } = require('../i18n');
 const voiceService = require('../services/voice/voice.service');
-const { VOICE_MONTHLY_LIMIT, getVoiceUsageThisMonth, incrementVoiceUsage } = require('../services/payment/subscription.service');
+const {
+  VOICE_MONTHLY_LIMIT,
+  getVoiceUsageThisMonth,
+  incrementVoiceUsage,
+} = require('../services/payment/subscription.service');
 
 /**
  * POST /api/voice/chat
@@ -48,7 +52,9 @@ async function voiceChat(pool, req, res) {
       voiceLimit: VOICE_MONTHLY_LIMIT,
     });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message || t('error.voice_processing', getLang(req)) });
+    return res
+      .status(500)
+      .json({ ok: false, error: err.message || t('error.voice_processing', getLang(req)) });
   }
 }
 

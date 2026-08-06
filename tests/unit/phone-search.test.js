@@ -66,7 +66,7 @@ describe('searchUsers (phone-only, exact match)', () => {
   test('matches legacy international values stored with +84', async () => {
     const pool = poolReturning([]);
     await searchUsers(pool, 1, '0901234567');
-    expect(pool.query.mock.calls[0][0]).toContain("REGEXP_REPLACE");
+    expect(pool.query.mock.calls[0][0]).toContain('REGEXP_REPLACE');
     expect(pool.query.mock.calls[0][0]).toContain("'^\\+?84'");
   });
 });

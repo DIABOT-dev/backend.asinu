@@ -21,7 +21,10 @@ const {
   QUESTION_REWRITES,
   BANNED_KEYWORDS,
 } = require('../src/core/checkin/illusion-layer');
-const { getNextQuestion, getNextQuestionWithIllusion } = require('../src/core/checkin/script-runner');
+const {
+  getNextQuestion,
+  getNextQuestionWithIllusion,
+} = require('../src/core/checkin/script-runner');
 const { getHonorifics } = require('../src/lib/honorifics');
 
 let totalPass = 0;
@@ -29,16 +32,31 @@ let totalFail = 0;
 const failures = [];
 
 function assert(condition, name) {
-  if (condition) { totalPass++; console.log(`  PASS ✓ ${name}`); }
-  else { totalFail++; failures.push(name); console.log(`  FAIL ✗ ${name}`); }
+  if (condition) {
+    totalPass++;
+    console.log(`  PASS ✓ ${name}`);
+  } else {
+    totalFail++;
+    failures.push(name);
+    console.log(`  FAIL ✗ ${name}`);
+  }
 }
 
 function get(path) {
   return new Promise((resolve, reject) => {
-    http.get('http://localhost:3000' + path, res => {
-      let d = ''; res.on('data', c => d += c);
-      res.on('end', () => { try { resolve({ s: res.statusCode, b: JSON.parse(d) }); } catch { resolve({ s: res.statusCode, b: d }); } });
-    }).on('error', reject);
+    http
+      .get('http://localhost:3000' + path, (res) => {
+        let d = '';
+        res.on('data', (c) => (d += c));
+        res.on('end', () => {
+          try {
+            resolve({ s: res.statusCode, b: JSON.parse(d) });
+          } catch {
+            resolve({ s: res.statusCode, b: d });
+          }
+        });
+      })
+      .on('error', reject);
   });
 }
 
@@ -92,7 +110,10 @@ async function testRewriteGreeting() {
   assert(g1.originalText === originalGreeting, '2.4 originalText preserved');
 
   // 2.5 Symptom worsening
-  const ctx2 = { consecutiveTiredDays: 0, topSymptom: { display_name: 'đau đầu', trend: 'increasing' } };
+  const ctx2 = {
+    consecutiveTiredDays: 0,
+    topSymptom: { display_name: 'đau đầu', trend: 'increasing' },
+  };
   const g2 = rewriteGreeting(originalGreeting, ctx2, USER_HUNG);
   assert(g2.templateId === 'greeting_trend_worsening', '2.5 Worsening → greeting_trend_worsening');
   assert(g2.displayText.includes('đau đầu'), '2.6 Contains symptom');
@@ -121,7 +142,10 @@ async function testRewriteGreeting() {
   assert(g7.displayText.includes('bạn Mai'), '2.11 Young → "bạn Mai"');
 
   // 2.12 Priority: consecutive tired > symptom
-  const ctx6 = { consecutiveTiredDays: 3, topSymptom: { display_name: 'đau', trend: 'increasing' } };
+  const ctx6 = {
+    consecutiveTiredDays: 3,
+    topSymptom: { display_name: 'đau', trend: 'increasing' },
+  };
   const g8 = rewriteGreeting(originalGreeting, ctx6, USER_HUNG);
   assert(g8.templateId === 'greeting_consecutive_tired', '2.12 Tired beats symptom');
 }
@@ -173,7 +197,10 @@ async function testRewriteQuestion() {
   let allClean = true;
   for (const q of allQuestions) {
     const r = rewriteQuestion(q, ctx, USER_HUNG);
-    if (r.displayText.includes('{')) { allClean = false; break; }
+    if (r.displayText.includes('{')) {
+      allClean = false;
+      break;
+    }
   }
   assert(allClean, '3.11 No unreplaced {vars} in any rewrite');
 }
@@ -211,23 +238,38 @@ async function testApplyIllusion() {
   assert(result.question.max === 10, '4.8 max preserved');
 
   // 4.9 Second question (step 1) → no greeting
-  const base2 = getNextQuestion(scriptData, [{ question_id: 'q1', answer: 5 }], { profile: USER_HUNG });
+  const base2 = getNextQuestion(scriptData, [{ question_id: 'q1', answer: 5 }], {
+    profile: USER_HUNG,
+  });
   const result2 = applyIllusion(base2, scriptData, ctx, USER_HUNG);
   assert(result2._greeting === undefined, '4.9 No greeting on step 1');
 
   // 4.10 Options preserved for choice questions
-  assert(JSON.stringify(result2.question.options) === JSON.stringify(['Vừa mới', 'Vài giờ']), '4.10 Options preserved');
+  assert(
+    JSON.stringify(result2.question.options) === JSON.stringify(['Vừa mới', 'Vài giờ']),
+    '4.10 Options preserved'
+  );
 
   // 4.11 Conclusion → illusion not applied
-  const base3 = getNextQuestion(scriptData, [
-    { question_id: 'q1', answer: 5 },
-    { question_id: 'q2', answer: 'Vừa mới' },
-  ], { profile: USER_HUNG });
+  const base3 = getNextQuestion(
+    scriptData,
+    [
+      { question_id: 'q1', answer: 5 },
+      { question_id: 'q2', answer: 'Vừa mới' },
+    ],
+    { profile: USER_HUNG }
+  );
   const result3 = applyIllusion(base3, scriptData, ctx, USER_HUNG);
   assert(result3.isDone === true, '4.11 Conclusion reached');
   // Note: After Phase 4, conclusion now has illusion applied (with progress feedback)
-  assert(result3._illusion.applied === true, '4.12 Illusion applied to conclusion (Phase 4: with progress)');
-  assert(result3._illusion.reason === 'conclusion_with_progress', '4.12b Reason = conclusion_with_progress');
+  assert(
+    result3._illusion.applied === true,
+    '4.12 Illusion applied to conclusion (Phase 4: with progress)'
+  );
+  assert(
+    result3._illusion.reason === 'conclusion_with_progress',
+    '4.12b Reason = conclusion_with_progress'
+  );
   assert(result3._progress !== undefined, '4.12c _progress added to conclusion');
 
   // 4.13 Script integrity check
@@ -242,7 +284,11 @@ async function testSafetyControls() {
   console.log('\n══════ SUITE 5: Safety Controls ══════');
 
   // 5.1 Valid output passes
-  const valid = { displayText: 'Chú thấy đau mức nào?', originalQuestionId: 'q1', templateId: 'rewrite_pain' };
+  const valid = {
+    displayText: 'Chú thấy đau mức nào?',
+    originalQuestionId: 'q1',
+    templateId: 'rewrite_pain',
+  };
   const v1 = validateOutput(valid, { id: 'q1' });
   assert(v1.valid, '5.1 Valid output passes');
 
@@ -256,7 +302,10 @@ async function testSafetyControls() {
 
   // 5.4 Banned keyword → fail
   for (const keyword of BANNED_KEYWORDS.slice(0, 3)) {
-    const v = validateOutput({ displayText: `Bạn nên ${keyword}`, originalQuestionId: 'q1', templateId: 'x' }, {});
+    const v = validateOutput(
+      { displayText: `Bạn nên ${keyword}`, originalQuestionId: 'q1', templateId: 'x' },
+      {}
+    );
     assert(!v.valid, `5.4 Banned "${keyword}" → fail`);
   }
 
@@ -268,7 +317,12 @@ async function testSafetyControls() {
     conclusion_templates: {},
   };
   // Question with empty text → rewrite produces empty → validation fails → original preserved
-  const base = { isDone: false, question: { id: 'q1', text: '', type: 'slider', min: 0, max: 10 }, currentStep: 0, totalSteps: 1 };
+  const base = {
+    isDone: false,
+    question: { id: 'q1', text: '', type: 'slider', min: 0, max: 10 },
+    currentStep: 0,
+    totalSteps: 1,
+  };
   const result = applyIllusion(base, scriptData, badCtx, USER_HUNG);
   // Should either not apply illusion or use a safe fallback
   assert(result.question.type === 'slider', '5.5 Type preserved even on validation fail');
@@ -327,7 +381,10 @@ async function testGetNextQuestionWithIllusion() {
 
   // 6.1 Without illusion context → plain result
   const plain = getNextQuestionWithIllusion(scriptData, [], { profile: USER_HUNG });
-  assert(plain._illusion === undefined || plain._illusion.applied === undefined, '6.1 No context → no illusion');
+  assert(
+    plain._illusion === undefined || plain._illusion.applied === undefined,
+    '6.1 No context → no illusion'
+  );
 
   // 6.2 With illusion → enhanced result
   const enhanced = getNextQuestionWithIllusion(scriptData, [], {
@@ -393,7 +450,10 @@ async function testApiEndpoint() {
 
   // 7.8 _original_question_id present
   if (r1.b.illusion.question && r1.b.illusion.question._original_question_id) {
-    assert(r1.b.illusion.question._original_question_id.length > 0, '7.8 _original_question_id present');
+    assert(
+      r1.b.illusion.question._original_question_id.length > 0,
+      '7.8 _original_question_id present'
+    );
   } else {
     assert(true, '7.8 (skip)');
   }
@@ -412,7 +472,10 @@ async function testApiEndpoint() {
     get('/api/health/illusion-preview/4'),
     get('/api/health/illusion-preview/4'),
   ]);
-  assert(results.every(r => r.s === 200), '7.11 3 concurrent requests all 200');
+  assert(
+    results.every((r) => r.s === 200),
+    '7.11 3 concurrent requests all 200'
+  );
 
   // 7.12 Deterministic
   if (results[0].b.illusion?.question && results[1].b.illusion?.question) {
@@ -431,7 +494,10 @@ async function testApiEndpoint() {
 async function testBilingualIllusion() {
   console.log('\n══════ SUITE 8: Bilingual & Honorific ══════');
 
-  const ctx = { topSymptom: { display_name: 'headache', trend: 'stable' }, consecutiveTiredDays: 0 };
+  const ctx = {
+    topSymptom: { display_name: 'headache', trend: 'stable' },
+    consecutiveTiredDays: 0,
+  };
   const greeting = 'Hello';
 
   // 8.1 Vietnamese
@@ -470,7 +536,10 @@ async function testTraceability() {
 
   for (const q of questions) {
     const r = rewriteQuestion(q, ctx, USER_HUNG);
-    assert(typeof r.templateId === 'string' && r.templateId.length > 0, `9.1 q=${q.id} has templateId: ${r.templateId}`);
+    assert(
+      typeof r.templateId === 'string' && r.templateId.length > 0,
+      `9.1 q=${q.id} has templateId: ${r.templateId}`
+    );
     assert(r.originalQuestionId === q.id, `9.2 q=${q.id} originalQuestionId preserved`);
     assert(r.originalText === q.text, `9.3 q=${q.id} originalText preserved`);
     assert(r.displayText.length > 0, `9.4 q=${q.id} displayText non-empty`);
@@ -487,7 +556,10 @@ async function testCodeIntegration() {
   const path = require('path');
 
   // 10.1 script-runner imports illusion-layer
-  const sr = fs.readFileSync(path.join(__dirname, '..', 'src', 'core', 'checkin', 'script-runner.js'), 'utf8');
+  const sr = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'core', 'checkin', 'script-runner.js'),
+    'utf8'
+  );
   assert(sr.includes("require('./illusion-layer')"), '10.1 script-runner imports illusion-layer');
 
   // 10.2 getNextQuestionWithIllusion exported
@@ -497,7 +569,10 @@ async function testCodeIntegration() {
   assert(sr.includes('catch (err)'), '10.3 Has fallback try/catch');
 
   // 10.4 health.routes has illusion preview endpoint
-  const routes = fs.readFileSync(path.join(__dirname, '..', 'src', 'routes', 'health.routes.js'), 'utf8');
+  const routes = fs.readFileSync(
+    path.join(__dirname, '..', 'src', 'routes', 'health.routes.js'),
+    'utf8'
+  );
   assert(routes.includes('illusion-preview'), '10.4 Route /illusion-preview exists');
 
   // 10.5 illusion-layer has all required exports
@@ -507,7 +582,10 @@ async function testCodeIntegration() {
   assert(typeof il.rewriteQuestion === 'function', '10.7 rewriteQuestion exported');
   assert(typeof il.applyIllusion === 'function', '10.8 applyIllusion exported');
   assert(typeof il.validateOutput === 'function', '10.9 validateOutput exported');
-  assert(typeof il.validateScriptIntegrity === 'function', '10.10 validateScriptIntegrity exported');
+  assert(
+    typeof il.validateScriptIntegrity === 'function',
+    '10.10 validateScriptIntegrity exported'
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -530,7 +608,9 @@ async function run() {
   await testCodeIntegration();
 
   console.log('\n╔══════════════════════════════════════════════════╗');
-  console.log(`║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`);
+  console.log(
+    `║  TOTAL: ${totalPass} PASS, ${totalFail} FAIL${' '.repeat(Math.max(0, 27 - String(totalPass).length - String(totalFail).length))}║`
+  );
   if (totalFail > 0) {
     console.log('║  FAILURES:                                       ║');
     for (const f of failures) console.log(`║  - ${f.substring(0, 46).padEnd(46)} ║`);
@@ -541,4 +621,8 @@ async function run() {
   process.exit(totalFail > 0 ? 1 : 0);
 }
 
-run().catch(err => { console.error('CRASHED:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASHED:', err);
+  pool.end();
+  process.exit(1);
+});

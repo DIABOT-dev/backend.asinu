@@ -7,12 +7,8 @@ const engagementService = require('../services/profile/engagement.service');
  * contract intentionally small: CRM only needs a non-sensitive screen name.
  */
 async function trackScreenViewHandler(pool, req, res) {
-  const screenName = typeof req.body?.screen_name === 'string'
-    ? req.body.screen_name
-    : '';
-  const featureCode = typeof req.body?.feature_code === 'string'
-    ? req.body.feature_code
-    : null;
+  const screenName = typeof req.body?.screen_name === 'string' ? req.body.screen_name : '';
+  const featureCode = typeof req.body?.feature_code === 'string' ? req.body.feature_code : null;
 
   if (!screenName.trim()) {
     return res.status(400).json({ ok: false, error: 'screen_name is required' });

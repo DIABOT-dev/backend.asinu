@@ -19,10 +19,9 @@
 
 const { callTextAi } = require('../../services/ai/ai.service');
 const { getHonorifics } = require('../../lib/honorifics');
-const { detectEmergency, isRedFlag, getRedFlags } = require('../../services/checkin/emergency-detector');
+const { detectEmergency, getRedFlags } = require('../../services/checkin/emergency-detector');
 const { resolveComplaint } = require('../../services/checkin/clinical-mapping');
 const { filterTriageResult } = require('../../services/ai/ai-safety.service');
-const { logAiInteraction } = require('../../services/ai/ai-logger.service');
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -42,7 +41,12 @@ const MAX_TURNS = 8; // Force conclusion after this many user turns
  * @param {string|null} previousSessionSummary - Summary from yesterday's session
  * @returns {string}
  */
-function buildSystemPrompt(profile, healthContext = {}, previousSessionSummary = null, simulatedHour = null) {
+function buildSystemPrompt(
+  profile,
+  _healthContext = {},
+  previousSessionSummary = null,
+  simulatedHour = null
+) {
   const h = getHonorifics({
     birth_year: profile.birth_year,
     gender: profile.gender,
@@ -58,7 +62,13 @@ function buildSystemPrompt(profile, healthContext = {}, previousSessionSummary =
     const tod = simulatedHour < 12 ? 'sáng' : simulatedHour < 18 ? 'chiều' : 'tối';
     vnTime = `${simulatedHour}:00 (buổi ${tod}) [giả lập test]`;
   } else {
-    vnTime = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hour12: false, weekday: 'long' });
+    vnTime = new Date().toLocaleString('vi-VN', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      weekday: 'long',
+    });
   }
 
   return `Bạn là Asinu — người bạn thân quan tâm sức khỏe ${h.callName}.
@@ -145,9 +155,7 @@ async function callGPT(systemPrompt, history, userMessage) {
  * @returns {string[]}
  */
 function extractUserMessages(history, currentMessage) {
-  const messages = (history || [])
-    .filter((m) => m.role === 'user')
-    .map((m) => m.content);
+  const messages = (history || []).filter((m) => m.role === 'user').map((m) => m.content);
   if (currentMessage) messages.push(currentMessage);
   return messages;
 }
@@ -174,11 +182,28 @@ function detectProgression(text) {
 
   // Worse indicators (có dấu + không dấu)
   const worseKw = [
-    'nặng hơn', 'nang hon', 'tệ hơn', 'te hon', 'xấu hơn', 'xau hon',
-    'nhiều hơn', 'nhieu hon', 'tăng lên', 'tang len',
-    'ngày càng', 'ngay cang', 'đau hơn', 'dau hon',
-    'khó chịu hơn', 'kho chiu hon', 'không chịu nổi', 'khong chiu noi',
-    'trầm trọng', 'tram trong', 'dữ dội hơn', 'du doi hon',
+    'nặng hơn',
+    'nang hon',
+    'tệ hơn',
+    'te hon',
+    'xấu hơn',
+    'xau hon',
+    'nhiều hơn',
+    'nhieu hon',
+    'tăng lên',
+    'tang len',
+    'ngày càng',
+    'ngay cang',
+    'đau hơn',
+    'dau hon',
+    'khó chịu hơn',
+    'kho chiu hon',
+    'không chịu nổi',
+    'khong chiu noi',
+    'trầm trọng',
+    'tram trong',
+    'dữ dội hơn',
+    'du doi hon',
   ];
   if (worseKw.some((kw) => lower.includes(kw))) return 'worse';
 
@@ -186,25 +211,77 @@ function detectProgression(text) {
   // QUAN TRỌNG: "do" đơn lẻ KHÔNG match (quá ngắn, dễ false positive)
   // Phải match cụm: "do hon", "do roi", "do nhieu", "da do"
   const betterKw = [
-    'đỡ hơn', 'do hon', 'giảm', 'giam',
-    'khá hơn', 'kha hon', 'đỡ rồi', 'do roi', 'nhẹ hơn', 'nhe hon',
-    'tốt hơn', 'tot hon', 'ổn hơn', 'on hon', 'bớt đau', 'bot dau',
-    'đỡ đau', 'do dau', 'khỏe hơn', 'khoe hon', 'đỡ nhiều', 'do nhieu',
-    'đã đỡ', 'da do', 'bớt mệt', 'bot met', 'bớt đau', 'bot dau',
-    'khỏe rồi', 'khoe roi', 'ổn rồi', 'on roi', 'hết rồi', 'het roi',
+    'đỡ hơn',
+    'do hon',
+    'giảm',
+    'giam',
+    'khá hơn',
+    'kha hon',
+    'đỡ rồi',
+    'do roi',
+    'nhẹ hơn',
+    'nhe hon',
+    'tốt hơn',
+    'tot hon',
+    'ổn hơn',
+    'on hon',
+    'bớt đau',
+    'bot dau',
+    'đỡ đau',
+    'do dau',
+    'khỏe hơn',
+    'khoe hon',
+    'đỡ nhiều',
+    'do nhieu',
+    'đã đỡ',
+    'da do',
+    'bớt mệt',
+    'bot met',
+    'bớt đau',
+    'bot dau',
+    'khỏe rồi',
+    'khoe roi',
+    'ổn rồi',
+    'on roi',
+    'hết rồi',
+    'het roi',
   ];
   if (betterKw.some((kw) => lower.includes(kw))) return 'better';
 
   // Same indicators (có dấu + không dấu)
   const sameKw = [
-    'vẫn vậy', 'van vay', 'vẫn như cũ', 'van nhu cu',
-    'không đổi', 'khong doi', 'y như cũ', 'y nhu cu',
-    'vẫn còn', 'van con', 'chưa đỡ', 'chua do',
-    'không khá hơn', 'khong kha hon', 'vẫn thế', 'van the',
-    'vẫn mệt', 'van met', 'vẫn đau', 'van dau',
-    'vẫn khó', 'van kho', 'vẫn tê', 'van te',
-    'vẫn chóng', 'van chong', 'chưa hết', 'chua het',
-    'không giảm', 'khong giam', 'chưa giảm', 'chua giam',
+    'vẫn vậy',
+    'van vay',
+    'vẫn như cũ',
+    'van nhu cu',
+    'không đổi',
+    'khong doi',
+    'y như cũ',
+    'y nhu cu',
+    'vẫn còn',
+    'van con',
+    'chưa đỡ',
+    'chua do',
+    'không khá hơn',
+    'khong kha hon',
+    'vẫn thế',
+    'van the',
+    'vẫn mệt',
+    'van met',
+    'vẫn đau',
+    'van dau',
+    'vẫn khó',
+    'van kho',
+    'vẫn tê',
+    'van te',
+    'vẫn chóng',
+    'van chong',
+    'chưa hết',
+    'chua het',
+    'không giảm',
+    'khong giam',
+    'chưa giảm',
+    'chua giam',
   ];
   if (sameKw.some((kw) => lower.includes(kw))) return 'same';
 
@@ -273,15 +350,52 @@ function calculateSeverity(allUserMessages, profile) {
 
   // ── Check if user said they're fine ──
   const fineKw = [
-    'tôi ổn', 'toi on', 'cảm thấy ổn', 'cam thay on', 'thấy ổn', 'thay on',
-    'bình thường', 'binh thuong', 'khỏe rồi', 'khoe roi', 'khỏe', 'khoe',
-    'ổn rồi', 'on roi', 'vẫn ổn', 'van on', 'tôi khỏe', 'toi khoe',
-    'đỡ rồi', 'do roi', 'đã đỡ', 'da do', 'đỡ nhiều', 'do nhieu', 'đỡ hơn', 'do hon',
-    'fine', 'ok', 'không sao', 'khong sao', 'hết rồi', 'het roi',
-    'ổn cháu', 'on chau', 'khỏe cháu', 'khoe chau', 'ổn chị', 'on chi',
-    'không có gì', 'khong co gi', 'không có triệu chứng', 'khong co trieu chung',
+    'tôi ổn',
+    'toi on',
+    'cảm thấy ổn',
+    'cam thay on',
+    'thấy ổn',
+    'thay on',
+    'bình thường',
+    'binh thuong',
+    'khỏe rồi',
+    'khoe roi',
+    'khỏe',
+    'khoe',
+    'ổn rồi',
+    'on roi',
+    'vẫn ổn',
+    'van on',
+    'tôi khỏe',
+    'toi khoe',
+    'đỡ rồi',
+    'do roi',
+    'đã đỡ',
+    'da do',
+    'đỡ nhiều',
+    'do nhieu',
+    'đỡ hơn',
+    'do hon',
+    'fine',
+    'ok',
+    'không sao',
+    'khong sao',
+    'hết rồi',
+    'het roi',
+    'ổn cháu',
+    'on chau',
+    'khỏe cháu',
+    'khoe chau',
+    'ổn chị',
+    'on chi',
+    'không có gì',
+    'khong co gi',
+    'không có triệu chứng',
+    'khong co trieu chung',
   ];
-  const userSaidFine = allUserMessages.some(m => fineKw.some(kw => m.toLowerCase().includes(kw)));
+  const userSaidFine = allUserMessages.some((m) =>
+    fineKw.some((kw) => m.toLowerCase().includes(kw))
+  );
 
   // ── Severity rules ──
 
@@ -293,7 +407,7 @@ function calculateSeverity(allUserMessages, profile) {
   } else if (hasRedFlag) {
     severity = 'high';
   } else if (progression === 'worse') {
-    severity = (isElderly || hasConditions) ? 'high' : 'medium';
+    severity = isElderly || hasConditions ? 'high' : 'medium';
   } else if (progression === 'same' && (isElderly || hasConditions)) {
     severity = 'medium';
   } else if (isElderly && hasConditions && !userSaidFine) {
@@ -316,12 +430,14 @@ function calculateSeverity(allUserMessages, profile) {
   // ── followUpHours ──
   // Tính theo giờ VN hiện tại
   const now = new Date();
-  const vnHour = parseInt(now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour: 'numeric', hour12: false }));
+  const vnHour = parseInt(
+    now.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh', hour: 'numeric', hour12: false })
+  );
 
   let followUpHours;
   if (userSaidFine && !hasRedFlag) {
     // "Tôi ổn" → hẹn 21h tối, nếu đã tối → hẹn 7h sáng mai
-    followUpHours = vnHour < 18 ? (21 - vnHour) : (24 - vnHour + 7);
+    followUpHours = vnHour < 18 ? 21 - vnHour : 24 - vnHour + 7;
   } else if (severity === 'high') {
     // "Rất mệt" / red flag → sau 1 tiếng
     followUpHours = 1;
@@ -334,7 +450,7 @@ function calculateSeverity(allUserMessages, profile) {
   // Nếu hẹn rơi vào quá 22h → dời sang sáng mai 7h
   const followUpVnHour = vnHour + followUpHours;
   if (followUpVnHour >= 22) {
-    followUpHours = (24 - vnHour) + 7; // tới 7h sáng mai
+    followUpHours = 24 - vnHour + 7; // tới 7h sáng mai
   }
 
   // ── needsFamilyAlert ──
@@ -355,14 +471,16 @@ function calculateSeverity(allUserMessages, profile) {
     recommendation = 'Tiếp tục nghỉ ngơi, uống đủ nước. Theo dõi và báo lại nếu có thay đổi.';
   } else {
     const complaintName = complaint ? complaint.key : '';
-    const progressionText = progression === 'worse' ? ', đang nặng hơn'
-      : progression === 'same' ? ', chưa đỡ'
-      : progression === 'better' ? ', đang đỡ dần'
-      : '';
+    const progressionText =
+      progression === 'worse'
+        ? ', đang nặng hơn'
+        : progression === 'same'
+          ? ', chưa đỡ'
+          : progression === 'better'
+            ? ', đang đỡ dần'
+            : '';
 
-    summary = complaintName
-      ? `${complaintName}${progressionText}`
-      : `Không khoẻ${progressionText}`;
+    summary = complaintName ? `${complaintName}${progressionText}` : `Không khoẻ${progressionText}`;
 
     if (severity === 'high') {
       recommendation = needsDoctor
@@ -417,7 +535,13 @@ function calculateSeverity(allUserMessages, profile) {
  *   forceConclude?: boolean,
  * }}
  */
-function analyzeResponse(reply, history, currentUserMessage, profile, previousSessionSummary = null) {
+function analyzeResponse(
+  reply,
+  history,
+  currentUserMessage,
+  profile,
+  previousSessionSummary = null
+) {
   const allUserMessages = extractUserMessages(history, currentUserMessage);
 
   // ── 1. Check for [EMERGENCY] tag from GPT ──
@@ -456,18 +580,25 @@ function analyzeResponse(reply, history, currentUserMessage, profile, previousSe
     if (serverResult.severity === 'low' && serverResult.userSaidFine) {
       finalSev = 'low';
     } else {
-      finalSev = (aiSeverity && sevOrder[aiSeverity] !== undefined)
-        ? (sevOrder[aiSeverity] >= sevOrder[serverResult.severity] ? aiSeverity : serverResult.severity)
-        : serverResult.severity;
+      finalSev =
+        aiSeverity && sevOrder[aiSeverity] !== undefined
+          ? sevOrder[aiSeverity] >= sevOrder[serverResult.severity]
+            ? aiSeverity
+            : serverResult.severity
+          : serverResult.severity;
     }
 
     // needsDoctor: true nếu bất kỳ bên nào nói true, TRỪ KHI user nói ổn
-    const finalDoc = serverResult.userSaidFine ? false : ((aiNeedsDoctor === true) || serverResult.needsDoctor);
+    const finalDoc = serverResult.userSaidFine
+      ? false
+      : aiNeedsDoctor === true || serverResult.needsDoctor;
 
-    const followUpHours = aiFollowUpHours && aiFollowUpHours > 0 ? aiFollowUpHours : serverResult.followUpHours;
+    const followUpHours =
+      aiFollowUpHours && aiFollowUpHours > 0 ? aiFollowUpHours : serverResult.followUpHours;
     const summary = aiSummary || serverResult.summary;
     const hasRedFlag = serverResult.hasRedFlag;
-    const needsFamilyAlert = (finalSev === 'high' || hasRedFlag) && (serverResult.isElderly || serverResult.hasConditions);
+    const needsFamilyAlert =
+      (finalSev === 'high' || hasRedFlag) && (serverResult.isElderly || serverResult.hasConditions);
 
     return {
       isDone: true,
@@ -516,14 +647,32 @@ function analyzeResponse(reply, history, currentUserMessage, profile, previousSe
   // ── 5. Heuristic: detect AI concluded without tag ──
   const replyLower = reply.toLowerCase();
   const concludePatterns = [
-    'hỏi lại.*sau', 'hỏi thăm.*sau', 'hỏi lại.*lúc', 'hỏi thăm.*lúc',
-    'hoi lai.*sau', 'hoi tham.*sau', 'hoi lai.*luc', 'hoi tham.*luc',
-    'chúc ngủ ngon', 'chuc ngu ngon', 'sáng mai', 'sang mai',
-    'hẹn.*tối', 'hen.*toi', 'hỏi thăm.*tối', 'hỏi thăm.*sáng',
-    'hỏi lại.*giờ', 'hỏi thăm.*giờ', 'hoi lai.*gio', 'hoi tham.*gio',
-    'sẽ hỏi lại', 'se hoi lai', 'sẽ hỏi thăm', 'se hoi tham',
+    'hỏi lại.*sau',
+    'hỏi thăm.*sau',
+    'hỏi lại.*lúc',
+    'hỏi thăm.*lúc',
+    'hoi lai.*sau',
+    'hoi tham.*sau',
+    'hoi lai.*luc',
+    'hoi tham.*luc',
+    'chúc ngủ ngon',
+    'chuc ngu ngon',
+    'sáng mai',
+    'sang mai',
+    'hẹn.*tối',
+    'hen.*toi',
+    'hỏi thăm.*tối',
+    'hỏi thăm.*sáng',
+    'hỏi lại.*giờ',
+    'hỏi thăm.*giờ',
+    'hoi lai.*gio',
+    'hoi tham.*gio',
+    'sẽ hỏi lại',
+    'se hoi lai',
+    'sẽ hỏi thăm',
+    'se hoi tham',
   ];
-  const looksLikeDone = concludePatterns.some(p => new RegExp(p).test(replyLower));
+  const looksLikeDone = concludePatterns.some((p) => new RegExp(p).test(replyLower));
 
   // Chỉ trigger nếu reply là kết luận thật:
   // - Có pattern hẹn/chúc trong REPLY HIỆN TẠI
@@ -539,7 +688,10 @@ function analyzeResponse(reply, history, currentUserMessage, profile, previousSe
     const serverResult = calculateSeverity(allUserMessages, profile);
 
     // Trích summary từ reply AI — lấy câu đầu tiên hoặc tóm tắt ngắn
-    const replySentences = reply.split(/[.!?\n]/).map(s => s.trim()).filter(s => s.length > 5);
+    const replySentences = reply
+      .split(/[.!?\n]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 5);
     const aiSummary = replySentences.length > 0 ? replySentences[0] : reply.substring(0, 100);
 
     // Parse severity/doctor/followup từ tag nếu có, fallback server
@@ -558,20 +710,25 @@ function analyzeResponse(reply, history, currentUserMessage, profile, previousSe
       // User nói ổn → luôn low, bất kể AI nói gì
       finalSev = 'low';
     } else {
-      finalSev = (aiSev && sevOrder[aiSev] !== undefined)
-        ? (sevOrder[aiSev] >= sevOrder[serverSev] ? aiSev : serverSev)
-        : serverSev;
+      finalSev =
+        aiSev && sevOrder[aiSev] !== undefined
+          ? sevOrder[aiSev] >= sevOrder[serverSev]
+            ? aiSev
+            : serverSev
+          : serverSev;
     }
 
     // needsDoctor: true nếu bất kỳ bên nào nói true, TRỪ KHI user nói ổn
     const aiDoc = doctorMatch ? doctorMatch[1].trim().toLowerCase() === 'true' : false;
-    const finalDoc = serverResult.userSaidFine ? false : (aiDoc || serverResult.needsDoctor);
+    const finalDoc = serverResult.userSaidFine ? false : aiDoc || serverResult.needsDoctor;
 
     return {
       isDone: true,
       severity: finalSev,
       needsDoctor: finalDoc,
-      needsFamilyAlert: serverResult.needsFamilyAlert || (finalSev === 'high' && (serverResult.isElderly || serverResult.hasConditions)),
+      needsFamilyAlert:
+        serverResult.needsFamilyAlert ||
+        (finalSev === 'high' && (serverResult.isElderly || serverResult.hasConditions)),
       hasRedFlag: serverResult.hasRedFlag,
       followUpHours: followUpMatch ? parseInt(followUpMatch[1]) : serverResult.followUpHours,
       summary: summaryMatch ? summaryMatch[1].trim() : aiSummary,
@@ -608,7 +765,10 @@ function stripTags(reply) {
 function parseOptions(reply) {
   const match = reply.match(/\[OPTIONS:\s*([^\]]+)\]/i);
   if (!match) return [];
-  return match[1].split(',').map(o => o.trim()).filter(Boolean);
+  return match[1]
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
 }
 
 // ─── Main Entry Point ─────────────────────────────────────────────────────
@@ -645,7 +805,7 @@ async function processTriageChat(input) {
     history = [],
     healthContext = {},
     previousSessionSummary = null,
-    isFollowUpSameDay = false,
+    _isFollowUpSameDay = false,
   } = input;
 
   // Empty message = initial greeting trigger (first call)
@@ -653,7 +813,12 @@ async function processTriageChat(input) {
   const userMessage = isInitialGreeting ? 'Xin chào' : message.trim();
 
   // ── 1. Build system prompt ──
-  const systemPrompt = buildSystemPrompt(profile, healthContext, previousSessionSummary, input.simulatedHour);
+  const systemPrompt = buildSystemPrompt(
+    profile,
+    healthContext,
+    previousSessionSummary,
+    input.simulatedHour
+  );
 
   // ── 2. Call GPT ──
   let gptResult;
@@ -716,7 +881,9 @@ async function processTriageChat(input) {
   if (filtered.text) cleanReply = filtered.text;
 
   // ── 8. Log the interaction ──
-  console.log(`[TriageChat] isDone=${analysis.isDone} severity=${analysis.severity||'-'} redFlag=${analysis.hasRedFlag||false}`);
+  console.log(
+    `[TriageChat] isDone=${analysis.isDone} severity=${analysis.severity || '-'} redFlag=${analysis.hasRedFlag || false}`
+  );
 
   // ── 9. Build final response ──
   const options = parseOptions(rawReply);

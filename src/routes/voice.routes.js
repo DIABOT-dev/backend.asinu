@@ -11,7 +11,14 @@ const voiceUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    const allowed = ['audio/m4a', 'audio/mp4', 'audio/webm', 'audio/ogg', 'audio/wav', 'audio/mpeg'];
+    const allowed = [
+      'audio/m4a',
+      'audio/mp4',
+      'audio/webm',
+      'audio/ogg',
+      'audio/wav',
+      'audio/mpeg',
+    ];
     if (allowed.includes(file.mimetype) || file.mimetype.startsWith('audio/')) {
       cb(null, true);
     } else {
@@ -23,8 +30,17 @@ const voiceUpload = multer({
 function voiceRoutes(pool) {
   const router = express.Router();
 
-  router.post('/chat', requireAuth, requirePremium(pool), handleUpload(voiceUpload.single('audio')), verifyAudioMagicBytes, (req, res) => voiceChat(pool, req, res));
-  router.get('/usage', requireAuth, requirePremium(pool), (req, res) => getVoiceUsage(pool, req, res));
+  router.post(
+    '/chat',
+    requireAuth,
+    requirePremium(pool),
+    handleUpload(voiceUpload.single('audio')),
+    verifyAudioMagicBytes,
+    (req, res) => voiceChat(pool, req, res)
+  );
+  router.get('/usage', requireAuth, requirePremium(pool), (req, res) =>
+    getVoiceUsage(pool, req, res)
+  );
 
   return router;
 }

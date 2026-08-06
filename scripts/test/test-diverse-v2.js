@@ -15,10 +15,17 @@ const { execSync } = require('child_process');
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
-const { createClustersFromOnboarding, getScript, toClusterKey } = require('../../src/services/checkin/script.service');
+const {
+  createClustersFromOnboarding,
+  getScript,
+  toClusterKey,
+} = require('../../src/services/checkin/script.service');
 const { getNextQuestion } = require('../../src/core/checkin/script-runner');
 const { evaluateFollowUp } = require('../../src/core/checkin/scoring-engine');
-const { getFallbackScriptData, matchCluster } = require('../../src/services/checkin/fallback.service');
+const {
+  getFallbackScriptData,
+  matchCluster,
+} = require('../../src/services/checkin/fallback.service');
 const { detectEmergency } = require('../../src/services/checkin/emergency-detector');
 const { listComplaints } = require('../../src/services/checkin/clinical-mapping');
 
@@ -29,32 +36,52 @@ const DATA_DIR = path.join(__dirname, './data');
 const PROFILES = {
   elderly_sick: {
     key: 'elderly_sick',
-    name: 'Bà Lan', age: 75, desc: '75 tuổi, 4 bệnh nền',
-    birth_year: 1951, gender: 'Nữ', full_name: 'Nguyễn Thị Lan',
+    name: 'Bà Lan',
+    age: 75,
+    desc: '75 tuổi, 4 bệnh nền',
+    birth_year: 1951,
+    gender: 'Nữ',
+    full_name: 'Nguyễn Thị Lan',
     medical_conditions: ['Tiểu đường type 2', 'Cao huyết áp', 'Suy tim', 'Loãng xương'],
   },
   elderly_diabetes: {
     key: 'elderly_diabetes',
-    name: 'Chú Hùng', age: 68, desc: '68 tuổi, tiểu đường',
-    birth_year: 1958, gender: 'Nam', full_name: 'Trần Văn Hùng',
+    name: 'Chú Hùng',
+    age: 68,
+    desc: '68 tuổi, tiểu đường',
+    birth_year: 1958,
+    gender: 'Nam',
+    full_name: 'Trần Văn Hùng',
     medical_conditions: ['Tiểu đường'],
   },
   middle_hypertension: {
     key: 'middle_hypertension',
-    name: 'Chị Hương', age: 50, desc: '50 tuổi, huyết áp cao',
-    birth_year: 1976, gender: 'Nữ', full_name: 'Phạm Thị Hương',
+    name: 'Chị Hương',
+    age: 50,
+    desc: '50 tuổi, huyết áp cao',
+    birth_year: 1976,
+    gender: 'Nữ',
+    full_name: 'Phạm Thị Hương',
     medical_conditions: ['Cao huyết áp'],
   },
   young_healthy: {
     key: 'young_healthy',
-    name: 'Anh Minh', age: 30, desc: '30 tuổi, khỏe mạnh',
-    birth_year: 1996, gender: 'Nam', full_name: 'Nguyễn Văn Minh',
+    name: 'Anh Minh',
+    age: 30,
+    desc: '30 tuổi, khỏe mạnh',
+    birth_year: 1996,
+    gender: 'Nam',
+    full_name: 'Nguyễn Văn Minh',
     medical_conditions: [],
   },
   no_profile: {
     key: 'no_profile',
-    name: 'User mới', age: null, desc: 'Không có hồ sơ',
-    birth_year: null, gender: null, full_name: null,
+    name: 'User mới',
+    age: null,
+    desc: 'Không có hồ sơ',
+    birth_year: null,
+    gender: null,
+    full_name: null,
     medical_conditions: [],
   },
 };
@@ -73,13 +100,15 @@ function pickAnswer(question, strategy) {
   switch (strategy) {
     case 'mildest':
       if (question.type === 'slider') return question.min || 0;
-      return opts.find(o => o.includes('không') || o.includes('nhẹ')) || opts[0] || 'không có';
+      return opts.find((o) => o.includes('không') || o.includes('nhẹ')) || opts[0] || 'không có';
     case 'worst':
       if (question.type === 'slider') return question.max || 10;
       if (opts.length > 0) {
-        const severe = opts.find(o => o.includes('nặng') || o.includes('dữ dội') || o.includes('liên tục'));
+        const severe = opts.find(
+          (o) => o.includes('nặng') || o.includes('dữ dội') || o.includes('liên tục')
+        );
         if (severe) return severe;
-        const last = opts.filter(o => !o.includes('không có') && !o.includes('không rõ'));
+        const last = opts.filter((o) => !o.includes('không có') && !o.includes('không rõ'));
         return last.length > 0 ? last[last.length - 1] : opts[opts.length - 1];
       }
       return 'rất nặng';
@@ -91,7 +120,11 @@ function pickAnswer(question, strategy) {
       return opts.length > 0 ? opts[Math.floor(Math.random() * opts.length)] : 'không rõ';
     case 'skip':
       if (question.type === 'slider') return 1;
-      return opts.find(o => o.includes('không có') || o.includes('không rõ') || o.includes('không')) || opts[0] || '';
+      return (
+        opts.find((o) => o.includes('không có') || o.includes('không rõ') || o.includes('không')) ||
+        opts[0] ||
+        ''
+      );
     default:
       return opts[0] || 5;
   }
@@ -101,7 +134,8 @@ function pickAnswer(question, strategy) {
 function runSession(scriptData, profile, strategy) {
   const answers = [];
   const conversation = [];
-  let step, count = 0;
+  let step,
+    count = 0;
 
   do {
     step = getNextQuestion(scriptData, answers, { sessionType: 'initial', profile });
@@ -178,18 +212,52 @@ function evaluateSafety(result, profileKey, strategyKey) {
 function testFollowUp(scriptData, previousSeverity) {
   const results = [];
   const cases = [
-    { answers: [{ question_id: 'fu1', answer: 'Đỡ hơn' }, { question_id: 'fu2', answer: 'Không' }], label: 'Đỡ hơn + không triệu chứng mới', expectLow: true },
-    { answers: [{ question_id: 'fu1', answer: 'Nặng hơn' }, { question_id: 'fu2', answer: 'Có' }], label: 'Nặng hơn + có triệu chứng mới', expectHigh: true },
-    { answers: [{ question_id: 'fu1', answer: 'Vẫn vậy' }, { question_id: 'fu2', answer: 'Không' }], label: 'Vẫn vậy + không mới', expectSame: true },
+    {
+      answers: [
+        { question_id: 'fu1', answer: 'Đỡ hơn' },
+        { question_id: 'fu2', answer: 'Không' },
+      ],
+      label: 'Đỡ hơn + không triệu chứng mới',
+      expectLow: true,
+    },
+    {
+      answers: [
+        { question_id: 'fu1', answer: 'Nặng hơn' },
+        { question_id: 'fu2', answer: 'Có' },
+      ],
+      label: 'Nặng hơn + có triệu chứng mới',
+      expectHigh: true,
+    },
+    {
+      answers: [
+        { question_id: 'fu1', answer: 'Vẫn vậy' },
+        { question_id: 'fu2', answer: 'Không' },
+      ],
+      label: 'Vẫn vậy + không mới',
+      expectSame: true,
+    },
   ];
 
   for (const tc of cases) {
     const r = evaluateFollowUp(scriptData, tc.answers, previousSeverity);
     let pass = true;
     let issue = '';
-    if (tc.expectLow && r.severity !== 'low') { pass = false; issue = `Mong đợi Nhẹ, được ${r.severity}`; }
-    if (tc.expectHigh && r.severity !== 'high') { pass = false; issue = `Mong đợi Nặng, được ${r.severity}`; }
-    results.push({ label: tc.label, severity: r.severity, action: r.action, needsDoctor: r.needsDoctor, pass, issue });
+    if (tc.expectLow && r.severity !== 'low') {
+      pass = false;
+      issue = `Mong đợi Nhẹ, được ${r.severity}`;
+    }
+    if (tc.expectHigh && r.severity !== 'high') {
+      pass = false;
+      issue = `Mong đợi Nặng, được ${r.severity}`;
+    }
+    results.push({
+      label: tc.label,
+      severity: r.severity,
+      action: r.action,
+      needsDoctor: r.needsDoctor,
+      pass,
+      issue,
+    });
   }
   return results;
 }
@@ -208,7 +276,8 @@ async function run() {
   await createClustersFromOnboarding(pool, USER_ID, complaints);
 
   const allResults = [];
-  let totalPass = 0, totalFail = 0;
+  let totalPass = 0,
+    totalFail = 0;
 
   for (const complaint of complaints) {
     const key = toClusterKey(complaint);
@@ -219,9 +288,13 @@ async function run() {
     const complaintResults = {
       complaint,
       clusterKey: key,
-      questions: sd.questions.map(q => ({
-        id: q.id, text: q.text, type: q.type,
-        options: q.options || null, min: q.min, max: q.max,
+      questions: sd.questions.map((q) => ({
+        id: q.id,
+        text: q.text,
+        type: q.type,
+        options: q.options || null,
+        min: q.min,
+        max: q.max,
       })),
       scoringRules: sd.scoring_rules.length,
       scenarios: [],
@@ -236,7 +309,8 @@ async function run() {
           ? evaluateSafety(step, profileKey, strategy.key)
           : { pass: false, issues: ['Phiên không hoàn thành'], severity: null };
 
-        if (safety.pass) totalPass++; else totalFail++;
+        if (safety.pass) totalPass++;
+        else totalFail++;
 
         complaintResults.scenarios.push({
           profile: { key: profileKey, name: profile.name, desc: profile.desc },
@@ -264,7 +338,11 @@ async function run() {
 
   // ─── Emergency tests ───────────────────────────────────────
   const emergencyTests = [
-    { input: ['đau ngực', 'khó thở'], expected: true, label: 'Đau ngực + khó thở → Nhồi máu cơ tim' },
+    {
+      input: ['đau ngực', 'khó thở'],
+      expected: true,
+      label: 'Đau ngực + khó thở → Nhồi máu cơ tim',
+    },
     { input: ['yếu nửa người'], expected: true, label: 'Yếu nửa người → Đột quỵ' },
     { input: ['co giật'], expected: true, label: 'Co giật → Động kinh' },
     { input: ['sốt cao', 'cứng cổ'], expected: true, label: 'Sốt + cứng cổ → Viêm màng não' },
@@ -273,11 +351,19 @@ async function run() {
     { input: ['đau đầu nhẹ'], expected: false, label: '"Đau đầu nhẹ" → Không phải cấp cứu' },
     { input: ['không đau ngực'], expected: false, label: '"Không đau ngực" (phủ định) → An toàn' },
   ];
-  const emergencyResults = emergencyTests.map(t => {
+  const emergencyResults = emergencyTests.map((t) => {
     const r = detectEmergency(t.input, PROFILES.elderly_sick);
-    return { ...t, actual: r.isEmergency, type: r.type || null, pass: r.isEmergency === t.expected };
+    return {
+      ...t,
+      actual: r.isEmergency,
+      type: r.type || null,
+      pass: r.isEmergency === t.expected,
+    };
   });
-  emergencyResults.forEach(r => { if (r.pass) totalPass++; else totalFail++; });
+  emergencyResults.forEach((r) => {
+    if (r.pass) totalPass++;
+    else totalFail++;
+  });
 
   // ─── Fallback tests ────────────────────────────────────────
   const fallbackTests = ['đau răng', 'ngứa da', 'đau vai phải', 'ợ nóng sau ăn', 'mắt mờ đột ngột'];
@@ -294,7 +380,8 @@ async function run() {
       severity: step.conclusion?.severity || null,
       pass: step.isDone,
     });
-    if (step.isDone) totalPass++; else totalFail++;
+    if (step.isDone) totalPass++;
+    else totalFail++;
   }
 
   // ─── Save JSON ─────────────────────────────────────────────
@@ -324,9 +411,13 @@ async function run() {
   fs.writeFileSync(htmlPath, html);
   console.log(`HTML: ${htmlPath}`);
 
-  console.log(`\nTổng: ${totalPass + totalFail} | Đạt: ${totalPass} | Lỗi: ${totalFail} | Tỉ lệ: ${output.summary.passRate}`);
+  console.log(
+    `\nTổng: ${totalPass + totalFail} | Đạt: ${totalPass} | Lỗi: ${totalFail} | Tỉ lệ: ${output.summary.passRate}`
+  );
 
-  try { execSync(`open "${htmlPath}"`); } catch {}
+  try {
+    execSync(`open "${htmlPath}"`);
+  } catch {}
   await pool.end();
 }
 
@@ -450,11 +541,12 @@ function generateHTML(data) {
 <div class="section">
   <div class="section-title">📋 ${s.complaints} triệu chứng × ${s.profiles * s.strategies} kịch bản mỗi triệu chứng</div>
 
-${data.complaints.map(comp => {
-  const passCount = comp.scenarios.filter(s => s.result.pass).length;
-  const failCount = comp.scenarios.filter(s => !s.result.pass).length;
-  const hasIssue = failCount > 0;
-  return `
+${data.complaints
+  .map((comp) => {
+    const passCount = comp.scenarios.filter((s) => s.result.pass).length;
+    const failCount = comp.scenarios.filter((s) => !s.result.pass).length;
+    const hasIssue = failCount > 0;
+    return `
   <div class="complaint${hasIssue ? ' open' : ''}">
     <div class="complaint-header" onclick="this.parentElement.classList.toggle('open')">
       <span style="font-size:16px">${hasIssue ? '⚠️' : '✅'}</span>
@@ -472,9 +564,10 @@ ${data.complaints.map(comp => {
         ${comp.questions.map((q, i) => `${i + 1}. "${q.text}" <span class="pill blue">${q.type === 'slider' ? `Thang ${q.min}-${q.max}` : q.type === 'single_choice' ? 'Chọn 1' : q.type === 'multi_choice' ? 'Chọn nhiều' : 'Nhập tự do'}</span>`).join('<br>')}
       </div>
 
-      ${comp.scenarios.map(sc => {
-        const sev = sc.result.severity || 'low';
-        return `
+      ${comp.scenarios
+        .map((sc) => {
+          const sev = sc.result.severity || 'low';
+          return `
       <div class="scenario${!sc.result.pass ? ' open' : ''}">
         <div class="scenario-row" onclick="this.parentElement.classList.toggle('open')">
           <span class="scenario-icon">${sc.result.pass ? '✅' : '❌'}</span>
@@ -489,13 +582,17 @@ ${data.complaints.map(comp => {
         </div>
         <div class="scenario-detail">
           <div style="margin-bottom:4px"><b>💬 Hội thoại (${sc.questionCount} câu):</b></div>
-          ${sc.conversation.map((cv, i) => `
+          ${sc.conversation
+            .map(
+              (cv, i) => `
             <div>
               <span class="convo-q"><b>Câu ${i + 1}:</b> ${cv.question}</span>
               ${cv.options ? `<div class="convo-opts">Lựa chọn: ${cv.options.join(' | ')}</div>` : ''}
               <div class="convo-a">→ <b>${cv.answer}</b></div>
             </div>
-          `).join('')}
+          `
+            )
+            .join('')}
           <div class="result-box" style="background:${sevBg[sev]};border-left:3px solid ${sevColor[sev]}">
             <b>Kết quả:</b> <span style="color:${sevColor[sev]};font-weight:700">${sevVN[sev] || sev}</span>
             | Hẹn lại: <b>${sc.result.followUpHours || '?'}h</b>
@@ -504,14 +601,17 @@ ${data.complaints.map(comp => {
             ${sc.result.summary ? `<br><b>Tóm tắt:</b> ${sc.result.summary}` : ''}
             ${sc.result.recommendation ? `<br><b>Lời khuyên:</b> ${sc.result.recommendation}` : ''}
           </div>
-          ${sc.result.issues.length > 0 ? sc.result.issues.map(i => `<div class="issue-box">⚠️ ${i}</div>`).join('') : ''}
+          ${sc.result.issues.length > 0 ? sc.result.issues.map((i) => `<div class="issue-box">⚠️ ${i}</div>`).join('') : ''}
         </div>
       </div>`;
-      }).join('')}
+        })
+        .join('')}
 
       <div class="followup-section">
         <b>🔄 Follow-up (hỏi lại sau ${comp.scenarios[0]?.result.followUpHours || '?'}h):</b>
-        ${comp.followUp.map(fu => `
+        ${comp.followUp
+          .map(
+            (fu) => `
           <div class="followup-row">
             <span>${fu.pass ? '✅' : '❌'}</span>
             <span>${fu.label}</span>
@@ -519,36 +619,47 @@ ${data.complaints.map(comp => {
             <span style="color:#64748b">${fu.action}</span>
             ${fu.issue ? `<span style="color:#dc2626">${fu.issue}</span>` : ''}
           </div>
-        `).join('')}
+        `
+          )
+          .join('')}
       </div>
     </div>
   </div>`;
-}).join('')}
+  })
+  .join('')}
 </div>
 
 <div class="section">
   <div class="section-title">🚨 Phát hiện cấp cứu (${data.emergency.length} tình huống)</div>
   <div class="emergency-section">
-    ${data.emergency.map(e => `
+    ${data.emergency
+      .map(
+        (e) => `
     <div class="em-row">
       <span>${e.pass ? '✅' : '❌'}</span>
       <span style="flex:1">${e.label}</span>
       <span class="pill ${e.expected ? 'red' : 'green'}">${e.expected ? '🚨 CẤP CỨU' : '✓ An toàn'}</span>
       ${e.type ? `<span style="color:#64748b;font-size:10px">${e.type}</span>` : ''}
-    </div>`).join('')}
+    </div>`
+      )
+      .join('')}
   </div>
 </div>
 
 <div class="section">
   <div class="section-title">❓ Triệu chứng lạ — Fallback (${data.fallback.length} tình huống)</div>
   <div class="fallback-section">
-    ${data.fallback.map(f => `
+    ${data.fallback
+      .map(
+        (f) => `
     <div class="fb-row">
       <span>${f.pass ? '✅' : '❌'}</span>
       <span style="flex:1">"${f.symptom}"</span>
       <span class="pill ${f.matched ? 'blue' : 'yellow'}">${f.matched ? `Tìm thấy: ${f.matchedCluster}` : 'Không tìm thấy → Fallback'}</span>
       ${f.severity ? `<span class="sev" style="background:${sevBg[f.severity]};color:${sevColor[f.severity]}">${sevVN[f.severity]}</span>` : ''}
-    </div>`).join('')}
+    </div>`
+      )
+      .join('')}
   </div>
 </div>
 
@@ -566,4 +677,8 @@ document.querySelectorAll('.complaint').forEach(c => {
 </html>`;
 }
 
-run().catch(err => { console.error('CRASH:', err); pool.end(); process.exit(1); });
+run().catch((err) => {
+  console.error('CRASH:', err);
+  pool.end();
+  process.exit(1);
+});

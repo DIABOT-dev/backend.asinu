@@ -12,17 +12,23 @@ const { z } = require('zod');
 // =====================================================
 
 const activitySchema = z.object({
-  activity_type: z.enum(['APP_OPEN', 'MOOD_CHECK', 'HEALTH_MEASUREMENT', 'QUESTION_ANSWERED', 'QUESTION_SKIPPED']),
+  activity_type: z.enum([
+    'APP_OPEN',
+    'MOOD_CHECK',
+    'HEALTH_MEASUREMENT',
+    'QUESTION_ANSWERED',
+    'QUESTION_SKIPPED',
+  ]),
   activity_data: z.record(z.any()).optional().default({}),
   session_id: z.string().optional(),
-  occurred_at: z.string().datetime().optional()
+  occurred_at: z.string().datetime().optional(),
 });
 
-const sendAlertSchema = z.object({
+const _sendAlertSchema = z.object({
   alert_type: z.enum(['INFO', 'WARNING', 'URGENT', 'EMERGENCY']),
   title: z.string().min(1),
   message: z.string().min(1),
-  context_data: z.record(z.any()).optional()
+  context_data: z.record(z.any()).optional(),
 });
 
 // =====================================================
@@ -33,10 +39,10 @@ async function postActivity(pool, req, res) {
   try {
     const parsed = activitySchema.safeParse(req.body);
     if (!parsed.success) {
-      return res.status(400).json({ 
-        ok: false, 
-        error: t('error.invalid_data', getLang(req)), 
-        details: parsed.error.issues 
+      return res.status(400).json({
+        ok: false,
+        error: t('error.invalid_data', getLang(req)),
+        details: parsed.error.issues,
       });
     }
 
@@ -53,7 +59,7 @@ async function postActivity(pool, req, res) {
       // Auto-evaluate after activity
       const evaluation = await wellnessService.evaluateUserWellness(pool, req.user.id, {
         executePrompt: false, // Don't auto-prompt from API
-        executeAlert: true
+        executeAlert: true,
       });
 
       return res.status(200).json({
@@ -62,14 +68,13 @@ async function postActivity(pool, req, res) {
         evaluation: {
           score: evaluation.score,
           status: evaluation.status,
-          statusChanged: evaluation.statusChanged
-        }
+          statusChanged: evaluation.statusChanged,
+        },
       });
     } finally {
       client.release();
     }
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -81,7 +86,7 @@ async function postActivity(pool, req, res) {
 async function getState(pool, req, res) {
   try {
     const state = await wellnessService.getWellnessState(pool, req.user.id);
-    
+
     return res.status(200).json({
       ok: true,
       state: {
@@ -92,11 +97,10 @@ async function getState(pool, req, res) {
         streakDays: state?.streak_days || 0,
         needsAttention: state?.needs_attention || false,
         consecutiveNoResponse: state?.consecutive_no_response || 0,
-        consecutiveNegativeMood: state?.consecutive_negative_mood || 0
-      }
+        consecutiveNegativeMood: state?.consecutive_negative_mood || 0,
+      },
     });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -109,7 +113,7 @@ async function postCalculate(pool, req, res) {
   try {
     const result = await wellnessService.evaluateUserWellness(pool, req.user.id, {
       executePrompt: false,
-      executeAlert: req.body.checkAlert !== false
+      executeAlert: req.body.checkAlert !== false,
     });
 
     return res.status(200).json({
@@ -118,10 +122,9 @@ async function postCalculate(pool, req, res) {
       status: result.status,
       breakdown: result.breakdown,
       statusChanged: result.statusChanged,
-      alertSent: result.alert ? true : false
+      alertSent: result.alert ? true : false,
     });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -137,15 +140,14 @@ async function getHistory(pool, req, res) {
 
     return res.status(200).json({
       ok: true,
-      history: history.map(h => ({
+      history: history.map((h) => ({
         score: h.score,
         status: h.status,
         breakdown: h.score_breakdown,
-        calculatedAt: h.calculated_at
-      }))
+        calculatedAt: h.calculated_at,
+      })),
     });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -161,7 +163,7 @@ async function getSummary(pool, req, res) {
 
     return res.status(200).json({
       ok: true,
-      summaries: summaries.map(s => ({
+      summaries: summaries.map((s) => ({
         date: s.summary_date,
         appOpens: s.app_opens,
         moodChecks: s.mood_checks,
@@ -172,18 +174,19 @@ async function getSummary(pool, req, res) {
         moodNeutral: s.mood_neutral,
         moodNegative: s.mood_negative,
         avgGlucose: s.avg_glucose,
-        avgBloodPressure: s.avg_blood_pressure_systolic ? {
-          systolic: s.avg_blood_pressure_systolic,
-          diastolic: s.avg_blood_pressure_diastolic
-        } : null,
+        avgBloodPressure: s.avg_blood_pressure_systolic
+          ? {
+              systolic: s.avg_blood_pressure_systolic,
+              diastolic: s.avg_blood_pressure_diastolic,
+            }
+          : null,
         avgWeight: s.avg_weight,
         totalWater: s.total_water_ml,
         endOfDayScore: s.end_of_day_score,
-        endOfDayStatus: s.end_of_day_status
-      }))
+        endOfDayStatus: s.end_of_day_status,
+      })),
     });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -197,18 +200,17 @@ async function checkShouldPrompt(pool, req, res) {
     const client = await pool.connect();
     try {
       const decision = await wellnessService.shouldPromptUser(client, req.user.id);
-      
+
       return res.status(200).json({
         ok: true,
         shouldPrompt: decision.shouldPrompt,
         reason: decision.reason,
-        promptType: decision.promptType
+        promptType: decision.promptType,
       });
     } finally {
       client.release();
     }
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -221,12 +223,12 @@ async function getMyAlerts(pool, req, res) {
   try {
     const alerts = await wellnessService.getCaregiverAlerts(pool, req.user.id, {
       status: req.query.status,
-      limit: parseInt(req.query.limit) || 20
+      limit: parseInt(req.query.limit) || 20,
     });
 
     return res.status(200).json({
       ok: true,
-      alerts: alerts.map(a => ({
+      alerts: alerts.map((a) => ({
         id: a.id,
         type: a.alert_type,
         status: a.alert_status,
@@ -235,11 +237,10 @@ async function getMyAlerts(pool, req, res) {
         triggeredBy: a.triggered_by,
         createdAt: a.created_at,
         sentAt: a.sent_at,
-        acknowledgedAt: a.acknowledged_at
-      }))
+        acknowledgedAt: a.acknowledged_at,
+      })),
     });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -252,12 +253,12 @@ async function getCaregiverAlertsHandler(pool, req, res) {
   try {
     const alerts = await wellnessService.getAlertsForCaregiver(pool, req.user.id, {
       unreadOnly: req.query.unreadOnly === 'true',
-      limit: parseInt(req.query.limit) || 20
+      limit: parseInt(req.query.limit) || 20,
     });
 
     return res.status(200).json({
       ok: true,
-      alerts: alerts.map(a => ({
+      alerts: alerts.map((a) => ({
         id: a.id,
         userId: a.user_id,
         type: a.alert_type,
@@ -267,11 +268,10 @@ async function getCaregiverAlertsHandler(pool, req, res) {
         contextData: a.context_data,
         triggeredBy: a.triggered_by,
         createdAt: a.created_at,
-        sentAt: a.sent_at
-      }))
+        sentAt: a.sent_at,
+      })),
     });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -295,7 +295,6 @@ async function postAckAlert(pool, req, res) {
 
     return res.status(200).json(result);
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -322,15 +321,13 @@ async function postHelpRequest(pool, req, res) {
       return res.status(200).json({
         ok: true,
         alertsSent: alerts.length,
-        message: alerts.length > 0 
-          ? t('wellness.alert_sent', lang) 
-          : t('wellness.no_caregiver', lang)
+        message:
+          alerts.length > 0 ? t('wellness.alert_sent', lang) : t('wellness.no_caregiver', lang),
       });
     } finally {
       client.release();
     }
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -349,5 +346,5 @@ module.exports = {
   getMyAlerts,
   getCaregiverAlertsHandler,
   postAckAlert,
-  postHelpRequest
+  postHelpRequest,
 };

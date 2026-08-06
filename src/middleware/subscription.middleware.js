@@ -14,7 +14,9 @@ function requirePremium(pool) {
   return async function (req, res, next) {
     const userId = req.user?.id;
     if (!userId) {
-      return res.status(401).json({ ok: false, code: 'UNAUTHORIZED', error: t('error.unauthenticated', getLang(req)) });
+      return res
+        .status(401)
+        .json({ ok: false, code: 'UNAUTHORIZED', error: t('error.unauthenticated', getLang(req)) });
     }
 
     try {
@@ -28,7 +30,6 @@ function requirePremium(pool) {
       }
       next();
     } catch (err) {
-
       return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
     }
   };

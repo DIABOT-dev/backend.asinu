@@ -56,11 +56,7 @@
           "id": "q4",
           "text": "{Honorific} thấy mức độ đau đầu hiện tại?",
           "type": "single_choice",
-          "options": [
-            "nhẹ, vẫn sinh hoạt được",
-            "trung bình, khó tập trung",
-            "nặng, phải nằm nghỉ"
-          ]
+          "options": ["nhẹ, vẫn sinh hoạt được", "trung bình, khó tập trung", "nặng, phải nằm nghỉ"]
         }
       ],
       "scoringRules": 7,
@@ -5768,12 +5764,7 @@
           "id": "q1",
           "text": "{Honorific} mệt mỏi kéo dài bao lâu rồi?",
           "type": "single_choice",
-          "options": [
-            "hôm nay mới thấy",
-            "vài ngày nay",
-            "1-2 tuần",
-            "trên 2 tuần"
-          ]
+          "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"]
         },
         {
           "id": "q2",
@@ -5790,15 +5781,7 @@
           "id": "q3",
           "text": "{Honorific} có thêm triệu chứng nào?",
           "type": "multi_choice",
-          "options": [
-            "mất ngủ",
-            "ăn kém",
-            "sốt nhẹ",
-            "sụt cân",
-            "buồn bã",
-            "khó thở",
-            "không có"
-          ]
+          "options": ["mất ngủ", "ăn kém", "sốt nhẹ", "sụt cân", "buồn bã", "khó thở", "không có"]
         },
         {
           "id": "q4",
@@ -5829,12 +5812,7 @@
             {
               "question": "Cô mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "hôm nay mới thấy"
             },
             {
@@ -5901,12 +5879,7 @@
             {
               "question": "Cô mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -5973,12 +5946,7 @@
             {
               "question": "Cô mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 tuần"
             },
             {
@@ -6045,12 +6013,7 @@
             {
               "question": "Cô mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "vài ngày nay"
             },
             {
@@ -6117,12 +6080,7 @@
             {
               "question": "Cô mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "hôm nay mới thấy"
             },
             {
@@ -6189,12 +6147,7 @@
             {
               "question": "Chú mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "hôm nay mới thấy"
             },
             {
@@ -6261,12 +6214,7 @@
             {
               "question": "Chú mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -6333,12 +6281,7 @@
             {
               "question": "Chú mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 tuần"
             },
             {
@@ -6405,12 +6348,7 @@
             {
               "question": "Chú mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "vài ngày nay"
             },
             {
@@ -6477,12 +6415,7 @@
             {
               "question": "Chú mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "hôm nay mới thấy"
             },
             {
@@ -6549,12 +6482,7 @@
             {
               "question": "Chị mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "hôm nay mới thấy"
             },
             {
@@ -6621,12 +6549,7 @@
             {
               "question": "Chị mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -6693,12 +6616,7 @@
             {
               "question": "Chị mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 tuần"
             },
             {
@@ -6765,12 +6683,7 @@
             {
               "question": "Chị mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -6837,12 +6750,7 @@
             {
               "question": "Chị mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "hôm nay mới thấy"
             },
             {
@@ -6909,12 +6817,7 @@
             {
               "question": "Anh mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "hôm nay mới thấy"
             },
             {
@@ -6981,12 +6884,7 @@
             {
               "question": "Anh mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -7053,12 +6951,7 @@
             {
               "question": "Anh mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 tuần"
             },
             {
@@ -7125,12 +7018,7 @@
             {
               "question": "Anh mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 tuần"
             },
             {
@@ -7197,12 +7085,7 @@
             {
               "question": "Anh mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "hôm nay mới thấy"
             },
             {
@@ -7269,12 +7152,7 @@
             {
               "question": "Bạn mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "hôm nay mới thấy"
             },
             {
@@ -7341,12 +7219,7 @@
             {
               "question": "Bạn mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -7413,12 +7286,7 @@
             {
               "question": "Bạn mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 tuần"
             },
             {
@@ -7485,12 +7353,7 @@
             {
               "question": "Bạn mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "hôm nay mới thấy"
             },
             {
@@ -7557,12 +7420,7 @@
             {
               "question": "Bạn mệt mỏi kéo dài bao lâu rồi?",
               "type": "single_choice",
-              "options": [
-                "hôm nay mới thấy",
-                "vài ngày nay",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["hôm nay mới thấy", "vài ngày nay", "1-2 tuần", "trên 2 tuần"],
               "answer": "hôm nay mới thấy"
             },
             {
@@ -7674,26 +7532,13 @@
           "id": "q3",
           "text": "{Honorific} đau ngực xuất hiện khi nào?",
           "type": "multi_choice",
-          "options": [
-            "khi nghỉ ngơi",
-            "khi gắng sức",
-            "sau khi ăn",
-            "khi nằm",
-            "bất kỳ lúc nào"
-          ]
+          "options": ["khi nghỉ ngơi", "khi gắng sức", "sau khi ăn", "khi nằm", "bất kỳ lúc nào"]
         },
         {
           "id": "q4",
           "text": "{Honorific} có thêm triệu chứng nào?",
           "type": "multi_choice",
-          "options": [
-            "khó thở",
-            "vã mồ hôi",
-            "tim đập nhanh",
-            "chóng mặt",
-            "buồn nôn",
-            "không có"
-          ]
+          "options": ["khó thở", "vã mồ hôi", "tim đập nhanh", "chóng mặt", "buồn nôn", "không có"]
         }
       ],
       "scoringRules": 7,
@@ -11545,24 +11390,13 @@
           "id": "q3",
           "text": "{Honorific} khớp có sưng hoặc đỏ không?",
           "type": "multi_choice",
-          "options": [
-            "có sưng",
-            "có đỏ nóng",
-            "cứng khớp buổi sáng",
-            "không sưng đỏ"
-          ]
+          "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"]
         },
         {
           "id": "q4",
           "text": "{Honorific} có thêm triệu chứng nào?",
           "type": "multi_choice",
-          "options": [
-            "tê tay chân",
-            "yếu cơ",
-            "sốt",
-            "đau lan xuống chân",
-            "không có"
-          ]
+          "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"]
         }
       ],
       "scoringRules": 6,
@@ -11609,24 +11443,13 @@
             {
               "question": "Cô khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "không có"
             }
           ],
@@ -11684,24 +11507,13 @@
             {
               "question": "Cô khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "đau lan xuống chân"
             }
           ],
@@ -11759,24 +11571,13 @@
             {
               "question": "Cô khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "cứng khớp buổi sáng"
             },
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "sốt"
             }
           ],
@@ -11834,24 +11635,13 @@
             {
               "question": "Cô khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "không có"
             }
           ],
@@ -11909,24 +11699,13 @@
             {
               "question": "Cô khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "không có"
             }
           ],
@@ -11984,24 +11763,13 @@
             {
               "question": "Chú khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "không có"
             }
           ],
@@ -12059,24 +11827,13 @@
             {
               "question": "Chú khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "đau lan xuống chân"
             }
           ],
@@ -12134,24 +11891,13 @@
             {
               "question": "Chú khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "cứng khớp buổi sáng"
             },
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "sốt"
             }
           ],
@@ -12209,24 +11955,13 @@
             {
               "question": "Chú khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "cứng khớp buổi sáng"
             },
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "đau lan xuống chân"
             }
           ],
@@ -12284,24 +12019,13 @@
             {
               "question": "Chú khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "không có"
             }
           ],
@@ -12359,24 +12083,13 @@
             {
               "question": "Chị khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "không có"
             }
           ],
@@ -12434,24 +12147,13 @@
             {
               "question": "Chị khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "đau lan xuống chân"
             }
           ],
@@ -12509,24 +12211,13 @@
             {
               "question": "Chị khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "cứng khớp buổi sáng"
             },
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "sốt"
             }
           ],
@@ -12584,24 +12275,13 @@
             {
               "question": "Chị khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "có đỏ nóng"
             },
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "yếu cơ"
             }
           ],
@@ -12659,24 +12339,13 @@
             {
               "question": "Chị khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "không có"
             }
           ],
@@ -12734,24 +12403,13 @@
             {
               "question": "Anh khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "không có"
             }
           ],
@@ -12809,24 +12467,13 @@
             {
               "question": "Anh khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "đau lan xuống chân"
             }
           ],
@@ -12884,24 +12531,13 @@
             {
               "question": "Anh khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "cứng khớp buổi sáng"
             },
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "sốt"
             }
           ],
@@ -12959,24 +12595,13 @@
             {
               "question": "Anh khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "có sưng"
             },
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "đau lan xuống chân"
             }
           ],
@@ -13034,24 +12659,13 @@
             {
               "question": "Anh khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "không có"
             }
           ],
@@ -13109,24 +12723,13 @@
             {
               "question": "Bạn khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "không có"
             }
           ],
@@ -13184,24 +12787,13 @@
             {
               "question": "Bạn khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "đau lan xuống chân"
             }
           ],
@@ -13259,24 +12851,13 @@
             {
               "question": "Bạn khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "cứng khớp buổi sáng"
             },
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "sốt"
             }
           ],
@@ -13334,24 +12915,13 @@
             {
               "question": "Bạn khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "cứng khớp buổi sáng"
             },
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "đau lan xuống chân"
             }
           ],
@@ -13409,24 +12979,13 @@
             {
               "question": "Bạn khớp có sưng hoặc đỏ không?",
               "type": "multi_choice",
-              "options": [
-                "có sưng",
-                "có đỏ nóng",
-                "cứng khớp buổi sáng",
-                "không sưng đỏ"
-              ],
+              "options": ["có sưng", "có đỏ nóng", "cứng khớp buổi sáng", "không sưng đỏ"],
               "answer": "không sưng đỏ"
             },
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "tê tay chân",
-                "yếu cơ",
-                "sốt",
-                "đau lan xuống chân",
-                "không có"
-              ],
+              "options": ["tê tay chân", "yếu cơ", "sốt", "đau lan xuống chân", "không có"],
               "answer": "không có"
             }
           ],
@@ -13502,14 +13061,7 @@
           "id": "q3",
           "text": "{Honorific} có thêm triệu chứng nào?",
           "type": "multi_choice",
-          "options": [
-            "yếu cơ",
-            "đau nhức",
-            "chuột rút",
-            "run tay",
-            "khó đi lại",
-            "không có"
-          ]
+          "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"]
         },
         {
           "id": "q4",
@@ -13565,14 +13117,7 @@
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "không có"
             },
             {
@@ -13639,14 +13184,7 @@
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "khó đi lại"
             },
             {
@@ -13713,14 +13251,7 @@
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "run tay"
             },
             {
@@ -13787,14 +13318,7 @@
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "không có"
             },
             {
@@ -13861,14 +13385,7 @@
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "không có"
             },
             {
@@ -13935,14 +13452,7 @@
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "không có"
             },
             {
@@ -14009,14 +13519,7 @@
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "khó đi lại"
             },
             {
@@ -14083,14 +13586,7 @@
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "run tay"
             },
             {
@@ -14157,14 +13653,7 @@
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "không có"
             },
             {
@@ -14231,14 +13720,7 @@
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "không có"
             },
             {
@@ -14305,14 +13787,7 @@
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "không có"
             },
             {
@@ -14379,14 +13854,7 @@
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "khó đi lại"
             },
             {
@@ -14453,14 +13921,7 @@
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "run tay"
             },
             {
@@ -14527,14 +13988,7 @@
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "khó đi lại"
             },
             {
@@ -14601,14 +14055,7 @@
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "không có"
             },
             {
@@ -14675,14 +14122,7 @@
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "không có"
             },
             {
@@ -14749,14 +14189,7 @@
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "khó đi lại"
             },
             {
@@ -14823,14 +14256,7 @@
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "run tay"
             },
             {
@@ -14897,14 +14323,7 @@
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "khó đi lại"
             },
             {
@@ -14971,14 +14390,7 @@
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "không có"
             },
             {
@@ -15045,14 +14457,7 @@
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "không có"
             },
             {
@@ -15119,14 +14524,7 @@
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "khó đi lại"
             },
             {
@@ -15193,14 +14591,7 @@
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "run tay"
             },
             {
@@ -15267,14 +14658,7 @@
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "khó đi lại"
             },
             {
@@ -15341,14 +14725,7 @@
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "yếu cơ",
-                "đau nhức",
-                "chuột rút",
-                "run tay",
-                "khó đi lại",
-                "không có"
-              ],
+              "options": ["yếu cơ", "đau nhức", "chuột rút", "run tay", "khó đi lại", "không có"],
               "answer": "không có"
             },
             {
@@ -15412,46 +14789,25 @@
           "id": "q1",
           "text": "{Honorific} đã nôn bao nhiêu lần?",
           "type": "single_choice",
-          "options": [
-            "chỉ buồn nôn, chưa nôn",
-            "1-2 lần",
-            "3-5 lần",
-            "trên 5 lần"
-          ]
+          "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"]
         },
         {
           "id": "q2",
           "text": "{Honorific} chất nôn ra như thế nào?",
           "type": "single_choice",
-          "options": [
-            "thức ăn",
-            "nước trong hoặc vàng",
-            "có lẫn máu hoặc nâu đen",
-            "không rõ"
-          ]
+          "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"]
         },
         {
           "id": "q3",
           "text": "{Honorific} có uống được nước không?",
           "type": "single_choice",
-          "options": [
-            "uống bình thường",
-            "uống ít, hay nôn lại",
-            "không uống được gì"
-          ]
+          "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"]
         },
         {
           "id": "q4",
           "text": "{Honorific} có thêm triệu chứng nào?",
           "type": "multi_choice",
-          "options": [
-            "đau bụng",
-            "tiêu chảy",
-            "sốt",
-            "đau đầu",
-            "chóng mặt",
-            "không có"
-          ]
+          "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"]
         }
       ],
       "scoringRules": 5,
@@ -15471,46 +14827,25 @@
             {
               "question": "Cô đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "chỉ buồn nôn, chưa nôn"
             },
             {
               "question": "Cô chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "không rõ"
             },
             {
               "question": "Cô có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "không có"
             }
           ],
@@ -15541,46 +14876,25 @@
             {
               "question": "Cô đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "trên 5 lần"
             },
             {
               "question": "Cô chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "có lẫn máu hoặc nâu đen"
             },
             {
               "question": "Cô có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "chóng mặt"
             }
           ],
@@ -15611,46 +14925,25 @@
             {
               "question": "Cô đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "3-5 lần"
             },
             {
               "question": "Cô chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "có lẫn máu hoặc nâu đen"
             },
             {
               "question": "Cô có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "uống ít, hay nôn lại"
             },
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "đau đầu"
             }
           ],
@@ -15681,46 +14974,25 @@
             {
               "question": "Cô đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "chỉ buồn nôn, chưa nôn"
             },
             {
               "question": "Cô chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "thức ăn"
             },
             {
               "question": "Cô có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "uống bình thường"
             },
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "tiêu chảy"
             }
           ],
@@ -15751,46 +15023,25 @@
             {
               "question": "Cô đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "chỉ buồn nôn, chưa nôn"
             },
             {
               "question": "Cô chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "không rõ"
             },
             {
               "question": "Cô có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Cô có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "không có"
             }
           ],
@@ -15821,46 +15072,25 @@
             {
               "question": "Chú đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "chỉ buồn nôn, chưa nôn"
             },
             {
               "question": "Chú chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "không rõ"
             },
             {
               "question": "Chú có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "không có"
             }
           ],
@@ -15891,46 +15121,25 @@
             {
               "question": "Chú đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "trên 5 lần"
             },
             {
               "question": "Chú chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "có lẫn máu hoặc nâu đen"
             },
             {
               "question": "Chú có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "chóng mặt"
             }
           ],
@@ -15961,46 +15170,25 @@
             {
               "question": "Chú đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "3-5 lần"
             },
             {
               "question": "Chú chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "có lẫn máu hoặc nâu đen"
             },
             {
               "question": "Chú có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "uống ít, hay nôn lại"
             },
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "đau đầu"
             }
           ],
@@ -16031,46 +15219,25 @@
             {
               "question": "Chú đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "3-5 lần"
             },
             {
               "question": "Chú chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "nước trong hoặc vàng"
             },
             {
               "question": "Chú có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "uống ít, hay nôn lại"
             },
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "tiêu chảy"
             }
           ],
@@ -16101,46 +15268,25 @@
             {
               "question": "Chú đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "chỉ buồn nôn, chưa nôn"
             },
             {
               "question": "Chú chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "không rõ"
             },
             {
               "question": "Chú có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Chú có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "không có"
             }
           ],
@@ -16171,46 +15317,25 @@
             {
               "question": "Chị đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "chỉ buồn nôn, chưa nôn"
             },
             {
               "question": "Chị chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "không rõ"
             },
             {
               "question": "Chị có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "không có"
             }
           ],
@@ -16241,46 +15366,25 @@
             {
               "question": "Chị đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "trên 5 lần"
             },
             {
               "question": "Chị chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "có lẫn máu hoặc nâu đen"
             },
             {
               "question": "Chị có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "chóng mặt"
             }
           ],
@@ -16311,46 +15415,25 @@
             {
               "question": "Chị đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "3-5 lần"
             },
             {
               "question": "Chị chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "có lẫn máu hoặc nâu đen"
             },
             {
               "question": "Chị có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "uống ít, hay nôn lại"
             },
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "đau đầu"
             }
           ],
@@ -16381,46 +15464,25 @@
             {
               "question": "Chị đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "trên 5 lần"
             },
             {
               "question": "Chị chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "không rõ"
             },
             {
               "question": "Chị có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "uống bình thường"
             },
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "đau bụng"
             }
           ],
@@ -16451,46 +15513,25 @@
             {
               "question": "Chị đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "chỉ buồn nôn, chưa nôn"
             },
             {
               "question": "Chị chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "không rõ"
             },
             {
               "question": "Chị có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Chị có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "không có"
             }
           ],
@@ -16521,46 +15562,25 @@
             {
               "question": "Anh đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "chỉ buồn nôn, chưa nôn"
             },
             {
               "question": "Anh chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "không rõ"
             },
             {
               "question": "Anh có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "không có"
             }
           ],
@@ -16591,46 +15611,25 @@
             {
               "question": "Anh đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "trên 5 lần"
             },
             {
               "question": "Anh chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "có lẫn máu hoặc nâu đen"
             },
             {
               "question": "Anh có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "chóng mặt"
             }
           ],
@@ -16661,46 +15660,25 @@
             {
               "question": "Anh đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "3-5 lần"
             },
             {
               "question": "Anh chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "có lẫn máu hoặc nâu đen"
             },
             {
               "question": "Anh có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "uống ít, hay nôn lại"
             },
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "đau đầu"
             }
           ],
@@ -16731,46 +15709,25 @@
             {
               "question": "Anh đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "3-5 lần"
             },
             {
               "question": "Anh chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "thức ăn"
             },
             {
               "question": "Anh có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "chóng mặt"
             }
           ],
@@ -16801,46 +15758,25 @@
             {
               "question": "Anh đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "chỉ buồn nôn, chưa nôn"
             },
             {
               "question": "Anh chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "không rõ"
             },
             {
               "question": "Anh có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Anh có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "không có"
             }
           ],
@@ -16871,46 +15807,25 @@
             {
               "question": "Bạn đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "chỉ buồn nôn, chưa nôn"
             },
             {
               "question": "Bạn chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "không rõ"
             },
             {
               "question": "Bạn có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "không có"
             }
           ],
@@ -16941,46 +15856,25 @@
             {
               "question": "Bạn đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "trên 5 lần"
             },
             {
               "question": "Bạn chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "có lẫn máu hoặc nâu đen"
             },
             {
               "question": "Bạn có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "chóng mặt"
             }
           ],
@@ -17011,46 +15905,25 @@
             {
               "question": "Bạn đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "3-5 lần"
             },
             {
               "question": "Bạn chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "có lẫn máu hoặc nâu đen"
             },
             {
               "question": "Bạn có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "uống ít, hay nôn lại"
             },
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "đau đầu"
             }
           ],
@@ -17081,46 +15954,25 @@
             {
               "question": "Bạn đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "chỉ buồn nôn, chưa nôn"
             },
             {
               "question": "Bạn chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "không rõ"
             },
             {
               "question": "Bạn có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "chóng mặt"
             }
           ],
@@ -17151,46 +16003,25 @@
             {
               "question": "Bạn đã nôn bao nhiêu lần?",
               "type": "single_choice",
-              "options": [
-                "chỉ buồn nôn, chưa nôn",
-                "1-2 lần",
-                "3-5 lần",
-                "trên 5 lần"
-              ],
+              "options": ["chỉ buồn nôn, chưa nôn", "1-2 lần", "3-5 lần", "trên 5 lần"],
               "answer": "chỉ buồn nôn, chưa nôn"
             },
             {
               "question": "Bạn chất nôn ra như thế nào?",
               "type": "single_choice",
-              "options": [
-                "thức ăn",
-                "nước trong hoặc vàng",
-                "có lẫn máu hoặc nâu đen",
-                "không rõ"
-              ],
+              "options": ["thức ăn", "nước trong hoặc vàng", "có lẫn máu hoặc nâu đen", "không rõ"],
               "answer": "không rõ"
             },
             {
               "question": "Bạn có uống được nước không?",
               "type": "single_choice",
-              "options": [
-                "uống bình thường",
-                "uống ít, hay nôn lại",
-                "không uống được gì"
-              ],
+              "options": ["uống bình thường", "uống ít, hay nôn lại", "không uống được gì"],
               "answer": "không uống được gì"
             },
             {
               "question": "Bạn có thêm triệu chứng nào?",
               "type": "multi_choice",
-              "options": [
-                "đau bụng",
-                "tiêu chảy",
-                "sốt",
-                "đau đầu",
-                "chóng mặt",
-                "không có"
-              ],
+              "options": ["đau bụng", "tiêu chảy", "sốt", "đau đầu", "chóng mặt", "không có"],
               "answer": "không có"
             }
           ],
@@ -17254,13 +16085,7 @@
           "id": "q2",
           "text": "{Honorific} sốt từ khi nào?",
           "type": "single_choice",
-          "options": [
-            "hôm nay",
-            "từ hôm qua",
-            "2-3 ngày nay",
-            "trên 3 ngày",
-            "trên 1 tuần"
-          ]
+          "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"]
         },
         {
           "id": "q3",
@@ -17329,13 +16154,7 @@
             {
               "question": "Cô sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "hôm nay"
             },
             {
@@ -17415,13 +16234,7 @@
             {
               "question": "Cô sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "trên 1 tuần"
             },
             {
@@ -17501,13 +16314,7 @@
             {
               "question": "Cô sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "2-3 ngày nay"
             },
             {
@@ -17587,13 +16394,7 @@
             {
               "question": "Cô sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "trên 1 tuần"
             },
             {
@@ -17673,13 +16474,7 @@
             {
               "question": "Cô sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "hôm nay"
             },
             {
@@ -17759,13 +16554,7 @@
             {
               "question": "Chú sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "hôm nay"
             },
             {
@@ -17845,13 +16634,7 @@
             {
               "question": "Chú sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "trên 1 tuần"
             },
             {
@@ -17931,13 +16714,7 @@
             {
               "question": "Chú sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "2-3 ngày nay"
             },
             {
@@ -18017,13 +16794,7 @@
             {
               "question": "Chú sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "từ hôm qua"
             },
             {
@@ -18103,13 +16874,7 @@
             {
               "question": "Chú sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "hôm nay"
             },
             {
@@ -18189,13 +16954,7 @@
             {
               "question": "Chị sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "hôm nay"
             },
             {
@@ -18275,13 +17034,7 @@
             {
               "question": "Chị sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "trên 1 tuần"
             },
             {
@@ -18361,13 +17114,7 @@
             {
               "question": "Chị sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "2-3 ngày nay"
             },
             {
@@ -18447,13 +17194,7 @@
             {
               "question": "Chị sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "trên 3 ngày"
             },
             {
@@ -18533,13 +17274,7 @@
             {
               "question": "Chị sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "hôm nay"
             },
             {
@@ -18619,13 +17354,7 @@
             {
               "question": "Anh sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "hôm nay"
             },
             {
@@ -18705,13 +17434,7 @@
             {
               "question": "Anh sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "trên 1 tuần"
             },
             {
@@ -18791,13 +17514,7 @@
             {
               "question": "Anh sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "2-3 ngày nay"
             },
             {
@@ -18877,13 +17594,7 @@
             {
               "question": "Anh sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "trên 3 ngày"
             },
             {
@@ -18963,13 +17674,7 @@
             {
               "question": "Anh sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "hôm nay"
             },
             {
@@ -19049,13 +17754,7 @@
             {
               "question": "Bạn sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "hôm nay"
             },
             {
@@ -19135,13 +17834,7 @@
             {
               "question": "Bạn sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "trên 1 tuần"
             },
             {
@@ -19221,13 +17914,7 @@
             {
               "question": "Bạn sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "2-3 ngày nay"
             },
             {
@@ -19307,13 +17994,7 @@
             {
               "question": "Bạn sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "từ hôm qua"
             },
             {
@@ -19393,13 +18074,7 @@
             {
               "question": "Bạn sốt từ khi nào?",
               "type": "single_choice",
-              "options": [
-                "hôm nay",
-                "từ hôm qua",
-                "2-3 ngày nay",
-                "trên 3 ngày",
-                "trên 1 tuần"
-              ],
+              "options": ["hôm nay", "từ hôm qua", "2-3 ngày nay", "trên 3 ngày", "trên 1 tuần"],
               "answer": "hôm nay"
             },
             {
@@ -19488,51 +18163,25 @@
           "id": "q1",
           "text": "{Honorific} ho kiểu nào?",
           "type": "single_choice",
-          "options": [
-            "ho khan, không đờm",
-            "ho có đờm trắng",
-            "ho đờm xanh/vàng",
-            "ho có lẫn máu"
-          ]
+          "options": ["ho khan, không đờm", "ho có đờm trắng", "ho đờm xanh/vàng", "ho có lẫn máu"]
         },
         {
           "id": "q2",
           "text": "{Honorific} ho kéo dài bao lâu?",
           "type": "single_choice",
-          "options": [
-            "1-3 ngày",
-            "4-7 ngày",
-            "1-2 tuần",
-            "trên 2 tuần",
-            "trên 1 tháng"
-          ]
+          "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"]
         },
         {
           "id": "q3",
           "text": "{Honorific} ho nặng hơn khi nào?",
           "type": "multi_choice",
-          "options": [
-            "về đêm",
-            "buổi sáng",
-            "khi nằm",
-            "khi gắng sức",
-            "sau khi ăn",
-            "suốt ngày"
-          ]
+          "options": ["về đêm", "buổi sáng", "khi nằm", "khi gắng sức", "sau khi ăn", "suốt ngày"]
         },
         {
           "id": "q4",
           "text": "{Honorific} có thêm triệu chứng nào?",
           "type": "multi_choice",
-          "options": [
-            "sốt",
-            "đau họng",
-            "khó thở",
-            "sổ mũi",
-            "đau ngực",
-            "sụt cân",
-            "không có"
-          ]
+          "options": ["sốt", "đau họng", "khó thở", "sổ mũi", "đau ngực", "sụt cân", "không có"]
         }
       ],
       "scoringRules": 7,
@@ -19563,13 +18212,7 @@
             {
               "question": "Cô ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-3 ngày"
             },
             {
@@ -19638,13 +18281,7 @@
             {
               "question": "Cô ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "trên 1 tháng"
             },
             {
@@ -19713,13 +18350,7 @@
             {
               "question": "Cô ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-2 tuần"
             },
             {
@@ -19788,13 +18419,7 @@
             {
               "question": "Cô ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "trên 2 tuần"
             },
             {
@@ -19863,13 +18488,7 @@
             {
               "question": "Cô ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-3 ngày"
             },
             {
@@ -19938,13 +18557,7 @@
             {
               "question": "Chú ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-3 ngày"
             },
             {
@@ -20013,13 +18626,7 @@
             {
               "question": "Chú ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "trên 1 tháng"
             },
             {
@@ -20088,13 +18695,7 @@
             {
               "question": "Chú ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-2 tuần"
             },
             {
@@ -20163,13 +18764,7 @@
             {
               "question": "Chú ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-3 ngày"
             },
             {
@@ -20238,13 +18833,7 @@
             {
               "question": "Chú ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-3 ngày"
             },
             {
@@ -20313,13 +18902,7 @@
             {
               "question": "Chị ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-3 ngày"
             },
             {
@@ -20388,13 +18971,7 @@
             {
               "question": "Chị ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "trên 1 tháng"
             },
             {
@@ -20463,13 +19040,7 @@
             {
               "question": "Chị ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-2 tuần"
             },
             {
@@ -20538,13 +19109,7 @@
             {
               "question": "Chị ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-3 ngày"
             },
             {
@@ -20613,13 +19178,7 @@
             {
               "question": "Chị ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-3 ngày"
             },
             {
@@ -20688,13 +19247,7 @@
             {
               "question": "Anh ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-3 ngày"
             },
             {
@@ -20763,13 +19316,7 @@
             {
               "question": "Anh ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "trên 1 tháng"
             },
             {
@@ -20838,13 +19385,7 @@
             {
               "question": "Anh ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-2 tuần"
             },
             {
@@ -20913,13 +19454,7 @@
             {
               "question": "Anh ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "4-7 ngày"
             },
             {
@@ -20988,13 +19523,7 @@
             {
               "question": "Anh ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-3 ngày"
             },
             {
@@ -21063,13 +19592,7 @@
             {
               "question": "Bạn ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-3 ngày"
             },
             {
@@ -21138,13 +19661,7 @@
             {
               "question": "Bạn ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "trên 1 tháng"
             },
             {
@@ -21213,13 +19730,7 @@
             {
               "question": "Bạn ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-2 tuần"
             },
             {
@@ -21288,13 +19799,7 @@
             {
               "question": "Bạn ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "4-7 ngày"
             },
             {
@@ -21363,13 +19868,7 @@
             {
               "question": "Bạn ho kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-3 ngày",
-                "4-7 ngày",
-                "1-2 tuần",
-                "trên 2 tuần",
-                "trên 1 tháng"
-              ],
+              "options": ["1-3 ngày", "4-7 ngày", "1-2 tuần", "trên 2 tuần", "trên 1 tháng"],
               "answer": "1-3 ngày"
             },
             {
@@ -21459,12 +19958,7 @@
           "id": "q2",
           "text": "{Honorific} mất ngủ kéo dài bao lâu?",
           "type": "single_choice",
-          "options": [
-            "vài hôm nay",
-            "1-2 tuần",
-            "trên 1 tháng",
-            "đã lâu rồi"
-          ]
+          "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"]
         },
         {
           "id": "q3",
@@ -21521,12 +20015,7 @@
             {
               "question": "Cô mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "vài hôm nay"
             },
             {
@@ -21594,12 +20083,7 @@
             {
               "question": "Cô mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "đã lâu rồi"
             },
             {
@@ -21667,12 +20151,7 @@
             {
               "question": "Cô mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "trên 1 tháng"
             },
             {
@@ -21740,12 +20219,7 @@
             {
               "question": "Cô mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "trên 1 tháng"
             },
             {
@@ -21813,12 +20287,7 @@
             {
               "question": "Cô mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "vài hôm nay"
             },
             {
@@ -21886,12 +20355,7 @@
             {
               "question": "Chú mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "vài hôm nay"
             },
             {
@@ -21959,12 +20423,7 @@
             {
               "question": "Chú mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "đã lâu rồi"
             },
             {
@@ -22032,12 +20491,7 @@
             {
               "question": "Chú mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "trên 1 tháng"
             },
             {
@@ -22105,12 +20559,7 @@
             {
               "question": "Chú mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "trên 1 tháng"
             },
             {
@@ -22178,12 +20627,7 @@
             {
               "question": "Chú mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "vài hôm nay"
             },
             {
@@ -22251,12 +20695,7 @@
             {
               "question": "Chị mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "vài hôm nay"
             },
             {
@@ -22324,12 +20763,7 @@
             {
               "question": "Chị mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "đã lâu rồi"
             },
             {
@@ -22397,12 +20831,7 @@
             {
               "question": "Chị mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "trên 1 tháng"
             },
             {
@@ -22470,12 +20899,7 @@
             {
               "question": "Chị mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "vài hôm nay"
             },
             {
@@ -22543,12 +20967,7 @@
             {
               "question": "Chị mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "vài hôm nay"
             },
             {
@@ -22616,12 +21035,7 @@
             {
               "question": "Anh mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "vài hôm nay"
             },
             {
@@ -22689,12 +21103,7 @@
             {
               "question": "Anh mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "đã lâu rồi"
             },
             {
@@ -22762,12 +21171,7 @@
             {
               "question": "Anh mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "trên 1 tháng"
             },
             {
@@ -22835,12 +21239,7 @@
             {
               "question": "Anh mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "1-2 tuần"
             },
             {
@@ -22908,12 +21307,7 @@
             {
               "question": "Anh mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "vài hôm nay"
             },
             {
@@ -22981,12 +21375,7 @@
             {
               "question": "Bạn mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "vài hôm nay"
             },
             {
@@ -23054,12 +21443,7 @@
             {
               "question": "Bạn mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "đã lâu rồi"
             },
             {
@@ -23127,12 +21511,7 @@
             {
               "question": "Bạn mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "trên 1 tháng"
             },
             {
@@ -23200,12 +21579,7 @@
             {
               "question": "Bạn mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "vài hôm nay"
             },
             {
@@ -23273,12 +21647,7 @@
             {
               "question": "Bạn mất ngủ kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "vài hôm nay",
-                "1-2 tuần",
-                "trên 1 tháng",
-                "đã lâu rồi"
-              ],
+              "options": ["vài hôm nay", "1-2 tuần", "trên 1 tháng", "đã lâu rồi"],
               "answer": "vài hôm nay"
             },
             {
@@ -23356,37 +21725,19 @@
           "id": "q1",
           "text": "{Honorific} thấy mức độ đau họng?",
           "type": "single_choice",
-          "options": [
-            "ngứa rát nhẹ",
-            "đau khi nuốt",
-            "đau nhiều, khó ăn uống",
-            "không nuốt được"
-          ]
+          "options": ["ngứa rát nhẹ", "đau khi nuốt", "đau nhiều, khó ăn uống", "không nuốt được"]
         },
         {
           "id": "q2",
           "text": "{Honorific} có thêm triệu chứng nào?",
           "type": "multi_choice",
-          "options": [
-            "sốt",
-            "ho",
-            "sổ mũi",
-            "sưng hạch cổ",
-            "khàn tiếng",
-            "khó thở",
-            "không có"
-          ]
+          "options": ["sốt", "ho", "sổ mũi", "sưng hạch cổ", "khàn tiếng", "khó thở", "không có"]
         },
         {
           "id": "q3",
           "text": "{Honorific} đau họng kéo dài bao lâu?",
           "type": "single_choice",
-          "options": [
-            "1-2 ngày",
-            "3-5 ngày",
-            "1-2 tuần",
-            "trên 2 tuần"
-          ]
+          "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"]
         },
         {
           "id": "q4",
@@ -23443,12 +21794,7 @@
             {
               "question": "Cô đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 ngày"
             },
             {
@@ -23516,12 +21862,7 @@
             {
               "question": "Cô đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -23589,12 +21930,7 @@
             {
               "question": "Cô đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 tuần"
             },
             {
@@ -23662,12 +21998,7 @@
             {
               "question": "Cô đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 ngày"
             },
             {
@@ -23735,12 +22066,7 @@
             {
               "question": "Cô đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 ngày"
             },
             {
@@ -23808,12 +22134,7 @@
             {
               "question": "Chú đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 ngày"
             },
             {
@@ -23881,12 +22202,7 @@
             {
               "question": "Chú đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -23954,12 +22270,7 @@
             {
               "question": "Chú đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 tuần"
             },
             {
@@ -24027,12 +22338,7 @@
             {
               "question": "Chú đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -24100,12 +22406,7 @@
             {
               "question": "Chú đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 ngày"
             },
             {
@@ -24173,12 +22474,7 @@
             {
               "question": "Chị đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 ngày"
             },
             {
@@ -24246,12 +22542,7 @@
             {
               "question": "Chị đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -24319,12 +22610,7 @@
             {
               "question": "Chị đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 tuần"
             },
             {
@@ -24392,12 +22678,7 @@
             {
               "question": "Chị đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -24465,12 +22746,7 @@
             {
               "question": "Chị đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 ngày"
             },
             {
@@ -24538,12 +22814,7 @@
             {
               "question": "Anh đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 ngày"
             },
             {
@@ -24611,12 +22882,7 @@
             {
               "question": "Anh đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -24684,12 +22950,7 @@
             {
               "question": "Anh đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 tuần"
             },
             {
@@ -24757,12 +23018,7 @@
             {
               "question": "Anh đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -24830,12 +23086,7 @@
             {
               "question": "Anh đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 ngày"
             },
             {
@@ -24903,12 +23154,7 @@
             {
               "question": "Bạn đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 ngày"
             },
             {
@@ -24976,12 +23222,7 @@
             {
               "question": "Bạn đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "trên 2 tuần"
             },
             {
@@ -25049,12 +23290,7 @@
             {
               "question": "Bạn đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 tuần"
             },
             {
@@ -25122,12 +23358,7 @@
             {
               "question": "Bạn đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "3-5 ngày"
             },
             {
@@ -25195,12 +23426,7 @@
             {
               "question": "Bạn đau họng kéo dài bao lâu?",
               "type": "single_choice",
-              "options": [
-                "1-2 ngày",
-                "3-5 ngày",
-                "1-2 tuần",
-                "trên 2 tuần"
-              ],
+              "options": ["1-2 ngày", "3-5 ngày", "1-2 tuần", "trên 2 tuần"],
               "answer": "1-2 ngày"
             },
             {
@@ -25264,12 +23490,7 @@
           "id": "q1",
           "text": "{Honorific} đi ngoài bao nhiêu lần trong ngày?",
           "type": "single_choice",
-          "options": [
-            "2-3 lần",
-            "4-5 lần",
-            "6-10 lần",
-            "trên 10 lần"
-          ]
+          "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"]
         },
         {
           "id": "q2",
@@ -25298,15 +23519,7 @@
           "id": "q4",
           "text": "{Honorific} có thêm triệu chứng nào?",
           "type": "multi_choice",
-          "options": [
-            "đau bụng",
-            "sốt",
-            "buồn nôn",
-            "chóng mặt",
-            "tiểu ít",
-            "mệt lả",
-            "không có"
-          ]
+          "options": ["đau bụng", "sốt", "buồn nôn", "chóng mặt", "tiểu ít", "mệt lả", "không có"]
         },
         {
           "id": "q5",
@@ -25337,12 +23550,7 @@
             {
               "question": "Cô đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "2-3 lần"
             },
             {
@@ -25421,12 +23629,7 @@
             {
               "question": "Cô đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "trên 10 lần"
             },
             {
@@ -25505,12 +23708,7 @@
             {
               "question": "Cô đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "6-10 lần"
             },
             {
@@ -25589,12 +23787,7 @@
             {
               "question": "Cô đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "6-10 lần"
             },
             {
@@ -25673,12 +23866,7 @@
             {
               "question": "Cô đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "2-3 lần"
             },
             {
@@ -25757,12 +23945,7 @@
             {
               "question": "Chú đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "2-3 lần"
             },
             {
@@ -25841,12 +24024,7 @@
             {
               "question": "Chú đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "trên 10 lần"
             },
             {
@@ -25925,12 +24103,7 @@
             {
               "question": "Chú đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "6-10 lần"
             },
             {
@@ -26009,12 +24182,7 @@
             {
               "question": "Chú đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "6-10 lần"
             },
             {
@@ -26093,12 +24261,7 @@
             {
               "question": "Chú đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "2-3 lần"
             },
             {
@@ -26177,12 +24340,7 @@
             {
               "question": "Chị đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "2-3 lần"
             },
             {
@@ -26261,12 +24419,7 @@
             {
               "question": "Chị đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "trên 10 lần"
             },
             {
@@ -26345,12 +24498,7 @@
             {
               "question": "Chị đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "6-10 lần"
             },
             {
@@ -26429,12 +24577,7 @@
             {
               "question": "Chị đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "4-5 lần"
             },
             {
@@ -26513,12 +24656,7 @@
             {
               "question": "Chị đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "2-3 lần"
             },
             {
@@ -26597,12 +24735,7 @@
             {
               "question": "Anh đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "2-3 lần"
             },
             {
@@ -26681,12 +24814,7 @@
             {
               "question": "Anh đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "trên 10 lần"
             },
             {
@@ -26765,12 +24893,7 @@
             {
               "question": "Anh đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "6-10 lần"
             },
             {
@@ -26849,12 +24972,7 @@
             {
               "question": "Anh đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "6-10 lần"
             },
             {
@@ -26933,12 +25051,7 @@
             {
               "question": "Anh đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "2-3 lần"
             },
             {
@@ -27017,12 +25130,7 @@
             {
               "question": "Bạn đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "2-3 lần"
             },
             {
@@ -27101,12 +25209,7 @@
             {
               "question": "Bạn đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "trên 10 lần"
             },
             {
@@ -27185,12 +25288,7 @@
             {
               "question": "Bạn đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "6-10 lần"
             },
             {
@@ -27269,12 +25367,7 @@
             {
               "question": "Bạn đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "trên 10 lần"
             },
             {
@@ -27353,12 +25446,7 @@
             {
               "question": "Bạn đi ngoài bao nhiêu lần trong ngày?",
               "type": "single_choice",
-              "options": [
-                "2-3 lần",
-                "4-5 lần",
-                "6-10 lần",
-                "trên 10 lần"
-              ],
+              "options": ["2-3 lần", "4-5 lần", "6-10 lần", "trên 10 lần"],
               "answer": "2-3 lần"
             },
             {
@@ -27453,10 +25541,7 @@
   ],
   "emergency": [
     {
-      "input": [
-        "đau ngực",
-        "khó thở"
-      ],
+      "input": ["đau ngực", "khó thở"],
       "expected": true,
       "label": "Đau ngực + khó thở → Nhồi máu cơ tim",
       "actual": true,
@@ -27464,9 +25549,7 @@
       "pass": true
     },
     {
-      "input": [
-        "yếu nửa người"
-      ],
+      "input": ["yếu nửa người"],
       "expected": true,
       "label": "Yếu nửa người → Đột quỵ",
       "actual": true,
@@ -27474,9 +25557,7 @@
       "pass": true
     },
     {
-      "input": [
-        "co giật"
-      ],
+      "input": ["co giật"],
       "expected": true,
       "label": "Co giật → Động kinh",
       "actual": true,
@@ -27484,10 +25565,7 @@
       "pass": true
     },
     {
-      "input": [
-        "sốt cao",
-        "cứng cổ"
-      ],
+      "input": ["sốt cao", "cứng cổ"],
       "expected": true,
       "label": "Sốt + cứng cổ → Viêm màng não",
       "actual": true,
@@ -27495,9 +25573,7 @@
       "pass": true
     },
     {
-      "input": [
-        "nôn ra máu"
-      ],
+      "input": ["nôn ra máu"],
       "expected": true,
       "label": "Nôn ra máu → Xuất huyết tiêu hóa",
       "actual": true,
@@ -27505,9 +25581,7 @@
       "pass": true
     },
     {
-      "input": [
-        "hơi mệt"
-      ],
+      "input": ["hơi mệt"],
       "expected": false,
       "label": "\"Hơi mệt\" → Không phải cấp cứu",
       "actual": false,
@@ -27515,9 +25589,7 @@
       "pass": true
     },
     {
-      "input": [
-        "đau đầu nhẹ"
-      ],
+      "input": ["đau đầu nhẹ"],
       "expected": false,
       "label": "\"Đau đầu nhẹ\" → Không phải cấp cứu",
       "actual": false,
@@ -27525,9 +25597,7 @@
       "pass": true
     },
     {
-      "input": [
-        "không đau ngực"
-      ],
+      "input": ["không đau ngực"],
       "expected": false,
       "label": "\"Không đau ngực\" (phủ định) → An toàn",
       "actual": false,

@@ -6,12 +6,12 @@ const {
   loginByProvider: serviceLoginProvider,
   getCurrentUser,
   searchUsers: serviceSearchUsers,
-  verifySocialToken
+  verifySocialToken,
 } = require('../services/auth/auth.service');
 
-const ZALO_CALLBACK_URI     = 'asinu-lite://auth/zalo/callback';
+const ZALO_CALLBACK_URI = 'asinu-lite://auth/zalo/callback';
 const FACEBOOK_CALLBACK_URI = 'asinu-lite://auth/facebook/callback';
-const GOOGLE_CALLBACK_URI   = 'asinu-lite://auth/google/callback';
+const GOOGLE_CALLBACK_URI = 'asinu-lite://auth/google/callback';
 // Keep backward-compat alias
 const APP_CALLBACK_URI = ZALO_CALLBACK_URI;
 
@@ -23,12 +23,19 @@ async function registerByEmail(pool, req, res) {
   try {
     const parsed = registerSchema.safeParse(req.body || {});
     if (!parsed.success) {
-      const errorMessages = parsed.error.issues.map(issue => issue.message).join(', ');
+      const errorMessages = parsed.error.issues.map((issue) => issue.message).join(', ');
       return res.status(400).json({ ok: false, error: errorMessages });
     }
 
     const { email, phone_number, password, full_name, display_name } = parsed.data;
-    const result = await serviceRegister(pool, email, password, phone_number, full_name, display_name);
+    const result = await serviceRegister(
+      pool,
+      email,
+      password,
+      phone_number,
+      full_name,
+      display_name
+    );
 
     if (!result.ok) {
       return res.status(400).json(result);
@@ -48,7 +55,7 @@ async function loginByEmail(pool, req, res) {
   try {
     const parsed = loginSchema.safeParse(req.body || {});
     if (!parsed.success) {
-      const errorMessages = parsed.error.issues.map(issue => issue.message).join(', ');
+      const errorMessages = parsed.error.issues.map((issue) => issue.message).join(', ');
       return res.status(400).json({ ok: false, error: errorMessages });
     }
 
@@ -94,7 +101,9 @@ async function loginByProvider(pool, req, res, provider, idColumn) {
   }
 
   if (!actualProviderId) {
-    return res.status(400).json({ ok: false, error: t('error.missing_provider_id_or_email', getLang(req)) });
+    return res
+      .status(400)
+      .json({ ok: false, error: t('error.missing_provider_id_or_email', getLang(req)) });
   }
 
   // Call service
@@ -105,7 +114,7 @@ async function loginByProvider(pool, req, res, provider, idColumn) {
     provider,
     verifiedEmail,
     phone_number,
-    full_name,
+    full_name
   );
 
   if (!result.ok) {
@@ -140,25 +149,24 @@ async function loginByZalo(pool, req, res) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'secret_key': process.env.ZALO_SECRET_KEY
+        secret_key: process.env.ZALO_SECRET_KEY,
       },
       body: new URLSearchParams({
         app_id: process.env.ZALO_APP_ID,
         grant_type: 'authorization_code',
         code,
-        code_verifier
-      }).toString()
+        code_verifier,
+      }).toString(),
     });
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-
       return res.status(401).json({ ok: false, error: t('error.invalid_token', lang) });
     }
 
     // Get Zalo user profile (request phone if app has permission)
     const profileRes = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name,picture,phone', {
-      headers: { access_token: tokenData.access_token }
+      headers: { access_token: tokenData.access_token },
     });
     const profile = await profileRes.json();
 
@@ -168,11 +176,17 @@ async function loginByZalo(pool, req, res) {
 
     const { normalizePhoneNumber } = require('../services/auth/auth.service');
     const zaloPhone = profile.phone ? normalizePhoneNumber(profile.phone) : null;
-    const result = await serviceLoginProvider(pool, 'zalo_id', String(profile.id), 'zalo', null, zaloPhone);
+    const result = await serviceLoginProvider(
+      pool,
+      'zalo_id',
+      String(profile.id),
+      'zalo',
+      null,
+      zaloPhone
+    );
     if (!result.ok) return res.status(401).json(result);
     return res.status(200).json(result);
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', lang) });
   }
 }
@@ -183,7 +197,7 @@ async function loginByZalo(pool, req, res) {
  * Exchange code → get profile → create user → redirect back to app with JWT
  */
 async function zaloCallback(pool, req, res) {
-  const { code, state } = req.query;
+  const { code, state: _state } = req.query;
 
   if (!code) {
     return res.redirect(`${APP_CALLBACK_URI}?error=no_code`);
@@ -196,25 +210,24 @@ async function zaloCallback(pool, req, res) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'secret_key': process.env.ZALO_SECRET_KEY
+        secret_key: process.env.ZALO_SECRET_KEY,
       },
       body: new URLSearchParams({
         app_id: process.env.ZALO_APP_ID,
         grant_type: 'authorization_code',
         code,
-        redirect_uri: redirectUri
-      }).toString()
+        redirect_uri: redirectUri,
+      }).toString(),
     });
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-
       return res.redirect(`${APP_CALLBACK_URI}?error=token_exchange_failed`);
     }
 
     // Get user profile (request phone if app has permission)
     const profileRes = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name,picture,phone', {
-      headers: { access_token: tokenData.access_token }
+      headers: { access_token: tokenData.access_token },
     });
     const profile = await profileRes.json();
 
@@ -224,14 +237,20 @@ async function zaloCallback(pool, req, res) {
 
     const { normalizePhoneNumber } = require('../services/auth/auth.service');
     const zaloPhone = profile.phone ? normalizePhoneNumber(profile.phone) : null;
-    const result = await serviceLoginProvider(pool, 'zalo_id', String(profile.id), 'zalo', null, zaloPhone);
+    const result = await serviceLoginProvider(
+      pool,
+      'zalo_id',
+      String(profile.id),
+      'zalo',
+      null,
+      zaloPhone
+    );
     if (!result.ok) {
       return res.redirect(`${APP_CALLBACK_URI}?error=login_failed`);
     }
 
     return res.redirect(`${APP_CALLBACK_URI}?token=${encodeURIComponent(result.token)}`);
   } catch (err) {
-
     return res.redirect(`${APP_CALLBACK_URI}?error=server_error`);
   }
 }
@@ -249,7 +268,8 @@ async function facebookCallback(pool, req, res) {
   }
 
   try {
-    const backendUrl = process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const backendUrl =
+      process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
     const redirectUri = `${backendUrl}/api/auth/facebook/callback`;
 
     // Exchange code for access_token
@@ -278,7 +298,14 @@ async function facebookCallback(pool, req, res) {
     }
 
     const email = profile.email || null;
-    const result = await serviceLoginProvider(pool, 'facebook_id', String(profile.id), 'facebook', email, null);
+    const result = await serviceLoginProvider(
+      pool,
+      'facebook_id',
+      String(profile.id),
+      'facebook',
+      email,
+      null
+    );
     if (!result.ok) {
       return res.redirect(`${FACEBOOK_CALLBACK_URI}?error=login_failed`);
     }
@@ -307,7 +334,6 @@ async function getMe(pool, req, res) {
     }
     return res.status(200).json({ ok: true, user });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', lang) });
   }
 }
@@ -323,7 +349,6 @@ async function searchUsers(pool, req, res) {
     const users = await serviceSearchUsers(pool, req.user.id, q);
     return res.status(200).json({ ok: true, users });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
@@ -343,13 +368,12 @@ async function verifyToken(pool, req, res) {
     if (!user) {
       return res.status(401).json({ ok: false, error: t('error.user_not_found', lang) });
     }
-    
+
     return res.status(200).json({
       ok: true,
-      profile: user
+      profile: user,
     });
   } catch (err) {
-
     return res.status(500).json({ ok: false, error: t('error.server', lang) });
   }
 }
@@ -359,7 +383,8 @@ async function verifyToken(pool, req, res) {
  * Redirect browser to Google OAuth consent screen (server-side flow for Android)
  */
 async function googleInitiate(pool, req, res) {
-  const backendUrl = process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+  const backendUrl =
+    process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
   const redirectUri = `${backendUrl}/api/auth/google/callback`;
   const clientId = process.env.GOOGLE_WEB_CLIENT_ID;
 
@@ -392,7 +417,8 @@ async function googleCallback(pool, req, res) {
   }
 
   try {
-    const backendUrl = process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
+    const backendUrl =
+      process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
     const redirectUri = `${backendUrl}/api/auth/google/callback`;
     const clientId = process.env.GOOGLE_WEB_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_WEB_CLIENT_SECRET;
@@ -425,7 +451,14 @@ async function googleCallback(pool, req, res) {
       return res.redirect(`${GOOGLE_CALLBACK_URI}?error=profile_failed`);
     }
 
-    const result = await serviceLoginProvider(pool, 'google_id', String(profile.id), 'google', profile.email || null, null);
+    const result = await serviceLoginProvider(
+      pool,
+      'google_id',
+      String(profile.id),
+      'google',
+      profile.email || null,
+      null
+    );
     if (!result.ok) {
       return res.redirect(`${GOOGLE_CALLBACK_URI}?error=login_failed`);
     }
@@ -459,9 +492,10 @@ async function loginByFacebookToken(pool, req, res) {
       // Decode JWT header để xác định issuer → đúng JWKS endpoint
       const [headerB64Pre] = id_token.split('.');
       const headerPre = JSON.parse(Buffer.from(headerB64Pre, 'base64').toString());
-      const jwksUrl = headerPre.iss === 'https://limited.facebook.com'
-        ? 'https://limited.facebook.com/.well-known/oauth/openid/jwks/'
-        : 'https://www.facebook.com/.well-known/oauth/openid/jwks/';
+      const jwksUrl =
+        headerPre.iss === 'https://limited.facebook.com'
+          ? 'https://limited.facebook.com/.well-known/oauth/openid/jwks/'
+          : 'https://www.facebook.com/.well-known/oauth/openid/jwks/';
 
       // Fetch JWKS from Facebook
       const jwksRes = await fetch(jwksUrl);
@@ -470,11 +504,13 @@ async function loginByFacebookToken(pool, req, res) {
       // Decode JWT header to get kid
       const [headerB64] = id_token.split('.');
       const header = JSON.parse(Buffer.from(headerB64, 'base64').toString());
-      const jwk = jwks.keys?.find(k => k.kid === header.kid);
+      const jwk = jwks.keys?.find((k) => k.kid === header.kid);
 
       if (!jwk) {
         console.error('[FB token] JWKS key not found for kid:', header.kid);
-        return res.status(401).json({ ok: false, error: 'Invalid Facebook id_token: key not found' });
+        return res
+          .status(401)
+          .json({ ok: false, error: 'Invalid Facebook id_token: key not found' });
       }
 
       // Verify JWT signature using Node crypto
@@ -488,7 +524,9 @@ async function loginByFacebookToken(pool, req, res) {
 
       if (!valid) {
         console.error('[FB token] JWT signature invalid');
-        return res.status(401).json({ ok: false, error: 'Invalid Facebook id_token: bad signature' });
+        return res
+          .status(401)
+          .json({ ok: false, error: 'Invalid Facebook id_token: bad signature' });
       }
 
       // Decode payload
@@ -497,12 +535,13 @@ async function loginByFacebookToken(pool, req, res) {
 
       const validIssuers = ['https://www.facebook.com', 'https://limited.facebook.com'];
       if (payload.aud !== appId || !validIssuers.includes(payload.iss)) {
-        return res.status(401).json({ ok: false, error: 'Invalid Facebook id_token: aud/iss mismatch' });
+        return res
+          .status(401)
+          .json({ ok: false, error: 'Invalid Facebook id_token: aud/iss mismatch' });
       }
 
       userId = payload.sub || user_id;
       email = payload.email || null;
-
     } else {
       // Android: standard access_token via debug_token endpoint
       const debugRes = await fetch(
@@ -535,7 +574,14 @@ async function loginByFacebookToken(pool, req, res) {
     //   2. Lookup theo email → tự link nếu user đã có account từ Android/web
     //   3. Tạo user mới nếu cả 2 không có
     const idColumn = id_token ? 'facebook_limited_id' : 'facebook_id';
-    const result = await serviceLoginProvider(pool, idColumn, String(userId), 'facebook', email, null);
+    const result = await serviceLoginProvider(
+      pool,
+      idColumn,
+      String(userId),
+      'facebook',
+      email,
+      null
+    );
     if (!result.ok) {
       return res.status(400).json({ ok: false, error: result.error || 'Login failed' });
     }
@@ -572,5 +618,5 @@ module.exports = {
   getMe,
   searchUsers,
   verifyToken,
-  logoutHandler
+  logoutHandler,
 };

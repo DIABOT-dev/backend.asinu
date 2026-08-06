@@ -20,26 +20,45 @@ const BIG_MODEL = process.env.BIG_MODEL || 'gpt-4o';
 // ─── Task type classification ───────────────────────────────────────────────
 
 const TASK_TYPES = {
-  classification: 'classification',   // phân loại triệu chứng, sentiment
-  extraction: 'extraction',           // trích xuất entity (symptom, drug name)
-  simple_qa: 'simple_qa',             // Q&A đơn giản
-  triage: 'triage',                   // triage câu hỏi y khoa
-  analysis: 'analysis',               // phân tích bệnh án phức tạp
-  generation: 'generation',           // tạo nội dung (script, report)
+  classification: 'classification', // phân loại triệu chứng, sentiment
+  extraction: 'extraction', // trích xuất entity (symptom, drug name)
+  simple_qa: 'simple_qa', // Q&A đơn giản
+  triage: 'triage', // triage câu hỏi y khoa
+  analysis: 'analysis', // phân tích bệnh án phức tạp
+  generation: 'generation', // tạo nội dung (script, report)
 };
 
 // ─── Complexity indicators ──────────────────────────────────────────────────
 
 const RED_FLAG_KEYWORDS = [
-  'khó thở', 'đau ngực', 'tức ngực', 'ngất', 'co giật', 'vã mồ hôi',
-  'chest pain', 'difficulty breathing', 'fainting', 'seizure',
-  'tim đập nhanh', 'không thở được', 'mất ý thức',
+  'khó thở',
+  'đau ngực',
+  'tức ngực',
+  'ngất',
+  'co giật',
+  'vã mồ hôi',
+  'chest pain',
+  'difficulty breathing',
+  'fainting',
+  'seizure',
+  'tim đập nhanh',
+  'không thở được',
+  'mất ý thức',
 ];
 
 const COMPLEX_CONDITIONS = [
-  'tiểu đường', 'diabetes', 'bệnh tim', 'heart disease',
-  'cao huyết áp', 'hypertension', 'ung thư', 'cancer',
-  'suy thận', 'kidney', 'đột quỵ', 'stroke',
+  'tiểu đường',
+  'diabetes',
+  'bệnh tim',
+  'heart disease',
+  'cao huyết áp',
+  'hypertension',
+  'ung thư',
+  'cancer',
+  'suy thận',
+  'kidney',
+  'đột quỵ',
+  'stroke',
 ];
 
 // ─── Route decision ─────────────────────────────────────────────────────────
@@ -60,10 +79,10 @@ const COMPLEX_CONDITIONS = [
 function routeModel(request = {}) {
   const {
     taskType = 'simple_qa',
-    text = '',
+    text: _text = '',
     severity = null,
     answerCount = 0,
-    userConditions = [],
+    userConditions: _userConditions = [],
     riskTier = null,
     hasRedFlags = false,
   } = request;
@@ -114,12 +133,14 @@ function calculateComplexity(request) {
   let total = 0;
 
   // Red flags in text (+3 each)
-  const redFlagCount = RED_FLAG_KEYWORDS.filter(kw => textLower.includes(kw)).length;
+  const redFlagCount = RED_FLAG_KEYWORDS.filter((kw) => textLower.includes(kw)).length;
   total += redFlagCount * 3;
 
   // User medical conditions (+1 each complex condition)
-  const condText = (Array.isArray(userConditions) ? userConditions.join(' ') : String(userConditions || '')).toLowerCase();
-  const conditionCount = COMPLEX_CONDITIONS.filter(c => condText.includes(c)).length;
+  const condText = (
+    Array.isArray(userConditions) ? userConditions.join(' ') : String(userConditions || '')
+  ).toLowerCase();
+  const conditionCount = COMPLEX_CONDITIONS.filter((c) => condText.includes(c)).length;
   total += conditionCount;
 
   // Severity score
@@ -149,7 +170,7 @@ function routeForTriage(status, answerCount, profile = {}) {
 
   return routeModel({
     taskType: isUrgent ? 'analysis' : 'triage',
-    severity: isUrgent ? 'high' : (status === 'tired' ? 'medium' : 'low'),
+    severity: isUrgent ? 'high' : status === 'tired' ? 'medium' : 'low',
     answerCount,
     userConditions: conditions,
     riskTier,
@@ -172,13 +193,16 @@ function getRouteStats() {
   return {
     ..._stats,
     total,
-    smallPct: total > 0 ? Math.round(_stats.smallCalls / total * 100) : 0,
-    bigPct: total > 0 ? Math.round(_stats.bigCalls / total * 100) : 0,
+    smallPct: total > 0 ? Math.round((_stats.smallCalls / total) * 100) : 0,
+    bigPct: total > 0 ? Math.round((_stats.bigCalls / total) * 100) : 0,
     estimatedSavings: `${_stats.smallCalls} calls at 1/10 cost`,
   };
 }
 
-function resetStats() { _stats.smallCalls = 0; _stats.bigCalls = 0; }
+function resetStats() {
+  _stats.smallCalls = 0;
+  _stats.bigCalls = 0;
+}
 
 // ─── Exports ────────────────────────────────────────────────────────────────
 

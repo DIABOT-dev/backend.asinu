@@ -32,9 +32,9 @@ function gateOnFlag(envName, code, defaultEnabled = true) {
   };
 }
 
-const careCircleEnabled    = gateOnFlag('CARE_CIRCLE_ENABLED',         'CARE_CIRCLE_DISABLED');
-const caregiverViewLogs    = gateOnFlag('CAREGIVER_VIEW_LOGS_ENABLED', 'CAREGIVER_VIEW_DISABLED');
-const caregiverAckEnabled  = gateOnFlag('CAREGIVER_ACK_ENABLED',       'CAREGIVER_ACK_DISABLED');
+const careCircleEnabled = gateOnFlag('CARE_CIRCLE_ENABLED', 'CARE_CIRCLE_DISABLED');
+const caregiverViewLogs = gateOnFlag('CAREGIVER_VIEW_LOGS_ENABLED', 'CAREGIVER_VIEW_DISABLED');
+const caregiverAckEnabled = gateOnFlag('CAREGIVER_ACK_ENABLED', 'CAREGIVER_ACK_DISABLED');
 
 function isCaregiverAlertEnabled() {
   return envBool('CAREGIVER_ALERT_ENABLED', true);

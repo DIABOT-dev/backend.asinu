@@ -37,12 +37,23 @@ function mockReq(userId, body = {}, query = {}) {
 }
 
 function mockRes() {
-  let _s = 200, _j = null;
+  let _s = 200,
+    _j = null;
   return {
-    status(c) { _s = c; return this; },
-    json(d) { _j = d; return this; },
-    getStatus() { return _s; },
-    getData() { return _j; },
+    status(c) {
+      _s = c;
+      return this;
+    },
+    json(d) {
+      _j = d;
+      return this;
+    },
+    getStatus() {
+      return _s;
+    },
+    getData() {
+      return _j;
+    },
   };
 }
 
@@ -65,7 +76,10 @@ async function cleanup() {
   await pool.query('DELETE FROM problem_clusters WHERE user_id = $1', [TEST_USER_ID]);
   await pool.query('DELETE FROM fallback_logs WHERE user_id = $1', [TEST_USER_ID]);
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
-  await pool.query('DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2', [TEST_USER_ID, today]);
+  await pool.query('DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2', [
+    TEST_USER_ID,
+    today,
+  ]);
 }
 
 // ─── Helper: answer all questions, picking first option each time ──────────
@@ -132,8 +146,10 @@ async function run() {
     await createClustersHandler(pool, req, res);
     const d = res.getData();
     assert(res.getStatus() === 200 && d.ok === true, 'J1.1 createClusters -> ok');
-    assert(Array.isArray(d.clusters) && d.clusters.length === 3,
-      `J1.1 created 3 clusters (got ${d.clusters?.length})`);
+    assert(
+      Array.isArray(d.clusters) && d.clusters.length === 3,
+      `J1.1 created 3 clusters (got ${d.clusters?.length})`
+    );
   }
 
   // 1.2 getScriptHandler
@@ -143,8 +159,10 @@ async function run() {
     await getScriptHandler(pool, req, res);
     const d = res.getData();
     assert(d.ok === true && d.has_script === true, 'J1.2 getScript -> has_script:true');
-    assert(Array.isArray(d.clusters) && d.clusters.length === 3,
-      `J1.2 clusters count = ${d.clusters?.length} (expected 3)`);
+    assert(
+      Array.isArray(d.clusters) && d.clusters.length === 3,
+      `J1.2 clusters count = ${d.clusters?.length} (expected 3)`
+    );
     assert(
       d.greeting && (d.greeting.includes('Hùng') || d.greeting.includes('hùng')),
       `J1.2 greeting contains "Hùng": "${d.greeting}"`
@@ -177,12 +195,18 @@ async function run() {
 
   // 1.5 Verify final response
   {
-    assert(j1Conclusion && j1Conclusion.severity,
-      `J1.5 conclusion has severity: ${j1Conclusion?.severity}`);
-    assert(j1Conclusion && j1Conclusion.summary && j1Conclusion.summary.length > 0,
-      'J1.5 conclusion has summary');
-    assert(j1Conclusion && j1Conclusion.recommendation && j1Conclusion.recommendation.length > 0,
-      'J1.5 conclusion has recommendation');
+    assert(
+      j1Conclusion && j1Conclusion.severity,
+      `J1.5 conclusion has severity: ${j1Conclusion?.severity}`
+    );
+    assert(
+      j1Conclusion && j1Conclusion.summary && j1Conclusion.summary.length > 0,
+      'J1.5 conclusion has summary'
+    );
+    assert(
+      j1Conclusion && j1Conclusion.recommendation && j1Conclusion.recommendation.length > 0,
+      'J1.5 conclusion has recommendation'
+    );
   }
 
   // 1.6 getSessionHandler
@@ -198,30 +222,35 @@ async function run() {
   // 1.7 Verify DB
   {
     // Allow async DB writes to settle
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 300));
 
-    const { rows: sessRows } = await pool.query(
-      'SELECT * FROM script_sessions WHERE id = $1', [j1SessionId]
+    const { rows: sessRows } = await pool.query('SELECT * FROM script_sessions WHERE id = $1', [
+      j1SessionId,
+    ]);
+    assert(
+      sessRows.length === 1 && sessRows[0].is_completed === true,
+      'J1.7 DB: script_sessions has completed row'
     );
-    assert(sessRows.length === 1 && sessRows[0].is_completed === true,
-      'J1.7 DB: script_sessions has completed row');
 
     const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
     const { rows: checkinRows } = await pool.query(
       'SELECT * FROM health_checkins WHERE user_id = $1 AND session_date = $2 ORDER BY id DESC LIMIT 1',
       [TEST_USER_ID, today]
     );
-    assert(checkinRows.length > 0 && checkinRows[0].triage_severity !== null,
-      `J1.7 DB: health_checkins has triage_severity: ${checkinRows[0]?.triage_severity}`);
+    assert(
+      checkinRows.length > 0 && checkinRows[0].triage_severity !== null,
+      `J1.7 DB: health_checkins has triage_severity: ${checkinRows[0]?.triage_severity}`
+    );
   }
 
   // 1.8 Count questions
   {
-    assert(j1QuestionCount > 0,
-      `J1.8 questions asked: ${j1QuestionCount} (expected >0)`);
+    assert(j1QuestionCount > 0, `J1.8 questions asked: ${j1QuestionCount} (expected >0)`);
   }
 
-  console.log(`\n  Journey 1 complete: ${j1QuestionCount} questions, severity=${j1Conclusion?.severity}\n`);
+  console.log(
+    `\n  Journey 1 complete: ${j1QuestionCount} questions, severity=${j1Conclusion?.severity}\n`
+  );
 
   // ═══════════════════════════════════════════════════════════════════════
   // JOURNEY 2: Unknown symptom -> fallback -> R&D -> re-check
@@ -233,7 +262,10 @@ async function run() {
   // Clean sessions for fresh journey (keep clusters from J1)
   await pool.query('DELETE FROM script_sessions WHERE user_id = $1', [TEST_USER_ID]);
   const today2 = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
-  await pool.query('DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2', [TEST_USER_ID, today2]);
+  await pool.query('DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2', [
+    TEST_USER_ID,
+    today2,
+  ]);
   await pool.query('DELETE FROM fallback_logs WHERE user_id = $1', [TEST_USER_ID]);
 
   // 2.1 startScript with unknown symptom (use something that won't token-match existing clusters)
@@ -262,13 +294,15 @@ async function run() {
     j2FallbackQCount = result.questionCount;
     j2FallbackConclusion = result.lastData?.conclusion;
     assert(result.done === true, 'J2.2 fallback questions answered -> isDone:true');
-    assert(j2FallbackConclusion && j2FallbackConclusion.severity,
-      `J2.2 fallback conclusion severity: ${j2FallbackConclusion?.severity}`);
+    assert(
+      j2FallbackConclusion && j2FallbackConclusion.severity,
+      `J2.2 fallback conclusion severity: ${j2FallbackConclusion?.severity}`
+    );
   }
 
   // 2.3 Verify fallback_logs
   {
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise((r) => setTimeout(r, 300));
     const { rows } = await pool.query(
       'SELECT * FROM fallback_logs WHERE user_id = $1 ORDER BY created_at DESC',
       [TEST_USER_ID]
@@ -299,17 +333,21 @@ async function run() {
   {
     // Clean sessions so we can start fresh
     await pool.query('DELETE FROM script_sessions WHERE user_id = $1', [TEST_USER_ID]);
-    await pool.query('DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2', [TEST_USER_ID, today2]);
+    await pool.query('DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2', [
+      TEST_USER_ID,
+      today2,
+    ]);
 
     const req = mockReq(TEST_USER_ID, { status: 'tired', symptom_input: 'tê bì tay chân' });
     const res = mockRes();
     await startScriptHandler(pool, req, res);
     const d = res.getData();
     assert(d.ok === true, 'J2.5 re-start with same symptom -> ok');
-    assert(d.is_fallback === false || d.is_fallback === undefined,
-      `J2.5 now matches cluster (is_fallback=${d.is_fallback})`);
-    assert(d.cluster_key === 'numbness',
-      `J2.5 cluster_key = ${d.cluster_key} (expected numbness)`);
+    assert(
+      d.is_fallback === false || d.is_fallback === undefined,
+      `J2.5 now matches cluster (is_fallback=${d.is_fallback})`
+    );
+    assert(d.cluster_key === 'numbness', `J2.5 cluster_key = ${d.cluster_key} (expected numbness)`);
     j2ScriptSessionId = d.session_id;
     j2ScriptFirstQ = d.question;
   }
@@ -322,20 +360,23 @@ async function run() {
     j2ScriptQCount = result.questionCount;
     j2ScriptConclusion = result.lastData?.conclusion;
     assert(result.done === true, 'J2.6 script questions answered -> isDone:true');
-    assert(j2ScriptConclusion && j2ScriptConclusion.severity,
-      `J2.6 script conclusion severity: ${j2ScriptConclusion?.severity}`);
+    assert(
+      j2ScriptConclusion && j2ScriptConclusion.severity,
+      `J2.6 script conclusion severity: ${j2ScriptConclusion?.severity}`
+    );
   }
 
   // 2.7 Compare: fallback had 3 questions, script should have more (or at least same)
   {
     console.log(`\n  Fallback questions: ${j2FallbackQCount}, Script questions: ${j2ScriptQCount}`);
     // Fallback uses 3 standard questions (fb1, fb2, fb3)
-    assert(j2FallbackQCount === 3,
-      `J2.7 fallback had ${j2FallbackQCount} questions (expected 3)`);
+    assert(j2FallbackQCount === 3, `J2.7 fallback had ${j2FallbackQCount} questions (expected 3)`);
     // Script (generic template for unknown cluster) has 3 questions too, but may have more
     // if clinical-mapping provides followUpQuestions
-    assert(j2ScriptQCount >= j2FallbackQCount,
-      `J2.7 script has ${j2ScriptQCount} questions >= fallback ${j2FallbackQCount}`);
+    assert(
+      j2ScriptQCount >= j2FallbackQCount,
+      `J2.7 script has ${j2ScriptQCount} questions >= fallback ${j2FallbackQCount}`
+    );
   }
 
   console.log(`\n  Journey 2 complete: fallback=${j2FallbackQCount}q, script=${j2ScriptQCount}q\n`);
@@ -349,7 +390,10 @@ async function run() {
 
   // Clean sessions
   await pool.query('DELETE FROM script_sessions WHERE user_id = $1', [TEST_USER_ID]);
-  await pool.query('DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2', [TEST_USER_ID, today2]);
+  await pool.query('DELETE FROM health_checkins WHERE user_id = $1 AND session_date = $2', [
+    TEST_USER_ID,
+    today2,
+  ]);
 
   // 3.1 Emergency symptom at start
   {
@@ -357,10 +401,11 @@ async function run() {
     const res = mockRes();
     await startScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.ok === true && d.is_emergency === true,
-      `J3.1 emergency symptom -> is_emergency: ${d.is_emergency}`);
-    assert(d.emergency && d.emergency.type,
-      `J3.1 emergency.type = ${d.emergency?.type}`);
+    assert(
+      d.ok === true && d.is_emergency === true,
+      `J3.1 emergency symptom -> is_emergency: ${d.is_emergency}`
+    );
+    assert(d.emergency && d.emergency.type, `J3.1 emergency.type = ${d.emergency?.type}`);
   }
 
   // 3.2 Verify emergency.type exists (MI or similar)
@@ -369,8 +414,10 @@ async function run() {
     const res = mockRes();
     await startScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.emergency && typeof d.emergency.type === 'string' && d.emergency.type.length > 0,
-      `J3.2 emergency type is a non-empty string: "${d.emergency?.type}"`);
+    assert(
+      d.emergency && typeof d.emergency.type === 'string' && d.emergency.type.length > 0,
+      `J3.2 emergency type is a non-empty string: "${d.emergency?.type}"`
+    );
   }
 
   // 3.3 Verify NO session created for emergency
@@ -380,8 +427,7 @@ async function run() {
       [TEST_USER_ID]
     );
     // There should be no sessions since emergency returns immediately before creating one
-    assert(rows.length === 0,
-      `J3.3 no session created for emergency (found ${rows.length})`);
+    assert(rows.length === 0, `J3.3 no session created for emergency (found ${rows.length})`);
   }
 
   // 3.4 Start normal session
@@ -407,20 +453,24 @@ async function run() {
     const res = mockRes();
     await answerScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.ok === true && d.is_emergency === true,
-      `J3.5 emergency text mid-session -> is_emergency: ${d.is_emergency}`);
+    assert(
+      d.ok === true && d.is_emergency === true,
+      `J3.5 emergency text mid-session -> is_emergency: ${d.is_emergency}`
+    );
   }
 
   // 3.6 Verify session marked completed with severity=critical
   {
-    await new Promise(r => setTimeout(r, 200));
-    const { rows } = await pool.query(
-      'SELECT * FROM script_sessions WHERE id = $1', [j3SessionId]
+    await new Promise((r) => setTimeout(r, 200));
+    const { rows } = await pool.query('SELECT * FROM script_sessions WHERE id = $1', [j3SessionId]);
+    assert(
+      rows.length === 1 && rows[0].is_completed === true,
+      'J3.6 session marked completed after emergency'
     );
-    assert(rows.length === 1 && rows[0].is_completed === true,
-      'J3.6 session marked completed after emergency');
-    assert(rows[0].severity === 'critical',
-      `J3.6 severity = ${rows[0].severity} (expected critical)`);
+    assert(
+      rows[0].severity === 'critical',
+      `J3.6 severity = ${rows[0].severity} (expected critical)`
+    );
   }
 
   console.log('\n  Journey 3 complete: emergency detection verified\n');
@@ -475,7 +525,11 @@ async function run() {
   // E6: answerScript on completed session
   {
     // j3SessionId was completed by emergency
-    const req = mockReq(TEST_USER_ID, { session_id: j3SessionId, question_id: 'q1', answer: 'test' });
+    const req = mockReq(TEST_USER_ID, {
+      session_id: j3SessionId,
+      question_id: 'q1',
+      answer: 'test',
+    });
     const res = mockRes();
     await answerScriptHandler(pool, req, res);
     assert(res.getStatus() === 400, 'E6 answerScript on completed session -> 400');
@@ -504,8 +558,10 @@ async function run() {
     const res = mockRes();
     await getScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.ok === true && d.has_script === false,
-      `E9 getScript no clusters -> has_script: ${d.has_script}`);
+    assert(
+      d.ok === true && d.has_script === false,
+      `E9 getScript no clusters -> has_script: ${d.has_script}`
+    );
   }
 
   // E10: startScript with status="fine" -> needs_script=false
@@ -514,8 +570,10 @@ async function run() {
     const res = mockRes();
     await startScriptHandler(pool, req, res);
     const d = res.getData();
-    assert(d.ok === true && d.needs_script === false,
-      `E10 status="fine" -> needs_script: ${d.needs_script}`);
+    assert(
+      d.ok === true && d.needs_script === false,
+      `E10 status="fine" -> needs_script: ${d.needs_script}`
+    );
   }
 
   console.log('');
@@ -532,12 +590,14 @@ async function run() {
   console.log(`  ROUND 4 RESULTS: ${passed} passed, ${failed} failed, ${total} total`);
   console.log('══════════════════════════════════════════════════════════');
 
-  console.log('\n  Journey 1 (Normal check-in):  ' +
-    `${j1QuestionCount} questions, severity=${j1Conclusion?.severity}`);
-  console.log('  Journey 2 (Fallback -> R&D):  ' +
-    `fallback=${j2FallbackQCount}q, script=${j2ScriptQCount}q`);
-  console.log('  Journey 3 (Emergency bypass): ' +
-    'emergency detected at start + mid-session');
+  console.log(
+    '\n  Journey 1 (Normal check-in):  ' +
+      `${j1QuestionCount} questions, severity=${j1Conclusion?.severity}`
+  );
+  console.log(
+    '  Journey 2 (Fallback -> R&D):  ' + `fallback=${j2FallbackQCount}q, script=${j2ScriptQCount}q`
+  );
+  console.log('  Journey 3 (Emergency bypass): ' + 'emergency detected at start + mid-session');
   console.log(`  Error cases: 10 tests\n`);
 
   if (failed > 0) {
@@ -550,7 +610,7 @@ async function run() {
   process.exit(failed > 0 ? 1 : 0);
 }
 
-run().catch(err => {
+run().catch((err) => {
   console.error('Test crashed:', err);
   pool.end().then(() => process.exit(1));
 });

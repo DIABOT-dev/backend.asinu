@@ -4,10 +4,7 @@
     "es2022": true,
     "jest": true
   },
-  "extends": [
-    "eslint:recommended",
-    "prettier"
-  ],
+  "extends": ["eslint:recommended", "prettier"],
   "parserOptions": {
     "ecmaVersion": 2022,
     "sourceType": "script"
@@ -19,11 +16,13 @@
     "prefer-const": "warn",
     "eqeqeq": ["warn", "smart"]
   },
-  "ignorePatterns": [
-    "node_modules/",
-    "coverage/",
-    "public/",
-    "audit_pack_v1_*/",
-    "**/*.min.js"
-  ]
+  "overrides": [
+    {
+      "files": ["scripts/test/**/*.js", "tests/**/*.js", "asinu-brain-extension/tests/**/*.js"],
+      "rules": {
+        "no-unused-vars": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["node_modules/", "coverage/", "public/", "audit_pack_v1_*/", "**/*.min.js"]
 }

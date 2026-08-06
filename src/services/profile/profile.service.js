@@ -4,7 +4,11 @@
  */
 
 const { t } = require('../../i18n');
-const { normalizePhoneNumber, getPhoneVariants, getCrmUserPayload } = require('../auth/auth.service');
+const {
+  normalizePhoneNumber,
+  getPhoneVariants,
+  getCrmUserPayload,
+} = require('../auth/auth.service');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
 const logger = require('../../lib/logger');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
@@ -63,13 +67,13 @@ async function getProfile(pool, userId) {
       [userId]
     );
 
-    const careCircle = careCircleResult.rows.map(row => ({
+    const careCircle = careCircleResult.rows.map((row) => ({
       id: String(row.id),
       guardianId: String(row.guardian_id),
       name: row.guardian_name || t('profile.guardian_label'),
       phone: row.guardian_phone_number,
       email: row.guardian_email,
-      status: row.status
+      status: row.status,
     }));
 
     // Calculate age from date_of_birth, fall back to birth_year for v2 onboarding users
@@ -90,13 +94,18 @@ async function getProfile(pool, userId) {
     const NONE_VALUES = ['không có', 'none', 'no', 'không', ''];
     const chronicDiseases = [
       ...(onboarding?.medical_conditions || []),
-      ...(onboarding?.chronic_symptoms || [])
-    ].filter(v => !NONE_VALUES.includes(String(v).toLowerCase().trim()))
-     .filter((v, i, arr) => arr.indexOf(v) === i); // deduplicate
+      ...(onboarding?.chronic_symptoms || []),
+    ]
+      .filter((v) => !NONE_VALUES.includes(String(v).toLowerCase().trim()))
+      .filter((v, i, arr) => arr.indexOf(v) === i); // deduplicate
 
     const profile = {
       id: String(user.id),
-      name: user.full_name || user.display_name || onboarding?.display_name || (user.email ? user.email.split('@')[0] : `User123 ${user.id}`),
+      name:
+        user.full_name ||
+        user.display_name ||
+        onboarding?.display_name ||
+        (user.email ? user.email.split('@')[0] : `User123 ${user.id}`),
       email: user.email || null,
       phone: user.phone_number || null,
       relationship: t('profile.caregiver_label'),
@@ -117,15 +126,14 @@ async function getProfile(pool, userId) {
         ageRange: onboarding.age,
         gender: onboarding.gender,
         goal: onboarding.goal,
-        bodyType: onboarding.body_type
-      })
+        bodyType: onboarding.body_type,
+      }),
     };
 
     const result = { ok: true, profile };
     await cacheSet(`profile:${userId}`, result, 3600); // 1 hour
     return result;
   } catch (err) {
-
     return { ok: false, error: t('error.server') };
   }
 }
@@ -138,7 +146,17 @@ async function getProfile(pool, userId) {
  * @returns {Promise<Object>} - { ok, profile, error }
  */
 async function updateProfile(pool, userId, updates) {
-  const { name, phone, dateOfBirth, gender, heightCm, weightKg, bloodType, chronicDiseases, language } = updates;
+  const {
+    name,
+    phone,
+    dateOfBirth,
+    gender,
+    heightCm,
+    weightKg,
+    bloodType,
+    chronicDiseases,
+    language,
+  } = updates;
 
   try {
     // Update name and phone in users table
@@ -269,20 +287,15 @@ async function updateProfile(pool, userId, updates) {
     const updatedProfile = await getProfile(pool, userId);
     const crmUser = await getCrmUserPayload(pool, userId);
     if (crmUser) emitCrmEventAsync(pool, 'user.updated', crmUser);
-    if (
-      dateOfBirth !== undefined ||
-      chronicDiseases !== undefined ||
-      gender !== undefined
-    ) {
+    if (dateOfBirth !== undefined || chronicDiseases !== undefined || gender !== undefined) {
       const onboardingSync = await pool.query(
         'SELECT age, birth_year, medical_conditions FROM user_onboarding_profiles WHERE user_id = $1',
-        [userId],
+        [userId]
       );
       emitProfileUpdated(pool, userId, onboardingSync.rows[0] || {});
     }
     return updatedProfile;
   } catch (err) {
-
     if (err?.code === '23505' && err?.constraint === 'users_phone_key') {
       return { ok: false, error: t('auth.phone_already_used'), statusCode: 409 };
     }
@@ -331,21 +344,45 @@ async function updateAvatar(pool, userId, avatarUrl) {
  */
 async function deleteAccount(pool, userId) {
   const client = await pool.connect();
-  
+
   try {
     // Bắt đầu transaction
     await client.query('BEGIN');
 
     // Xóa các bảng liên quan theo thứ tự (child tables trước)
     // 1. Health & Wellness logs
-    await client.query('DELETE FROM glucose_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
-    await client.query('DELETE FROM blood_pressure_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
-    await client.query('DELETE FROM weight_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
-    await client.query('DELETE FROM water_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
-    await client.query('DELETE FROM meal_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
-    await client.query('DELETE FROM insulin_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
-    await client.query('DELETE FROM medication_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
-    await client.query('DELETE FROM care_pulse_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)', [userId]);
+    await client.query(
+      'DELETE FROM glucose_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)',
+      [userId]
+    );
+    await client.query(
+      'DELETE FROM blood_pressure_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)',
+      [userId]
+    );
+    await client.query(
+      'DELETE FROM weight_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)',
+      [userId]
+    );
+    await client.query(
+      'DELETE FROM water_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)',
+      [userId]
+    );
+    await client.query(
+      'DELETE FROM meal_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)',
+      [userId]
+    );
+    await client.query(
+      'DELETE FROM insulin_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)',
+      [userId]
+    );
+    await client.query(
+      'DELETE FROM medication_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)',
+      [userId]
+    );
+    await client.query(
+      'DELETE FROM care_pulse_logs WHERE log_id IN (SELECT id FROM logs_common WHERE user_id = $1)',
+      [userId]
+    );
     await client.query('DELETE FROM logs_common WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM logs WHERE user_id = $1', [userId]);
 
@@ -361,7 +398,10 @@ async function deleteAccount(pool, userId) {
     await client.query('DELETE FROM care_pulse_events WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM care_pulse_engine_state WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM care_pulse_escalations WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM caregiver_alerts WHERE user_id = $1 OR caregiver_user_id = $1', [userId]);
+    await client.query(
+      'DELETE FROM caregiver_alerts WHERE user_id = $1 OR caregiver_user_id = $1',
+      [userId]
+    );
     await client.query('DELETE FROM wellness_monitoring_config WHERE user_id = $1', [userId]);
 
     // 5. Wellness & Health Tracking
@@ -372,8 +412,13 @@ async function deleteAccount(pool, userId) {
     await client.query('DELETE FROM prompt_history WHERE user_id = $1', [userId]);
 
     // 6. Care Circle & Connections
-    await client.query('DELETE FROM care_circle WHERE patient_id = $1 OR guardian_id = $1', [userId]);
-    await client.query('DELETE FROM user_connections WHERE requester_id = $1 OR addressee_id = $1', [userId]);
+    await client.query('DELETE FROM care_circle WHERE patient_id = $1 OR guardian_id = $1', [
+      userId,
+    ]);
+    await client.query(
+      'DELETE FROM user_connections WHERE requester_id = $1 OR addressee_id = $1',
+      [userId]
+    );
     await client.query('DELETE FROM user_baselines WHERE user_id = $1', [userId]);
 
     // 7. Notifications
@@ -391,9 +436,15 @@ async function deleteAccount(pool, userId) {
 
     // Invalidate all caches for this user
     await cacheDel(
-      `profile:${userId}`, `user:name:${userId}`, `subscription:${userId}`,
-      `tree:summary:${userId}`, `tree:history:${userId}`, `missions:${userId}`,
-      `health:score:${userId}`, `wellness:state:${userId}`, `wellness:score:${userId}`,
+      `profile:${userId}`,
+      `user:name:${userId}`,
+      `subscription:${userId}`,
+      `tree:summary:${userId}`,
+      `tree:history:${userId}`,
+      `missions:${userId}`,
+      `health:score:${userId}`,
+      `wellness:state:${userId}`,
+      `wellness:score:${userId}`,
       `engagement:pattern:${userId}`
     );
 
@@ -403,7 +454,7 @@ async function deleteAccount(pool, userId) {
       pool,
       'user.deleted',
       { user_id: String(userId) },
-      { event_id: `user.deleted:${userId}` },
+      { event_id: `user.deleted:${userId}` }
     );
 
     return { ok: true, message: t('success.account_deleted') };
@@ -431,14 +482,14 @@ async function updatePushToken(pool, userId, pushToken) {
       hasToken: Boolean(pushToken),
     });
     // Clear this token from any other user first (1 device = 1 user)
-    await pool.query(
-      `UPDATE users SET push_token = NULL WHERE push_token = $1 AND id != $2`,
-      [pushToken, userId]
-    );
-    const result = await pool.query(
-      `UPDATE users SET push_token = $1 WHERE id = $2`,
-      [pushToken, userId]
-    );
+    await pool.query(`UPDATE users SET push_token = NULL WHERE push_token = $1 AND id != $2`, [
+      pushToken,
+      userId,
+    ]);
+    const result = await pool.query(`UPDATE users SET push_token = $1 WHERE id = $2`, [
+      pushToken,
+      userId,
+    ]);
     logger.debug('[updatePushToken] success', {
       userId,
       rowCount: result.rowCount,
@@ -475,17 +526,17 @@ async function getBasicProfile(pool, userId) {
     return {
       ok: true,
       profile: {
-        id:                  String(r.id),
-        name:                r.full_name || r.display_name || (r.email ? r.email.split('@')[0] : `User ${r.id}`),
-        email:               r.email || null,
-        phone:               r.phone_number || null,
-        avatarUrl:           r.avatar_url || null,
-        languagePreference:  r.language_preference || 'vi',
-        hasPassword:         !!r.has_password,
+        id: String(r.id),
+        name: r.full_name || r.display_name || (r.email ? r.email.split('@')[0] : `User ${r.id}`),
+        email: r.email || null,
+        phone: r.phone_number || null,
+        avatarUrl: r.avatar_url || null,
+        languagePreference: r.language_preference || 'vi',
+        hasPassword: !!r.has_password,
         onboardingCompleted: !!r.onboarding_completed_at,
-        ageRange:            r.age_range || null,
-        gender:              r.gender || null,
-        goal:                r.goal || null,
+        ageRange: r.age_range || null,
+        gender: r.gender || null,
+        goal: r.goal || null,
       },
     };
   } catch (err) {
