@@ -1,10 +1,24 @@
 const crypto = require('crypto');
 const logger = require('../../lib/logger');
 const { assertCrmEventType } = require('./crm-event.catalog');
+const { projectCrmPayload, stripContactPii } = require('./crm-event.policy');
 
 const CRM_EVENTS_URL = process.env.CRM_INTEGRATION_URL || '';
 const CRM_EVENTS_SECRET = process.env.CRM_INTEGRATION_SECRET || '';
 const TIMEOUT_MS = Number(process.env.CRM_INTEGRATION_TIMEOUT_MS || 5000);
+const INSECURE_SECRETS = new Set(['change-me-in-development', 'change_me_in_production']);
+
+const assertCrmIntegrationConfig = () => {
+  if (CRM_EVENTS_URL && !CRM_EVENTS_SECRET) {
+    throw new Error('CRM_INTEGRATION_SECRET is required when CRM_INTEGRATION_URL is configured.');
+  }
+  if (process.env.NODE_ENV === 'production') {
+    if (!CRM_EVENTS_URL) throw new Error('CRM_INTEGRATION_URL is required in production.');
+    if (INSECURE_SECRETS.has(CRM_EVENTS_SECRET)) {
+      throw new Error('CRM_INTEGRATION_SECRET must be replaced before production deployment.');
+    }
+  }
+};
 
 const isDbClient = (value) => value && typeof value.query === 'function';
 
@@ -19,7 +33,7 @@ const buildCrmEnvelope = (eventType, payload, options = {}) => {
     source: options.source || 'asinu-backend',
     version: Number(options.version || 1),
     ...(options.correlation_id ? { correlation_id: String(options.correlation_id) } : {}),
-    payload: payload && typeof payload === 'object' ? payload : {},
+    payload: projectCrmPayload(eventType, payload),
   };
 };
 
@@ -47,7 +61,10 @@ const deliverCrmEnvelope = async (envelope) => {
       signal: controller.signal,
     });
     if (!response.ok) {
-      logger.warn('crm_event_delivery_failed', { event_type: envelope.event_type, status: response.status });
+      logger.warn('crm_event_delivery_failed', {
+        event_type: envelope.event_type,
+        status: response.status,
+      });
       return { sent: false, status: response.status };
     }
     return { sent: true };
@@ -85,10 +102,8 @@ const enqueueCrmEvent = async (pool, eventType, payload, options = {}) => {
         envelope.correlation_id || null,
         envelope.occurred_at,
         JSON.stringify(envelope.payload),
-      ],
+      ]
     );
-    // Try immediately for low latency; the scheduler remains the durable retry path.
-    if (typeof pool.connect === 'function') void flushCrmEventOutbox(pool, 1);
     return { queued: true, event_id: envelope.event_id };
   } catch (error) {
     logger.error('crm_event_enqueue_failed', { event_type: eventType, err: error });
@@ -105,10 +120,16 @@ const emitCrmEventAsync = (...args) => {
   return emitCrmEvent(args[0], args[1], args[2]);
 };
 
-const getRetryDelaySeconds = (attempts) => Math.min(3600, 30 * (2 ** Math.min(Math.max(attempts - 1, 0), 7)));
+const getRetryDelaySeconds = (attempts) =>
+  Math.min(3600, 30 * 2 ** Math.min(Math.max(attempts - 1, 0), 7));
 
 const flushCrmEventOutbox = async (pool, limit = 50) => {
-  if (!isDbClient(pool) || typeof pool.connect !== 'function' || !CRM_EVENTS_URL || !CRM_EVENTS_SECRET) {
+  if (
+    !isDbClient(pool) ||
+    typeof pool.connect !== 'function' ||
+    !CRM_EVENTS_URL ||
+    !CRM_EVENTS_SECRET
+  ) {
     return { sent: 0, failed: 0 };
   }
 
@@ -129,7 +150,7 @@ const flushCrmEventOutbox = async (pool, limit = 50) => {
         ORDER BY created_at ASC
         FOR UPDATE SKIP LOCKED
         LIMIT $1`,
-      [Math.max(1, Math.min(Number(limit) || 50, 200))],
+      [Math.max(1, Math.min(Number(limit) || 50, 200))]
     );
     rows = selected.rows;
     for (const row of rows) {
@@ -137,7 +158,7 @@ const flushCrmEventOutbox = async (pool, limit = 50) => {
         `UPDATE crm_event_outbox
             SET status = 'processing', locked_at = NOW(), attempts = attempts + 1, updated_at = NOW()
           WHERE id = $1`,
-        [row.id],
+        [row.id]
       );
     }
     await client.query('COMMIT');
@@ -164,9 +185,10 @@ const flushCrmEventOutbox = async (pool, limit = 50) => {
       sent++;
       await pool.query(
         `UPDATE crm_event_outbox
-            SET status = 'sent', sent_at = NOW(), locked_at = NULL, updated_at = NOW(), last_error = NULL
+            SET status = 'sent', sent_at = NOW(), locked_at = NULL, updated_at = NOW(), last_error = NULL,
+                payload = $2::jsonb
           WHERE id = $1`,
-        [row.id],
+        [row.id, JSON.stringify(stripContactPii(row.payload || {}))]
       );
     } else {
       failed++;
@@ -178,7 +200,7 @@ const flushCrmEventOutbox = async (pool, limit = 50) => {
                 next_attempt_at = NOW() + ($2 || ' seconds')::interval,
                 last_error = LEFT($3, 1000), updated_at = NOW()
           WHERE id = $1`,
-        [row.id, String(getRetryDelaySeconds(attempts)), errorMessage],
+        [row.id, String(getRetryDelaySeconds(attempts)), errorMessage]
       );
     }
   }
@@ -186,6 +208,7 @@ const flushCrmEventOutbox = async (pool, limit = 50) => {
 };
 
 module.exports = {
+  assertCrmIntegrationConfig,
   buildCrmEnvelope,
   deliverCrmEnvelope,
   emitCrmEvent,

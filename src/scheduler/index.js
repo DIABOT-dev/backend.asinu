@@ -15,8 +15,13 @@ const { captureException } = require('../lib/sentry');
 const { runBasicNotifications } = require('../services/notification/basic.notification.service');
 const { runNightlyCycle } = require('../services/checkin/rnd-cycle.service');
 const { updateAllSegments } = require('../services/profile/lifecycle.service');
-const { runDailyLifecycleNotifications } = require('../services/notification/lifecycle.notification.service');
-const { dispatchPendingNotifications, runHealthFeedCycle } = require('../services/health_feed/service');
+const {
+  runDailyLifecycleNotifications,
+} = require('../services/notification/lifecycle.notification.service');
+const {
+  dispatchPendingNotifications,
+  runHealthFeedCycle,
+} = require('../services/health_feed/service');
 const { flushCrmEventOutbox } = require('../services/integrations/crm-event.service');
 
 const TZ = 'Asia/Ho_Chi_Minh';
@@ -57,8 +62,10 @@ function safeCron(expression, name, handler) {
 
 function startScheduler(pool) {
   // Reliable Asinu -> CRM webhook delivery and retry.
-  safeCron('* * * * *', 'crm_event_webhooks', async () => {
-    const stats = await flushCrmEventOutbox(pool, 100);
+  // Drain at the CRM contract limit (50 every 5 seconds = 600/minute).
+  // This keeps the durable source outbox from becoming the hidden throughput cap.
+  safeCron('*/5 * * * * *', 'crm_event_webhooks', async () => {
+    const stats = await flushCrmEventOutbox(pool, 50);
     if (stats.sent > 0 || stats.failed > 0) {
       logger.info('cron.crm_event_webhooks.stats', stats);
     }
@@ -122,7 +129,9 @@ function startScheduler(pool) {
     // Giữ fallback_logs trong 30 ngày
     await pool.query("DELETE FROM fallback_logs WHERE created_at < NOW() - INTERVAL '30 days'");
     // Giữ user_activity_logs trong 90 ngày
-    await pool.query("DELETE FROM user_activity_logs WHERE created_at < NOW() - INTERVAL '90 days'");
+    await pool.query(
+      "DELETE FROM user_activity_logs WHERE created_at < NOW() - INTERVAL '90 days'"
+    );
     logger.info('cron.database_log_cleanup.completed');
   });
 }

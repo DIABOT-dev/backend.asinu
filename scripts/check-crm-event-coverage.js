@@ -17,6 +17,9 @@ const servicesRoot = path.join(__dirname, '..', 'src', 'services');
 const ignoredFiles = new Set([
   path.join(servicesRoot, 'integrations', 'crm-event.catalog.js'),
   path.join(servicesRoot, 'integrations', 'crm-event.service.js'),
+  // The policy mirrors the complete contract for source-side filtering. Its
+  // event names are not emitters and must not count as premature emissions.
+  path.join(servicesRoot, 'integrations', 'crm-event.policy.js'),
 ]);
 
 function collectJavaScriptFiles(directory) {
@@ -24,7 +27,8 @@ function collectJavaScriptFiles(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
     const fullPath = path.join(directory, entry.name);
     if (entry.isDirectory()) files.push(...collectJavaScriptFiles(fullPath));
-    else if (entry.isFile() && fullPath.endsWith('.js') && !ignoredFiles.has(fullPath)) files.push(fullPath);
+    else if (entry.isFile() && fullPath.endsWith('.js') && !ignoredFiles.has(fullPath))
+      files.push(fullPath);
   }
   return files;
 }
@@ -36,16 +40,20 @@ const source = collectJavaScriptFiles(servicesRoot)
 const hasEventLiteral = (eventType) =>
   new RegExp(`['"]${eventType.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`).test(source);
 
-const missingPhaseOne = CRM_PHASE_ONE_EVENT_TYPES.filter((eventType) => !hasEventLiteral(eventType));
+const missingPhaseOne = CRM_PHASE_ONE_EVENT_TYPES.filter(
+  (eventType) => !hasEventLiteral(eventType)
+);
 const prematurelyEmitted = CRM_DEFERRED_EVENT_TYPES.filter(hasEventLiteral);
 
 if (missingPhaseOne.length || prematurelyEmitted.length) {
   console.error(JSON.stringify({ ok: false, missingPhaseOne, prematurelyEmitted }, null, 2));
   process.exitCode = 1;
 } else {
-  console.log(JSON.stringify({
-    ok: true,
-    phaseOneEvents: CRM_PHASE_ONE_EVENT_TYPES.length,
-    deferredEvents: CRM_DEFERRED_EVENT_TYPES.length,
-  }));
+  console.log(
+    JSON.stringify({
+      ok: true,
+      phaseOneEvents: CRM_PHASE_ONE_EVENT_TYPES.length,
+      deferredEvents: CRM_DEFERRED_EVENT_TYPES.length,
+    })
+  );
 }

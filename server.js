@@ -22,14 +22,17 @@ const iapRoutes = require('./src/routes/iap.routes');
 const healthFeedRoutes = require('./src/routes/healthFeed.routes');
 const asinuBrainRoutes = require('./asinu-brain-extension/routes/asinuBrain.routes');
 const langMiddleware = require('./src/middleware/lang.middleware');
+const { createRateLimitStore } = require('./src/middleware/rate-limit-store');
 const { getRedis } = require('./src/lib/redis');
 const { startScheduler } = require('./src/scheduler');
+const { assertCrmIntegrationConfig } = require('./src/services/integrations/crm-event.service');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
 const path = require('path');
 const app = express();
 app.set('trust proxy', 1);
+assertCrmIntegrationConfig();
 
 // Sentry MUST be initialized before other middleware so it can capture them
 initSentry();
@@ -37,15 +40,17 @@ app.use(sentryRequestHandler());
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      ...helmet.contentSecurityPolicy.getDefaultDirectives(),
-      'script-src': ["'self'"],
-      'script-src-attr': ["'none'"],
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        'script-src': ["'self'"],
+        'script-src-attr': ["'none'"],
+      },
     },
-  },
-}));
+  })
+);
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- OPS HEALTH CHECK ---
@@ -53,7 +58,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.get('/api/healthz', async (_req, res) => {
   // Still probe redis so container orchestrators get an accurate liveness signal,
   // but never expose the result to the response body.
-  try { await getRedis().ping(); } catch { /* ignore */ }
+  try {
+    await getRedis().ping();
+  } catch {
+    /* ignore */
+  }
   res.status(200).json({ status: 'ok' });
 });
 app.get('/healthz', (_req, res) => {
@@ -67,7 +76,11 @@ app.get('/api/healthz/detailed', async (req, res) => {
     return res.status(404).json({ status: 'not_found' });
   }
   let redisOk = false;
-  try { redisOk = (await getRedis().ping()) === 'PONG'; } catch { /* ignore */ }
+  try {
+    redisOk = (await getRedis().ping()) === 'PONG';
+  } catch {
+    /* ignore */
+  }
   res.status(200).json({
     status: 'ok',
     redis: redisOk ? 'connected' : 'disconnected',
@@ -85,8 +98,9 @@ const generalLimiter = rateLimit({
   message: { ok: false, error: t('error.too_many_requests', getLang(null)) },
   standardHeaders: true,
   legacyHeaders: false,
+  store: createRateLimitStore('general'),
   // Skip rate limiting for health checks
-  skip: (req) => req.path === '/healthz' || req.path === '/api/healthz'
+  skip: (req) => req.path === '/healthz' || req.path === '/api/healthz',
 });
 
 // Stricter rate limiting for auth endpoints (prevent brute force)
@@ -95,7 +109,8 @@ const authLimiter = rateLimit({
   max: 50, // 50 auth requests per 15 min
   message: { ok: false, error: t('error.too_many_auth_attempts', getLang(null)) },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  store: createRateLimitStore('auth'),
 });
 
 app.use(generalLimiter);
@@ -104,12 +119,13 @@ app.use(langMiddleware);
 // Postgres connection pool (instrumented with slow-query logging)
 const pool = createPool({
   connectionString: DATABASE_URL,
-  max: Number(process.env.DB_POOL_MAX || 20),           // Tối đa 20 kết nối đồng thời cho tải MVP
-  idleTimeoutMillis: 30000,                            // Đóng kết nối nhàn rỗi sau 30 giây
-  connectionTimeoutMillis: 2000                         // Ngắt kết nối và báo lỗi sau 2 giây nếu DB nghẽn
+  max: Number(process.env.DB_POOL_MAX || 20), // Tối đa 20 kết nối đồng thời cho tải MVP
+  idleTimeoutMillis: 30000, // Đóng kết nối nhàn rỗi sau 30 giây
+  connectionTimeoutMillis: 2000, // Ngắt kết nối và báo lỗi sau 2 giây nếu DB nghẽn
 });
 
 app.use('/api/auth', authLimiter, authRoutes(pool));
+app.use('/api/mobile/auth/login', authLimiter);
 app.use('/api/mobile', mobileRoutes(pool));
 app.use('/api/missions', missionsRoutes(pool));
 app.use('/api/care-pulse', carePulseRoutes(pool));
@@ -139,9 +155,11 @@ app.use((err, req, res, _next) => {
 });
 
 // Connect Redis then start server
-getRedis().connect().catch((err) => {
-  logger.warn('redis.connect_failed', { err });
-});
+getRedis()
+  .connect()
+  .catch((err) => {
+    logger.warn('redis.connect_failed', { err });
+  });
 
 app.listen(PORT, () => {
   logger.info('server.listening', { port: PORT });
