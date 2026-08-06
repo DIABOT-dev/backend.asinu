@@ -33,7 +33,7 @@ async function getEligibleUsers(pool) {
      LEFT JOIN user_notification_preferences np ON np.user_id = u.id
      WHERE u.push_token IS NOT NULL
        AND u.deleted_at IS NULL
-       AND COALESCE(np.reminders_enabled, true) = true
+       AND COALESCE(np.reminders_enabled, false) = true
        AND (
          u.last_engagement_notif_at IS NULL
          OR u.last_engagement_notif_at < NOW() - INTERVAL '${COOLDOWN_HOURS} hours'

@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
+const { requireCronSecret } = require('../middleware/cron-auth');
 const {
   getNotifications,
   markAsRead,
@@ -26,8 +27,8 @@ function notificationRoutes(pool) {
     updateNotificationPreferences(pool, req, res)
   );
   router.get('/engagement/preview', requireAuth, (req, res) => previewEngagement(pool, req, res));
-  router.post('/engagement/run', (req, res) => runEngagement(pool, req, res));
-  router.post('/basic/run', (req, res) => runBasic(pool, req, res));
+  router.post('/engagement/run', requireCronSecret, (req, res) => runEngagement(pool, req, res));
+  router.post('/basic/run', requireCronSecret, (req, res) => runBasic(pool, req, res));
 
   return router;
 }

@@ -1,6 +1,10 @@
 'use strict';
 
 const DEFAULT_TIMEZONE = 'Asia/Ho_Chi_Minh';
+const HEALTH_FEED_PUSH_COOLDOWN_HOURS = 24;
+const HEALTH_FEED_TEMPLATE_COOLDOWN_HOURS = 72;
+const PUSH_START_HOUR = 8;
+const PUSH_END_HOUR = 21;
 
 function isHealthFeedEnabled() {
   return process.env.ENABLE_HEALTH_FEED === 'true';
@@ -40,11 +44,15 @@ function getTimeParts(timezone, date = new Date()) {
 
 function isWithinPushWindow(timezone, date = new Date()) {
   const { hour } = getTimeParts(timezone, date);
-  return hour >= 8 && hour < 21;
+  return hour >= PUSH_START_HOUR && hour < PUSH_END_HOUR;
 }
 
 module.exports = {
   DEFAULT_TIMEZONE,
+  HEALTH_FEED_PUSH_COOLDOWN_HOURS,
+  HEALTH_FEED_TEMPLATE_COOLDOWN_HOURS,
+  PUSH_END_HOUR,
+  PUSH_START_HOUR,
   getTimeParts,
   isHealthFeedEnabled,
   isWithinPushWindow,

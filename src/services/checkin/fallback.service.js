@@ -146,7 +146,7 @@ async function logFallback(pool, userId, rawInput, checkinId = null, fallbackAns
        VALUES ($1, $2, $3, $4::jsonb)`,
       [userId, checkinId, rawInput, JSON.stringify(fallbackAnswers)]
     );
-    console.log(`[Fallback] Logged unknown symptom for user ${userId}: "${rawInput}"`);
+    console.log(`[Fallback] Logged redacted fallback input for user ${userId}, checkin=${checkinId || 'none'}`);
   } catch (err) {
     console.error('[Fallback] Failed to log:', err.message);
   }

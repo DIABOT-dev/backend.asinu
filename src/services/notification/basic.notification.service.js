@@ -17,6 +17,8 @@ const {
 const { getHonorifics } = require('../../lib/honorifics');
 const { generateMessage } = require('./notification-intelligence.service');
 const { runReengagement } = require('./reengagement.service');
+const logger = require('../../lib/logger');
+const { canSendNonUrgent } = require('./notification.policy');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
@@ -61,16 +63,21 @@ const TYPE_PRIORITY = {
 // ─── Exact HH:MM match helpers ────────────────────────────────────
 // Matches both hour AND minute so notifications fire at the exact configured time.
 // When no time is set (NULL), falls back to default HH:00.
+const safeTime = (field) =>
+  `(CASE WHEN ${field} IS NOT NULL
+          AND BTRIM(${field}::text) ~ '^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$'
+         THEN ${field}::time END)`;
+
 const morningMatch = (defH = 8) => `
-  COALESCE(EXTRACT(HOUR   FROM np.morning_time::time)::int, np.morning_hour, np.inferred_morning_hour, ${defH}) = $1
-  AND COALESCE(EXTRACT(MINUTE FROM np.morning_time::time)::int, 0) = $2`;
+  COALESCE(EXTRACT(HOUR   FROM ${safeTime('np.morning_time')})::int, np.morning_hour, np.inferred_morning_hour, ${defH}) = $1
+  AND COALESCE(EXTRACT(MINUTE FROM ${safeTime('np.morning_time')})::int, 0) = $2`;
 const afternoonMatch = (defH = 14) => `
-  COALESCE(EXTRACT(HOUR   FROM np.afternoon_time::time)::int, EXTRACT(HOUR   FROM np.inferred_afternoon_time::time)::int, ${defH}) = $1
-  AND COALESCE(EXTRACT(MINUTE FROM np.afternoon_time::time)::int, EXTRACT(MINUTE FROM np.inferred_afternoon_time::time)::int, 0) = $2`;
+  COALESCE(EXTRACT(HOUR   FROM ${safeTime('np.afternoon_time')})::int, EXTRACT(HOUR   FROM ${safeTime('np.inferred_afternoon_time')})::int, ${defH}) = $1
+  AND COALESCE(EXTRACT(MINUTE FROM ${safeTime('np.afternoon_time')})::int, EXTRACT(MINUTE FROM ${safeTime('np.inferred_afternoon_time')})::int, 0) = $2`;
 const eveningMatch = (defH = 21) => `
-  COALESCE(EXTRACT(HOUR   FROM np.evening_time::time)::int, np.evening_hour, np.inferred_evening_hour, ${defH}) = $1
-  AND COALESCE(EXTRACT(MINUTE FROM np.evening_time::time)::int, 0) = $2`;
-const remindersEnabled = () => `COALESCE(np.reminders_enabled, true) = true`;
+  COALESCE(EXTRACT(HOUR   FROM ${safeTime('np.evening_time')})::int, np.evening_hour, np.inferred_evening_hour, ${defH}) = $1
+  AND COALESCE(EXTRACT(MINUTE FROM ${safeTime('np.evening_time')})::int, 0) = $2`;
+const remindersEnabled = () => `COALESCE(np.reminders_enabled, false) = true`;
 
 function nowVN() {
   const fmt = new Intl.DateTimeFormat('en-US', {
@@ -160,15 +167,24 @@ async function sendAndSave(pool, userOrId, type, title, body, data = {}, overrid
 
   const priority = overridePriority || TYPE_PRIORITY[type] || 'low';
 
+  // Non-urgent reminders require an explicit opt-in and are subject to a
+  // daily cap. Emergency/health/caregiver alerts are intentionally exempt.
+  if (!(await canSendNonUrgent(pool, userId, type))) return false;
+
   // Cross-type spacing: skip if user received any reminder push in last 5 minutes
   if (REMINDER_TYPES.has(type)) {
-    const { rows } = await pool.query(
-      `SELECT 1 FROM notifications WHERE user_id = $1
-         AND type = ANY($2::text[])
-         AND created_at >= NOW() - make_interval(mins => $3) LIMIT 1`,
-      [userId, [...REMINDER_TYPES], CROSS_TYPE_GAP_MINUTES]
-    );
-    if (rows.length > 0) return false;
+    try {
+      const { rows } = await pool.query(
+        `SELECT 1 FROM notifications WHERE user_id = $1
+           AND type = ANY($2::text[])
+           AND created_at >= NOW() - make_interval(mins => $3) LIMIT 1`,
+        [userId, [...REMINDER_TYPES], CROSS_TYPE_GAP_MINUTES]
+      );
+      if (rows.length > 0) return false;
+    } catch (err) {
+      logger.error('notification.spacing_check_failed', { userId, type, err });
+      return false;
+    }
   }
 
   // Same-type dedup: skip if exact same type was sent to this user in the last 5 minutes
@@ -179,10 +195,13 @@ async function sendAndSave(pool, userOrId, type, title, body, data = {}, overrid
       [userId, type]
     );
     if (dup.length > 0) {
-      console.log(`[sendAndSave] Skipped ${type} for user ${userId} (same-type dedup 5min)`);
+      logger.debug('notification.dedup_skipped', { userId, type });
       return false;
     }
-  } catch {}
+  } catch (err) {
+    logger.warn('notification.dedup_check_failed', { userId, type, err });
+    return false;
+  }
 
   // Insert DB record FIRST, only push if insert succeeds
   try {
@@ -191,7 +210,7 @@ async function sendAndSave(pool, userOrId, type, title, body, data = {}, overrid
       [userId, type, title, body, JSON.stringify(data), priority]
     );
   } catch (err) {
-    console.error(`[sendAndSave] DB insert failed for ${type} user=${userId}:`, err.message);
+    logger.error('notification.insert_failed', { userId, type, err });
     return false;
   }
 
@@ -673,7 +692,8 @@ async function getPreferredHour(pool, userId, defaultHour) {
        GROUP BY hour ORDER BY cnt DESC LIMIT 1`,
       [userId]
     );
-    return res.rows[0] ? parseInt(res.rows[0].hour) : defaultHour;
+    const hour = Number(res.rows[0]?.hour);
+    return Number.isInteger(hour) && hour >= 0 && hour <= 23 ? hour : defaultHour;
   } catch {
     return defaultHour;
   }
@@ -685,44 +705,68 @@ async function runBasicNotifications(pool, forceHour = null, forceMinute = null)
   const vn = nowVN();
   const currentHour = vn.getHours();
   const currentMinute = vn.getMinutes();
-  const hour =
-    forceHour !== null ? Number(forceHour) : Number.isFinite(currentHour) ? currentHour : 0;
-  const minute =
-    forceMinute !== null ? Number(forceMinute) : Number.isFinite(currentMinute) ? currentMinute : 0;
+  const validateTimePart = (value, name, max) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === 'string' && value.trim() === '') {
+      throw new Error(`Invalid ${name}`);
+    }
+    const number = Number(value);
+    if (!Number.isInteger(number) || number < 0 || number > max) {
+      throw new Error(`Invalid ${name}`);
+    }
+    return number;
+  };
+  const requestedHour = validateTimePart(forceHour, 'hour', 23);
+  const requestedMinute = validateTimePart(forceMinute, 'minute', 59);
+  const hour = requestedHour ?? (Number.isFinite(currentHour) ? currentHour : 0);
+  const minute = requestedMinute ?? (Number.isFinite(currentMinute) ? currentMinute : 0);
   const dow = vn.getDay(); // 0 = Sunday
+
+  const runTask = async (name, handler) => {
+    try {
+      return await handler();
+    } catch (err) {
+      // A malformed preference or one broken notification family must not
+      // abort the remaining families in this minute's batch.
+      logger.error('basic_notifications.task_failed', { task: name, err });
+      return { type: name, total: 0, sent: 0, failed: true };
+    }
+  };
 
   // Quiet hours 22:00–05:00 VN: only run urgent jobs, skip all reminders
   const isQuietHours = hour >= 22 || hour < 5;
   if (isQuietHours) {
     const results = await Promise.all([
-      runCheckinFollowUps(pool),
-      runAlertConfirmationFollowUps(pool),
+      runTask('checkin_followups', () => runCheckinFollowUps(pool)),
+      runTask('alert_confirmation_followups', () => runAlertConfirmationFollowUps(pool)),
     ]);
-    const totalSent = results.reduce((s, r) => s + (r.sent || 0), 0);
+    const totalSent = results.reduce((s, r) => s + (r?.sent || 0), 0);
     return { ok: true, hour, minute, quietHours: true, results, totalSent, totalEligible: 0 };
   }
 
   // Run sequentially so cross-type 5-min gap works (earlier job blocks later ones for same user)
   const results = [];
-  results.push(await runMorningCheckin(pool, hour));
-  results.push(await runMorningSummary(pool, hour, minute));
-  results.push(await runAfternoon(pool, hour, minute));
-  results.push(await runEveningSummary(pool, hour, minute));
-  results.push(await runStreakMilestones(pool, hour, minute));
-  if (hour === 20 && minute < 5 && dow === 0) results.push(await runWeeklyRecap(pool));
+  results.push(await runTask('morning_checkin', () => runMorningCheckin(pool, hour)));
+  results.push(await runTask('morning_summary', () => runMorningSummary(pool, hour, minute)));
+  results.push(await runTask('afternoon', () => runAfternoon(pool, hour, minute)));
+  results.push(await runTask('evening_summary', () => runEveningSummary(pool, hour, minute)));
+  results.push(await runTask('streak_milestones', () => runStreakMilestones(pool, hour, minute)));
+  if (hour === 20 && minute < 5 && dow === 0)
+    results.push(await runTask('weekly_recap', () => runWeeklyRecap(pool)));
   // Re-engagement: chạy 1 lần/ngày vào 9:00 sáng VN
-  if (hour === 9 && minute < 5) results.push(await runReengagement(pool, sendAndSave));
+  if (hour === 9 && minute < 5)
+    results.push(await runTask('reengagement', () => runReengagement(pool, sendAndSave)));
   // Context-based alerts (severity high, trend worsening)
-  results.push(await runContextAlerts(pool));
+  results.push(await runTask('context_alerts', () => runContextAlerts(pool)));
   // Checkin follow-ups are urgent — run independently (not subject to reminder gap)
   const [followUps, alertFollowUps] = await Promise.all([
-    runCheckinFollowUps(pool),
-    runAlertConfirmationFollowUps(pool),
+    runTask('checkin_followups', () => runCheckinFollowUps(pool)),
+    runTask('alert_confirmation_followups', () => runAlertConfirmationFollowUps(pool)),
   ]);
   results.push(followUps, alertFollowUps);
 
-  const totalSent = results.reduce((s, r) => s + (r.sent || 0), 0);
-  const totalEligible = results.reduce((s, r) => s + (r.total || 0), 0);
+  const totalSent = results.reduce((s, r) => s + (r?.sent || 0), 0);
+  const totalEligible = results.reduce((s, r) => s + (r?.total || 0), 0);
 
   return { ok: true, hour, minute, results, totalSent, totalEligible };
 }
@@ -748,7 +792,7 @@ async function runContextAlerts(pool) {
     WHERE u.push_token IS NOT NULL
       AND u.deleted_at IS NULL
       AND uop.onboarding_completed_at IS NOT NULL
-      AND COALESCE(np.reminders_enabled, true) = true
+      AND COALESCE(np.reminders_enabled, false) = true
       AND ul.segment IN ('active', 'semi_active')
   `);
 

@@ -15,6 +15,8 @@ const COOLDOWN_MINUTES = {
   low: 120, // 2h cooldown
 };
 
+const { canSendNonUrgent } = require('../../services/notification/notification.policy');
+
 const TYPE_PRIORITY = {
   emergency: 'critical',
   health_alert: 'high',
@@ -43,6 +45,8 @@ const TYPE_PRIORITY = {
 async function dispatch(pool, { userId, type, title, body, data = {}, priority = null }) {
   const effectivePriority = priority || TYPE_PRIORITY[type] || 'low';
   const cooldownMinutes = COOLDOWN_MINUTES[effectivePriority];
+
+  if (!(await canSendNonUrgent(pool, userId, type))) return null;
 
   // Use advisory lock per user+type to prevent race conditions
   // hashtext gives a stable int for the string, ensuring same user+type always gets same lock

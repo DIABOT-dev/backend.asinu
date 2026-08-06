@@ -1612,7 +1612,7 @@ async function runMorningCheckin(pool, hour) {
      WHERE u.push_token IS NOT NULL
        AND u.deleted_at IS NULL
        AND uop.onboarding_completed_at IS NOT NULL
-       AND COALESCE(np.reminders_enabled, true) = true
+       AND COALESCE(np.reminders_enabled, false) = true
        AND NOT EXISTS (
          SELECT 1 FROM health_checkins hc
          WHERE hc.user_id = u.id AND hc.session_date = $1

@@ -1259,8 +1259,7 @@ Trả lời JSON only.`;
   }
 
   console.log(
-    `[TriageAI] phase=${phase}, answers=${answerCount}/${maxQuestions}, min=${minQuestions}, raw:`,
-    raw
+    `[TriageAI] response received phase=${phase}, answers=${answerCount}/${maxQuestions}, min=${minQuestions}, responseLength=${raw.length}`
   );
   try {
     let parsed = JSON.parse(raw);
@@ -2379,7 +2378,7 @@ Trả lời JSON only.`;
       }
     }
 
-    console.log(`[TriageAI] isDone=${parsed.isDone}, question=${parsed.question || 'N/A'}`);
+    console.log(`[TriageAI] response validated isDone=${parsed.isDone}, questionPresent=${Boolean(parsed.question)}`);
     return parsed;
   } catch (parseErr) {
     console.error(`[TriageAI] JSON parse failed, using fallback:`, parseErr?.message);

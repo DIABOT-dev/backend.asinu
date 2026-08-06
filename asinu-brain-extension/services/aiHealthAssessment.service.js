@@ -149,7 +149,7 @@ const generateNextStepOrAssess = async ({
     console.log(`[AI Health Assessment] User ${userId}:`);
     console.log(`  - Action: ${parsed.action}`);
     console.log(`  - Question count: ${questionCount}`);
-    console.log(`  - Reasoning: ${parsed.reasoning}`);
+    console.log('  - Reasoning: [redacted]');
 
     if (parsed.action === 'ask') {
       // Cần hỏi thêm

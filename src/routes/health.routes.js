@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
+const { requireCronSecret } = require('../middleware/cron-auth');
 const {
   alertCareCircle,
   runDailyMonitor,
@@ -24,9 +25,15 @@ const distillation = require('../core/ai/distillation');
 function healthRoutes(pool) {
   const router = express.Router();
 
-  router.post('/monitor/daily', (req, res) => runDailyMonitor(pool, req, res));
+  router.post('/monitor/daily', requireCronSecret, (req, res) => runDailyMonitor(pool, req, res));
   router.post('/alert-care-circle', requireAuth, (req, res) => alertCareCircle(pool, req, res));
-  router.post('/monitor/user/:userId', (req, res) => runUserMonitor(pool, req, res));
+  router.post('/monitor/user/:userId', requireCronSecret, (req, res) =>
+    runUserMonitor(pool, req, res)
+  );
+
+  // The remaining health endpoints are operational/debug APIs. Keep them out
+  // of the public mobile surface and require the same internal cron secret.
+  router.use(requireCronSecret);
 
   // ─── Lifecycle endpoints ────────────────────────────────────────────────
   // GET /api/health/lifecycle — toàn bộ user lifecycle summary

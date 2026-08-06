@@ -12,6 +12,7 @@ const {
 } = require('./config');
 const { FLOWS, PUSHABLE_FLOWS, getSelfFlow, selectContentForPlan } = require('./logic');
 const repo = require('./repository');
+const { hasReachedDailyCap } = require('../notification/notification.policy');
 
 function getTemplateIdForFlow(flow) {
   if (flow === FLOWS.ALERT) return 'health_feed_alert';
@@ -124,11 +125,18 @@ async function dispatchPendingNotifications(pool) {
 
   for (const job of jobs) {
     const payload = job.payload || {};
-    await saveHealthFeedInAppNotification(pool, job, payload);
 
     const timezone = resolveTimezone(job.timezone || DEFAULT_TIMEZONE);
     if (!job.reminders_enabled) {
+      await saveHealthFeedInAppNotification(pool, job, payload);
       await repo.markNotificationJobDispatched(pool, job.id, 'skipped_opt_out');
+      skipped += 1;
+      continue;
+    }
+    const dailyCapReached = await hasReachedDailyCap(pool, job.user_id);
+    await saveHealthFeedInAppNotification(pool, job, payload);
+    if (dailyCapReached) {
+      await repo.markNotificationJobDispatched(pool, job.id, 'skipped_daily_cap');
       skipped += 1;
       continue;
     }

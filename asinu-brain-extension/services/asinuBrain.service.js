@@ -20,7 +20,7 @@ const {
 } = require('./aiHealthAssessment.service');
 
 // Flag để bật/tắt AI Dynamic Mode
-const AI_DYNAMIC_MODE = process.env.AI_DYNAMIC_MODE === 'true' || true; // Bật mặc định
+const AI_DYNAMIC_MODE = process.env.AI_DYNAMIC_MODE === 'true';
 
 const ENGINE_B_VERSION = 'B-PS-V1';
 const SHADOW_ENV_KEYS = ['ASINU_SHADOW_MODE', 'SHADOW_MODE'];
@@ -1125,7 +1125,6 @@ const notifyCaregivers = async (pool, userId, { title, message, data }) => {
   console.log(
     `[notifyCaregivers] Notified ${caregiverIds.length} caregivers (in-app + push: ${pushNotified})`
   );
-  console.log(`[notifyCaregivers] ALERT SENT - Risk: ${data.riskLevel}, Patient: ${userName}`);
 
   return {
     notified: true,
@@ -1580,7 +1579,7 @@ const submitAnswer = async (pool, userId, payload) => {
     } else {
       // AI đã đánh giá xong
       const assessment = aiResult.assessment;
-      console.log(`[submitAnswer] AI Assessment:`, assessment);
+      console.log('[submitAnswer] AI assessment completed');
 
       // Update risk persistence
       await upsertRiskPersistence(pool, userId, {
@@ -1611,8 +1610,6 @@ const submitAnswer = async (pool, userId, payload) => {
       // GỬI THÔNG BÁO nếu AI quyết định
       if (assessment.notify_caregiver) {
         console.log(`[submitAnswer] AI decided to SEND ALERT to caregiver`);
-        console.log(`  - Risk: ${assessment.risk_tier}, Score: ${assessment.risk_score}`);
-        console.log(`  - Reason: ${assessment.summary}`);
 
         // Lấy tên bệnh nhân để notifyCaregivers replace bằng mối quan hệ
         const userResult = await pool.query('SELECT full_name, email FROM users WHERE id = $1', [
@@ -1731,7 +1728,7 @@ const submitAnswer = async (pool, userId, payload) => {
         symptomSeverity: null,
       });
 
-      console.log(`[submitAnswer] AI Decision for mood=OK:`, aiDecision);
+      console.log('[submitAnswer] AI decision completed for mood=OK');
 
       await upsertRiskPersistence(pool, userId, {
         risk_score: aiDecision.risk_score,
@@ -1797,12 +1794,7 @@ const submitAnswer = async (pool, userId, payload) => {
       symptomSeverity,
     });
 
-    console.log(`[submitAnswer] AI Decision for symptoms:`, aiDecision);
-    console.log(`  - Symptoms: ${symptomsList.join(', ')}`);
-    console.log(`  - Severity: ${symptomSeverity}`);
-    console.log(
-      `  - Mood history: ${moodHistory.tiredCount} tired, ${moodHistory.notOkCount} not_ok in 48h`
-    );
+    console.log('[submitAnswer] AI decision completed for symptom flow');
 
     await upsertRiskPersistence(pool, userId, {
       risk_score: aiDecision.risk_score,
@@ -1829,8 +1821,6 @@ const submitAnswer = async (pool, userId, payload) => {
     // GỬI THÔNG BÁO cho người thân nếu AI quyết định
     if (aiDecision.notify_caregiver) {
       console.log(`[submitAnswer] AI decided to SEND ALERT to caregiver`);
-      console.log(`  - Risk: ${aiDecision.risk_tier}, Score: ${aiDecision.risk_score}`);
-      console.log(`  - Reason: ${aiDecision.ai_reasoning}`);
 
       await notifyCaregivers(pool, userId, {
         title: t('brain.emergency_health_alert'),

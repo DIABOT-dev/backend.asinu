@@ -376,10 +376,7 @@ const aiAssessRiskAndDecision = async (pool, userId, context) => {
 
     const parsed = JSON.parse(jsonMatch[0]);
 
-    console.log(`[aiAssessRiskAndDecision] AI Decision for userId ${userId}:`);
-    console.log(`  - Risk: ${parsed.risk_tier} (score: ${parsed.risk_score})`);
-    console.log(`  - Notify caregiver: ${parsed.notify_caregiver}`);
-    console.log(`  - Reasoning: ${parsed.reasoning}`);
+    console.log('[aiAssessRiskAndDecision] AI decision parsed');
 
     return {
       risk_tier: parsed.risk_tier || 'LOW',

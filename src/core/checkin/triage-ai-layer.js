@@ -474,10 +474,10 @@ CHỈ JSON.`;
     };
 
     _severityCache.set(cacheKey, result);
-    console.log(`[AI Safety] "${symptom}" → ${result.severity} (${result.reason})`);
+    console.log(`[AI Safety] classification completed severity=${result.severity}`);
     return result;
   } catch (err) {
-    console.error(`[AI Safety] classify failed for "${symptom}":`, err.message);
+    console.error('[AI Safety] classify failed:', err.message);
     // Fail-safe: AI down → urgent (bắt user đi khám) thay vì silent miss
     return {
       severity: 'urgent',

@@ -159,7 +159,7 @@ async function getPreferences(pool, userId) {
       p.afternoon_time ?? p.inferred_afternoon_time ?? DEFAULT_TIMES.afternoon,
     effective_evening_time: p.evening_time ?? p.inferred_evening_time ?? DEFAULT_TIMES.evening,
 
-    reminders_enabled: p.reminders_enabled !== false, // default true if no row yet
+    reminders_enabled: p.reminders_enabled === true,
   };
 }
 
@@ -181,8 +181,19 @@ async function updatePreferences(
 ) {
   const hasReminders = reminders_enabled !== undefined;
 
-  // Also sync hour from time string for backward compat with cron
-  const extractHour = (time) => (time ? parseInt(time.split(':')[0], 10) : undefined);
+  // Also sync hour from time string for backward compat with cron. Reject
+  // malformed text here as a second line of defence behind the controller.
+  const normalizeTime = (time, name) => {
+    if (time === null || time === undefined) return time;
+    if (typeof time !== 'string' || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+      throw new Error(`Invalid ${name}`);
+    }
+    return time;
+  };
+  const normalizedMorningTime = normalizeTime(morning_time, 'morning_time');
+  const normalizedAfternoonTime = normalizeTime(afternoon_time, 'afternoon_time');
+  const normalizedEveningTime = normalizeTime(evening_time, 'evening_time');
+  const extractHour = (time) => (time ? Number(time.slice(0, 2)) : undefined);
   const mh = morning_time !== undefined ? extractHour(morning_time) : morning_hour;
   const eh = evening_time !== undefined ? extractHour(evening_time) : evening_hour;
 
@@ -206,13 +217,13 @@ async function updatePreferences(
       mh ?? null,
       eh ?? null,
       water_hour ?? null,
-      morning_time ?? null,
-      afternoon_time ?? null,
-      evening_time ?? null,
-      hasReminders ? reminders_enabled : true,
-      morning_time !== undefined,
-      afternoon_time !== undefined,
-      evening_time !== undefined,
+      normalizedMorningTime ?? null,
+      normalizedAfternoonTime ?? null,
+      normalizedEveningTime ?? null,
+      hasReminders ? reminders_enabled === true : false,
+      normalizedMorningTime !== undefined,
+      normalizedAfternoonTime !== undefined,
+      normalizedEveningTime !== undefined,
       hasReminders,
     ]
   );

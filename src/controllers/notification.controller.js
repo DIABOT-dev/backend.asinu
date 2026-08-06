@@ -135,7 +135,10 @@ async function updateNotificationPreferences(pool, req, res) {
 
   const inRange = (v, min, max) =>
     v === null || v === undefined || (Number.isInteger(v) && v >= min && v <= max);
-  const validTime = (v) => v === null || v === undefined || /^\d{2}:\d{2}$/.test(v);
+  const validTime = (v) =>
+    v === null ||
+    v === undefined ||
+    (typeof v === 'string' && /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(v));
   if (
     !inRange(morning_hour, 5, 11) ||
     !inRange(evening_hour, 17, 23) ||
@@ -144,6 +147,9 @@ async function updateNotificationPreferences(pool, req, res) {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
   }
   if (!validTime(morning_time) || !validTime(afternoon_time) || !validTime(evening_time)) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
+  }
+  if (reminders_enabled !== undefined && typeof reminders_enabled !== 'boolean') {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
   }
 
@@ -208,15 +214,25 @@ async function runEngagement(pool, req, res) {
  */
 async function runBasic(pool, req, res) {
   if (_basicRunning) return res.status(429).json({ error: 'Basic cron already running' });
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.headers['x-cron-secret'] !== secret) {
+    return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
+  }
+
+  const parseOptionalPart = (value, max) => {
+    if (value === undefined || value === null) return null;
+    if (typeof value === 'string' && value.trim() === '') return null;
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed >= 0 && parsed <= max ? parsed : undefined;
+  };
+  const forceHour = parseOptionalPart(req.body?.hour, 23);
+  const forceMinute = parseOptionalPart(req.body?.minute, 59);
+  if (forceHour === undefined || forceMinute === undefined) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
+  }
+
   _basicRunning = true;
   try {
-    const secret = process.env.CRON_SECRET;
-    if (!secret || req.headers['x-cron-secret'] !== secret) {
-      return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
-    }
-
-    const forceHour = req.body?.hour !== undefined ? Number(req.body.hour) : null;
-    const forceMinute = req.body?.minute !== undefined ? Number(req.body.minute) : null;
     const result = await runBasicNotifications(pool, forceHour, forceMinute);
     return res.status(200).json(result);
   } catch (err) {

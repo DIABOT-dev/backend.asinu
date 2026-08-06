@@ -1,6 +1,10 @@
 'use strict';
 
-const { DEFAULT_TIMEZONE } = require('./config');
+const {
+  DEFAULT_TIMEZONE,
+  HEALTH_FEED_PUSH_COOLDOWN_HOURS,
+  HEALTH_FEED_TEMPLATE_COOLDOWN_HOURS,
+} = require('./config');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 async function getContentCatalog(pool) {
@@ -42,7 +46,7 @@ async function getUserContexts(pool, userIds) {
               uop.risk_score, uop.onboarding_completed_at,
               ul.segment, ul.inactive_days, ul.last_checkin_at,
               ub.timezone,
-              COALESCE(unp.reminders_enabled, true) AS reminders_enabled
+              COALESCE(unp.reminders_enabled, false) AS reminders_enabled
          FROM users u
          LEFT JOIN user_onboarding_profiles uop ON uop.user_id = u.id
          LEFT JOIN user_lifecycle ul ON ul.user_id = u.id
@@ -126,14 +130,14 @@ async function getUserContexts(pool, userIds) {
       `SELECT DISTINCT user_id
          FROM health_feed_notification_jobs
         WHERE user_id = ANY($1::int[])
-          AND dispatched_at >= NOW() - INTERVAL '24 hours'`,
+          AND dispatched_at >= NOW() - INTERVAL '${HEALTH_FEED_PUSH_COOLDOWN_HOURS} hours'`,
       [userIds]
     ),
     pool.query(
       `SELECT user_id, template_id
          FROM health_feed_notification_jobs
         WHERE user_id = ANY($1::int[])
-          AND dispatched_at >= NOW() - INTERVAL '72 hours'`,
+          AND dispatched_at >= NOW() - INTERVAL '${HEALTH_FEED_TEMPLATE_COOLDOWN_HOURS} hours'`,
       [userIds]
     ),
     pool.query(
@@ -448,7 +452,7 @@ async function getPendingNotificationJobs(pool, limit = 50) {
   const { rows } = await pool.query(
     `SELECT j.id, j.user_id, j.feed_item_id, j.template_id, j.payload, j.scheduled_for,
             u.push_token, COALESCE(u.language_preference, 'vi') AS language_preference,
-            ub.timezone, COALESCE(unp.reminders_enabled, true) AS reminders_enabled
+            ub.timezone, COALESCE(unp.reminders_enabled, false) AS reminders_enabled
        FROM health_feed_notification_jobs j
        JOIN users u ON u.id = j.user_id
        LEFT JOIN user_baselines ub ON ub.user_id = u.id

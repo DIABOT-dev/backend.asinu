@@ -12,8 +12,9 @@
 const logger = require('../../lib/logger');
 const { estimateCost } = require('./ai-cost.service');
 
-const PROMPT_PREVIEW_LIMIT = 500;
-const RESPONSE_PREVIEW_LIMIT = 1000;
+// Free-text AI input/output can contain chat, symptoms, or location details.
+// Keep the columns for schema compatibility, but never persist the content.
+const redactPreview = (value) => (value ? '[redacted]' : null);
 
 /**
  * @param {object} pool      pg pool
@@ -85,8 +86,8 @@ async function logAiInteraction(pool, entry = {}) {
         action,
         provider,
         model,
-        (promptSummary || '').slice(0, PROMPT_PREVIEW_LIMIT),
-        (responseSummary || '').slice(0, RESPONSE_PREVIEW_LIMIT),
+        redactPreview(promptSummary),
+        redactPreview(responseSummary),
         inputTokens,
         outputTokens,
         tokensUsed || null,
