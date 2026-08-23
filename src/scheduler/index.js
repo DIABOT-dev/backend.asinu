@@ -23,6 +23,7 @@ const {
   runHealthFeedCycle,
 } = require('../services/health_feed/service');
 const { flushCrmEventOutbox } = require('../services/integrations/crm-event.service');
+const { flushDoctorTaskOutbox } = require('../services/integrations/doctor-task.service');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
@@ -68,6 +69,13 @@ function startScheduler(pool) {
     const stats = await flushCrmEventOutbox(pool, 50);
     if (stats.sent > 0 || stats.failed > 0) {
       logger.info('cron.crm_event_webhooks.stats', stats);
+    }
+  });
+
+  safeCron('*/5 * * * * *', 'doctor_task_webhooks', async () => {
+    const stats = await flushDoctorTaskOutbox(pool, 20);
+    if (stats.sent > 0 || stats.failed > 0) {
+      logger.info('cron.doctor_task_webhooks.stats', stats);
     }
   });
 

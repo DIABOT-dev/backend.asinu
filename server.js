@@ -26,6 +26,7 @@ const { createRateLimitStore } = require('./src/middleware/rate-limit-store');
 const { getRedis } = require('./src/lib/redis');
 const { startScheduler } = require('./src/scheduler');
 const { assertCrmIntegrationConfig } = require('./src/services/integrations/crm-event.service');
+const doctorTaskRoutes = require('./src/routes/doctor-task.routes');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -133,6 +134,7 @@ app.use('/api/care-circle', careCircleRoutes(pool));
 app.use('/api/wellness', wellnessRoutes(pool));
 app.use('/api/health', healthRoutes(pool));
 app.use('/api/health-feed', healthFeedRoutes(pool));
+app.use('/api/doctor', doctorTaskRoutes(pool));
 app.use('/api/notifications', notificationRoutes(pool));
 app.use('/api/payments', paymentRoutes(pool));
 app.use('/api/subscriptions', subscriptionRoutes(pool));
