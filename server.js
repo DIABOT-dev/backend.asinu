@@ -27,6 +27,7 @@ const { getRedis } = require('./src/lib/redis');
 const { startScheduler } = require('./src/scheduler');
 const { assertCrmIntegrationConfig } = require('./src/services/integrations/crm-event.service');
 const doctorTaskRoutes = require('./src/routes/doctor-task.routes');
+const doctorProfileRoutes = require('./src/routes/doctor-profile.routes');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -39,7 +40,14 @@ assertCrmIntegrationConfig();
 initSentry();
 app.use(sentryRequestHandler());
 
-app.use(express.json({ limit: '50mb' }));
+app.use(
+  express.json({
+    limit: '15mb',
+    verify: (req, _res, buffer) => {
+      req.rawBody = Buffer.from(buffer);
+    },
+  })
+);
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(
   helmet({
@@ -135,6 +143,7 @@ app.use('/api/wellness', wellnessRoutes(pool));
 app.use('/api/health', healthRoutes(pool));
 app.use('/api/health-feed', healthFeedRoutes(pool));
 app.use('/api/doctor', doctorTaskRoutes(pool));
+app.use('/api/doctor', doctorProfileRoutes(pool));
 app.use('/api/notifications', notificationRoutes(pool));
 app.use('/api/payments', paymentRoutes(pool));
 app.use('/api/subscriptions', subscriptionRoutes(pool));
