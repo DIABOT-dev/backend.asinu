@@ -17,6 +17,35 @@ const doctorTaskRequestSchema = z
   })
   .strict();
 
+const patientRatingRequestSchema = z
+  .object({
+    tenant_id: z.string().trim().min(1).max(120),
+    score: z.number().int().min(1).max(5),
+    comment: z.string().trim().max(1000).optional(),
+    request_id: z.string().uuid().optional(),
+  })
+  .strict();
+
+const privacyRequestSchema = z
+  .object({
+    tenant_id: z.string().trim().min(1).max(120),
+    action: z.enum(['withdraw_consent', 'export', 'anonymize', 'delete']),
+    reason: z.string().trim().max(1000).optional(),
+    request_id: z.string().uuid().optional(),
+  })
+  .strict();
+
+const doctorRecommendationRequestSchema = z
+  .object({
+    tenant_id: z.string().trim().min(1).max(120),
+    specialty: z.string().trim().min(1).max(120),
+    service_flow: z.enum(['clinical', 'wellness']),
+    priority: z.enum(['normal', 'high', 'urgent']).default('normal'),
+    preferred_doctor_id: z.string().uuid().nullable().optional(),
+    limit: z.number().int().min(1).max(10).default(3),
+  })
+  .strict();
+
 const buildPatientRef = (user) => ({
   app_user_id: String(user.id),
   display_name: user.display_name || user.full_name || null,
@@ -56,4 +85,50 @@ const buildDoctorTaskEnvelope = ({ user, input }) => {
   };
 };
 
-module.exports = { doctorTaskRequestSchema, buildPatientRef, buildDoctorTaskEnvelope };
+const buildPatientRatingEnvelope = ({ userId, taskId, input }) => {
+  const eventId = `doctor.task.rating.submitted:${input.request_id || crypto.randomUUID()}`;
+  return {
+    event_id: eventId,
+    idempotency_key: eventId,
+    event_type: 'doctor.task.rating.submitted',
+    occurred_at: new Date().toISOString(),
+    source: 'asinu-backend',
+    version: 1,
+    tenant_id: input.tenant_id,
+    payload: {
+      task_id: taskId,
+      app_user_id: String(userId),
+      score: input.score,
+      ...(input.comment ? { comment: input.comment } : {}),
+    },
+  };
+};
+
+const buildPrivacyRequestEnvelope = ({ userId, input }) => {
+  const eventId = `doctor.privacy.requested:${input.request_id || crypto.randomUUID()}`;
+  return {
+    event_id: eventId,
+    idempotency_key: eventId,
+    event_type: 'doctor.privacy.requested',
+    occurred_at: new Date().toISOString(),
+    source: 'asinu-backend',
+    version: 1,
+    tenant_id: input.tenant_id,
+    payload: {
+      app_user_id: String(userId),
+      action: input.action,
+      ...(input.reason ? { reason: input.reason } : {}),
+    },
+  };
+};
+
+module.exports = {
+  doctorTaskRequestSchema,
+  patientRatingRequestSchema,
+  privacyRequestSchema,
+  doctorRecommendationRequestSchema,
+  buildPatientRef,
+  buildDoctorTaskEnvelope,
+  buildPatientRatingEnvelope,
+  buildPrivacyRequestEnvelope,
+};

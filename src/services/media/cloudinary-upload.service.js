@@ -2,7 +2,11 @@ const { v2: cloudinary } = require('cloudinary');
 let configured = false;
 const configure = () => {
   if (configured) return;
-  const { CLOUDINARY_CLOUD_NAME: cloud_name, CLOUDINARY_API_KEY: api_key, CLOUDINARY_API_SECRET: api_secret } = process.env;
+  const {
+    CLOUDINARY_CLOUD_NAME: cloud_name,
+    CLOUDINARY_API_KEY: api_key,
+    CLOUDINARY_API_SECRET: api_secret,
+  } = process.env;
   if (!cloud_name || !api_key || !api_secret) {
     const error = new Error('Cloudinary is not configured');
     error.code = 'CLOUDINARY_NOT_CONFIGURED';
@@ -11,9 +15,22 @@ const configure = () => {
   cloudinary.config({ cloud_name, api_key, api_secret, secure: true });
   configured = true;
 };
-const uploadBuffer = (buffer, options) => new Promise((resolve, reject) => {
+const uploadBuffer = (buffer, options) =>
+  new Promise((resolve, reject) => {
+    configure();
+    const stream = cloudinary.uploader.upload_stream(options, (error, result) =>
+      error ? reject(error) : resolve(result)
+    );
+    stream.end(buffer);
+  });
+
+const deleteAsset = async (publicId, resourceType = 'image') => {
+  if (!publicId) return;
   configure();
-  const stream = cloudinary.uploader.upload_stream(options, (error, result) => error ? reject(error) : resolve(result));
-  stream.end(buffer);
-});
-module.exports = { uploadBuffer };
+  await cloudinary.uploader.destroy(publicId, {
+    resource_type: resourceType,
+    invalidate: true,
+  });
+};
+
+module.exports = { uploadBuffer, deleteAsset };

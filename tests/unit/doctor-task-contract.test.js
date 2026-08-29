@@ -1,7 +1,12 @@
 const {
   buildDoctorTaskEnvelope,
+  buildPatientRatingEnvelope,
+  buildPrivacyRequestEnvelope,
   buildPatientRef,
+  doctorRecommendationRequestSchema,
   doctorTaskRequestSchema,
+  patientRatingRequestSchema,
+  privacyRequestSchema,
 } = require('../../src/services/integrations/doctor-task.policy');
 
 describe('ASINU -> Doctor task contract', () => {
@@ -57,5 +62,59 @@ describe('ASINU -> Doctor task contract', () => {
       gender: null,
       profile_version: null,
     });
+  });
+
+  test('builds patient-owned rating events without exposing the user id in event metadata', () => {
+    const ratingInput = patientRatingRequestSchema.parse({
+      tenant_id: 'clinic-demo',
+      score: 5,
+      comment: 'Tư vấn rõ ràng',
+      request_id: '10000000-0000-4000-8000-000000000001',
+    });
+    const envelope = buildPatientRatingEnvelope({
+      userId: 42,
+      taskId: 'task-1',
+      input: ratingInput,
+    });
+    expect(envelope).toMatchObject({
+      event_id: 'doctor.task.rating.submitted:10000000-0000-4000-8000-000000000001',
+      tenant_id: 'clinic-demo',
+      payload: { task_id: 'task-1', app_user_id: '42', score: 5 },
+    });
+    expect(envelope.event_id).not.toContain(':42:');
+  });
+
+  test('builds all supported privacy actions and keeps user identity inside the signed payload', () => {
+    for (const action of ['withdraw_consent', 'export', 'anonymize', 'delete']) {
+      const privacyInput = privacyRequestSchema.parse({
+        tenant_id: 'clinic-demo',
+        action,
+        request_id: `20000000-0000-4000-8000-00000000000${
+          ['withdraw_consent', 'export', 'anonymize', 'delete'].indexOf(action) + 1
+        }`,
+      });
+      const envelope = buildPrivacyRequestEnvelope({ userId: 42, input: privacyInput });
+      expect(envelope.payload).toMatchObject({ app_user_id: '42', action });
+      expect(envelope.event_id).not.toContain('42');
+    }
+  });
+
+  test('validates patient recommendation limits and rejects arbitrary fields', () => {
+    expect(
+      doctorRecommendationRequestSchema.safeParse({
+        tenant_id: 'clinic-demo',
+        specialty: 'general',
+        service_flow: 'clinical',
+        limit: 3,
+      }).success
+    ).toBe(true);
+    expect(
+      doctorRecommendationRequestSchema.safeParse({
+        tenant_id: 'clinic-demo',
+        specialty: 'general',
+        service_flow: 'clinical',
+        limit: 11,
+      }).success
+    ).toBe(false);
   });
 });

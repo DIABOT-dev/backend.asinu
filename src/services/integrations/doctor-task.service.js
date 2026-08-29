@@ -1,6 +1,11 @@
 const crypto = require('crypto');
 const logger = require('../../lib/logger');
-const { buildDoctorTaskEnvelope } = require('./doctor-task.policy');
+const { deleteAsset } = require('../media/cloudinary-upload.service');
+const {
+  buildDoctorTaskEnvelope,
+  buildPatientRatingEnvelope,
+  buildPrivacyRequestEnvelope,
+} = require('./doctor-task.policy');
 
 const DOCTOR_TASKS_URL = process.env.DOCTOR_TASKS_URL || '';
 const DOCTOR_INTEGRATION_SECRET = process.env.DOCTOR_ASINU_INTEGRATION_SECRET || '';
@@ -41,29 +46,174 @@ const signPayload = (body, timestamp) =>
     .update(`${timestamp}.${body}`)
     .digest('hex');
 
-const deliverDoctorTask = async (envelope) => {
+const integrationUrl = (resource) => {
+  const tasksUrl = new URL(DOCTOR_TASKS_URL);
+  tasksUrl.pathname = tasksUrl.pathname.replace(/\/tasks\/?$/, `/${resource}`);
+  return tasksUrl.toString();
+};
+
+const deliverDoctorRequest = async (resource, payload, idempotencyKey) => {
   assertDoctorTaskConfig();
-  const body = JSON.stringify(envelope);
+  const body = JSON.stringify(payload);
   const timestamp = String(Math.floor(Date.now() / 1000));
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
-    const response = await fetch(DOCTOR_TASKS_URL, {
+    const response = await fetch(integrationUrl(resource), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         'x-asinu-timestamp': timestamp,
         'x-asinu-signature': signPayload(body, timestamp),
-        'x-idempotency-key': envelope.idempotency_key,
+        ...(idempotencyKey ? { 'x-idempotency-key': idempotencyKey } : {}),
       },
       body,
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`doctor_task_${response.status}`);
-    return response.status;
+    const responseBody = await response.json().catch(() => null);
+    if (!response.ok) {
+      const error = new Error(
+        responseBody?.error?.message || `doctor_integration_${response.status}`
+      );
+      error.statusCode = response.status >= 400 && response.status < 500 ? response.status : 502;
+      error.code = responseBody?.error?.code || 'DOCTOR_INTEGRATION_FAILED';
+      throw error;
+    }
+    return { status: response.status, data: responseBody?.data ?? responseBody };
   } finally {
     clearTimeout(timeout);
   }
+};
+
+const deliverDoctorTask = async (envelope) => {
+  const response = await deliverDoctorRequest('tasks', envelope, envelope.idempotency_key);
+  return response.status;
+};
+
+const assertPatientOwnsTask = async (pool, tenantId, taskId, userId) => {
+  const result = await pool.query(
+    `SELECT 1
+       FROM doctor_task_outbox
+      WHERE tenant_id = $1
+        AND payload->'payload'->>'task_id' = $2
+        AND payload->'payload'->>'app_user_id' = $3
+      LIMIT 1`,
+    [tenantId, taskId, String(userId)]
+  );
+  if (!result.rows[0]) {
+    const error = new Error('The Doctor task was not found for this patient.');
+    error.statusCode = 404;
+    error.code = 'DOCTOR_TASK_NOT_FOUND';
+    throw error;
+  }
+};
+
+const submitPatientRating = async (pool, { userId, taskId, input }) => {
+  assertTenantAllowed(input.tenant_id);
+  await assertPatientOwnsTask(pool, input.tenant_id, taskId, userId);
+  const envelope = buildPatientRatingEnvelope({ userId, taskId, input });
+  const response = await deliverDoctorRequest('ratings', envelope, envelope.idempotency_key);
+  return response.data;
+};
+
+const submitPrivacyRequest = async (pool, { userId, input }) => {
+  assertTenantAllowed(input.tenant_id);
+  const envelope = buildPrivacyRequestEnvelope({ userId, input });
+  const response = await deliverDoctorRequest('privacy', envelope, envelope.idempotency_key);
+  if (input.action === 'export') {
+    const [records, files] = await Promise.all([
+      pool.query(
+        `SELECT id, record_type, title, diagnosis, summary, treatment, notes,
+                doctor_ref, source_task_id, recorded_at, created_at, updated_at
+           FROM doctor_patient_medical_records
+          WHERE user_id = $1 ORDER BY recorded_at`,
+        [userId]
+      ),
+      pool.query(
+        `SELECT id, name, mime_type, size_bytes, secure_url, source_task_id,
+                uploaded_by, created_at
+           FROM doctor_patient_files
+          WHERE user_id = $1 ORDER BY created_at`,
+        [userId]
+      ),
+    ]);
+    return {
+      ...response.data,
+      asinu_doctor_data: {
+        medical_records: records.rows,
+        patient_files: files.rows,
+      },
+    };
+  }
+  if (
+    input.action === 'withdraw_consent' ||
+    input.action === 'anonymize' ||
+    input.action === 'delete'
+  ) {
+    await pool.query(
+      `UPDATE users
+          SET consent_accepted_at = NULL, updated_at = NOW()
+        WHERE id = $1 AND deleted_at IS NULL`,
+      [userId]
+    );
+  }
+  if (input.action === 'anonymize' || input.action === 'delete') {
+    const files = await pool.query(
+      `SELECT public_id, mime_type FROM doctor_patient_files WHERE user_id = $1`,
+      [userId]
+    );
+    for (const file of files.rows) {
+      if (!file.public_id) continue;
+      const resourceType = String(file.mime_type || '').startsWith('video/')
+        ? 'video'
+        : String(file.mime_type || '').startsWith('image/')
+          ? 'image'
+          : 'raw';
+      await deleteAsset(file.public_id, resourceType);
+    }
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM doctor_patient_files WHERE user_id = $1', [userId]);
+      await client.query('DELETE FROM doctor_patient_medical_records WHERE user_id = $1', [userId]);
+      await client.query(
+        `UPDATE doctor_task_outbox
+            SET event_id = 'anon-event-' || id::text,
+                idempotency_key = 'anon-key-' || id::text,
+                payload = jsonb_build_object(
+                  'event_id', 'anon-event-' || id::text,
+                  'idempotency_key', 'anon-key-' || id::text,
+                  'event_type', 'doctor.task.requested',
+                  'source', 'asinu-backend',
+                  'version', 1,
+                  'tenant_id', tenant_id,
+                  'payload', jsonb_build_object(
+                    'task_id', 'anon-task-' || id::text,
+                    'app_user_id', 'anonymized',
+                    'patient_ref', jsonb_build_object('app_user_id', 'anonymized'),
+                    'consent', jsonb_build_object('status', 'withdrawn')
+                  )
+                ),
+                updated_at = NOW()
+          WHERE tenant_id = $1
+            AND payload->'payload'->>'app_user_id' = $2`,
+        [input.tenant_id, String(userId)]
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+  return response.data;
+};
+
+const requestDoctorRecommendations = async ({ input }) => {
+  assertTenantAllowed(input.tenant_id);
+  const response = await deliverDoctorRequest('recommendations', input);
+  return response.data;
 };
 
 const enqueueDoctorTask = async (pool, input) => {
@@ -152,6 +302,10 @@ module.exports = {
   assertTenantAllowed,
   buildDoctorTaskEnvelope,
   deliverDoctorTask,
+  deliverDoctorRequest,
   enqueueDoctorTask,
   flushDoctorTaskOutbox,
+  submitPatientRating,
+  submitPrivacyRequest,
+  requestDoctorRecommendations,
 };
