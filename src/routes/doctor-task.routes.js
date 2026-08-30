@@ -5,12 +5,24 @@ const {
   submitDoctorRating,
   requestDoctorPrivacy,
   recommendDoctor,
+  listDoctorTasks,
+  listDoctorMessages,
+  createDoctorMessage,
 } = require('../controllers/doctor-task.controller');
 
 function doctorTaskRoutes(pool) {
   const router = express.Router();
   router.post('/tasks', requireAuth, (req, res, next) =>
     Promise.resolve(requestDoctorTask(pool, req, res)).catch(next)
+  );
+  router.get('/tasks', requireAuth, (req, res, next) =>
+    Promise.resolve(listDoctorTasks(pool, req, res)).catch(next)
+  );
+  router.get('/tasks/:taskId/messages', requireAuth, (req, res, next) =>
+    Promise.resolve(listDoctorMessages(pool, req, res)).catch(next)
+  );
+  router.post('/tasks/:taskId/messages', requireAuth, (req, res, next) =>
+    Promise.resolve(createDoctorMessage(pool, req, res)).catch(next)
   );
   router.post('/tasks/:taskId/rating', requireAuth, (req, res, next) =>
     Promise.resolve(submitDoctorRating(pool, req, res)).catch(next)

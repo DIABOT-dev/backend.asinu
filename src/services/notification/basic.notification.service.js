@@ -58,7 +58,10 @@ const TYPE_PRIORITY = {
   streak_milestone: 'low',
   weekly_recap: 'low',
   engagement: 'low',
+  doctor_message: 'high',
 };
+
+const ALWAYS_DELIVER_TYPES = new Set(['doctor_message']);
 
 // ─── Exact HH:MM match helpers ────────────────────────────────────
 // Matches both hour AND minute so notifications fire at the exact configured time.
@@ -169,7 +172,7 @@ async function sendAndSave(pool, userOrId, type, title, body, data = {}, overrid
 
   // Non-urgent reminders require an explicit opt-in and are subject to a
   // daily cap. Emergency/health/caregiver alerts are intentionally exempt.
-  if (!(await canSendNonUrgent(pool, userId, type))) return false;
+  if (!ALWAYS_DELIVER_TYPES.has(type) && !(await canSendNonUrgent(pool, userId, type))) return false;
 
   // Cross-type spacing: skip if user received any reminder push in last 5 minutes
   if (REMINDER_TYPES.has(type)) {
@@ -188,19 +191,21 @@ async function sendAndSave(pool, userOrId, type, title, body, data = {}, overrid
   }
 
   // Same-type dedup: skip if exact same type was sent to this user in the last 5 minutes
-  try {
-    const { rows: dup } = await pool.query(
-      `SELECT 1 FROM notifications WHERE user_id = $1 AND type = $2
-         AND created_at >= NOW() - make_interval(mins => 5) LIMIT 1`,
-      [userId, type]
-    );
-    if (dup.length > 0) {
-      logger.debug('notification.dedup_skipped', { userId, type });
+  if (!ALWAYS_DELIVER_TYPES.has(type)) {
+    try {
+      const { rows: dup } = await pool.query(
+        `SELECT 1 FROM notifications WHERE user_id = $1 AND type = $2
+           AND created_at >= NOW() - make_interval(mins => 5) LIMIT 1`,
+        [userId, type]
+      );
+      if (dup.length > 0) {
+        logger.debug('notification.dedup_skipped', { userId, type });
+        return false;
+      }
+    } catch (err) {
+      logger.warn('notification.dedup_check_failed', { userId, type, err });
       return false;
     }
-  } catch (err) {
-    logger.warn('notification.dedup_check_failed', { userId, type, err });
-    return false;
   }
 
   // Insert DB record FIRST, only push if insert succeeds

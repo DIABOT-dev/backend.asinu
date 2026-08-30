@@ -46,6 +46,32 @@ const doctorRecommendationRequestSchema = z
   })
   .strict();
 
+const patientMessageRequestSchema = z
+  .object({
+    tenant_id: z.string().trim().min(1).max(120),
+    content: z.string().trim().min(1).max(5000),
+    message_type: z.enum(['reply', 'follow_up']).default('reply'),
+    client_message_id: z.string().uuid(),
+  })
+  .strict();
+
+const doctorMessageQuerySchema = z
+  .object({
+    tenant_id: z.string().trim().min(1).max(120),
+    task_id: z.string().trim().min(1).max(160),
+    app_user_id: z.string().trim().min(1).max(80),
+  })
+  .strict();
+
+const doctorMessageSendSchema = doctorMessageQuerySchema
+  .extend({
+    content: z.string().trim().min(1).max(5000),
+    message_type: z.enum(['question', 'consultation', 'follow_up']),
+    client_message_id: z.string().uuid(),
+    sender_ref: z.string().trim().min(1).max(160),
+  })
+  .strict();
+
 const buildPatientRef = (user) => ({
   app_user_id: String(user.id),
   display_name: user.display_name || user.full_name || null,
@@ -127,6 +153,9 @@ module.exports = {
   patientRatingRequestSchema,
   privacyRequestSchema,
   doctorRecommendationRequestSchema,
+  patientMessageRequestSchema,
+  doctorMessageQuerySchema,
+  doctorMessageSendSchema,
   buildPatientRef,
   buildDoctorTaskEnvelope,
   buildPatientRatingEnvelope,

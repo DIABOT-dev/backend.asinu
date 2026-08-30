@@ -7,6 +7,9 @@ const {
   doctorTaskRequestSchema,
   patientRatingRequestSchema,
   privacyRequestSchema,
+  patientMessageRequestSchema,
+  doctorMessageQuerySchema,
+  doctorMessageSendSchema,
 } = require('../../src/services/integrations/doctor-task.policy');
 
 describe('ASINU -> Doctor task contract', () => {
@@ -114,6 +117,43 @@ describe('ASINU -> Doctor task contract', () => {
         specialty: 'general',
         service_flow: 'clinical',
         limit: 11,
+      }).success
+    ).toBe(false);
+  });
+
+  test('validates patient and signed Doctor message payloads', () => {
+    const clientMessageId = '30000000-0000-4000-8000-000000000001';
+    expect(
+      patientMessageRequestSchema.safeParse({
+        tenant_id: 'clinic-demo',
+        content: 'Tôi đã đo lại huyết áp.',
+        message_type: 'reply',
+        client_message_id: clientMessageId,
+      }).success
+    ).toBe(true);
+    expect(
+      doctorMessageQuerySchema.safeParse({
+        tenant_id: 'clinic-demo',
+        task_id: 'task-1',
+        app_user_id: '42',
+      }).success
+    ).toBe(true);
+    expect(
+      doctorMessageSendSchema.safeParse({
+        tenant_id: 'clinic-demo',
+        task_id: 'task-1',
+        app_user_id: '42',
+        sender_ref: 'doctor-1',
+        content: 'Bạn vui lòng đo lại huyết áp.',
+        message_type: 'question',
+        client_message_id: clientMessageId,
+      }).success
+    ).toBe(true);
+    expect(
+      patientMessageRequestSchema.safeParse({
+        tenant_id: 'clinic-demo',
+        content: '',
+        client_message_id: 'not-a-uuid',
       }).success
     ).toBe(false);
   });

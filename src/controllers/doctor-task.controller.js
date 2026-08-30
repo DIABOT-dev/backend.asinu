@@ -4,13 +4,20 @@ const {
   patientRatingRequestSchema,
   privacyRequestSchema,
   doctorRecommendationRequestSchema,
+  patientMessageRequestSchema,
 } = require('../services/integrations/doctor-task.policy');
 const {
   enqueueDoctorTask,
   submitPatientRating,
   submitPrivacyRequest,
   requestDoctorRecommendations,
+  requestDoctorTaskStatus,
 } = require('../services/integrations/doctor-task.service');
+const {
+  listMessages,
+  listPatientTasks,
+  sendPatientMessage,
+} = require('../services/integrations/doctor-messaging.service');
 
 const loadPatientProjection = async (pool, userId) => {
   const result = await pool.query(
@@ -88,9 +95,58 @@ const recommendDoctor = async (_pool, req, res) => {
   return res.status(200).json({ ok: true, data: result });
 };
 
+const listDoctorTasks = async (pool, req, res) => {
+  const tenantId = String(req.query.tenant_id || '').trim();
+  if (!tenantId || tenantId.length > 120) {
+    return res.status(400).json({ ok: false, error: 'A valid tenant_id is required.' });
+  }
+  return res.json({ ok: true, data: await listPatientTasks(pool, req.user.id, tenantId) });
+};
+
+const listDoctorMessages = async (pool, req, res) => {
+  const taskId = String(req.params.taskId || '').trim();
+  const tenantId = String(req.query.tenant_id || '').trim();
+  if (!taskId || taskId.length > 160 || !tenantId || tenantId.length > 120) {
+    return res
+      .status(400)
+      .json({ ok: false, error: 'A valid task id and tenant_id are required.' });
+  }
+  const data = await listMessages(pool, tenantId, taskId, req.user.id);
+  let taskStatus = null;
+  try {
+    taskStatus = await requestDoctorTaskStatus({
+      input: { tenant_id: tenantId, task_id: taskId, app_user_id: String(req.user.id) },
+    });
+  } catch {
+    // Conversation history remains available during a temporary Doctor outage.
+  }
+  return res.json({ ok: true, data: { ...data, task_status: taskStatus } });
+};
+
+const createDoctorMessage = async (pool, req, res) => {
+  const taskId = String(req.params.taskId || '').trim();
+  const parsed = patientMessageRequestSchema.safeParse(req.body);
+  if (!taskId || taskId.length > 160 || !parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Invalid Doctor message.',
+      details: parsed.success ? undefined : parsed.error.issues,
+    });
+  }
+  const data = await sendPatientMessage(pool, {
+    userId: req.user.id,
+    taskId,
+    input: parsed.data,
+  });
+  return res.status(data.duplicate ? 200 : 201).json({ ok: true, data });
+};
+
 module.exports = {
   requestDoctorTask,
   submitDoctorRating,
   requestDoctorPrivacy,
   recommendDoctor,
+  listDoctorTasks,
+  listDoctorMessages,
+  createDoctorMessage,
 };
