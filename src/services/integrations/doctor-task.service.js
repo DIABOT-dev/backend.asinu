@@ -120,6 +120,22 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
   assertTenantAllowed(input.tenant_id);
   const envelope = buildPrivacyRequestEnvelope({ userId, input });
   const response = await deliverDoctorRequest('privacy', envelope, envelope.idempotency_key);
+  const recordReceipt = async () => {
+    await pool.query(
+      `INSERT INTO doctor_privacy_request_receipts(
+         user_id, tenant_id, action, source_event_id, status, result_summary, completed_at
+       ) VALUES ($1,$2,$3,$4,'completed',$5::jsonb,NOW())
+       ON CONFLICT (source_event_id) DO UPDATE SET status = 'completed',
+         result_summary = EXCLUDED.result_summary, completed_at = NOW()`,
+      [
+        userId,
+        input.tenant_id,
+        input.action,
+        envelope.event_id,
+        JSON.stringify({ request_id: response.data?.request_id || null, action: input.action }),
+      ]
+    );
+  };
   if (input.action === 'export') {
     const [records, messages, files] = await Promise.all([
       pool.query(
@@ -144,7 +160,7 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
         [userId]
       ),
     ]);
-    return {
+    const result = {
       ...response.data,
       asinu_doctor_data: {
         medical_records: records.rows,
@@ -152,6 +168,8 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
         task_messages: messages.rows,
       },
     };
+    await recordReceipt();
+    return result;
   }
   if (
     input.action === 'withdraw_consent' ||
@@ -216,7 +234,19 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
       client.release();
     }
   }
+  await recordReceipt();
   return response.data;
+};
+
+const listPrivacyReceipts = async (pool, userId) => {
+  const result = await pool.query(
+    `SELECT id, tenant_id, action, source_event_id, status, result_summary,
+            created_at, completed_at
+       FROM doctor_privacy_request_receipts
+      WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
+    [userId]
+  );
+  return { items: result.rows };
 };
 
 const requestDoctorRecommendations = async ({ input }) => {
@@ -285,10 +315,12 @@ const flushDoctorTaskOutbox = async (pool, limit = 20) => {
   let failed = 0;
   for (const row of rows) {
     try {
-      const resource = row.payload?.event_type === 'doctor.task.message.received' ? 'messages' : 'tasks';
-      const status = resource === 'tasks'
-        ? await deliverDoctorTask(row.payload)
-        : (await deliverDoctorRequest(resource, row.payload, row.payload.idempotency_key)).status;
+      const resource =
+        row.payload?.event_type === 'doctor.task.message.received' ? 'messages' : 'tasks';
+      const status =
+        resource === 'tasks'
+          ? await deliverDoctorTask(row.payload)
+          : (await deliverDoctorRequest(resource, row.payload, row.payload.idempotency_key)).status;
       sent++;
       await pool.query(
         `UPDATE doctor_task_outbox
@@ -327,4 +359,5 @@ module.exports = {
   submitPrivacyRequest,
   requestDoctorRecommendations,
   requestDoctorTaskStatus,
+  listPrivacyReceipts,
 };

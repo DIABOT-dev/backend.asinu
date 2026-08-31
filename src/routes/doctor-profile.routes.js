@@ -7,11 +7,13 @@ const {
 const {
   doctorMessageQuerySchema,
   doctorMessageSendSchema,
+  doctorAiAssistSchema,
 } = require('../services/integrations/doctor-task.policy');
 const {
   queryDoctorMessages,
   sendDoctorMessage,
 } = require('../services/integrations/doctor-messaging.service');
+const { createDoctorAiAssist } = require('../services/integrations/doctor-ai.service');
 
 function doctorProfileRoutes(pool) {
   const router = express.Router();
@@ -49,6 +51,16 @@ function doctorProfileRoutes(pool) {
         .json({ ok: false, error: 'Invalid Doctor message.', details: parsed.error.issues });
     return Promise.resolve(sendDoctorMessage(pool, req, parsed.data))
       .then((data) => res.status(data.duplicate ? 200 : 201).json({ ok: true, data }))
+      .catch(next);
+  });
+  router.post('/ai-assist', requireDoctorSignature, (req, res, next) => {
+    const parsed = doctorAiAssistSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res
+        .status(400)
+        .json({ ok: false, error: 'Invalid Doctor AI request.', details: parsed.error.issues });
+    return Promise.resolve(createDoctorAiAssist(pool, parsed.data))
+      .then((data) => res.json({ ok: true, data }))
       .catch(next);
   });
   return router;

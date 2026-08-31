@@ -34,7 +34,7 @@ test('doctor profile boundary rejects invalid signatures and tenants', () => {
     verifyDoctorSignature({
       headers: {
         'x-doctor-timestamp': timestamp,
-        'x-doctor-signature': `${signature.slice(0, -1)}0`,
+        'x-doctor-signature': `${signature.slice(0, -1)}${signature.endsWith('0') ? '1' : '0'}`,
       },
       rawBody,
       body,

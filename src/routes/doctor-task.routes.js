@@ -8,6 +8,7 @@ const {
   listDoctorTasks,
   listDoctorMessages,
   createDoctorMessage,
+  getDoctorPrivacyReceipts,
 } = require('../controllers/doctor-task.controller');
 
 function doctorTaskRoutes(pool) {
@@ -29,6 +30,9 @@ function doctorTaskRoutes(pool) {
   );
   router.post('/privacy', requireAuth, (req, res, next) =>
     Promise.resolve(requestDoctorPrivacy(pool, req, res)).catch(next)
+  );
+  router.get('/privacy', requireAuth, (req, res, next) =>
+    Promise.resolve(getDoctorPrivacyReceipts(pool, req, res)).catch(next)
   );
   router.post('/recommendations', requireAuth, (req, res, next) =>
     Promise.resolve(recommendDoctor(pool, req, res)).catch(next)

@@ -5,6 +5,7 @@ const {
   privacyRequestSchema,
   doctorRecommendationRequestSchema,
   patientMessageRequestSchema,
+  screenRemoteCareSuitability,
 } = require('../services/integrations/doctor-task.policy');
 const {
   enqueueDoctorTask,
@@ -12,6 +13,7 @@ const {
   submitPrivacyRequest,
   requestDoctorRecommendations,
   requestDoctorTaskStatus,
+  listPrivacyReceipts,
 } = require('../services/integrations/doctor-task.service');
 const {
   listMessages,
@@ -45,6 +47,16 @@ const requestDoctorTask = async (pool, req, res) => {
   if (!patient) return res.status(404).json({ ok: false, error: 'Patient not found.' });
   if (!patient.consent_accepted_at || patient.consent_version !== parsed.data.consent_version) {
     return res.status(403).json({ ok: false, error: 'Doctor consultation consent is required.' });
+  }
+  const screening = screenRemoteCareSuitability(parsed.data);
+  if (!screening.suitable_for_remote_care) {
+    return res.status(422).json({
+      ok: false,
+      error:
+        'Dấu hiệu có thể cần cấp cứu và không phù hợp để chờ tư vấn từ xa. Hãy gọi 115 hoặc đến cơ sở y tế gần nhất.',
+      code: 'REMOTE_CARE_EMERGENCY_BLOCKED',
+      data: screening,
+    });
   }
 
   const result = await enqueueDoctorTask(pool, { user: patient, input: parsed.data });
@@ -81,6 +93,9 @@ const requestDoctorPrivacy = async (pool, req, res) => {
   const result = await submitPrivacyRequest(pool, { userId: req.user.id, input: parsed.data });
   return res.status(200).json({ ok: true, data: result });
 };
+
+const getDoctorPrivacyReceipts = async (pool, req, res) =>
+  res.json({ ok: true, data: await listPrivacyReceipts(pool, req.user.id) });
 
 const recommendDoctor = async (_pool, req, res) => {
   const parsed = doctorRecommendationRequestSchema.safeParse(req.body);
@@ -149,4 +164,5 @@ module.exports = {
   listDoctorTasks,
   listDoctorMessages,
   createDoctorMessage,
+  getDoctorPrivacyReceipts,
 };

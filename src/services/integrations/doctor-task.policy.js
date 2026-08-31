@@ -32,6 +32,7 @@ const privacyRequestSchema = z
     action: z.enum(['withdraw_consent', 'export', 'anonymize', 'delete']),
     reason: z.string().trim().max(1000).optional(),
     request_id: z.string().uuid().optional(),
+    confirmation: z.literal('CONFIRM_DOCTOR_DATA_REQUEST'),
   })
   .strict();
 
@@ -72,6 +73,19 @@ const doctorMessageSendSchema = doctorMessageQuerySchema
   })
   .strict();
 
+const doctorAiAssistSchema = doctorMessageQuerySchema
+  .extend({
+    touchpoint: z.enum([
+      'patient_summary',
+      'suggested_questions',
+      'consultation_draft',
+      'auto_triage',
+    ]),
+    task_summary: z.string().trim().min(1).max(5000),
+    locale: z.enum(['vi', 'en']).default('vi'),
+  })
+  .strict();
+
 const buildPatientRef = (user) => ({
   app_user_id: String(user.id),
   display_name: user.display_name || user.full_name || null,
@@ -79,6 +93,34 @@ const buildPatientRef = (user) => ({
   gender: user.gender || null,
   profile_version: user.profile_version ? new Date(user.profile_version).toISOString() : null,
 });
+
+const EMERGENCY_PATTERNS = [
+  /\b(đau ngực dữ dội|khó thở dữ dội|ngất|co giật|liệt nửa người|chảy máu không cầm|tự tử|cấp cứu|chấn thương nặng)\b/i,
+  /\b(severe chest pain|severe shortness of breath|unconscious|seizure|stroke|suicid|emergency|major trauma)\b/i,
+];
+
+const removeNegatedEmergencyStatements = (summary) =>
+  summary
+    .replace(
+      /\b(không|chưa)\s+(?:có\s+)?(?:bất kỳ\s+)?(?:dấu hiệu\s+)?(đau ngực dữ dội|khó thở dữ dội|ngất|co giật|liệt nửa người|chảy máu không cầm|tự tử|cấp cứu|chấn thương nặng)\b/gi,
+      ''
+    )
+    .replace(
+      /\b(no|without)\s+(?:signs?\s+of\s+)?(severe chest pain|severe shortness of breath|unconsciousness|seizure|stroke|suicidal ideation|emergency|major trauma)\b/gi,
+      ''
+    );
+
+const screenRemoteCareSuitability = (input) => {
+  const summary = removeNegatedEmergencyStatements(input.summary);
+  const emergency = EMERGENCY_PATTERNS.some((pattern) => pattern.test(summary));
+  return {
+    emergency,
+    suitable_for_remote_care: !emergency,
+    reason: emergency ? 'emergency_red_flag' : 'screened_no_emergency_red_flag',
+    screened_at: new Date().toISOString(),
+    screening_version: 'remote-care-v1',
+  };
+};
 
 const buildDoctorTaskEnvelope = ({ user, input }) => {
   const taskId = input.task_id || `doctor-task:${user.id}:${crypto.randomUUID()}`;
@@ -107,6 +149,7 @@ const buildDoctorTaskEnvelope = ({ user, input }) => {
         status: 'accepted',
         version: input.consent_version,
       },
+      legal_screening: screenRemoteCareSuitability(input),
     },
   };
 };
@@ -156,8 +199,10 @@ module.exports = {
   patientMessageRequestSchema,
   doctorMessageQuerySchema,
   doctorMessageSendSchema,
+  doctorAiAssistSchema,
   buildPatientRef,
   buildDoctorTaskEnvelope,
   buildPatientRatingEnvelope,
   buildPrivacyRequestEnvelope,
+  screenRemoteCareSuitability,
 };

@@ -107,6 +107,9 @@ const loadPatientProfile = async (pool, req) => {
     `SELECT u.id, COALESCE(u.full_name, u.display_name, u.email) AS full_name,
             u.email, u.phone_number, u.avatar_url,
             p.gender, p.age, p.birth_year, p.date_of_birth,
+            COALESCE(p.medical_conditions, '[]'::jsonb) AS medical_conditions,
+            COALESCE(p.chronic_symptoms, '[]'::jsonb) AS chronic_symptoms,
+            COALESCE(p.raw_profile, '{}'::jsonb) AS raw_profile,
             COALESCE(p.updated_at, u.updated_at, u.created_at) AS profile_version
        FROM users u
        LEFT JOIN user_onboarding_profiles p ON p.user_id = u.id
@@ -164,6 +167,45 @@ const loadPatientProfile = async (pool, req) => {
       ORDER BY date DESC LIMIT 100`,
     [tenantId, appUserId]
   );
+  const [bloodPressure, glucose, medications, symptoms] = await Promise.all([
+    pool.query(
+      `SELECT common.occurred_at, logs.systolic, logs.diastolic, logs.pulse, logs.unit
+         FROM logs_common common
+         JOIN blood_pressure_logs logs ON logs.log_id = common.id
+        WHERE common.user_id = $1
+        ORDER BY common.occurred_at DESC LIMIT 90`,
+      [appUserId]
+    ),
+    pool.query(
+      `SELECT common.occurred_at, logs.value, logs.unit, logs.context, logs.meal_tag
+         FROM logs_common common
+         JOIN glucose_logs logs ON logs.log_id = common.id
+        WHERE common.user_id = $1
+        ORDER BY common.occurred_at DESC LIMIT 90`,
+      [appUserId]
+    ),
+    pool.query(
+      `SELECT DISTINCT ON (LOWER(logs.med_name)) logs.med_name, logs.dose_text,
+              logs.frequency_text, common.occurred_at
+         FROM logs_common common
+         JOIN medication_logs logs ON logs.log_id = common.id
+        WHERE common.user_id = $1
+        ORDER BY LOWER(logs.med_name), common.occurred_at DESC LIMIT 50`,
+      [appUserId]
+    ),
+    pool.query(
+      `SELECT symptom_name, severity, occurred_date
+         FROM symptom_logs WHERE user_id = $1
+        ORDER BY occurred_date DESC, id DESC LIMIT 50`,
+      [appUserId]
+    ),
+  ]);
+
+  const rawProfile =
+    patient.raw_profile && typeof patient.raw_profile === 'object' ? patient.raw_profile : {};
+  const allergies = Array.isArray(rawProfile.allergies)
+    ? rawProfile.allergies.filter((item) => typeof item === 'string').slice(0, 50)
+    : [];
 
   return {
     full_name: patient.full_name || null,
@@ -174,6 +216,15 @@ const loadPatientProfile = async (pool, req) => {
     address: null,
     consultation_history: consultationHistory.rows,
     medical_records: records.rows,
+    medical_conditions: Array.isArray(patient.medical_conditions) ? patient.medical_conditions : [],
+    chronic_symptoms: Array.isArray(patient.chronic_symptoms) ? patient.chronic_symptoms : [],
+    allergies,
+    medications: medications.rows,
+    recent_symptoms: symptoms.rows,
+    vitals: {
+      blood_pressure: bloodPressure.rows.reverse(),
+      glucose: glucose.rows.reverse(),
+    },
     attachments: files.rows.map((file) => ({
       id: String(file.id),
       name: file.name,
@@ -202,7 +253,11 @@ const loadAuthorisedPatient = async (pool, body) => {
     [tenantId, taskId]
   );
   if (!task.rows[0] || task.rows[0].app_user_id !== appUserId) {
-    throw integrationError(404, 'DOCTOR_TASK_NOT_FOUND', 'The requested Doctor task was not found.');
+    throw integrationError(
+      404,
+      'DOCTOR_TASK_NOT_FOUND',
+      'The requested Doctor task was not found.'
+    );
   }
   return { tenantId, appUserId, taskId };
 };
@@ -212,7 +267,13 @@ const createPatientFile = async (pool, req) => {
   const { appUserId, taskId } = await loadAuthorisedPatient(pool, req.body);
   const { file_name, mime_type, size_bytes, content_base64, uploaded_by } = req.body || {};
   const content = typeof content_base64 === 'string' ? Buffer.from(content_base64, 'base64') : null;
-  if (!file_name || !mime_type || !content || content.length === 0 || content.length > 10 * 1024 * 1024) {
+  if (
+    !file_name ||
+    !mime_type ||
+    !content ||
+    content.length === 0 ||
+    content.length > 10 * 1024 * 1024
+  ) {
     throw integrationError(400, 'INVALID_PATIENT_FILE', 'A valid file up to 10 MB is required.');
   }
   if (Number(size_bytes) !== content.length) {
@@ -229,10 +290,23 @@ const createPatientFile = async (pool, req) => {
     `INSERT INTO doctor_patient_files
       (user_id, name, mime_type, size_bytes, secure_url, public_id, source_task_id, uploaded_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, mime_type, size_bytes, secure_url, source_task_id, uploaded_by, created_at`,
-    [appUserId, String(file_name).slice(0, 255), mime_type, content.length, uploaded.secure_url,
-      uploaded.public_id || null, taskId, uploaded_by || null]
+    [
+      appUserId,
+      String(file_name).slice(0, 255),
+      mime_type,
+      content.length,
+      uploaded.secure_url,
+      uploaded.public_id || null,
+      taskId,
+      uploaded_by || null,
+    ]
   );
   return result.rows[0];
 };
 
-module.exports = { loadPatientProfile, createPatientFile, verifyDoctorSignature, assertProfileRequest };
+module.exports = {
+  loadPatientProfile,
+  createPatientFile,
+  verifyDoctorSignature,
+  assertProfileRequest,
+};

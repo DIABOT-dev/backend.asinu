@@ -10,6 +10,8 @@ const {
   patientMessageRequestSchema,
   doctorMessageQuerySchema,
   doctorMessageSendSchema,
+  doctorAiAssistSchema,
+  screenRemoteCareSuitability,
 } = require('../../src/services/integrations/doctor-task.policy');
 
 describe('ASINU -> Doctor task contract', () => {
@@ -57,6 +59,25 @@ describe('ASINU -> Doctor task contract', () => {
     expect(doctorTaskRequestSchema.safeParse({ ...input, unexpected: true }).success).toBe(false);
   });
 
+  test('blocks emergency red flags from the remote-care workflow', () => {
+    expect(
+      screenRemoteCareSuitability({ summary: 'Bệnh nhân đau ngực dữ dội và khó thở dữ dội.' })
+    ).toMatchObject({
+      emergency: true,
+      suitable_for_remote_care: false,
+      reason: 'emergency_red_flag',
+    });
+    expect(screenRemoteCareSuitability(input)).toMatchObject({
+      emergency: false,
+      suitable_for_remote_care: true,
+    });
+    expect(
+      screenRemoteCareSuitability({
+        summary: 'Đau đầu nhẹ, không có dấu hiệu cấp cứu và không khó thở dữ dội.',
+      })
+    ).toMatchObject({ emergency: false, suitable_for_remote_care: true });
+  });
+
   test('builds a bounded patient projection', () => {
     expect(buildPatientRef({ id: 7, full_name: 'Patient', phone: '0123456789' })).toEqual({
       app_user_id: '7',
@@ -92,6 +113,7 @@ describe('ASINU -> Doctor task contract', () => {
       const privacyInput = privacyRequestSchema.parse({
         tenant_id: 'clinic-demo',
         action,
+        confirmation: 'CONFIRM_DOCTOR_DATA_REQUEST',
         request_id: `20000000-0000-4000-8000-00000000000${
           ['withdraw_consent', 'export', 'anonymize', 'delete'].indexOf(action) + 1
         }`,
@@ -156,5 +178,15 @@ describe('ASINU -> Doctor task contract', () => {
         client_message_id: 'not-a-uuid',
       }).success
     ).toBe(false);
+    expect(
+      doctorAiAssistSchema.safeParse({
+        tenant_id: 'clinic-demo',
+        task_id: 'task-1',
+        app_user_id: '42',
+        task_summary: 'Review the latest blood-pressure trend.',
+        touchpoint: 'auto_triage',
+        locale: 'en',
+      }).success
+    ).toBe(true);
   });
 });
