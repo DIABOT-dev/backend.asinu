@@ -5,7 +5,7 @@ services:
     build: .
     container_name: asinu-backend
     ports:
-      - '3000:3000'
+      - '3300:3300'
     env_file:
       - .env
     networks:
