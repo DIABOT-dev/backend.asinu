@@ -8,17 +8,9 @@ const { t } = require('../../i18n');
 
 const DEFAULT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
 
-const buildMockReply = (message) => {
-  const trimmed = String(message || '')
-    .slice(0, 240)
-    .trim();
-  const prefix = trimmed ? t('chat.mock_reply', 'vi', { message: trimmed }) : '';
-  return `${prefix}${t('chat.mock_support')}`;
-};
-
-const buildBusyReply = () => ({
-  reply: t('chat.service_busy', 'vi'),
-  provider: 'fallback',
+const buildUnavailableReply = () => ({
+  reply: t('chat.service_unavailable', 'vi'),
+  provider: 'unavailable',
 });
 
 const GEMINI_MAX_RETRIES = 3;
@@ -121,8 +113,7 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
 
   if (provider === 'openai' || provider === '') {
     if (!process.env.OPENAI_API_KEY) {
-      // No API key configured — mock reply tells the user we're in dev mode.
-      return { reply: buildMockReply(message), provider: 'mock' };
+      return buildUnavailableReply();
     }
     try {
       const userId = context?.user_id ?? context?.userId ?? null;
@@ -132,12 +123,12 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
       console.error('[ChatProvider] OpenAI failed after retries:', err.message);
     }
     // API exists but failed (timeout / rate limit / 5xx) — give a friendlier "try again" message.
-    return buildBusyReply();
+    return { reply: t('chat.service_busy', 'vi'), provider: 'fallback' };
   }
 
   if (provider === 'gemini') {
     if (!process.env.GEMINI_API_KEY) {
-      return { reply: buildMockReply(message), provider: 'mock' };
+      return buildUnavailableReply();
     }
     try {
       const reply = await callGemini(message, context, history, systemPrompt);
@@ -147,12 +138,12 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
     } catch (err) {
       console.error('[ChatProvider] Gemini failed after retries:', err.message);
     }
-    return buildBusyReply();
+    return { reply: t('chat.service_busy', 'vi'), provider: 'fallback' };
   }
 
   if (provider === 'medgemma') {
     if (!isMedGemmaConfigured()) {
-      return { reply: buildMockReply(message), provider: 'mock' };
+      return buildUnavailableReply();
     }
     try {
       const userId = context?.user_id ?? context?.userId ?? null;
@@ -166,10 +157,10 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
     } catch (err) {
       console.error('[ChatProvider] MedGemma failed after retries:', err.message);
     }
-    return buildBusyReply();
+    return { reply: t('chat.service_busy', 'vi'), provider: 'fallback' };
   }
 
-  return { reply: buildMockReply(message), provider: 'mock' };
+  return buildUnavailableReply();
 }
 
 module.exports = { getChatReply };

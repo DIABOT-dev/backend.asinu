@@ -1033,7 +1033,7 @@ async function processChat(pool, userId, message, context = {}) {
     const safetyFiltered = reply !== filterChatResponse(reply);
     reply = filterChatResponse(reply);
 
-    const replyProvider = replyResult.provider || 'mock';
+    const replyProvider = replyResult.provider || 'unavailable';
 
     // Pull token counts out of whatever shape the provider returned them in.
     // Today we see two shapes in the wild: OpenAI/MedGemma return
@@ -1078,7 +1078,7 @@ async function processChat(pool, userId, message, context = {}) {
       tokensUsed: totalTokens,
       latencyMs: chatDuration,
       durationMs: chatDuration,
-      isFallback: replyProvider === 'mock',
+      isFallback: replyProvider === 'fallback',
       safetyFiltered,
       success: true,
     }).catch(() => {}); // fire-and-forget
