@@ -5,6 +5,7 @@ const {
   buildDoctorTaskEnvelope,
   buildPatientRatingEnvelope,
   buildPrivacyRequestEnvelope,
+  normalizeSpecialty,
 } = require('./doctor-task.policy');
 
 const DOCTOR_TASKS_URL = process.env.DOCTOR_TASKS_URL || '';
@@ -137,7 +138,7 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
     );
   };
   if (input.action === 'export') {
-    const [records, messages, files] = await Promise.all([
+    const [records, messages, files, lifecycle] = await Promise.all([
       pool.query(
         `SELECT id, record_type, title, diagnosis, summary, treatment, notes,
                 doctor_ref, source_task_id, recorded_at, created_at, updated_at
@@ -159,6 +160,13 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
           WHERE user_id = $1 ORDER BY created_at`,
         [userId]
       ),
+      pool.query(
+        `SELECT event_id, tenant_id, task_id, event_type, status, doctor_ref,
+                medical_record_ref, reason, occurred_at, created_at
+           FROM doctor_task_lifecycle_events
+          WHERE app_user_id = $1 ORDER BY occurred_at`,
+        [userId]
+      ),
     ]);
     const result = {
       ...response.data,
@@ -166,6 +174,7 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
         medical_records: records.rows,
         patient_files: files.rows,
         task_messages: messages.rows,
+        task_lifecycle_events: lifecycle.rows,
       },
     };
     await recordReceipt();
@@ -203,6 +212,7 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
       await client.query('DELETE FROM doctor_patient_files WHERE user_id = $1', [userId]);
       await client.query('DELETE FROM doctor_patient_medical_records WHERE user_id = $1', [userId]);
       await client.query('DELETE FROM doctor_task_messages WHERE user_id = $1', [userId]);
+      await client.query('DELETE FROM doctor_task_lifecycle_events WHERE app_user_id = $1', [userId]);
       await client.query(
         `UPDATE doctor_task_outbox
             SET event_id = 'anon-event-' || id::text,
@@ -251,7 +261,10 @@ const listPrivacyReceipts = async (pool, userId) => {
 
 const requestDoctorRecommendations = async ({ input }) => {
   assertTenantAllowed(input.tenant_id);
-  const response = await deliverDoctorRequest('recommendations', input);
+  const response = await deliverDoctorRequest('recommendations', {
+    ...input,
+    specialty: normalizeSpecialty(input.specialty),
+  });
   return response.data;
 };
 

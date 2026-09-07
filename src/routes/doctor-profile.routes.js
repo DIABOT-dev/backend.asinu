@@ -14,6 +14,7 @@ const {
   sendDoctorMessage,
 } = require('../services/integrations/doctor-messaging.service');
 const { createDoctorAiAssist } = require('../services/integrations/doctor-ai.service');
+const { ingestDoctorLifecycle } = require('../services/integrations/doctor-lifecycle.service');
 
 function doctorProfileRoutes(pool) {
   const router = express.Router();
@@ -31,6 +32,11 @@ function doctorProfileRoutes(pool) {
   router.post('/patient-files', (req, res, next) =>
     Promise.resolve(createPatientFile(pool, req))
       .then((data) => res.status(201).json({ ok: true, data }))
+      .catch(next)
+  );
+  router.post('/lifecycle', (req, res, next) =>
+    Promise.resolve(ingestDoctorLifecycle(pool, req))
+      .then((data) => res.status(data.duplicate ? 200 : 201).json({ ok: true, data }))
       .catch(next)
   );
   router.post('/messages/query', requireDoctorSignature, (req, res, next) => {

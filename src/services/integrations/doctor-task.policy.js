@@ -86,6 +86,29 @@ const doctorAiAssistSchema = doctorMessageQuerySchema
   })
   .strict();
 
+const normalizeSpecialty = (value) => {
+  const normalized = String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đ]/g, 'd')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  const aliases = {
+    general: ['general', 'general_practice', 'tong_quat', 'bac_si_tu_van'],
+    internal_medicine: ['internal_medicine', 'noi_khoa'],
+    cardiology: ['cardiology', 'tim_mach'],
+    endocrinology: ['endocrinology', 'noi_tiet', 'dai_thao_duong'],
+    dermatology: ['dermatology', 'da_lieu'],
+    pediatrics: ['pediatrics', 'nhi_khoa', 'nhi'],
+    nutrition: ['nutrition', 'dinh_duong'],
+    psychology: ['psychology', 'tam_ly'],
+    other: ['other', 'wellness', 'khac'],
+  };
+  return Object.entries(aliases).find(([, values]) => values.includes(normalized))?.[0] || 'other';
+};
+
 const buildPatientRef = (user) => ({
   app_user_id: String(user.id),
   display_name: user.display_name || user.full_name || null,
@@ -136,7 +159,7 @@ const buildDoctorTaskEnvelope = ({ user, input }) => {
     payload: {
       task_id: taskId,
       app_user_id: String(user.id),
-      specialty: input.specialty,
+      specialty: normalizeSpecialty(input.specialty),
       service_flow: input.service_flow,
       priority: input.priority,
       preferred_doctor_id: input.preferred_doctor_id || null,
@@ -205,4 +228,5 @@ module.exports = {
   buildPatientRatingEnvelope,
   buildPrivacyRequestEnvelope,
   screenRemoteCareSuitability,
+  normalizeSpecialty,
 };

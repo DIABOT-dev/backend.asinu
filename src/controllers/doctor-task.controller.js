@@ -6,6 +6,7 @@ const {
   doctorRecommendationRequestSchema,
   patientMessageRequestSchema,
   screenRemoteCareSuitability,
+  normalizeSpecialty,
 } = require('../services/integrations/doctor-task.policy');
 const {
   enqueueDoctorTask,
@@ -20,6 +21,7 @@ const {
   listPatientTasks,
   sendPatientMessage,
 } = require('../services/integrations/doctor-messaging.service');
+const { enqueueCrmEvent } = require('../services/integrations/crm-event.service');
 
 const loadPatientProjection = async (pool, userId) => {
   const result = await pool.query(
@@ -60,6 +62,34 @@ const requestDoctorTask = async (pool, req, res) => {
   }
 
   const result = await enqueueDoctorTask(pool, { user: patient, input: parsed.data });
+  // The CRM owns the service-order projection. Queue the request alongside
+  // the Doctor task so CRM can link the order to the same app user before the
+  // Doctor sends back accepted/started/completed lifecycle events.
+  await enqueueCrmEvent(
+    pool,
+    'service.requested',
+    {
+      user_id: String(patient.id),
+      app_user_id: String(patient.id),
+      app_order_id: result.task_id,
+      service_code: parsed.data.service_code,
+      source_channel: parsed.data.source_channel,
+      specialty: normalizeSpecialty(parsed.data.specialty),
+      service_flow: parsed.data.service_flow,
+      priority: parsed.data.priority,
+      summary: parsed.data.summary,
+      consent_status: 'accepted',
+      consent_version: parsed.data.consent_version,
+      patient_display_name: patient.display_name || patient.full_name || null,
+      patient_age_group: patient.age_group == null ? null : String(patient.age_group),
+      patient_gender: patient.gender || null,
+      profile_version: patient.profile_version ? new Date(patient.profile_version).toISOString() : null,
+      doctor_ref: parsed.data.preferred_doctor_id || null,
+      medical_record_ref: parsed.data.medical_record_ref || null,
+      expires_at: null,
+    },
+    { event_id: `service.requested:${result.task_id}`, correlation_id: result.task_id },
+  );
   return res.status(202).json({ ok: true, data: result });
 };
 

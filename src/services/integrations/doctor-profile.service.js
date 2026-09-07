@@ -158,13 +158,39 @@ const loadPatientProfile = async (pool, req) => {
     [appUserId]
   );
   const consultationHistory = await pool.query(
-    `SELECT payload->'payload'->>'task_id' AS task_id,
-            COALESCE(payload->'payload'->>'status', 'queued') AS status,
-            COALESCE(payload->'payload'->>'doctor_name', payload->'payload'->>'doctor_ref', '—') AS doctor_name,
-            COALESCE((payload->>'occurred_at')::timestamptz, created_at) AS date
-       FROM doctor_task_outbox
-      WHERE tenant_id = $1 AND payload->'payload'->>'app_user_id' = $2
-      ORDER BY date DESC LIMIT 100`,
+    `WITH request_history AS (
+      SELECT event_id,
+             payload->>'event_type' AS event_type,
+             payload->'payload'->>'task_id' AS task_id,
+             COALESCE(payload->'payload'->>'status', 'queued') AS status,
+             status AS delivery_status,
+             payload->'payload'->>'service_code' AS service_code,
+             payload->'payload'->>'specialty' AS specialty,
+             payload->'payload'->>'service_flow' AS service_flow,
+             payload->'payload'->>'priority' AS priority,
+             payload->'payload'->>'summary' AS summary,
+             COALESCE(payload->'payload'->>'doctor_name', payload->'payload'->>'doctor_ref', '—') AS doctor_name,
+             COALESCE((payload->>'occurred_at')::timestamptz, created_at) AS date
+        FROM doctor_task_outbox
+       WHERE tenant_id = $1
+         AND payload->>'event_type' = 'doctor.task.requested'
+         AND payload->'payload'->>'app_user_id' = $2
+    ), lifecycle_history AS (
+      SELECT event_id, event_type, task_id, status, 'received' AS delivery_status,
+             payload->>'service_code' AS service_code,
+             payload->>'specialty' AS specialty,
+             payload->>'service_flow' AS service_flow,
+             payload->>'priority' AS priority,
+             payload->>'summary' AS summary,
+             COALESCE(doctor_ref, '—') AS doctor_name,
+             occurred_at AS date
+        FROM doctor_task_lifecycle_events
+       WHERE tenant_id = $1 AND app_user_id = $2::integer
+    )
+    SELECT * FROM request_history
+    UNION ALL
+    SELECT * FROM lifecycle_history
+    ORDER BY date DESC LIMIT 100`,
     [tenantId, appUserId]
   );
   const [bloodPressure, glucose, medications, symptoms] = await Promise.all([
