@@ -5,12 +5,9 @@
 
 // Words/phrases AI must NEVER say.
 //
-// Lưu ý: Các cụm về OTC + liều ("liều dùng", "kê đơn", "nên dùng thuốc") đã GỠ
-// vì system prompt (chat.service.js) cho phép gợi ý OTC kèm disclaimer rõ ràng.
-// Ban các cụm này gây bug strip giữa câu — vd "uống paracetamol 500mg, liều dùng
-// 4-6 tiếng/lần" → bị thay thành "...". Giữ ban cho:
-//   1. Tự khẳng định chẩn đoán (LLM không phải bác sĩ)
-//   2. Trấn an sai ("không cần đi bác sĩ") — nguy hiểm cho user health app
+// Nội dung trên nền tảng chỉ được cung cấp thông tin, sàng lọc và định hướng.
+// Không cho AI chẩn đoán xác định, kê đơn, gọi tên thuốc hoặc chỉ định liều.
+// Các cụm nguy hiểm được lọc ở đầu ra cuối cùng, kể cả khi prompt đã yêu cầu OTC.
 const BANNED_PHRASES = [
   // Diagnosis (LLM không tự khẳng định bệnh)
   'bạn bị',
@@ -20,6 +17,22 @@ const BANNED_PHRASES = [
   'you have',
   'diagnosed with',
   'you are suffering from',
+  // Treatment boundary: no prescribing, drug names or dosage instructions.
+  'kê đơn',
+  'đơn thuốc',
+  'liều dùng',
+  'liều lượng',
+  'prescription',
+  'dosage',
+  'dose',
+  'paracetamol',
+  'acetaminophen',
+  'ibuprofen',
+  'aspirin',
+  'amoxicillin',
+  'metformin',
+  'insulin',
+  'kháng sinh',
   // Dangerous reassurance
   'không cần đi bác sĩ',
   'không cần lo',
@@ -30,27 +43,34 @@ const BANNED_PHRASES = [
 ];
 
 // Phrases that MUST be present when severity is high
-const REQUIRED_HIGH_SEVERITY = ['bác sĩ', 'doctor', 'y tế', 'medical'];
+const REQUIRED_HIGH_SEVERITY = ['chuyên gia', 'healthcare', 'y tế', 'medical'];
 
 function filterAiOutput(text, severity = 'low') {
   let filtered = text;
   const warnings = [];
+  const matchedPhrases = [];
 
   // Check banned phrases
   for (const phrase of BANNED_PHRASES) {
     if (filtered.toLowerCase().includes(phrase.toLowerCase())) {
-      warnings.push(`Removed banned phrase: "${phrase}"`);
-      // Replace with safe alternative
-      filtered = filtered.replace(new RegExp(phrase, 'gi'), '...');
+      matchedPhrases.push(phrase);
     }
   }
 
-  // For high severity, ensure doctor recommendation is present
+  // Fail closed: do not leave a diagnosis, medicine name or dosage fragment
+  // visible after filtering one unsafe phrase.
+  if (matchedPhrases.length > 0 || /\b\d+(?:[.,]\d+)?\s*(?:mg|g|ml|mcg|iu|viên|lần\/ngày)\b/i.test(filtered)) {
+    filtered = 'Nội dung này cần được chuyên gia tư vấn sức khỏe hoặc cơ sở y tế đánh giá trực tiếp.';
+    matchedPhrases.forEach((phrase) => warnings.push(`Blocked unsafe phrase: "${phrase}"`));
+    warnings.push('Replaced unsafe AI output with a safe care-navigation message');
+  }
+
+  // For high severity, ensure a safe human-care recommendation is present.
   if (severity === 'high') {
-    const hasDocRef = REQUIRED_HIGH_SEVERITY.some((p) => filtered.toLowerCase().includes(p));
-    if (!hasDocRef) {
-      filtered += '\n\nNếu tình trạng không cải thiện, nên liên hệ bác sĩ để được tư vấn.';
-      warnings.push('Added doctor recommendation for high severity');
+    const hasCareRef = REQUIRED_HIGH_SEVERITY.some((p) => filtered.toLowerCase().includes(p));
+    if (!hasCareRef) {
+      filtered += '\n\nNếu có dấu hiệu bất thường, hãy liên hệ cơ sở y tế hoặc chuyên gia phù hợp.';
+      warnings.push('Added healthcare recommendation for high severity');
     }
   }
 
