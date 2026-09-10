@@ -51,6 +51,7 @@ async function callTextAi({ system, prompt, messages, temperature, maxTokens, js
       prompt: finalPrompt,
       temperature: temperature !== undefined ? temperature : 0.3,
       maxTokens: maxTokens || 800,
+      jsonMode,
     });
 
     return {

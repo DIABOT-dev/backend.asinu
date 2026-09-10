@@ -83,18 +83,25 @@ const touchpointInstruction = {
 };
 
 const parseModelJson = (content) => {
-  try {
-    const parsed = JSON.parse(content);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-      throw new Error('not_object');
-    return parsed;
-  } catch {
-    throw integrationError(
-      502,
-      'DOCTOR_AI_INVALID_RESPONSE',
-      'The AI provider returned invalid JSON.'
-    );
+  const text = String(content || '').trim();
+  const candidates = [
+    text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim(),
+  ];
+  const firstObject = text.indexOf('{');
+  const lastObject = text.lastIndexOf('}');
+  if (firstObject >= 0 && lastObject > firstObject)
+    candidates.push(text.slice(firstObject, lastObject + 1));
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
+    } catch {
+      // Try the next normalized candidate before rejecting the provider output.
+    }
   }
+
+  throw integrationError(502, 'DOCTOR_AI_INVALID_RESPONSE', 'The AI provider returned invalid JSON.');
 };
 
 const sanitizeModelOutput = (value) => {

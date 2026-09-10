@@ -28,7 +28,7 @@ function isConfigured() {
   return Boolean(process.env.MEDGEMMA_ENDPOINT);
 }
 
-async function callMedGemma({ prompt, system, maxTokens = 800, temperature = 0.3, signal } = {}) {
+async function callMedGemma({ prompt, system, maxTokens = 800, temperature = 0.3, jsonMode = false, signal } = {}) {
   if (!isConfigured()) {
     throw new Error('MEDGEMMA_ENDPOINT is not set');
   }
@@ -48,6 +48,7 @@ async function callMedGemma({ prompt, system, maxTokens = 800, temperature = 0.3
     ],
     temperature,
     max_tokens: maxTokens,
+    ...(jsonMode ? { response_format: { type: 'json_object' } } : {}),
   });
 
   const controller = new AbortController();
