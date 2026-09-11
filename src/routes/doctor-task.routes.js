@@ -5,6 +5,7 @@ const {
   submitDoctorRating,
   requestDoctorPrivacy,
   recommendDoctor,
+  listDoctorSpecialties,
   listDoctorTasks,
   listDoctorMessages,
   createDoctorMessage,
@@ -36,6 +37,9 @@ function doctorTaskRoutes(pool) {
   );
   router.post('/recommendations', requireAuth, (req, res, next) =>
     Promise.resolve(recommendDoctor(pool, req, res)).catch(next)
+  );
+  router.post('/specialties', requireAuth, (req, res, next) =>
+    Promise.resolve(listDoctorSpecialties(pool, req, res)).catch(next)
   );
   return router;
 }

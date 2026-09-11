@@ -268,6 +268,12 @@ const requestDoctorRecommendations = async ({ input }) => {
   return response.data;
 };
 
+const requestDoctorSpecialties = async ({ tenantId }) => {
+  assertTenantAllowed(tenantId);
+  const response = await deliverDoctorRequest('specialties', { tenant_id: tenantId });
+  return response.data;
+};
+
 const requestDoctorTaskStatus = async ({ input }) => {
   assertTenantAllowed(input.tenant_id);
   const response = await deliverDoctorRequest('status', input);
@@ -371,6 +377,7 @@ module.exports = {
   submitPatientRating,
   submitPrivacyRequest,
   requestDoctorRecommendations,
+  requestDoctorSpecialties,
   requestDoctorTaskStatus,
   listPrivacyReceipts,
 };

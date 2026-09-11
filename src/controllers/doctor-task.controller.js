@@ -13,6 +13,7 @@ const {
   submitPatientRating,
   submitPrivacyRequest,
   requestDoctorRecommendations,
+  requestDoctorSpecialties,
   requestDoctorTaskStatus,
   listPrivacyReceipts,
 } = require('../services/integrations/doctor-task.service');
@@ -162,6 +163,14 @@ const recommendDoctor = async (_pool, req, res) => {
   return res.status(200).json({ ok: true, data: result });
 };
 
+const listDoctorSpecialties = async (_pool, req, res) => {
+  const tenantId = String(req.body?.tenant_id || '').trim();
+  if (!tenantId || tenantId.length > 120) {
+    return res.status(400).json({ ok: false, error: 'A valid tenant_id is required.' });
+  }
+  return res.json({ ok: true, data: await requestDoctorSpecialties({ tenantId }) });
+};
+
 const listDoctorTasks = async (pool, req, res) => {
   const tenantId = String(req.query.tenant_id || '').trim();
   if (!tenantId || tenantId.length > 120) {
@@ -213,6 +222,7 @@ module.exports = {
   submitDoctorRating,
   requestDoctorPrivacy,
   recommendDoctor,
+  listDoctorSpecialties,
   listDoctorTasks,
   listDoctorMessages,
   createDoctorMessage,
