@@ -138,18 +138,18 @@ const listPatientTasks = async (pool, userId, tenantId) => {
   const result = await pool.query(
     `SELECT payload->'payload'->>'task_id' AS task_id,
             payload->'payload'->>'summary' AS summary,
-            COALESCE((payload->>'occurred_at')::timestamptz, created_at) AS created_at,
+            COALESCE((o.payload->>'occurred_at')::timestamptz, o.created_at) AS created_at,
             latest.content AS latest_message,
             latest.sender_type AS latest_sender_type,
             latest.created_at AS latest_message_at
        FROM doctor_task_outbox o
        LEFT JOIN LATERAL (
-         SELECT content, sender_type, created_at
+         SELECT m.content, m.sender_type, m.created_at
            FROM doctor_task_messages m
           WHERE m.tenant_id = o.tenant_id
             AND m.task_id = o.payload->'payload'->>'task_id'
             AND m.user_id = $1
-          ORDER BY created_at DESC, id DESC LIMIT 1
+          ORDER BY m.created_at DESC, m.id DESC LIMIT 1
        ) latest ON TRUE
       WHERE o.tenant_id = $2
         AND o.payload->>'event_type' = 'doctor.task.requested'
