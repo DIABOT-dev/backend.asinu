@@ -21,6 +21,7 @@ const {
   listMessages,
   listPatientTasks,
   sendPatientMessage,
+  sendPatientAttachment,
 } = require('../services/integrations/doctor-messaging.service');
 const { enqueueCrmEvent } = require('../services/integrations/crm-event.service');
 
@@ -217,6 +218,26 @@ const createDoctorMessage = async (pool, req, res) => {
   return res.status(data.duplicate ? 200 : 201).json({ ok: true, data });
 };
 
+const createDoctorAttachment = async (pool, req, res) => {
+  const taskId = String(req.params.taskId || '').trim();
+  const tenantId = String(req.query.tenant_id || req.body?.tenant_id || '').trim();
+  if (!taskId || taskId.length > 160 || !tenantId || tenantId.length > 120 || !req.file) {
+    return res.status(400).json({ ok: false, error: 'A valid task, tenant and image are required.' });
+  }
+  const data = await sendPatientAttachment(pool, {
+    userId: req.user.id,
+    taskId,
+    input: {
+      tenant_id: tenantId,
+      content: '',
+      message_type: 'follow_up',
+      client_message_id: String(req.headers['x-client-message-id'] || require('crypto').randomUUID()),
+    },
+    file: req.file,
+  });
+  return res.status(201).json({ ok: true, data });
+};
+
 module.exports = {
   requestDoctorTask,
   submitDoctorRating,
@@ -226,5 +247,6 @@ module.exports = {
   listDoctorTasks,
   listDoctorMessages,
   createDoctorMessage,
+  createDoctorAttachment,
   getDoctorPrivacyReceipts,
 };

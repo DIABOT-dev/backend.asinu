@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
+const { imageUpload, handleUpload, verifyImageMagicBytes } = require('../middleware/upload.middleware');
 const {
   requestDoctorTask,
   submitDoctorRating,
@@ -9,6 +10,7 @@ const {
   listDoctorTasks,
   listDoctorMessages,
   createDoctorMessage,
+  createDoctorAttachment,
   getDoctorPrivacyReceipts,
 } = require('../controllers/doctor-task.controller');
 
@@ -25,6 +27,9 @@ function doctorTaskRoutes(pool) {
   );
   router.post('/tasks/:taskId/messages', requireAuth, (req, res, next) =>
     Promise.resolve(createDoctorMessage(pool, req, res)).catch(next)
+  );
+  router.post('/tasks/:taskId/attachments', requireAuth, handleUpload(imageUpload.single('file')), verifyImageMagicBytes, (req, res, next) =>
+    Promise.resolve(createDoctorAttachment(pool, req, res)).catch(next)
   );
   router.post('/tasks/:taskId/rating', requireAuth, (req, res, next) =>
     Promise.resolve(submitDoctorRating(pool, req, res)).catch(next)

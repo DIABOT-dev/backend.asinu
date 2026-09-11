@@ -1,6 +1,7 @@
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { assertTenantAllowed } = require('./doctor-task.service');
 const { verifyDoctorSignature, assertProfileRequest } = require('./doctor-profile.service');
+const { uploadBuffer } = require('../media/cloudinary-upload.service');
 
 const integrationError = (statusCode, code, message) => {
   const error = new Error(message);
@@ -133,6 +134,42 @@ const sendPatientMessage = async (pool, { userId, taskId, input }) => {
   }
 };
 
+const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
+  assertTenantAllowed(input.tenant_id);
+  await loadOwnedTask(pool, input.tenant_id, taskId, userId);
+  if (!file?.buffer || file.size <= 0 || file.size > 10 * 1024 * 1024) {
+    throw integrationError(400, 'INVALID_PATIENT_FILE', 'A valid image up to 10 MB is required.');
+  }
+
+  const uploaded = await uploadBuffer(file.buffer, {
+    folder: process.env.CLOUDINARY_PATIENT_FILE_FOLDER || 'asinu/patient-files',
+    resource_type: 'image',
+    use_filename: true,
+    unique_filename: true,
+  });
+  const fileResult = await pool.query(
+    `INSERT INTO doctor_patient_files
+      (user_id, name, mime_type, size_bytes, secure_url, public_id, source_task_id, uploaded_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     RETURNING id, name, mime_type, size_bytes, secure_url, source_task_id, uploaded_by, created_at`,
+    [userId, String(file.originalname).slice(0, 255), file.mimetype, file.size,
+      uploaded.secure_url, uploaded.public_id || null, taskId, String(userId)]
+  );
+  const attachment = fileResult.rows[0];
+  const content = `[ASINU_ATTACHMENT]${JSON.stringify({
+    id: String(attachment.id),
+    name: attachment.name,
+    mime_type: attachment.mime_type,
+    size_bytes: attachment.size_bytes,
+    url: attachment.secure_url,
+  })}`;
+  return sendPatientMessage(pool, {
+    userId,
+    taskId,
+    input: { ...input, content },
+  }).then((message) => ({ ...message, attachment }));
+};
+
 const listPatientTasks = async (pool, userId, tenantId) => {
   assertTenantAllowed(tenantId);
   const result = await pool.query(
@@ -207,6 +244,7 @@ module.exports = {
   listMessages,
   listPatientTasks,
   sendPatientMessage,
+  sendPatientAttachment,
   queryDoctorMessages,
   sendDoctorMessage,
 };
