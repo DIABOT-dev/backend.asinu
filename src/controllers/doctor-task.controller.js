@@ -14,6 +14,7 @@ const {
   submitPrivacyRequest,
   requestDoctorRecommendations,
   requestDoctorSpecialties,
+  requestDoctorClinics,
   requestDoctorTaskStatus,
   listPrivacyReceipts,
 } = require('../services/integrations/doctor-task.service');
@@ -81,7 +82,7 @@ const requestDoctorTask = async (pool, req, res) => {
         status: 'accepted',
         version: parsed.data.consent_version,
       },
-      { event_id: `consent.updated:privacy_policy:${patient.id}:${parsed.data.consent_version}` },
+      { event_id: `consent.updated:privacy_policy:${patient.id}:${parsed.data.consent_version}` }
     );
   }
 
@@ -107,12 +108,14 @@ const requestDoctorTask = async (pool, req, res) => {
       patient_display_name: patient.display_name || patient.full_name || null,
       patient_age_group: patient.age_group == null ? null : String(patient.age_group),
       patient_gender: patient.gender || null,
-      profile_version: patient.profile_version ? new Date(patient.profile_version).toISOString() : null,
+      profile_version: patient.profile_version
+        ? new Date(patient.profile_version).toISOString()
+        : null,
       doctor_ref: parsed.data.preferred_doctor_id || null,
       medical_record_ref: parsed.data.medical_record_ref || null,
       expires_at: null,
     },
-    { event_id: `service.requested:${result.task_id}`, correlation_id: result.task_id },
+    { event_id: `service.requested:${result.task_id}`, correlation_id: result.task_id }
   );
   return res.status(202).json({ ok: true, data: result });
 };
@@ -172,6 +175,9 @@ const listDoctorSpecialties = async (_pool, req, res) => {
   return res.json({ ok: true, data: await requestDoctorSpecialties({ tenantId }) });
 };
 
+const listDoctorClinics = async (_pool, _req, res) =>
+  res.json({ ok: true, data: await requestDoctorClinics() });
+
 const listDoctorTasks = async (pool, req, res) => {
   const tenantId = String(req.query.tenant_id || '').trim();
   if (!tenantId || tenantId.length > 120) {
@@ -222,7 +228,9 @@ const createDoctorAttachment = async (pool, req, res) => {
   const taskId = String(req.params.taskId || '').trim();
   const tenantId = String(req.query.tenant_id || req.body?.tenant_id || '').trim();
   if (!taskId || taskId.length > 160 || !tenantId || tenantId.length > 120 || !req.file) {
-    return res.status(400).json({ ok: false, error: 'A valid task, tenant and image are required.' });
+    return res
+      .status(400)
+      .json({ ok: false, error: 'A valid task, tenant and image are required.' });
   }
   const data = await sendPatientAttachment(pool, {
     userId: req.user.id,
@@ -231,7 +239,9 @@ const createDoctorAttachment = async (pool, req, res) => {
       tenant_id: tenantId,
       content: '',
       message_type: 'follow_up',
-      client_message_id: String(req.headers['x-client-message-id'] || require('crypto').randomUUID()),
+      client_message_id: String(
+        req.headers['x-client-message-id'] || require('crypto').randomUUID()
+      ),
     },
     file: req.file,
   });
@@ -244,6 +254,7 @@ module.exports = {
   requestDoctorPrivacy,
   recommendDoctor,
   listDoctorSpecialties,
+  listDoctorClinics,
   listDoctorTasks,
   listDoctorMessages,
   createDoctorMessage,

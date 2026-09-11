@@ -212,7 +212,9 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
       await client.query('DELETE FROM doctor_patient_files WHERE user_id = $1', [userId]);
       await client.query('DELETE FROM doctor_patient_medical_records WHERE user_id = $1', [userId]);
       await client.query('DELETE FROM doctor_task_messages WHERE user_id = $1', [userId]);
-      await client.query('DELETE FROM doctor_task_lifecycle_events WHERE app_user_id = $1', [userId]);
+      await client.query('DELETE FROM doctor_task_lifecycle_events WHERE app_user_id = $1', [
+        userId,
+      ]);
       await client.query(
         `UPDATE doctor_task_outbox
             SET event_id = 'anon-event-' || id::text,
@@ -271,6 +273,15 @@ const requestDoctorRecommendations = async ({ input }) => {
 const requestDoctorSpecialties = async ({ tenantId }) => {
   assertTenantAllowed(tenantId);
   const response = await deliverDoctorRequest('specialties', { tenant_id: tenantId });
+  return response.data;
+};
+
+const requestDoctorClinics = async () => {
+  const tenantIds = [...ALLOWED_TENANT_IDS];
+  if (tenantIds.length === 0) {
+    throw new Error('DOCTOR_ALLOWED_TENANT_IDS must contain at least one tenant.');
+  }
+  const response = await deliverDoctorRequest('clinics', { tenant_ids: tenantIds });
   return response.data;
 };
 
@@ -378,6 +389,7 @@ module.exports = {
   submitPrivacyRequest,
   requestDoctorRecommendations,
   requestDoctorSpecialties,
+  requestDoctorClinics,
   requestDoctorTaskStatus,
   listPrivacyReceipts,
 };

@@ -1,12 +1,17 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
-const { imageUpload, handleUpload, verifyImageMagicBytes } = require('../middleware/upload.middleware');
+const {
+  imageUpload,
+  handleUpload,
+  verifyImageMagicBytes,
+} = require('../middleware/upload.middleware');
 const {
   requestDoctorTask,
   submitDoctorRating,
   requestDoctorPrivacy,
   recommendDoctor,
   listDoctorSpecialties,
+  listDoctorClinics,
   listDoctorTasks,
   listDoctorMessages,
   createDoctorMessage,
@@ -28,8 +33,12 @@ function doctorTaskRoutes(pool) {
   router.post('/tasks/:taskId/messages', requireAuth, (req, res, next) =>
     Promise.resolve(createDoctorMessage(pool, req, res)).catch(next)
   );
-  router.post('/tasks/:taskId/attachments', requireAuth, handleUpload(imageUpload.single('file')), verifyImageMagicBytes, (req, res, next) =>
-    Promise.resolve(createDoctorAttachment(pool, req, res)).catch(next)
+  router.post(
+    '/tasks/:taskId/attachments',
+    requireAuth,
+    handleUpload(imageUpload.single('file')),
+    verifyImageMagicBytes,
+    (req, res, next) => Promise.resolve(createDoctorAttachment(pool, req, res)).catch(next)
   );
   router.post('/tasks/:taskId/rating', requireAuth, (req, res, next) =>
     Promise.resolve(submitDoctorRating(pool, req, res)).catch(next)
@@ -45,6 +54,9 @@ function doctorTaskRoutes(pool) {
   );
   router.post('/specialties', requireAuth, (req, res, next) =>
     Promise.resolve(listDoctorSpecialties(pool, req, res)).catch(next)
+  );
+  router.post('/clinics', requireAuth, (req, res, next) =>
+    Promise.resolve(listDoctorClinics(pool, req, res)).catch(next)
   );
   return router;
 }
