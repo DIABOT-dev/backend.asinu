@@ -24,9 +24,18 @@ const CLINICAL_PROVIDER = (process.env.AI_PROVIDER_CLINICAL || 'openai').toLower
  *   - jsonMode: boolean (optional, OpenAI only)
  * @returns {Promise<{ content: string, usage: Object, provider: string, model: string }>}
  */
-async function callTextAi({ system, prompt, messages, temperature, maxTokens, jsonMode = false }) {
+async function callTextAi({
+  system,
+  prompt,
+  messages,
+  temperature,
+  maxTokens,
+  jsonMode = false,
+  provider,
+}) {
+  const selectedProvider = String(provider || CLINICAL_PROVIDER).toLowerCase();
   // ─── 1. MedGemma Route ───────────────────────────────────────────────────
-  if (CLINICAL_PROVIDER === 'medgemma' && medgemmaProvider.isConfigured()) {
+  if (selectedProvider === 'medgemma' && medgemmaProvider.isConfigured()) {
     let finalPrompt = prompt || '';
     let finalSystem = system || '';
 

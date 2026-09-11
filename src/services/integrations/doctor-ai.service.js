@@ -85,7 +85,10 @@ const touchpointInstruction = {
 const parseModelJson = (content) => {
   const text = String(content || '').trim();
   const candidates = [
-    text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim(),
+    text
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/, '')
+      .trim(),
   ];
   const firstObject = text.indexOf('{');
   const lastObject = text.lastIndexOf('}');
@@ -101,7 +104,11 @@ const parseModelJson = (content) => {
     }
   }
 
-  throw integrationError(502, 'DOCTOR_AI_INVALID_RESPONSE', 'The AI provider returned invalid JSON.');
+  throw integrationError(
+    502,
+    'DOCTOR_AI_INVALID_RESPONSE',
+    'The AI provider returned invalid JSON.'
+  );
 };
 
 const sanitizeModelOutput = (value) => {
@@ -146,6 +153,10 @@ const createDoctorAiAssist = async (pool, input) => {
       temperature: 0.2,
       maxTokens: 1000,
       jsonMode: true,
+      // Doctor triage requires strict JSON. Keep this provider independent
+      // from the general clinical provider so MedGemma can remain enabled for
+      // other ASINU flows without breaking the Doctor contract.
+      provider: process.env.DOCTOR_AI_PROVIDER || 'openai',
     });
   } catch (error) {
     throw integrationError(
