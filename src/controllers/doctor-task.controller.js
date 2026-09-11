@@ -47,9 +47,6 @@ const requestDoctorTask = async (pool, req, res) => {
 
   const patient = await loadPatientProjection(pool, req.user.id);
   if (!patient) return res.status(404).json({ ok: false, error: 'Patient not found.' });
-  if (!patient.consent_accepted_at || patient.consent_version !== parsed.data.consent_version) {
-    return res.status(403).json({ ok: false, error: 'Doctor consultation consent is required.' });
-  }
   const screening = screenRemoteCareSuitability(parsed.data);
   if (!screening.suitable_for_remote_care) {
     return res.status(422).json({
@@ -59,6 +56,31 @@ const requestDoctorTask = async (pool, req, res) => {
       code: 'REMOTE_CARE_EMERGENCY_BLOCKED',
       data: screening,
     });
+  }
+
+  // The consultation form contains the explicit, versioned consent for this
+  // data processing purpose. Older accounts may only have the device-local
+  // consent flag and therefore have no consent row on the server yet. Persist
+  // this consent here before creating the task so the checkbox is meaningful
+  // across devices and the existing server-side guard remains effective.
+  if (!patient.consent_accepted_at || patient.consent_version !== parsed.data.consent_version) {
+    await pool.query(
+      `UPDATE users
+          SET consent_accepted_at = NOW(), consent_version = $1, updated_at = NOW()
+        WHERE id = $2 AND deleted_at IS NULL`,
+      [parsed.data.consent_version, patient.id]
+    );
+    await enqueueCrmEvent(
+      pool,
+      'consent.updated',
+      {
+        user_id: String(patient.id),
+        consent_type: 'privacy_policy',
+        status: 'accepted',
+        version: parsed.data.consent_version,
+      },
+      { event_id: `consent.updated:privacy_policy:${patient.id}:${parsed.data.consent_version}` },
+    );
   }
 
   const result = await enqueueDoctorTask(pool, { user: patient, input: parsed.data });
