@@ -232,7 +232,9 @@ async function updateCheckinFromSession(pool, checkinId, severity, summary, foll
      WHERE id = $1`,
     [checkinId, severity, summary, nextAt]
   );
-  const { rows } = await pool.query('SELECT user_id FROM health_checkins WHERE id = $1', [checkinId]);
+  const { rows } = await pool.query('SELECT user_id FROM health_checkins WHERE id = $1', [
+    checkinId,
+  ]);
   if (rows[0]?.user_id) {
     await rebuildPatientHealthTimeline(pool, rows[0].user_id);
   }

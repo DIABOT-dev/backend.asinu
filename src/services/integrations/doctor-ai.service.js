@@ -27,58 +27,60 @@ const loadDoctorRagContext = async (pool, input) => {
     throw integrationError(404, 'DOCTOR_TASK_NOT_FOUND', 'The Doctor task was not found.');
   }
 
-  const [profile, bloodPressure, glucose, medication, symptoms, records, messages, timeline] = await Promise.all([
-    pool.query(
-      `SELECT p.birth_year, p.gender, COALESCE(p.medical_conditions, '[]'::jsonb) AS conditions,
+  const [profile, bloodPressure, glucose, medication, symptoms, records, messages, timeline] =
+    await Promise.all([
+      pool.query(
+        `SELECT p.birth_year, p.gender, COALESCE(p.medical_conditions, '[]'::jsonb) AS conditions,
               COALESCE(p.chronic_symptoms, '[]'::jsonb) AS chronic_symptoms,
               COALESCE(p.raw_profile->'allergies', '[]'::jsonb) AS allergies
          FROM user_onboarding_profiles p WHERE p.user_id = $1`,
-      [appUserId]
-    ),
-    pool.query(
-      `SELECT logs.systolic, logs.diastolic, logs.pulse, common.occurred_at
+        [appUserId]
+      ),
+      pool.query(
+        `SELECT logs.systolic, logs.diastolic, logs.pulse, common.occurred_at
          FROM logs_common common JOIN blood_pressure_logs logs ON logs.log_id = common.id
         WHERE common.user_id = $1 ORDER BY common.occurred_at DESC LIMIT 20`,
-      [appUserId]
-    ),
-    pool.query(
-      `SELECT logs.value, logs.unit, logs.context, logs.meal_tag, common.occurred_at
+        [appUserId]
+      ),
+      pool.query(
+        `SELECT logs.value, logs.unit, logs.context, logs.meal_tag, common.occurred_at
          FROM logs_common common JOIN glucose_logs logs ON logs.log_id = common.id
         WHERE common.user_id = $1 ORDER BY common.occurred_at DESC LIMIT 20`,
-      [appUserId]
-    ),
-    pool.query(
-      `SELECT logs.med_name, logs.dose_text, logs.frequency_text, common.occurred_at
+        [appUserId]
+      ),
+      pool.query(
+        `SELECT logs.med_name, logs.dose_text, logs.frequency_text, common.occurred_at
          FROM logs_common common JOIN medication_logs logs ON logs.log_id = common.id
         WHERE common.user_id = $1 ORDER BY common.occurred_at DESC LIMIT 20`,
-      [appUserId]
-    ),
-    pool.query(
-      `SELECT symptom_name, severity, occurred_date FROM symptom_logs
+        [appUserId]
+      ),
+      pool.query(
+        `SELECT symptom_name, severity, occurred_date FROM symptom_logs
         WHERE user_id = $1 ORDER BY occurred_date DESC LIMIT 20`,
-      [appUserId]
-    ),
-    pool.query(
-      `SELECT record_type, diagnosis, summary, treatment, recorded_at
+        [appUserId]
+      ),
+      pool.query(
+        `SELECT record_type, diagnosis, summary, treatment, recorded_at
          FROM doctor_patient_medical_records WHERE user_id = $1
         ORDER BY recorded_at DESC LIMIT 20`,
-      [appUserId]
-    ),
-    pool.query(
-      `SELECT sender_type, sender_ref, message_type, content, created_at
+        [appUserId]
+      ),
+      pool.query(
+        `SELECT sender_type, sender_ref, message_type, content, created_at
          FROM doctor_task_messages
         WHERE tenant_id = $1 AND task_id = $2 AND user_id = $3
         ORDER BY created_at DESC, id DESC LIMIT 30`,
-      [tenantId, taskId, appUserId]
-    ),
-    pool.query(
-      `SELECT content_markdown, updated_at
+        [tenantId, taskId, appUserId]
+      ),
+      pool.query(
+        `SELECT content_markdown, updated_at
          FROM patient_health_timeline_documents
         WHERE user_id = $1`,
-      [appUserId]
-    ),
-  ]);
-  const timelineMarkdown = timeline.rows[0]?.content_markdown || (await rebuildPatientHealthTimeline(pool, appUserId));
+        [appUserId]
+      ),
+    ]);
+  const timelineMarkdown =
+    timeline.rows[0]?.content_markdown || (await rebuildPatientHealthTimeline(pool, appUserId));
   return {
     profile: profile.rows[0] || {},
     blood_pressure: bloodPressure.rows,
@@ -157,7 +159,8 @@ const createDoctorAiAssist = async (pool, input) => {
         task: input.task_summary,
         request: touchpointInstruction[input.touchpoint],
         context,
-        conversation_priority: 'The final patient message is the immediate question. Respond to it first; use earlier messages and the timeline only for context.',
+        conversation_priority:
+          'The final patient message is the immediate question. Respond to it first; use earlier messages and the timeline only for context.',
         output_contract: {
           draft: 'string suitable for doctor review',
           summary: 'short clinical rationale',
