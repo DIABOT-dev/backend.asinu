@@ -2,6 +2,7 @@ const { sendAndSave } = require('../notification/basic.notification.service');
 const { assertTenantAllowed } = require('./doctor-task.service');
 const { verifyDoctorSignature, assertProfileRequest } = require('./doctor-profile.service');
 const { uploadBuffer } = require('../media/cloudinary-upload.service');
+const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 
 const integrationError = (statusCode, code, message) => {
   const error = new Error(message);
@@ -125,6 +126,7 @@ const sendPatientMessage = async (pool, { userId, taskId, input }) => {
       );
     }
     await client.query('COMMIT');
+    await rebuildPatientHealthTimeline(pool, userId);
     return message;
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
@@ -152,8 +154,16 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
       (user_id, name, mime_type, size_bytes, secure_url, public_id, source_task_id, uploaded_by)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
      RETURNING id, name, mime_type, size_bytes, secure_url, source_task_id, uploaded_by, created_at`,
-    [userId, String(file.originalname).slice(0, 255), file.mimetype, file.size,
-      uploaded.secure_url, uploaded.public_id || null, taskId, String(userId)]
+    [
+      userId,
+      String(file.originalname).slice(0, 255),
+      file.mimetype,
+      file.size,
+      uploaded.secure_url,
+      uploaded.public_id || null,
+      taskId,
+      String(userId),
+    ]
   );
   const attachment = fileResult.rows[0];
   const content = `[ASINU_ATTACHMENT]${JSON.stringify({
@@ -237,6 +247,7 @@ const sendDoctorMessage = async (pool, req, input) => {
       );
     }
   }
+  await rebuildPatientHealthTimeline(pool, appUserId);
   return message;
 };
 

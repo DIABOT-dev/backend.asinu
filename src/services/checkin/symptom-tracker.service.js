@@ -5,6 +5,8 @@
  * Gọi sau mỗi lần triage hoàn thành.
  */
 
+const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
+
 // Triệu chứng thường gặp — dùng để match từ câu trả lời
 const _KNOWN_SYMPTOMS = [
   'mệt mỏi',
@@ -167,6 +169,9 @@ async function saveSymptomLogs(pool, userId, checkinId, triageMessages, sessionD
 
   // Cập nhật frequency
   await updateSymptomFrequency(pool, userId).catch(() => {});
+  await rebuildPatientHealthTimeline(pool, userId).catch((err) =>
+    console.error('[SymptomTracker] Failed to rebuild health timeline:', err.message)
+  );
 }
 
 /**

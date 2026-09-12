@@ -27,7 +27,7 @@ const loadDoctorRagContext = async (pool, input) => {
     throw integrationError(404, 'DOCTOR_TASK_NOT_FOUND', 'The Doctor task was not found.');
   }
 
-  const [profile, bloodPressure, glucose, medication, symptoms, records, messages, timeline] =
+  const [profile, bloodPressure, glucose, medication, symptoms, records, messages] =
     await Promise.all([
       pool.query(
         `SELECT p.birth_year, p.gender, COALESCE(p.medical_conditions, '[]'::jsonb) AS conditions,
@@ -69,18 +69,21 @@ const loadDoctorRagContext = async (pool, input) => {
         `SELECT sender_type, sender_ref, message_type, content, created_at
          FROM doctor_task_messages
         WHERE tenant_id = $1 AND task_id = $2 AND user_id = $3
-        ORDER BY created_at DESC, id DESC LIMIT 30`,
+        ORDER BY created_at ASC, id ASC`,
         [tenantId, taskId, appUserId]
       ),
-      pool.query(
-        `SELECT content_markdown, updated_at
-         FROM patient_health_timeline_documents
-        WHERE user_id = $1`,
-        [appUserId]
-      ),
     ]);
-  const timelineMarkdown =
-    timeline.rows[0]?.content_markdown || (await rebuildPatientHealthTimeline(pool, appUserId));
+  // Rebuild on every AI request so a newly completed check-in or profile edit
+  // can never leave the copilot reading a stale per-user Markdown snapshot.
+  const timelineMarkdown = await rebuildPatientHealthTimeline(pool, appUserId);
+  const conversation = messages.rows.map((message) => ({
+    role: message.sender_type === 'patient' ? 'patient' : 'doctor',
+    message: message.content,
+    message_type: message.message_type,
+    created_at: message.created_at,
+  }));
+  const latestPatientMessage =
+    [...conversation].reverse().find((message) => message.role === 'patient') || null;
   return {
     profile: profile.rows[0] || {},
     blood_pressure: bloodPressure.rows,
@@ -88,12 +91,8 @@ const loadDoctorRagContext = async (pool, input) => {
     medications: medication.rows,
     symptoms: symptoms.rows,
     medical_records: records.rows,
-    conversation: messages.rows.reverse().map((message) => ({
-      role: message.sender_type === 'patient' ? 'patient' : 'doctor',
-      message: message.content,
-      message_type: message.message_type,
-      created_at: message.created_at,
-    })),
+    conversation,
+    latest_patient_message: latestPatientMessage,
     health_timeline_markdown: timelineMarkdown,
   };
 };
@@ -159,8 +158,9 @@ const createDoctorAiAssist = async (pool, input) => {
         task: input.task_summary,
         request: touchpointInstruction[input.touchpoint],
         context,
+        latest_patient_question: context.latest_patient_message,
         conversation_priority:
-          'The final patient message is the immediate question. Respond to it first; use earlier messages and the timeline only for context.',
+          'The latest_patient_question is the immediate question. Answer that exact patient message first. Use earlier messages and the timeline only to preserve continuity and avoid repeating questions.',
         output_contract: {
           draft: 'string suitable for doctor review',
           summary: 'short clinical rationale',

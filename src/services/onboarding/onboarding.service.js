@@ -85,6 +85,7 @@ const normalizeJointIssues = (items) => {
 const { cacheDel } = require('../../lib/redis');
 const { emitProfileUpdated } = require('../integrations/crm-profile.service');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
+const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 
 // =====================================================
 // DATABASE OPERATIONS
@@ -185,6 +186,7 @@ async function upsertProfile(pool, userId, profile) {
   await cacheDel(`profile:${userId}`, `user:name:${userId}`);
 
   emitProfileUpdated(pool, userId, { ...profile, medical_conditions: normalizedMedical });
+  await rebuildPatientHealthTimeline(pool, userId);
 
   return result.rows[0];
 }
@@ -267,6 +269,7 @@ async function upsertProfileFromAI(pool, userId, aiProfile) {
 
   const saved = result.rows[0];
   emitProfileUpdated(pool, userId, { ...aiProfile, medical_conditions: medical });
+  await rebuildPatientHealthTimeline(pool, userId);
   return saved;
 }
 
@@ -500,6 +503,7 @@ async function upsertProfileV2(pool, userId, data) {
   await cacheDel(`profile:${userId}`, `user:name:${userId}`);
 
   emitProfileUpdated(pool, userId, { ...data, medical_conditions: normalizedConditions });
+  await rebuildPatientHealthTimeline(pool, userId);
 
   return saved;
 }

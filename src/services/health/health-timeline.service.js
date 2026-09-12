@@ -30,61 +30,90 @@ const answerText = (answer) => {
 
 /** Rebuild the durable Markdown health timeline used by Doctor AI. */
 const rebuildPatientHealthTimeline = async (pool, userId) => {
-  const [profileResult, checkinResult, logsResult, recordsResult, messagesResult, filesResult] =
-    await Promise.all([
-      pool.query(
-        `SELECT u.display_name, u.full_name, u.email, u.phone_number,
-              p.gender, p.birth_year, p.date_of_birth,
-              p.medical_conditions, p.chronic_symptoms, p.raw_profile
+  const [
+    profileResult,
+    checkinResult,
+    logsResult,
+    symptomsResult,
+    recordsResult,
+    messagesResult,
+    filesResult,
+  ] = await Promise.all([
+    pool.query(
+      `SELECT u.display_name, u.full_name, u.email, u.phone_number,
+              p.*
          FROM users u LEFT JOIN user_onboarding_profiles p ON p.user_id = u.id
         WHERE u.id = $1`,
-        [userId]
-      ),
-      pool.query(
-        `SELECT id, session_date, initial_status, current_status, triage_severity,
+      [userId]
+    ),
+    pool.query(
+      `SELECT id, session_date, initial_status, current_status, triage_severity,
             triage_summary, triage_messages, triage_completed_at, updated_at
        FROM health_checkins
       WHERE user_id = $1
       ORDER BY session_date ASC, id ASC`,
-        [userId]
-      ),
-      pool.query(
-        `SELECT common.occurred_at, common.log_type, common.source,
+      [userId]
+    ),
+    pool.query(
+      `SELECT common.occurred_at, common.log_type, common.source,
+              common.note, common.metadata,
               bp.systolic, bp.diastolic, bp.pulse,
               glucose.value AS glucose_value, glucose.unit AS glucose_unit,
               medication.med_name, medication.dose_text, medication.frequency_text,
-              symptoms.symptom_name, symptoms.severity AS symptom_severity
+              weight.weight_kg, weight.body_fat_percent, weight.muscle_percent,
+              water.volume_ml,
+              meal.calories_kcal, meal.carbs_g, meal.protein_g, meal.fat_g, meal.meal_text,
+              insulin.insulin_type, insulin.dose_units, insulin.unit AS insulin_unit,
+              insulin.timing, insulin.injection_site
          FROM logs_common common
          LEFT JOIN blood_pressure_logs bp ON bp.log_id = common.id
          LEFT JOIN glucose_logs glucose ON glucose.log_id = common.id
          LEFT JOIN medication_logs medication ON medication.log_id = common.id
-         LEFT JOIN symptom_logs symptoms ON symptoms.user_id = common.user_id
-          AND symptoms.occurred_date::text = common.occurred_at::date::text
+         LEFT JOIN weight_logs weight ON weight.log_id = common.id
+         LEFT JOIN water_logs water ON water.log_id = common.id
+         LEFT JOIN meal_logs meal ON meal.log_id = common.id
+         LEFT JOIN insulin_logs insulin ON insulin.log_id = common.id
         WHERE common.user_id = $1
         ORDER BY common.occurred_at ASC, common.id ASC`,
-        [userId]
-      ),
-      pool.query(
-        `SELECT record_type, title, diagnosis, summary, treatment, notes,
+      [userId]
+    ),
+    pool.query(
+      `SELECT symptom_name, severity, occurred_date, created_at
+           FROM symptom_logs
+          WHERE user_id = $1
+          ORDER BY occurred_date ASC, id ASC`,
+      [userId]
+    ),
+    pool.query(
+      `SELECT record_type, title, diagnosis, summary, treatment, notes,
               doctor_ref, source_task_id, recorded_at
          FROM doctor_patient_medical_records
         WHERE user_id = $1 ORDER BY recorded_at ASC, id ASC`,
-        [userId]
-      ),
-      pool.query(
-        `SELECT task_id, sender_type, message_type, content, created_at
+      [userId]
+    ),
+    pool.query(
+      `SELECT task_id, sender_type, message_type, content, created_at
          FROM doctor_task_messages
         WHERE user_id = $1 ORDER BY created_at ASC, id ASC`,
-        [userId]
-      ),
-      pool.query(
-        `SELECT name, mime_type, size_bytes, source_task_id, created_at
+      [userId]
+    ),
+    pool.query(
+      `SELECT name, mime_type, size_bytes, source_task_id, created_at
          FROM doctor_patient_files
         WHERE user_id = $1 ORDER BY created_at ASC, id ASC`,
-        [userId]
-      ),
-    ]);
+      [userId]
+    ),
+  ]);
   const profile = profileResult.rows[0] || {};
+  const rawProfile =
+    profile.raw_profile && typeof profile.raw_profile === 'object' ? profile.raw_profile : {};
+  const profileValue = (value, fallback = 'not declared') => {
+    if (value == null || value === '' || (Array.isArray(value) && value.length === 0))
+      return fallback;
+    return Array.isArray(value) || typeof value === 'object'
+      ? JSON.stringify(value)
+      : String(value);
+  };
   const rows = checkinResult.rows;
   const lines = [
     '# Health timeline',
@@ -93,12 +122,28 @@ const rebuildPatientHealthTimeline = async (pool, userId) => {
     '',
     '## Patient profile and declared health information',
     `- Name: ${escapeMarkdown(profile.full_name || profile.display_name || 'unknown')}`,
-    `- Gender: ${escapeMarkdown(profile.gender || 'not declared')}`,
-    `- Birth year: ${escapeMarkdown(profile.birth_year || profile.date_of_birth || 'not declared')}`,
-    `- Medical conditions: ${escapeMarkdown(JSON.stringify(profile.medical_conditions || []))}`,
-    `- Chronic symptoms: ${escapeMarkdown(JSON.stringify(profile.chronic_symptoms || []))}`,
-    `- Allergies: ${escapeMarkdown(JSON.stringify(profile.raw_profile?.allergies || []))}`,
-    `- Medications declared: ${escapeMarkdown(JSON.stringify(profile.raw_profile?.medications || []))}`,
+    `- Gender: ${escapeMarkdown(profileValue(profile.gender))}`,
+    `- Birth year/date of birth: ${escapeMarkdown(profileValue(profile.birth_year || profile.date_of_birth))}`,
+    `- Height: ${escapeMarkdown(profileValue(profile.height_cm))} cm`,
+    `- Weight: ${escapeMarkdown(profileValue(profile.weight_kg))} kg`,
+    `- Blood type: ${escapeMarkdown(profileValue(profile.blood_type))}`,
+    `- Medical conditions: ${escapeMarkdown(profileValue(profile.medical_conditions, 'none declared'))}`,
+    `- Chronic symptoms: ${escapeMarkdown(profileValue(profile.chronic_symptoms, 'none declared'))}`,
+    `- Joint issues: ${escapeMarkdown(profileValue(profile.joint_issues, 'none declared'))}`,
+    `- Daily medication: ${escapeMarkdown(profileValue(profile.daily_medication))}`,
+    `- Allergies: ${escapeMarkdown(profileValue(rawProfile.allergies, 'none declared'))}`,
+    `- Medications declared: ${escapeMarkdown(profileValue(rawProfile.medications, 'none declared'))}`,
+    `- Lifestyle and goals: ${escapeMarkdown(
+      profileValue({
+        goal: profile.goal || profile.user_goal,
+        exercise_freq: profile.exercise_freq,
+        walking_habit: profile.walking_habit,
+        sleep_hours: profile.sleep_hours || profile.sleep_duration,
+        water_intake: profile.water_intake,
+        checkup_freq: profile.checkup_freq,
+      })
+    )}`,
+    `- Profile updated at: ${escapeMarkdown(profile.updated_at || 'unknown')}`,
     '',
   ];
 
@@ -141,12 +186,29 @@ const rebuildPatientHealthTimeline = async (pool, userId) => {
       values.push(`glucose ${log.glucose_value} ${log.glucose_unit || ''}`);
     if (log.med_name)
       values.push(`medication ${log.med_name} ${log.dose_text || ''} ${log.frequency_text || ''}`);
-    if (log.symptom_name)
+    if (log.weight_kg != null)
       values.push(
-        `symptom ${log.symptom_name}${log.symptom_severity ? ` (${log.symptom_severity})` : ''}`
+        `weight ${log.weight_kg} kg${log.body_fat_percent != null ? `, body fat ${log.body_fat_percent}%` : ''}`
       );
+    if (log.volume_ml != null) values.push(`water ${log.volume_ml} ml`);
+    if (log.meal_text || log.calories_kcal != null)
+      values.push(
+        `meal ${log.meal_text || ''}${log.calories_kcal != null ? `, ${log.calories_kcal} kcal` : ''}`
+      );
+    if (log.dose_units != null)
+      values.push(
+        `insulin ${log.insulin_type || ''} ${log.dose_units}${log.insulin_unit || ' U'}${log.timing ? `, ${log.timing}` : ''}`
+      );
+    if (log.note) values.push(`note ${log.note}`);
+    if (log.metadata && Object.keys(log.metadata).length)
+      values.push(`metadata ${JSON.stringify(log.metadata)}`);
     if (values.length)
       lines.push(`- ${escapeMarkdown(log.occurred_at)}: ${escapeMarkdown(values.join('; '))}`);
+  }
+  for (const symptom of symptomsResult.rows) {
+    lines.push(
+      `- ${escapeMarkdown(symptom.occurred_date)}: symptom ${escapeMarkdown(symptom.symptom_name)}${symptom.severity ? ` (${escapeMarkdown(symptom.severity)})` : ''}`
+    );
   }
   lines.push('');
 
