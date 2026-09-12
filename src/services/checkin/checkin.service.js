@@ -36,6 +36,7 @@ const { t } = require('../../i18n');
 const { getHonorifics } = require('../../lib/honorifics');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
 const { buildCheckinContext, applyIllusion } = require('../../core/checkin/illusion-layer');
+const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 const logger = require('../../lib/logger');
 const console = { log: logger.debug, error: logger.error };
 
@@ -525,6 +526,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
         checkinId,
       ]
     );
+    await rebuildPatientHealthTimeline(pool, userId);
 
     // Alert family immediately với alertType='emergency' (priority critical, cooldown 1min)
     if (!session.family_alerted) {
@@ -782,6 +784,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
         isEmergencyResult,
       ]
     );
+    await rebuildPatientHealthTimeline(pool, userId);
 
     // Safety override: severity='emergency' / 'high' → LUÔN cảnh báo người thân,
     // không phụ thuộc vào AI judgment. AI có thể sai. User safety > AI confidence.

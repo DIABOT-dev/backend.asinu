@@ -2,6 +2,7 @@ const { callTextAi } = require('../ai/ai.service');
 const { filterAiOutput } = require('../ai/ai-safety.service');
 const { assertTenantAllowed } = require('./doctor-task.service');
 const { assertProfileRequest } = require('./doctor-profile.service');
+const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 
 const integrationError = (statusCode, code, message) => {
   const error = new Error(message);
@@ -26,7 +27,7 @@ const loadDoctorRagContext = async (pool, input) => {
     throw integrationError(404, 'DOCTOR_TASK_NOT_FOUND', 'The Doctor task was not found.');
   }
 
-  const [profile, bloodPressure, glucose, medication, symptoms, records] = await Promise.all([
+  const [profile, bloodPressure, glucose, medication, symptoms, records, messages, timeline] = await Promise.all([
     pool.query(
       `SELECT p.birth_year, p.gender, COALESCE(p.medical_conditions, '[]'::jsonb) AS conditions,
               COALESCE(p.chronic_symptoms, '[]'::jsonb) AS chronic_symptoms,
@@ -63,7 +64,21 @@ const loadDoctorRagContext = async (pool, input) => {
         ORDER BY recorded_at DESC LIMIT 20`,
       [appUserId]
     ),
+    pool.query(
+      `SELECT sender_type, sender_ref, message_type, content, created_at
+         FROM doctor_task_messages
+        WHERE tenant_id = $1 AND task_id = $2 AND user_id = $3
+        ORDER BY created_at DESC, id DESC LIMIT 30`,
+      [tenantId, taskId, appUserId]
+    ),
+    pool.query(
+      `SELECT content_markdown, updated_at
+         FROM patient_health_timeline_documents
+        WHERE user_id = $1`,
+      [appUserId]
+    ),
   ]);
+  const timelineMarkdown = timeline.rows[0]?.content_markdown || (await rebuildPatientHealthTimeline(pool, appUserId));
   return {
     profile: profile.rows[0] || {},
     blood_pressure: bloodPressure.rows,
@@ -71,6 +86,13 @@ const loadDoctorRagContext = async (pool, input) => {
     medications: medication.rows,
     symptoms: symptoms.rows,
     medical_records: records.rows,
+    conversation: messages.rows.reverse().map((message) => ({
+      role: message.sender_type === 'patient' ? 'patient' : 'doctor',
+      message: message.content,
+      message_type: message.message_type,
+      created_at: message.created_at,
+    })),
+    health_timeline_markdown: timelineMarkdown,
   };
 };
 
@@ -130,11 +152,12 @@ const createDoctorAiAssist = async (pool, input) => {
   let response;
   try {
     response = await callTextAi({
-      system: `You are a clinical decision-support assistant for licensed doctors. You do not diagnose, prescribe, or send content directly to patients. Use only the supplied context. Mark uncertainty, identify emergency red flags, avoid definitive claims, and return JSON only. ${localeInstruction}`,
+      system: `You are a clinical decision-support assistant for a licensed doctor conducting a live consultation. You do not diagnose, prescribe, or send content directly to patients. Use only the supplied context and return JSON only.\n\nFor consultation_draft, the latest patient message is the primary question to answer. Read the conversation in chronological order, identify exactly what the patient is asking or reporting, and draft a direct, empathetic response to that message. Do not answer an older topic when a newer patient message exists. If the latest message is ambiguous, ask one or two focused clarifying questions instead of inventing details. Keep the response concise and in the same language as the patient. Use the health timeline to maintain continuity, but never treat it as proof of the current condition. Mention uncertainty and red flags when relevant. A doctor must review and approve every draft. ${localeInstruction}`,
       prompt: JSON.stringify({
         task: input.task_summary,
         request: touchpointInstruction[input.touchpoint],
         context,
+        conversation_priority: 'The final patient message is the immediate question. Respond to it first; use earlier messages and the timeline only for context.',
         output_contract: {
           draft: 'string suitable for doctor review',
           summary: 'short clinical rationale',

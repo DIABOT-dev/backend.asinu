@@ -11,6 +11,7 @@ const {
   dispatch: dispatchNotification,
 } = require('../../core/notification/notification.orchestrator');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
+const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 
 // ─── Profile helper ────────────────────────────────────────────────────────
 
@@ -231,6 +232,10 @@ async function updateCheckinFromSession(pool, checkinId, severity, summary, foll
      WHERE id = $1`,
     [checkinId, severity, summary, nextAt]
   );
+  const { rows } = await pool.query('SELECT user_id FROM health_checkins WHERE id = $1', [checkinId]);
+  if (rows[0]?.user_id) {
+    await rebuildPatientHealthTimeline(pool, rows[0].user_id);
+  }
 }
 
 /**
