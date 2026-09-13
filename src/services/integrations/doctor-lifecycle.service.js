@@ -1,6 +1,17 @@
 const { z } = require('zod');
 const { assertTenantAllowed } = require('./doctor-task.service');
 const { verifyDoctorSignature } = require('./doctor-profile.service');
+const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
+
+const consultationSummarySchema = z
+  .object({
+    problem_summary: z.string().trim().min(1).max(3000),
+    assessment: z.string().trim().min(1).max(3000),
+    next_steps: z.string().trim().min(1).max(3000),
+    warning_signs: z.string().trim().min(1).max(3000),
+    follow_up_recommendation: z.string().trim().min(1).max(3000),
+  })
+  .strict();
 
 const lifecycleSchema = z
   .object({
@@ -32,6 +43,8 @@ const lifecycleSchema = z
         doctor_ref: z.string().trim().max(160).nullable().optional(),
         medical_record_ref: z.string().trim().max(160).nullable().optional(),
         reason: z.string().trim().max(500).nullable().optional(),
+        consultation_summary: consultationSummarySchema.nullable().optional(),
+        follow_up_until: z.string().datetime({ offset: true }).nullable().optional(),
       })
       .strict(),
   })
@@ -53,11 +66,19 @@ const ingestDoctorLifecycle = async (pool, req) => {
   const event = parsed.data;
   const payload = event.payload;
   if (payload.status !== event.event_type.replace('service.', '')) {
-    throw integrationError(400, 'DOCTOR_LIFECYCLE_STATUS_MISMATCH', 'Event type and status must match.');
+    throw integrationError(
+      400,
+      'DOCTOR_LIFECYCLE_STATUS_MISMATCH',
+      'Event type and status must match.'
+    );
   }
   assertTenantAllowed(payload.tenant_id);
   if (event.correlation_id !== payload.app_order_id) {
-    throw integrationError(400, 'DOCTOR_LIFECYCLE_CORRELATION_MISMATCH', 'Correlation id must match app order id.');
+    throw integrationError(
+      400,
+      'DOCTOR_LIFECYCLE_CORRELATION_MISMATCH',
+      'Correlation id must match app order id.'
+    );
   }
 
   const appUserId = String(payload.app_user_id);
@@ -77,7 +98,43 @@ const ingestDoctorLifecycle = async (pool, req) => {
     'SELECT event_id, task_id, status, occurred_at FROM doctor_task_lifecycle_events WHERE event_id = $1',
     [event.event_id]
   );
-  if (existing.rows[0]) return { ...existing.rows[0], duplicate: true };
+  const persistConsultationOutcome = async () => {
+    if (payload.status !== 'completed' || !payload.consultation_summary) return;
+    const summary = payload.consultation_summary;
+    await pool.query(
+      `INSERT INTO doctor_patient_medical_records(
+         user_id, record_type, title, diagnosis, summary, treatment, notes,
+         doctor_ref, source_task_id, recorded_at
+       )
+       SELECT $1, 'consultation_summary', 'Tóm tắt tư vấn bác sĩ', $2, $3, $4, $5, $6, $7, $8
+       WHERE NOT EXISTS (
+         SELECT 1 FROM doctor_patient_medical_records
+          WHERE user_id = $1 AND source_task_id = $7 AND record_type = 'consultation_summary'
+       )`,
+      [
+        Number(appUserId),
+        summary.assessment,
+        summary.problem_summary,
+        summary.next_steps,
+        [
+          `Dấu hiệu cảnh báo: ${summary.warning_signs}`,
+          `Theo dõi/tái tư vấn: ${summary.follow_up_recommendation}`,
+          payload.follow_up_until ? `Trao đổi bổ sung đến: ${payload.follow_up_until}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        payload.doctor_ref || null,
+        payload.app_order_id,
+        event.occurred_at,
+      ]
+    );
+    await rebuildPatientHealthTimeline(pool, Number(appUserId));
+  };
+
+  if (existing.rows[0]) {
+    await persistConsultationOutcome();
+    return { ...existing.rows[0], duplicate: true };
+  }
 
   const inserted = await pool.query(
     `INSERT INTO doctor_task_lifecycle_events(
@@ -108,7 +165,15 @@ const ingestDoctorLifecycle = async (pool, req) => {
       }),
     ]
   );
-  return { ...(inserted.rows[0] || { event_id: event.event_id, task_id: payload.app_order_id, status: payload.status }), duplicate: false };
+  await persistConsultationOutcome();
+  return {
+    ...(inserted.rows[0] || {
+      event_id: event.event_id,
+      task_id: payload.app_order_id,
+      status: payload.status,
+    }),
+    duplicate: false,
+  };
 };
 
 module.exports = { ingestDoctorLifecycle, lifecycleSchema };

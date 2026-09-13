@@ -12,6 +12,14 @@ const doctorTaskRequestSchema = z
     service_code: z.string().trim().min(1).max(120).default('doctor-consultation'),
     medical_record_ref: z.string().trim().max(160).nullable().optional(),
     summary: z.string().trim().min(1).max(5000),
+    clinical_intake: z
+      .object({
+        symptom_onset: z.enum(['today', 'two_to_seven_days', 'over_one_week', 'ongoing']),
+        progression: z.enum(['improving', 'stable', 'worsening']),
+        severity: z.enum(['mild', 'moderate', 'severe']),
+        emergency_confirmation: z.literal(true),
+      })
+      .strict(),
     consent_version: z.string().trim().min(1).max(80),
     task_id: z.string().trim().min(1).max(160).optional(),
   })
@@ -135,7 +143,9 @@ const removeNegatedEmergencyStatements = (summary) =>
 
 const screenRemoteCareSuitability = (input) => {
   const summary = removeNegatedEmergencyStatements(input.summary);
-  const emergency = EMERGENCY_PATTERNS.some((pattern) => pattern.test(summary));
+  const emergency =
+    input.clinical_intake?.emergency_confirmation !== true ||
+    EMERGENCY_PATTERNS.some((pattern) => pattern.test(summary));
   return {
     emergency,
     suitable_for_remote_care: !emergency,
@@ -173,6 +183,7 @@ const buildDoctorTaskEnvelope = ({ user, input }) => {
         version: input.consent_version,
       },
       legal_screening: screenRemoteCareSuitability(input),
+      clinical_intake: input.clinical_intake,
     },
   };
 };

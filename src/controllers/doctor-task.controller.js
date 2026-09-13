@@ -206,6 +206,23 @@ const listDoctorMessages = async (pool, req, res) => {
   return res.json({ ok: true, data: { ...data, task_status: taskStatus } });
 };
 
+const patientMessageState = async (tenantId, taskId, userId) => {
+  const status = await requestDoctorTaskStatus({
+    input: { tenant_id: tenantId, task_id: taskId, app_user_id: String(userId) },
+  });
+  const terminal = ['cancelled', 'expired', 'emergency_referred', 'forwarded'];
+  if (
+    terminal.includes(status.status) ||
+    (status.status === 'completed' && !status.follow_up_open)
+  ) {
+    const error = new Error('The consultation conversation is closed.');
+    error.statusCode = 409;
+    error.code = 'CONSULTATION_CONVERSATION_CLOSED';
+    throw error;
+  }
+  return status;
+};
+
 const createDoctorMessage = async (pool, req, res) => {
   const taskId = String(req.params.taskId || '').trim();
   const parsed = patientMessageRequestSchema.safeParse(req.body);
@@ -216,10 +233,14 @@ const createDoctorMessage = async (pool, req, res) => {
       details: parsed.success ? undefined : parsed.error.issues,
     });
   }
+  const status = await patientMessageState(parsed.data.tenant_id, taskId, req.user.id);
   const data = await sendPatientMessage(pool, {
     userId: req.user.id,
     taskId,
-    input: parsed.data,
+    input: {
+      ...parsed.data,
+      message_type: status.status === 'completed' ? 'follow_up' : parsed.data.message_type,
+    },
   });
   return res.status(data.duplicate ? 200 : 201).json({ ok: true, data });
 };
@@ -232,6 +253,7 @@ const createDoctorAttachment = async (pool, req, res) => {
       .status(400)
       .json({ ok: false, error: 'A valid task, tenant and image are required.' });
   }
+  await patientMessageState(tenantId, taskId, req.user.id);
   const data = await sendPatientAttachment(pool, {
     userId: req.user.id,
     taskId,

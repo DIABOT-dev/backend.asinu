@@ -21,6 +21,12 @@ describe('ASINU -> Doctor task contract', () => {
     service_flow: 'clinical',
     priority: 'high',
     summary: 'Người dùng yêu cầu được bác sĩ tư vấn.',
+    clinical_intake: {
+      symptom_onset: 'today',
+      progression: 'stable',
+      severity: 'mild',
+      emergency_confirmation: true,
+    },
     consent_version: 'v1.0.0',
   };
 
@@ -74,6 +80,7 @@ describe('ASINU -> Doctor task contract', () => {
     expect(
       screenRemoteCareSuitability({
         summary: 'Đau đầu nhẹ, không có dấu hiệu cấp cứu và không khó thở dữ dội.',
+        clinical_intake: input.clinical_intake,
       })
     ).toMatchObject({ emergency: false, suitable_for_remote_care: true });
   });
