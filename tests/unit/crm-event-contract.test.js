@@ -7,8 +7,8 @@ const {
 
 describe('ASINU -> CRM event contract', () => {
   test('keeps the Phase 1 and deferred sets complete and unique', () => {
-    expect(CRM_PHASE_ONE_EVENT_TYPES).toHaveLength(25);
-    expect(CRM_DEFERRED_EVENT_TYPES).toHaveLength(10);
+    expect(CRM_PHASE_ONE_EVENT_TYPES).toHaveLength(31);
+    expect(CRM_DEFERRED_EVENT_TYPES).toHaveLength(4);
     expect(CRM_EVENT_TYPES).toHaveLength(35);
     expect(new Set(CRM_EVENT_TYPES).size).toBe(CRM_EVENT_TYPES.length);
   });

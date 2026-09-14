@@ -2,9 +2,8 @@
  * ASINU → CRM event catalog.
  *
  * Keep this list aligned with crm-contracts/src/index.ts. The App backend
- * deliberately knows the complete contract, while only Phase 1 events are
- * emitted today. Health labels and Doctor/service events are deferred until
- * their source modules are implemented.
+ * deliberately knows the complete contract. Events move into Phase 1 only
+ * after a real source emitter and its delivery contract are implemented.
  */
 
 const CRM_PHASE_ONE_EVENT_TYPES = Object.freeze([
@@ -33,19 +32,19 @@ const CRM_PHASE_ONE_EVENT_TYPES = Object.freeze([
   'subscription.expiring',
   'subscription.cancelled',
   'subscription.expired',
+  'service.requested',
+  'service.accepted',
+  'service.started',
+  'service.completed',
+  'service.cancelled',
+  'service.expired',
 ]);
 
 const CRM_DEFERRED_EVENT_TYPES = Object.freeze([
   'health.label.updated',
   'health.label.revoked',
-  'service.requested',
   'service.dispatched',
-  'service.accepted',
-  'service.started',
   'service.updated',
-  'service.completed',
-  'service.cancelled',
-  'service.expired',
 ]);
 
 const CRM_EVENT_TYPES = Object.freeze([...CRM_PHASE_ONE_EVENT_TYPES, ...CRM_DEFERRED_EVENT_TYPES]);

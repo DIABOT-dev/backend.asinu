@@ -32,6 +32,7 @@ async function callTextAi({
   maxTokens,
   jsonMode = false,
   provider,
+  strictProvider = false,
 }) {
   const selectedProvider = String(provider || CLINICAL_PROVIDER).toLowerCase();
   // ─── 1. MedGemma Route ───────────────────────────────────────────────────
@@ -69,6 +70,10 @@ async function callTextAi({
       provider: 'medgemma',
       model: res.meta?.model || 'medgemma',
     };
+  }
+
+  if (selectedProvider === 'medgemma' && strictProvider) {
+    throw new Error('MEDGEMMA_ENDPOINT is not set');
   }
 
   // ─── 2. OpenAI Route (Default / Fallback) ───────────────────────────────

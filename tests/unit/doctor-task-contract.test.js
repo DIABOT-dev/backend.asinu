@@ -50,7 +50,6 @@ describe('ASINU -> Doctor task contract', () => {
         app_user_id: '42',
         patient_ref: {
           app_user_id: '42',
-          display_name: 'Nguyễn Văn A',
           age_group: '40-49',
           gender: 'Nam',
         },
@@ -88,7 +87,6 @@ describe('ASINU -> Doctor task contract', () => {
   test('builds a bounded patient projection', () => {
     expect(buildPatientRef({ id: 7, full_name: 'Patient', phone: '0123456789' })).toEqual({
       app_user_id: '7',
-      display_name: 'Patient',
       age_group: null,
       gender: null,
       profile_version: null,

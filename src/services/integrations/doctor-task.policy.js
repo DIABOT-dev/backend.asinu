@@ -119,7 +119,6 @@ const normalizeSpecialty = (value) => {
 
 const buildPatientRef = (user) => ({
   app_user_id: String(user.id),
-  display_name: user.display_name || user.full_name || null,
   age_group: user.age_group || null,
   gender: user.gender || null,
   profile_version: user.profile_version ? new Date(user.profile_version).toISOString() : null,

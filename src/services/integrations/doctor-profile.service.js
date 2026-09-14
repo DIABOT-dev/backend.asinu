@@ -104,8 +104,7 @@ const loadPatientProfile = async (pool, req) => {
   }
 
   const result = await pool.query(
-    `SELECT u.id, COALESCE(u.full_name, u.display_name, u.email) AS full_name,
-            u.email, u.phone_number, u.avatar_url,
+    `SELECT u.id,
             p.gender, p.age, p.birth_year, p.date_of_birth,
             COALESCE(p.medical_conditions, '[]'::jsonb) AS medical_conditions,
             COALESCE(p.chronic_symptoms, '[]'::jsonb) AS chronic_symptoms,
@@ -234,12 +233,8 @@ const loadPatientProfile = async (pool, req) => {
     : [];
 
   return {
-    full_name: patient.full_name || null,
     gender: patient.gender || null,
     age,
-    phone: patient.phone_number || null,
-    email: patient.email || null,
-    address: null,
     consultation_history: consultationHistory.rows,
     medical_records: records.rows,
     medical_conditions: Array.isArray(patient.medical_conditions) ? patient.medical_conditions : [],
@@ -262,7 +257,6 @@ const loadPatientProfile = async (pool, req) => {
       uploaded_by: file.uploaded_by,
       created_at: file.created_at ? new Date(file.created_at).toISOString() : null,
     })),
-    avatar_url: patient.avatar_url || null,
     app_user_id: String(patient.id),
     profile_version: patient.profile_version
       ? new Date(patient.profile_version).toISOString()

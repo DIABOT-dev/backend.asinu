@@ -13,13 +13,13 @@ const {
   CRM_PHASE_ONE_EVENT_TYPES,
 } = require('../src/services/integrations/crm-event.catalog');
 
-const servicesRoot = path.join(__dirname, '..', 'src', 'services');
+const sourceRoot = path.join(__dirname, '..', 'src');
 const ignoredFiles = new Set([
-  path.join(servicesRoot, 'integrations', 'crm-event.catalog.js'),
-  path.join(servicesRoot, 'integrations', 'crm-event.service.js'),
+  path.join(sourceRoot, 'services', 'integrations', 'crm-event.catalog.js'),
+  path.join(sourceRoot, 'services', 'integrations', 'crm-event.service.js'),
   // The policy mirrors the complete contract for source-side filtering. Its
   // event names are not emitters and must not count as premature emissions.
-  path.join(servicesRoot, 'integrations', 'crm-event.policy.js'),
+  path.join(sourceRoot, 'services', 'integrations', 'crm-event.policy.js'),
 ]);
 
 function collectJavaScriptFiles(directory) {
@@ -33,7 +33,7 @@ function collectJavaScriptFiles(directory) {
   return files;
 }
 
-const source = collectJavaScriptFiles(servicesRoot)
+const source = collectJavaScriptFiles(sourceRoot)
   .map((file) => fs.readFileSync(file, 'utf8'))
   .join('\n');
 

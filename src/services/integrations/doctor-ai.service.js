@@ -179,10 +179,10 @@ const createDoctorAiAssist = async (pool, input) => {
       temperature: 0.2,
       maxTokens: 1000,
       jsonMode: true,
-      // Doctor triage requires strict JSON. Keep this provider independent
-      // from the general clinical provider so MedGemma can remain enabled for
-      // other ASINU flows without breaking the Doctor contract.
-      provider: process.env.DOCTOR_AI_PROVIDER || 'openai',
+      // Doctor copilot follows the clinical provider unless it has an explicit
+      // override. Once MedGemma is selected, never silently switch to OpenAI.
+      provider: process.env.DOCTOR_AI_PROVIDER || process.env.AI_PROVIDER_CLINICAL || 'openai',
+      strictProvider: true,
     });
   } catch (error) {
     throw integrationError(

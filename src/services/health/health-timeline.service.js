@@ -40,10 +40,9 @@ const rebuildPatientHealthTimeline = async (pool, userId) => {
     filesResult,
   ] = await Promise.all([
     pool.query(
-      `SELECT u.display_name, u.full_name, u.email, u.phone_number,
-              p.*
-         FROM users u LEFT JOIN user_onboarding_profiles p ON p.user_id = u.id
-        WHERE u.id = $1`,
+      `SELECT p.*
+         FROM user_onboarding_profiles p
+        WHERE p.user_id = $1`,
       [userId]
     ),
     pool.query(
@@ -118,10 +117,9 @@ const rebuildPatientHealthTimeline = async (pool, userId) => {
   const lines = [
     '# Health timeline',
     '',
-    '> Complete patient health timeline assembled from onboarding, health logs, check-ins and consultations. Use as context only; verify with the patient.',
+    '> De-identified health timeline assembled from onboarding, health logs, check-ins and consultations. Use as context only; verify with the patient.',
     '',
     '## Patient profile and declared health information',
-    `- Name: ${escapeMarkdown(profile.full_name || profile.display_name || 'unknown')}`,
     `- Gender: ${escapeMarkdown(profileValue(profile.gender))}`,
     `- Birth year/date of birth: ${escapeMarkdown(profileValue(profile.birth_year || profile.date_of_birth))}`,
     `- Height: ${escapeMarkdown(profileValue(profile.height_cm))} cm`,
