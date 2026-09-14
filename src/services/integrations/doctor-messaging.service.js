@@ -236,14 +236,30 @@ const sendDoctorMessage = async (pool, req, input) => {
     );
     if (user.rows[0]) {
       const isEnglish = user.rows[0].language === 'en';
+      const doctorName = typeof input.sender_name === 'string' ? input.sender_name.trim() : '';
+      const preview = input.content.slice(0, 180);
       await sendAndSave(
         pool,
         user.rows[0],
         'doctor_message',
-        isEnglish ? 'New message from your doctor' : 'Tin nhắn mới từ bác sĩ',
-        input.content.slice(0, 180),
+        isEnglish ? 'New message from Doctor' : 'Tin nhắn mới từ Doctor',
+        doctorName
+          ? isEnglish
+            ? `Dr. ${doctorName}: ${preview}`
+            : `Bác sĩ ${doctorName}: ${preview}`
+          : preview,
         { type: 'doctor_message', task_id: taskId, message_id: String(message.id) },
-        'high'
+        'high',
+        {
+          // Do not put the patient's health details on the device lock screen.
+          pushBody: isEnglish
+            ? doctorName
+              ? `Dr. ${doctorName} sent a message in your consultation.`
+              : 'Your doctor sent a message in your consultation.'
+            : doctorName
+              ? `Bác sĩ ${doctorName} đã gửi tin nhắn trong cuộc tư vấn của bạn.`
+              : 'Bác sĩ đã gửi tin nhắn trong cuộc tư vấn của bạn.',
+        }
       );
     }
   }

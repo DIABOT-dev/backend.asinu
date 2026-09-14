@@ -78,6 +78,7 @@ const doctorMessageSendSchema = doctorMessageQuerySchema
     message_type: z.enum(['question', 'consultation', 'follow_up']),
     client_message_id: z.string().uuid(),
     sender_ref: z.string().trim().min(1).max(160),
+    sender_name: z.string().trim().max(160).nullable().optional(),
   })
   .strict();
 

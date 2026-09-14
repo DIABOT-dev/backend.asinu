@@ -163,7 +163,16 @@ const IN_APP_ONLY_TYPES = new Set([
   'engagement', // tương tự
 ]);
 
-async function sendAndSave(pool, userOrId, type, title, body, data = {}, overridePriority = null) {
+async function sendAndSave(
+  pool,
+  userOrId,
+  type,
+  title,
+  body,
+  data = {},
+  overridePriority = null,
+  options = {}
+) {
   const isObject = typeof userOrId === 'object' && userOrId !== null;
   const userId = isObject ? userOrId.id : userOrId;
   const pushToken = isObject ? userOrId.push_token : null;
@@ -224,9 +233,14 @@ async function sendAndSave(pool, userOrId, type, title, body, data = {}, overrid
     return true;
   }
 
+  // Push notifications can appear on a lock screen. Callers may keep a rich
+  // preview in the in-app notification while using a privacy-safe body for
+  // the external push (for example, a Doctor message may contain health data).
+  const pushBody = typeof options.pushBody === 'string' ? options.pushBody : body;
+
   if (pushToken) {
     try {
-      const result = await sendPushNotification([pushToken], title, body, { type, ...data });
+      const result = await sendPushNotification([pushToken], title, pushBody, { type, ...data });
       return result?.ok || false;
     } catch {
       return false;

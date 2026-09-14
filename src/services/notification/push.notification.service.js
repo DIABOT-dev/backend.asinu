@@ -38,6 +38,7 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
   const SOUND_MAP = {
     care_circle_invitation: { channelId: 'care-circle', sound: 'asinu_care.wav', priority: 'high' },
     care_circle_accepted: { channelId: 'care-circle', sound: 'asinu_care.wav', priority: 'high' },
+    doctor_message: { channelId: 'doctor-consultation', sound: 'asinu_care.wav', priority: 'high' },
     alert: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
     caregiver_alert: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
     streak_7: { channelId: 'milestone', sound: 'asinu_milestone.wav', priority: 'normal' },
