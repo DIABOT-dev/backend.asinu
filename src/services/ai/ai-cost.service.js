@@ -22,6 +22,7 @@ const PRICING = {
   // Google — Gemini & MedGemma
   'gemini-2.0-flash': { input: 0.0001, output: 0.0004 },
   'gemini-1.5-pro': { input: 0.00125, output: 0.005 },
+  'medgemma-4b-it': { input: 0.00015, output: 0.0006 }, // placeholder until Dr7 pricing is firm
   'medgemma-27b-text-it': { input: 0.00015, output: 0.0006 }, // placeholder until Vertex pricing is firm
 
   // DiaBrain (internal, no marginal cost)

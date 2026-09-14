@@ -10,7 +10,13 @@
 
 const medgemmaProvider = require('./providers/medgemma');
 
-const CLINICAL_PROVIDER = (process.env.AI_PROVIDER_CLINICAL || 'openai').toLowerCase();
+// If MedGemma is configured but the provider flag was omitted, prefer the
+// configured clinical endpoint. An implicit OpenAI fallback made production
+// provider selection impossible to verify and could send clinical context to
+// the wrong vendor.
+const CLINICAL_PROVIDER = (
+  process.env.AI_PROVIDER_CLINICAL || (process.env.MEDGEMMA_ENDPOINT ? 'medgemma' : 'openai')
+).toLowerCase();
 
 /**
  * Call the configured text-based LLM.

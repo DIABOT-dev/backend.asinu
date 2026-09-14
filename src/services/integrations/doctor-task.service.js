@@ -40,6 +40,30 @@ const assertTenantAllowed = (tenantId) => {
   }
 };
 
+const stableJson = (value) => {
+  if (Array.isArray(value)) return value.map(stableJson);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value)
+        .sort()
+        .map((key) => [key, stableJson(value[key])])
+    );
+  }
+  return value;
+};
+
+const comparableTaskEnvelope = (envelope) => {
+  const { occurred_at: _occurredAt, ...stableEnvelope } = envelope;
+  return stableJson(stableEnvelope);
+};
+
+const idempotencyConflict = (message) => {
+  const error = new Error(message);
+  error.statusCode = 409;
+  error.code = 'DOCTOR_TASK_IDEMPOTENCY_CONFLICT';
+  return error;
+};
+
 const signPayload = (body, timestamp) =>
   'sha256=' +
   crypto
@@ -138,7 +162,7 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
     );
   };
   if (input.action === 'export') {
-    const [records, messages, files, lifecycle] = await Promise.all([
+    const [records, messages, files, lifecycle, timeline] = await Promise.all([
       pool.query(
         `SELECT id, record_type, title, diagnosis, summary, treatment, notes,
                 doctor_ref, source_task_id, recorded_at, created_at, updated_at
@@ -167,6 +191,12 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
           WHERE app_user_id = $1 ORDER BY occurred_at`,
         [userId]
       ),
+      pool.query(
+        `SELECT file_name, content_markdown, checkin_count, updated_at
+           FROM patient_health_timeline_documents
+          WHERE user_id = $1`,
+        [userId]
+      ),
     ]);
     const result = {
       ...response.data,
@@ -175,6 +205,7 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
         patient_files: files.rows,
         task_messages: messages.rows,
         task_lifecycle_events: lifecycle.rows,
+        health_timeline: timeline.rows[0] || null,
       },
     };
     await recordReceipt();
@@ -212,6 +243,10 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
       await client.query('DELETE FROM doctor_patient_files WHERE user_id = $1', [userId]);
       await client.query('DELETE FROM doctor_patient_medical_records WHERE user_id = $1', [userId]);
       await client.query('DELETE FROM doctor_task_messages WHERE user_id = $1', [userId]);
+      // The Markdown document is a denormalized copy of the records above;
+      // remove it too so an anonymize/delete request cannot leave stale
+      // profile, check-in or consultation content in the database.
+      await client.query('DELETE FROM patient_health_timeline_documents WHERE user_id = $1', [userId]);
       await client.query('DELETE FROM doctor_task_lifecycle_events WHERE app_user_id = $1', [
         userId,
       ]);
@@ -295,12 +330,30 @@ const enqueueDoctorTask = async (pool, input) => {
   assertDoctorTaskConfig();
   assertTenantAllowed(input.input.tenant_id);
   const envelope = buildDoctorTaskEnvelope(input);
-  await pool.query(
+  const envelopeJson = JSON.stringify(envelope);
+  const inserted = await pool.query(
     `INSERT INTO doctor_task_outbox(event_id, idempotency_key, tenant_id, payload)
      VALUES ($1, $2, $3, $4::jsonb)
-     ON CONFLICT (event_id) DO NOTHING`,
-    [envelope.event_id, envelope.idempotency_key, envelope.tenant_id, JSON.stringify(envelope)]
+     ON CONFLICT DO NOTHING
+     RETURNING event_id`,
+    [envelope.event_id, envelope.idempotency_key, envelope.tenant_id, envelopeJson]
   );
+  if (!inserted.rowCount) {
+    const existing = await pool.query(
+      `SELECT payload
+         FROM doctor_task_outbox
+        WHERE event_id = $1 OR idempotency_key = $2
+        LIMIT 1`,
+      [envelope.event_id, envelope.idempotency_key]
+    );
+    if (
+      !existing.rows[0] ||
+      JSON.stringify(comparableTaskEnvelope(existing.rows[0].payload)) !==
+        JSON.stringify(comparableTaskEnvelope(envelope))
+    ) {
+      throw idempotencyConflict('The task id was already used with different consultation data.');
+    }
+  }
   return { queued: true, event_id: envelope.event_id, task_id: envelope.payload.task_id };
 };
 

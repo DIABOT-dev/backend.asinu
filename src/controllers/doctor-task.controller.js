@@ -26,6 +26,8 @@ const {
 } = require('../services/integrations/doctor-messaging.service');
 const { enqueueCrmEvent } = require('../services/integrations/crm-event.service');
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 const loadPatientProjection = async (pool, userId) => {
   const result = await pool.query(
     `SELECT u.id, u.full_name, u.display_name, u.consent_accepted_at, u.consent_version,
@@ -248,10 +250,19 @@ const createDoctorMessage = async (pool, req, res) => {
 const createDoctorAttachment = async (pool, req, res) => {
   const taskId = String(req.params.taskId || '').trim();
   const tenantId = String(req.query.tenant_id || req.body?.tenant_id || '').trim();
-  if (!taskId || taskId.length > 160 || !tenantId || tenantId.length > 120 || !req.file) {
-    return res
-      .status(400)
-      .json({ ok: false, error: 'A valid task, tenant and image are required.' });
+  const clientMessageId = String(req.headers['x-client-message-id'] || '').trim();
+  if (
+    !taskId ||
+    taskId.length > 160 ||
+    !tenantId ||
+    tenantId.length > 120 ||
+    !req.file ||
+    !UUID_PATTERN.test(clientMessageId)
+  ) {
+    return res.status(400).json({
+      ok: false,
+      error: 'A valid task, tenant, image and client message id are required.',
+    });
   }
   await patientMessageState(tenantId, taskId, req.user.id);
   const data = await sendPatientAttachment(pool, {
@@ -261,13 +272,11 @@ const createDoctorAttachment = async (pool, req, res) => {
       tenant_id: tenantId,
       content: '',
       message_type: 'follow_up',
-      client_message_id: String(
-        req.headers['x-client-message-id'] || require('crypto').randomUUID()
-      ),
+      client_message_id: clientMessageId,
     },
     file: req.file,
   });
-  return res.status(201).json({ ok: true, data });
+  return res.status(data.duplicate ? 200 : 201).json({ ok: true, data });
 };
 
 module.exports = {

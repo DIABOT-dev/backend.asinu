@@ -1,7 +1,7 @@
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { assertTenantAllowed } = require('./doctor-task.service');
 const { verifyDoctorSignature, assertProfileRequest } = require('./doctor-profile.service');
-const { uploadBuffer } = require('../media/cloudinary-upload.service');
+const { uploadBuffer, deleteAsset } = require('../media/cloudinary-upload.service');
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 
 const integrationError = (statusCode, code, message) => {
@@ -9,6 +9,27 @@ const integrationError = (statusCode, code, message) => {
   error.statusCode = statusCode;
   error.code = code;
   return error;
+};
+
+const TERMINAL_LIFECYCLE_STATUSES = new Set(['cancelled', 'expired', 'failed']);
+
+const isDoctorTaskMessageable = ({ status, followUpUntil }, messageType, now = new Date()) => {
+  if (!status || !status.length) return true;
+  if (TERMINAL_LIFECYCLE_STATUSES.has(status)) return false;
+  if (status !== 'completed') return true;
+  return (
+    messageType === 'follow_up' &&
+    Boolean(followUpUntil && new Date(followUpUntil).getTime() > now.getTime())
+  );
+};
+
+const parseAttachment = (content) => {
+  if (typeof content !== 'string' || !content.startsWith('[ASINU_ATTACHMENT]')) return null;
+  try {
+    return JSON.parse(content.slice('[ASINU_ATTACHMENT]'.length));
+  } catch {
+    return null;
+  }
 };
 
 const loadOwnedTask = async (pool, tenantId, taskId, userId) => {
@@ -30,7 +51,19 @@ const loadOwnedTask = async (pool, tenantId, taskId, userId) => {
       'The Doctor task was not found for this patient.'
     );
   }
-  return result.rows[0];
+  const lifecycle = await pool.query(
+    `SELECT status, payload->>'follow_up_until' AS follow_up_until
+       FROM doctor_task_lifecycle_events
+      WHERE tenant_id = $1 AND task_id = $2
+      ORDER BY occurred_at DESC, created_at DESC
+      LIMIT 1`,
+    [tenantId, taskId]
+  );
+  return {
+    ...result.rows[0],
+    lifecycle_status: lifecycle.rows[0]?.status || null,
+    follow_up_until: lifecycle.rows[0]?.follow_up_until || null,
+  };
 };
 
 const listMessages = async (pool, tenantId, taskId, userId) => {
@@ -89,7 +122,15 @@ const insertMessage = async (client, input) => {
 
 const sendPatientMessage = async (pool, { userId, taskId, input }) => {
   assertTenantAllowed(input.tenant_id);
-  await loadOwnedTask(pool, input.tenant_id, taskId, userId);
+  const task = await loadOwnedTask(pool, input.tenant_id, taskId, userId);
+  if (
+    !isDoctorTaskMessageable(
+      { status: task.lifecycle_status, followUpUntil: task.follow_up_until },
+      input.message_type
+    )
+  ) {
+    throw integrationError(409, 'TASK_NOT_MESSAGEABLE', 'The consultation conversation is closed.');
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -143,6 +184,28 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
     throw integrationError(400, 'INVALID_PATIENT_FILE', 'A valid image up to 10 MB is required.');
   }
 
+  // Check the message key before touching Cloudinary. A mobile retry must not
+  // create another file when the original message was already persisted.
+  const existingMessage = await pool.query(
+    `SELECT id, task_id, sender_type, sender_ref, message_type, content,
+            client_message_id, created_at
+       FROM doctor_task_messages
+      WHERE tenant_id = $1 AND task_id = $2 AND user_id = $3 AND client_message_id = $4`,
+    [input.tenant_id, taskId, userId, input.client_message_id]
+  );
+  if (existingMessage.rows[0]) {
+    const existing = existingMessage.rows[0];
+    if (existing.sender_type !== 'patient' || existing.message_type !== input.message_type) {
+      throw integrationError(
+        409,
+        'MESSAGE_IDEMPOTENCY_CONFLICT',
+        'The message id was reused with different data.'
+      );
+    }
+    const attachment = parseAttachment(existing.content);
+    return { ...existing, duplicate: true, ...(attachment ? { attachment } : {}) };
+  }
+
   const uploaded = await uploadBuffer(file.buffer, {
     folder: process.env.CLOUDINARY_PATIENT_FILE_FOLDER || 'asinu/patient-files',
     resource_type: 'image',
@@ -173,11 +236,42 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
     size_bytes: attachment.size_bytes,
     url: attachment.secure_url,
   })}`;
-  return sendPatientMessage(pool, {
-    userId,
-    taskId,
-    input: { ...input, content },
-  }).then((message) => ({ ...message, attachment }));
+  try {
+    const message = await sendPatientMessage(pool, {
+      userId,
+      taskId,
+      input: { ...input, content },
+    });
+    if (message.duplicate) {
+      // Two identical uploads can pass the pre-check concurrently. The
+      // message unique constraint is the final authority; remove the losing
+      // file and return the already-persisted attachment.
+      await pool
+        .query('DELETE FROM doctor_patient_files WHERE id = $1 AND user_id = $2', [
+          attachment.id,
+          userId,
+        ])
+        .catch(() => {});
+      if (uploaded.public_id) await deleteAsset(uploaded.public_id, 'image').catch(() => {});
+      const existingAttachment = parseAttachment(message.content);
+      return {
+        ...message,
+        ...(existingAttachment ? { attachment: existingAttachment } : {}),
+      };
+    }
+    return { ...message, attachment };
+  } catch (error) {
+    await pool
+      .query('DELETE FROM doctor_patient_files WHERE id = $1 AND user_id = $2', [
+        attachment.id,
+        userId,
+      ])
+      .catch(() => {});
+    if (uploaded.public_id) {
+      await deleteAsset(uploaded.public_id, 'image').catch(() => {});
+    }
+    throw error;
+  }
 };
 
 const listPatientTasks = async (pool, userId, tenantId) => {
@@ -217,7 +311,15 @@ const queryDoctorMessages = async (pool, req, input) => {
 const sendDoctorMessage = async (pool, req, input) => {
   verifyDoctorSignature(req);
   const { tenantId, appUserId, taskId } = assertProfileRequest(input);
-  await loadOwnedTask(pool, tenantId, taskId, appUserId);
+  const task = await loadOwnedTask(pool, tenantId, taskId, appUserId);
+  if (
+    !isDoctorTaskMessageable(
+      { status: task.lifecycle_status, followUpUntil: task.follow_up_until },
+      input.message_type
+    )
+  ) {
+    throw integrationError(409, 'TASK_NOT_MESSAGEABLE', 'The consultation conversation is closed.');
+  }
   const message = await insertMessage(pool, {
     tenantId,
     taskId,
@@ -274,4 +376,5 @@ module.exports = {
   sendPatientAttachment,
   queryDoctorMessages,
   sendDoctorMessage,
+  isDoctorTaskMessageable,
 };

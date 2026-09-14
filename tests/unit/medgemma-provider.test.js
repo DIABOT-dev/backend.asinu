@@ -36,6 +36,19 @@ describe('medgemma provider', () => {
     expect(r.meta.tokens_used.total).toBe(15);
   });
 
+  test('callMedGemma sends a Dr7-compatible body by default', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: '{"ok":true}' } }] }),
+    });
+
+    await medgemma.callMedGemma({ prompt: 'hi', jsonMode: true });
+    const [, request] = global.fetch.mock.calls[0];
+    const body = JSON.parse(request.body);
+    expect(body.model).toBe('medgemma-27b-text-it');
+    expect(body.response_format).toBeUndefined();
+  });
+
   test('callMedGemma falls back to predictions[].content', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,

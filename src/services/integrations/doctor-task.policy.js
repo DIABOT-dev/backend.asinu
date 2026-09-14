@@ -21,7 +21,9 @@ const doctorTaskRequestSchema = z
       })
       .strict(),
     consent_version: z.string().trim().min(1).max(80),
-    task_id: z.string().trim().min(1).max(160).optional(),
+    // The client owns this idempotency key. Generating it only on the server
+    // makes a retry after an app restart create a second consultation.
+    task_id: z.string().trim().min(1).max(160),
   })
   .strict();
 

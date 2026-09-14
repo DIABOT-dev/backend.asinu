@@ -13,6 +13,9 @@ const {
   doctorAiAssistSchema,
   screenRemoteCareSuitability,
 } = require('../../src/services/integrations/doctor-task.policy');
+const {
+  isDoctorTaskMessageable,
+} = require('../../src/services/integrations/doctor-messaging.service');
 
 describe('ASINU -> Doctor task contract', () => {
   const input = {
@@ -28,6 +31,7 @@ describe('ASINU -> Doctor task contract', () => {
       emergency_confirmation: true,
     },
     consent_version: 'v1.0.0',
+    task_id: 'doctor-task:42:retry-safe',
   };
 
   test('creates a tenant-scoped envelope from the authenticated user', () => {
@@ -193,5 +197,28 @@ describe('ASINU -> Doctor task contract', () => {
         locale: 'en',
       }).success
     ).toBe(true);
+  });
+
+  test('keeps the ASINU message boundary closed after terminal Doctor lifecycle states', () => {
+    const now = new Date('2026-09-14T10:00:00.000Z');
+    expect(isDoctorTaskMessageable({ status: 'cancelled' }, 'follow_up', now)).toBe(false);
+    expect(isDoctorTaskMessageable({ status: 'expired' }, 'follow_up', now)).toBe(false);
+    expect(
+      isDoctorTaskMessageable(
+        { status: 'completed', followUpUntil: '2026-09-14T10:00:01.000Z' },
+        'follow_up',
+        now
+      )
+    ).toBe(true);
+    expect(
+      isDoctorTaskMessageable(
+        { status: 'completed', followUpUntil: '2026-09-14T10:00:01.000Z' },
+        'question',
+        now
+      )
+    ).toBe(false);
+    expect(
+      isDoctorTaskMessageable({ status: 'completed', followUpUntil: null }, 'follow_up', now)
+    ).toBe(false);
   });
 });
