@@ -1,5 +1,6 @@
 {
   "error.server": "Server error",
+  "doctor.task_not_ready": "Your consultation is still being prepared. Please try again in a few seconds.",
   "error.missing_auth_token": "Missing authentication token",
   "error.invalid_token": "Invalid token",
   "error.missing_provider_id_or_email": "Missing provider_id or email",

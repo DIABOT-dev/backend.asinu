@@ -1,5 +1,6 @@
 {
   "error.server": "Lỗi server",
+  "doctor.task_not_ready": "Ca tư vấn đang được khởi tạo, vui lòng thử lại sau ít giây.",
   "error.missing_auth_token": "Thiếu token xác thực",
   "error.invalid_token": "Token không hợp lệ",
   "error.missing_provider_id_or_email": "Thiếu provider_id hoặc email",

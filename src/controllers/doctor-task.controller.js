@@ -24,6 +24,7 @@ const {
   sendPatientMessage,
   sendPatientAttachment,
 } = require('../services/integrations/doctor-messaging.service');
+const { waitForDoctorTask } = require('../services/integrations/doctor-task-readiness');
 const { enqueueCrmEvent } = require('../services/integrations/crm-event.service');
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -209,9 +210,11 @@ const listDoctorMessages = async (pool, req, res) => {
 };
 
 const patientMessageState = async (tenantId, taskId, userId) => {
-  const status = await requestDoctorTaskStatus({
-    input: { tenant_id: tenantId, task_id: taskId, app_user_id: String(userId) },
-  });
+  const status = await waitForDoctorTask(() =>
+    requestDoctorTaskStatus({
+      input: { tenant_id: tenantId, task_id: taskId, app_user_id: String(userId) },
+    })
+  );
   const terminal = ['cancelled', 'expired', 'emergency_referred', 'forwarded'];
   if (
     terminal.includes(status.status) ||
@@ -225,6 +228,17 @@ const patientMessageState = async (tenantId, taskId, userId) => {
   return status;
 };
 
+const sendTaskReadinessError = (error, req, res) => {
+  if (error?.code !== 'DOCTOR_TASK_NOT_READY') return false;
+  res.status(409).json({
+    ok: false,
+    error: t('doctor.task_not_ready', getLang(req)),
+    code: error.code,
+    retryable: true,
+  });
+  return true;
+};
+
 const createDoctorMessage = async (pool, req, res) => {
   const taskId = String(req.params.taskId || '').trim();
   const parsed = patientMessageRequestSchema.safeParse(req.body);
@@ -235,7 +249,13 @@ const createDoctorMessage = async (pool, req, res) => {
       details: parsed.success ? undefined : parsed.error.issues,
     });
   }
-  const status = await patientMessageState(parsed.data.tenant_id, taskId, req.user.id);
+  let status;
+  try {
+    status = await patientMessageState(parsed.data.tenant_id, taskId, req.user.id);
+  } catch (error) {
+    if (sendTaskReadinessError(error, req, res)) return;
+    throw error;
+  }
   const data = await sendPatientMessage(pool, {
     userId: req.user.id,
     taskId,
@@ -264,7 +284,12 @@ const createDoctorAttachment = async (pool, req, res) => {
       error: 'A valid task, tenant, image and client message id are required.',
     });
   }
-  await patientMessageState(tenantId, taskId, req.user.id);
+  try {
+    await patientMessageState(tenantId, taskId, req.user.id);
+  } catch (error) {
+    if (sendTaskReadinessError(error, req, res)) return;
+    throw error;
+  }
   const data = await sendPatientAttachment(pool, {
     userId: req.user.id,
     taskId,
