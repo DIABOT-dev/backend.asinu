@@ -55,13 +55,18 @@ const requestDoctorTask = async (pool, req, res) => {
   }
 
   const patient = await loadPatientProjection(pool, req.user.id);
-  if (!patient) return res.status(404).json({ ok: false, error: 'Patient not found.' });
+  if (!patient) {
+    return res.status(404).json({
+      ok: false,
+      error: t('error.patient_not_found', getLang(req)),
+      code: 'PATIENT_NOT_FOUND',
+    });
+  }
   const screening = screenRemoteCareSuitability(parsed.data);
   if (!screening.suitable_for_remote_care) {
     return res.status(422).json({
       ok: false,
-      error:
-        'Dấu hiệu có thể cần cấp cứu và không phù hợp để chờ tư vấn từ xa. Hãy gọi 115 hoặc đến cơ sở y tế gần nhất.',
+      error: t('doctor.remote_care_emergency_blocked', getLang(req)),
       code: 'REMOTE_CARE_EMERGENCY_BLOCKED',
       data: screening,
     });
@@ -132,7 +137,8 @@ const submitDoctorRating = async (pool, req, res) => {
   if (!parsed.success || !taskId || taskId.length > 160) {
     return res.status(400).json({
       ok: false,
-      error: 'Invalid patient rating request.',
+      error: t('doctor.invalid_rating_request', getLang(req)),
+      code: 'INVALID_PATIENT_RATING_REQUEST',
       details: parsed.success ? undefined : parsed.error.issues,
     });
   }
@@ -149,7 +155,8 @@ const requestDoctorPrivacy = async (pool, req, res) => {
   if (!parsed.success) {
     return res.status(400).json({
       ok: false,
-      error: 'Invalid privacy request.',
+      error: t('doctor.invalid_privacy_request', getLang(req)),
+      code: 'INVALID_PRIVACY_REQUEST',
       details: parsed.error.issues,
     });
   }
@@ -165,7 +172,8 @@ const recommendDoctor = async (_pool, req, res) => {
   if (!parsed.success) {
     return res.status(400).json({
       ok: false,
-      error: 'Invalid Doctor recommendation request.',
+      error: t('doctor.invalid_recommendation_request', getLang(req)),
+      code: 'INVALID_DOCTOR_RECOMMENDATION_REQUEST',
       details: parsed.error.issues,
     });
   }
@@ -176,7 +184,11 @@ const recommendDoctor = async (_pool, req, res) => {
 const listDoctorSpecialties = async (_pool, req, res) => {
   const tenantId = String(req.body?.tenant_id || '').trim();
   if (!tenantId || tenantId.length > 120) {
-    return res.status(400).json({ ok: false, error: 'A valid tenant_id is required.' });
+    return res.status(400).json({
+      ok: false,
+      error: t('doctor.tenant_required', getLang(req)),
+      code: 'TENANT_REQUIRED',
+    });
   }
   return res.json({ ok: true, data: await requestDoctorSpecialties({ tenantId }) });
 };
@@ -187,7 +199,11 @@ const listDoctorClinics = async (_pool, _req, res) =>
 const listDoctorTasks = async (pool, req, res) => {
   const tenantId = String(req.query.tenant_id || '').trim();
   if (!tenantId || tenantId.length > 120) {
-    return res.status(400).json({ ok: false, error: 'A valid tenant_id is required.' });
+    return res.status(400).json({
+      ok: false,
+      error: t('doctor.tenant_required', getLang(req)),
+      code: 'TENANT_REQUIRED',
+    });
   }
   return res.json({ ok: true, data: await listPatientTasks(pool, req.user.id, tenantId) });
 };
@@ -198,7 +214,11 @@ const listDoctorMessages = async (pool, req, res) => {
   if (!taskId || taskId.length > 160 || !tenantId || tenantId.length > 120) {
     return res
       .status(400)
-      .json({ ok: false, error: 'A valid task id and tenant_id are required.' });
+      .json({
+        ok: false,
+        error: t('doctor.task_tenant_required', getLang(req)),
+        code: 'TASK_TENANT_REQUIRED',
+      });
   }
   const data = await listMessages(pool, tenantId, taskId, req.user.id);
   let taskStatus = null;
@@ -223,7 +243,7 @@ const patientMessageState = async (tenantId, taskId, userId) => {
     terminal.includes(status.status) ||
     (status.status === 'completed' && !status.follow_up_open)
   ) {
-    const error = new Error('The consultation conversation is closed.');
+    const error = new Error('CONSULTATION_CONVERSATION_CLOSED');
     error.statusCode = 409;
     error.code = 'CONSULTATION_CONVERSATION_CLOSED';
     throw error;
@@ -248,7 +268,8 @@ const createDoctorMessage = async (pool, req, res) => {
   if (!taskId || taskId.length > 160 || !parsed.success) {
     return res.status(400).json({
       ok: false,
-      error: 'Invalid Doctor message.',
+      error: t('doctor.message_invalid', getLang(req)),
+      code: 'INVALID_DOCTOR_MESSAGE',
       details: parsed.success ? undefined : parsed.error.issues,
     });
   }
@@ -284,7 +305,8 @@ const createDoctorAttachment = async (pool, req, res) => {
   ) {
     return res.status(400).json({
       ok: false,
-      error: 'A valid task, tenant, image and client message id are required.',
+      error: t('doctor.attachment_required', getLang(req)),
+      code: 'DOCTOR_ATTACHMENT_REQUIRED',
     });
   }
   try {
@@ -325,7 +347,11 @@ const createDoctorVoice = async (pool, req, res) => {
   ) {
     return res
       .status(400)
-      .json({ ok: false, error: 'A valid task, audio and client message id are required.' });
+      .json({
+        ok: false,
+        error: t('doctor.voice_required', getLang(req)),
+        code: 'DOCTOR_VOICE_REQUIRED',
+      });
   }
   try {
     await patientMessageState(tenantId, taskId, req.user.id);
@@ -347,13 +373,22 @@ const createDoctorMessageAction = async (pool, req, res) => {
   const taskId = String(req.params.taskId || '').trim();
   const tenantId = String(req.body?.tenant_id || req.query.tenant_id || '').trim();
   if (!taskId || taskId.length > 160 || !tenantId || tenantId.length > 120) {
-    return res.status(400).json({ ok: false, error: 'A valid task and tenant_id are required.' });
+    return res.status(400).json({
+      ok: false,
+      error: t('doctor.task_required', getLang(req)),
+      code: 'TASK_REQUIRED',
+    });
   }
   const parsed = messageActionSchema.safeParse({ ...req.body, tenant_id: tenantId });
   if (!parsed.success) {
     return res
       .status(400)
-      .json({ ok: false, error: 'Invalid message action.', details: parsed.error.issues });
+      .json({
+        ok: false,
+        error: t('doctor.action_invalid', getLang(req)),
+        code: 'INVALID_MESSAGE_ACTION',
+        details: parsed.error.issues,
+      });
   }
   const data = await messageAction(pool, {
     tenantId,

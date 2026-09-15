@@ -23,14 +23,32 @@ const { t, getLang } = require('../i18n');
 async function testNotificationHandler(pool, req, res) {
   const { sendPushNotification } = require('../services/notification/push.notification.service');
   const { type } = req.body;
-  if (!type) return res.status(400).json({ ok: false, error: 'type required' });
+  if (!type) {
+    return res.status(400).json({
+      ok: false,
+      error: t('notification.type_required', getLang(req)),
+      code: 'NOTIFICATION_TYPE_REQUIRED',
+    });
+  }
 
   try {
     const token = await notificationService.getUserPushToken(pool, req.user.id);
-    if (!token) return res.json({ ok: false, error: 'No push_token saved for this user' });
+    if (!token) {
+      return res.json({
+        ok: false,
+        error: t('notification.push_token_missing', getLang(req)),
+        code: 'PUSH_TOKEN_MISSING',
+      });
+    }
 
     const notif = NOTIF_MAP[type];
-    if (!notif) return res.status(400).json({ ok: false, error: `Unknown type: ${type}` });
+    if (!notif) {
+      return res.status(400).json({
+        ok: false,
+        error: t('notification.unknown_type', getLang(req), { type }),
+        code: 'UNKNOWN_NOTIFICATION_TYPE',
+      });
+    }
 
     const result = await sendPushNotification([token], notif.title, notif.body, { type });
 
@@ -46,7 +64,7 @@ async function testNotificationHandler(pool, req, res) {
 
     return res.json({ ok: true, type, title: notif.title, body: notif.body, pushResult: result });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -61,7 +79,11 @@ async function getNotifications(pool, req, res) {
   const result = await notificationService.getNotifications(pool, req.user.id, { page, limit });
 
   if (!result.ok) {
-    return res.status(500).json(result);
+    return res.status(500).json({
+      ...result,
+      error: t('notification.cannot_get_list', getLang(req)),
+      code: 'NOTIFICATIONS_LIST_FAILED',
+    });
   }
 
   return res.status(200).json(result);
@@ -85,7 +107,11 @@ async function markAsRead(pool, req, res) {
 
   if (!result.ok) {
     const statusCode = result.statusCode || 500;
-    return res.status(statusCode).json(result);
+    return res.status(statusCode).json({
+      ...result,
+      error: t(result.statusCode === 404 ? 'notification.not_found' : 'notification.cannot_mark_read', getLang(req)),
+      code: result.statusCode === 404 ? 'NOTIFICATION_NOT_FOUND' : 'NOTIFICATION_READ_FAILED',
+    });
   }
 
   return res.status(200).json(result);
@@ -99,7 +125,11 @@ async function markAllAsRead(pool, req, res) {
   const result = await notificationService.markAllAsRead(pool, req.user.id);
 
   if (!result.ok) {
-    return res.status(500).json(result);
+    return res.status(500).json({
+      ...result,
+      error: t('notification.cannot_mark_all_read', getLang(req)),
+      code: 'NOTIFICATIONS_MARK_ALL_READ_FAILED',
+    });
   }
 
   return res.status(200).json(result);
@@ -114,7 +144,7 @@ async function getNotificationPreferences(pool, req, res) {
     const prefs = await getPreferences(pool, req.user.id);
     return res.status(200).json({ ok: true, ...prefs });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -166,7 +196,7 @@ async function updateNotificationPreferences(pool, req, res) {
     const prefs = await getPreferences(pool, req.user.id);
     return res.status(200).json({ ok: true, ...prefs });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -179,7 +209,7 @@ async function previewEngagement(pool, req, res) {
     const result = await previewEngagementNotification(pool, req.user.id);
     return res.status(200).json({ ok: true, ...result });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -191,7 +221,11 @@ let _engagementRunning = false;
  * Run AI-driven engagement notifications for inactive users (cron)
  */
 async function runEngagement(pool, req, res) {
-  if (_engagementRunning) return res.status(429).json({ error: 'Engagement cron already running' });
+  if (_engagementRunning) return res.status(429).json({
+    ok: false,
+    error: t('notification.cron_busy', getLang(req)),
+    code: 'NOTIFICATION_JOB_BUSY',
+  });
   _engagementRunning = true;
   try {
     const secret = process.env.CRON_SECRET;
@@ -202,7 +236,7 @@ async function runEngagement(pool, req, res) {
     const result = await runEngagementNotifications(pool);
     return res.status(200).json(result);
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   } finally {
     _engagementRunning = false;
   }
@@ -213,7 +247,11 @@ async function runEngagement(pool, req, res) {
  * Run basic scheduled notifications (cron)
  */
 async function runBasic(pool, req, res) {
-  if (_basicRunning) return res.status(429).json({ error: 'Basic cron already running' });
+  if (_basicRunning) return res.status(429).json({
+    ok: false,
+    error: t('notification.cron_busy', getLang(req)),
+    code: 'NOTIFICATION_JOB_BUSY',
+  });
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers['x-cron-secret'] !== secret) {
     return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
@@ -236,7 +274,7 @@ async function runBasic(pool, req, res) {
     const result = await runBasicNotifications(pool, forceHour, forceMinute);
     return res.status(200).json(result);
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   } finally {
     _basicRunning = false;
   }
@@ -245,12 +283,24 @@ async function runBasic(pool, req, res) {
 async function deleteOne(pool, req, res) {
   try {
     const id = parseInt(req.params.id);
-    if (!id || isNaN(id)) return res.status(400).json({ ok: false, error: 'Invalid ID' });
+    if (!id || isNaN(id)) {
+      return res.status(400).json({
+        ok: false,
+        error: t('notification.invalid_id', getLang(req)),
+        code: 'INVALID_NOTIFICATION_ID',
+      });
+    }
     const result = await notificationService.deleteNotification(pool, id, req.user.id);
-    if (!result.deleted) return res.status(404).json({ ok: false, error: 'Not found' });
+    if (!result.deleted) {
+      return res.status(404).json({
+        ok: false,
+        error: t('notification.not_found', getLang(req)),
+        code: 'NOTIFICATION_NOT_FOUND',
+      });
+    }
     return res.json({ ok: true });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -259,7 +309,7 @@ async function deleteAll(pool, req, res) {
     await notificationService.deleteAllNotifications(pool, req.user.id);
     return res.json({ ok: true });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 

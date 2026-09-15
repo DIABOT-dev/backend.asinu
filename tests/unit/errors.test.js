@@ -1,4 +1,5 @@
 const { AppError, asAppError, ERROR_CODES } = require('../../src/lib/errors');
+const { t } = require('../../src/i18n');
 
 describe('AppError', () => {
   test('maps code key to http status', () => {
@@ -50,4 +51,22 @@ test('ERROR_CODES has stable shape', () => {
     expect(typeof ERROR_CODES[key].http).toBe('number');
     expect(typeof ERROR_CODES[key].code).toBe('string');
   }
+});
+
+test('localized AI prompts use specialist terminology', () => {
+  const promptKeys = [
+    'prompt.mood',
+    'prompt.followup',
+    'prompt.symptom',
+    'prompt.risk_assessment',
+    'prompt.health_assessment',
+    'prompt.emergency_triage',
+    'prompt.system_chat',
+  ];
+  for (const key of promptKeys) {
+    expect(t(key, 'vi')).not.toMatch(/bác sĩ/i);
+    expect(t(key, 'en')).not.toMatch(/\bdoctor\b/i);
+  }
+  expect(t('prompt.mood', 'vi')).toContain('chuyên gia');
+  expect(t('prompt.mood', 'en')).toContain('specialist');
 });

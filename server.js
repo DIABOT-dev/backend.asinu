@@ -159,13 +159,42 @@ app.use('/api/asinu-brain', asinuBrainRoutes(pool));
 // Sentry error handler must run BEFORE our custom one
 app.use(sentryErrorHandler());
 
-// Global error handler — suppress client-aborted requests
+const GLOBAL_ERROR_MESSAGE_KEYS = {
+  UNAUTHORIZED: 'error.unauthenticated',
+  TOKEN_EXPIRED: 'error.invalid_token',
+  VALIDATION_FAILED: 'error.invalid_data',
+  INVALID_INPUT: 'error.invalid_data',
+  MISSING_FIELD: 'error.invalid_data',
+  NOT_FOUND: 'error.resource_not_found',
+  CONFLICT: 'error.conflict',
+  ALREADY_EXISTS: 'error.conflict',
+  RATE_LIMITED: 'error.rate_limited',
+  QUOTA_EXCEEDED: 'error.quota_exceeded',
+  PAYMENT_FAILED: 'error.payment_failed',
+  PAYMENT_NOT_FOUND: 'error.payment_not_found',
+  AMOUNT_MISMATCH: 'error.amount_mismatch',
+  SUBSCRIPTION_REQUIRED: 'error.premium_required',
+  INVALID_FILE: 'error.invalid_data',
+  FILE_TOO_LARGE: 'error.file_too_large',
+  UPSTREAM_FAILED: 'error.service_unavailable',
+  SERVICE_UNAVAILABLE: 'error.service_unavailable',
+  CONSULTATION_CONVERSATION_CLOSED: 'doctor.conversation_closed',
+  INTERNAL_ERROR: 'error.server',
+};
+
+// Global error handler — suppress client-aborted requests and return a
+// localized, safe explanation instead of leaking a stack or raw DB error.
 app.use((err, req, res, _next) => {
   if (err.type === 'request.aborted' || err.code === 'ECONNRESET') return;
   logger.error('unhandled_error', { err, path: req?.path, method: req?.method });
   if (!res.headersSent) {
     const code = err.code && typeof err.code === 'string' ? err.code : 'INTERNAL_ERROR';
-    res.status(err.statusCode || 500).json({ ok: false, error: 'Internal server error', code });
+    const key = GLOBAL_ERROR_MESSAGE_KEYS[code] || 'error.server';
+    res.status(err.statusCode || 500).json({
+      ok: false,
+      error: t(key, getLang(req)),
+      code,
+    });
   }
 });
 

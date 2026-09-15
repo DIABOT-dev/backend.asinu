@@ -27,11 +27,19 @@ async function startCheckinHandler(pool, req, res) {
   // Validate locations array (mỗi element phải nằm trong enum)
   if (locations !== undefined && locations !== null) {
     if (!Array.isArray(locations)) {
-      return res.status(400).json({ ok: false, error: 'body_locations must be an array' });
+      return res.status(400).json({
+        ok: false,
+        error: t('error.body_locations_array', getLang(req)),
+        code: 'BODY_LOCATIONS_ARRAY_REQUIRED',
+      });
     }
     const invalid = locations.find((l) => !BODY_LOCATIONS.includes(l));
     if (invalid) {
-      return res.status(400).json({ ok: false, error: `invalid body_location: ${invalid}` });
+      return res.status(400).json({
+        ok: false,
+        error: t('error.invalid_body_location', getLang(req), { location: invalid }),
+        code: 'INVALID_BODY_LOCATION',
+      });
     }
     // Dedupe + giới hạn cứng max 7 (toàn bộ enum) để tránh array bloated
     locations = [...new Set(locations)].slice(0, 7);
@@ -52,7 +60,7 @@ async function startCheckinHandler(pool, req, res) {
     );
     return res.json({ ok: true, session });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -84,7 +92,7 @@ async function followUpHandler(pool, req, res) {
     }
     return res.json({ ok: true, session });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -101,7 +109,7 @@ async function triageHandler(pool, req, res) {
     );
     return res.json({ ok: true, ...result });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -110,7 +118,7 @@ async function todayCheckinHandler(pool, req, res) {
     const { session, continuityMessage } = await checkinService.getTodayCheckin(pool, req.user.id);
     return res.json({ ok: true, session, continuityMessage });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -125,7 +133,7 @@ async function emergencyHandler(pool, req, res) {
     });
     return res.json({ ...result, ...caregiverStatus });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -134,7 +142,7 @@ async function pendingAlertsHandler(pool, req, res) {
     const alerts = await checkinService.getPendingCaregiverAlerts(pool, req.user.id);
     return res.json({ ok: true, alerts });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -147,7 +155,7 @@ async function confirmAlertHandler(pool, req, res) {
     const result = await checkinService.confirmCaregiverAlert(pool, req.user.id, alert_id, action);
     return res.json(result);
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -156,11 +164,15 @@ async function simulateTimePassHandler(pool, req, res) {
   try {
     const session = await checkinService.simulateTimePassing(pool, req.user.id);
     if (!session) {
-      return res.json({ ok: false, error: 'No active session today' });
+      return res.json({
+        ok: false,
+        error: t('error.no_active_checkin', getLang(req)),
+        code: 'NO_ACTIVE_CHECKIN',
+      });
     }
-    return res.json({ ok: true, session, message: 'Time simulated — follow-up ready' });
+    return res.json({ ok: true, session, message: t('error.followup_ready', getLang(req)) });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -170,7 +182,7 @@ async function resetTodayHandler(pool, req, res) {
     await checkinService.resetTodayCheckin(pool, req.user.id);
     return res.json({ ok: true, message: 'Today session reset' });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -181,7 +193,7 @@ async function healthReportHandler(pool, req, res) {
     const report = await checkinService.getHealthReport(pool, req.user.id, days);
     return res.json({ ok: true, period, ...report });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -194,7 +206,7 @@ async function healthScoreHandler(pool, req, res) {
     const result = await checkinService.getHealthScore(pool, req.user.id);
     return res.json({ ok: true, ...result });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -207,7 +219,7 @@ async function engagementPatternHandler(pool, req, res) {
     const pattern = await engagementService.getUserPattern(pool, req.user.id);
     return res.json({ ok: true, ...pattern });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -220,7 +232,7 @@ async function engagementOptimalTimeHandler(pool, req, res) {
     const times = await engagementService.getOptimalNotificationTime(pool, req.user.id);
     return res.json({ ok: true, ...times });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
