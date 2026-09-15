@@ -1,4 +1,5 @@
 require('dotenv').config();
+const http = require('http');
 const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
@@ -28,6 +29,9 @@ const { startScheduler } = require('./src/scheduler');
 const { assertCrmIntegrationConfig } = require('./src/services/integrations/crm-event.service');
 const doctorTaskRoutes = require('./src/routes/doctor-task.routes');
 const doctorProfileRoutes = require('./src/routes/doctor-profile.routes');
+const {
+  attachDoctorChatWebSocketServer,
+} = require('./src/services/integrations/doctor-chat-realtime');
 
 const PORT = process.env.PORT || 3000;
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -172,7 +176,10 @@ getRedis()
     logger.warn('redis.connect_failed', { err });
   });
 
-app.listen(PORT, () => {
+const server = http.createServer(app);
+const chatWebSocketServer = attachDoctorChatWebSocketServer(server, pool);
+
+server.listen(PORT, () => {
   logger.info('server.listening', { port: PORT });
 });
 

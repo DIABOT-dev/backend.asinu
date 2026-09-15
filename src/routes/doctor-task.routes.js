@@ -2,8 +2,10 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const {
   imageUpload,
+  audioUpload,
   handleUpload,
   verifyImageMagicBytes,
+  verifyAudioMagicBytes,
 } = require('../middleware/upload.middleware');
 const {
   requestDoctorTask,
@@ -16,6 +18,8 @@ const {
   listDoctorMessages,
   createDoctorMessage,
   createDoctorAttachment,
+  createDoctorVoice,
+  createDoctorMessageAction,
   getDoctorPrivacyReceipts,
 } = require('../controllers/doctor-task.controller');
 
@@ -33,12 +37,22 @@ function doctorTaskRoutes(pool) {
   router.post('/tasks/:taskId/messages', requireAuth, (req, res, next) =>
     Promise.resolve(createDoctorMessage(pool, req, res)).catch(next)
   );
+  router.post('/tasks/:taskId/messages/action', requireAuth, (req, res, next) =>
+    Promise.resolve(createDoctorMessageAction(pool, req, res)).catch(next)
+  );
   router.post(
     '/tasks/:taskId/attachments',
     requireAuth,
     handleUpload(imageUpload.single('file')),
     verifyImageMagicBytes,
     (req, res, next) => Promise.resolve(createDoctorAttachment(pool, req, res)).catch(next)
+  );
+  router.post(
+    '/tasks/:taskId/voice',
+    requireAuth,
+    handleUpload(audioUpload.single('file')),
+    verifyAudioMagicBytes,
+    (req, res, next) => Promise.resolve(createDoctorVoice(pool, req, res)).catch(next)
   );
   router.post('/tasks/:taskId/rating', requireAuth, (req, res, next) =>
     Promise.resolve(submitDoctorRating(pool, req, res)).catch(next)

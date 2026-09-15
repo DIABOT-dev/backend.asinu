@@ -66,11 +66,56 @@ const patientMessageRequestSchema = z
   })
   .strict();
 
+const messageActionSchema = z
+  .object({
+    tenant_id: z.string().trim().min(1).max(120),
+    action: z.enum(['read', 'typing', 'edit', 'unsend', 'delete_for_me', 'pin', 'unpin']),
+    message_id: z.string().uuid().optional(),
+    message_ids: z.array(z.string().uuid()).max(100).optional(),
+    content: z.string().trim().min(1).max(5000).optional(),
+    is_typing: z.boolean().optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      ['edit', 'unsend', 'delete_for_me', 'pin', 'unpin'].includes(value.action) &&
+      !value.message_id
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['message_id'],
+        message: 'A message id is required.',
+      });
+    }
+    if (value.action === 'edit' && !value.content) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['content'],
+        message: 'Message content is required.',
+      });
+    }
+    if (value.action === 'read' && (!value.message_ids || value.message_ids.length === 0)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['message_ids'],
+        message: 'Message ids are required.',
+      });
+    }
+    if (value.action === 'typing' && typeof value.is_typing !== 'boolean') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['is_typing'],
+        message: 'Typing state is required.',
+      });
+    }
+  });
+
 const doctorMessageQuerySchema = z
   .object({
     tenant_id: z.string().trim().min(1).max(120),
     task_id: z.string().trim().min(1).max(160),
     app_user_id: z.string().trim().min(1).max(80),
+    viewer_ref: z.string().trim().min(1).max(160).optional(),
   })
   .strict();
 
@@ -78,6 +123,74 @@ const doctorMessageSendSchema = doctorMessageQuerySchema
   .extend({
     content: z.string().trim().min(1).max(5000),
     message_type: z.enum(['question', 'consultation', 'follow_up']),
+    client_message_id: z.string().uuid(),
+    sender_ref: z.string().trim().min(1).max(160),
+    sender_name: z.string().trim().max(160).nullable().optional(),
+  })
+  .strict();
+
+const doctorMessageActionSchema = doctorMessageQuerySchema
+  .extend({
+    action: z.enum(['read', 'typing', 'edit', 'unsend', 'delete_for_me', 'pin', 'unpin']),
+    message_id: z.string().uuid().optional(),
+    message_ids: z.array(z.string().uuid()).max(100).optional(),
+    content: z.string().trim().min(1).max(5000).optional(),
+    is_typing: z.boolean().optional(),
+    actor_ref: z.string().trim().min(1).max(160),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (
+      ['edit', 'unsend', 'delete_for_me', 'pin', 'unpin'].includes(value.action) &&
+      !value.message_id
+    ) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['message_id'],
+        message: 'A message id is required.',
+      });
+    }
+    if (value.action === 'edit' && !value.content) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['content'],
+        message: 'Message content is required.',
+      });
+    }
+    if (value.action === 'read' && (!value.message_ids || value.message_ids.length === 0)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['message_ids'],
+        message: 'Message ids are required.',
+      });
+    }
+    if (value.action === 'typing' && typeof value.is_typing !== 'boolean') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['is_typing'],
+        message: 'Typing state is required.',
+      });
+    }
+  });
+
+const doctorVoiceSendSchema = doctorMessageQuerySchema
+  .extend({
+    content_base64: z
+      .string()
+      .min(1)
+      .max(14 * 1024 * 1024),
+    file_name: z.string().trim().min(1).max(255),
+    mime_type: z.string().trim().min(1).max(100),
+    size_bytes: z
+      .number()
+      .int()
+      .min(1)
+      .max(10 * 1024 * 1024),
+    duration_ms: z
+      .number()
+      .int()
+      .min(0)
+      .max(10 * 60 * 1000),
     client_message_id: z.string().uuid(),
     sender_ref: z.string().trim().min(1).max(160),
     sender_name: z.string().trim().max(160).nullable().optional(),
@@ -233,8 +346,11 @@ module.exports = {
   privacyRequestSchema,
   doctorRecommendationRequestSchema,
   patientMessageRequestSchema,
+  messageActionSchema,
   doctorMessageQuerySchema,
   doctorMessageSendSchema,
+  doctorMessageActionSchema,
+  doctorVoiceSendSchema,
   doctorAiAssistSchema,
   buildPatientRef,
   buildDoctorTaskEnvelope,

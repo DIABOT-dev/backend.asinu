@@ -7,11 +7,15 @@ const {
 const {
   doctorMessageQuerySchema,
   doctorMessageSendSchema,
+  doctorMessageActionSchema,
+  doctorVoiceSendSchema,
   doctorAiAssistSchema,
 } = require('../services/integrations/doctor-task.policy');
 const {
   queryDoctorMessages,
   sendDoctorMessage,
+  doctorMessageAction,
+  sendDoctorVoice,
 } = require('../services/integrations/doctor-messaging.service');
 const { createDoctorAiAssist } = require('../services/integrations/doctor-ai.service');
 const { ingestDoctorLifecycle } = require('../services/integrations/doctor-lifecycle.service');
@@ -56,6 +60,26 @@ function doctorProfileRoutes(pool) {
         .status(400)
         .json({ ok: false, error: 'Invalid Doctor message.', details: parsed.error.issues });
     return Promise.resolve(sendDoctorMessage(pool, req, parsed.data))
+      .then((data) => res.status(data.duplicate ? 200 : 201).json({ ok: true, data }))
+      .catch(next);
+  });
+  router.post('/messages/action', requireDoctorSignature, (req, res, next) => {
+    const parsed = doctorMessageActionSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res
+        .status(400)
+        .json({ ok: false, error: 'Invalid Doctor message action.', details: parsed.error.issues });
+    return Promise.resolve(doctorMessageAction(pool, req, parsed.data))
+      .then((data) => res.json({ ok: true, data }))
+      .catch(next);
+  });
+  router.post('/messages/voice', requireDoctorSignature, (req, res, next) => {
+    const parsed = doctorVoiceSendSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res
+        .status(400)
+        .json({ ok: false, error: 'Invalid Doctor voice message.', details: parsed.error.issues });
+    return Promise.resolve(sendDoctorVoice(pool, req, parsed.data))
       .then((data) => res.status(data.duplicate ? 200 : 201).json({ ok: true, data }))
       .catch(next);
   });

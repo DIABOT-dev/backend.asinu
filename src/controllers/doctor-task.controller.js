@@ -5,6 +5,7 @@ const {
   privacyRequestSchema,
   doctorRecommendationRequestSchema,
   patientMessageRequestSchema,
+  messageActionSchema,
   screenRemoteCareSuitability,
   normalizeSpecialty,
 } = require('../services/integrations/doctor-task.policy');
@@ -23,6 +24,8 @@ const {
   listPatientTasks,
   sendPatientMessage,
   sendPatientAttachment,
+  sendPatientVoice,
+  messageAction,
 } = require('../services/integrations/doctor-messaging.service');
 const { waitForDoctorTask } = require('../services/integrations/doctor-task-readiness');
 const { enqueueCrmEvent } = require('../services/integrations/crm-event.service');
@@ -304,6 +307,69 @@ const createDoctorAttachment = async (pool, req, res) => {
   return res.status(data.duplicate ? 200 : 201).json({ ok: true, data });
 };
 
+const createDoctorVoice = async (pool, req, res) => {
+  const taskId = String(req.params.taskId || '').trim();
+  const tenantId = String(req.body?.tenant_id || req.query.tenant_id || '').trim();
+  const clientMessageId = String(req.headers['x-client-message-id'] || '').trim();
+  const durationMs = Number(req.body?.duration_ms || 0);
+  if (
+    !taskId ||
+    taskId.length > 160 ||
+    !tenantId ||
+    tenantId.length > 120 ||
+    !req.file ||
+    !UUID_PATTERN.test(clientMessageId) ||
+    !Number.isInteger(durationMs) ||
+    durationMs < 0 ||
+    durationMs > 10 * 60 * 1000
+  ) {
+    return res
+      .status(400)
+      .json({ ok: false, error: 'A valid task, audio and client message id are required.' });
+  }
+  try {
+    await patientMessageState(tenantId, taskId, req.user.id);
+  } catch (error) {
+    if (sendTaskReadinessError(error, req, res)) return;
+    throw error;
+  }
+  const data = await sendPatientVoice(pool, {
+    userId: req.user.id,
+    taskId,
+    input: { tenant_id: tenantId, client_message_id: clientMessageId },
+    file: req.file,
+    durationMs,
+  });
+  return res.status(data.duplicate ? 200 : 201).json({ ok: true, data });
+};
+
+const createDoctorMessageAction = async (pool, req, res) => {
+  const taskId = String(req.params.taskId || '').trim();
+  const tenantId = String(req.body?.tenant_id || req.query.tenant_id || '').trim();
+  if (!taskId || taskId.length > 160 || !tenantId || tenantId.length > 120) {
+    return res.status(400).json({ ok: false, error: 'A valid task and tenant_id are required.' });
+  }
+  const parsed = messageActionSchema.safeParse({ ...req.body, tenant_id: tenantId });
+  if (!parsed.success) {
+    return res
+      .status(400)
+      .json({ ok: false, error: 'Invalid message action.', details: parsed.error.issues });
+  }
+  const data = await messageAction(pool, {
+    tenantId,
+    taskId,
+    userId: req.user.id,
+    actorType: 'patient',
+    actorRef: String(req.user.id),
+    action: parsed.data.action,
+    messageId: parsed.data.message_id,
+    messageIds: parsed.data.message_ids,
+    content: parsed.data.content,
+    isTyping: parsed.data.is_typing,
+  });
+  return res.json({ ok: true, data });
+};
+
 module.exports = {
   requestDoctorTask,
   submitDoctorRating,
@@ -315,5 +381,7 @@ module.exports = {
   listDoctorMessages,
   createDoctorMessage,
   createDoctorAttachment,
+  createDoctorVoice,
+  createDoctorMessageAction,
   getDoctorPrivacyReceipts,
 };
