@@ -71,7 +71,14 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
     data: data,
     priority: config.priority,
     channelId: config.channelId,
-    ...(isCaregiverAlert && { categoryIdentifier: 'health_alert' }),
+    // Expo Push Service expects categoryId. The app registers the matching
+    // categoryIdentifier locally; using the server-side field here is what
+    // makes interactive actions appear on a remote push.
+    ...(isCaregiverAlert && { categoryId: 'health_alert' }),
+    ...(notifType === 'doctor_message' && {
+      categoryId: 'doctor_message',
+      threadId: data?.task_id ? `doctor-${data.task_id}` : 'doctor-consultation',
+    }),
   }));
 
   try {

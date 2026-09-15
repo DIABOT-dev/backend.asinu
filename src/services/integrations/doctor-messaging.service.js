@@ -721,7 +721,10 @@ const messageAction = async (pool, input) => {
 const listPatientTasks = async (pool, userId, tenantId) => {
   assertTenantAllowed(tenantId);
   const result = await pool.query(
-    `SELECT payload->'payload'->>'task_id' AS task_id,
+    `SELECT o.tenant_id,
+            payload->'payload'->>'task_id' AS task_id,
+            lifecycle.status,
+            lifecycle.follow_up_until,
             payload->'payload'->>'summary' AS summary,
             COALESCE((o.payload->>'occurred_at')::timestamptz, o.created_at) AS created_at,
             CASE
@@ -742,6 +745,15 @@ const listPatientTasks = async (pool, userId, tenantId) => {
             AND m.user_id = $1
           ORDER BY m.created_at DESC, m.id DESC LIMIT 1
        ) latest ON TRUE
+       LEFT JOIN LATERAL (
+         SELECT e.status AS status,
+                e.payload->>'follow_up_until' AS follow_up_until
+           FROM doctor_task_lifecycle_events e
+          WHERE e.tenant_id = o.tenant_id
+            AND e.task_id = o.payload->'payload'->>'task_id'
+          ORDER BY e.occurred_at DESC, e.created_at DESC
+          LIMIT 1
+       ) lifecycle ON TRUE
       WHERE o.tenant_id = $2
         AND o.payload->>'event_type' = 'doctor.task.requested'
         AND o.payload->'payload'->>'app_user_id' = $1::text
@@ -812,7 +824,12 @@ const sendDoctorMessage = async (pool, req, input) => {
             ? `Dr. ${doctorName}: ${preview}`
             : `Bác sĩ ${doctorName}: ${preview}`
           : preview,
-        { type: 'doctor_message', task_id: taskId, message_id: String(message.id) },
+        {
+          type: 'doctor_message',
+          task_id: taskId,
+          tenant_id: tenantId,
+          message_id: String(message.id),
+        },
         'high',
         {
           // Do not put the patient's health details on the device lock screen.
