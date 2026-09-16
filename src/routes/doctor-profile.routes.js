@@ -17,7 +17,10 @@ const {
   doctorMessageAction,
   sendDoctorVoice,
 } = require('../services/integrations/doctor-messaging.service');
-const { createDoctorAiAssist } = require('../services/integrations/doctor-ai.service');
+const {
+  createDoctorAiAssist,
+  getDoctorAiContextVersion,
+} = require('../services/integrations/doctor-ai.service');
 const { ingestDoctorLifecycle } = require('../services/integrations/doctor-lifecycle.service');
 
 function doctorProfileRoutes(pool) {
@@ -90,6 +93,16 @@ function doctorProfileRoutes(pool) {
         .status(400)
         .json({ ok: false, error: 'Invalid Doctor AI request.', details: parsed.error.issues });
     return Promise.resolve(createDoctorAiAssist(pool, parsed.data))
+      .then((data) => res.json({ ok: true, data }))
+      .catch(next);
+  });
+  router.post('/ai-context-version', requireDoctorSignature, (req, res, next) => {
+    const parsed = doctorAiAssistSchema.safeParse(req.body);
+    if (!parsed.success)
+      return res
+        .status(400)
+        .json({ ok: false, error: 'Invalid Doctor AI context request.', details: parsed.error.issues });
+    return Promise.resolve(getDoctorAiContextVersion(pool, parsed.data))
       .then((data) => res.json({ ok: true, data }))
       .catch(next);
   });

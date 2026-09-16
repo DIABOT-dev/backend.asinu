@@ -1,6 +1,16 @@
 const crypto = require('crypto');
 const { z } = require('zod');
 
+const EMPTY_CLINICAL_SUPPORT = Object.freeze({
+  policy_version: crypto
+    .createHash('sha256')
+    .update(JSON.stringify({ chunks: [], rules: [] }))
+    .digest('hex'),
+  retrieval_mode: 'none',
+  knowledge_chunks: [],
+  rules: [],
+});
+
 const doctorTaskRequestSchema = z
   .object({
     tenant_id: z.string().trim().min(1).max(120),
@@ -201,12 +211,65 @@ const doctorAiAssistSchema = doctorMessageQuerySchema
   .extend({
     touchpoint: z.enum([
       'patient_summary',
+      'abnormal_trends',
       'suggested_questions',
+      'soap_note',
       'consultation_draft',
+      'follow_up_draft',
       'auto_triage',
     ]),
     task_summary: z.string().trim().min(1).max(5000),
     locale: z.enum(['vi', 'en']).default('vi'),
+    clinical_support: z
+      .object({
+        policy_version: z.string().regex(/^[a-f0-9]{64}$/),
+        retrieval_mode: z.enum(['hybrid', 'lexical', 'none']),
+        knowledge_chunks: z
+          .array(
+            z
+              .object({
+                source_id: z.string().uuid(),
+                chunk_id: z.string().uuid(),
+                title: z.string().trim().min(1).max(300),
+                publisher: z.string().trim().min(1).max(200),
+                version: z.string().trim().min(1).max(80),
+                source_url: z
+                  .string()
+                  .url()
+                  .max(2000)
+                  .refine(
+                    (value) => value.startsWith('https://'),
+                    'Clinical sources must use HTTPS.'
+                  ),
+                specialty: z.string().trim().min(1).max(120),
+                locale: z.enum(['vi', 'en']),
+                valid_until: z.string().date().nullable(),
+                content: z.string().trim().min(20).max(12000),
+                retrieval_score: z.number().min(0).max(1.05),
+              })
+              .strict()
+          )
+          .max(6),
+        rules: z
+          .array(
+            z
+              .object({
+                rule_id: z.string().uuid(),
+                name: z.string().trim().min(1).max(200),
+                version: z.string().trim().min(1).max(80),
+                rule_type: z.enum(['observation_threshold', 'symptom_duration']),
+                severity: z.enum(['soon', 'urgent', 'emergency']),
+                config: z.record(z.unknown()),
+                patient_message: z.string().trim().min(1).max(1000),
+                expert_message: z.string().trim().min(1).max(1000),
+                source_document_id: z.string().uuid(),
+              })
+              .strict()
+          )
+          .max(100),
+      })
+      .strict()
+      .default(EMPTY_CLINICAL_SUPPORT),
   })
   .strict();
 

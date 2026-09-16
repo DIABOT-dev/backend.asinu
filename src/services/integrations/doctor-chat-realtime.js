@@ -90,7 +90,6 @@ const attachDoctorChatWebSocketServer = (server, pool) => {
   webSocketServer = instance;
 
   instance.on('connection', (socket, request) => {
-    const auth = request.doctorChatAuth;
     const url = new URL(request.url || CHAT_PATH, `http://${request.headers.host || 'localhost'}`);
     const tenantId = String(url.searchParams.get('tenant_id') || '').trim();
     const taskId = String(url.searchParams.get('task_id') || '').trim();

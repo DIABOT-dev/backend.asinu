@@ -57,6 +57,20 @@ const integrationError = (statusCode, code, message) => {
   return error;
 };
 
+const isPatientDeletionRace = (error) =>
+  error?.code === '23503' &&
+  ['doctor_task_lifecycle_events_app_user_id_fkey', 'doctor_patient_medical_records_user_id_fkey'].includes(
+    error?.constraint
+  );
+
+const ignoredDeletedPatientEvent = (event, payload) => ({
+  event_id: event.event_id,
+  task_id: payload.app_order_id,
+  status: 'ignored',
+  duplicate: false,
+  ignored_reason: 'PATIENT_ACCOUNT_DELETED',
+});
+
 const ingestDoctorLifecycle = async (pool, req) => {
   verifyDoctorSignature(req);
   const parsed = lifecycleSchema.safeParse(req.body);
@@ -82,6 +96,23 @@ const ingestDoctorLifecycle = async (pool, req) => {
   }
 
   const appUserId = String(payload.app_user_id);
+  // Account deletion can race with a lifecycle webhook already in flight. If
+  // the patient no longer exists, acknowledge the event without recreating any
+  // clinical record; returning 404 would make the Doctor delivery worker retry
+  // an event that can never be applied after a privacy deletion.
+  const patient = await pool.query(
+    'SELECT 1 FROM users WHERE id = $1 AND deleted_at IS NULL LIMIT 1',
+    [Number(appUserId)]
+  );
+  if (!patient.rows[0]) {
+    return {
+      event_id: event.event_id,
+      task_id: payload.app_order_id,
+      status: 'ignored',
+      duplicate: false,
+      ignored_reason: 'PATIENT_ACCOUNT_DELETED',
+    };
+  }
   const task = await pool.query(
     `SELECT payload->'payload'->>'app_user_id' AS app_user_id
        FROM doctor_task_outbox
@@ -94,10 +125,6 @@ const ingestDoctorLifecycle = async (pool, req) => {
     throw integrationError(404, 'DOCTOR_TASK_NOT_FOUND', 'The Doctor task was not found.');
   }
 
-  const existing = await pool.query(
-    'SELECT event_id, task_id, status, occurred_at FROM doctor_task_lifecycle_events WHERE event_id = $1',
-    [event.event_id]
-  );
   const persistConsultationOutcome = async () => {
     if (payload.status !== 'completed' || !payload.consultation_summary) return;
     const summary = payload.consultation_summary;
@@ -130,50 +157,62 @@ const ingestDoctorLifecycle = async (pool, req) => {
     );
     await rebuildPatientHealthTimeline(pool, Number(appUserId));
   };
+  try {
+    const existing = await pool.query(
+      'SELECT event_id, task_id, status, occurred_at FROM doctor_task_lifecycle_events WHERE event_id = $1',
+      [event.event_id]
+    );
 
-  if (existing.rows[0]) {
+    if (existing.rows[0]) {
+      await persistConsultationOutcome();
+      return { ...existing.rows[0], duplicate: true };
+    }
+
+    const inserted = await pool.query(
+      `INSERT INTO doctor_task_lifecycle_events(
+         event_id, tenant_id, task_id, app_user_id, event_type, status,
+         doctor_ref, medical_record_ref, reason, occurred_at, payload
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
+       ON CONFLICT (event_id) DO NOTHING
+       RETURNING event_id, task_id, status, occurred_at`,
+      [
+        event.event_id,
+        payload.tenant_id,
+        payload.app_order_id,
+        Number(appUserId),
+        event.event_type,
+        payload.status,
+        payload.doctor_ref || null,
+        payload.medical_record_ref || null,
+        payload.reason || null,
+        event.occurred_at,
+        JSON.stringify({
+          ...payload,
+          event_version: event.version,
+          source_channel: payload.source_channel,
+          specialty: payload.specialty,
+          service_flow: payload.service_flow,
+          priority: payload.priority,
+          summary: payload.summary,
+        }),
+      ]
+    );
     await persistConsultationOutcome();
-    return { ...existing.rows[0], duplicate: true };
-  }
-
-  const inserted = await pool.query(
-    `INSERT INTO doctor_task_lifecycle_events(
-       event_id, tenant_id, task_id, app_user_id, event_type, status,
-       doctor_ref, medical_record_ref, reason, occurred_at, payload
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb)
-     ON CONFLICT (event_id) DO NOTHING
-     RETURNING event_id, task_id, status, occurred_at`,
-    [
-      event.event_id,
-      payload.tenant_id,
-      payload.app_order_id,
-      Number(appUserId),
-      event.event_type,
-      payload.status,
-      payload.doctor_ref || null,
-      payload.medical_record_ref || null,
-      payload.reason || null,
-      event.occurred_at,
-      JSON.stringify({
-        ...payload,
-        event_version: event.version,
-        source_channel: payload.source_channel,
-        specialty: payload.specialty,
-        service_flow: payload.service_flow,
-        priority: payload.priority,
-        summary: payload.summary,
+    return {
+      ...(inserted.rows[0] || {
+        event_id: event.event_id,
+        task_id: payload.app_order_id,
+        status: payload.status,
       }),
-    ]
-  );
-  await persistConsultationOutcome();
-  return {
-    ...(inserted.rows[0] || {
-      event_id: event.event_id,
-      task_id: payload.app_order_id,
-      status: payload.status,
-    }),
-    duplicate: false,
-  };
+      duplicate: false,
+    };
+  } catch (error) {
+    // A privacy delete may commit after the existence check but before the FK
+    // insert. This is an expected terminal race: acknowledge without retrying
+    // a webhook that can no longer be attached to a patient.
+    if (isPatientDeletionRace(error)) return ignoredDeletedPatientEvent(event, payload);
+    throw error;
+  }
 };
 
-module.exports = { ingestDoctorLifecycle, lifecycleSchema };
+module.exports = { ingestDoctorLifecycle, lifecycleSchema, isPatientDeletionRace };

@@ -178,6 +178,11 @@ const GLOBAL_ERROR_MESSAGE_KEYS = {
   FILE_TOO_LARGE: 'error.file_too_large',
   UPSTREAM_FAILED: 'error.service_unavailable',
   SERVICE_UNAVAILABLE: 'error.service_unavailable',
+  DOCTOR_AI_INVALID_RESPONSE: 'error.service_unavailable',
+  DOCTOR_AI_CITATION_INVALID: 'error.service_unavailable',
+  DOCTOR_AI_PROVIDER_UNAVAILABLE: 'error.service_unavailable',
+  AI_CONTEXT_STALE: 'error.conflict',
+  AI_CITATION_REQUIRED: 'error.invalid_data',
   CONSULTATION_CONVERSATION_CLOSED: 'doctor.conversation_closed',
   INTERNAL_ERROR: 'error.server',
 };
@@ -206,7 +211,7 @@ getRedis()
   });
 
 const server = http.createServer(app);
-const chatWebSocketServer = attachDoctorChatWebSocketServer(server, pool);
+attachDoctorChatWebSocketServer(server, pool);
 
 server.listen(PORT, () => {
   logger.info('server.listening', { port: PORT });

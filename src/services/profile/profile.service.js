@@ -389,8 +389,21 @@ async function deleteAccount(pool, userId) {
     await client.query('DELETE FROM logs WHERE user_id = $1', [userId]);
 
     // 2. Chat & AI
+    // AI telemetry keeps a foreign-key reference to the patient. It must be
+    // removed before the user row, otherwise account deletion fails with a
+    // constraint error after a Doctor/AI consultation has run.
+    await client.query('DELETE FROM ai_logs WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM chat_logs WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM chat_histories WHERE user_id = $1', [userId]);
+
+    // The Doctor request outbox is JSON-owned rather than FK-owned. Remove
+    // pending or already-delivered envelopes as well, so deleting a patient
+    // can never leave a retry worker with a ghost consultation request.
+    await client.query(
+      `DELETE FROM doctor_task_outbox
+        WHERE payload->'payload'->>'app_user_id' = $1`,
+      [String(userId)]
+    );
 
     // 3. Missions
     await client.query('DELETE FROM mission_history WHERE user_id = $1', [userId]);
