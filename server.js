@@ -27,6 +27,7 @@ const { createRateLimitStore } = require('./src/middleware/rate-limit-store');
 const { getRedis } = require('./src/lib/redis');
 const { startScheduler } = require('./src/scheduler');
 const { assertCrmIntegrationConfig } = require('./src/services/integrations/crm-event.service');
+const { assertIapRuntimeConfig } = require('./src/services/payment/iap.service');
 const doctorTaskRoutes = require('./src/routes/doctor-task.routes');
 const doctorProfileRoutes = require('./src/routes/doctor-profile.routes');
 const {
@@ -39,6 +40,7 @@ const path = require('path');
 const app = express();
 app.set('trust proxy', 1);
 assertCrmIntegrationConfig();
+assertIapRuntimeConfig();
 
 // Sentry MUST be initialized before other middleware so it can capture them
 initSentry();

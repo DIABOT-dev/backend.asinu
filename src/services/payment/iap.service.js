@@ -26,6 +26,24 @@ const logger = require('../../lib/logger');
 const { captureException } = require('../../lib/sentry');
 const subscriptionService = require('./subscription.service');
 
+function assertIapRuntimeConfig() {
+  if (process.env.IAP_ENABLED === 'false' || process.env.NODE_ENV !== 'production') return;
+
+  const required = [
+    'APPLE_BUNDLE_ID',
+    'APPLE_APP_APPLE_ID',
+    'GOOGLE_PLAY_PACKAGE_NAME',
+    'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON',
+  ];
+  const missing = required.filter((name) => !String(process.env[name] || '').trim());
+  if ((process.env.APPLE_IAP_ENV || '').toLowerCase() !== 'production') {
+    missing.push('APPLE_IAP_ENV=production');
+  }
+  if (missing.length) {
+    throw new Error(`IAP production configuration is incomplete: ${missing.join(', ')}`);
+  }
+}
+
 /**
  * Wrap an IAP failure with Sentry tags so platform / product errors
  * are easy to slice in the dashboard. No-ops when Sentry isn't enabled.
@@ -120,7 +138,11 @@ function getAppleVerifier() {
     return null;
   }
 
-  const envName = (process.env.APPLE_IAP_ENV || 'sandbox').toLowerCase();
+  const envName = (process.env.APPLE_IAP_ENV || '').toLowerCase();
+  if (!['sandbox', 'production'].includes(envName)) {
+    logger.error('iap.apple.invalid_environment — set APPLE_IAP_ENV to sandbox or production');
+    return null;
+  }
   const environment = envName === 'production' ? Environment.PRODUCTION : Environment.SANDBOX;
   const appAppleId = process.env.APPLE_APP_APPLE_ID
     ? Number(process.env.APPLE_APP_APPLE_ID)
@@ -172,6 +194,15 @@ async function verifyAppleReceipt({ signedTransaction } = {}) {
         ok: false,
         code: 'APPLE_INVALID_TRANSACTION',
         error: 'Decoded transaction missing required fields',
+      };
+    }
+    const configuredEnvironment = (process.env.APPLE_IAP_ENV || '').toLowerCase();
+    const receiptEnvironment = String(decoded.environment || '').toLowerCase();
+    if (configuredEnvironment === 'production' && receiptEnvironment !== 'production') {
+      return {
+        ok: false,
+        code: 'APPLE_SANDBOX_NOT_ALLOWED',
+        error: 'Sandbox Apple transaction is not accepted in production',
       };
     }
     return {
@@ -354,7 +385,9 @@ async function recordReceipt(
   } catch (err) {
     if (err.code === '42P01') {
       logger.warn('iap.receipts_table_missing — migration 072_iap_receipts.sql chưa chạy');
-      return true; // fail-open so we don't double-charge while migration is pending
+      const migrationError = new Error('IAP idempotency table is unavailable');
+      migrationError.code = 'IAP_IDEMPOTENCY_UNAVAILABLE';
+      throw migrationError;
     }
     throw err;
   }
@@ -381,6 +414,17 @@ async function verifyAndActivate(pool, userId, payload = {}) {
 
   if (!verification.ok) {
     return verification;
+  }
+
+  if (
+    process.env.NODE_ENV === 'production' &&
+    String(verification.environment || '').toLowerCase() !== 'production'
+  ) {
+    return {
+      ok: false,
+      code: 'IAP_SANDBOX_NOT_ALLOWED',
+      error: 'Sandbox purchases are not accepted in production',
+    };
   }
 
   const { productId, transactionId, originalTransactionId, expiresAt } = verification;
@@ -529,6 +573,9 @@ async function handleGoogleNotification(pool, body) {
   if (!message || !message.data) {
     return { ok: false, code: 'INVALID_PAYLOAD', error: 'Missing message.data' };
   }
+  if (typeof message.data !== 'string' || message.data.length > 200000) {
+    return { ok: false, code: 'GOOGLE_BAD_PAYLOAD', error: 'Pub/Sub data is too large' };
+  }
 
   let payload;
   try {
@@ -558,6 +605,14 @@ async function handleGoogleNotification(pool, body) {
   //  12 SUBSCRIPTION_REVOKED        → revoke
   //  13 SUBSCRIPTION_EXPIRED        → expire
   const type = sub.notificationType;
+  const configuredPackageName = process.env.GOOGLE_PLAY_PACKAGE_NAME;
+  if (!configuredPackageName || payload.packageName !== configuredPackageName) {
+    return {
+      ok: false,
+      code: 'GOOGLE_PACKAGE_MISMATCH',
+      error: 'Notification package does not match the configured application',
+    };
+  }
   let action = null;
   if ([1, 2, 4, 7, 9].includes(type)) action = 'renew';
   else if ([12].includes(type)) action = 'revoke';
@@ -608,6 +663,7 @@ async function handleGoogleNotification(pool, body) {
 }
 
 module.exports = {
+  assertIapRuntimeConfig,
   verifyAndActivate,
   verifyAppleReceipt,
   verifyGooglePurchase,

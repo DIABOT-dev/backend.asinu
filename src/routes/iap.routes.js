@@ -1,6 +1,7 @@
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth.middleware');
+const { requireGooglePubSubAuth } = require('../middleware/google-pubsub-auth.middleware');
 const {
   verifyReceipt,
   listProducts,
@@ -41,12 +42,14 @@ function iapRoutes(pool) {
   // requireAuth runs FIRST so the limiter can key by user id.
   router.post('/verify', requireAuth, verifyLimiter, (req, res) => verifyReceipt(pool, req, res));
 
-  // Store webhooks — NO requireAuth, NO rate-limit. Apple signs the body
-  // so we verify there; Google authenticates the Pub/Sub push at the
-  // platform layer. Keep these URLs OUT of public docs — only paste
-  // them into App Store Connect / Play Console.
+  // Store webhooks — Apple signs the body; Google must also present a
+  // verified Pub/Sub OIDC identity. Keep these URLs out of public docs.
   router.post('/apple-notifications', (req, res) => appleNotifications(pool, req, res));
-  router.post('/google-notifications', (req, res) => googleNotifications(pool, req, res));
+  router.post(
+    '/google-notifications',
+    requireGooglePubSubAuth,
+    (req, res) => googleNotifications(pool, req, res)
+  );
 
   return router;
 }
