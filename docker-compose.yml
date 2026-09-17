@@ -4,8 +4,10 @@ services:
   asinu-backend:
     build: .
     container_name: asinu-backend
+    # Keep the public API on host port 3300 while the Node process listens on
+    # its standard container port. This also matches the Dockerfile healthcheck.
     ports:
-      - '3300:3300'
+      - '3300:3000'
     env_file:
       - .env
     networks:
