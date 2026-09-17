@@ -2,6 +2,11 @@ const { sendAndSave } = require('../notification/basic.notification.service');
 const { assertTenantAllowed, deliverDoctorRequest } = require('./doctor-task.service');
 const { verifyDoctorSignature, assertProfileRequest } = require('./doctor-profile.service');
 const { uploadBuffer, deleteAsset } = require('../media/cloudinary-upload.service');
+const {
+  authenticatedAssetUrl,
+  requirePrivateDeliveryConfig,
+  resourceTypeForMime,
+} = require('../media/private-media.service');
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 const { isAudioBuffer } = require('../../middleware/upload.middleware');
 const { broadcastChatEvent } = require('./doctor-chat-realtime');
@@ -108,6 +113,45 @@ const parseVoice = (content) => {
   }
 };
 
+const privateMedia = (media) => {
+  if (!media || typeof media !== 'object') return null;
+  const resourceType = ['image', 'video', 'raw'].includes(media.resource_type)
+    ? media.resource_type
+    : resourceTypeForMime(media.mime_type);
+  const {
+    public_id: _publicId,
+    resource_type: _resourceType,
+    delivery_type: _deliveryType,
+    secure_url: _secureUrl,
+    ...safeMedia
+  } = media;
+  return {
+    ...safeMedia,
+    // Legacy public URLs are deliberately not returned. New records carry a
+    // public_id and receive a short-lived authenticated delivery URL.
+    url: authenticatedAssetUrl(media.public_id, resourceType, media.delivery_type),
+  };
+};
+
+const hydrateMessageMedia = (message) => {
+  if (!message || typeof message.content !== 'string') return message;
+  const attachment = parseAttachment(message.content);
+  if (attachment) {
+    return {
+      ...message,
+      content: `[ASINU_ATTACHMENT]${JSON.stringify(privateMedia(attachment))}`,
+    };
+  }
+  const voice = parseVoice(message.content);
+  if (voice) {
+    return {
+      ...message,
+      content: `[ASINU_VOICE]${JSON.stringify(privateMedia(voice))}`,
+    };
+  }
+  return message;
+};
+
 const messageViewerJoin = (viewerType, viewerRef) => ({
   sql: `LEFT JOIN doctor_task_message_deletions d
           ON d.tenant_id = m.tenant_id AND d.task_id = m.task_id AND d.message_id = m.id
@@ -124,7 +168,7 @@ const selectMessage = async (pool, tenantId, taskId, messageId, viewerType, view
       WHERE m.tenant_id = $1 AND m.task_id = $2 AND m.id = $3`,
     [tenantId, taskId, messageId, ...join.params]
   );
-  return result.rows[0] || null;
+  return hydrateMessageMedia(result.rows[0] || null);
 };
 
 const loadOwnedTask = async (pool, tenantId, taskId, userId) => {
@@ -181,11 +225,12 @@ const listMessages = async (
       LIMIT 500`,
     [tenantId, taskId, userId, ...join.params]
   );
-  const pinned = result.rows.filter((message) => message.is_pinned && !message.is_deleted);
+  const messages = result.rows.map(hydrateMessageMedia);
+  const pinned = messages.filter((message) => message.is_pinned && !message.is_deleted);
   return {
     task_id: taskId,
     summary: task.summary || null,
-    messages: result.rows,
+    messages,
     pinned_message: pinned[pinned.length - 1] || null,
     typing: await listTyping(pool, tenantId, taskId, viewerType, viewerRef),
   };
@@ -332,26 +377,47 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
       );
     }
     const attachment = parseAttachment(existing.content);
-    return { ...existing, duplicate: true, ...(attachment ? { attachment } : {}) };
+    return {
+      ...hydrateMessageMedia(existing),
+      duplicate: true,
+      ...(attachment ? { attachment: privateMedia(attachment) } : {}),
+    };
   }
 
+  try {
+    requirePrivateDeliveryConfig();
+  } catch {
+    throw integrationError(
+      503,
+      'CLOUDINARY_PRIVATE_DELIVERY_NOT_CONFIGURED',
+      'Private file delivery is not configured.'
+    );
+  }
   const uploaded = await uploadBuffer(file.buffer, {
     folder: process.env.CLOUDINARY_PATIENT_FILE_FOLDER || 'asinu/patient-files',
     resource_type: 'image',
+    type: 'authenticated',
     use_filename: true,
     unique_filename: true,
   });
+  const privateUrl = authenticatedAssetUrl(uploaded.public_id, 'image', 'authenticated');
+  if (!privateUrl)
+    throw integrationError(
+      503,
+      'CLOUDINARY_PRIVATE_DELIVERY_NOT_CONFIGURED',
+      'Private file delivery is not configured.'
+    );
   const fileResult = await pool.query(
     `INSERT INTO doctor_patient_files
-      (user_id, name, mime_type, size_bytes, secure_url, public_id, source_task_id, uploaded_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-     RETURNING id, name, mime_type, size_bytes, secure_url, source_task_id, uploaded_by, created_at`,
+      (user_id, name, mime_type, size_bytes, secure_url, public_id, resource_type, delivery_type, source_task_id, uploaded_by)
+     VALUES ($1,$2,$3,$4,$5,$6,'image','authenticated',$7,$8)
+     RETURNING id, name, mime_type, size_bytes, secure_url, public_id, resource_type, delivery_type, source_task_id, uploaded_by, created_at`,
     [
       userId,
       String(file.originalname).slice(0, 255),
       file.mimetype,
       file.size,
-      uploaded.secure_url,
+      privateUrl,
       uploaded.public_id || null,
       taskId,
       String(userId),
@@ -363,7 +429,10 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
     name: attachment.name,
     mime_type: attachment.mime_type,
     size_bytes: attachment.size_bytes,
-    url: attachment.secure_url,
+    public_id: attachment.public_id,
+    resource_type: attachment.resource_type,
+    delivery_type: attachment.delivery_type,
+    url: privateUrl,
   })}`;
   try {
     const message = await sendPatientMessage(pool, {
@@ -381,14 +450,23 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
           userId,
         ])
         .catch(() => {});
-      if (uploaded.public_id) await deleteAsset(uploaded.public_id, 'image').catch(() => {});
+      if (uploaded.public_id)
+        await deleteAsset(uploaded.public_id, 'image', 'authenticated').catch(() => {});
       const existingAttachment = parseAttachment(message.content);
       return {
-        ...message,
-        ...(existingAttachment ? { attachment: existingAttachment } : {}),
+        ...hydrateMessageMedia(message),
+        ...(existingAttachment ? { attachment: privateMedia(existingAttachment) } : {}),
       };
     }
-    return { ...message, attachment };
+    return {
+      ...hydrateMessageMedia(message),
+      attachment: privateMedia({
+        ...attachment,
+        public_id: uploaded.public_id,
+        resource_type: 'image',
+        delivery_type: 'authenticated',
+      }),
+    };
   } catch (error) {
     await pool
       .query('DELETE FROM doctor_patient_files WHERE id = $1 AND user_id = $2', [
@@ -397,7 +475,7 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
       ])
       .catch(() => {});
     if (uploaded.public_id) {
-      await deleteAsset(uploaded.public_id, 'image').catch(() => {});
+      await deleteAsset(uploaded.public_id, 'image', 'authenticated').catch(() => {});
     }
     throw error;
   }
@@ -426,6 +504,15 @@ const sendPatientVoice = async (pool, { userId, taskId, input, file, durationMs 
       'A valid audio file up to 10 MB is required.'
     );
   }
+  try {
+    requirePrivateDeliveryConfig();
+  } catch {
+    throw integrationError(
+      503,
+      'CLOUDINARY_PRIVATE_DELIVERY_NOT_CONFIGURED',
+      'Private file delivery is not configured.'
+    );
+  }
   const duration = Number(durationMs || 0);
   if (!Number.isFinite(duration) || duration < 0 || duration > 10 * 60 * 1000) {
     throw integrationError(400, 'INVALID_AUDIO_DURATION', 'Audio duration is invalid.');
@@ -446,11 +533,16 @@ const sendPatientVoice = async (pool, { userId, taskId, input, file, durationMs 
       );
     }
     const voice = parseVoice(existing.content);
-    return { ...existing, duplicate: true, ...(voice ? { voice } : {}) };
+    return {
+      ...hydrateMessageMedia(existing),
+      duplicate: true,
+      ...(voice ? { voice: privateMedia(voice) } : {}),
+    };
   }
   const uploaded = await uploadBuffer(file.buffer, {
     folder: process.env.CLOUDINARY_DOCTOR_VOICE_FOLDER || 'asinu/doctor-voice',
     resource_type: 'video',
+    type: 'authenticated',
     use_filename: true,
     unique_filename: true,
   });
@@ -466,16 +558,23 @@ const sendPatientVoice = async (pool, { userId, taskId, input, file, durationMs 
           mime_type: file.mimetype,
           size_bytes: file.size,
           duration_ms: Math.round(duration),
-          url: uploaded.secure_url,
+          public_id: uploaded.public_id,
+          resource_type: 'video',
+          delivery_type: 'authenticated',
+          url: authenticatedAssetUrl(uploaded.public_id, 'video', 'authenticated'),
         })}`,
       },
     });
     if (message.duplicate && uploaded.public_id)
-      await deleteAsset(uploaded.public_id, 'video').catch(() => {});
+      await deleteAsset(uploaded.public_id, 'video', 'authenticated').catch(() => {});
     const voice = parseVoice(message.content);
-    return { ...message, ...(voice ? { voice } : {}) };
+    return {
+      ...hydrateMessageMedia(message),
+      ...(voice ? { voice: privateMedia(voice) } : {}),
+    };
   } catch (error) {
-    if (uploaded.public_id) await deleteAsset(uploaded.public_id, 'video').catch(() => {});
+    if (uploaded.public_id)
+      await deleteAsset(uploaded.public_id, 'video', 'authenticated').catch(() => {});
     throw error;
   }
 };
@@ -761,7 +860,14 @@ const listPatientTasks = async (pool, userId, tenantId) => {
       LIMIT 100`,
     [userId, tenantId]
   );
-  return { tasks: result.rows };
+  return {
+    tasks: result.rows.map((task) => ({
+      ...task,
+      latest_message: task.latest_message
+        ? hydrateMessageMedia({ content: task.latest_message }).content
+        : task.latest_message,
+    })),
+  };
 };
 
 const queryDoctorMessages = async (pool, req, input) => {
@@ -879,6 +985,15 @@ const sendDoctorVoice = async (pool, req, input) => {
       'A valid audio file up to 10 MB is required.'
     );
   }
+  try {
+    requirePrivateDeliveryConfig();
+  } catch {
+    throw integrationError(
+      503,
+      'CLOUDINARY_PRIVATE_DELIVERY_NOT_CONFIGURED',
+      'Private file delivery is not configured.'
+    );
+  }
   const duration = Number(input.duration_ms || 0);
   if (!Number.isFinite(duration) || duration < 0 || duration > 10 * 60 * 1000) {
     throw integrationError(400, 'INVALID_AUDIO_DURATION', 'Audio duration is invalid.');
@@ -886,6 +1001,7 @@ const sendDoctorVoice = async (pool, req, input) => {
   const uploaded = await uploadBuffer(buffer, {
     folder: process.env.CLOUDINARY_DOCTOR_VOICE_FOLDER || 'asinu/doctor-voice',
     resource_type: 'video',
+    type: 'authenticated',
     use_filename: true,
     unique_filename: true,
   });
@@ -903,15 +1019,22 @@ const sendDoctorVoice = async (pool, req, input) => {
         mime_type: input.mime_type || 'audio/webm',
         size_bytes: buffer.length,
         duration_ms: Math.round(duration),
-        url: uploaded.secure_url,
+        public_id: uploaded.public_id,
+        resource_type: 'video',
+        delivery_type: 'authenticated',
+        url: authenticatedAssetUrl(uploaded.public_id, 'video', 'authenticated'),
       })}`,
     });
     if (message.duplicate && uploaded.public_id)
-      await deleteAsset(uploaded.public_id, 'video').catch(() => {});
+      await deleteAsset(uploaded.public_id, 'video', 'authenticated').catch(() => {});
     const voice = parseVoice(message.content);
-    return { ...message, ...(voice ? { voice } : {}) };
+    return {
+      ...hydrateMessageMedia(message),
+      ...(voice ? { voice: privateMedia(voice) } : {}),
+    };
   } catch (error) {
-    if (uploaded.public_id) await deleteAsset(uploaded.public_id, 'video').catch(() => {});
+    if (uploaded.public_id)
+      await deleteAsset(uploaded.public_id, 'video', 'authenticated').catch(() => {});
     throw error;
   }
 };

@@ -1,4 +1,10 @@
 const crypto = require('crypto');
+const {
+  authenticatedAssetUrl,
+  isSupportedPatientFile,
+  requirePrivateDeliveryConfig,
+  resourceTypeForMime,
+} = require('../media/private-media.service');
 
 const DOCTOR_SECRET = process.env.DOCTOR_ASINU_INTEGRATION_SECRET || '';
 const MAX_SKEW_SECONDS = Number(process.env.DOCTOR_INTEGRATION_MAX_SKEW_SECONDS || 300);
@@ -150,8 +156,8 @@ const loadPatientProfile = async (pool, req) => {
     [appUserId]
   );
   const files = await pool.query(
-    `SELECT id, name, mime_type, size_bytes, secure_url, source_task_id,
-            uploaded_by, created_at
+    `SELECT id, name, mime_type, size_bytes, public_id, resource_type, delivery_type,
+            source_task_id, uploaded_by, created_at
        FROM doctor_patient_files
       WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`,
     [appUserId]
@@ -252,7 +258,13 @@ const loadPatientProfile = async (pool, req) => {
       mime_type: file.mime_type,
       size_bytes: file.size_bytes,
       size: `${Math.max(1, Math.round(Number(file.size_bytes) / 1024))} KB`,
-      url: file.secure_url,
+      url: authenticatedAssetUrl(
+        file.public_id,
+        ['image', 'video', 'raw'].includes(file.resource_type)
+          ? file.resource_type
+          : resourceTypeForMime(file.mime_type),
+        file.delivery_type
+      ),
       source_task_id: file.source_task_id,
       uploaded_by: file.uploaded_by,
       created_at: file.created_at ? new Date(file.created_at).toISOString() : null,
@@ -287,9 +299,10 @@ const createPatientFile = async (pool, req) => {
   const { appUserId, taskId } = await loadAuthorisedPatient(pool, req.body);
   const { file_name, mime_type, size_bytes, content_base64, uploaded_by } = req.body || {};
   const content = typeof content_base64 === 'string' ? Buffer.from(content_base64, 'base64') : null;
+  const normalizedMimeType = typeof mime_type === 'string' ? mime_type.trim().toLowerCase() : '';
   if (
     !file_name ||
-    !mime_type ||
+    !normalizedMimeType ||
     !content ||
     content.length === 0 ||
     content.length > 10 * 1024 * 1024
@@ -299,29 +312,62 @@ const createPatientFile = async (pool, req) => {
   if (Number(size_bytes) !== content.length) {
     throw integrationError(400, 'INVALID_PATIENT_FILE_SIZE', 'The file size is invalid.');
   }
+  if (!isSupportedPatientFile(content, normalizedMimeType)) {
+    throw integrationError(400, 'INVALID_PATIENT_FILE', 'The patient file content is invalid.');
+  }
+  const resourceType = resourceTypeForMime(normalizedMimeType);
+  try {
+    requirePrivateDeliveryConfig();
+  } catch {
+    throw integrationError(
+      503,
+      'CLOUDINARY_PRIVATE_DELIVERY_NOT_CONFIGURED',
+      'Private file delivery is not configured.'
+    );
+  }
   const { uploadBuffer } = require('../../services/media/cloudinary-upload.service');
   const uploaded = await uploadBuffer(content, {
     folder: process.env.CLOUDINARY_PATIENT_FILE_FOLDER || 'asinu/patient-files',
-    resource_type: 'auto',
+    resource_type: resourceType,
+    type: 'authenticated',
     use_filename: true,
     unique_filename: true,
   });
+  const privateUrl = authenticatedAssetUrl(uploaded.public_id, resourceType, 'authenticated');
+  if (!privateUrl)
+    throw integrationError(
+      503,
+      'CLOUDINARY_PRIVATE_DELIVERY_NOT_CONFIGURED',
+      'Private file delivery is not configured.'
+    );
   const result = await pool.query(
     `INSERT INTO doctor_patient_files
-      (user_id, name, mime_type, size_bytes, secure_url, public_id, source_task_id, uploaded_by)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, name, mime_type, size_bytes, secure_url, source_task_id, uploaded_by, created_at`,
+      (user_id, name, mime_type, size_bytes, secure_url, public_id, resource_type, delivery_type, source_task_id, uploaded_by)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,'authenticated',$8,$9)
+     RETURNING id, name, mime_type, size_bytes, secure_url, public_id, resource_type, delivery_type, source_task_id, uploaded_by, created_at`,
     [
       appUserId,
       String(file_name).slice(0, 255),
-      mime_type,
+      normalizedMimeType,
       content.length,
-      uploaded.secure_url,
+      privateUrl,
       uploaded.public_id || null,
+      resourceType,
       taskId,
       uploaded_by || null,
     ]
   );
-  return result.rows[0];
+  const file = result.rows[0];
+  return {
+    id: String(file.id),
+    name: file.name,
+    mime_type: file.mime_type,
+    size_bytes: file.size_bytes,
+    url: privateUrl,
+    source_task_id: file.source_task_id,
+    uploaded_by: file.uploaded_by,
+    created_at: file.created_at,
+  };
 };
 
 module.exports = {

@@ -178,7 +178,7 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
         [userId]
       ),
       pool.query(
-        `SELECT id, name, mime_type, size_bytes, secure_url, source_task_id,
+        `SELECT id, name, mime_type, size_bytes, source_task_id,
                 uploaded_by, created_at
            FROM doctor_patient_files
           WHERE user_id = $1 ORDER BY created_at`,
@@ -225,17 +225,21 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
   }
   if (input.action === 'anonymize' || input.action === 'delete') {
     const files = await pool.query(
-      `SELECT public_id, mime_type FROM doctor_patient_files WHERE user_id = $1`,
+      `SELECT public_id, mime_type, resource_type, delivery_type
+         FROM doctor_patient_files WHERE user_id = $1`,
       [userId]
     );
     for (const file of files.rows) {
       if (!file.public_id) continue;
-      const resourceType = String(file.mime_type || '').startsWith('video/')
-        ? 'video'
-        : String(file.mime_type || '').startsWith('image/')
-          ? 'image'
-          : 'raw';
-      await deleteAsset(file.public_id, resourceType);
+      const resourceType = ['image', 'video', 'raw'].includes(file.resource_type)
+        ? file.resource_type
+        : String(file.mime_type || '').startsWith('video/')
+          ? 'video'
+          : String(file.mime_type || '').startsWith('image/')
+            ? 'image'
+            : 'raw';
+      const deliveryType = file.delivery_type === 'authenticated' ? 'authenticated' : 'upload';
+      await deleteAsset(file.public_id, resourceType, deliveryType);
     }
     const client = await pool.connect();
     try {
@@ -246,7 +250,9 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
       // The Markdown document is a denormalized copy of the records above;
       // remove it too so an anonymize/delete request cannot leave stale
       // profile, check-in or consultation content in the database.
-      await client.query('DELETE FROM patient_health_timeline_documents WHERE user_id = $1', [userId]);
+      await client.query('DELETE FROM patient_health_timeline_documents WHERE user_id = $1', [
+        userId,
+      ]);
       await client.query('DELETE FROM doctor_task_lifecycle_events WHERE app_user_id = $1', [
         userId,
       ]);

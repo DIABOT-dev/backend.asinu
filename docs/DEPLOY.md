@@ -36,6 +36,9 @@ git pull --ff-only origin main
 cp .env.example .env
 nano .env
 # → điền JWT_SECRET, OPENAI_API_KEY (sk-proj-...)
+# → nếu dùng patient files/Doctor chat, nhờ Cloudinary Support enable token-based
+#   delivery và provision CLOUDINARY_AUTH_TOKEN_KEY (hex encryption key);
+#   khóa này khác API secret, không tự sinh. Giữ TTL 60–3600 giây
 # → các giá trị khác (DATABASE_URL, REDIS_URL, BACKEND_PUBLIC_URL) giữ default
 
 # 4. Stop container cũ (đang chạy bằng docker run thủ công, không phải compose)
@@ -122,6 +125,11 @@ App tự chạy migrate qua `scripts/migrate.js` khi container start (gọi tron
 ```bash
 docker compose exec asinu-backend node scripts/migrate.js
 ```
+
+Migration `082_private_media_delivery.sql` thêm metadata private delivery cho
+patient files. Trước khi deploy cần backup database. Các file legacy không có
+`public_id`/authenticated delivery sẽ không còn được phát URL; cần upload lại
+file còn cần dùng sau rollout.
 
 ### Chạy SQL ad-hoc
 

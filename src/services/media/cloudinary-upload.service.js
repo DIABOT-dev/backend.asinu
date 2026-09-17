@@ -24,11 +24,12 @@ const uploadBuffer = (buffer, options) =>
     stream.end(buffer);
   });
 
-const deleteAsset = async (publicId, resourceType = 'image') => {
+const deleteAsset = async (publicId, resourceType = 'image', type = 'upload') => {
   if (!publicId) return;
   configure();
   await cloudinary.uploader.destroy(publicId, {
     resource_type: resourceType,
+    type,
     invalidate: true,
   });
 };
