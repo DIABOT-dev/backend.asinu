@@ -841,7 +841,7 @@ const listPatientTasks = async (pool, userId, tenantId) => {
             AND d.viewer_type = 'patient' AND d.viewer_ref = $1::text
           WHERE m.tenant_id = o.tenant_id
             AND m.task_id = o.payload->'payload'->>'task_id'
-            AND m.user_id = $1
+            AND m.user_id = $1::integer
           ORDER BY m.created_at DESC, m.id DESC LIMIT 1
        ) latest ON TRUE
        LEFT JOIN LATERAL (
