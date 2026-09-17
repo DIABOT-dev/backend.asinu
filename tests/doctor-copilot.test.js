@@ -13,6 +13,11 @@ const {
 } = require('../src/services/integrations/doctor-context.service');
 const { doctorAiAssistSchema } = require('../src/services/integrations/doctor-task.policy');
 const { __test__ } = require('../src/services/integrations/doctor-ai.service');
+const {
+  buildGroundingFacts,
+  buildDeterministicClinicalSummary,
+  planClarifyingQuestions,
+} = require('../src/services/integrations/doctor-question-planner');
 
 const sourceId = '11111111-1111-4111-8111-111111111111';
 const chunkId = '22222222-2222-4222-8222-222222222222';
@@ -199,6 +204,69 @@ describe('approved clinical rule engine', () => {
 });
 
 describe('context versioning and safety boundaries', () => {
+  test('plans headache questions in safety order and avoids answered facts', () => {
+    const questions = planClarifyingQuestions({
+      locale: 'vi',
+      context: {
+        latest_patient_message: {
+          message:
+            'Tôi 37 tuổi, nặng đầu sau giờ làm 3 ngày nay, không sốt, không nôn và không nhìn mờ.',
+        },
+        missing_data: ['Chưa có huyết áp.'],
+        profile: { allergies: [] },
+        medications: [],
+      },
+    });
+    expect(questions.length).toBeGreaterThanOrEqual(3);
+    expect(questions[0]).toContain('đột ngột');
+    expect(questions.join(' ')).toContain('yếu hoặc tê');
+    expect(questions.join(' ')).not.toContain('Bạn có sốt');
+  });
+
+  test('grounding summary contains only documented facts', () => {
+    const context = {
+      latest_patient_message: { message: 'Tôi thấy mệt sau khi làm việc.' },
+      profile: { birth_year: null, gender: null, conditions: [], chronic_symptoms: [] },
+      medications: [],
+      blood_pressure: [],
+      glucose: [],
+    };
+    expect(buildGroundingFacts(context)).toEqual([
+      'Tin nhắn bệnh nhân gần nhất (nguyên văn): Tôi thấy mệt sau khi làm việc.',
+    ]);
+    expect(buildDeterministicClinicalSummary({ context, locale: 'vi' })).not.toContain('37');
+  });
+
+  test('suggested questions override hallucinated model summary', () => {
+    const output = __test__.buildOutput({
+      raw: {
+        ...emptyRawOutput(),
+        clinical_summary: 'Bệnh nhân nam bị đau đầu 1-2 giờ.',
+        clinical_rationale: 'Đã đo huyết áp bình thường.',
+        clarifying_questions: ['Câu hỏi bất kỳ?'],
+      },
+      input: {
+        locale: 'vi',
+        touchpoint: 'suggested_questions',
+        clinical_support: { knowledge_chunks: [] },
+      },
+      context: {
+        latest_patient_message: { message: 'Tôi thấy nặng đầu sau giờ làm 3 ngày nay.' },
+        missing_data: [],
+        conflicts: [],
+        profile: { allergies: [] },
+        medications: [],
+        blood_pressure: [],
+        glucose: [],
+      },
+      ruleFindings: [],
+    });
+    expect(output.clinical_summary).toContain('3 ngày nay');
+    expect(output.clinical_summary).not.toContain('nam');
+    expect(output.clinical_summary).not.toContain('1-2 giờ');
+    expect(output.clarifying_questions[0]).toContain('đột ngột');
+  });
+
   test('context hash is key-order independent and changes with clinical data', () => {
     expect(hashClinicalContext({ a: 1, b: { c: 2 } })).toBe(
       hashClinicalContext({ b: { c: 2 }, a: 1 })

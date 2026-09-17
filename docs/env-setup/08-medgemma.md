@@ -6,6 +6,21 @@
 - `GOOGLE_APPLICATION_CREDENTIALS` (file JSON Service Account)
 
 **Vai trò:** Thay OpenAI bằng MedGemma cho các luồng lâm sàng (check-in triage, symptom analyzer).
+
+### Dùng Dr7 API (không cần chạy GPU riêng)
+
+Dr7 cung cấp endpoint tương thích OpenAI. Với môi trường local/staging, có thể cấu hình:
+
+```bash
+AI_PROVIDER_CLINICAL=medgemma
+DOCTOR_AI_PROVIDER=medgemma
+MEDGEMMA_ENDPOINT=https://dr7.ai/api/v1/medical/chat/completions
+MEDGEMMA_MODEL=medgemma-27b-it
+MEDGEMMA_API_KEY=<đặt trong secret manager hoặc biến môi trường runtime>
+MEDGEMMA_SUPPORTS_JSON_MODE=false
+```
+
+Không ghi API key vào git, log, file `.env` được chia sẻ hoặc ticket. Nên ưu tiên model 27B cho copilot; model 4B chỉ phù hợp kiểm thử chi phí thấp và phải chạy bộ đánh giá trước khi dùng thật.
 **Chi phí:** ~$0.8/giờ GPU L4 trên Vertex AI = ~$570/tháng nếu chạy 24/7 (giảm xuống ~$170/tháng nếu set Min replicas = 0).
 **Thời gian setup:** ~30 phút (chưa kể chờ deploy 10–20 phút).
 
