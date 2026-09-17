@@ -8,12 +8,44 @@ const {
   searchUsers: serviceSearchUsers,
   verifySocialToken,
 } = require('../services/auth/auth.service');
+const {
+  OAuthFlowError,
+  appRedirect,
+  createOAuthState,
+  consumeOAuthState,
+  createOAuthExchange,
+  exchangeOAuthCode: exchangeOAuthSessionCode,
+} = require('../services/auth/oauth-flow.service');
 
-const ZALO_CALLBACK_URI = 'asinu-lite://auth/zalo/callback';
-const FACEBOOK_CALLBACK_URI = 'asinu-lite://auth/facebook/callback';
-const GOOGLE_CALLBACK_URI = 'asinu-lite://auth/google/callback';
-// Keep backward-compat alias
-const APP_CALLBACK_URI = ZALO_CALLBACK_URI;
+function backendCallbackUri(provider) {
+  const backendUrl = (
+    process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`
+  ).replace(/\/$/, '');
+  return `${backendUrl}/api/auth/${provider}/callback`;
+}
+
+function oauthErrorCode(err) {
+  if (err instanceof OAuthFlowError) {
+    return ['INVALID_OAUTH_STATE', 'PKCE_REQUIRED'].includes(err.code)
+      ? err.code.toLowerCase()
+      : 'server_error';
+  }
+  return 'server_error';
+}
+
+function redirectOAuthError(res, provider, error) {
+  return res.redirect(appRedirect(provider, { error }));
+}
+
+function decodeJwtJsonPart(value) {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]+$/.test(value)) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
 
 // =====================================================
 // REGISTER
@@ -194,18 +226,25 @@ async function loginByZalo(pool, req, res) {
 /**
  * GET /api/auth/zalo/callback
  * Zalo redirects here with ?code=&state=
- * Exchange code → get profile → create user → redirect back to app with JWT
+ * Exchange code → get profile → create user → redirect with a one-time PKCE code.
  */
 async function zaloCallback(pool, req, res) {
-  const { code, state: _state } = req.query;
+  let oauthState;
+  try {
+    oauthState = await consumeOAuthState(req, res, 'zalo');
+  } catch (err) {
+    return redirectOAuthError(res, 'zalo', oauthErrorCode(err));
+  }
+
+  const { code } = req.query;
 
   if (!code) {
-    return res.redirect(`${APP_CALLBACK_URI}?error=no_code`);
+    return redirectOAuthError(res, 'zalo', 'no_code');
   }
 
   try {
     // Exchange code for access_token
-    const redirectUri = `${process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`}/api/auth/zalo/callback`;
+    const redirectUri = backendCallbackUri('zalo');
     const tokenRes = await fetch('https://oauth.zaloapp.com/v4/access_token', {
       method: 'POST',
       headers: {
@@ -222,7 +261,7 @@ async function zaloCallback(pool, req, res) {
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-      return res.redirect(`${APP_CALLBACK_URI}?error=token_exchange_failed`);
+      return redirectOAuthError(res, 'zalo', 'token_exchange_failed');
     }
 
     // Get user profile (request phone if app has permission)
@@ -232,7 +271,7 @@ async function zaloCallback(pool, req, res) {
     const profile = await profileRes.json();
 
     if (!profile.id) {
-      return res.redirect(`${APP_CALLBACK_URI}?error=profile_failed`);
+      return redirectOAuthError(res, 'zalo', 'profile_failed');
     }
 
     const { normalizePhoneNumber } = require('../services/auth/auth.service');
@@ -246,31 +285,40 @@ async function zaloCallback(pool, req, res) {
       zaloPhone
     );
     if (!result.ok) {
-      return res.redirect(`${APP_CALLBACK_URI}?error=login_failed`);
+      return redirectOAuthError(res, 'zalo', 'login_failed');
     }
 
-    return res.redirect(`${APP_CALLBACK_URI}?token=${encodeURIComponent(result.token)}`);
+    const exchangeCode = await createOAuthExchange(result, {
+      provider: 'zalo',
+      codeChallenge: oauthState.codeChallenge,
+    });
+    return res.redirect(appRedirect('zalo', { code: exchangeCode }));
   } catch (err) {
-    return res.redirect(`${APP_CALLBACK_URI}?error=server_error`);
+    return redirectOAuthError(res, 'zalo', 'server_error');
   }
 }
 
 /**
  * GET /api/auth/facebook/callback
  * Facebook redirects here with ?code=
- * Exchange code → get profile → create user → redirect back to app with JWT
+ * Exchange code → get profile → create user → redirect with a one-time PKCE code.
  */
 async function facebookCallback(pool, req, res) {
+  let oauthState;
+  try {
+    oauthState = await consumeOAuthState(req, res, 'facebook');
+  } catch (err) {
+    return redirectOAuthError(res, 'facebook', oauthErrorCode(err));
+  }
+
   const { code } = req.query;
 
   if (!code) {
-    return res.redirect(`${FACEBOOK_CALLBACK_URI}?error=no_code`);
+    return redirectOAuthError(res, 'facebook', 'no_code');
   }
 
   try {
-    const backendUrl =
-      process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
-    const redirectUri = `${backendUrl}/api/auth/facebook/callback`;
+    const redirectUri = backendCallbackUri('facebook');
 
     // Exchange code for access_token
     const tokenRes = await fetch(
@@ -284,7 +332,7 @@ async function facebookCallback(pool, req, res) {
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-      return res.redirect(`${FACEBOOK_CALLBACK_URI}?error=token_exchange_failed`);
+      return redirectOAuthError(res, 'facebook', 'token_exchange_failed');
     }
 
     // Get user profile
@@ -294,7 +342,7 @@ async function facebookCallback(pool, req, res) {
     const profile = await profileRes.json();
 
     if (!profile.id) {
-      return res.redirect(`${FACEBOOK_CALLBACK_URI}?error=profile_failed`);
+      return redirectOAuthError(res, 'facebook', 'profile_failed');
     }
 
     const email = profile.email || null;
@@ -307,13 +355,17 @@ async function facebookCallback(pool, req, res) {
       null
     );
     if (!result.ok) {
-      return res.redirect(`${FACEBOOK_CALLBACK_URI}?error=login_failed`);
+      return redirectOAuthError(res, 'facebook', 'login_failed');
     }
 
-    return res.redirect(`${FACEBOOK_CALLBACK_URI}?token=${encodeURIComponent(result.token)}`);
+    const exchangeCode = await createOAuthExchange(result, {
+      provider: 'facebook',
+      codeChallenge: oauthState.codeChallenge,
+    });
+    return res.redirect(appRedirect('facebook', { code: exchangeCode }));
   } catch (err) {
     console.error('[Facebook callback] error:', err.message);
-    return res.redirect(`${FACEBOOK_CALLBACK_URI}?error=server_error`);
+    return redirectOAuthError(res, 'facebook', 'server_error');
   }
 }
 
@@ -380,46 +432,106 @@ async function verifyToken(pool, req, res) {
 
 /**
  * GET /api/auth/google/initiate
- * Redirect browser to Google OAuth consent screen (server-side flow for Android)
+ * Redirect browser to Google OAuth consent screen (server-side flow for Android).
+ * The app supplies a PKCE challenge; the backend binds it to this OAuth state.
  */
 async function googleInitiate(pool, req, res) {
-  const backendUrl =
-    process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
-  const redirectUri = `${backendUrl}/api/auth/google/callback`;
+  const redirectUri = backendCallbackUri('google');
   const clientId = process.env.GOOGLE_WEB_CLIENT_ID;
+  const codeChallenge = req.query?.code_challenge;
 
   if (!clientId) {
-    return res.redirect(`${GOOGLE_CALLBACK_URI}?error=google_not_configured`);
+    return redirectOAuthError(res, 'google', 'google_not_configured');
   }
 
-  const params = new URLSearchParams({
-    client_id: clientId,
-    redirect_uri: redirectUri,
-    response_type: 'code',
-    scope: 'openid email profile',
-    access_type: 'online',
-    state: Buffer.from(JSON.stringify({ n: Date.now() })).toString('base64'),
-  });
+  try {
+    const state = await createOAuthState(req, res, { provider: 'google', codeChallenge });
+    const params = new URLSearchParams({
+      client_id: clientId,
+      redirect_uri: redirectUri,
+      response_type: 'code',
+      scope: 'openid email profile',
+      access_type: 'online',
+      state,
+    });
 
-  return res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+    return res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`);
+  } catch (err) {
+    return redirectOAuthError(res, 'google', oauthErrorCode(err));
+  }
+}
+
+/**
+ * GET /api/auth/zalo/initiate
+ * Start the legacy web/backend Zalo flow with the same state + PKCE contract.
+ */
+async function zaloInitiate(pool, req, res) {
+  const appId = process.env.ZALO_APP_ID;
+  if (!appId) return redirectOAuthError(res, 'zalo', 'zalo_not_configured');
+
+  try {
+    const state = await createOAuthState(req, res, {
+      provider: 'zalo',
+      codeChallenge: req.query?.code_challenge,
+    });
+    const params = new URLSearchParams({
+      app_id: appId,
+      redirect_uri: backendCallbackUri('zalo'),
+      state,
+    });
+    return res.redirect(`https://oauth.zaloapp.com/v4/permission?${params.toString()}`);
+  } catch (err) {
+    return redirectOAuthError(res, 'zalo', oauthErrorCode(err));
+  }
+}
+
+/**
+ * GET /api/auth/facebook/initiate
+ * Start the legacy web/backend Facebook flow with the same state + PKCE contract.
+ */
+async function facebookInitiate(pool, req, res) {
+  const appId = process.env.FACEBOOK_APP_ID;
+  if (!appId) return redirectOAuthError(res, 'facebook', 'facebook_not_configured');
+
+  try {
+    const state = await createOAuthState(req, res, {
+      provider: 'facebook',
+      codeChallenge: req.query?.code_challenge,
+    });
+    const params = new URLSearchParams({
+      client_id: appId,
+      redirect_uri: backendCallbackUri('facebook'),
+      response_type: 'code',
+      scope: 'email,public_profile',
+      state,
+    });
+    return res.redirect(`https://www.facebook.com/v18.0/dialog/oauth?${params.toString()}`);
+  } catch (err) {
+    return redirectOAuthError(res, 'facebook', oauthErrorCode(err));
+  }
 }
 
 /**
  * GET /api/auth/google/callback
  * Google redirects here with ?code=
- * Exchange code → get profile → create user → redirect back to app with JWT
+ * Exchange code → get profile → redirect with a one-time PKCE code.
  */
 async function googleCallback(pool, req, res) {
+  let oauthState;
+  try {
+    oauthState = await consumeOAuthState(req, res, 'google');
+  } catch (err) {
+    return redirectOAuthError(res, 'google', oauthErrorCode(err));
+  }
+
   const { code } = req.query;
 
   if (!code) {
-    return res.redirect(`${GOOGLE_CALLBACK_URI}?error=no_code`);
+    return redirectOAuthError(res, 'google', 'no_code');
   }
 
   try {
-    const backendUrl =
-      process.env.BACKEND_PUBLIC_URL || `http://localhost:${process.env.PORT || 3000}`;
-    const redirectUri = `${backendUrl}/api/auth/google/callback`;
+    const redirectUri = backendCallbackUri('google');
     const clientId = process.env.GOOGLE_WEB_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_WEB_CLIENT_SECRET;
 
@@ -438,7 +550,7 @@ async function googleCallback(pool, req, res) {
     const tokenData = await tokenRes.json();
 
     if (!tokenData.access_token) {
-      return res.redirect(`${GOOGLE_CALLBACK_URI}?error=token_exchange_failed`);
+      return redirectOAuthError(res, 'google', 'token_exchange_failed');
     }
 
     // Get user profile
@@ -448,7 +560,7 @@ async function googleCallback(pool, req, res) {
     const profile = await profileRes.json();
 
     if (!profile.id) {
-      return res.redirect(`${GOOGLE_CALLBACK_URI}?error=profile_failed`);
+      return redirectOAuthError(res, 'google', 'profile_failed');
     }
 
     const result = await serviceLoginProvider(
@@ -460,12 +572,31 @@ async function googleCallback(pool, req, res) {
       null
     );
     if (!result.ok) {
-      return res.redirect(`${GOOGLE_CALLBACK_URI}?error=login_failed`);
+      return redirectOAuthError(res, 'google', 'login_failed');
     }
 
-    return res.redirect(`${GOOGLE_CALLBACK_URI}?token=${encodeURIComponent(result.token)}`);
+    const exchangeCode = await createOAuthExchange(result, {
+      provider: 'google',
+      codeChallenge: oauthState.codeChallenge,
+    });
+    return res.redirect(appRedirect('google', { code: exchangeCode }));
   } catch (err) {
-    return res.redirect(`${GOOGLE_CALLBACK_URI}?error=server_error`);
+    return redirectOAuthError(res, 'google', 'server_error');
+  }
+}
+
+/**
+ * POST /api/auth/oauth/exchange
+ * Exchange the short-lived callback code for the API JWT after PKCE succeeds.
+ */
+async function exchangeOAuthCodeHandler(pool, req, res) {
+  try {
+    const { code, code_verifier: codeVerifier } = req.body || {};
+    const result = await exchangeOAuthSessionCode(code, codeVerifier);
+    return res.status(200).json({ ok: true, token: result.token, user: result.user || null });
+  } catch (err) {
+    const status = err instanceof OAuthFlowError && err.code === 'OAUTH_EXCHANGE_UNAVAILABLE' ? 503 : 401;
+    return res.status(status).json({ ok: false, error: 'OAuth code is invalid or expired' });
   }
 }
 
@@ -488,12 +619,33 @@ async function loginByFacebookToken(pool, req, res) {
     if (id_token) {
       // iOS SDK v16+ Limited Login: verify JWT via Facebook JWKS
       console.log('[FB token] iOS id_token flow');
+      if (!appId) {
+        return res.status(503).json({ ok: false, error: 'Facebook login is not configured' });
+      }
 
-      // Decode JWT header để xác định issuer → đúng JWKS endpoint
-      const [headerB64Pre] = id_token.split('.');
-      const headerPre = JSON.parse(Buffer.from(headerB64Pre, 'base64').toString());
+      const tokenParts = String(id_token).split('.');
+      if (tokenParts.length !== 3) {
+        return res.status(401).json({ ok: false, error: 'Invalid Facebook id_token' });
+      }
+
+      const [headerB64Pre, payloadB64Pre] = tokenParts;
+      const headerPre = decodeJwtJsonPart(headerB64Pre);
+      const unverifiedPayload = decodeJwtJsonPart(payloadB64Pre);
+      const validIssuers = ['https://www.facebook.com', 'https://limited.facebook.com'];
+      if (
+        !headerPre ||
+        !unverifiedPayload ||
+        headerPre.alg !== 'RS256' ||
+        unverifiedPayload.aud !== appId ||
+        !validIssuers.includes(unverifiedPayload.iss)
+      ) {
+        return res
+          .status(401)
+          .json({ ok: false, error: 'Invalid Facebook id_token: aud/iss/alg mismatch' });
+      }
+
       const jwksUrl =
-        headerPre.iss === 'https://limited.facebook.com'
+        unverifiedPayload.iss === 'https://limited.facebook.com'
           ? 'https://limited.facebook.com/.well-known/oauth/openid/jwks/'
           : 'https://www.facebook.com/.well-known/oauth/openid/jwks/';
 
@@ -501,12 +653,11 @@ async function loginByFacebookToken(pool, req, res) {
       const jwksRes = await fetch(jwksUrl);
       const jwks = await jwksRes.json();
 
-      // Decode JWT header to get kid
-      const [headerB64] = id_token.split('.');
-      const header = JSON.parse(Buffer.from(headerB64, 'base64').toString());
+      // The header was parsed and validated above before any network call.
+      const header = headerPre;
       const jwk = jwks.keys?.find((k) => k.kid === header.kid);
 
-      if (!jwk) {
+      if (!jwk || jwk.kty !== 'RSA') {
         console.error('[FB token] JWKS key not found for kid:', header.kid);
         return res
           .status(401)
@@ -515,9 +666,9 @@ async function loginByFacebookToken(pool, req, res) {
 
       // Verify JWT signature using Node crypto
       const crypto = require('crypto');
-      const [hB64, pB64, sigB64] = id_token.split('.');
+      const [hB64, pB64, sigB64] = tokenParts;
       const signingInput = `${hB64}.${pB64}`;
-      const signature = Buffer.from(sigB64.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+      const signature = Buffer.from(sigB64, 'base64url');
 
       const pubKey = crypto.createPublicKey({ key: jwk, format: 'jwk' });
       const valid = crypto.verify('SHA256', Buffer.from(signingInput), pubKey, signature);
@@ -529,18 +680,32 @@ async function loginByFacebookToken(pool, req, res) {
           .json({ ok: false, error: 'Invalid Facebook id_token: bad signature' });
       }
 
-      // Decode payload
-      const payload = JSON.parse(Buffer.from(pB64, 'base64').toString());
+      // The payload was parsed before the signature check and is safe to use
+      // only now that the signature has been verified.
+      const payload = unverifiedPayload;
       console.log('[FB token] JWT payload verified');
 
-      const validIssuers = ['https://www.facebook.com', 'https://limited.facebook.com'];
-      if (payload.aud !== appId || !validIssuers.includes(payload.iss)) {
+      const now = Math.floor(Date.now() / 1000);
+      const clockSkewSeconds = 60;
+      if (
+        payload.aud !== appId ||
+        !validIssuers.includes(payload.iss) ||
+        typeof payload.exp !== 'number' ||
+        payload.exp <= now - clockSkewSeconds ||
+        typeof payload.iat !== 'number' ||
+        payload.iat > now + clockSkewSeconds ||
+        payload.iat < now - 24 * 60 * 60 ||
+        (payload.nbf !== undefined &&
+          (typeof payload.nbf !== 'number' || payload.nbf > now + clockSkewSeconds)) ||
+        typeof payload.sub !== 'string' ||
+        payload.sub.length === 0
+      ) {
         return res
           .status(401)
-          .json({ ok: false, error: 'Invalid Facebook id_token: aud/iss mismatch' });
+          .json({ ok: false, error: 'Invalid Facebook id_token claims' });
       }
 
-      userId = payload.sub || user_id;
+      userId = payload.sub;
       email = payload.email || null;
     } else {
       // Android: standard access_token via debug_token endpoint
@@ -610,11 +775,14 @@ module.exports = {
   loginByGoogle,
   loginByApple,
   loginByZalo,
+  zaloInitiate,
   zaloCallback,
+  facebookInitiate,
   facebookCallback,
   loginByFacebookToken,
   googleInitiate,
   googleCallback,
+  exchangeOAuthCodeHandler,
   getMe,
   searchUsers,
   verifyToken,

@@ -6,11 +6,14 @@ const {
   loginByGoogle,
   loginByApple,
   loginByZalo,
+  zaloInitiate,
   zaloCallback,
+  facebookInitiate,
   facebookCallback,
   loginByFacebookToken,
   googleInitiate,
   googleCallback,
+  exchangeOAuthCodeHandler,
   searchUsers,
   verifyToken,
 } = require('../controllers/auth.controller');
@@ -26,11 +29,14 @@ function authRoutes(pool) {
   router.post('/google', (req, res) => loginByGoogle(pool, req, res));
   router.post('/apple', (req, res) => loginByApple(pool, req, res));
   router.post('/zalo', (req, res) => loginByZalo(pool, req, res));
+  router.get('/zalo/initiate', (req, res) => zaloInitiate(pool, req, res));
   router.get('/zalo/callback', (req, res) => zaloCallback(pool, req, res));
+  router.get('/facebook/initiate', (req, res) => facebookInitiate(pool, req, res));
   router.get('/facebook/callback', (req, res) => facebookCallback(pool, req, res));
   router.post('/facebook/token', (req, res) => loginByFacebookToken(pool, req, res));
   router.get('/google/initiate', (req, res) => googleInitiate(pool, req, res));
   router.get('/google/callback', (req, res) => googleCallback(pool, req, res));
+  router.post('/oauth/exchange', (req, res) => exchangeOAuthCodeHandler(pool, req, res));
   // ===== AUTHENTICATED ENDPOINTS =====
   router.get('/me', requireAuth, (req, res) => getMe(pool, req, res));
   router.post('/verify', requireAuth, (req, res) => verifyToken(pool, req, res));
