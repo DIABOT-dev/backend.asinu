@@ -825,7 +825,7 @@ const listPatientTasks = async (pool, userId, tenantId) => {
             lifecycle.status,
             lifecycle.follow_up_until,
             payload->'payload'->>'summary' AS summary,
-            COALESCE((o.payload->>'occurred_at')::timestamptz, o.created_at) AS created_at,
+            COALESCE((o.payload->>'occurred_at')::timestamptz, o.created_at::timestamptz) AS created_at,
             CASE
               WHEN latest.deleted_at IS NOT NULL OR latest.deleted_for_me IS NOT NULL THEN NULL
               ELSE latest.content
@@ -856,7 +856,7 @@ const listPatientTasks = async (pool, userId, tenantId) => {
       WHERE o.tenant_id = $2
         AND o.payload->>'event_type' = 'doctor.task.requested'
         AND o.payload->'payload'->>'app_user_id' = $1::text
-      ORDER BY COALESCE(latest.created_at, o.created_at) DESC
+      ORDER BY COALESCE(latest.created_at::timestamptz, o.created_at::timestamptz) DESC
       LIMIT 100`,
     [userId, tenantId]
   );
