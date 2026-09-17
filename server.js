@@ -195,7 +195,10 @@ app.use((err, req, res, _next) => {
   if (err.type === 'request.aborted' || err.code === 'ECONNRESET') return;
   logger.error('unhandled_error', { err, path: req?.path, method: req?.method });
   if (!res.headersSent) {
-    const code = err.code && typeof err.code === 'string' ? err.code : 'INTERNAL_ERROR';
+    const rawCode = err.code && typeof err.code === 'string' ? err.code : '';
+    const code = Object.prototype.hasOwnProperty.call(GLOBAL_ERROR_MESSAGE_KEYS, rawCode)
+      ? rawCode
+      : 'INTERNAL_ERROR';
     const key = GLOBAL_ERROR_MESSAGE_KEYS[code] || 'error.server';
     res.status(err.statusCode || 500).json({
       ok: false,
