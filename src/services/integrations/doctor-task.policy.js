@@ -67,6 +67,25 @@ const doctorRecommendationRequestSchema = z
   })
   .strict();
 
+// Patient-facing directory search. Tenant routing stays server-side so the
+// mobile app can show one specialist list without exposing clinic affiliation.
+const doctorDirectoryRequestSchema = z
+  .object({
+    specialty: z.string().trim().min(1).max(120),
+    service_flow: z.enum(['clinical', 'wellness']).default('clinical'),
+    priority: z.enum(['normal', 'high', 'urgent']).default('normal'),
+    preferred_doctor_id: z.string().uuid().nullable().optional(),
+    limit: z.number().int().min(1).max(10).default(6),
+  })
+  .strict();
+
+const doctorReviewsRequestSchema = z
+  .object({
+    doctor_id: z.string().uuid(),
+    limit: z.number().int().min(1).max(50).default(10),
+  })
+  .strict();
+
 const patientMessageRequestSchema = z
   .object({
     tenant_id: z.string().trim().min(1).max(120),
@@ -408,6 +427,8 @@ module.exports = {
   patientRatingRequestSchema,
   privacyRequestSchema,
   doctorRecommendationRequestSchema,
+  doctorDirectoryRequestSchema,
+  doctorReviewsRequestSchema,
   patientMessageRequestSchema,
   messageActionSchema,
   doctorMessageQuerySchema,

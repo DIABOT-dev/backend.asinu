@@ -12,6 +12,9 @@ const {
   submitDoctorRating,
   requestDoctorPrivacy,
   recommendDoctor,
+  listDoctorDirectory,
+  listDoctorDirectorySpecialties,
+  listDoctorReviews,
   listDoctorSpecialties,
   listDoctorClinics,
   listDoctorTasks,
@@ -65,6 +68,15 @@ function doctorTaskRoutes(pool) {
   );
   router.post('/recommendations', requireAuth, (req, res, next) =>
     Promise.resolve(recommendDoctor(pool, req, res)).catch(next)
+  );
+  router.post('/specialists', requireAuth, (req, res, next) =>
+    Promise.resolve(listDoctorDirectory(pool, req, res)).catch(next)
+  );
+  router.get('/specialty-options', requireAuth, (req, res, next) =>
+    Promise.resolve(listDoctorDirectorySpecialties(pool, req, res)).catch(next)
+  );
+  router.get('/specialists/:doctorId/reviews', requireAuth, (req, res, next) =>
+    Promise.resolve(listDoctorReviews(pool, req, res)).catch(next)
   );
   router.post('/specialties', requireAuth, (req, res, next) =>
     Promise.resolve(listDoctorSpecialties(pool, req, res)).catch(next)

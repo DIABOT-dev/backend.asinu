@@ -4,6 +4,8 @@ const {
   patientRatingRequestSchema,
   privacyRequestSchema,
   doctorRecommendationRequestSchema,
+  doctorDirectoryRequestSchema,
+  doctorReviewsRequestSchema,
   patientMessageRequestSchema,
   messageActionSchema,
   screenRemoteCareSuitability,
@@ -14,6 +16,9 @@ const {
   submitPatientRating,
   submitPrivacyRequest,
   requestDoctorRecommendations,
+  requestDoctorDirectory,
+  requestDoctorDirectorySpecialties,
+  requestDoctorReviews,
   requestDoctorSpecialties,
   requestDoctorClinics,
   requestDoctorTaskStatus,
@@ -179,6 +184,39 @@ const recommendDoctor = async (_pool, req, res) => {
   }
   const result = await requestDoctorRecommendations({ input: parsed.data });
   return res.status(200).json({ ok: true, data: result });
+};
+
+const listDoctorDirectory = async (_pool, req, res) => {
+  const parsed = doctorDirectoryRequestSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      error: t('doctor.invalid_recommendation_request', getLang(req)),
+      code: 'INVALID_DOCTOR_DIRECTORY_REQUEST',
+      details: parsed.error.issues,
+    });
+  }
+  const result = await requestDoctorDirectory({ input: parsed.data });
+  return res.status(200).json({ ok: true, data: result });
+};
+
+const listDoctorDirectorySpecialties = async (_pool, _req, res) =>
+  res.json({ ok: true, data: await requestDoctorDirectorySpecialties() });
+
+const listDoctorReviews = async (_pool, req, res) => {
+  const parsed = doctorReviewsRequestSchema.safeParse({
+    doctor_id: String(req.params.doctorId || '').trim(),
+    limit: req.query.limit ? Number(req.query.limit) : undefined,
+  });
+  if (!parsed.success) {
+    return res.status(400).json({
+      ok: false,
+      error: t('error.invalid_data', getLang(req)),
+      code: 'INVALID_DOCTOR_REVIEWS_REQUEST',
+      details: parsed.error.issues,
+    });
+  }
+  return res.json({ ok: true, data: await requestDoctorReviews({ input: parsed.data }) });
 };
 
 const listDoctorSpecialties = async (_pool, req, res) => {
@@ -410,6 +448,9 @@ module.exports = {
   submitDoctorRating,
   requestDoctorPrivacy,
   recommendDoctor,
+  listDoctorDirectory,
+  listDoctorDirectorySpecialties,
+  listDoctorReviews,
   listDoctorSpecialties,
   listDoctorClinics,
   listDoctorTasks,

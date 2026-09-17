@@ -311,6 +311,126 @@ const requestDoctorRecommendations = async ({ input }) => {
   return response.data;
 };
 
+const configuredTenantIds = () => {
+  const tenantIds = [...ALLOWED_TENANT_IDS];
+  if (tenantIds.length === 0) {
+    const error = new Error('DOCTOR_ALLOWED_TENANT_IDS must contain at least one tenant.');
+    error.statusCode = 503;
+    error.code = 'DOCTOR_DIRECTORY_NOT_CONFIGURED';
+    throw error;
+  }
+  return tenantIds;
+};
+
+const requestDoctorDirectory = async ({ input }) => {
+  const tenantIds = configuredTenantIds();
+  const responses = await Promise.allSettled(
+    tenantIds.map(async (tenantId) => {
+      const response = await deliverDoctorRequest('recommendations', {
+        tenant_id: tenantId,
+        ...input,
+        specialty: normalizeSpecialty(input.specialty),
+      });
+      const items = Array.isArray(response.data?.items) ? response.data.items : [];
+      return items.map((item) => ({
+        ...item,
+        // This field is consumed only when submitting a task. It is not
+        // rendered as a clinic affiliation in the mobile UI.
+        routingTenantId: tenantId,
+        availability: 'online',
+      }));
+    }),
+  );
+  const fulfilled = responses.filter((result) => result.status === 'fulfilled');
+  if (fulfilled.length === 0) {
+    const rejected = responses.find((result) => result.status === 'rejected');
+    throw rejected?.reason || new Error('The Doctor directory is unavailable.');
+  }
+
+  const byDoctor = new Map();
+  for (const result of fulfilled) {
+    for (const item of result.value) {
+      const previous = byDoctor.get(item.doctorId);
+      if (
+        !previous ||
+        Number(item.score ?? 0) > Number(previous.score ?? 0) ||
+        (Number(item.score ?? 0) === Number(previous.score ?? 0) &&
+          Number(item.estimatedWaitMinutes ?? 0) < Number(previous.estimatedWaitMinutes ?? 0))
+      ) {
+        byDoctor.set(item.doctorId, item);
+      }
+    }
+  }
+  const items = [...byDoctor.values()]
+    .sort(
+      (left, right) =>
+        Number(right.score ?? 0) - Number(left.score ?? 0) ||
+        Number(left.estimatedWaitMinutes ?? 0) - Number(right.estimatedWaitMinutes ?? 0),
+    )
+    .slice(0, input.limit);
+  return {
+    items,
+    estimatedWaitMinutes: items.length
+      ? Math.min(...items.map((item) => Number(item.estimatedWaitMinutes ?? 0)))
+      : null,
+  };
+};
+
+const requestDoctorDirectorySpecialties = async () => {
+  const tenantIds = configuredTenantIds();
+  const responses = await Promise.allSettled(
+    tenantIds.map(async (tenantId) => {
+      const response = await deliverDoctorRequest('specialties', { tenant_id: tenantId });
+      return Array.isArray(response.data?.items) ? response.data.items : [];
+    }),
+  );
+  const fulfilled = responses.filter((result) => result.status === 'fulfilled');
+  if (fulfilled.length === 0) {
+    const rejected = responses.find((result) => result.status === 'rejected');
+    throw rejected?.reason || new Error('The Doctor specialty directory is unavailable.');
+  }
+  const byCode = new Map();
+  for (const result of fulfilled) {
+    for (const item of result.value) {
+      if (item?.code && !byCode.has(item.code)) byCode.set(item.code, item);
+    }
+  }
+  return { items: [...byCode.values()].sort((left, right) => String(left.name).localeCompare(String(right.name))) };
+};
+
+const requestDoctorReviews = async ({ input }) => {
+  const tenantIds = configuredTenantIds();
+  const responses = await Promise.allSettled(
+    tenantIds.map((tenantId) => deliverDoctorRequest('reviews', { tenant_id: tenantId, ...input })),
+  );
+  const fulfilled = responses
+    .filter((result) => result.status === 'fulfilled')
+    .map((result) => result.value.data)
+    .filter(Boolean);
+  if (fulfilled.length === 0) {
+    const rejected = responses.find((result) => result.status === 'rejected');
+    throw rejected?.reason || new Error('The Doctor reviews are unavailable.');
+  }
+  const items = fulfilled
+    .flatMap((result) => (Array.isArray(result.items) ? result.items : []))
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())
+    .slice(0, input.limit);
+  const summary = fulfilled.reduce(
+    (current, result) => ({
+      ratingCount: current.ratingCount + Number(result.summary?.ratingCount ?? 0),
+      ratingSum: current.ratingSum + Number(result.summary?.ratingSum ?? 0),
+    }),
+    { ratingCount: 0, ratingSum: 0 },
+  );
+  return {
+    summary: {
+      ratingCount: summary.ratingCount,
+      averageRating: summary.ratingCount ? Number((summary.ratingSum / summary.ratingCount).toFixed(2)) : 0,
+    },
+    items,
+  };
+};
+
 const requestDoctorSpecialties = async ({ tenantId }) => {
   assertTenantAllowed(tenantId);
   const response = await deliverDoctorRequest('specialties', { tenant_id: tenantId });
@@ -318,10 +438,7 @@ const requestDoctorSpecialties = async ({ tenantId }) => {
 };
 
 const requestDoctorClinics = async () => {
-  const tenantIds = [...ALLOWED_TENANT_IDS];
-  if (tenantIds.length === 0) {
-    throw new Error('DOCTOR_ALLOWED_TENANT_IDS must contain at least one tenant.');
-  }
+  const tenantIds = configuredTenantIds();
   const response = await deliverDoctorRequest('clinics', { tenant_ids: tenantIds });
   return response.data;
 };
@@ -447,6 +564,9 @@ module.exports = {
   submitPatientRating,
   submitPrivacyRequest,
   requestDoctorRecommendations,
+  requestDoctorDirectory,
+  requestDoctorDirectorySpecialties,
+  requestDoctorReviews,
   requestDoctorSpecialties,
   requestDoctorClinics,
   requestDoctorTaskStatus,
