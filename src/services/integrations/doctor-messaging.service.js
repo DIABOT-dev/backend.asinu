@@ -128,7 +128,7 @@ const privateMedia = (media) => {
   return {
     ...safeMedia,
     // Legacy public URLs are deliberately not returned. New records carry a
-    // public_id and receive a short-lived authenticated delivery URL.
+    // public_id and receive a signed authenticated delivery URL.
     url: authenticatedAssetUrl(media.public_id, resourceType, media.delivery_type),
   };
 };

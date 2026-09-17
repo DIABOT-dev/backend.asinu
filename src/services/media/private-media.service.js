@@ -1,9 +1,5 @@
 const { v2: cloudinary } = require('cloudinary');
 
-const privateUrlTtlSeconds = () =>
-  Number.parseInt(process.env.CLOUDINARY_ASSET_URL_TTL_SECONDS || '300', 10);
-const authTokenKey = () => process.env.CLOUDINARY_AUTH_TOKEN_KEY || '';
-
 const resourceTypeForMime = (mimeType) => {
   const normalizedMimeType = String(mimeType || '').toLowerCase();
   if (normalizedMimeType.startsWith('image/')) return 'image';
@@ -26,31 +22,26 @@ const configure = () => {
 };
 
 const requirePrivateDeliveryConfig = () => {
-  const key = authTokenKey();
-  const ttlSeconds = privateUrlTtlSeconds();
-  if (!key || !/^[0-9a-f]{32,}$/i.test(key)) {
+  if (
+    !process.env.CLOUDINARY_CLOUD_NAME ||
+    !process.env.CLOUDINARY_API_KEY ||
+    !process.env.CLOUDINARY_API_SECRET
+  ) {
     const error = new Error('Cloudinary authenticated delivery is not configured');
     error.code = 'CLOUDINARY_PRIVATE_DELIVERY_NOT_CONFIGURED';
     throw error;
   }
-  if (!Number.isInteger(ttlSeconds) || ttlSeconds < 60 || ttlSeconds > 3600) {
-    const error = new Error('Cloudinary private URL TTL is invalid');
-    error.code = 'CLOUDINARY_PRIVATE_DELIVERY_NOT_CONFIGURED';
-    throw error;
-  }
-  return { key, ttlSeconds };
 };
 
 const authenticatedAssetUrl = (publicId, resourceType, deliveryType = 'authenticated') => {
   if (!publicId || deliveryType !== 'authenticated') return null;
-  const { key, ttlSeconds } = requirePrivateDeliveryConfig();
+  requirePrivateDeliveryConfig();
   configure();
   return cloudinary.url(publicId, {
     secure: true,
     resource_type: resourceType,
     type: 'authenticated',
     sign_url: true,
-    auth_token: { key, duration: ttlSeconds },
   });
 };
 

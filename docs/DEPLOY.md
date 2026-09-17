@@ -36,9 +36,8 @@ git pull --ff-only origin main
 cp .env.example .env
 nano .env
 # → điền JWT_SECRET, OPENAI_API_KEY (sk-proj-...)
-# → nếu dùng patient files/Doctor chat, nhờ Cloudinary Support enable token-based
-#   delivery và provision CLOUDINARY_AUTH_TOKEN_KEY (hex encryption key);
-#   khóa này khác API secret, không tự sinh. Giữ TTL 60–3600 giây
+# → nếu dùng patient files/Doctor chat, cấu hình đủ Cloudinary credentials;
+#   URL private được ký ở backend bằng CLOUDINARY_API_SECRET
 # → các giá trị khác (DATABASE_URL, REDIS_URL, BACKEND_PUBLIC_URL) giữ default
 
 # 4. Stop container cũ (đang chạy bằng docker run thủ công, không phải compose)

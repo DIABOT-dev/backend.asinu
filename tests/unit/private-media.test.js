@@ -3,14 +3,13 @@ describe('private media policy', () => {
     process.env.CLOUDINARY_CLOUD_NAME = 'demo';
     process.env.CLOUDINARY_API_KEY = '123456789012345';
     process.env.CLOUDINARY_API_SECRET = 'demo-secret';
-    process.env.CLOUDINARY_AUTH_TOKEN_KEY = '00112233445566778899aabbccddeeff';
-    process.env.CLOUDINARY_ASSET_URL_TTL_SECONDS = '300';
     jest.resetModules();
   });
 
   afterEach(() => {
-    delete process.env.CLOUDINARY_AUTH_TOKEN_KEY;
-    delete process.env.CLOUDINARY_ASSET_URL_TTL_SECONDS;
+    delete process.env.CLOUDINARY_CLOUD_NAME;
+    delete process.env.CLOUDINARY_API_KEY;
+    delete process.env.CLOUDINARY_API_SECRET;
   });
 
   test('requires the declared MIME type to match the file signature', () => {
@@ -25,12 +24,14 @@ describe('private media policy', () => {
     expect(isSupportedPatientFile(png, 'image/png')).toBe(true);
   });
 
-  test('generates an authenticated expiring URL and never an upload URL', () => {
+  test('generates a signed authenticated URL and never an upload URL', () => {
     const { authenticatedAssetUrl } = require('../../src/services/media/private-media.service');
     const url = authenticatedAssetUrl('patient-files/record-1', 'raw', 'authenticated');
 
-    expect(url).toContain('/raw/authenticated/v1/patient-files/record-1');
-    expect(url).toContain('__cld_token__=');
+    expect(url).toContain('/raw/authenticated/');
+    expect(url).toContain('/v1/patient-files/record-1');
+    expect(url).toMatch(/\/s--[^/]+--\//);
+    expect(url).not.toContain('__cld_token__=');
     expect(url).not.toContain('/upload/');
   });
 
