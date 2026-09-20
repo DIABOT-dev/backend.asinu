@@ -87,7 +87,13 @@ const messageProjection = `
 
 const isDoctorTaskMessageable = ({ status, followUpUntil }, messageType, now = new Date()) => {
   if (!status || !status.length) return true;
-  if (TERMINAL_LIFECYCLE_STATUSES.has(status)) return false;
+  if (TERMINAL_LIFECYCLE_STATUSES.has(status)) {
+    return (
+      ['cancelled', 'expired'].includes(status) &&
+      messageType === 'reply' &&
+      Boolean(followUpUntil && new Date(followUpUntil).getTime() > now.getTime())
+    );
+  }
   if (status !== 'completed') return true;
   return (
     ['follow_up', 'voice'].includes(messageType) &&

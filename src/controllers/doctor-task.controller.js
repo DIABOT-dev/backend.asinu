@@ -250,13 +250,11 @@ const listDoctorMessages = async (pool, req, res) => {
   const taskId = String(req.params.taskId || '').trim();
   const tenantId = String(req.query.tenant_id || '').trim();
   if (!taskId || taskId.length > 160 || !tenantId || tenantId.length > 120) {
-    return res
-      .status(400)
-      .json({
-        ok: false,
-        error: t('doctor.task_tenant_required', getLang(req)),
-        code: 'TASK_TENANT_REQUIRED',
-      });
+    return res.status(400).json({
+      ok: false,
+      error: t('doctor.task_tenant_required', getLang(req)),
+      code: 'TASK_TENANT_REQUIRED',
+    });
   }
   const data = await listMessages(pool, tenantId, taskId, req.user.id);
   let taskStatus = null;
@@ -278,7 +276,7 @@ const patientMessageState = async (tenantId, taskId, userId) => {
   );
   const terminal = ['cancelled', 'expired', 'emergency_referred', 'forwarded'];
   if (
-    terminal.includes(status.status) ||
+    (terminal.includes(status.status) && !status.reopen_open) ||
     (status.status === 'completed' && !status.follow_up_open)
   ) {
     const error = new Error('CONSULTATION_CONVERSATION_CLOSED');
@@ -383,13 +381,11 @@ const createDoctorVoice = async (pool, req, res) => {
     durationMs < 0 ||
     durationMs > 10 * 60 * 1000
   ) {
-    return res
-      .status(400)
-      .json({
-        ok: false,
-        error: t('doctor.voice_required', getLang(req)),
-        code: 'DOCTOR_VOICE_REQUIRED',
-      });
+    return res.status(400).json({
+      ok: false,
+      error: t('doctor.voice_required', getLang(req)),
+      code: 'DOCTOR_VOICE_REQUIRED',
+    });
   }
   try {
     await patientMessageState(tenantId, taskId, req.user.id);
@@ -419,14 +415,12 @@ const createDoctorMessageAction = async (pool, req, res) => {
   }
   const parsed = messageActionSchema.safeParse({ ...req.body, tenant_id: tenantId });
   if (!parsed.success) {
-    return res
-      .status(400)
-      .json({
-        ok: false,
-        error: t('doctor.action_invalid', getLang(req)),
-        code: 'INVALID_MESSAGE_ACTION',
-        details: parsed.error.issues,
-      });
+    return res.status(400).json({
+      ok: false,
+      error: t('doctor.action_invalid', getLang(req)),
+      code: 'INVALID_MESSAGE_ACTION',
+      details: parsed.error.issues,
+    });
   }
   const data = await messageAction(pool, {
     tenantId,
