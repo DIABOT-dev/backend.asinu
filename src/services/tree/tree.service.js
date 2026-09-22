@@ -5,6 +5,9 @@
 
 const { t } = require('../../i18n');
 const { cacheGet, cacheSet } = require('../../lib/redis');
+const checkinService = require('../checkin/checkin.service');
+
+const TREE_DASHBOARD_CACHE_TTL_SECONDS = 60;
 
 const DAY_LABEL_KEYS = [
   'tree.day_sun',
@@ -16,100 +19,217 @@ const DAY_LABEL_KEYS = [
   'tree.day_sat',
 ];
 
+function toFiniteNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function glucoseStatus(value) {
+  if (value === null) return 'unavailable';
+  if (value < 70 || value > 250) return 'danger';
+  if (value >= 200) return 'monitor';
+  return 'stable';
+}
+
+function bloodPressureStatus(systolic) {
+  if (systolic === null) return 'unavailable';
+  if (systolic > 180) return 'danger';
+  if (systolic >= 140) return 'monitor';
+  return 'stable';
+}
+
+function metric(value, unit, recordedAt, status, extra = {}) {
+  if (value === null) return null;
+  return { value, unit, recordedAt, status, ...extra };
+}
+
+async function getLatestMetrics(pool, userId) {
+  const [glucoseResult, bloodPressureResult, weightResult, waterResult] = await Promise.all([
+    pool.query(
+      `SELECT gl.value, gl.unit, lc.occurred_at
+       FROM glucose_logs gl
+       JOIN logs_common lc ON lc.id = gl.log_id
+       WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '24 hours'
+       ORDER BY lc.occurred_at DESC LIMIT 1`,
+      [userId],
+    ),
+    pool.query(
+      `SELECT bp.systolic, bp.diastolic, bp.pulse, bp.unit, lc.occurred_at
+       FROM blood_pressure_logs bp
+       JOIN logs_common lc ON lc.id = bp.log_id
+       WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '24 hours'
+       ORDER BY lc.occurred_at DESC LIMIT 1`,
+      [userId],
+    ),
+    pool.query(
+      `SELECT wl.weight_kg, wl.body_fat_percent, wl.muscle_percent, lc.occurred_at
+       FROM weight_logs wl
+       JOIN logs_common lc ON lc.id = wl.log_id
+       WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '24 hours'
+       ORDER BY lc.occurred_at DESC LIMIT 1`,
+      [userId],
+    ),
+    pool.query(
+      `SELECT COALESCE(SUM(wl.volume_ml), 0) AS total_ml,
+              MAX(lc.occurred_at) AS occurred_at,
+              COUNT(*)::int AS entry_count
+       FROM water_logs wl
+       JOIN logs_common lc ON lc.id = wl.log_id
+       WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '24 hours'`,
+      [userId],
+    ),
+  ]);
+
+  const glucoseRow = glucoseResult.rows[0];
+  const bloodPressureRow = bloodPressureResult.rows[0];
+  const weightRow = weightResult.rows[0];
+  const waterRow = waterResult.rows[0];
+  const glucoseValue = toFiniteNumber(glucoseRow?.value);
+  const systolic = toFiniteNumber(bloodPressureRow?.systolic);
+  const diastolic = toFiniteNumber(bloodPressureRow?.diastolic);
+  const weight = toFiniteNumber(weightRow?.weight_kg);
+  const waterTotal = toFiniteNumber(waterRow?.total_ml);
+
+  return {
+    glucose: metric(glucoseValue, glucoseRow?.unit || 'mg/dL', glucoseRow?.occurred_at || null, glucoseStatus(glucoseValue)),
+    bloodPressure: bloodPressureRow && systolic !== null && diastolic !== null
+      ? metric(
+          `${systolic}/${diastolic}`,
+          bloodPressureRow.unit || 'mmHg',
+          bloodPressureRow.occurred_at,
+          bloodPressureStatus(systolic),
+          { systolic, diastolic, pulse: toFiniteNumber(bloodPressureRow.pulse) },
+        )
+      : null,
+    weight: metric(weight, 'kg', weightRow?.occurred_at || null, 'available', {
+      bodyFatPercent: toFiniteNumber(weightRow?.body_fat_percent),
+      musclePercent: toFiniteNumber(weightRow?.muscle_percent),
+    }),
+    water: waterTotal !== null && waterTotal > 0
+      ? metric(waterTotal, 'ml', waterRow.occurred_at, 'available', { entryCount: waterRow.entry_count || 0 })
+      : null,
+  };
+}
+
+async function getTodayCheckin(pool, userId) {
+  const todayVN = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const result = await pool.query(
+    `SELECT initial_status, current_status, flow_state, triage_severity,
+            emergency_triggered, triage_completed_at, next_checkin_at, created_at
+     FROM health_checkins
+     WHERE user_id = $1 AND session_date = $2
+     ORDER BY created_at DESC LIMIT 1`,
+    [userId, todayVN],
+  );
+  const row = result.rows[0];
+  if (!row) return { done: false, status: null, recordedAt: null };
+
+  const done = row.initial_status === 'fine' ||
+    row.triage_completed_at !== null ||
+    row.flow_state === 'monitoring' ||
+    row.flow_state === 'resolved';
+
+  return {
+    done,
+    status: row.current_status || row.initial_status,
+    flowState: row.flow_state,
+    severity: row.triage_severity,
+    emergencyTriggered: Boolean(row.emergency_triggered),
+    recordedAt: row.created_at,
+    completedAt: row.triage_completed_at,
+    nextCheckinAt: row.next_checkin_at,
+  };
+}
+
+async function getSupportingActivity(pool, userId) {
+  const todayVN = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const [missionsResult, totalMissionsResult] = await Promise.all([
+    pool.query(
+      `SELECT COUNT(*) AS completed_count
+       FROM user_missions
+       WHERE user_id = $1 AND status = 'completed' AND last_incremented_date = $2`,
+      [userId, todayVN],
+    ),
+    pool.query(
+      `SELECT COUNT(*) AS total FROM user_missions WHERE user_id = $1`,
+      [userId],
+    ),
+  ]);
+
+  const completedToday = parseInt(missionsResult.rows[0]?.completed_count || 0, 10);
+  const totalMissions = parseInt(totalMissionsResult.rows[0]?.total || 0, 10);
+  let streakDays = 0;
+
+  if (totalMissions > 0) {
+    const streakResult = await pool.query(
+      `SELECT completed_date
+       FROM mission_history
+       WHERE user_id = $1
+         AND completed_date >= (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date - INTERVAL '31 days'
+       GROUP BY completed_date
+       HAVING COUNT(DISTINCT mission_key) >= $2
+       ORDER BY completed_date DESC`,
+      [userId, totalMissions],
+    );
+    const nowVN = new Date(Date.now() + 7 * 60 * 60 * 1000);
+    const todayVNMs = Date.UTC(nowVN.getUTCFullYear(), nowVN.getUTCMonth(), nowVN.getUTCDate());
+    for (let i = 0; i < streakResult.rows.length; i += 1) {
+      const date = new Date(streakResult.rows[i].completed_date);
+      const dateMs = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+      if (dateMs !== todayVNMs - i * 86400000) break;
+      streakDays += 1;
+    }
+  }
+
+  return {
+    streakDays,
+    completedToday,
+    totalMissions: totalMissions || 12,
+  };
+}
+
 /**
- * Get tree summary with score, streak, missions
- * @param {Object} pool - Database pool
- * @param {number} userId - User ID
- * @returns {Promise<Object>} - { ok, score, streakDays, completedThisWeek, totalMissions, error }
+ * Get the health dashboard used by the tree screen.
+ * Check-in status and recent readings drive the current state. Logs and
+ * missions are returned as supporting context only.
  */
 async function getTreeSummary(pool, userId) {
   try {
-    const cached = await cacheGet(`tree:summary:${userId}`);
+    const cacheKey = `tree:dashboard:v2:${userId}`;
+    const cached = await cacheGet(cacheKey);
     if (cached) return cached;
 
-    // Vietnam timezone (UTC+7) — phải nhất quán với missions.service.js
-    const nowVN = new Date(Date.now() + 7 * 60 * 60 * 1000);
-    const todayVN = `${nowVN.getUTCFullYear()}-${String(nowVN.getUTCMonth() + 1).padStart(2, '0')}-${String(nowVN.getUTCDate()).padStart(2, '0')}`;
-
-    // Get missions completed TODAY (last_incremented_date lưu theo giờ VN)
-    const missionsResult = await pool.query(
-      `SELECT COUNT(*) as completed_count
-       FROM user_missions
-       WHERE user_id = $1
-         AND status = 'completed'
-         AND last_incremented_date = $2`,
-      [userId, todayVN]
-    );
-
-    // Get total active missions count for today
-    const totalMissionsResult = await pool.query(
-      `SELECT COUNT(*) as total
-       FROM user_missions
-       WHERE user_id = $1`,
-      [userId]
-    );
-
-    // Calculate streak: consecutive days where ALL missions were completed
-    // Uses mission_history which records each mission completion with completed_date
-    const totalForStreak = parseInt(totalMissionsResult.rows[0]?.total || 0);
-
-    let streakDays = 0;
-    if (totalForStreak > 0) {
-      const streakResult = await pool.query(
-        `SELECT completed_date
-         FROM mission_history
-         WHERE user_id = $1
-           AND completed_date >= (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date - INTERVAL '31 days'
-         GROUP BY completed_date
-         HAVING COUNT(DISTINCT mission_key) >= $2
-         ORDER BY completed_date DESC`,
-        [userId, totalForStreak]
-      );
-
-      // So sánh ngày theo VN timezone — tránh lệch ngày khi server chạy UTC
-      const todayVNMs = Date.UTC(nowVN.getUTCFullYear(), nowVN.getUTCMonth(), nowVN.getUTCDate());
-
-      for (let i = 0; i < streakResult.rows.length; i++) {
-        const d = new Date(streakResult.rows[i].completed_date);
-        const logMs = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
-        const expectedMs = todayVNMs - i * 86400000;
-
-        if (logMs === expectedMs) {
-          streakDays++;
-        } else {
-          break;
-        }
-      }
-    }
-
-    // Calculate health score based on recent activity
-    const recentLogsResult = await pool.query(
-      `SELECT COUNT(*) as log_count
-       FROM logs_common
-       WHERE user_id = $1
-         AND occurred_at >= NOW() - INTERVAL '7 days'`,
-      [userId]
-    );
-
-    const logCount = parseInt(recentLogsResult.rows[0]?.log_count || 0);
-    const completedCount = parseInt(missionsResult.rows[0]?.completed_count || 0);
-    const totalMissions = parseInt(totalMissionsResult.rows[0]?.total || 0);
-
-    // Score calculation: max 1.0
-    // - 50% from logs (max 14 logs per week = 2 per day)
-    // - 50% from missions completed
-    const logScore = Math.min(logCount / 14, 1) * 0.5;
-    const missionScore = totalMissions > 0 ? (completedCount / totalMissions) * 0.5 : 0;
-    const score = Math.round((logScore + missionScore) * 100) / 100;
+    const [healthStatus, checkin, metrics, supporting] = await Promise.all([
+      checkinService.getHealthScore(pool, userId),
+      getTodayCheckin(pool, userId),
+      getLatestMetrics(pool, userId),
+      getSupportingActivity(pool, userId),
+    ]);
 
     const result = {
       ok: true,
-      score,
-      streakDays,
-      completedToday: completedCount,
-      totalMissions: totalMissions || 12,
+      generatedAt: new Date().toISOString(),
+      status: healthStatus.level,
+      healthStatus: {
+        level: healthStatus.level,
+        factors: healthStatus.factors,
+        checkinDone: healthStatus.checkinDone,
+      },
+      checkin,
+      metrics,
+      alerts: {
+        hasAlerts: healthStatus.factors.length > 0,
+        factors: healthStatus.factors,
+      },
+      supporting,
+      // Kept for older clients. New clients must use healthStatus instead of
+      // treating this field as a medical score.
+      score: null,
+      streakDays: supporting.streakDays,
+      completedToday: supporting.completedToday,
+      totalMissions: supporting.totalMissions,
     };
-    await cacheSet(`tree:summary:${userId}`, result, 1800); // 30 min
+    await cacheSet(cacheKey, result, TREE_DASHBOARD_CACHE_TTL_SECONDS);
     return result;
   } catch (err) {
     return { ok: false, error: t('error.server') };
