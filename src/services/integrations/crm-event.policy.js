@@ -104,6 +104,7 @@ const SERVICE_FIELDS = setOf(
   'app_user_id',
   'app_order_id',
   'order_id',
+  'tenant_id',
   'service_code',
   'source_channel',
   'specialty',

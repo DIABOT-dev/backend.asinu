@@ -189,6 +189,17 @@ const GLOBAL_ERROR_MESSAGE_KEYS = {
   INTERNAL_ERROR: 'error.server',
 };
 
+const fallbackErrorCodeForStatus = (statusCode) => {
+  const statusCodes = {
+    401: 'UNAUTHORIZED',
+    403: 'UNAUTHORIZED',
+    404: 'NOT_FOUND',
+    409: 'CONFLICT',
+  };
+  if (statusCodes[statusCode]) return statusCodes[statusCode];
+  return statusCode >= 400 && statusCode < 500 ? 'INVALID_INPUT' : 'INTERNAL_ERROR';
+};
+
 // Global error handler — suppress client-aborted requests and return a
 // localized, safe explanation instead of leaking a stack or raw DB error.
 app.use((err, req, res, _next) => {
@@ -196,11 +207,12 @@ app.use((err, req, res, _next) => {
   logger.error('unhandled_error', { err, path: req?.path, method: req?.method });
   if (!res.headersSent) {
     const rawCode = err.code && typeof err.code === 'string' ? err.code : '';
+    const statusCode = Number(err.statusCode) || 500;
     const code = Object.prototype.hasOwnProperty.call(GLOBAL_ERROR_MESSAGE_KEYS, rawCode)
       ? rawCode
-      : 'INTERNAL_ERROR';
+      : fallbackErrorCodeForStatus(statusCode);
     const key = GLOBAL_ERROR_MESSAGE_KEYS[code] || 'error.server';
-    res.status(err.statusCode || 500).json({
+    res.status(statusCode).json({
       ok: false,
       error: t(key, getLang(req)),
       code,

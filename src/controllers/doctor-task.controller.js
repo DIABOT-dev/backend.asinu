@@ -113,6 +113,7 @@ const requestDoctorTask = async (pool, req, res) => {
       user_id: String(patient.id),
       app_user_id: String(patient.id),
       app_order_id: result.task_id,
+      tenant_id: parsed.data.tenant_id,
       service_code: parsed.data.service_code,
       source_channel: parsed.data.source_channel,
       specialty: normalizeSpecialty(parsed.data.specialty),
