@@ -27,7 +27,7 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
 
   // Filter valid Expo push tokens
   const validTokens = expoPushTokens.filter(
-    (token) => token && typeof token === 'string' && token.startsWith('ExponentPushToken[')
+    (token) => token && typeof token === 'string' && (token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken['))
   );
 
   if (validTokens.length === 0) {
@@ -49,6 +49,7 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
     checkin_followup: { channelId: 'checkin', sound: 'asinu_reminder.wav', priority: 'high' },
     checkin_followup_urgent: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
     emergency: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
+    checkin_call: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
   };
   const notifType = data?.type || '';
   const config = SOUND_MAP[notifType] || {
@@ -89,6 +90,7 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(messages),
+      signal: AbortSignal.timeout(10000),
     });
 
     const result = await response.json();

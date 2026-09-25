@@ -158,13 +158,24 @@ async function updatePushToken(pool, req, res) {
     return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
 
-  const { push_token } = req.body || {};
+  const { push_token, fcm_token, voip_token, voip_environment, clear_voip_token } = req.body || {};
 
-  if (!push_token) {
+  if (!push_token && !fcm_token && !voip_token && clear_voip_token !== true) {
     return res.status(400).json({ ok: false, error: t('error.push_token_required', getLang(req)) });
   }
+  if (voip_token && !['sandbox', 'production'].includes(voip_environment)) {
+    return res.status(400).json({ ok: false, error: 'Invalid VoIP push environment' });
+  }
 
-  const result = await profileService.updatePushToken(pool, req.user.id, push_token);
+  const result = await profileService.updatePushToken(
+    pool,
+    req.user.id,
+    push_token,
+    fcm_token,
+    voip_token,
+    voip_environment,
+    clear_voip_token === true
+  );
 
   if (!result.ok) {
     return res.status(500).json(result);

@@ -490,21 +490,55 @@ async function deleteAccount(pool, userId) {
  * @param {string} pushToken - Push token
  * @returns {Promise<Object>} - { ok, error }
  */
-async function updatePushToken(pool, userId, pushToken) {
+async function updatePushToken(
+  pool,
+  userId,
+  pushToken,
+  fcmToken = null,
+  voipToken = null,
+  voipEnvironment = null,
+  clearVoipToken = false
+) {
   try {
     logger.debug('[updatePushToken] set', {
       userId,
       hasToken: Boolean(pushToken),
+      hasFcmToken: Boolean(fcmToken),
+      hasVoipToken: Boolean(voipToken),
+      clearVoipToken,
     });
-    // Clear this token from any other user first (1 device = 1 user)
-    await pool.query(`UPDATE users SET push_token = NULL WHERE push_token = $1 AND id != $2`, [
-      pushToken,
-      userId,
-    ]);
-    const result = await pool.query(`UPDATE users SET push_token = $1 WHERE id = $2`, [
-      pushToken,
-      userId,
-    ]);
+    // Clear each token from any other user first (1 device = 1 user).
+    if (pushToken) {
+      await pool.query(`UPDATE users SET push_token = NULL WHERE push_token = $1 AND id != $2`, [
+        pushToken,
+        userId,
+      ]);
+    }
+    if (fcmToken) {
+      await pool.query(`UPDATE users SET fcm_token = NULL WHERE fcm_token = $1 AND id != $2`, [
+        fcmToken,
+        userId,
+      ]);
+    }
+    if (voipToken) {
+      await pool.query(
+        `UPDATE users SET voip_push_token = NULL, voip_push_environment = NULL WHERE voip_push_token = $1 AND id != $2`,
+        [voipToken, userId]
+      );
+    }
+    if (clearVoipToken) {
+      await pool.query(
+        'UPDATE users SET voip_push_token = NULL, voip_push_environment = NULL WHERE id = $1',
+        [userId]
+      );
+    }
+    const result = await pool.query(
+      `UPDATE users SET push_token = COALESCE($1, push_token), fcm_token = COALESCE($2, fcm_token), ` +
+        `voip_push_token = COALESCE($3, voip_push_token), ` +
+        `voip_push_environment = CASE WHEN $3::text IS NOT NULL THEN $4 ELSE voip_push_environment END ` +
+        `WHERE id = $5`,
+      [pushToken || null, fcmToken || null, voipToken || null, voipEnvironment || null, userId]
+    );
     logger.debug('[updatePushToken] success', {
       userId,
       rowCount: result.rowCount,
@@ -567,7 +601,10 @@ async function getBasicProfile(pool, userId) {
  * @returns {Promise<void>}
  */
 async function clearPushToken(pool, userId) {
-  await pool.query('UPDATE users SET push_token = NULL WHERE id = $1', [userId]);
+  await pool.query(
+    'UPDATE users SET push_token = NULL, fcm_token = NULL, voip_push_token = NULL, voip_push_environment = NULL WHERE id = $1',
+    [userId]
+  );
 }
 
 module.exports = {

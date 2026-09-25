@@ -829,7 +829,10 @@ async function searchUsers(pool, currentUserId, query) {
 }
 
 async function logout(pool, userId) {
-  await pool.query('UPDATE users SET push_token = NULL WHERE id = $1', [userId]);
+  await pool.query(
+    'UPDATE users SET push_token = NULL, fcm_token = NULL, voip_push_token = NULL, voip_push_environment = NULL WHERE id = $1',
+    [userId]
+  );
   emitCrmEventAsync(
     pool,
     'session.ended',

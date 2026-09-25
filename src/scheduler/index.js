@@ -24,6 +24,7 @@ const {
 } = require('../services/health_feed/service');
 const { flushCrmEventOutbox } = require('../services/integrations/crm-event.service');
 const { flushDoctorTaskOutbox } = require('../services/integrations/doctor-task.service');
+const checkinCall = require('../services/checkin-call/checkin-call.service');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
@@ -62,6 +63,10 @@ function safeCron(expression, name, handler) {
 }
 
 function startScheduler(pool) {
+  safeCron('*/15 * * * * *', 'checkin_call', async () => {
+    await checkinCall.tick(pool);
+    await checkinCall.dispatchDeliveries(pool);
+  });
   // Reliable Asinu -> CRM webhook delivery and retry.
   // Drain at the CRM contract limit (50 every 5 seconds = 600/minute).
   // This keeps the durable source outbox from becoming the hidden throughput cap.

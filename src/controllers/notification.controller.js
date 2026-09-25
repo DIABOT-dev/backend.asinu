@@ -90,6 +90,50 @@ async function getNotifications(pool, req, res) {
 }
 
 /**
+ * POST /api/notifications
+ * Create an in-app notification for the authenticated user.
+ */
+async function createNotification(pool, req, res) {
+  const { type, title, message, data } = req.body || {};
+  if (
+    typeof type !== 'string' ||
+    typeof title !== 'string' ||
+    typeof message !== 'string' ||
+    !type.trim() ||
+    !title.trim() ||
+    !message.trim() ||
+    type.length > 64 ||
+    title.length > 200 ||
+    message.length > 2000 ||
+    (data !== undefined && (data === null || typeof data !== 'object' || Array.isArray(data)))
+  ) {
+    return res.status(400).json({
+      ok: false,
+      error: t('error.invalid_params', getLang(req)),
+      code: 'INVALID_NOTIFICATION_PAYLOAD',
+    });
+  }
+
+  try {
+    const priority = data?.severity === 'critical' ? 'high' : 'low';
+    await notificationService.saveInAppNotification(
+      pool,
+      req.user.id,
+      type.trim(),
+      title.trim(),
+      message.trim(),
+      data || {},
+      priority
+    );
+    return res.status(201).json({ ok: true });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+  }
+}
+
+/**
  * PUT /api/notifications/:id/read
  * Mark notification as read
  */
@@ -315,6 +359,7 @@ async function deleteAll(pool, req, res) {
 
 module.exports = {
   testNotificationHandler,
+  createNotification,
   getNotifications,
   markAsRead,
   markAllAsRead,

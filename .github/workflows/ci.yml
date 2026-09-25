@@ -38,5 +38,11 @@ jobs:
           NODE_ENV: test
           LOG_LEVEL: error
 
+      - name: Check-in call tests
+        run: npx jest tests/checkin-call.test.js tests/apns-voip.test.js --runInBand
+        env:
+          NODE_ENV: test
+          LOG_LEVEL: error
+
       - name: Syntax check server entry
         run: node -c server.js
