@@ -60,7 +60,9 @@ async function startCheckinHandler(pool, req, res) {
     );
     return res.json({ ok: true, session });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -92,7 +94,9 @@ async function followUpHandler(pool, req, res) {
     }
     return res.json({ ok: true, session });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -100,6 +104,23 @@ async function triageHandler(pool, req, res) {
   const { checkin_id, previous_answers = [] } = req.body;
   if (!checkin_id)
     return res.status(400).json({ ok: false, error: t('error.missing_checkin_id', getLang(req)) });
+  const validAnswers =
+    Array.isArray(previous_answers) &&
+    previous_answers.length <= 8 &&
+    previous_answers.every(
+      (item) =>
+        item &&
+        typeof item.question === 'string' &&
+        item.question.trim().length > 0 &&
+        item.question.length <= 500 &&
+        ((typeof item.answer === 'string' && item.answer.length <= 2000) ||
+          (Array.isArray(item.answer) &&
+            item.answer.length <= 20 &&
+            item.answer.every((answer) => typeof answer === 'string' && answer.length <= 500)))
+    );
+  if (!validAnswers) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
+  }
   try {
     const result = await checkinService.processTriageStep(
       pool,
@@ -109,7 +130,14 @@ async function triageHandler(pool, req, res) {
     );
     return res.json({ ok: true, ...result });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    if (err.code === 'SESSION_NOT_FOUND') {
+      return res
+        .status(404)
+        .json({ ok: false, code: err.code, error: t('error.session_not_found', getLang(req)) });
+    }
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -118,12 +146,30 @@ async function todayCheckinHandler(pool, req, res) {
     const { session, continuityMessage } = await checkinService.getTodayCheckin(pool, req.user.id);
     return res.json({ ok: true, session, continuityMessage });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
 async function emergencyHandler(pool, req, res) {
   const { location } = req.body; // { lat, lng, accuracy }
+  const validLocation =
+    location === undefined ||
+    location === null ||
+    (typeof location === 'object' &&
+      !Array.isArray(location) &&
+      Number.isFinite(location.lat) &&
+      location.lat >= -90 &&
+      location.lat <= 90 &&
+      Number.isFinite(location.lng) &&
+      location.lng >= -180 &&
+      location.lng <= 180 &&
+      (location.accuracy === undefined ||
+        (Number.isFinite(location.accuracy) && location.accuracy >= 0)));
+  if (!validLocation) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
+  }
   try {
     const result = await checkinService.triggerEmergency(pool, req.user.id, location);
     // Emergency is always urgent — tell the client whether anyone is on
@@ -133,7 +179,9 @@ async function emergencyHandler(pool, req, res) {
     });
     return res.json({ ...result, ...caregiverStatus });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -142,7 +190,9 @@ async function pendingAlertsHandler(pool, req, res) {
     const alerts = await checkinService.getPendingCaregiverAlerts(pool, req.user.id);
     return res.json({ ok: true, alerts });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -153,9 +203,14 @@ async function confirmAlertHandler(pool, req, res) {
   }
   try {
     const result = await checkinService.confirmCaregiverAlert(pool, req.user.id, alert_id, action);
+    if (!result.ok) {
+      return res.status(result.code === 'FORBIDDEN' ? 403 : 404).json(result);
+    }
     return res.json(result);
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -172,7 +227,9 @@ async function simulateTimePassHandler(pool, req, res) {
     }
     return res.json({ ok: true, session, message: t('error.followup_ready', getLang(req)) });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -182,18 +239,25 @@ async function resetTodayHandler(pool, req, res) {
     await checkinService.resetTodayCheckin(pool, req.user.id);
     return res.json({ ok: true, message: 'Today session reset' });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
 async function healthReportHandler(pool, req, res) {
   const period = req.query.period || 'week'; // 'week' | 'month'
+  if (!['week', 'month'].includes(period)) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
+  }
   const days = period === 'month' ? 30 : 7;
   try {
     const report = await checkinService.getHealthReport(pool, req.user.id, days);
     return res.json({ ok: true, period, ...report });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -206,7 +270,9 @@ async function healthScoreHandler(pool, req, res) {
     const result = await checkinService.getHealthScore(pool, req.user.id);
     return res.json({ ok: true, ...result });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -219,7 +285,9 @@ async function engagementPatternHandler(pool, req, res) {
     const pattern = await engagementService.getUserPattern(pool, req.user.id);
     return res.json({ ok: true, ...pattern });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -232,7 +300,9 @@ async function engagementOptimalTimeHandler(pool, req, res) {
     const times = await engagementService.getOptimalNotificationTime(pool, req.user.id);
     return res.json({ ok: true, ...times });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 

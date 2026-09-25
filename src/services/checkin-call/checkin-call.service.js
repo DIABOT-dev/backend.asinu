@@ -287,7 +287,8 @@ async function getActive(pool, userId) {
     'SELECT e.id, e.user_id, e.state, e.severity, e.acknowledged_by, a.id AS attempt_id, a.target_role, a.state AS attempt_state FROM checkin_call_attempts a ' +
       'JOIN checkin_call_episodes e ON e.id = a.episode_id WHERE a.target_user_id = $1 ' +
       "AND a.state IN ('RINGING','CONNECTED','WAITING_CONFIRMATION','PUSH_WAIT') " +
-      "AND e.state NOT IN ('RESOLVED','EXHAUSTED','EXHAUSTED_MILD','EXHAUSTED_URGENT','CANCELLED','URGENT_ACKNOWLEDGED') " +
+      "AND (e.state NOT IN ('RESOLVED','EXHAUSTED','EXHAUSTED_MILD','EXHAUSTED_URGENT','CANCELLED','URGENT_ACKNOWLEDGED') " +
+      "OR (e.state = 'URGENT_ACKNOWLEDGED' AND e.acknowledged_by = $1 AND a.state = 'CONNECTED')) " +
       'ORDER BY a.created_at DESC LIMIT 1',
     [userId]
   );
@@ -324,12 +325,7 @@ async function seen(pool, attemptId, userId) {
   return { ok: true };
 }
 
-async function endRemoteCalls(
-  pool,
-  episodeId,
-  exceptAttemptId = null,
-  onlyAttemptId = null
-) {
+async function endRemoteCalls(pool, episodeId, exceptAttemptId = null, onlyAttemptId = null) {
   if (!pool?.query) return;
   try {
     const result = await pool.query(
@@ -393,12 +389,21 @@ async function accept(pool, attemptId, userId) {
     const episode = found.rows[0];
     if (!episode)
       throw serviceError('Attempt not found', 404, 'checkinCall.error.attempt_not_found');
-    if (TERMINAL.has(episode.state))
+
+    const isOwnedUrgentCall =
+      episode.state === 'URGENT_ACKNOWLEDGED' && Number(episode.acknowledged_by) === Number(userId);
+    const isAlreadyAccepted =
+      episode.attempt_state === 'CONNECTED' && (!TERMINAL.has(episode.state) || isOwnedUrgentCall);
+
+    // Accept can be sent twice when CallKit/ConnectionService opens the app and
+    // the React screen retries. Return the current state instead of a false 409.
+    if (isAlreadyAccepted) {
+      result = { ok: true, state: episode.state, alreadyAccepted: true };
+    } else if (TERMINAL.has(episode.state)) {
       throw serviceError('Episode closed', 409, 'checkinCall.error.episode_closed');
-    if (!['RINGING', 'PUSH_WAIT'].includes(episode.attempt_state)) {
+    } else if (!['RINGING', 'PUSH_WAIT'].includes(episode.attempt_state)) {
       throw serviceError('Attempt closed', 409, 'checkinCall.error.attempt_closed');
-    }
-    if (episode.target_role === 'FAMILY' && episode.state === 'URGENT_BROADCAST') {
+    } else if (episode.target_role === 'FAMILY' && episode.state === 'URGENT_BROADCAST') {
       await db.query(
         "UPDATE checkin_call_episodes SET state = 'URGENT_ACKNOWLEDGED', acknowledged_by = $2, next_action_at = NULL, updated_at = now() WHERE id = $1",
         [episode.id, userId]
@@ -413,6 +418,7 @@ async function accept(pool, attemptId, userId) {
       );
       await event(db, episode.id, 'URGENT_ACKNOWLEDGED', userId, attemptId);
       urgentEpisodeId = episode.id;
+      result = { ok: true, state: 'URGENT_ACKNOWLEDGED' };
     } else {
       const seconds =
         episode.target_role === 'USER'
@@ -427,12 +433,9 @@ async function accept(pool, attemptId, userId) {
         [episode.id, seconds]
       );
       await event(db, episode.id, 'CALL_ACCEPTED', userId, attemptId);
+      result = { ok: true, state: episode.state };
     }
     await db.query('COMMIT');
-    result = {
-      ok: true,
-      state: episode.state === 'URGENT_BROADCAST' ? 'URGENT_ACKNOWLEDGED' : episode.state,
-    };
   } catch (error) {
     await db.query('ROLLBACK');
     throw error;
@@ -795,11 +798,7 @@ function testCallsEnabled() {
 
 async function startTestCall(pool, userId) {
   if (!testCallsEnabled()) {
-    throw serviceError(
-      'Check-in call testing is disabled',
-      403,
-      'checkinCall.error.test_disabled'
-    );
+    throw serviceError('Check-in call testing is disabled', 403, 'checkinCall.error.test_disabled');
   }
 
   const recipient = await pool.query(

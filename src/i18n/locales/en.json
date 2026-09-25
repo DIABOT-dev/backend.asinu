@@ -532,6 +532,8 @@
   "checkin.action_on_my_way": "is on the way 🚗",
   "checkin.action_called": "has called you 📞",
   "checkin.action_seen": "has seen the notification 👀",
+  "checkin.triage_limit_summary": "Enough health information has been collected.",
+  "checkin.triage_limit_recommendation": "Please rest and keep monitoring your condition. Asinu will check again later.",
   "checkin.caregiver_confirmed_body": "{{name}} received the notification and {{action}}.",
   "checkin.reminder_emergency_title": "Reminder: emergency alert",
   "checkin.reminder_health_check_title": "Reminder: health check needed",

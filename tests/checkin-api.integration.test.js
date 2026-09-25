@@ -42,8 +42,8 @@ describeDatabase('check-in HTTP API contract', () => {
     const mobileRoutes = require('../src/routes/mobile.routes');
     const checkinCallRoutes = require('../src/routes/checkin-call.routes');
     checkinCallService = require('../src/services/checkin-call/checkin-call.service');
-    sendVoipNotification = require('../src/services/notification/apns.voip.service')
-      .sendVoipNotification;
+    sendVoipNotification =
+      require('../src/services/notification/apns.voip.service').sendVoipNotification;
     const audioService = require('../src/services/checkin-call/audio.service');
 
     app = express();
@@ -68,11 +68,7 @@ describeDatabase('check-in HTTP API contract', () => {
 
     await pool.query(
       "INSERT INTO user_connections (requester_id, addressee_id, status, permissions, accepted_at) VALUES ($1,$2,'accepted',$3::jsonb,now())",
-      [
-        patientId,
-        familyId,
-        JSON.stringify({ can_receive_alerts: true, can_ack_escalation: true }),
-      ]
+      [patientId, familyId, JSON.stringify({ can_receive_alerts: true, can_ack_escalation: true })]
     );
 
     const existingAudio = await pool.query(
@@ -92,7 +88,7 @@ describeDatabase('check-in HTTP API contract', () => {
     global.fetch = originalFetch;
     if (audioBackup) {
       await pool.query(
-        "INSERT INTO checkin_call_audio (audio_key, text_version, text_hash, mime_type, audio_data, created_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (audio_key) DO UPDATE SET text_version = EXCLUDED.text_version, text_hash = EXCLUDED.text_hash, mime_type = EXCLUDED.mime_type, audio_data = EXCLUDED.audio_data, created_at = EXCLUDED.created_at",
+        'INSERT INTO checkin_call_audio (audio_key, text_version, text_hash, mime_type, audio_data, created_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (audio_key) DO UPDATE SET text_version = EXCLUDED.text_version, text_hash = EXCLUDED.text_hash, mime_type = EXCLUDED.mime_type, audio_data = EXCLUDED.audio_data, created_at = EXCLUDED.created_at',
         [
           audioBackup.audio_key,
           audioBackup.text_version,
@@ -240,6 +236,41 @@ describeDatabase('check-in HTTP API contract', () => {
       .set(auth(patientToken))
       .send({ checkin_id: null, status: 'fine' })
       .expect(400);
+    await request(app)
+      .post('/api/mobile/checkin/triage')
+      .set(auth(patientToken))
+      .send({ checkin_id: 1, previous_answers: {} })
+      .expect(400);
+    await request(app)
+      .post('/api/mobile/checkin/triage')
+      .set(auth(patientToken))
+      .send({ checkin_id: 999999999, previous_answers: [] })
+      .expect(404);
+    await request(app)
+      .post('/api/mobile/checkin/triage')
+      .set(auth(patientToken))
+      .send({
+        checkin_id: 1,
+        previous_answers: Array.from({ length: 9 }, (_, index) => ({
+          question: `Question ${index}`,
+          answer: 'Answer',
+        })),
+      })
+      .expect(400);
+    await request(app)
+      .post('/api/mobile/checkin/emergency')
+      .set(auth(patientToken))
+      .send({ location: { lat: 999, lng: 106.7 } })
+      .expect(400);
+    await request(app)
+      .post('/api/mobile/checkin/confirm-alert')
+      .set(auth(familyToken))
+      .send({ alert_id: 999999999, action: 'seen' })
+      .expect(404);
+    await request(app)
+      .get('/api/mobile/checkin/report?period=year')
+      .set(auth(patientToken))
+      .expect(400);
   });
 
   test('triage accepts the frontend answer shape and applies deterministic red-flag safety', async () => {
@@ -258,7 +289,9 @@ describeDatabase('check-in HTTP API contract', () => {
       .set(auth(familyToken))
       .send({
         checkin_id: started.body.session.id,
-        previous_answers: [{ question: 'Bạn đang gặp vấn đề gì?', answer: 'Tôi khó thở' }],
+        previous_answers: [
+          { question: 'Bạn đang gặp vấn đề gì?', answer: 'Tôi bị ngã nhưng không khó thở' },
+        ],
       })
       .expect(200);
     expect(triage.body).toMatchObject({
@@ -276,6 +309,50 @@ describeDatabase('check-in HTTP API contract', () => {
     );
     expect(stored.rows[0]).toMatchObject({
       emergency_triggered: true,
+      flow_state: 'high_alert',
+    });
+    expect(stored.rows[0].triage_completed_at).not.toBeNull();
+
+    const report = await request(app)
+      .get('/api/mobile/checkin/report?period=week')
+      .set(auth(familyToken))
+      .expect(200);
+    expect(report.body.severityDistribution).toMatchObject({
+      low: 0,
+      medium: 0,
+      high: 0,
+      emergency: 1,
+    });
+  });
+
+  test('triage hard limit persists the conclusion and high-alert state', async () => {
+    const inserted = await pool.query(
+      "INSERT INTO health_checkins (user_id, session_date, initial_status, current_status) VALUES ($1, CURRENT_DATE - 2, 'very_tired', 'very_tired') RETURNING id",
+      [familyId]
+    );
+    const previousAnswers = Array.from({ length: 8 }, (_, index) => ({
+      question: `Câu hỏi ${index + 1}`,
+      answer: 'Tôi không khó thở và không bị đau ngực',
+    }));
+
+    const triage = await request(app)
+      .post('/api/mobile/checkin/triage')
+      .set(auth(familyToken))
+      .send({ checkin_id: inserted.rows[0].id, previous_answers: previousAnswers })
+      .expect(200);
+    expect(triage.body).toMatchObject({
+      ok: true,
+      isDone: true,
+      severity: 'high',
+      needsFamilyAlert: true,
+    });
+
+    const stored = await pool.query(
+      'SELECT triage_severity, triage_completed_at, flow_state FROM health_checkins WHERE id = $1',
+      [inserted.rows[0].id]
+    );
+    expect(stored.rows[0]).toMatchObject({
+      triage_severity: 'high',
       flow_state: 'high_alert',
     });
     expect(stored.rows[0].triage_completed_at).not.toBeNull();
@@ -386,6 +463,11 @@ describeDatabase('check-in HTTP API contract', () => {
       .post(`/api/mobile/checkin-call/attempts/${attempt.id}/accept`)
       .set(auth(patientToken))
       .expect(200);
+    const acceptedAgain = await request(app)
+      .post(`/api/mobile/checkin-call/attempts/${attempt.id}/accept`)
+      .set(auth(patientToken))
+      .expect(200);
+    expect(acceptedAgain.body).toMatchObject({ ok: true, alreadyAccepted: true });
     const answered = await request(app)
       .post(`/api/mobile/checkin-call/episodes/${episode.id}/answer`)
       .set(auth(patientToken))
@@ -429,6 +511,11 @@ describeDatabase('check-in HTTP API contract', () => {
       .post(`/api/mobile/checkin-call/attempts/${attemptId}/accept`)
       .set(auth(familyToken))
       .expect(200);
+    const acceptedAgain = await request(app)
+      .post(`/api/mobile/checkin-call/attempts/${attemptId}/accept`)
+      .set(auth(familyToken))
+      .expect(200);
+    expect(acceptedAgain.body).toMatchObject({ ok: true, alreadyAccepted: true });
     const confirmed = await request(app)
       .post(`/api/mobile/checkin-call/episodes/${episodeId}/family-confirm`)
       .set(auth(familyToken))
@@ -465,6 +552,27 @@ describeDatabase('check-in HTTP API contract', () => {
       .set(auth(familyToken))
       .expect(200);
     expect(accepted.body.state).toBe('URGENT_ACKNOWLEDGED');
+
+    const acceptedAgain = await request(app)
+      .post(`/api/mobile/checkin-call/attempts/${familyActive.body.active.attempt_id}/accept`)
+      .set(auth(familyToken))
+      .expect(200);
+    expect(acceptedAgain.body).toMatchObject({
+      ok: true,
+      state: 'URGENT_ACKNOWLEDGED',
+      alreadyAccepted: true,
+    });
+
+    const recovered = await request(app)
+      .get('/api/mobile/checkin-call/active')
+      .set(auth(familyToken))
+      .expect(200);
+    expect(recovered.body.active).toMatchObject({
+      id: episodeId,
+      attempt_id: familyActive.body.active.attempt_id,
+      attempt_state: 'CONNECTED',
+      state: 'URGENT_ACKNOWLEDGED',
+    });
 
     const confirmed = await request(app)
       .post(`/api/mobile/checkin-call/episodes/${episodeId}/family-confirm`)

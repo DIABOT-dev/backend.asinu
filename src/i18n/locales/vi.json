@@ -532,6 +532,8 @@
   "checkin.action_on_my_way": "đang trên đường đến 🚗",
   "checkin.action_called": "đã gọi điện cho bạn 📞",
   "checkin.action_seen": "đã xem thông báo 👀",
+  "checkin.triage_limit_summary": "Đã thu thập đủ thông tin sức khoẻ.",
+  "checkin.triage_limit_recommendation": "Bạn hãy nghỉ ngơi và theo dõi thêm nhé. Asinu sẽ hỏi lại sau.",
   "checkin.caregiver_confirmed_body": "{{name}} đã nhận thông báo và {{action}}.",
   "checkin.reminder_emergency_title": "Nhắc lại: cảnh báo khẩn cấp",
   "checkin.reminder_health_check_title": "Nhắc lại: cần kiểm tra",

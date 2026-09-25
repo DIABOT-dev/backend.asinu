@@ -434,7 +434,12 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     `SELECT * FROM health_checkins WHERE id = $1 AND user_id = $2`,
     [checkinId, userId]
   );
-  if (!rows.length) throw new Error(t('error.session_not_found'));
+  if (!rows.length) {
+    throw Object.assign(new Error(t('error.session_not_found')), {
+      code: 'SESSION_NOT_FOUND',
+      statusCode: 404,
+    });
+  }
   const session = rows[0];
 
   // Follow-up phase = triage đã hoàn thành ít nhất 1 lần (triage_completed_at đã set)
@@ -451,21 +456,6 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
   const isVeryUnwell = session.initial_status === 'very_tired';
   const maxQuestions = isFollowUp ? 3 : 8;
 
-  if (previousAnswers.length >= maxQuestions) {
-    // AI đã hỏi đủ số câu → buộc kết thúc
-    return {
-      ok: true,
-      isDone: true,
-      summary: 'Đã thu thập đủ thông tin sức khoẻ.',
-      severity: isVeryUnwell ? 'high' : 'medium',
-      recommendation: 'Bạn hãy nghỉ ngơi và theo dõi thêm nhé. Tôi sẽ hỏi lại sau.',
-      needsDoctor: false,
-      needsFamilyAlert: false,
-      hasRedFlag: false,
-      followUpHours: calcFollowUpHours(isVeryUnwell ? 'high' : 'medium', previousAnswers.length),
-    };
-  }
-
   // ── Hard-coded red flag detection — bypass AI if user already reported danger signs ──
   const RED_FLAG_KEYWORDS = [
     'khó thở',
@@ -475,20 +465,50 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     'đau ngực lan',
     'vã mồ hôi',
     'ngất',
+    'bị ngã',
+    'té ngã',
+    'ngã',
     'co giật',
     'không thở được',
+    'không thể thở',
     'tim đập nhanh',
     'chest pain',
     'difficulty breathing',
     'shortness of breath',
     'fainting',
+    'fell down',
+    'fallen',
+    "can't breathe",
+    'cannot breathe',
     'blurred vision',
     'chest tightness',
   ];
 
   const _safeAns = (v) => (Array.isArray(v) ? v.join(', ') : String(v || ''));
-  const allAnswerText = previousAnswers.map((a) => _safeAns(a.answer).toLowerCase()).join(' ');
-  const hasRedFlagInAnswers = RED_FLAG_KEYWORDS.some((kw) => allAnswerText.includes(kw));
+  const intrinsicallyUrgentNegatives = new Set([
+    'không thở được',
+    'không thể thở',
+    "can't breathe",
+    'cannot breathe',
+  ]);
+  const hasUnnegatedKeyword = (text, keyword) => {
+    let offset = 0;
+    while (offset < text.length) {
+      const index = text.indexOf(keyword, offset);
+      if (index < 0) return false;
+      if (intrinsicallyUrgentNegatives.has(keyword)) return true;
+      const prefix = text.slice(Math.max(0, index - 40), index);
+      const negated =
+        /(?:không|chưa|ko|no|not|without)\s+(?:(?:có|còn|bị|thấy|cảm thấy)\s+){0,2}$/i.test(prefix);
+      if (!negated) return true;
+      offset = index + keyword.length;
+    }
+    return false;
+  };
+  const hasRedFlagInAnswers = previousAnswers.some((answer) => {
+    const text = _safeAns(answer.answer).toLowerCase();
+    return RED_FLAG_KEYWORDS.some((keyword) => hasUnnegatedKeyword(text, keyword));
+  });
 
   if (hasRedFlagInAnswers) {
     const allSymptoms = previousAnswers.map((a) => _safeAns(a.answer)).join(', ');
@@ -556,24 +576,41 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
       : []
     : [];
 
-  let result = await getNextTriageQuestion({
-    status: isFollowUpPhase
-      ? session.current_status || session.initial_status
-      : session.initial_status,
-    phase: isFollowUpPhase ? 'followup' : 'initial',
-    lang: profile.lang || 'vi',
-    profile,
-    healthContext,
-    previousAnswers,
-    previousSessionSummary: session.triage_summary || null,
-    previousTriageMessages: prevTriageMessages,
-    bodyLocation: session.body_location || null,
-    bodyLocations:
-      session.body_locations || (session.body_location ? [session.body_location] : null),
-    bodyLocationOther: session.body_location_other || null,
-    pool,
-    userId,
-  });
+  let result;
+  if (previousAnswers.length >= maxQuestions) {
+    // Conclude through the normal persistence/escalation path. Returning early
+    // here used to leave triage_completed_at unset and skipped family alerts.
+    result = {
+      ok: true,
+      isDone: true,
+      summary: t('checkin.triage_limit_summary', profile.lang || 'vi'),
+      severity: isVeryUnwell ? 'high' : 'medium',
+      recommendation: t('checkin.triage_limit_recommendation', profile.lang || 'vi'),
+      needsDoctor: false,
+      needsFamilyAlert: isVeryUnwell,
+      hasRedFlag: false,
+      followUpHours: calcFollowUpHours(isVeryUnwell ? 'high' : 'medium', previousAnswers.length),
+    };
+  } else {
+    result = await getNextTriageQuestion({
+      status: isFollowUpPhase
+        ? session.current_status || session.initial_status
+        : session.initial_status,
+      phase: isFollowUpPhase ? 'followup' : 'initial',
+      lang: profile.lang || 'vi',
+      profile,
+      healthContext,
+      previousAnswers,
+      previousSessionSummary: session.triage_summary || null,
+      previousTriageMessages: prevTriageMessages,
+      bodyLocation: session.body_location || null,
+      bodyLocations:
+        session.body_locations || (session.body_location ? [session.body_location] : null),
+      bodyLocationOther: session.body_location_other || null,
+      pool,
+      userId,
+    });
+  }
 
   // ── Double enforcement: block early isDone at service level too ──
   const minQForPhase = isFollowUp ? 2 : 5;
@@ -1415,7 +1452,13 @@ async function confirmCaregiverAlert(pool, caregiverId, alertId, action) {
      WHERE cac.id=$1 AND cac.caregiver_id=$2 AND cac.confirmed_at IS NULL`,
     [alertId, caregiverId]
   );
-  if (!alertRows.length) return { ok: false, error: t('careCircle.alert_not_found_or_confirmed') };
+  if (!alertRows.length) {
+    return {
+      ok: false,
+      code: 'ALERT_NOT_FOUND_OR_CONFIRMED',
+      error: t('careCircle.alert_not_found_or_confirmed'),
+    };
+  }
 
   const alert = alertRows[0];
 
@@ -1428,7 +1471,7 @@ async function confirmCaregiverAlert(pool, caregiverId, alertId, action) {
     [alert.patient_id, caregiverId]
   );
   if (permRows.length === 0) {
-    return { ok: false, error: t('careCircle.no_permission') };
+    return { ok: false, code: 'FORBIDDEN', error: t('careCircle.no_permission') };
   }
 
   // 3. Now UPDATE to confirm the alert
@@ -1675,7 +1718,7 @@ async function getHealthReport(pool, userId, days = 7) {
       totalDays: days,
       checkinDays: 0,
       sessions: [],
-      severityDistribution: { low: 0, medium: 0, high: 0 },
+      severityDistribution: { low: 0, medium: 0, high: 0, emergency: 0 },
       statusDistribution: { fine: 0, tired: 0, very_tired: 0, specific_concern: 0 },
       commonSymptoms: [],
       alerts: { familyAlerted: 0, emergencyTriggered: 0 },
@@ -1685,7 +1728,7 @@ async function getHealthReport(pool, userId, days = 7) {
   }
 
   // Phân bố severity
-  const severityDist = { low: 0, medium: 0, high: 0 };
+  const severityDist = { low: 0, medium: 0, high: 0, emergency: 0 };
   const statusDist = { fine: 0, tired: 0, very_tired: 0, specific_concern: 0 };
   let familyAlerted = 0;
   let emergencyTriggered = 0;
@@ -1791,7 +1834,7 @@ async function getHealthReport(pool, userId, days = 7) {
   const half = Math.ceil(sessions.length / 2);
   const recentHalf = sessions.slice(0, half);
   const olderHalf = sessions.slice(half);
-  const severityScore = { low: 1, medium: 2, high: 3 };
+  const severityScore = { low: 1, medium: 2, high: 3, emergency: 4 };
   const avgRecent =
     recentHalf.reduce((s, r) => s + (severityScore[r.triage_severity] || 1), 0) /
     (recentHalf.length || 1);
@@ -1807,8 +1850,11 @@ async function getHealthReport(pool, userId, days = 7) {
   const highlights = [];
   const checkinDays = new Set(sessions.map((s) => s.session_date)).size;
   highlights.push({ type: 'consistency', value: `${checkinDays}/${days}` });
-  if (severityDist.high > 0)
-    highlights.push({ type: 'high_severity_days', value: severityDist.high });
+  if (severityDist.high + severityDist.emergency > 0)
+    highlights.push({
+      type: 'high_severity_days',
+      value: severityDist.high + severityDist.emergency,
+    });
   if (trend === 'improving') highlights.push({ type: 'trend', value: 'improving' });
   if (trend === 'worsening') highlights.push({ type: 'trend', value: 'worsening' });
 
