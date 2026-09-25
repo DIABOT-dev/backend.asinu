@@ -252,10 +252,12 @@ async function answer(pool, episodeId, userId, choice) {
       [episodeId]
     );
     if (choice === 1) {
-      await db.query(
-        "INSERT INTO health_checkins (user_id, session_date, initial_status, current_status, flow_state, resolved_at, last_response_at) VALUES ($1,$2,'fine','fine','resolved',now(),now()) ON CONFLICT (user_id, session_date) DO NOTHING",
-        [userId, episode.local_date]
-      );
+      if (episode.config?.test_mode !== true) {
+        await db.query(
+          "INSERT INTO health_checkins (user_id, session_date, initial_status, current_status, flow_state, resolved_at, last_response_at) VALUES ($1,$2,'fine','fine','resolved',now(),now()) ON CONFLICT (user_id, session_date) DO NOTHING",
+          [userId, episode.local_date]
+        );
+      }
       await db.query(
         "UPDATE checkin_call_episodes SET state = 'RESOLVED', severity = 'NONE', resolved_at = now(), next_action_at = NULL, updated_at = now() WHERE id = $1",
         [episodeId]
@@ -769,6 +771,109 @@ async function dispatchDeliveries(pool) {
   return pending.rowCount;
 }
 
+function testCallsEnabled() {
+  return process.env.NODE_ENV !== 'production' || process.env.CHECKIN_CALL_TEST_ENABLED === 'true';
+}
+
+async function startTestCall(pool, userId) {
+  if (!testCallsEnabled()) {
+    throw serviceError(
+      'Check-in call testing is disabled',
+      403,
+      'checkinCall.error.test_disabled'
+    );
+  }
+
+  const recipient = await pool.query(
+    'SELECT id, push_token, fcm_token, voip_push_token FROM users WHERE id = $1 AND deleted_at IS NULL',
+    [userId]
+  );
+  const user = recipient.rows[0];
+  const hasExpo = /^(Exponent|Expo)PushToken\[/.test(user?.push_token || '');
+  if (!user || (!hasExpo && !user.fcm_token && !user.voip_push_token)) {
+    throw serviceError(
+      'Notifications are required for check-in call testing',
+      409,
+      'checkinCall.error.notifications_required'
+    );
+  }
+
+  const previous = await pool.query(
+    "SELECT id FROM checkin_call_episodes WHERE user_id = $1 AND COALESCE((config->>'test_mode')::boolean, false) = true",
+    [userId]
+  );
+  for (const row of previous.rows) await endRemoteCalls(pool, row.id);
+
+  const db = await pool.connect();
+  let episode;
+  let attempt;
+  try {
+    await db.query('BEGIN');
+    await db.query(
+      "DELETE FROM checkin_call_episodes WHERE user_id = $1 AND COALESCE((config->>'test_mode')::boolean, false) = true",
+      [userId]
+    );
+    const current = await settings(db, userId);
+    const config = {
+      ...DEFAULTS,
+      ...current,
+      checkin_time: String(current.checkin_time || DEFAULTS.checkin_time).slice(0, 5),
+      enabled: true,
+      test_mode: true,
+      user_timeout_seconds: 180,
+    };
+    const inserted = await db.query(
+      `INSERT INTO checkin_call_episodes (
+         user_id, local_date, state, severity, scheduled_at, grace_until, next_action_at, config
+       ) VALUES ($1, DATE '2099-12-31', 'CONTACT_USER', 'NONE', now(), now(), NULL, $2::jsonb)
+       RETURNING *`,
+      [userId, JSON.stringify(config)]
+    );
+    episode = inserted.rows[0];
+    attempt = await createAttempt(db, episode, userId, 'USER');
+    await db.query(
+      'UPDATE checkin_call_episodes SET next_action_at = $2, updated_at = now() WHERE id = $1',
+      [episode.id, attempt.ring_deadline]
+    );
+    await event(db, episode.id, 'TEST_CALL_STARTED', userId, attempt.id);
+    await db.query('COMMIT');
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  } finally {
+    db.release();
+  }
+
+  await dispatchDeliveries(pool);
+  const delivery = await pool.query(
+    'SELECT state FROM checkin_call_deliveries WHERE attempt_id = $1 ORDER BY created_at DESC LIMIT 1',
+    [attempt.id]
+  );
+  if (delivery.rows[0]?.state === 'FAILED') {
+    throw serviceError(
+      'Unable to deliver the test call',
+      503,
+      'checkinCall.error.test_delivery_failed'
+    );
+  }
+
+  return {
+    episode: {
+      id: episode.id,
+      user_id: episode.user_id,
+      state: episode.state,
+      severity: episode.severity,
+    },
+    attempt: {
+      id: attempt.id,
+      episode_id: episode.id,
+      target_role: attempt.target_role,
+      state: attempt.state,
+    },
+    delivery_state: delivery.rows[0]?.state || 'PENDING',
+  };
+}
+
 module.exports = {
   DEFAULTS,
   validateSettings,
@@ -784,4 +889,5 @@ module.exports = {
   createDailyEpisodes,
   tick,
   dispatchDeliveries,
+  startTestCall,
 };

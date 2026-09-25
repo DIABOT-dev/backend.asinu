@@ -62,6 +62,13 @@ function checkinCallRoutes(pool) {
       return respond(req, res, error);
     }
   });
+  router.post('/test-call', async (req, res) => {
+    try {
+      return res.status(201).json({ ok: true, ...(await service.startTestCall(pool, req.user.id)) });
+    } catch (error) {
+      return respond(req, res, error);
+    }
+  });
   router.get('/episodes/:id', async (req, res) => {
     try {
       const episode = await service.getEpisode(pool, req.params.id, req.user.id);

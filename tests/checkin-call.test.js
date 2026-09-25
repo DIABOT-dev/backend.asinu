@@ -50,8 +50,35 @@ describe('check-in call safety rules', () => {
     await service.answer(pool, episode.id, 7, 1);
     expect(queries.some((sql) => sql.includes('INSERT INTO health_checkins'))).toBe(true);
     expect(queries.some((sql) => sql.includes("state = 'RESOLVED'"))).toBe(true);
+    const resolvedCall = db.query.mock.calls.find(([sql]) => sql.includes("state = 'RESOLVED'"));
+    expect(resolvedCall[1]).toEqual([episode.id]);
     expect(queries.some((sql) => sql.includes('checkin_call_deliveries'))).toBe(false);
     expect(queries).toContain('COMMIT');
+  });
+
+  test('test-mode OK resolves without writing a real health check-in', async () => {
+    const queries = [];
+    const episode = {
+      id: 'episode-test',
+      user_id: 7,
+      local_date: '2099-12-31',
+      state: 'CONTACT_USER',
+      config: { user_timeout_seconds: 60, test_mode: true },
+      family_ids: [],
+    };
+    const db = {
+      query: jest.fn(async (sql) => {
+        queries.push(sql);
+        if (sql.includes('SELECT * FROM checkin_call_episodes')) return { rows: [episode] };
+        return { rows: [] };
+      }),
+      release: jest.fn(),
+    };
+
+    await service.answer({ connect: async () => db }, episode.id, 7, 1);
+
+    expect(queries.some((sql) => sql.includes('INSERT INTO health_checkins'))).toBe(false);
+    expect(queries.some((sql) => sql.includes("state = 'RESOLVED'"))).toBe(true);
   });
 
   test('MILD creates only the first family call', async () => {
