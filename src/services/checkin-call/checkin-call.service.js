@@ -376,6 +376,46 @@ async function endRemoteCalls(pool, episodeId, exceptAttemptId = null, onlyAttem
   }
 }
 
+async function cancelActiveForManualCheckin(pool, userId) {
+  const db = await pool.connect();
+  let episodeIds = [];
+  try {
+    await db.query('BEGIN');
+    const active = await db.query(
+      "SELECT id FROM checkin_call_episodes WHERE user_id = $1 AND state NOT IN ('RESOLVED','EXHAUSTED','EXHAUSTED_MILD','EXHAUSTED_URGENT','CANCELLED','URGENT_ACKNOWLEDGED') FOR UPDATE",
+      [userId]
+    );
+    episodeIds = active.rows.map((row) => row.id);
+    if (episodeIds.length) {
+      await db.query(
+        "UPDATE checkin_call_episodes SET state = 'CANCELLED', next_action_at = NULL, updated_at = now() WHERE id = ANY($1::uuid[])",
+        [episodeIds]
+      );
+      await db.query(
+        "UPDATE checkin_call_attempts SET state = 'CANCELLED', ended_at = COALESCE(ended_at, now()) WHERE episode_id = ANY($1::uuid[]) AND state IN ('RINGING','CONNECTED','PUSH_WAIT','WAITING_CONFIRMATION')",
+        [episodeIds]
+      );
+      await db.query(
+        "UPDATE checkin_call_deliveries SET state = 'CANCELLED', updated_at = now() WHERE episode_id = ANY($1::uuid[]) AND state IN ('PENDING','SENDING')",
+        [episodeIds]
+      );
+      for (const episodeId of episodeIds) {
+        await event(db, episodeId, 'CANCELLED', userId, null, {
+          reason: 'MANUAL_CHECKIN',
+        });
+      }
+    }
+    await db.query('COMMIT');
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  } finally {
+    db.release();
+  }
+  for (const episodeId of episodeIds) await endRemoteCalls(pool, episodeId);
+  return episodeIds.length;
+}
+
 async function accept(pool, attemptId, userId) {
   const db = await pool.connect();
   let result;
@@ -907,4 +947,5 @@ module.exports = {
   tick,
   dispatchDeliveries,
   startTestCall,
+  cancelActiveForManualCheckin,
 };

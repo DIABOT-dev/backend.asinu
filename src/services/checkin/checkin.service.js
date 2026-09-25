@@ -38,6 +38,7 @@ const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
 const { buildCheckinContext, applyIllusion } = require('../../core/checkin/illusion-layer');
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 const logger = require('../../lib/logger');
+const checkinCallService = require('../checkin-call/checkin-call.service');
 const console = { log: logger.debug, error: logger.error };
 
 // ─── Priority map ────────────────────────────────────────────────
@@ -249,6 +250,10 @@ async function startCheckin(pool, userId, status, bodyLocations = null, bodyLoca
      RETURNING *`,
     [userId, date, status, flowState, nextAt, locFirst, locArr, bodyLocationOther]
   );
+
+  // A manual check-in is authoritative: stop every active automated call flow
+  // so relatives are not contacted after the user has already responded.
+  await checkinCallService.cancelActiveForManualCheckin(pool, userId);
 
   // Track engagement event
   trackEvent(pool, userId, 'checkin_response', { status, flowState }).catch(() => {});
@@ -1474,7 +1479,19 @@ async function confirmCaregiverAlert(pool, caregiverId, alertId, action) {
     return { ok: false, code: 'FORBIDDEN', error: t('careCircle.no_permission') };
   }
 
-  // 3. Now UPDATE to confirm the alert
+  // `seen` is read tracking only. It deliberately remains pending until the
+  // caregiver commits to an action (`on_my_way` or `called`).
+  if (action === 'seen') {
+    await pool.query(
+      `UPDATE caregiver_alert_confirmations
+       SET seen_at=COALESCE(seen_at, NOW())
+       WHERE id=$1 AND caregiver_id=$2 AND confirmed_at IS NULL`,
+      [alertId, caregiverId]
+    );
+    return { ok: true, action, confirmed: false };
+  }
+
+  // 3. Commit an action that is allowed to close the alert.
   await pool.query(
     `UPDATE caregiver_alert_confirmations
      SET confirmed_at=NOW(), confirmed_action=$1
@@ -1534,7 +1551,8 @@ async function getPendingCaregiverAlerts(pool, caregiverId) {
   const ACTIVE_THRESHOLD_HOURS = 1;
   const STALE_HOURS = 12;
   const { rows } = await pool.query(
-    `SELECT cac.id as alert_id, cac.alert_type, cac.sent_at, cac.checkin_id,
+    `SELECT cac.id as alert_id, cac.alert_type, cac.sent_at, cac.seen_at,
+            cac.resent_at, cac.checkin_id,
             u.display_name, u.full_name,
             hc.current_status, hc.flow_state, hc.resolved_at,
             EXTRACT(EPOCH FROM (NOW() - cac.sent_at))/3600 AS hours_since_sent
@@ -1543,6 +1561,7 @@ async function getPendingCaregiverAlerts(pool, caregiverId) {
      JOIN health_checkins hc ON hc.id = cac.checkin_id
      WHERE cac.caregiver_id=$1
        AND cac.confirmed_at IS NULL
+       AND (cac.seen_at IS NULL OR (cac.resent_at IS NOT NULL AND cac.resent_at > cac.seen_at))
        AND cac.sent_at >= NOW() - make_interval(hours => $2)
      ORDER BY cac.sent_at DESC`,
     [caregiverId, STALE_HOURS]
