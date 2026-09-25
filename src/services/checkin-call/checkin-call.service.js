@@ -324,14 +324,20 @@ async function seen(pool, attemptId, userId) {
   return { ok: true };
 }
 
-async function endRemoteCalls(pool, episodeId, exceptAttemptId = null) {
+async function endRemoteCalls(
+  pool,
+  episodeId,
+  exceptAttemptId = null,
+  onlyAttemptId = null
+) {
   if (!pool?.query) return;
   try {
     const result = await pool.query(
       "SELECT a.id AS attempt_id, u.fcm_token, u.voip_push_token, u.voip_push_environment, COALESCE(u.language_preference, 'vi') AS lang " +
         'FROM checkin_call_attempts a JOIN users u ON u.id = a.target_user_id ' +
-        'WHERE a.episode_id = $1 AND ($2::uuid IS NULL OR a.id != $2::uuid)',
-      [episodeId, exceptAttemptId]
+        'WHERE a.episode_id = $1 AND ($2::uuid IS NULL OR a.id != $2::uuid) ' +
+        'AND ($3::uuid IS NULL OR a.id = $3::uuid)',
+      [episodeId, exceptAttemptId, onlyAttemptId]
     );
     await Promise.allSettled(
       result.rows.flatMap((row) => {
@@ -510,7 +516,7 @@ async function createDailyEpisodes(pool) {
 }
 
 async function advance(pool, id) {
-  return withEpisode(pool, id, null, async (db, episode) => {
+  const remoteEnd = await withEpisode(pool, id, null, async (db, episode) => {
     if (
       !episode.next_action_at ||
       new Date(episode.next_action_at) > new Date() ||
@@ -554,12 +560,13 @@ async function advance(pool, id) {
         [id]
       );
       episode.severity = 'UNKNOWN';
-      await db.query(
-        "UPDATE checkin_call_attempts SET state = 'NO_ANSWER', ended_at = now() WHERE episode_id = $1 AND target_role = 'USER' AND state IN ('RINGING','CONNECTED')",
+      const ended = await db.query(
+        "UPDATE checkin_call_attempts SET state = 'NO_ANSWER', ended_at = now() WHERE episode_id = $1 AND target_role = 'USER' AND state IN ('RINGING','CONNECTED') RETURNING id",
         [id]
       );
       await event(db, id, 'USER_TIMEOUT');
       await startNextFamily(db, episode);
+      return { attemptIds: ended.rows.map((row) => row.id) };
     } else if (episode.state === 'MILD_FAMILY_ESCALATION' || episode.state === 'CONTACT_FAMILY') {
       const found = await db.query(
         "SELECT * FROM checkin_call_attempts WHERE episode_id = $1 AND target_role = 'FAMILY' ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
@@ -581,6 +588,7 @@ async function advance(pool, id) {
           [id, episode.config.family_confirm_minutes]
         );
         await event(db, id, 'FAMILY_NO_ANSWER', null, attempt.id);
+        return { attemptIds: [attempt.id] };
       } else {
         await db.query(
           "UPDATE checkin_call_attempts SET state = 'EXPIRED', ended_at = now() WHERE id = $1",
@@ -601,6 +609,7 @@ async function advance(pool, id) {
           severity: 'URGENT',
           reason: 'MAX_DURATION',
         });
+        return { all: true };
       } else {
         for (const familyId of episode.family_ids) {
           await db.query(
@@ -618,6 +627,13 @@ async function advance(pool, id) {
       }
     }
   });
+  if (remoteEnd?.all) await endRemoteCalls(pool, id);
+  else {
+    for (const attemptId of remoteEnd?.attemptIds || []) {
+      await endRemoteCalls(pool, id, null, attemptId);
+    }
+  }
+  return remoteEnd;
 }
 
 async function tick(pool) {
@@ -648,7 +664,7 @@ async function dispatchDeliveries(pool) {
     try {
       await db.query('BEGIN');
       const found = await db.query(
-        'SELECT d.*, e.state AS episode_state, e.severity, e.config, a.state AS attempt_state, ' +
+        'SELECT d.*, e.state AS episode_state, e.severity, e.config, a.state AS attempt_state, a.target_role, ' +
           "u.push_token, u.fcm_token, u.voip_push_token, u.voip_push_environment, COALESCE(u.language_preference, 'vi') AS lang " +
           'FROM checkin_call_deliveries d JOIN checkin_call_episodes e ON e.id = d.episode_id ' +
           'LEFT JOIN checkin_call_attempts a ON a.id = d.attempt_id ' +
@@ -697,7 +713,9 @@ async function dispatchDeliveries(pool) {
       kind: delivery.kind,
       severity: delivery.severity,
       ringSeconds:
-        delivery.config?.family_ring_seconds || delivery.config?.user_timeout_seconds || 60,
+        delivery.target_role === 'USER'
+          ? delivery.config?.user_timeout_seconds || 60
+          : delivery.config?.family_ring_seconds || 60,
       lang,
     };
     const title = t(urgent ? 'checkinCall.push.urgent_title' : 'checkinCall.push.call_title', lang);
