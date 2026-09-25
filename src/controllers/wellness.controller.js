@@ -68,7 +68,7 @@ async function postActivity(pool, req, res) {
         evaluation: {
           score: evaluation.score,
           status: evaluation.status,
-          statusChanged: evaluation.statusChanged,
+          statusChanged: Boolean(evaluation.statusChanged),
         },
       });
     } finally {
@@ -121,7 +121,7 @@ async function postCalculate(pool, req, res) {
       score: result.score,
       status: result.status,
       breakdown: result.breakdown,
-      statusChanged: result.statusChanged,
+      statusChanged: Boolean(result.statusChanged),
       alertSent: result.alert ? true : false,
     });
   } catch (err) {
@@ -282,12 +282,12 @@ async function getCaregiverAlertsHandler(pool, req, res) {
 // =====================================================
 async function postAckAlert(pool, req, res) {
   try {
-    const alertId = parseInt(req.params.id, 10);
-    if (isNaN(alertId)) {
+    const parsedId = z.string().uuid().safeParse(req.params.id);
+    if (!parsedId.success) {
       return res.status(400).json({ ok: false, error: t('error.invalid_id', getLang(req)) });
     }
 
-    const result = await wellnessService.ackAlertWithPermission(pool, alertId, req.user.id);
+    const result = await wellnessService.ackAlertWithPermission(pool, parsedId.data, req.user.id);
 
     if (!result.ok) {
       return res.status(result.statusCode || 400).json(result);

@@ -104,7 +104,7 @@ async function uploadAvatarHandler(pool, req, res) {
     return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
   if (!req.file?.buffer) {
-    return res.status(400).json({ ok: false, error: 'No avatar file uploaded' });
+    return res.status(400).json({ ok: false, error: t('error.no_image_uploaded', getLang(req)) });
   }
 
   try {
@@ -128,14 +128,18 @@ async function uploadAvatarHandler(pool, req, res) {
     });
   } catch (error) {
     if (error?.code === 'CLOUDINARY_NOT_CONFIGURED') {
-      return res
-        .status(503)
-        .json({ ok: false, error: 'Avatar upload is not configured', code: error.code });
+      return res.status(503).json({
+        ok: false,
+        error: t('error.avatar_upload_not_configured', getLang(req)),
+        code: error.code,
+      });
     }
     console.error('[uploadAvatar] failed:', { code: error?.code, message: error?.message });
-    return res
-      .status(502)
-      .json({ ok: false, error: 'Avatar upload failed', code: 'AVATAR_UPLOAD_FAILED' });
+    return res.status(502).json({
+      ok: false,
+      error: t('error.avatar_upload_failed', getLang(req)),
+      code: 'AVATAR_UPLOAD_FAILED',
+    });
   }
 }
 
@@ -164,7 +168,9 @@ async function updatePushToken(pool, req, res) {
     return res.status(400).json({ ok: false, error: t('error.push_token_required', getLang(req)) });
   }
   if (voip_token && !['sandbox', 'production'].includes(voip_environment)) {
-    return res.status(400).json({ ok: false, error: 'Invalid VoIP push environment' });
+    return res
+      .status(400)
+      .json({ ok: false, error: t('error.invalid_voip_environment', getLang(req)) });
   }
 
   const result = await profileService.updatePushToken(

@@ -152,7 +152,11 @@ async function deleteConnection(pool, req, res) {
     return res.status(statusCode).json({ ok: false, error: result.error });
   }
 
-  return res.status(200).json({ ok: true, connection: result.connection });
+  return res.status(200).json({
+    ok: true,
+    connection: result.connection,
+    message: t('success.connection_removed', getLang(req)),
+  });
 }
 
 /**

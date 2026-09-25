@@ -373,7 +373,7 @@ async function rejectInvitation(pool, invitationId, userId) {
       return { ok: false, error: t('careCircle.invitation_not_found'), statusCode: 404 };
     }
 
-    const invitation = result.rows[0];
+    const invitation = { ...result.rows[0], status: 'rejected' };
 
     // Notify the requester that their invite was declined (non-blocking)
     const rejecterName = await getUserDisplayName(pool, userId);

@@ -43,7 +43,8 @@ async function getProfile(pool, userId) {
     // Get onboarding profile for health info
     const onboardingResult = await pool.query(
       `SELECT display_name, age, gender, goal, body_type,
-              date_of_birth, birth_year, height_cm, weight_kg, blood_type,
+              TO_CHAR(date_of_birth, 'YYYY-MM-DD') AS date_of_birth,
+              birth_year, height_cm, weight_kg, blood_type,
               medical_conditions, chronic_symptoms, onboarding_completed_at
        FROM user_onboarding_profiles
        WHERE user_id = $1`,
@@ -393,7 +394,12 @@ async function deleteAccount(pool, userId) {
     // removed before the user row, otherwise account deletion fails with a
     // constraint error after a Doctor/AI consultation has run.
     await client.query('DELETE FROM ai_logs WHERE user_id = $1', [userId]);
-    await client.query('DELETE FROM chat_logs WHERE user_id = $1', [userId]);
+    const legacyChatLogs = await client.query(
+      "SELECT to_regclass('public.chat_logs') IS NOT NULL AS exists"
+    );
+    if (legacyChatLogs.rows[0]?.exists) {
+      await client.query('DELETE FROM chat_logs WHERE user_id = $1', [userId]);
+    }
     await client.query('DELETE FROM chat_histories WHERE user_id = $1', [userId]);
 
     // The Doctor request outbox is JSON-owned rather than FK-owned. Remove
@@ -412,7 +418,15 @@ async function deleteAccount(pool, userId) {
     // 4. Care Pulse & Monitoring
     await client.query('DELETE FROM care_pulse_events WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM care_pulse_engine_state WHERE user_id = $1', [userId]);
+    await client.query(
+      'UPDATE care_pulse_escalations SET acknowledged_by = NULL WHERE acknowledged_by = $1 AND user_id <> $1',
+      [userId]
+    );
     await client.query('DELETE FROM care_pulse_escalations WHERE user_id = $1', [userId]);
+    await client.query(
+      'UPDATE caregiver_alerts SET acknowledged_by = NULL WHERE acknowledged_by = $1 AND user_id <> $1 AND caregiver_user_id IS DISTINCT FROM $1',
+      [userId]
+    );
     await client.query(
       'DELETE FROM caregiver_alerts WHERE user_id = $1 OR caregiver_user_id = $1',
       [userId]
@@ -423,6 +437,7 @@ async function deleteAccount(pool, userId) {
     await client.query('DELETE FROM user_activity_logs WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM user_health_scores WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM user_wellness_state WHERE user_id = $1', [userId]);
+    await client.query('DELETE FROM user_engagement WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM daily_wellness_summary WHERE user_id = $1', [userId]);
     await client.query('DELETE FROM prompt_history WHERE user_id = $1', [userId]);
 
@@ -434,7 +449,17 @@ async function deleteAccount(pool, userId) {
       'DELETE FROM user_connections WHERE requester_id = $1 OR addressee_id = $1',
       [userId]
     );
+    await client.query('UPDATE user_connections SET requested_by = NULL WHERE requested_by = $1', [
+      userId,
+    ]);
     await client.query('DELETE FROM user_baselines WHERE user_id = $1', [userId]);
+
+    // A caregiver may have acknowledged another user's active check-in call.
+    // Preserve that patient's history while releasing the account FK.
+    await client.query(
+      'UPDATE checkin_call_episodes SET acknowledged_by = NULL WHERE acknowledged_by = $1 AND user_id <> $1',
+      [userId]
+    );
 
     // 7. Notifications
     await client.query('DELETE FROM notifications WHERE user_id = $1', [userId]);
@@ -476,6 +501,13 @@ async function deleteAccount(pool, userId) {
   } catch (err) {
     // Rollback nếu có lỗi
     await client.query('ROLLBACK');
+
+    logger.error('[deleteAccount] failed', {
+      userId,
+      code: err?.code,
+      constraint: err?.constraint,
+      message: err?.message,
+    });
 
     return { ok: false, error: t('profile.delete_account_error') };
   } finally {

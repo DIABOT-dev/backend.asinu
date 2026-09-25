@@ -63,15 +63,14 @@ async function insertAlertNotifications(pool, connections, notificationTemplate)
     data: notificationTemplate.data,
     is_read: false,
     created_at: new Date(),
-    updated_at: new Date(),
   }));
 
   const insertQuery = `
-    INSERT INTO notifications (user_id, type, title, message, data, is_read, created_at, updated_at)
+    INSERT INTO notifications (user_id, type, title, message, data, is_read, created_at)
     VALUES ${notifications
       .map(
         (_, index) =>
-          `($${index * 8 + 1}, $${index * 8 + 2}, $${index * 8 + 3}, $${index * 8 + 4}, $${index * 8 + 5}, $${index * 8 + 6}, $${index * 8 + 7}, $${index * 8 + 8})`
+          `($${index * 7 + 1}, $${index * 7 + 2}, $${index * 7 + 3}, $${index * 7 + 4}, $${index * 7 + 5}, $${index * 7 + 6}, $${index * 7 + 7})`
       )
       .join(', ')}
   `;
@@ -84,7 +83,6 @@ async function insertAlertNotifications(pool, connections, notificationTemplate)
     JSON.stringify(n.data),
     n.is_read,
     n.created_at,
-    n.updated_at,
   ]);
 
   await pool.query(insertQuery, insertValues);

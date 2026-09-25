@@ -26,7 +26,11 @@ async function verifyReceipt(pool, req, res) {
       .json({ ok: false, code: 'UNAUTHORIZED', error: t('error.unauthenticated', getLang(req)) });
   }
   if (!payload.platform) {
-    return res.status(400).json({ ok: false, code: 'INVALID_PAYLOAD', error: 'Missing platform' });
+    return res.status(400).json({
+      ok: false,
+      code: 'INVALID_PAYLOAD',
+      error: t('iap.missing_platform', getLang(req)),
+    });
   }
 
   try {
@@ -34,11 +38,14 @@ async function verifyReceipt(pool, req, res) {
     if (!result.ok) {
       // 402 Payment Required for verification failures so the FE can
       // distinguish them from auth or validation errors.
-      return res.status(402).json(result);
+      return res.status(402).json({
+        ...result,
+        error: result.error || t('iap.verification_failed', getLang(req)),
+      });
     }
     return res.status(200).json(result);
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 

@@ -787,8 +787,9 @@ async function evaluateUserWellness(pool, userId, options = {}) {
       scoreUpdated: true,
       score: scoreResult.score,
       status: scoreResult.status,
-      statusChanged:
-        scoreResult.previousStatus && scoreResult.status !== scoreResult.previousStatus,
+      statusChanged: Boolean(
+        scoreResult.previousStatus && scoreResult.status !== scoreResult.previousStatus
+      ),
       prompt: null,
       alert: null,
     };

@@ -16,7 +16,23 @@ const {
  */
 async function alertCareCircle(pool, req, res) {
   const userId = req.user.id; // lấy từ token, không tin body
-  const { alertData } = req.body;
+  const { alertData } = req.body || {};
+
+  if (
+    !alertData ||
+    typeof alertData !== 'object' ||
+    typeof alertData.message !== 'string' ||
+    !alertData.message.trim() ||
+    typeof alertData.alertType !== 'string' ||
+    !alertData.alertType.trim() ||
+    typeof alertData.severity !== 'string' ||
+    !alertData.severity.trim()
+  ) {
+    return res.status(400).json({
+      ok: false,
+      error: t('error.invalid_params', getLang(req)),
+    });
+  }
 
   try {
     const connections = await getActiveConnections(pool, userId);
@@ -34,7 +50,7 @@ async function alertCareCircle(pool, req, res) {
     const notificationTemplate = {
       type: 'health_alert',
       title: t('health.alert_from_user', getLang(req), { name: userName }),
-      message: alertData.message,
+      message: alertData.message.trim(),
       data: {
         type: 'health_alert',
         alertType: alertData.alertType,

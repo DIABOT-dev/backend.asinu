@@ -142,10 +142,10 @@ function verifyAudioMagicBytes(req, res, next) {
 function verifyImageMagicBytes(req, res, next) {
   const file = req.file;
   if (!file || !file.buffer) {
-    return res.status(400).json({ ok: false, error: 'No avatar file uploaded' });
+    return res.status(400).json({ ok: false, error: t('error.no_image_uploaded', getLang(req)) });
   }
   if (!isImageBuffer(file.buffer)) {
-    return res.status(400).json({ ok: false, error: 'Invalid image file' });
+    return res.status(400).json({ ok: false, error: t('error.invalid_image_file', getLang(req)) });
   }
   return next();
 }

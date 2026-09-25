@@ -337,7 +337,7 @@ function generateProviderId(provider, providerId, email) {
 async function findUserByEmail(pool, email) {
   const normalizedEmail = String(email).trim().toLowerCase();
   const result = await pool.query(
-    'SELECT id, email, password_hash FROM users WHERE email = $1 AND deleted_at IS NULL',
+    'SELECT id, email, password_hash, phone_number, display_name, full_name FROM users WHERE email = $1 AND deleted_at IS NULL',
     [normalizedEmail]
   );
   return result.rows[0] || null;
