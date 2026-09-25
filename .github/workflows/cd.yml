@@ -71,17 +71,17 @@ jobs:
           echo "repository=$image" >> "$GITHUB_OUTPUT"
 
       - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and publish image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
@@ -135,7 +135,7 @@ jobs:
           ref: ${{ needs.package.outputs.sha }}
 
       - name: Copy Compose file to VPS
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@v1.0.0
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
@@ -145,7 +145,7 @@ jobs:
           strip_components: 1
 
       - name: Deploy and verify
-        uses: appleboy/ssh-action@v1.2.0
+        uses: appleboy/ssh-action@v1.2.5
         env:
           ASINU_BACKEND_IMAGE: ${{ needs.package.outputs.image }}
           GHCR_USER: ${{ github.actor }}
