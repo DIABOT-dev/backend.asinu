@@ -36,7 +36,7 @@ jobs:
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.head_repository.full_name == github.repository)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
       image: ${{ steps.meta.outputs.image }}
@@ -57,7 +57,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.source.outputs.ref }}
 
@@ -105,7 +105,7 @@ jobs:
       needs.package.result == 'success' &&
       ((github.event_name == 'workflow_dispatch' && inputs.deploy) ||
       (github.event_name == 'workflow_run' && vars.AUTO_DEPLOY_CAMP == 'true'))
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'camp' }}
     env:
@@ -130,7 +130,7 @@ jobs:
           exit "$missing"
 
       - name: Checkout deployment files
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ needs.package.outputs.sha }}
 
