@@ -1,0 +1,432 @@
+{
+  "content_items": [
+    {
+      "id": "family-dont-just-ask",
+      "title": "Do not only ask your parents if they are well",
+      "summary": "Older adults may say they are fine even when something has changed. Specific questions can help family members notice concerns earlier.",
+      "body": "Older adults may avoid worrying their children, feel concerned about treatment costs, or not notice gradual changes in their own health. Instead of asking a general question, use specific questions and pay attention to changes in everyday routines.",
+      "checklist": [
+        "Did you feel dizzy or unsteady when standing up today?",
+        "Did you eat normally, or feel unusually tired or sleepy after eating?",
+        "Did you have chest pressure, heaviness, shortness of breath, or difficulty breathing?",
+        "Have you been urinating more often than usual, especially at night?",
+        "Have your arms or legs felt numb or weaker than usual while walking?"
+      ],
+      "cta_label": "Check on your parents"
+    },
+    {
+      "id": "family-5-signs-to-watch",
+      "title": "5 changes in your parents that need attention",
+      "summary": "Small changes in an older adult's daily routine can be an early sign that their health needs attention.",
+      "body": "When caring for older parents, pay attention to changes in their usual behavior and routines. The following signs deserve a closer look:",
+      "checklist": [
+        "Unexplained rapid weight loss, which may be related to poor intake, diabetes, or digestive problems.",
+        "Shortness of breath during light activity, which may involve the heart or lungs.",
+        "A sudden change in mood, alertness, or memory that is not part of their usual behavior.",
+        "Frequent dizziness or unsteadiness while walking, which increases the risk of falls.",
+        "Persistent thirst and frequent nighttime urination, which can occur with high blood glucose."
+      ],
+      "cta_label": "View detailed guidance"
+    },
+    {
+      "id": "family-tired-after-meal",
+      "title": "What to ask when a parent says they feel tired",
+      "summary": "Tiredness can mean many things. A few focused questions can help identify whether other symptoms are present.",
+      "body": "Tiredness is common in older adults, but it can sometimes occur with low blood glucose, changing blood pressure, or heart-related symptoms. Ask a few focused questions to understand the situation more clearly.",
+      "checklist": [
+        "When did the tiredness start? Did it happen after a meal or physical activity?",
+        "Is there a headache, dizziness, sweating, or cold hands and feet?",
+        "Is there a racing heartbeat, palpitations, or chest pressure?",
+        "Have blood pressure and blood glucose been checked recently?"
+      ],
+      "cta_label": "Record blood pressure or glucose"
+    },
+    {
+      "id": "family-diabetes-3-moments",
+      "title": "Diabetes care: 3 useful times to check in",
+      "summary": "Blood glucose can change unexpectedly. These three moments are useful times to ask how your parent is feeling.",
+      "body": "Diabetes care includes taking medication as prescribed and noticing changes in how a person feels. Consider checking in with your parent at these three times:",
+      "checklist": [
+        "Early morning: ask about fatigue, night sweats, or headache after waking.",
+        "About two hours after a main meal: ask about unusual sleepiness, thirst, or frequent urination.",
+        "Before exercise or a walk: remind them to check how they feel and carry a fast source of sugar if advised by their clinician."
+      ],
+      "cta_label": "Remind them to check in"
+    },
+    {
+      "id": "family-call-doctor-immediately",
+      "title": "When should the family call emergency services?",
+      "summary": "Recognize warning signs that require urgent medical help.",
+      "body": "Some warning signs should not be managed at home. Call emergency services at 115 in Vietnam, or go to the nearest emergency department, if any of the following occurs:",
+      "checklist": [
+        "Severe chest pressure lasting more than five minutes or spreading to the shoulder, neck, jaw, or left arm.",
+        "Sudden severe breathing difficulty, noisy breathing, or visible effort in the neck or chest.",
+        "Sudden weakness on one side, facial drooping, or difficulty speaking.",
+        "Loss of consciousness, fainting, seizures, or no response when called.",
+        "A sudden extremely severe headache with vomiting or a stiff neck."
+      ],
+      "cta_label": "View emergency contacts"
+    },
+    {
+      "id": "family-first-7-days-guide",
+      "title": "How to support your parents during the first 7 days",
+      "summary": "The first week is a useful time to build a simple, sustainable health tracking routine.",
+      "body": "Help your parents establish a routine for recording daily readings and symptoms. A consistent first week creates a clearer health history and makes changes easier to notice.",
+      "checklist": [
+        "Days 1 to 3: show them how to open the app and record blood pressure or blood glucose readings.",
+        "Days 4 to 5: use a gentle reminder at a regular time and help them record how they feel.",
+        "Days 6 to 7: review the first summary together and discuss anything that needs attention."
+      ],
+      "cta_label": "Start tracking"
+    },
+    {
+      "id": "family-post-meal-lethargy",
+      "title": "Severe tiredness after meals deserves attention",
+      "summary": "Marked tiredness or sleepiness after eating may occur with changes in blood pressure or blood glucose.",
+      "body": "Strong fatigue after meals in older adults can occur when blood pressure falls after eating or when a high-carbohydrate meal causes a rapid rise in blood glucose. Track the pattern and discuss recurring symptoms with a healthcare professional.",
+      "checklist": [
+        "Reduce large portions of white rice, noodles, or bread and include vegetables and a suitable protein source.",
+        "If advised, record blood pressure and blood glucose before the meal and two hours afterward.",
+        "Avoid standing suddenly or doing strenuous activity immediately after eating."
+      ],
+      "cta_label": "Read the detailed article"
+    },
+    {
+      "id": "family-remind-without-pressure",
+      "title": "How to remind your parents without adding pressure",
+      "summary": "Support regular check-ins without making your parents feel monitored or burdensome.",
+      "body": "Some older parents worry about becoming a burden when family members repeatedly remind them about medication or readings. A collaborative approach can make tracking feel more comfortable.",
+      "checklist": [
+        "Use a supportive request instead of an interrogation, and offer to help record the result.",
+        "Make tracking a shared family routine by discussing your own healthy habits too.",
+        "Explain that regular updates help the family stay informed without repeatedly calling."
+      ],
+      "cta_label": "Share with family"
+    },
+    {
+      "id": "family-1-min-inquiry-template",
+      "title": "A one-minute family check-in checklist",
+      "summary": "Five quick questions can help you understand how your parents are doing today.",
+      "body": "When you cannot be there in person, a short daily call can help you notice meaningful changes. Use these questions as a simple guide:",
+      "checklist": [
+        "How was your appetite today? Were you able to finish your meals?",
+        "Did you sleep well, or wake frequently during the night?",
+        "Do you have any unusual pain, weakness, or tiredness today?",
+        "Have you checked your blood pressure or blood glucose today?",
+        "Do you need help with anything tomorrow?"
+      ],
+      "cta_label": "Copy the questions"
+    },
+    {
+      "id": "family-why-parents-hide-symptoms",
+      "title": "Why older parents may hide symptoms",
+      "summary": "Understanding their concerns can help you offer support earlier and more respectfully.",
+      "body": "Many parents only tell their children after symptoms have become more serious. Understanding why they hold back can help the family respond with patience and practical support.",
+      "checklist": [
+        "They may not want to interrupt a busy child over a symptom that seems minor.",
+        "They may worry about the cost of appointments, tests, or medication.",
+        "They may avoid information because they fear a serious diagnosis.",
+        "Check in regularly and review shared Asinu updates with their consent."
+      ],
+      "cta_label": "Open Care Circle"
+    },
+    {
+      "id": "diabetes-post-meal-fatigue",
+      "title": "What can tiredness after meals be related to?",
+      "summary": "If you regularly feel very tired or sleepy after meals, record the pattern and your blood glucose readings.",
+      "body": "After a meal, carbohydrates are converted into glucose. In diabetes, glucose may not enter cells efficiently, so blood glucose can be high while the body still feels tired. Large high-carbohydrate meals can also cause a bigger change in glucose levels.",
+      "checklist": [
+        "Notice whether tiredness follows high-carbohydrate meals or also occurs after lighter meals.",
+        "Check blood glucose two hours after the meal if this is part of your care plan.",
+        "Try smaller portions and include more fiber-rich vegetables.",
+        "If tiredness comes with dizziness, sit down safely and check your blood pressure."
+      ],
+      "cta_label": "Record a reading"
+    },
+    {
+      "id": "diabetes-thirst-urination",
+      "title": "Persistent thirst and urination: when to pay attention",
+      "summary": "Ongoing thirst with frequent urination, especially at night, can occur when blood glucose is high.",
+      "body": "When blood glucose is very high, the kidneys work harder to remove excess glucose. This draws water from the body and can lead to dehydration and persistent thirst. Record the pattern and seek clinical advice if it continues.",
+      "checklist": [
+        "Record nighttime urination and approximately how much water you drink each day.",
+        "Check fasting blood glucose the next morning if this is part of your care plan.",
+        "Choose plain water instead of sugary or carbonated drinks when thirsty.",
+        "Seek medical advice promptly if this occurs with rapid weight loss or blurred vision."
+      ],
+      "cta_label": "Check in symptoms"
+    },
+    {
+      "id": "diabetes-postprandial-glucose",
+      "title": "What to track when blood glucose is high after meals",
+      "summary": "A reading taken two hours after eating can help you and your clinician understand the effect of meals and treatment.",
+      "body": "Post-meal glucose goals are individualized. Many clinical plans use a two-hour target below 180 mg/dL (10.0 mmol/L) for adults with diabetes, but follow the target given by your healthcare professional.",
+      "checklist": [
+        "Record the meal and the two-hour post-meal reading in Asinu.",
+        "Notice foods that cause a larger rise, such as sweet drinks, desserts, sticky rice, or large portions of white rice.",
+        "If appropriate for you, take a gentle 15 to 20 minute walk about 30 minutes after eating."
+      ],
+      "cta_label": "Record a post-meal reading"
+    },
+    {
+      "id": "diabetes-dont-skip-breakfast",
+      "title": "Why people with diabetes should avoid skipping breakfast",
+      "summary": "Skipping breakfast can disrupt meal timing and make blood glucose harder to manage later in the day.",
+      "body": "Skipping breakfast can increase the risk of low blood glucose for some people taking diabetes medication and may lead to overeating later. Follow the meal and medication schedule recommended by your healthcare professional.",
+      "checklist": [
+        "Eat breakfast at a consistent time, usually within an hour of waking if appropriate for your plan.",
+        "Choose fiber and protein, such as eggs, vegetables, whole grains, or oatmeal.",
+        "Record fasting blood glucose before breakfast if your care plan requires it."
+      ],
+      "cta_label": "Check in breakfast"
+    },
+    {
+      "id": "diabetes-hypoglycemia-signs",
+      "title": "Easy-to-miss signs of low blood glucose",
+      "summary": "Low blood glucose needs prompt action to prevent loss of consciousness or other serious complications.",
+      "body": "Low blood glucose, generally below 70 mg/dL (3.9 mmol/L), can occur after too much medication, a missed meal, or unusually strenuous activity. Recognize early signs and follow the treatment plan provided by your clinician.",
+      "checklist": [
+        "Early signs include sweating, shaking, a racing heartbeat, sudden hunger, dizziness, or sudden anxiety.",
+        "If you can swallow safely, use the 15-15 rule: take 15 grams of fast-acting carbohydrate and recheck after 15 minutes.",
+        "If the reading remains below 70 mg/dL, repeat the plan and contact a family member. Call emergency services if the person is unconscious or cannot swallow safely."
+      ],
+      "cta_label": "Save the emergency checklist"
+    },
+    {
+      "id": "diabetes-when-to-notify-family",
+      "title": "Diabetes: when to contact family immediately",
+      "summary": "Sharing urgent changes helps family members provide timely support.",
+      "body": "An older adult with diabetes should not manage severe symptoms alone. Contact a family member immediately in the following situations:",
+      "checklist": [
+        "Blood glucose remains below 70 mg/dL after following the 15-minute treatment plan.",
+        "Blood glucose is above 250 mg/dL with nausea, marked weakness, or rapid breathing.",
+        "High fever, persistent diarrhea, or repeated vomiting makes normal eating and drinking difficult.",
+        "A foot wound is swollen, draining, unusually red, or slow to heal."
+      ],
+      "cta_label": "View family contacts"
+    },
+    {
+      "id": "diabetes-importance-of-logs",
+      "title": "Regular readings matter more than a single number",
+      "summary": "A trend over time gives you and your clinician more useful information than one isolated reading.",
+      "body": "One glucose reading only describes a single moment. Recording readings consistently in Asinu helps show patterns that can support a more informed conversation with your treating clinician. Do not change medication doses without clinical advice.",
+      "checklist": [
+        "Record readings at the times recommended in your care plan, such as before breakfast or two hours after a meal.",
+        "Add a short note when meals or activity were different from usual.",
+        "Review the weekly chart and share relevant patterns with your clinician."
+      ],
+      "cta_label": "View glucose history"
+    },
+    {
+      "id": "diabetes-daily-routine",
+      "title": "A simple daily diabetes tracking routine",
+      "summary": "A small, repeatable routine can make diabetes tracking easier to maintain.",
+      "body": "Diabetes tracking does not need to take over your day. Use a few consistent steps and follow the medication and measurement plan provided by your healthcare professional.",
+      "checklist": [
+        "Morning: record fasting blood glucose and blood pressure if they are part of your care plan.",
+        "During the day: take medication as prescribed, eat regular meals, and drink enough water.",
+        "Evening: inspect your feet for cuts or redness and record a brief health check-in."
+      ],
+      "cta_label": "Start today's check-in"
+    },
+    {
+      "id": "diabetes-3-small-tips",
+      "title": "3 small habits that support blood glucose management",
+      "summary": "Small changes to meals and activity can support your treatment plan.",
+      "body": "Medication is only one part of diabetes care. These practical habits may help when they are appropriate for your health and treatment plan:",
+      "checklist": [
+        "Drink plain water regularly and avoid using drinks to replace meals.",
+        "At meals, begin with vegetables, then protein, and keep carbohydrate portions appropriate for your plan.",
+        "If it is safe for you, take a gentle 10 to 15 minute walk after a main meal."
+      ],
+      "cta_label": "Save this article"
+    },
+    {
+      "id": "diabetes-when-to-visit-clinic",
+      "title": "When should a person with diabetes seek medical care?",
+      "summary": "Seek clinical assessment when warning signs persist or readings repeatedly fall outside your personal target range.",
+      "body": "In addition to regular follow-up appointments, contact a healthcare professional promptly if ongoing symptoms or repeated readings suggest your current plan needs review.",
+      "checklist": [
+        "Fasting glucose is repeatedly above 200 mg/dL or below 70 mg/dL despite taking medication as prescribed.",
+        "There is persistent numbness, burning, tingling, or loss of sensation in the hands or feet.",
+        "You repeatedly experience sudden blurred vision, dizziness, or difficulty with balance.",
+        "A foot wound becomes red, swollen, drains fluid, smells unusual, or does not heal."
+      ],
+      "cta_label": "View reading history"
+    },
+    {
+      "id": "hypertension-fast-heartbeat",
+      "title": "Fast heartbeat: when does it need attention?",
+      "summary": "A fast heartbeat can be a normal response, but accompanying symptoms may require urgent assessment.",
+      "body": "A racing or pounding heartbeat can occur with exercise, anxiety, poor sleep, or caffeine. For someone with hypertension or heart disease, persistent palpitations should be recorded and discussed with a healthcare professional.",
+      "checklist": [
+        "Stop activity and sit or lie down safely in a cool, comfortable place.",
+        "Measure your pulse and blood pressure if you have a monitor, then record the results in Asinu.",
+        "Contact family and seek urgent medical help if a fast heartbeat occurs with chest pain, shortness of breath, faintness, or cold sweats."
+      ],
+      "cta_label": "Record heart rate"
+    },
+    {
+      "id": "hypertension-headache-handling",
+      "title": "What to do about a headache with high blood pressure",
+      "summary": "A severe or sudden headache with very high blood pressure requires careful assessment.",
+      "body": "Headache has many causes and cannot be judged from blood pressure alone. Stay calm, rest safely, measure again correctly, and follow the plan provided by your healthcare professional.",
+      "checklist": [
+        "Sit quietly in a dim, comfortable place and keep your head supported.",
+        "Rest for at least five minutes, then measure blood pressure using correct technique.",
+        "Take prescribed blood pressure medication as directed. Do not take an extra dose without clinical advice.",
+        "Avoid strong tea, coffee, very hot showers, or cold showers while symptoms are present.",
+        "Call emergency services if blood pressure is above 180/120 mmHg with severe headache, chest pain, breathing difficulty, weakness, confusion, or vision changes."
+      ],
+      "cta_label": "Record blood pressure"
+    },
+    {
+      "id": "general-dizziness-warning",
+      "title": "Dizziness: when should you seek help?",
+      "summary": "Sudden dizziness in an older adult can increase fall risk and may need urgent assessment when other warning signs are present.",
+      "body": "Dizziness or a spinning sensation can occur with postural blood pressure changes, inner-ear conditions, dehydration, or other causes. The immediate priority is preventing a fall.",
+      "checklist": [
+        "Hold onto a stable object and sit or lie down slowly to prevent a fall.",
+        "Keep your head still and breathe slowly. Do not stand up suddenly.",
+        "Drink some water if you can swallow safely and have not been told to restrict fluids.",
+        "Seek emergency help if dizziness occurs with trouble speaking, one-sided numbness or weakness, facial drooping, or inability to walk."
+      ],
+      "cta_label": "Save the dizziness checklist"
+    },
+    {
+      "id": "general-chest-pain-guide",
+      "title": "Chest pain: warning signs that need immediate action",
+      "summary": "Chest pressure or pain can be an emergency. Know when to call for help.",
+      "body": "Chest pain has many causes, but pressure caused by reduced blood flow to the heart can be life-threatening. Do not stay alone and wait for severe symptoms to pass.",
+      "checklist": [
+        "Danger signs include heavy pressure, squeezing, or severe pain behind the breastbone that spreads to the shoulder, left arm, neck, or jaw and lasts more than five minutes.",
+        "Stop activity, sit safely, alert the nearest family member, and call emergency services at 115 in Vietnam.",
+        "Only use medication under the tongue if it was specifically prescribed for you, following the clinician's instructions."
+      ],
+      "cta_label": "View safety guidance"
+    },
+    {
+      "id": "general-shortness-of-breath",
+      "title": "Shortness of breath: a safety checklist",
+      "summary": "Sudden or worsening breathing difficulty needs calm, prompt action and may require emergency care.",
+      "body": "Breathing difficulty can involve the lungs or heart. Sit in a position that makes breathing easier and seek help if symptoms are severe or worsening.",
+      "checklist": [
+        "Loosen tight clothing around the neck and chest.",
+        "Sit upright or lean slightly forward with your arms supported.",
+        "Use pursed-lip breathing: inhale slowly through the nose and exhale gently through pursed lips for about twice as long.",
+        "Check oxygen saturation if you have a pulse oximeter and know how to use it.",
+        "Call emergency services if breathing worsens, does not improve with rest, or occurs with blue lips, chest pain, fainting, or confusion."
+      ],
+      "cta_label": "Record an SpO2 reading"
+    },
+    {
+      "id": "general-chronic-fatigue",
+      "title": "Ongoing fatigue: what should you track?",
+      "summary": "Fatigue that continues for many days deserves a broader review of sleep, nutrition, hydration, and health readings.",
+      "body": "Fatigue lasting more than two weeks and not improving with rest can have many causes, including poor sleep, anemia, thyroid problems, diabetes, dehydration, or ongoing stress. Track patterns and arrange a clinical review rather than trying to diagnose the cause yourself.",
+      "checklist": [
+        "Record sleep duration and quality, including frequent waking or loud snoring.",
+        "Track daily fluid intake, because dehydration can contribute to fatigue.",
+        "Note missed meals or major changes in appetite and nutrition.",
+        "Record blood pressure as directed and note repeated readings below 90/60 mmHg."
+      ],
+      "cta_label": "Record sleep and water"
+    },
+    {
+      "id": "general-poor-sleep",
+      "title": "How can poor sleep affect your health?",
+      "summary": "Sleep supports energy, blood pressure regulation, and blood glucose management.",
+      "body": "Difficulty falling asleep or interrupted sleep can affect stress hormones, blood pressure, mood, and insulin sensitivity. A consistent routine may help, while persistent sleep problems should be discussed with a healthcare professional.",
+      "checklist": [
+        "Keep a consistent bedtime and waking time, including on weekends.",
+        "Avoid tea or coffee after 2 p.m. and reduce phone or television use during the hour before bed.",
+        "Keep the bedroom dark, cool, and quiet, and use a calming routine before sleep."
+      ],
+      "cta_label": "Record your sleep"
+    },
+    {
+      "id": "general-dehydration-fatigue",
+      "title": "Can drinking too little make you feel tired?",
+      "summary": "Dehydration can reduce circulating blood volume and contribute to fatigue, headache, constipation, and dizziness.",
+      "body": "Older adults may feel less thirsty and can become dehydrated without noticing. Drink regularly instead of waiting for strong thirst, unless a clinician has advised you to restrict fluids.",
+      "checklist": [
+        "Aim for the fluid amount recommended for you. Many adults use 1.5 to 2 liters a day, but individual needs differ.",
+        "Start the morning with a glass of water if you have not been told to limit fluids.",
+        "Pale yellow urine often suggests better hydration, while dark urine can be a sign that more fluid is needed."
+      ],
+      "cta_label": "Check in water intake"
+    },
+    {
+      "id": "hypertension-when-to-remeasure",
+      "title": "When should you measure blood pressure again?",
+      "summary": "Consistent timing and correct technique help reduce misleading blood pressure readings.",
+      "body": "Repeatedly checking while anxious can raise the reading. Use a consistent schedule and correct technique, and follow the monitoring plan given by your healthcare professional.",
+      "checklist": [
+        "A common schedule is twice daily: in the morning before breakfast and medication, and in the evening before bed, if advised by your clinician.",
+        "Sit quietly for at least five minutes with your back supported, feet flat, and arm supported at heart level.",
+        "Wait at least 30 minutes after exercise, climbing stairs, a large meal, caffeine, smoking, or strong emotion before measuring."
+      ],
+      "cta_label": "Record blood pressure"
+    },
+    {
+      "id": "general-need-family-help",
+      "title": "3 signs that you need family support now",
+      "summary": "Ask a family member for help when physical symptoms make it unsafe to manage alone.",
+      "body": "Older adults may try to manage symptoms alone to avoid interrupting family. Asking early for support can reduce the risk of falls and delayed care.",
+      "checklist": [
+        "A blood pressure reading rises above 160 mmHg or pulse is above 100 beats per minute with marked discomfort or restlessness.",
+        "You feel dizzy or unsteady when standing and may fall.",
+        "Sudden severe joint or muscle pain makes walking or personal care difficult."
+      ],
+      "cta_label": "Contact family"
+    },
+    {
+      "id": "onboarding-profile-summary",
+      "title": "What does your first health profile tell you?",
+      "summary": "Your profile helps Asinu tailor guidance to your health history and daily habits.",
+      "body": "During the first seven days, review your health profile and make sure the information is accurate. A more complete profile helps Asinu present more relevant tracking guidance.",
+      "checklist": ["Review your health profile", "Check that your conditions are accurate", "Ask a family member for help if needed"],
+      "cta_label": "View profile"
+    },
+    {
+      "id": "onboarding-three-daily-signals",
+      "title": "3 signals worth tracking each day",
+      "summary": "A few brief daily observations can make changes easier to notice.",
+      "body": "During the first week, focus on energy after meals, recurring pain or numbness, and whether scheduled medication was taken.",
+      "checklist": ["Record how you feel after meals", "Notice recurring symptoms", "Record scheduled medication"],
+      "cta_label": "Open check-in"
+    },
+    {
+      "id": "reactivate-high-value-article",
+      "title": "Return with one short, useful guide",
+      "summary": "If you are busy, a two-minute guide can help you restart your health tracking routine.",
+      "body": "You do not need to catch up on everything at once. Read one short guide, review a recent symptom, and choose one small action for today.",
+      "checklist": ["Read the short guide", "Review a recent symptom", "Choose one small next step"],
+      "cta_label": "Start again"
+    },
+    {
+      "id": "winback-welcome-back-1",
+      "title": "Welcome back to Asinu",
+      "summary": "A few simple suggestions can help you return to regular health tracking.",
+      "body": "It is okay if you have not opened the app for a while. Start with this update and consider how your body has felt recently.",
+      "checklist": ["Read the update", "Recall any notable symptoms", "Check in when ready"],
+      "cta_label": "Return to check-in"
+    },
+    {
+      "id": "winback-welcome-back-2",
+      "title": "Where should you begin when returning?",
+      "summary": "Start with one recent health signal instead of trying to update everything.",
+      "body": "If you recently felt tired after meals, had a headache or dizziness, or missed medication, begin with that item. One useful update is better than leaving the record empty.",
+      "checklist": ["Choose one recent signal", "Open check-in", "Save this guide if useful"],
+      "cta_label": "Choose one action"
+    },
+    {
+      "id": "winback-welcome-back-3",
+      "title": "One brief update still has value",
+      "summary": "A single update today can help make tomorrow's health history clearer.",
+      "body": "The record does not need to be perfect. Add one reading, one symptom, or one short check-in today.",
+      "checklist": ["Record one reading", "Record one symptom", "Complete a short check-in"],
+      "cta_label": "Update now"
+    }
+  ]
+}

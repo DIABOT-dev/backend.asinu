@@ -1,6 +1,7 @@
 'use strict';
 
 const { isHealthFeedEnabled } = require('./config');
+const { t, getLang } = require('../../i18n');
 const repo = require('./repository');
 const service = require('./service');
 
@@ -29,7 +30,12 @@ async function dismissFeed(pool, req, res) {
 async function getContent(pool, req, res) {
   if (!isHealthFeedEnabled()) return disabledResponse(res);
   const content = await repo.getContent(pool, req.user.id, req.params.id);
-  if (!content) return res.status(404).json({ ok: false, error: 'Content not found' });
+  if (!content) {
+    return res.status(404).json({
+      ok: false,
+      error: t('health_feed.content_not_found', getLang(req)),
+    });
+  }
   return res.json({ ok: true, enabled: true, content });
 }
 
@@ -55,7 +61,10 @@ async function createEvent(pool, req, res) {
   if (!isHealthFeedEnabled()) return disabledResponse(res);
   const { content_id, feed_item_id, event_type, metadata } = req.body || {};
   if (!content_id || !event_type) {
-    return res.status(400).json({ ok: false, error: 'content_id and event_type are required' });
+    return res.status(400).json({
+      ok: false,
+      error: t('health_feed.event_fields_required', getLang(req)),
+    });
   }
   await repo.trackEvent(pool, req.user.id, { content_id, feed_item_id, event_type, metadata });
   return res.json({ ok: true, enabled: true });

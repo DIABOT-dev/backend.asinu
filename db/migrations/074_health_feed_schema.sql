@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS health_feed_content_items (
   status TEXT NOT NULL DEFAULT 'active',
   action_label TEXT,
   action_target TEXT,
+  translations JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

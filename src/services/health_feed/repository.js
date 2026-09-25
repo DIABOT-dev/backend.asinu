@@ -5,14 +5,34 @@ const {
   HEALTH_FEED_PUSH_COOLDOWN_HOURS,
   HEALTH_FEED_TEMPLATE_COOLDOWN_HOURS,
 } = require('./config');
+const { t } = require('../../i18n');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
+
+function localizeContent(content, language = 'vi') {
+  const lang = language === 'en' ? 'en' : 'vi';
+  if (lang === 'vi') return { ...content };
+
+  const translation = content?.translations?.[lang];
+  if (!translation || typeof translation !== 'object') return { ...content };
+
+  return {
+    ...content,
+    title: translation.title || content.title,
+    summary: translation.summary || content.summary,
+    body: translation.body || content.body,
+    checklist: Array.isArray(translation.checklist)
+      ? translation.checklist
+      : content.checklist,
+    action_label: translation.action_label || content.action_label,
+  };
+}
 
 async function getContentCatalog(pool) {
   const { rows } = await pool.query(
     `SELECT id, title, summary, body, checklist, content_type, target_conditions,
             target_flow, target_cluster_key, topic_category, flow_step,
             severity_level, engagement_score, shareable, saveable, status,
-            action_label, action_target
+            action_label, action_target, translations
        FROM health_feed_content_items
       WHERE status = 'active'`
   );
@@ -277,7 +297,7 @@ async function insertFeedItems(pool, user, selectedItems) {
         content.title,
         message,
         priority,
-        content.action_label || 'Đọc chi tiết',
+        content.action_label || t('health_feed.read_details', user.language_preference),
         content.action_target || `/feed/${content.id}`,
       ]
     );
@@ -290,14 +310,26 @@ async function insertFeedItems(pool, user, selectedItems) {
 
 async function listFeed(pool, userId) {
   const { rows } = await pool.query(
-    `SELECT id, user_id, content_id, patient_id, feed_type, title, message, priority,
-            action_label, action_target, created_at, read_at, dismissed_at, expires_at,
-            CASE WHEN priority >= 100 THEN 'warning' ELSE 'info' END AS severity_level
-       FROM health_feed_feed_items
-      WHERE user_id = $1
-        AND dismissed_at IS NULL
-        AND expires_at > NOW()
-      ORDER BY priority DESC, created_at DESC
+    `SELECT f.id, f.user_id, f.content_id, f.patient_id, f.feed_type,
+            CASE WHEN COALESCE(u.language_preference, 'vi') = 'en'
+              THEN COALESCE(c.translations->'en'->>'title', f.title)
+              ELSE f.title END AS title,
+            CASE WHEN COALESCE(u.language_preference, 'vi') = 'en'
+              THEN COALESCE(c.translations->'en'->>'summary', c.translations->'en'->>'body', f.message)
+              ELSE f.message END AS message,
+            f.priority,
+            CASE WHEN COALESCE(u.language_preference, 'vi') = 'en'
+              THEN COALESCE(c.translations->'en'->>'action_label', f.action_label)
+              ELSE f.action_label END AS action_label,
+            f.action_target, f.created_at, f.read_at, f.dismissed_at, f.expires_at,
+            CASE WHEN f.priority >= 100 THEN 'warning' ELSE 'info' END AS severity_level
+       FROM health_feed_feed_items f
+       JOIN users u ON u.id = f.user_id
+       JOIN health_feed_content_items c ON c.id = f.content_id
+      WHERE f.user_id = $1
+        AND f.dismissed_at IS NULL
+        AND f.expires_at > NOW()
+      ORDER BY f.priority DESC, f.created_at DESC
       LIMIT 5`,
     [userId]
   );
@@ -306,13 +338,30 @@ async function listFeed(pool, userId) {
 
 async function getContent(pool, userId, contentId) {
   const { rows } = await pool.query(
-    `SELECT c.id, c.title, c.summary, c.body, c.checklist, c.content_type, c.severity_level,
-            c.shareable, c.saveable, c.action_label AS cta_label, c.action_target AS cta_target,
+    `SELECT c.id,
+            CASE WHEN COALESCE(u.language_preference, 'vi') = 'en'
+              THEN COALESCE(c.translations->'en'->>'title', c.title)
+              ELSE c.title END AS title,
+            CASE WHEN COALESCE(u.language_preference, 'vi') = 'en'
+              THEN COALESCE(c.translations->'en'->>'summary', c.summary)
+              ELSE c.summary END AS summary,
+            CASE WHEN COALESCE(u.language_preference, 'vi') = 'en'
+              THEN COALESCE(c.translations->'en'->>'body', c.body)
+              ELSE c.body END AS body,
+            CASE WHEN COALESCE(u.language_preference, 'vi') = 'en'
+              THEN COALESCE(c.translations->'en'->'checklist', c.checklist)
+              ELSE c.checklist END AS checklist,
+            c.content_type, c.severity_level, c.shareable, c.saveable,
+            CASE WHEN COALESCE(u.language_preference, 'vi') = 'en'
+              THEN COALESCE(c.translations->'en'->>'action_label', c.action_label)
+              ELSE c.action_label END AS cta_label,
+            c.action_target AS cta_target,
             EXISTS(
               SELECT 1 FROM health_feed_saved_content sc
                WHERE sc.user_id = $1 AND sc.content_id = c.id
             ) AS is_saved
        FROM health_feed_content_items c
+       JOIN users u ON u.id = $1
       WHERE c.id = $2
         AND c.status = 'active'
       LIMIT 1`,
@@ -384,9 +433,17 @@ async function unsaveContent(pool, userId, contentId) {
 
 async function listSaved(pool, userId) {
   const { rows } = await pool.query(
-    `SELECT c.id, c.title, c.summary, c.content_type, sc.saved_at
+    `SELECT c.id,
+            CASE WHEN COALESCE(u.language_preference, 'vi') = 'en'
+              THEN COALESCE(c.translations->'en'->>'title', c.title)
+              ELSE c.title END AS title,
+            CASE WHEN COALESCE(u.language_preference, 'vi') = 'en'
+              THEN COALESCE(c.translations->'en'->>'summary', c.summary)
+              ELSE c.summary END AS summary,
+            c.content_type, sc.saved_at
        FROM health_feed_saved_content sc
        JOIN health_feed_content_items c ON c.id = sc.content_id
+       JOIN users u ON u.id = sc.user_id
       WHERE sc.user_id = $1
       ORDER BY sc.saved_at DESC`,
     [userId]
@@ -452,9 +509,14 @@ async function getPendingNotificationJobs(pool, limit = 50) {
   const { rows } = await pool.query(
     `SELECT j.id, j.user_id, j.feed_item_id, j.template_id, j.payload, j.scheduled_for,
             u.push_token, COALESCE(u.language_preference, 'vi') AS language_preference,
-            ub.timezone, COALESCE(unp.reminders_enabled, false) AS reminders_enabled
+            ub.timezone, COALESCE(unp.reminders_enabled, false) AS reminders_enabled,
+            c.title AS content_title, c.summary AS content_summary, c.body AS content_body,
+            c.action_label AS content_action_label, c.action_target AS content_action_target,
+            c.translations AS content_translations
        FROM health_feed_notification_jobs j
        JOIN users u ON u.id = j.user_id
+       JOIN health_feed_feed_items f ON f.id = j.feed_item_id
+       JOIN health_feed_content_items c ON c.id = f.content_id
        LEFT JOIN user_baselines ub ON ub.user_id = u.id
        LEFT JOIN user_notification_preferences unp ON unp.user_id = u.id
       WHERE j.status = 'pending'
@@ -490,6 +552,7 @@ module.exports = {
   getPendingNotificationJobs,
   getUserContexts,
   insertFeedItems,
+  localizeContent,
   listFeed,
   listSaved,
   markNotificationJobDispatched,

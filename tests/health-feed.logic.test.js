@@ -8,8 +8,44 @@ const {
   hasAlert,
   selectContentForPlan,
 } = require('../src/services/health_feed/logic');
+const { localizeContent } = require('../src/services/health_feed/repository');
 
 describe('health feed logic', () => {
+  test('returns localized health feed copy and preserves Vietnamese fallback', () => {
+    const content = {
+      title: 'Tiêu đề tiếng Việt',
+      summary: 'Tóm tắt tiếng Việt',
+      body: 'Nội dung tiếng Việt',
+      checklist: ['Bước tiếng Việt'],
+      action_label: 'Đọc chi tiết',
+      translations: {
+        en: {
+          title: 'English title',
+          summary: 'English summary',
+          body: 'English body',
+          checklist: ['English step'],
+          action_label: 'Read details',
+        },
+      },
+    };
+
+    expect(localizeContent(content, 'en')).toMatchObject({
+      title: 'English title',
+      summary: 'English summary',
+      body: 'English body',
+      checklist: ['English step'],
+      action_label: 'Read details',
+    });
+    expect(localizeContent(content, 'vi')).toMatchObject({
+      title: 'Tiêu đề tiếng Việt',
+      summary: 'Tóm tắt tiếng Việt',
+    });
+    expect(localizeContent({ ...content, translations: {} }, 'en')).toMatchObject({
+      title: 'Tiêu đề tiếng Việt',
+      summary: 'Tóm tắt tiếng Việt',
+    });
+  });
+
   test('defaults timezone to Vietnam when user timezone missing', () => {
     expect(resolveTimezone()).toBe(DEFAULT_TIMEZONE);
     expect(resolveTimezone('')).toBe(DEFAULT_TIMEZONE);

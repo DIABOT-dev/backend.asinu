@@ -6,6 +6,18 @@ const path = require('path');
 const { FLOWS } = require('./logic');
 
 const seedPath = path.join(__dirname, 'seedData.json');
+const englishSeedPath = path.join(__dirname, 'seedData.en.json');
+
+function normalizeTranslation(entry) {
+  if (!entry) return null;
+  return {
+    title: String(entry.title || ''),
+    summary: String(entry.summary || ''),
+    body: String(entry.body || ''),
+    checklist: Array.isArray(entry.checklist) ? entry.checklist.map(String) : [],
+    action_label: String(entry.cta_label || entry.action_label || ''),
+  };
+}
 
 function flowFromEntry(entry) {
   const roles = Array.isArray(entry.target_roles) ? entry.target_roles : [];
@@ -30,7 +42,8 @@ function normalizeConditions(conditions) {
   return conditions.map((value) => String(value));
 }
 
-function normalizeEntry(entry, idx) {
+function normalizeEntry(entry, idx, englishById) {
+  const english = normalizeTranslation(englishById.get(String(entry.id)));
   return {
     id: String(entry.id),
     title: entry.title,
@@ -39,17 +52,21 @@ function normalizeEntry(entry, idx) {
     checklist: Array.isArray(entry.checklist) ? entry.checklist : [],
     content_type: entry.content_type || 'article',
     target_conditions: normalizeConditions(entry.target_conditions),
-    target_flow: flowFromEntry(entry),
-    target_cluster_key: entry.target_tags?.[0] || null,
-    topic_category: topicFromEntry(entry),
-    flow_step: flowFromEntry(entry) === FLOWS.ONBOARDING ? (idx % 5) + 1 : null,
+    target_flow: entry.target_flow || flowFromEntry(entry),
+    target_cluster_key: entry.target_cluster_key || entry.target_tags?.[0] || null,
+    topic_category: entry.topic_category || topicFromEntry(entry),
+    flow_step:
+      entry.flow_step ??
+      ((entry.target_flow || flowFromEntry(entry)) === FLOWS.ONBOARDING ? (idx % 5) + 1 : null),
     severity_level: entry.severity_level || 'low',
-    engagement_score: entry.content_type === 'warning' ? 95 : 60,
+    engagement_score:
+      entry.engagement_score ?? (entry.content_type === 'warning' ? 95 : 60),
     shareable: entry.shareable !== false,
     saveable: entry.saveable !== false,
-    status: 'active',
-    action_label: entry.cta_label || 'Đọc chi tiết',
-    action_target: entry.cta_target || `/feed/${entry.id}`,
+    status: entry.status || 'active',
+    action_label: entry.cta_label || entry.action_label || 'Đọc chi tiết',
+    action_target: entry.cta_target || entry.action_target || `/feed/${entry.id}`,
+    translations: english ? { en: english } : {},
   };
 }
 
@@ -197,9 +214,9 @@ async function upsertContent(client, entry) {
        id, title, summary, body, checklist, content_type, target_conditions,
        target_flow, target_cluster_key, topic_category, flow_step,
        severity_level, engagement_score, shareable, saveable, status,
-       action_label, action_target, updated_at
+       action_label, action_target, translations, updated_at
      )
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW())
      ON CONFLICT (id) DO UPDATE SET
        title = EXCLUDED.title,
        summary = EXCLUDED.summary,
@@ -218,6 +235,7 @@ async function upsertContent(client, entry) {
        status = EXCLUDED.status,
        action_label = EXCLUDED.action_label,
        action_target = EXCLUDED.action_target,
+       translations = EXCLUDED.translations,
        updated_at = NOW()`,
     [
       entry.id,
@@ -238,6 +256,7 @@ async function upsertContent(client, entry) {
       entry.status,
       entry.action_label,
       entry.action_target,
+      JSON.stringify(entry.translations || {}),
     ]
   );
 }
@@ -247,20 +266,20 @@ async function seedNotificationTemplates(client) {
     [
       'health_feed_alert',
       FLOWS.ALERT,
-      'Asinu thấy có điều cần bác lưu ý',
-      'Có một cảnh báo nhẹ nhàng mới trong bản tin sức khỏe của bác',
+      'health_feed.push_fallback_title',
+      'health_feed.push_fallback_body',
     ],
     [
       'health_feed_family',
       FLOWS.FAMILY,
-      'Asinu có gợi ý chăm sóc người thân',
-      'Có một bản tin mới để bác hỏi thăm người thân cụ thể hơn',
+      'health_feed.push_fallback_title',
+      'health_feed.push_fallback_body',
     ],
     [
       'health_feed_onboarding',
       FLOWS.ONBOARDING,
-      'Asinu chuẩn bị sẵn một hướng dẫn mới',
-      'Có một bản tin sức khỏe mới phù hợp với giai đoạn hiện tại của bác',
+      'health_feed.push_fallback_title',
+      'health_feed.push_fallback_body',
     ],
   ];
 
@@ -280,8 +299,16 @@ async function seedNotificationTemplates(client) {
 
 async function seedHealthFeed(client) {
   const raw = JSON.parse(fs.readFileSync(seedPath, 'utf8'));
-  const items = (raw.content_items || []).map(normalizeEntry);
-  const extras = generatedEntries();
+  const englishRaw = JSON.parse(fs.readFileSync(englishSeedPath, 'utf8'));
+  const englishById = new Map(
+    (englishRaw.content_items || []).map((entry) => [String(entry.id), entry])
+  );
+  const items = (raw.content_items || []).map((entry, idx) =>
+    normalizeEntry(entry, idx, englishById)
+  );
+  const extras = generatedEntries().map((entry, idx) =>
+    normalizeEntry(entry, items.length + idx, englishById)
+  );
   const finalItems = [...items, ...extras];
 
   for (const item of finalItems) {
@@ -291,4 +318,4 @@ async function seedHealthFeed(client) {
   return { contentCount: finalItems.length, templateCount: 3 };
 }
 
-module.exports = { seedHealthFeed };
+module.exports = { generatedEntries, seedHealthFeed };

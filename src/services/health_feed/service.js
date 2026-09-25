@@ -1,6 +1,7 @@
 'use strict';
 
 const logger = require('../../lib/logger');
+const { t } = require('../../i18n');
 const { sendPushNotification } = require('../notification/push.notification.service');
 const { saveInAppNotification } = require('../notification/notification.service');
 const {
@@ -20,6 +21,31 @@ function getTemplateIdForFlow(flow) {
   return 'health_feed_onboarding';
 }
 
+function getNotificationCopy(job, payload) {
+  const lang = job.language_preference === 'en' ? 'en' : 'vi';
+  const content = repo.localizeContent(
+    {
+      title: job.content_title,
+      summary: job.content_summary,
+      body: job.content_body,
+      action_label: job.content_action_label,
+      action_target: job.content_action_target,
+      translations: job.content_translations,
+    },
+    lang
+  );
+
+  return {
+    title: content.title || payload.title || t('health_feed.push_fallback_title', lang),
+    body:
+      content.summary ||
+      content.body ||
+      payload.body ||
+      t('health_feed.push_fallback_body', lang),
+    actionTarget: content.action_target || payload.action_target || '/feed',
+  };
+}
+
 async function buildFeedForUsers(pool, userIds) {
   if (!isHealthFeedEnabled()) {
     return { enabled: false, processed: 0, inserted: 0, queued: 0 };
@@ -34,6 +60,9 @@ async function buildFeedForUsers(pool, userIds) {
   let queued = 0;
 
   for (const user of contexts) {
+    const localizedCatalog = catalog.map((content) =>
+      repo.localizeContent(content, user.language_preference)
+    );
     const nowParts = getTimeParts(resolveTimezone(user.timezone));
     const historyKeys = new Set(
       (user.feed_history || []).map((row) => `${row.content_id}:${row.patient_id || 'self'}`)
@@ -53,7 +82,7 @@ async function buildFeedForUsers(pool, userIds) {
     };
 
     const selectedItems = selectContentForPlan({
-      catalog,
+      catalog: localizedCatalog,
       context,
       historyKeys,
       dismissedKeys,
@@ -125,6 +154,7 @@ async function dispatchPendingNotifications(pool) {
 
   for (const job of jobs) {
     const payload = job.payload || {};
+    const copy = getNotificationCopy(job, payload);
 
     const timezone = resolveTimezone(job.timezone || DEFAULT_TIMEZONE);
     if (!job.reminders_enabled) {
@@ -152,14 +182,14 @@ async function dispatchPendingNotifications(pool) {
 
     const result = await sendPushNotification(
       [job.push_token],
-      payload.title || 'Asinu nhắc bạn',
-      payload.body || 'Có một bản tin sức khỏe mới dành cho bạn',
+      copy.title,
+      copy.body,
       {
         type: 'health_feed',
         screen: 'feed',
         contentId: String(payload.content_id || ''),
         feedItemId: String(payload.feed_item_id || ''),
-        actionTarget: payload.action_target || '/feed',
+        actionTarget: copy.actionTarget,
       }
     );
 
@@ -198,18 +228,25 @@ async function saveHealthFeedInAppNotification(pool, job, payload) {
 
   const priority =
     payload.flow === FLOWS.ALERT ? 'high' : payload.flow === FLOWS.FAMILY ? 'medium' : 'low';
-  const title = payload.title || 'Asinu nhắc bạn';
-  const message = payload.body || 'Có một bản tin sức khỏe mới dành cho bạn';
+  const copy = getNotificationCopy(job, payload);
   const data = {
     type: 'health_feed',
     screen: 'feed',
     contentId,
     feedItemId,
-    actionTarget: payload.action_target || '/feed',
+    actionTarget: copy.actionTarget,
     flow: payload.flow || null,
   };
 
-  await saveInAppNotification(pool, job.user_id, 'health_feed', title, message, data, priority);
+  await saveInAppNotification(
+    pool,
+    job.user_id,
+    'health_feed',
+    copy.title,
+    copy.body,
+    data,
+    priority
+  );
   return null;
 }
 

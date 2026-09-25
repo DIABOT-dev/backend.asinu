@@ -43,7 +43,7 @@ async function run() {
       const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
       await client.query('BEGIN');
       await client.query(sql);
-      if (file === '075_health_feed_seed.sql') {
+      if (file === '075_health_feed_seed.sql' || file === '089_health_feed_i18n.sql') {
         await seedHealthFeed(client);
       }
       await client.query('INSERT INTO schema_migrations (version) VALUES ($1)', [file]);
