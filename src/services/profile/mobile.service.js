@@ -158,15 +158,17 @@ async function insertDetailLog(client, logType, logId, data) {
  */
 async function checkAndAlertCareCircle(pool, userId, logType, data) {
   let severity = null;
-  let title = '';
-  let body = '';
+  let titleKey = null;
+  let bodyKey = null;
+  let messageParams = {};
 
   if (logType === 'glucose' && data.value) {
     const v = parseFloat(data.value);
     if (v > 250 || v < 70) {
       severity = 'critical';
-      title = v > 250 ? 'Đường huyết rất cao' : 'Đường huyết rất thấp';
-      body = `Chỉ số đường huyết: ${v} mg/dL`;
+      titleKey = v > 250 ? 'push.health_alert_glucose_high_title' : 'push.health_alert_glucose_low_title';
+      bodyKey = 'push.health_alert_glucose_body';
+      messageParams = { value: v };
     }
   }
 
@@ -175,12 +177,13 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
     const dia = parseFloat(data.diastolic);
     if (sys >= 180 || dia >= 110) {
       severity = 'critical';
-      title = 'Huyết áp nguy hiểm';
-      body = `Huyết áp: ${sys}/${dia} mmHg`;
+      titleKey = 'push.health_alert_bp_title';
+      bodyKey = 'push.health_alert_bp_body';
+      messageParams = { systolic: sys, diastolic: dia };
     }
   }
 
-  if (!severity) return;
+  if (!severity || !titleKey || !bodyKey) return;
 
   // Skip if health_alert was already sent for this user in the last 10 minutes
   const { rows: recentAlert } = await pool.query(
@@ -193,18 +196,27 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
   // Get user name
   const {
     rows: [user],
-  } = await pool.query('SELECT full_name, display_name FROM users WHERE id = $1', [userId]);
-  const name = user?.full_name || user?.display_name || `User ${userId}`;
+  } = await pool.query(
+    `SELECT full_name, display_name, COALESCE(language_preference, 'vi') AS lang
+       FROM users WHERE id = $1`,
+    [userId]
+  );
+  const userLang = user?.lang || 'vi';
+  const name = user?.full_name || user?.display_name || t('notification.reengagement.family_fallback', userLang);
 
   // Notify the user themselves
-  await sendAndSave(pool, { id: userId, push_token: null }, 'health_alert', title, body, {
-    alertType: logType,
-    severity,
-  });
+  await sendAndSave(
+    pool,
+    { id: userId, push_token: null },
+    'health_alert',
+    t(titleKey, userLang),
+    t(bodyKey, userLang, messageParams),
+    { alertType: logType, severity }
+  );
 
   // Find care circle caregivers with alert permission
   const { rows: caregivers } = await pool.query(
-    `SELECT u.id, u.push_token
+    `SELECT u.id, u.push_token, COALESCE(u.language_preference, 'vi') AS lang
      FROM user_connections uc
      JOIN users u ON (
        CASE WHEN uc.requester_id = $1 THEN uc.addressee_id ELSE uc.requester_id END = u.id
@@ -217,7 +229,12 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
   );
 
   for (const cg of caregivers) {
-    await sendAndSave(pool, cg, 'health_alert', `${name}: ${title}`, body, {
+    const alertTitle = t(titleKey, cg.lang);
+    const caregiverName = user?.full_name || user?.display_name || t('notification.reengagement.family_fallback', cg.lang);
+    await sendAndSave(pool, cg, 'health_alert', t('push.health_alert_family_title', cg.lang, {
+      name: caregiverName || name,
+      alert: alertTitle,
+    }), t(bodyKey, cg.lang, messageParams), {
       alertType: logType,
       severity,
       patientId: userId,

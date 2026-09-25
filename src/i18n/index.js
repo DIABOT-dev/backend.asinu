@@ -27,7 +27,7 @@ function t(key, lang = 'vi', params = {}) {
 
   if (params && typeof params === 'object') {
     for (const [k, v] of Object.entries(params)) {
-      text = text.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v));
+      text = text.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), () => String(v));
     }
   }
 

@@ -438,9 +438,8 @@ async function notifyGiftConfirmed(pool, payerId, recipientId, expiresAt) {
       pool,
       { id: payerId, push_token: u.push_token },
       'subscription_gift_confirmed',
-      t('push.gift_confirmed_title', lang) || 'Đã tặng Premium thành công',
-      t('push.gift_confirmed_body', lang, { name: u.recipient_name || '', date: dateStr }) ||
-        `Bạn vừa tặng Premium cho ${u.recipient_name || 'người thân'} đến ${dateStr}.`,
+      t('push.gift_confirmed_title', lang),
+      t('push.gift_confirmed_body', lang, { name: u.recipient_name || '', date: dateStr }),
       { recipientId: String(recipientId), expiresAt: new Date(expiresAt).toISOString() }
     );
   } catch {}

@@ -881,11 +881,8 @@ async function reactToTriageResult(pool, userId, checkinId, result) {
         [userId]
       );
       const lang = langRows[0]?.lang || 'vi';
-      const title = lang === 'en' ? 'Doctor visit recommended' : 'Khuyến nghị khám bác sĩ';
-      const body =
-        lang === 'en'
-          ? 'Based on your symptoms, you should see a doctor as soon as possible.'
-          : 'Bạn nên đi khám bác sĩ dựa trên các triệu chứng bạn mô tả.';
+      const title = t('checkin.specialist_visit_title', lang);
+      const body = t('checkin.specialist_visit_body', lang);
 
       await dispatchNotification(pool, {
         userId,

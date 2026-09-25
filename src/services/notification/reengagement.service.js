@@ -22,6 +22,7 @@
 
 const { getHonorifics } = require('../../lib/honorifics');
 const { getUsersBySegment } = require('../profile/lifecycle.service');
+const { t } = require('../../i18n');
 
 // ─── Re-engagement Templates ────────────────────────────────────────────────
 
@@ -30,64 +31,55 @@ const REENGAGEMENT_TEMPLATES = {
   d2_gentle_with_symptom: {
     id: 'reengage_d2_gentle_symptom',
     level: 'gentle',
-    vi: '{CallName} ơi, {symptom} lần trước còn không? Cập nhật hôm nay để Asinu theo dõi tiếp nhé.',
-    en: 'Your {symptom} was recorded recently. If it is still present, update your health record today.',
+    key: 'notification.reengagement.d2_gentle_symptom',
   },
   d2_gentle_no_symptom: {
     id: 'reengage_d2_gentle',
     level: 'gentle',
-    vi: '{CallName} ơi, hôm nay chưa có cập nhật. Mở app ghi lại để Asinu theo dõi tiếp nhé.',
-    en: 'There is no health update today. Open the app to record your current status.',
+    key: 'notification.reengagement.d2_gentle',
   },
 
   // D3-4: concerned, mention symptom + previous severity
   d4_concerned_with_symptom: {
     id: 'reengage_d4_concerned_symptom',
     level: 'concerned',
-    vi: '{CallName} ơi, đã vài ngày chưa cập nhật. Nếu {symptom} còn, ghi lại để Asinu theo dõi tiếp; nếu nặng hơn, nên đi khám.',
-    en: 'There has been no update for a few days. If your {symptom} persists, monitor it and seek care if it worsens.',
+    key: 'notification.reengagement.d4_concerned_symptom',
   },
   d4_concerned_was_severe: {
     id: 'reengage_d4_concerned_severe',
     level: 'concerned',
-    vi: '{CallName} ơi, lần trước {honorific} ghi nhận triệu chứng nặng. Nếu chưa đỡ, nên liên hệ cơ sở y tế.',
-    en: 'You recorded severe symptoms recently. If they have not improved, contact a healthcare provider.',
+    key: 'notification.reengagement.d4_concerned_severe',
   },
   d4_concerned_default: {
     id: 'reengage_d4_concerned',
     level: 'concerned',
-    vi: '{CallName} ơi, đã {days} ngày chưa có cập nhật. Ghi lại khi tiện để Asinu theo dõi tiếp nhé.',
-    en: 'There has been no health update for {days} days. Record your current status when you can.',
+    key: 'notification.reengagement.d4_concerned',
   },
 
   // D5-7: worried, suggest family
   d7_worried_with_symptom: {
     id: 'reengage_d7_worried_symptom',
     level: 'worried',
-    vi: '{CallName} ơi, đã {days} ngày từ lần cập nhật gần nhất. Nếu {symptom} còn kéo dài, nên đi khám nhé.',
-    en: 'It has been {days} days since your last update. If your {symptom} persists, consider seeing a doctor.',
+    key: 'notification.reengagement.d7_worried_symptom',
   },
   d7_worried_default: {
     id: 'reengage_d7_worried',
     level: 'worried',
-    vi: '{CallName} ơi, đã {days} ngày chưa có cập nhật. Mở app ghi lại hôm nay để Asinu theo dõi tiếp nhé.',
-    en: "There has been no update for {days} days. Open the app to record today's status.",
+    key: 'notification.reengagement.d7_worried',
   },
 
   // D8+: urgent, churned
   d8_urgent: {
     id: 'reengage_d8_urgent',
     level: 'urgent',
-    vi: '{CallName} ơi, đã {days} ngày chưa có cập nhật. Nếu đang không ổn, hãy liên hệ người thân hoặc cơ sở y tế.',
-    en: 'There has been no health update for {days} days. If you feel unwell, contact a family member or healthcare provider.',
+    key: 'notification.reengagement.d8_urgent',
   },
 
   // Care-circle alert (gửi cho gia đình)
   care_circle_alert: {
     id: 'reengage_care_circle',
     level: 'family',
-    vi: '{patientName} đã {days} ngày chưa cập nhật sức khỏe. Vui lòng liên hệ để kiểm tra.',
-    en: '{patientName} has not shared a health update for {days} days. Please check in with them.',
+    key: 'notification.reengagement.care_circle_alert',
   },
 };
 
@@ -172,18 +164,14 @@ function renderReengagementMessage(template, ctx, user, _escalation) {
   const lang = user.lang || 'vi';
   const h = getHonorifics(user);
 
-  let text = lang === 'en' ? template.en : template.vi;
-
-  // Honorific replacements
-  text = text.replace(/\{callName\}/g, h.callName);
-  text = text.replace(/\{honorific\}/g, h.honorific);
-  text = text.replace(/\{Honorific\}/g, h.Honorific);
-  text = text.replace(/\{selfRef\}/g, h.selfRef);
-
-  // Context replacements
-  const symptomFallback = lang === 'en' ? 'symptoms' : 'triệu chứng';
-  text = text.replace(/\{symptom\}/g, ctx.topSymptom?.display_name || symptomFallback);
-  text = text.replace(/\{days\}/g, String(ctx.lifecycle.inactive_days || 0));
+  const text = t(template.key, lang, {
+    callName: h.callName,
+    honorific: h.honorific,
+    Honorific: h.Honorific,
+    selfRef: h.selfRef,
+    symptom: ctx.topSymptom?.display_name || t('notification.reengagement.symptom_fallback', lang),
+    days: ctx.lifecycle.inactive_days || 0,
+  });
 
   return { text, templateId: template.id, level: template.level };
 }
@@ -259,18 +247,15 @@ async function sendCareCircleAlert(pool, sendAndSave, patientId, patientName, in
       guardian.patient_side === 'requester'
         ? getPatientRoleForCaregiver(
             guardian.relationship_type,
-            patientName || 'người thân',
+            patientName || t('notification.reengagement.family_fallback', lang),
             lang,
             true
           )
-        : patientName || 'người thân';
+        : patientName || t('notification.reengagement.family_fallback', lang);
 
     const tmpl = REENGAGEMENT_TEMPLATES.care_circle_alert;
-    let text = lang === 'en' ? tmpl.en : tmpl.vi;
-    text = text.replace(/\{patientName\}/g, patientDisplay);
-    text = text.replace(/\{days\}/g, String(inactiveDays));
-
-    const title = lang === 'en' ? 'Health check needed' : 'Cần kiểm tra sức khỏe';
+    const text = t(tmpl.key, lang, { patientName: patientDisplay, days: inactiveDays });
+    const title = t('notification.reengagement.family_title', lang);
 
     const ok = await sendAndSave(pool, guardian, 'caregiver_alert', title, text, {
       type: 'caregiver_alert',
@@ -338,7 +323,7 @@ async function runReengagement(pool, sendAndSave) {
       if (!result || !result.shouldSend) continue;
 
       // Send re-engagement push
-      const title = user.lang === 'en' ? 'Health update' : 'Cập nhật sức khỏe';
+      const title = t('notification.health_update_title', user.lang);
 
       const ok = await sendAndSave(pool, user, 'reengagement', title, result.message.text, {
         type: 'reengagement',

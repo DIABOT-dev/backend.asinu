@@ -19,6 +19,7 @@ const { generateMessage } = require('./notification-intelligence.service');
 const { runReengagement } = require('./reengagement.service');
 const logger = require('../../lib/logger');
 const { canSendNonUrgent } = require('./notification.policy');
+const { t } = require('../../i18n');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
@@ -251,12 +252,6 @@ async function sendAndSave(
 
 // ─── Personalization helpers ──────────────────────────────────────
 
-function _getGreeting(lang, hour) {
-  if (hour < 12) return lang === 'en' ? 'Good morning' : 'Chào buổi sáng';
-  if (hour < 18) return lang === 'en' ? 'Good afternoon' : 'Chào buổi chiều';
-  return lang === 'en' ? 'Good evening' : 'Chào buổi tối';
-}
-
 // ─── User query with name + conditions + last checkin ─────────────
 
 const USER_SELECT = `
@@ -353,37 +348,33 @@ async function runMorningSummary(pool, hour, minute) {
   for (const user of rows) {
     const { honorific, CallName } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
-    const isEn = user.lang === 'en';
+    const lang = user.lang === 'en' ? 'en' : 'vi';
 
     // Build task list based on what user needs to do today
     const tasks = [];
     if (conditions.hasDiabetes && user.no_glucose_today) {
-      const prev = user.last_glucose
-        ? isEn
-          ? ` (last: ${user.last_glucose})`
-          : ` (gần nhất: ${user.last_glucose})`
+      const last = user.last_glucose
+        ? t('notification.task.last_value', lang, { value: user.last_glucose })
         : '';
-      tasks.push(isEn ? `blood glucose${prev}` : `đo đường huyết${prev}`);
+      tasks.push(t('notification.task.glucose', lang, { last }));
     }
     if (conditions.hasHypertension && user.no_bp_today) {
-      const prev = user.last_bp
-        ? isEn
-          ? ` (last: ${user.last_bp})`
-          : ` (gần nhất: ${user.last_bp})`
+      const last = user.last_bp
+        ? t('notification.task.last_value', lang, { value: user.last_bp })
         : '';
-      tasks.push(isEn ? `blood pressure${prev}` : `đo huyết áp${prev}`);
+      tasks.push(t('notification.task.blood_pressure', lang, { last }));
     }
     if (conditions.hasAny && user.no_medication_today) {
-      tasks.push(isEn ? 'take medication' : 'uống thuốc');
+      tasks.push(t('notification.task.medication', lang));
     }
     if (user.no_log_today && tasks.length === 0) {
-      tasks.push(isEn ? 'log your health stats' : 'ghi chỉ số sức khỏe');
+      tasks.push(t('notification.task.health_log', lang));
     }
 
     // Skip if nothing to remind
     if (tasks.length === 0) continue;
 
-    const title = isEn ? '☀️ Morning health update' : '☀️ Cập nhật sức khỏe buổi sáng';
+    const title = t('push.reminder_log_morning_title', lang);
 
     // Personalized body from Intelligence Layer
     let body;
@@ -394,20 +385,22 @@ async function runMorningSummary(pool, hour, minute) {
       body =
         msg.text +
         (tasks.length > 0
-          ? isEn
-            ? ` Still to do: ${tasks.join(', ')}.`
-            : ` Còn thiếu: ${tasks.join(', ')}.`
+          ? t('notification.morning.still_to_do', lang, { tasks: tasks.join(', ') })
           : '');
     } catch {
       // Fallback
       if (user.last_symptom) {
-        body = isEn
-          ? `You recently recorded ${user.last_symptom}. Still to do: ${tasks.join(', ')}.`
-          : `${CallName} ơi, lần trước ${honorific} ghi nhận ${user.last_symptom}. Hôm nay còn thiếu ${tasks.join(', ')}; cập nhật để Asinu theo dõi tiếp nhé.`;
+        body = t('notification.morning.fallback_with_symptom', lang, {
+          CallName,
+          honorific,
+          symptom: user.last_symptom,
+          tasks: tasks.join(', '),
+        });
       } else {
-        body = isEn
-          ? `There is no health data for today yet. Still to do: ${tasks.join(', ')}.`
-          : `${CallName} ơi, hôm nay chưa có dữ liệu sức khỏe. Cập nhật nhanh để Asinu theo dõi tiếp nhé.`;
+        body = t('notification.morning.fallback_no_data', lang, {
+          CallName,
+          tasks: tasks.join(', '),
+        });
       }
     }
 
@@ -445,8 +438,8 @@ async function runAfternoon(pool, hour, minute) {
   for (const user of rows) {
     const { CallName } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
-    const isEn = user.lang === 'en';
-    const title = isEn ? '🌤️ Afternoon health update' : '🌤️ Cập nhật sức khỏe buổi chiều';
+    const lang = user.lang === 'en' ? 'en' : 'vi';
+    const title = t('notification.afternoon.title', lang);
     // Personalized body from Intelligence Layer
     let body;
     try {
@@ -455,17 +448,11 @@ async function runAfternoon(pool, hour, minute) {
     } catch {
       // Fallback
       if (conditions.hasDiabetes) {
-        body = isEn
-          ? `If needed, drink some water and check your blood glucose today.`
-          : `${CallName} ơi, uống nước và đo đường huyết hôm nay nếu chưa đo nhé.`;
+        body = t('notification.afternoon.diabetes', lang, { CallName });
       } else if (conditions.hasHypertension) {
-        body = isEn
-          ? `Take a short break and check your blood pressure if you have not done so today.`
-          : `${CallName} ơi, nghỉ vài phút rồi đo huyết áp nếu hôm nay chưa đo nhé.`;
+        body = t('notification.afternoon.hypertension', lang, { CallName });
       } else {
-        body = isEn
-          ? `Take a few minutes to rest and drink some water before continuing your day.`
-          : `${CallName} ơi, nghỉ một chút và uống nước trước khi tiếp tục ngày nhé.`;
+        body = t('notification.afternoon.default', lang, { CallName });
       }
     }
     const target = conditions.hasDiabetes
@@ -527,19 +514,19 @@ async function runEveningSummary(pool, hour, minute) {
   for (const user of rows) {
     const { honorific, CallName } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
-    const isEn = user.lang === 'en';
+    const lang = user.lang === 'en' ? 'en' : 'vi';
 
     const tasks = [];
     if (conditions.hasAny && user.no_medication_today) {
-      tasks.push(isEn ? 'take evening medication 💊' : 'uống thuốc tối 💊');
+      tasks.push(t('notification.task.evening_medication', lang));
     }
     if (user.no_evening_log) {
-      tasks.push(isEn ? 'log your health stats 📋' : 'ghi chỉ số sức khỏe 📋');
+      tasks.push(t('notification.task.evening_health_log', lang));
     }
 
     if (tasks.length === 0) continue;
 
-    const title = isEn ? '🌙 Evening health update' : '🌙 Cập nhật sức khỏe buổi tối';
+    const title = t('push.reminder_log_evening_title', lang);
 
     // Personalized body from Intelligence Layer
     let body;
@@ -551,13 +538,17 @@ async function runEveningSummary(pool, hour, minute) {
     } catch {
       // Fallback
       if (user.last_symptom) {
-        body = isEn
-          ? `You recently recorded ${user.last_symptom}. Still to do before bed: ${tasks.join(', ')}.`
-          : `${CallName} ơi, lần trước ${honorific} ghi nhận ${user.last_symptom}. Còn thiếu ${tasks.join(', ')}; cập nhật để Asinu theo dõi tiếp nhé.`;
+        body = t('notification.evening.fallback_with_symptom', lang, {
+          CallName,
+          honorific,
+          symptom: user.last_symptom,
+          tasks: tasks.join(', '),
+        });
       } else {
-        body = isEn
-          ? `Still to do before bed: ${tasks.join(', ')}. Complete today's record before you rest.`
-          : `${CallName} ơi, hôm nay còn thiếu ${tasks.join(', ')}. Ghi thêm trước khi nghỉ để Asinu theo dõi đủ dữ liệu nhé.`;
+        body = t('notification.evening.fallback_no_data', lang, {
+          CallName,
+          tasks: tasks.join(', '),
+        });
       }
     }
 
@@ -627,11 +618,9 @@ async function runStreakMilestones(pool, hour, minute) {
       [user.id, type]
     );
     if (already.length) continue;
-    const title = user.lang === 'en' ? `Health log: ${streak} days` : `Ghi log: ${streak} ngày`;
-    const body =
-      user.lang === 'en'
-        ? `You logged health data for ${streak} days in a row. Keep the routine going.`
-        : `Bạn đã ghi log sức khỏe ${streak} ngày liên tiếp. Tiếp tục duy trì thói quen này.`;
+    const lang = user.lang === 'en' ? 'en' : 'vi';
+    const title = t(`push.streak_${streak}_title`, lang);
+    const body = t(`push.streak_${streak}_body`, lang);
     if (await sendAndSave(pool, user, type, title, body, { streak })) sent++;
   }
   return { type: 'streak', total: activeUsers.length, sent };
@@ -657,28 +646,17 @@ async function runWeeklyRecap(pool) {
       [user.id]
     );
     const days = logDays[0]?.days || 0;
-    const title = user.lang === 'en' ? 'Weekly health summary' : 'Tổng kết sức khỏe tuần';
+    const lang = user.lang === 'en' ? 'en' : 'vi';
+    const title = t('push.weekly_recap_title', lang);
     let body;
     if (days === 7) {
-      body =
-        user.lang === 'en'
-          ? "You logged health data on all 7 days. This week's record is complete."
-          : 'Bạn đã ghi log sức khỏe đủ 7/7 ngày. Dữ liệu tuần này đã đầy đủ.';
+      body = t('push.weekly_recap_body_7', lang);
     } else if (days >= 5) {
-      body =
-        user.lang === 'en'
-          ? `${days}/7 days logged this week. A few more updates will make next week easier to track.`
-          : `Bạn đã ghi log ${days}/7 ngày. Thêm vài lần cập nhật để theo dõi đều hơn tuần tới.`;
+      body = t('push.weekly_recap_body_good', lang, { days });
     } else if (days >= 3) {
-      body =
-        user.lang === 'en'
-          ? `${days}/7 days logged this week. More regular updates will make your trend easier to follow.`
-          : `Bạn đã ghi log ${days}/7 ngày. Cập nhật đều hơn sẽ giúp theo dõi xu hướng rõ hơn.`;
+      body = t('push.weekly_recap_body_ok', lang, { days });
     } else {
-      body =
-        user.lang === 'en'
-          ? `${days}/7 days logged this week. You can start a new record today.`
-          : `Tuần này có ${days}/7 ngày được ghi nhận. Bạn có thể bắt đầu cập nhật từ hôm nay.`;
+      body = t('push.weekly_recap_body_low', lang, { days });
     }
     if (await sendAndSave(pool, user, 'weekly_recap', title, body, { days_logged: days })) sent++;
   }
@@ -832,7 +810,7 @@ async function runContextAlerts(pool) {
       if (recent.length > 0) continue;
 
       const msg = await genAlertMsg(pool, user.id, result.trigger, user);
-      const title = user.lang === 'en' ? 'Health alert' : 'Cần chú ý sức khỏe';
+      const title = t('notification.health_alert_title', user.lang);
 
       if (
         await sendAndSave(pool, user, notifType, title, msg.text, {

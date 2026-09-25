@@ -22,6 +22,7 @@ const {
   createClustersFromOnboarding,
 } = require('../services/checkin/script.service');
 const { buildCaregiverStatus } = require('../services/care-circle/caregiver-status.service');
+const { t, getLang } = require('../i18n');
 const { markActive } = require('../services/profile/lifecycle.service');
 const { getNextQuestion } = require('../core/checkin/script-runner');
 const {
@@ -76,7 +77,7 @@ async function getScriptHandler(pool, req, res) {
       return res.json({
         ok: true,
         has_script: false,
-        message: 'No clusters configured. Complete onboarding first.',
+        message: t('checkin.script.no_clusters', getLang(req)),
       });
     }
 
@@ -90,7 +91,7 @@ async function getScriptHandler(pool, req, res) {
     });
   } catch (err) {
     console.error('[ScriptCheckin] getScript failed:', err.message);
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -112,7 +113,10 @@ async function startScriptHandler(pool, req, res) {
     const userId = req.user.id;
 
     if (!['fine', 'tired', 'very_tired'].includes(status)) {
-      return res.status(400).json({ ok: false, error: 'Invalid status' });
+      return res.status(400).json({
+        ok: false,
+        error: t('checkin.script.invalid_status', getLang(req)),
+      });
     }
 
     // Starting any check-in is real activity, including the script-driven
@@ -128,7 +132,7 @@ async function startScriptHandler(pool, req, res) {
       return res.json({
         ok: true,
         needs_script: false,
-        message: 'Tốt quá! Hẹn tối nay nhé 💙',
+        message: t('checkin.script.fine', getLang(req)),
         next_checkin: 'evening',
       });
     }
@@ -315,7 +319,7 @@ async function startScriptHandler(pool, req, res) {
     return res.json(response);
   } catch (err) {
     console.error('[ScriptCheckin] startScript failed:', err.message);
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -335,17 +339,26 @@ async function answerScriptHandler(pool, req, res) {
     const userId = req.user.id;
 
     if (!session_id || !question_id) {
-      return res.status(400).json({ ok: false, error: 'Missing session_id or question_id' });
+      return res.status(400).json({
+        ok: false,
+        error: t('checkin.script.missing_session_question', getLang(req)),
+      });
     }
 
     // Get session
     const session = await getSession(pool, session_id, userId);
     if (!session) {
-      return res.status(404).json({ ok: false, error: 'Session not found' });
+      return res.status(404).json({
+        ok: false,
+        error: t('checkin.script.session_not_found', getLang(req)),
+      });
     }
 
     if (session.is_completed) {
-      return res.status(400).json({ ok: false, error: 'Session already completed' });
+      return res.status(400).json({
+        ok: false,
+        error: t('checkin.script.session_completed', getLang(req)),
+      });
     }
 
     // A response is also activity. This covers sessions created by older
@@ -567,7 +580,7 @@ async function answerScriptHandler(pool, req, res) {
     });
   } catch (err) {
     console.error('[ScriptCheckin] answer failed:', err.message);
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -602,7 +615,7 @@ async function getSessionHandler(pool, req, res) {
       },
     });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -617,7 +630,10 @@ async function createClustersHandler(pool, req, res) {
   try {
     const { symptoms } = req.body;
     if (!Array.isArray(symptoms) || symptoms.length === 0) {
-      return res.status(400).json({ ok: false, error: 'symptoms array required' });
+      return res.status(400).json({
+        ok: false,
+        error: t('checkin.script.symptoms_required', getLang(req)),
+      });
     }
 
     const clusters = await createClustersFromOnboarding(pool, req.user.id, symptoms);
@@ -629,7 +645,7 @@ async function createClustersHandler(pool, req, res) {
       })),
     });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 

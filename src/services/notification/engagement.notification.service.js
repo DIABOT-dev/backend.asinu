@@ -8,6 +8,7 @@
 
 const { getOpenAIReply } = require('../ai/providers/openai');
 const { sendAndSave } = require('./basic.notification.service');
+const { t } = require('../../i18n');
 
 const COOLDOWN_HOURS = 48;
 const MIN_INACTIVE_HOURS = 24;
@@ -349,7 +350,7 @@ Chỉ trả về JSON thuần (không có text thừa):
     const parsed = JSON.parse(jsonMatch[0]);
     return {
       shouldSend: !!parsed.shouldSend,
-      title: parsed.title || (isEn ? 'Health update' : 'Cập nhật sức khỏe'),
+      title: parsed.title || t('notification.health_update_title', isEn ? 'en' : 'vi'),
       body: parsed.body || '',
     };
   } catch {
@@ -407,8 +408,7 @@ async function previewEngagementNotification(pool, userId) {
 
   return {
     title:
-      decision.title ||
-      (userRow.language_preference === 'en' ? 'Health update' : 'Cập nhật sức khỏe'),
+      decision.title || t('notification.health_update_title', userRow.language_preference),
     body: decision.body,
     activitySummary: {
       loggedTodayCount: context.loggedTodayCount,

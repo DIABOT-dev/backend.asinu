@@ -10,6 +10,7 @@ const {
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 const { isAudioBuffer } = require('../../middleware/upload.middleware');
 const { broadcastChatEvent } = require('./doctor-chat-realtime');
+const { t } = require('../../i18n');
 const logger = require('../../lib/logger');
 const crypto = require('crypto');
 
@@ -918,24 +919,19 @@ const sendDoctorMessage = async (pool, req, input) => {
       [appUserId]
     );
     if (user.rows[0]) {
-      const isEnglish = user.rows[0].language === 'en';
+      const lang = user.rows[0].language === 'en' ? 'en' : 'vi';
       const doctorName = typeof input.sender_name === 'string' ? input.sender_name.trim() : '';
       const voice = parseVoice(input.content);
-      const preview = voice
-        ? isEnglish
-          ? 'Sent a voice message.'
-          : 'Đã gửi một tin nhắn thoại.'
-        : input.content.slice(0, 180);
+      const preview = voice ? t('push.doctor_voice_preview', lang) : input.content.slice(0, 180);
+      const messagePreview = doctorName
+        ? t('push.doctor_message_preview', lang, { name: doctorName, preview })
+        : preview;
       await sendAndSave(
         pool,
         user.rows[0],
         'doctor_message',
-        isEnglish ? 'New message from Doctor' : 'Tin nhắn mới từ Doctor',
-        doctorName
-          ? isEnglish
-            ? `Dr. ${doctorName}: ${preview}`
-            : `Bác sĩ ${doctorName}: ${preview}`
-          : preview,
+        t('push.doctor_message_title', lang),
+        messagePreview,
         {
           type: 'doctor_message',
           task_id: taskId,
@@ -945,13 +941,9 @@ const sendDoctorMessage = async (pool, req, input) => {
         'high',
         {
           // Do not put the patient's health details on the device lock screen.
-          pushBody: isEnglish
-            ? doctorName
-              ? `Dr. ${doctorName} sent a message in your consultation.`
-              : 'Your doctor sent a message in your consultation.'
-            : doctorName
-              ? `Bác sĩ ${doctorName} đã gửi tin nhắn trong cuộc tư vấn của bạn.`
-              : 'Bác sĩ đã gửi tin nhắn trong cuộc tư vấn của bạn.',
+          pushBody: doctorName
+            ? t('push.doctor_lockscreen_named', lang, { name: doctorName })
+            : t('push.doctor_lockscreen_generic', lang),
         }
       );
     }

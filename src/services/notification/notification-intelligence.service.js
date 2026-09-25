@@ -15,6 +15,7 @@
  */
 
 const { getHonorifics } = require('../../lib/honorifics');
+const { t } = require('../../i18n');
 
 // ─── User Context Builder ───────────────────────────────────────────────────
 
@@ -99,38 +100,31 @@ async function buildUserContext(pool, userId) {
 const MORNING_TEMPLATES = {
   has_symptom_worsening: {
     id: 'morning_symptom_worsening',
-    vi: '{CallName} ơi, {symptom} hôm nay thế nào rồi? Cập nhật để Asinu theo dõi tiếp nhé.',
-    en: 'Your {symptom} seems to be getting worse. Check in today to update your health status.',
+    key: 'notification.template.morning_symptom_worsening',
   },
   has_symptom_stable: {
     id: 'morning_symptom_stable',
-    vi: '{CallName} ơi, {symptom} lần trước còn không? Cập nhật thêm để Asinu theo dõi tiếp nhé.',
-    en: 'Your {symptom} was recorded recently. Check in to track any changes.',
+    key: 'notification.template.morning_symptom_stable',
   },
   has_symptom_improving: {
     id: 'morning_symptom_improving',
-    vi: '{CallName} ơi, {symptom} đang đỡ hơn rồi. Ghi thêm hôm nay để Asinu theo dõi tiếp nhé.',
-    en: 'Your {symptom} is improving. Check in today to keep tracking it.',
+    key: 'notification.template.morning_symptom_improving',
   },
   consecutive_tired: {
     id: 'morning_consecutive_tired',
-    vi: '{CallName} ơi, {honorific} đã ghi nhận mệt mỏi {tiredDays} ngày liên tiếp. Hôm nay thấy thế nào? Cập nhật để Asinu theo dõi tiếp nhé.',
-    en: "You've recorded tiredness for {tiredDays} days in a row. Check in today to keep tracking it.",
+    key: 'notification.template.morning_consecutive_tired',
   },
   streak_good: {
     id: 'morning_streak_good',
-    vi: '{CallName} đã ghi nhận sức khỏe ổn định {streakDays} ngày liên tiếp. Ghi thêm khi tiện để Asinu theo dõi tiếp nhé.',
-    en: "You've recorded stable health for {streakDays} days in a row. Keep checking in regularly.",
+    key: 'notification.template.morning_streak_good',
   },
   high_severity: {
     id: 'morning_high_severity',
-    vi: '{CallName} ơi, lần trước {honorific} ghi nhận triệu chứng nặng. Hôm nay thấy thế nào? Cập nhật để Asinu theo dõi tiếp nhé.',
-    en: 'You recorded severe symptoms recently. Update your health status today to keep tracking it.',
+    key: 'notification.template.morning_high_severity',
   },
   default: {
     id: 'morning_default',
-    vi: '{CallName} ơi, hôm nay chưa có dữ liệu sức khỏe. Cập nhật nhanh để Asinu theo dõi tiếp nhé.',
-    en: 'There is no health data for today yet. Check in now to keep your records up to date.',
+    key: 'notification.template.morning_default',
   },
 };
 
@@ -140,18 +134,15 @@ const MORNING_TEMPLATES = {
 const EVENING_TEMPLATES = {
   has_symptom: {
     id: 'evening_has_symptom',
-    vi: '{CallName} ơi, hôm nay {symptom} thế nào rồi? Còn thiếu {tasks}; ghi thêm trước khi nghỉ để Asinu theo dõi tiếp nhé.',
-    en: 'How was your {symptom} today? Before bed, complete: {tasks}.',
+    key: 'notification.template.evening_has_symptom',
   },
   improving: {
     id: 'evening_improving',
-    vi: '{CallName} ơi, hôm nay có vẻ đỡ hơn rồi. Còn thiếu {tasks}; ghi thêm trước khi nghỉ để Asinu theo dõi tiếp nhé.',
-    en: 'Your symptoms improved today. Before bed, complete: {tasks}.',
+    key: 'notification.template.evening_improving',
   },
   default: {
     id: 'evening_default',
-    vi: '{CallName} ơi, hôm nay còn thiếu {tasks}. Ghi thêm trước khi nghỉ để Asinu theo dõi đủ dữ liệu nhé.',
-    en: "Still to do: {tasks}. Complete it before bed to finish today's record.",
+    key: 'notification.template.evening_default',
   },
 };
 
@@ -161,13 +152,11 @@ const EVENING_TEMPLATES = {
 const AFTERNOON_TEMPLATES = {
   has_symptom: {
     id: 'afternoon_has_symptom',
-    vi: '{CallName} ơi, chiều nay {symptom} thế nào rồi? Nghỉ một chút và cập nhật nếu cần để Asinu theo dõi tiếp nhé.',
-    en: 'How is your {symptom} this afternoon? Take a short break and drink some water if needed.',
+    key: 'notification.template.afternoon_has_symptom',
   },
   default: {
     id: 'afternoon_default',
-    vi: '{CallName} ơi, nghỉ một chút và uống nước nhé. Nếu thấy không khỏe, cập nhật để Asinu theo dõi tiếp.',
-    en: 'Take a few minutes to rest and drink some water before continuing your day.',
+    key: 'notification.template.afternoon_default',
   },
 };
 
@@ -177,13 +166,11 @@ const AFTERNOON_TEMPLATES = {
 const ALERT_TEMPLATES = {
   severity_high: {
     id: 'alert_severity_high',
-    vi: '🚨 {CallName} ơi, {symptom} có vẻ nặng hơn. Nếu chưa đỡ, {honorific} nên đi khám.',
-    en: '🚨 Your {symptom} appears severe. Consider seeing a doctor for an assessment.',
+    key: 'notification.template.alert_severity_high',
   },
   trend_worsening: {
     id: 'alert_trend_worsening',
-    vi: '{CallName} ơi, {symptom} có vẻ nặng hơn. Nếu chưa đỡ, {honorific} nên đi khám.',
-    en: 'Your {symptom} appears to be getting worse. If it does not improve, consider seeing a doctor.',
+    key: 'notification.template.alert_trend_worsening',
   },
 };
 
@@ -283,7 +270,7 @@ function selectAfternoonTemplate(ctx) {
 /**
  * Render template + variables + honorifics → final message string.
  *
- * @param {object} template - { id, vi, en }
+ * @param {object} template - { id, key }
  * @param {object} variables - { symptom, tiredDays, ... }
  * @param {object} user - user object with birth_year, gender, display_name, lang
  * @returns {{ text: string, templateId: string }}
@@ -292,20 +279,15 @@ function renderMessage(template, variables, user) {
   const lang = user.lang || 'vi';
   const { honorific, selfRef, callName, Honorific, CallName, SelfRef } = getHonorifics(user);
 
-  let text = lang === 'en' ? template.en : template.vi;
-
-  // Replace honorific vars
-  text = text.replace(/\{honorific\}/g, honorific);
-  text = text.replace(/\{selfRef\}/g, selfRef);
-  text = text.replace(/\{callName\}/g, callName);
-  text = text.replace(/\{Honorific\}/g, Honorific);
-  text = text.replace(/\{CallName\}/g, CallName);
-  text = text.replace(/\{SelfRef\}/g, SelfRef);
-
-  // Replace context vars
-  for (const [key, val] of Object.entries(variables)) {
-    text = text.replace(new RegExp(`\\{${key}\\}`, 'g'), String(val));
-  }
+  const text = t(template.key, lang, {
+    honorific,
+    selfRef,
+    callName,
+    Honorific,
+    CallName,
+    SelfRef,
+    ...variables,
+  });
 
   return { text, templateId: template.id };
 }

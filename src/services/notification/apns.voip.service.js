@@ -1,5 +1,6 @@
 const fs = require('fs');
 const http2 = require('http2');
+const { t } = require('../../i18n');
 
 const APNS_HOSTS = Object.freeze({
   sandbox: 'https://api.sandbox.push.apple.com',
@@ -58,7 +59,7 @@ async function providerToken(config) {
 }
 
 function buildPayload(data = {}, action = 'INCOMING_CALL') {
-  const english = data.lang === 'en';
+  const lang = data.lang === 'en' ? 'en' : 'vi';
   return {
     aps: { 'content-available': 1 },
     type: 'checkin_call',
@@ -69,11 +70,9 @@ function buildPayload(data = {}, action = 'INCOMING_CALL') {
     kind: data.kind || action,
     severity: data.severity || 'UNKNOWN',
     ringSeconds: Number(data.ringSeconds) || 60,
-    lang: english ? 'en' : 'vi',
-    title: data.title || (english ? 'Asinu call' : 'Cuộc gọi Asinu'),
-    body:
-      data.body ||
-      (english ? 'Asinu is calling. Please respond.' : 'Asinu đang gọi, vui lòng phản hồi.'),
+    lang,
+    title: data.title || t('checkinCall.push.call_title', lang),
+    body: data.body || t('checkinCall.push.incoming_body', lang),
   };
 }
 

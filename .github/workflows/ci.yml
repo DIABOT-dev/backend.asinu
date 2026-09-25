@@ -53,6 +53,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Check i18n catalogs and keys
+        run: npm run i18n:check
+
       - name: Format check (advisory until baseline is clean)
         run: |
           if ! npm run format:check; then

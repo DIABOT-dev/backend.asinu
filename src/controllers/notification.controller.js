@@ -41,8 +41,8 @@ async function testNotificationHandler(pool, req, res) {
       });
     }
 
-    const notif = NOTIF_MAP[type];
-    if (!notif) {
+    const notifKeys = NOTIF_MAP[type];
+    if (!notifKeys) {
       return res.status(400).json({
         ok: false,
         error: t('notification.unknown_type', getLang(req), { type }),
@@ -50,19 +50,22 @@ async function testNotificationHandler(pool, req, res) {
       });
     }
 
-    const result = await sendPushNotification([token], notif.title, notif.body, { type });
+    const lang = getLang(req);
+    const title = t(notifKeys[0], lang);
+    const body = t(notifKeys[1], lang);
+    const result = await sendPushNotification([token], title, body, { type });
 
     // Also save to in-app notifications
     await notificationService.saveInAppNotification(
       pool,
       req.user.id,
       type,
-      notif.title,
-      notif.body,
+      title,
+      body,
       { type, test: true }
     );
 
-    return res.json({ ok: true, type, title: notif.title, body: notif.body, pushResult: result });
+    return res.json({ ok: true, type, title, body, pushResult: result });
   } catch (err) {
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
