@@ -7,6 +7,14 @@ yarn-error.log*
 .env
 .env.*
 !.env.example
+backups
+certs
+*.p8
+*.p12
+*.key
+*.pem
+credentials.json
+credentials/
 tests
 **/*.test.js
 docs

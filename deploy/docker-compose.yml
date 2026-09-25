@@ -1,0 +1,17 @@
+services:
+  asinu-backend:
+    image: ${ASINU_BACKEND_IMAGE:?ASINU_BACKEND_IMAGE is required}
+    container_name: asinu-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+    ports:
+      - '127.0.0.1:${HOST_PORT:-3300}:3000'
+    networks:
+      - asinu_net
+
+networks:
+  asinu_net:
+    external: true

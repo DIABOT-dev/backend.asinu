@@ -1,0 +1,201 @@
+name: Backend CD
+
+on:
+  workflow_run:
+    workflows: ['Backend CI']
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment
+        type: choice
+        options: [camp, prod]
+        default: camp
+      ref:
+        description: Git branch, tag, or SHA to package
+        required: false
+        default: main
+      deploy:
+        description: Deploy after publishing the image
+        type: boolean
+        default: true
+
+concurrency:
+  group: backend-cd-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'camp' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  package:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      image: ${{ steps.meta.outputs.image }}
+      sha: ${{ steps.meta.outputs.sha }}
+
+    steps:
+      - name: Resolve source revision
+        id: source
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha }}
+          INPUT_REF: ${{ inputs.ref }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_run" ]; then
+            echo "ref=$WORKFLOW_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "ref=${INPUT_REF:-main}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.source.outputs.ref }}
+
+      - name: Resolve image metadata
+        id: meta
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          sha="$(git rev-parse HEAD)"
+          echo "image=${image}:${sha}" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "repository=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}
+            ${{ steps.meta.outputs.repository }}:main
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Package summary
+        run: |
+          {
+            echo "### Backend package"
+            echo "- Image: ${{ steps.meta.outputs.image }}"
+            echo "- Commit: ${{ steps.meta.outputs.sha }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs: package
+    if: >-
+      needs.package.result == 'success' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.deploy) ||
+      (github.event_name == 'workflow_run' && vars.AUTO_DEPLOY_CAMP == 'true'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'camp' }}
+    env:
+      STACK_DIR: ${{ vars.STACK_DIR || '/opt/asinu-backend' }}
+      BASE_URL: ${{ vars.BASE_URL }}
+      HOST_PORT: ${{ vars.HOST_PORT || '3300' }}
+
+    steps:
+      - name: Require deployment configuration
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          missing=0
+          for name in VPS_HOST VPS_USER VPS_SSH_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "Missing environment secret: $name" >&2
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      - name: Checkout deployment files
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.package.outputs.sha }}
+
+      - name: Copy Compose file to VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: deploy/docker-compose.yml
+          target: ${{ env.STACK_DIR }}
+          strip_components: 1
+
+      - name: Deploy and verify
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          ASINU_BACKEND_IMAGE: ${{ needs.package.outputs.image }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN || secrets.GITHUB_TOKEN }}
+          STACK_DIR: ${{ env.STACK_DIR }}
+          HOST_PORT: ${{ env.HOST_PORT }}
+          BASE_URL: ${{ env.BASE_URL }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: ASINU_BACKEND_IMAGE,GHCR_USER,GHCR_TOKEN,STACK_DIR,HOST_PORT,BASE_URL
+          script: |
+            set -eu
+            cd "$STACK_DIR"
+            test -f .env
+            docker network inspect asinu_net >/dev/null 2>&1 || docker network create asinu_net
+            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+
+            previous_image="$(docker inspect --format '{{.Config.Image}}' asinu-backend 2>/dev/null || true)"
+            export ASINU_BACKEND_IMAGE HOST_PORT
+            docker compose -f docker-compose.yml pull
+            docker compose -f docker-compose.yml up -d --remove-orphans
+
+            healthy=0
+            for _ in $(seq 1 45); do
+              if curl -fsS "http://127.0.0.1:${HOST_PORT}/api/healthz" >/dev/null; then
+                healthy=1
+                break
+              fi
+              sleep 2
+            done
+
+            if [ "$healthy" -ne 1 ]; then
+              docker compose -f docker-compose.yml logs --tail=150 asinu-backend
+              if [ -n "$previous_image" ]; then
+                export ASINU_BACKEND_IMAGE="$previous_image"
+                docker compose -f docker-compose.yml up -d --remove-orphans
+              fi
+              exit 1
+            fi
+
+            if [ -n "$BASE_URL" ]; then
+              curl -fsS "${BASE_URL%/}/api/healthz" >/dev/null
+            fi
+
+      - name: Deployment summary
+        run: |
+          {
+            echo "### Backend deployment"
+            echo "- Environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'camp' }}"
+            echo "- Image: ${{ needs.package.outputs.image }}"
+          } >> "$GITHUB_STEP_SUMMARY"
