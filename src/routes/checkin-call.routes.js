@@ -71,6 +71,7 @@ function checkinCallRoutes(pool) {
         ok: true,
         ...(await service.startTestCall(pool, req.user.id, {
           singleDeviceFamily: req.body?.single_device === true,
+          localSimulation: req.body?.local_simulation === true,
         })),
       });
     } catch (error) {

@@ -655,7 +655,7 @@ async function answer(pool, episodeId, userId, choice, requestedIssueCategory) {
 
 async function getActive(pool, userId) {
   const result = await pool.query(
-    'SELECT e.id, e.user_id, e.state, e.severity, e.issue_category, e.triage_context, e.acknowledged_by, a.id AS attempt_id, a.target_role, a.state AS attempt_state FROM checkin_call_attempts a ' +
+    "SELECT e.id, e.user_id, e.state, e.severity, e.issue_category, e.triage_context, e.acknowledged_by, COALESCE((e.config->>'local_callkit_simulation')::boolean, false) AS local_callkit_simulation, a.id AS attempt_id, a.target_role, a.state AS attempt_state FROM checkin_call_attempts a " +
       'JOIN checkin_call_episodes e ON e.id = a.episode_id WHERE a.target_user_id = $1 ' +
       "AND a.state IN ('RINGING','CONNECTED','WAITING_CONFIRMATION','PUSH_WAIT') " +
       "AND (e.state NOT IN ('RESOLVED','EXHAUSTED','EXHAUSTED_MILD','EXHAUSTED_URGENT','CANCELLED','URGENT_ACKNOWLEDGED') " +
@@ -1126,6 +1126,22 @@ async function dispatchDeliveries(pool) {
         await db.query('COMMIT');
         continue;
       }
+      if (delivery.config?.local_callkit_simulation === true) {
+        await db.query(
+          "UPDATE checkin_call_deliveries SET state = 'SENT', tries = tries + 1, last_error = NULL, updated_at = now() WHERE id = $1",
+          [row.id]
+        );
+        await event(
+          db,
+          delivery.episode_id,
+          'LOCAL_CALLKIT_SIMULATION_READY',
+          delivery.target_user_id,
+          delivery.attempt_id,
+          { kind: delivery.kind }
+        );
+        await db.query('COMMIT');
+        continue;
+      }
       await db.query(
         "UPDATE checkin_call_deliveries SET state = 'SENDING', tries = tries + 1, updated_at = now() WHERE id = $1",
         [row.id]
@@ -1247,7 +1263,12 @@ async function startTestCall(pool, userId, options = {}) {
   );
   const user = recipient.rows[0];
   const hasExpo = /^(Exponent|Expo)PushToken\[/.test(user?.push_token || '');
-  if (!user || (!hasExpo && !user.fcm_token && !user.voip_push_token)) {
+  const localSimulation =
+    process.env.NODE_ENV !== 'production' && options.localSimulation === true;
+  if (
+    !user ||
+    (!localSimulation && !hasExpo && !user.fcm_token && !user.voip_push_token)
+  ) {
     throw serviceError(
       'Notifications are required for check-in call testing',
       409,
@@ -1279,6 +1300,7 @@ async function startTestCall(pool, userId, options = {}) {
       enabled: true,
       test_mode: true,
       single_device_family_test: singleDeviceFamily,
+      local_callkit_simulation: localSimulation,
       user_timeout_seconds: 180,
     };
     const inserted = await db.query(
@@ -1332,6 +1354,7 @@ async function startTestCall(pool, userId, options = {}) {
       state: attempt.state,
     },
     delivery_state: delivery.rows[0]?.state || 'PENDING',
+    local_simulation: localSimulation,
   };
 }
 

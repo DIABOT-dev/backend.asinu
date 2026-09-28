@@ -483,6 +483,39 @@ describeDatabase('check-in HTTP API contract', () => {
     expect(falseHealthCheckin.rows).toHaveLength(0);
   });
 
+  test('development CallKit simulation creates a real flow without sending a push', async () => {
+    global.fetch.mockClear();
+    const started = await request(app)
+      .post('/api/mobile/checkin-call/test-call')
+      .set(auth(patientToken))
+      .send({ single_device: true, local_simulation: true })
+      .expect(201);
+
+    expect(started.body).toMatchObject({
+      ok: true,
+      local_simulation: true,
+      attempt: { target_role: 'USER', state: 'RINGING' },
+      delivery_state: 'SENT',
+    });
+    expect(global.fetch).not.toHaveBeenCalled();
+
+    const active = await request(app)
+      .get('/api/mobile/checkin-call/active')
+      .set(auth(patientToken))
+      .expect(200);
+    expect(active.body.active).toMatchObject({
+      id: started.body.episode.id,
+      attempt_id: started.body.attempt.id,
+      local_callkit_simulation: true,
+    });
+
+    await request(app)
+      .post(`/api/mobile/checkin-call/episodes/${started.body.episode.id}/answer`)
+      .set(auth(patientToken))
+      .send({ choice: 1 })
+      .expect(200);
+  });
+
   test('MILD call supports seen, accept and family confirmation over HTTP', async () => {
     const started = await request(app)
       .post('/api/mobile/checkin-call/test-call')
