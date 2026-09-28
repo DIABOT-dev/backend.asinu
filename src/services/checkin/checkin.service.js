@@ -123,10 +123,6 @@ function getShortName(fullName) {
   return parts[parts.length - 1];
 }
 
-function nowVN() {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: TZ }));
-}
-
 /** 21:00 VN time today — fixed timezone calculation */
 function todayEvening9pm() {
   const vnDateStr = new Date().toLocaleDateString('en-CA', { timeZone: TZ });
@@ -140,18 +136,25 @@ function hoursFromNow(h) {
   return new Date(Date.now() + h * 60 * 60 * 1000);
 }
 
-function _todayVN() {
-  return nowVN().toISOString().slice(0, 10);
-}
-
 /** Check-in session date: resets at 05:00 VN (not midnight).
  *  Before 05:00 → use previous calendar day. */
-function checkinDateVN() {
-  const vn = nowVN();
-  if (vn.getHours() < 5) {
-    vn.setDate(vn.getDate() - 1);
-  }
-  return vn.toISOString().slice(0, 10);
+function checkinDateVN(offsetDays = 0, reference = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: TZ,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(reference)
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, Number(part.value)])
+  );
+  const date = new Date(Date.UTC(parts.year, parts.month - 1, parts.day));
+  date.setUTCDate(date.getUTCDate() + offsetDays - (parts.hour < 5 ? 1 : 0));
+  return date.toISOString().slice(0, 10);
 }
 
 /** Calculate next follow-up time based on flow + checkin count */
@@ -171,11 +174,7 @@ function calcNextCheckin(flowState, currentStatus, followUpCount = 0, followUpHo
  * Lấy session ngày hôm qua (dùng cho Continuity Check).
  */
 async function getYesterdaySession(pool, userId) {
-  // Dùng cùng logic 5AM boundary như checkinDateVN, rồi trừ 1 ngày
-  const vn = nowVN();
-  if (vn.getHours() < 5) vn.setDate(vn.getDate() - 1); // adjust for 5AM boundary
-  vn.setDate(vn.getDate() - 1); // yesterday relative to checkin date
-  const yesterday = vn.toISOString().slice(0, 10);
+  const yesterday = checkinDateVN(-1);
   const { rows } = await pool.query(
     `SELECT session_date, initial_status, triage_summary, triage_severity, flow_state
      FROM health_checkins WHERE user_id = $1 AND session_date = $2`,
@@ -2060,6 +2059,7 @@ async function resetTodayCheckin(pool, userId) {
 }
 
 module.exports = {
+  checkinDateVN,
   getTodayCheckin,
   getYesterdaySession,
   startCheckin,

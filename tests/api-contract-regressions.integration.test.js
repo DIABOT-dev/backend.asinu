@@ -60,6 +60,8 @@ describeDatabase('API contract regressions', () => {
       await pool.query('DELETE FROM users WHERE id = ANY($1::integer[])', [userIds]);
     }
     await pool.end();
+    const redis = require('../src/lib/redis').getRedis();
+    if (redis.status !== 'end') await redis.quit();
   });
 
   test('manual check-in cancels an active call, attempts, and deliveries', async () => {

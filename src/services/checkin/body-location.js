@@ -38,16 +38,16 @@ const LOCATION_LABELS = {
 
 const LOCATION_TO_SYMPTOMS = {
   vi: {
-    head: ['Đau đầu', 'Chóng mặt', 'Hoa mắt', 'Mờ mắt', 'Ù tai', 'Đau nửa đầu'],
+    head: ['Đau đầu', 'Chóng mặt', 'Hoa mắt', 'Mờ mắt', 'Ù tai', 'Đau nửa đầu', 'Ngất'],
     chest: ['Khó thở', 'Đau ngực', 'Tức ngực', 'Hồi hộp', 'Tim đập nhanh', 'Vã mồ hôi'],
     abdomen: ['Đau bụng', 'Buồn nôn', 'Tiêu chảy', 'Đầy hơi', 'Khó tiêu', 'Táo bón'],
-    limbs: ['Tê tay chân', 'Đau khớp', 'Yếu cơ', 'Chuột rút', 'Sưng khớp', 'Đau lưng'],
+    limbs: ['Tê tay chân', 'Đau khớp', 'Yếu cơ', 'Chuột rút', 'Sưng khớp', 'Đau lưng', 'Bị ngã'],
     skin: ['Ngứa', 'Phát ban', 'Vàng da', 'Nóng rát', 'Vết bầm', 'Da khô'],
     whole_body: ['Sốt', 'Mệt mỏi', 'Ớn lạnh', 'Đau nhức toàn thân', 'Vã mồ hôi', 'Run rẩy'],
     mental: ['Lo âu', 'Buồn bã', 'Khó ngủ', 'Mất ngủ', 'Căng thẳng', 'Mệt mỏi tinh thần'],
   },
   en: {
-    head: ['Headache', 'Dizziness', 'Light-headed', 'Blurred vision', 'Tinnitus', 'Migraine'],
+    head: ['Headache', 'Dizziness', 'Light-headed', 'Blurred vision', 'Tinnitus', 'Migraine', 'Fainting'],
     chest: [
       'Shortness of breath',
       'Chest pain',
@@ -64,11 +64,46 @@ const LOCATION_TO_SYMPTOMS = {
       'Cramps',
       'Swollen joints',
       'Back pain',
+      'Fall',
     ],
     skin: ['Itching', 'Rash', 'Yellow skin', 'Burning', 'Bruises', 'Dry skin'],
     whole_body: ['Fever', 'Fatigue', 'Chills', 'Body aches', 'Sweating', 'Trembling'],
     mental: ['Anxiety', 'Sadness', 'Trouble sleeping', 'Insomnia', 'Stress', 'Mental fatigue'],
   },
+};
+
+// Stable keys for API payloads. Labels remain localized by LOCATION_TO_SYMPTOMS,
+// while clients submit these keys so a language change cannot corrupt history.
+const LOCATION_TO_SYMPTOM_KEYS = {
+  head: ['headache', 'dizziness', 'light_headed', 'blurred_vision', 'tinnitus', 'migraine', 'fainting'],
+  chest: [
+    'shortness_of_breath',
+    'chest_pain',
+    'chest_tightness',
+    'palpitations',
+    'rapid_heartbeat',
+    'sweating',
+  ],
+  abdomen: [
+    'abdominal_pain',
+    'nausea',
+    'diarrhea',
+    'bloating',
+    'indigestion',
+    'constipation',
+  ],
+  limbs: [
+    'limb_numbness',
+    'joint_pain',
+    'muscle_weakness',
+    'cramps',
+    'joint_swelling',
+    'back_pain',
+    'fall',
+  ],
+  skin: ['itching', 'rash', 'yellow_skin', 'burning_skin', 'bruising', 'dry_skin'],
+  whole_body: ['fever', 'fatigue', 'chills', 'body_aches', 'sweating', 'trembling'],
+  mental: ['anxiety', 'sadness', 'trouble_sleeping', 'insomnia', 'stress', 'mental_fatigue'],
 };
 
 /**
@@ -155,6 +190,12 @@ function getLocationOptions(lang = 'vi') {
 function getSymptomsForLocation(location, lang = 'vi') {
   const map = LOCATION_TO_SYMPTOMS[lang] || LOCATION_TO_SYMPTOMS.vi;
   return map[location] || [];
+}
+
+function getSymptomOptionsForLocation(location, lang = 'vi') {
+  const labels = getSymptomsForLocation(location, lang);
+  const keys = LOCATION_TO_SYMPTOM_KEYS[location] || [];
+  return keys.map((key, index) => ({ key, label: labels[index] || key }));
 }
 
 /**
@@ -270,9 +311,11 @@ module.exports = {
   BODY_LOCATIONS,
   LOCATION_LABELS,
   LOCATION_TO_SYMPTOMS,
+  LOCATION_TO_SYMPTOM_KEYS,
   EMERGENCY_KEYWORDS_BY_LOCATION,
   getLocationOptions,
   getSymptomsForLocation,
+  getSymptomOptionsForLocation,
   getSymptomsForLocations,
   getGroupedSymptoms,
   buildLocationContext,

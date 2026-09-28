@@ -46,8 +46,20 @@ describeDatabase('check-in call PostgreSQL integration', () => {
     await service.tick(pool);
     const userCall = await service.getActive(pool, users[0]);
     expect(userCall.target_role).toBe('USER');
-    const result = await service.answer(pool, userCall.id, users[0], 2);
+    const triage = await service.startTriage(pool, userCall.id, users[0], 'vi');
+    expect(triage.episode.state).toBe('TRIAGE_USER');
+    expect(triage.triage.locations.length).toBeGreaterThan(0);
+    const result = await service.completeTriage(pool, userCall.id, users[0], {
+      body_location: 'head',
+      symptom: 'dizziness',
+      intensity: 'MILD',
+    });
     expect(result.state).toBe('MILD_FAMILY_ESCALATION');
+    expect(result.triage_context).toEqual({
+      body_location: 'head',
+      symptom: 'dizziness',
+      intensity: 'MILD',
+    });
     const familyCalls = await Promise.all(users.slice(1).map((id) => service.getActive(pool, id)));
     expect(familyCalls.filter(Boolean)).toHaveLength(1);
     const contactedIndex = familyCalls.findIndex(Boolean) + 1;
@@ -106,7 +118,12 @@ describeDatabase('check-in call PostgreSQL integration', () => {
     );
     await service.tick(pool);
     const userCall = await service.getActive(pool, group[0]);
-    const result = await service.answer(pool, userCall.id, group[0], 3);
+    await service.startTriage(pool, userCall.id, group[0], 'vi');
+    const result = await service.completeTriage(pool, userCall.id, group[0], {
+      body_location: 'chest',
+      symptom: 'shortness_of_breath',
+      intensity: 'URGENT',
+    });
     expect(result.state).toBe('URGENT_BROADCAST');
     const first = await service.getActive(pool, group[1]);
     const second = await service.getActive(pool, group[2]);

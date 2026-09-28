@@ -52,6 +52,19 @@ const ENGAGEMENT_FIELDS = setOf(
 const CONSENT_FIELDS = setOf('user_id', 'consent_type', 'status', 'version');
 const PROFILE_FIELDS = setOf('user_id', 'age_group', 'is_elderly');
 
+const CHECKIN_CALL_FIELDS = setOf(
+  'user_id',
+  'episode_id',
+  'state',
+  'severity',
+  'reason',
+  'resolution',
+  'actor_user_id',
+  'attempt_id',
+  'source_platform',
+  'is_test_fixture'
+);
+
 const PAYMENT_FIELDS = setOf(
   'user_id',
   'external_ref',
@@ -171,6 +184,10 @@ const EVENT_ALLOWLISTS = {
   'content.saved': ENGAGEMENT_FIELDS,
   'checkin.started': ENGAGEMENT_FIELDS,
   'checkin.completed': ENGAGEMENT_FIELDS,
+  'checkin_call.started': CHECKIN_CALL_FIELDS,
+  'checkin_call.acknowledged': CHECKIN_CALL_FIELDS,
+  'checkin_call.resolved': CHECKIN_CALL_FIELDS,
+  'checkin_call.exhausted': CHECKIN_CALL_FIELDS,
   'health_log.created': ENGAGEMENT_FIELDS,
   'mission.completed': ENGAGEMENT_FIELDS,
   'chat.used': ENGAGEMENT_FIELDS,

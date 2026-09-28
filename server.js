@@ -31,6 +31,7 @@ const { assertIapRuntimeConfig } = require('./src/services/payment/iap.service')
 const doctorTaskRoutes = require('./src/routes/doctor-task.routes');
 const doctorProfileRoutes = require('./src/routes/doctor-profile.routes');
 const checkinCallRoutes = require('./src/routes/checkin-call.routes');
+const checkinCallOpsRoutes = require('./src/routes/checkin-call.ops.routes');
 const { prewarm: prewarmCheckinCallAudio } = require('./src/services/checkin-call/audio.service');
 const {
   attachDoctorChatWebSocketServer,
@@ -145,6 +146,7 @@ app.use('/api/auth', authLimiter, authRoutes(pool));
 app.use('/api/mobile/auth/login', authLimiter);
 app.use('/api/mobile', mobileRoutes(pool));
 app.use('/api/mobile/checkin-call', checkinCallRoutes(pool));
+app.use('/api/internal/checkin-call', checkinCallOpsRoutes(pool));
 app.use('/api/missions', missionsRoutes(pool));
 app.use('/api/care-pulse', carePulseRoutes(pool));
 app.use('/api/care-circle', careCircleRoutes(pool));

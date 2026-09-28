@@ -3,6 +3,10 @@ const { t } = require('../../i18n');
 
 const AUDIO_KEYS = Object.freeze([
   'user_prompt',
+  'triage_prompt',
+  'triage_location_prompt',
+  'triage_symptom_prompt',
+  'triage_intensity_prompt',
   'user_ok',
   'user_mild',
   'user_urgent',
@@ -36,6 +40,11 @@ function audioError(message, statusCode, i18nKey) {
   return Object.assign(new Error(message), { statusCode, i18nKey });
 }
 
+function synthesisTimeoutMs() {
+  const configured = Number(process.env.VIENEU_TIMEOUT_MS || 20000);
+  return Number.isFinite(configured) ? Math.max(1000, Math.min(configured, 60000)) : 20000;
+}
+
 async function getAudio(pool, key, requestedLanguage = 'vi') {
   const language = normalizeLanguage(requestedLanguage);
   const phrase = PHRASES[key]?.[language];
@@ -62,19 +71,30 @@ async function getAudio(pool, key, requestedLanguage = 'vi') {
   if (!process.env.VIENEU_API_KEY) {
     throw audioError('VieNeu is not configured', 503, 'checkinCall.error.audio_unavailable');
   }
-  const response = await fetch('https://api.vieneu.io/api/v1/audio/speech', {
-    method: 'POST',
-    headers: {
-      Authorization: 'Bearer ' + process.env.VIENEU_API_KEY,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      input: phrase,
-      voice,
-      response_format: 'mp3',
-    }),
-    signal: AbortSignal.timeout(20000),
-  });
+  let response;
+  try {
+    response = await fetch('https://api.vieneu.io/api/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer ' + process.env.VIENEU_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        input: phrase,
+        voice,
+        response_format: 'mp3',
+      }),
+      signal: AbortSignal.timeout(synthesisTimeoutMs()),
+    });
+  } catch (error) {
+    throw audioError(
+      error?.name === 'TimeoutError' || error?.name === 'AbortError'
+        ? 'VieNeu timed out'
+        : 'VieNeu unavailable',
+      503,
+      'checkinCall.error.audio_unavailable'
+    );
+  }
   if (!response.ok) throw audioError('VieNeu failed', 503, 'checkinCall.error.audio_unavailable');
   const data = Buffer.from(await response.arrayBuffer());
   if (!data.length || data.length > 2_000_000) {
@@ -101,4 +121,11 @@ async function prewarm(pool) {
   }
 }
 
-module.exports = { AUDIO_KEYS, PHRASES, getAudio, normalizeLanguage, prewarm };
+module.exports = {
+  AUDIO_KEYS,
+  PHRASES,
+  getAudio,
+  normalizeLanguage,
+  prewarm,
+  synthesisTimeoutMs,
+};

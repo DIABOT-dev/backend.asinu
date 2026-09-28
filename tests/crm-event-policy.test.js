@@ -34,6 +34,25 @@ describe('CRM event boundary', () => {
     });
   });
 
+  test('projects check-in call operations without raw triage or medical details', () => {
+    expect(
+      projectCrmPayload('checkin_call.exhausted', {
+        user_id: 'user-1',
+        episode_id: 'episode-1',
+        severity: 'URGENT',
+        reason: 'MAX_DURATION',
+        body_location: 'chest',
+        symptom: 'shortness_of_breath',
+        transcript: 'raw voice text',
+      })
+    ).toEqual({
+      user_id: 'user-1',
+      episode_id: 'episode-1',
+      severity: 'URGENT',
+      reason: 'MAX_DURATION',
+    });
+  });
+
   test('removes raw contact PII after successful delivery while preserving hashes', () => {
     expect(
       stripContactPii({

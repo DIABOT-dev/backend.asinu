@@ -30,6 +30,9 @@ function publicEpisode(episode) {
     user_id: episode.user_id,
     state: episode.state,
     severity: episode.severity,
+    issue_category: episode.issue_category || null,
+    triage_context: episode.triage_context?.body_location ? episode.triage_context : null,
+    triage_display: episode.triage_display || null,
     acknowledged_by: episode.acknowledged_by || null,
   };
 }
@@ -64,14 +67,19 @@ function checkinCallRoutes(pool) {
   });
   router.post('/test-call', async (req, res) => {
     try {
-      return res.status(201).json({ ok: true, ...(await service.startTestCall(pool, req.user.id)) });
+      return res.status(201).json({
+        ok: true,
+        ...(await service.startTestCall(pool, req.user.id, {
+          singleDeviceFamily: req.body?.single_device === true,
+        })),
+      });
     } catch (error) {
       return respond(req, res, error);
     }
   });
   router.get('/episodes/:id', async (req, res) => {
     try {
-      const episode = await service.getEpisode(pool, req.params.id, req.user.id);
+      const episode = await service.getEpisode(pool, req.params.id, req.user.id, getLang(req));
       if (!episode)
         return res
           .status(404)
@@ -96,7 +104,7 @@ function checkinCallRoutes(pool) {
   });
   router.get('/attempts/:id', async (req, res) => {
     try {
-      const attempt = await service.getAttempt(pool, req.params.id, req.user.id);
+      const attempt = await service.getAttempt(pool, req.params.id, req.user.id, getLang(req));
       if (!attempt)
         return res
           .status(404)
@@ -108,7 +116,43 @@ function checkinCallRoutes(pool) {
   });
   router.post('/episodes/:id/answer', async (req, res) => {
     try {
-      const episode = await service.answer(pool, req.params.id, req.user.id, req.body?.choice);
+      const episode = await service.answer(
+        pool,
+        req.params.id,
+        req.user.id,
+        req.body?.choice,
+        req.body?.issue_category
+      );
+      return res.json({ ok: true, episode: publicEpisode(episode) });
+    } catch (error) {
+      return respond(req, res, error);
+    }
+  });
+  router.post('/episodes/:id/triage/start', async (req, res) => {
+    try {
+      const result = await service.startTriage(
+        pool,
+        req.params.id,
+        req.user.id,
+        getLang(req)
+      );
+      return res.json({
+        ok: true,
+        episode: publicEpisode(result.episode),
+        triage: result.triage,
+      });
+    } catch (error) {
+      return respond(req, res, error);
+    }
+  });
+  router.post('/episodes/:id/triage/complete', async (req, res) => {
+    try {
+      const episode = await service.completeTriage(
+        pool,
+        req.params.id,
+        req.user.id,
+        req.body || {}
+      );
       return res.json({ ok: true, episode: publicEpisode(episode) });
     } catch (error) {
       return respond(req, res, error);

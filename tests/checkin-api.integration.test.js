@@ -468,6 +468,7 @@ describeDatabase('check-in HTTP API contract', () => {
       .set(auth(patientToken))
       .expect(200);
     expect(acceptedAgain.body).toMatchObject({ ok: true, alreadyAccepted: true });
+    expect(acceptedAgain.body.confirm_deadline).toBeTruthy();
     const answered = await request(app)
       .post(`/api/mobile/checkin-call/episodes/${episode.id}/answer`)
       .set(auth(patientToken))
@@ -489,12 +490,24 @@ describeDatabase('check-in HTTP API contract', () => {
       .expect(201);
     const episodeId = started.body.episode.id;
 
-    const escalated = await request(app)
-      .post(`/api/mobile/checkin-call/episodes/${episodeId}/answer`)
+    const triage = await request(app)
+      .post(`/api/mobile/checkin-call/episodes/${episodeId}/triage/start`)
       .set(auth(patientToken))
-      .send({ choice: 2 })
+      .expect(200);
+    expect(triage.body.episode.state).toBe('TRIAGE_USER');
+    expect(triage.body.triage.locations).toHaveLength(7);
+
+    const escalated = await request(app)
+      .post(`/api/mobile/checkin-call/episodes/${episodeId}/triage/complete`)
+      .set(auth(patientToken))
+      .send({ body_location: 'head', symptom: 'dizziness', intensity: 'MILD' })
       .expect(200);
     expect(escalated.body.episode.state).toBe('MILD_FAMILY_ESCALATION');
+    expect(escalated.body.episode.triage_context).toEqual({
+      body_location: 'head',
+      symptom: 'dizziness',
+      intensity: 'MILD',
+    });
 
     const active = await request(app)
       .get('/api/mobile/checkin-call/active')
@@ -502,6 +515,13 @@ describeDatabase('check-in HTTP API contract', () => {
       .expect(200);
     expect(active.body.active).toMatchObject({ target_role: 'FAMILY', id: episodeId });
     const attemptId = active.body.active.attempt_id;
+
+    const attempt = await request(app)
+      .get(`/api/mobile/checkin-call/attempts/${attemptId}`)
+      .set(auth(familyToken))
+      .expect(200);
+    expect(attempt.body.attempt.triage_display.summary).toContain('Đầu');
+    expect(attempt.body.attempt.triage_display.summary).toContain('Chóng mặt');
 
     await request(app)
       .post(`/api/mobile/checkin-call/attempts/${attemptId}/seen`)
@@ -583,6 +603,71 @@ describeDatabase('check-in HTTP API contract', () => {
       state: 'RESOLVED',
       acknowledged_by: familyId,
     });
+  });
+
+  test('push timeout is retried with durable state and eventually marked failed', async () => {
+    global.fetch.mockRejectedValue(new Error('simulated push timeout'));
+    const started = await request(app)
+      .post('/api/mobile/checkin-call/test-call')
+      .set(auth(patientToken))
+      .expect(201);
+    const attemptId = started.body.attempt.id;
+
+    for (let index = 0; index < 3; index += 1) {
+      await pool.query(
+        "UPDATE checkin_call_deliveries SET due_at = now() - interval '1 second' WHERE attempt_id = $1",
+        [attemptId]
+      );
+      await checkinCallService.dispatchDeliveries(pool);
+    }
+    const delivery = await pool.query(
+      'SELECT state, tries, last_error FROM checkin_call_deliveries WHERE attempt_id = $1',
+      [attemptId]
+    );
+    expect(delivery.rows[0]).toMatchObject({ state: 'FAILED', tries: 4 });
+    expect(delivery.rows[0].last_error).toContain('simulated push timeout');
+
+    global.fetch.mockImplementation(async () => ({
+      ok: true,
+      json: async () => ({ data: [{ status: 'ok', id: 'integration-ticket' }] }),
+    }));
+  });
+
+  test('a delivery left in SENDING is recovered after a backend restart lease timeout', async () => {
+    const started = await request(app)
+      .post('/api/mobile/checkin-call/test-call')
+      .set(auth(patientToken))
+      .expect(201);
+    const attemptId = started.body.attempt.id;
+    await pool.query(
+      "UPDATE checkin_call_deliveries SET state = 'SENDING', updated_at = now() - interval '3 minutes' WHERE attempt_id = $1",
+      [attemptId]
+    );
+
+    await checkinCallService.dispatchDeliveries(pool);
+
+    const delivery = await pool.query(
+      'SELECT state FROM checkin_call_deliveries WHERE attempt_id = $1',
+      [attemptId]
+    );
+    expect(delivery.rows[0].state).toBe('SENT');
+  });
+
+  test('LiveKit configuration failure is explicit while response buttons remain backend-driven', async () => {
+    const started = await request(app)
+      .post('/api/mobile/checkin-call/test-call')
+      .set(auth(patientToken))
+      .expect(201);
+    const previousUrl = process.env.LIVEKIT_URL;
+    delete process.env.LIVEKIT_URL;
+    try {
+      await request(app)
+        .get(`/api/mobile/checkin-call/attempts/${started.body.attempt.id}/token`)
+        .set(auth(patientToken))
+        .expect(503);
+    } finally {
+      process.env.LIVEKIT_URL = previousUrl;
+    }
   });
 
   test('expired native calls are ended before escalation continues', async () => {
