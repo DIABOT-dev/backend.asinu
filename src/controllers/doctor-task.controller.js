@@ -39,7 +39,8 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3
 
 const loadPatientProjection = async (pool, userId) => {
   const result = await pool.query(
-    `SELECT u.id, u.full_name, u.display_name, u.consent_accepted_at, u.consent_version,
+    `SELECT u.id, u.full_name, u.display_name, u.language_preference,
+            u.consent_accepted_at, u.consent_version,
             u.updated_at AS profile_version, p.age AS age_group, p.gender
        FROM users u
        LEFT JOIN user_onboarding_profiles p ON p.user_id = u.id
