@@ -3,6 +3,7 @@ const { createHash } = require('crypto');
 const jwt = require('jsonwebtoken');
 const request = require('supertest');
 const { Pool } = require('pg');
+const entitlementService = require('../src/services/payment/entitlement.service');
 
 const describeDatabase = process.env.CHECKIN_TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -65,6 +66,16 @@ describeDatabase('check-in HTTP API contract', () => {
     createdUserIds.push(patientId, familyId);
     patientToken = jwt.sign({ id: patientId }, jwtSecret, { expiresIn: '10m' });
     familyToken = jwt.sign({ id: familyId }, jwtSecret, { expiresIn: '10m' });
+
+    await entitlementService.activateHouseholdPlan(pool, patientId, {
+      planCode: 'antam_2',
+      billingPeriod: 'monthly',
+      platform: 'google',
+      productId: 'asinu.antam2.monthly',
+      originalTransactionId: `http-integration-${patientId}`,
+      startsAt: new Date(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
 
     await pool.query(
       "INSERT INTO user_connections (requester_id, addressee_id, status, permissions, accepted_at) VALUES ($1,$2,'accepted',$3::jsonb,now())",

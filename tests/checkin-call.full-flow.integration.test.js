@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
 const service = require('../src/services/checkin-call/checkin-call.service');
+const entitlementService = require('../src/services/payment/entitlement.service');
 
 const describeDatabase = process.env.CHECKIN_TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -58,6 +59,16 @@ describeDatabase('check-in call six-account full flow', () => {
       createdUserIds.push(inserted.rows[0].id);
     }
     [patientId, ...familyIds] = createdUserIds;
+
+    await entitlementService.activateHouseholdPlan(pool, patientId, {
+      planCode: 'antam_8',
+      billingPeriod: 'monthly',
+      platform: 'google',
+      productId: 'asinu.antam8.monthly',
+      originalTransactionId: `full-flow-${patientId}`,
+      startsAt: new Date(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
 
     for (let index = 0; index < familyIds.length; index += 1) {
       await pool.query(

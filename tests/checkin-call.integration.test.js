@@ -1,11 +1,24 @@
 const { Pool } = require('pg');
 const service = require('../src/services/checkin-call/checkin-call.service');
+const entitlementService = require('../src/services/payment/entitlement.service');
 
 const describeDatabase = process.env.CHECKIN_TEST_DATABASE_URL ? describe : describe.skip;
 
 describeDatabase('check-in call PostgreSQL integration', () => {
   const pool = new Pool({ connectionString: process.env.CHECKIN_TEST_DATABASE_URL });
   const users = [];
+
+  async function activateAnTam(userId) {
+    await entitlementService.activateHouseholdPlan(pool, userId, {
+      planCode: 'antam_8',
+      billingPeriod: 'monthly',
+      platform: 'google',
+      productId: 'asinu.antam8.monthly',
+      originalTransactionId: `integration-${userId}`,
+      startsAt: new Date(),
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    });
+  }
 
   afterAll(async () => {
     if (users.length) {
@@ -33,6 +46,7 @@ describeDatabase('check-in call PostgreSQL integration', () => {
         [users[0], familyId, JSON.stringify({ can_receive_alerts: true, can_ack_escalation: true })]
       );
     }
+    await activateAnTam(users[0]);
     await service.saveSettings(pool, users[0], {
       enabled: true,
       checkin_time: '00:00',
@@ -106,6 +120,7 @@ describeDatabase('check-in call PostgreSQL integration', () => {
         [group[0], familyId, JSON.stringify({ can_receive_alerts: true, can_ack_escalation: true })]
       );
     }
+    await activateAnTam(group[0]);
     await service.saveSettings(pool, group[0], {
       enabled: true,
       checkin_time: '00:00',
@@ -141,13 +156,15 @@ describeDatabase('check-in call PostgreSQL integration', () => {
     ).toBe('RESOLVED');
   });
 
-  test('cannot enable check-in calls without a reachable Care Circle', async () => {
+  test('requires An Tam and then a reachable Care Circle', async () => {
     const created = await pool.query(
       'INSERT INTO users (phone_number, push_token) VALUES ($1,$2) RETURNING id',
       ['nofamily' + Date.now(), 'ExponentPushToken[test]']
     );
     const userId = created.rows[0].id;
     users.push(userId);
+    await expect(service.saveSettings(pool, userId, { enabled: true })).rejects.toThrow('An Tam');
+    await activateAnTam(userId);
     await expect(service.saveSettings(pool, userId, { enabled: true })).rejects.toThrow(
       'Care Circle'
     );
