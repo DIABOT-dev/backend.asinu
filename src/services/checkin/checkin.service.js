@@ -41,6 +41,31 @@ const logger = require('../../lib/logger');
 const checkinCallService = require('../checkin-call/checkin-call.service');
 const console = { log: logger.debug, error: logger.error };
 
+function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sessionDate) {
+  // Loaded at runtime because the notification service imports this module.
+  const earlySignalService = require('../early-signal/early-signal.service');
+  const fingerprint = require('crypto')
+    .createHash('sha256')
+    .update(JSON.stringify(answers || []))
+    .digest('hex')
+    .slice(0, 16);
+  saveSymptomLogs(pool, userId, checkinId, answers, sessionDate)
+    .then(() =>
+      earlySignalService.evaluateAfterNewHealthData(
+        pool,
+        userId,
+        `checkin:${checkinId}:${fingerprint}`
+      )
+    )
+    .catch((error) =>
+      logger.warn('early_signal.checkin_evaluation_failed', {
+        userId,
+        checkinId,
+        error: error.message || String(error),
+      })
+    );
+}
+
 // ─── Priority map ────────────────────────────────────────────────
 const TYPE_PRIORITY = {
   emergency: 'critical',
@@ -568,7 +593,13 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     await reactToTriageResult(pool, userId, checkinId, urgentResult);
 
     // #3: Extract and save symptoms for AI memory
-    saveSymptomLogs(pool, userId, checkinId, previousAnswers, session.session_date).catch(() => {});
+    evaluateEarlySignalAfterSymptoms(
+      pool,
+      userId,
+      checkinId,
+      previousAnswers,
+      session.session_date
+    );
 
     // Invalidate health score cache so home screen updates immediately
     await cacheDel(`health:score:${userId}`);
@@ -870,7 +901,13 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     await reactToTriageResult(pool, userId, checkinId, result);
 
     // #3: Extract and save symptoms for AI memory
-    saveSymptomLogs(pool, userId, checkinId, previousAnswers, session.session_date).catch(() => {});
+    evaluateEarlySignalAfterSymptoms(
+      pool,
+      userId,
+      checkinId,
+      previousAnswers,
+      session.session_date
+    );
 
     // Invalidate health score cache so home screen updates immediately
     await cacheDel(`health:score:${userId}`);

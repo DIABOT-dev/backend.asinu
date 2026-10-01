@@ -32,6 +32,7 @@ const {
 } = require('../services/checkin/fallback.service');
 const { detectEmergency } = require('../services/checkin/emergency-detector');
 const { saveSymptomLogs } = require('../services/checkin/symptom-tracker.service');
+const earlySignalService = require('../services/early-signal/early-signal.service');
 const {
   parseSymptoms,
   analyzeMultiSymptom,
@@ -375,6 +376,11 @@ async function answerScriptHandler(pool, req, res) {
       if (emergency.isEmergency) {
         // Mark session as completed with emergency
         await markEmergency(pool, session_id);
+        earlySignalService
+          .evaluateAfterNewHealthData(pool, userId, `script-checkin:${session_id}:emergency`)
+          .catch((err) =>
+            console.warn('[EarlySignal] script emergency evaluation failed:', err.message)
+          );
         return res.json({
           ok: true,
           is_emergency: true,
@@ -545,7 +551,15 @@ async function answerScriptHandler(pool, req, res) {
           question: a.question_id,
           answer: a.answer,
         }));
-        saveSymptomLogs(pool, userId, session.checkin_id, triageMessages, null).catch(() => {});
+        saveSymptomLogs(pool, userId, session.checkin_id, triageMessages, null)
+          .then(() =>
+            earlySignalService.evaluateAfterNewHealthData(
+              pool,
+              userId,
+              `script-checkin:${session_id}:completed`
+            )
+          )
+          .catch((err) => console.warn('[EarlySignal] script evaluation failed:', err.message));
       }
 
       // Log fallback answers if this was a fallback session

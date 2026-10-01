@@ -2,6 +2,7 @@ const checkinService = require('../services/checkin/checkin.service');
 const caregiverStatusService = require('../services/care-circle/caregiver-status.service');
 const engagementService = require('../services/profile/engagement.service');
 const { markActive } = require('../services/profile/lifecycle.service');
+const earlySignalService = require('../services/early-signal/early-signal.service');
 const { t, getLang } = require('../i18n');
 const {
   BODY_LOCATIONS,
@@ -58,6 +59,13 @@ async function startCheckinHandler(pool, req, res) {
     await markActive(pool, req.user.id).catch((err) =>
       console.warn('[Lifecycle] markActive failed:', err.message)
     );
+    earlySignalService
+      .evaluateAfterNewHealthData(
+        pool,
+        req.user.id,
+        `checkin-start:${session.id}:${session.updated_at || status}`
+      )
+      .catch((err) => console.warn('[EarlySignal] check-in start evaluation failed:', err.message));
     return res.json({ ok: true, session });
   } catch (err) {
     return res
@@ -92,6 +100,13 @@ async function followUpHandler(pool, req, res) {
       // Was already resolved before this call — return it as-is
       return res.json({ ok: true, session, already_resolved: true });
     }
+    earlySignalService
+      .evaluateAfterNewHealthData(
+        pool,
+        req.user.id,
+        `checkin-followup:${session.id}:${session.updated_at || status}`
+      )
+      .catch((err) => console.warn('[EarlySignal] follow-up evaluation failed:', err.message));
     return res.json({ ok: true, session });
   } catch (err) {
     return res
@@ -172,6 +187,11 @@ async function emergencyHandler(pool, req, res) {
   }
   try {
     const result = await checkinService.triggerEmergency(pool, req.user.id, location);
+    if (!result.deduped) {
+      earlySignalService
+        .evaluateAfterNewHealthData(pool, req.user.id, `checkin-sos:${new Date().toISOString()}`)
+        .catch((err) => console.warn('[EarlySignal] SOS evaluation failed:', err.message));
+    }
     // Emergency is always urgent — tell the client whether anyone is on
     // the other end to receive the alert (MVP audit FIX #4).
     const caregiverStatus = await caregiverStatusService.buildCaregiverStatus(pool, req.user.id, {

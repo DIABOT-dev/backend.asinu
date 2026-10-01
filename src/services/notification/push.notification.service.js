@@ -27,7 +27,10 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
 
   // Filter valid Expo push tokens
   const validTokens = expoPushTokens.filter(
-    (token) => token && typeof token === 'string' && (token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken['))
+    (token) =>
+      token &&
+      typeof token === 'string' &&
+      (token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken['))
   );
 
   if (validTokens.length === 0) {
@@ -50,13 +53,17 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
     checkin_followup_urgent: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
     emergency: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
     checkin_call: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
+    early_signal: { channelId: 'reminder', sound: 'asinu_reminder.wav', priority: 'normal' },
   };
   const notifType = data?.type || '';
-  const config = SOUND_MAP[notifType] || {
-    channelId: 'reminder',
-    sound: 'asinu_reminder.wav',
-    priority: 'normal',
-  };
+  const config =
+    notifType === 'early_signal' && data?.severity === 'urgent'
+      ? { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' }
+      : SOUND_MAP[notifType] || {
+          channelId: 'reminder',
+          sound: 'asinu_reminder.wav',
+          priority: 'normal',
+        };
 
   // Caregiver alert cần xác nhận → thêm categoryIdentifier để hiện nút trên notification
   const isCaregiverAlert =

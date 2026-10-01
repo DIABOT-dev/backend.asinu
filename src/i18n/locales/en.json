@@ -680,8 +680,10 @@
   "checkin.specialist_visit_title": "Specialist consultation recommended",
   "checkin.specialist_visit_body": "Based on the symptoms you described, contact a healthcare specialist soon.",
   "error.an_tam_required": "This feature requires an An Tam plan.",
-  "push.early_signal_title": "Early Signals from Asinu",
+  "push.early_signal_title": "Early Signals: {{name}}",
+  "push.early_signal_weekly_title": "This week's Early Signals: {{name}}",
   "push.early_signal_body": "{{summary}} Level: {{level}}.",
   "push.early_signal_level_urgent": "Seek care now",
-  "push.early_signal_level_doctor": "See a doctor"
+  "push.early_signal_level_doctor": "See a doctor",
+  "push.early_signal_level_monitor": "Continue monitoring"
 }

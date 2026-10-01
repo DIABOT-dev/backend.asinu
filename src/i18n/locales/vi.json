@@ -680,8 +680,10 @@
   "checkin.specialist_visit_title": "Khuyến nghị liên hệ chuyên gia",
   "checkin.specialist_visit_body": "Dựa trên các triệu chứng đã mô tả, bạn nên liên hệ chuyên gia y tế sớm.",
   "error.an_tam_required": "Tính năng này yêu cầu gói An Tâm.",
-  "push.early_signal_title": "Tín hiệu sớm từ Asinu",
+  "push.early_signal_title": "Tín hiệu sớm: {{name}}",
+  "push.early_signal_weekly_title": "Tín hiệu sớm tuần này: {{name}}",
   "push.early_signal_body": "{{summary}} Mức độ: {{level}}.",
   "push.early_signal_level_urgent": "Cần đi khám ngay",
-  "push.early_signal_level_doctor": "Nên đi khám"
+  "push.early_signal_level_doctor": "Nên đi khám",
+  "push.early_signal_level_monitor": "Tiếp tục theo dõi"
 }
