@@ -11,7 +11,7 @@ async function listProtectedMembers(pool, ownerUserId) {
   const household = await entitlementService.householdOwnedBy(pool, ownerUserId);
   const members = await pool.query(
     `SELECT m.user_id, m.added_at,
-            COALESCE(u.display_name, u.full_name, u.email, u.phone, 'Thành viên') AS name,
+            COALESCE(u.display_name, u.full_name, u.email, u.phone_number, 'Thành viên') AS name,
             u.avatar_url
        FROM subscription_household_members m
        JOIN users u ON u.id = m.user_id
