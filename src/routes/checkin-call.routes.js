@@ -1,9 +1,19 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { AccessToken } = require('livekit-server-sdk');
 const { requireAuth } = require('../middleware/auth.middleware');
 const service = require('../services/checkin-call/checkin-call.service');
 const audio = require('../services/checkin-call/audio.service');
 const { getLang, t } = require('../i18n');
+
+const conclusionAudioLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { ok: false, code: 'RATE_LIMITED', error: 'Too many audio requests; slow down.' },
+  keyGenerator: (req) => `checkin-conclusion:user:${req.user.id}`,
+});
 
 function respond(req, res, error) {
   const status = error.statusCode || 500;
@@ -94,6 +104,18 @@ function checkinCallRoutes(pool) {
     // Audio is only available to authenticated app users; all phrases are fixed.
     try {
       const data = await audio.getAudio(pool, req.params.key, getLang(req));
+      return res.json({
+        ok: true,
+        mimeType: data.mime_type,
+        base64: data.audio_data.toString('base64'),
+      });
+    } catch (error) {
+      return respond(req, res, error);
+    }
+  });
+  router.post('/audio/conclusion', conclusionAudioLimiter, async (req, res) => {
+    try {
+      const data = await audio.synthesizeText(req.body?.text, getLang(req));
       return res.json({
         ok: true,
         mimeType: data.mime_type,
