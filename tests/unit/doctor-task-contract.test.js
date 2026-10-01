@@ -89,12 +89,22 @@ describe('ASINU -> Doctor task contract', () => {
   });
 
   test('builds a bounded patient projection', () => {
-    expect(buildPatientRef({ id: 7, full_name: 'Patient', phone: '0123456789' })).toEqual({
+    const patientRef = buildPatientRef({
+      id: 7,
+      full_name: 'Patient',
+      language_preference: 'en',
+      phone: '0123456789',
+    });
+
+    expect(patientRef).toEqual({
       app_user_id: '7',
+      display_name: 'Patient',
       age_group: null,
       gender: null,
       profile_version: null,
+      locale: 'en',
     });
+    expect(patientRef.phone).toBeUndefined();
   });
 
   test('builds patient-owned rating events without exposing the user id in event metadata', () => {
