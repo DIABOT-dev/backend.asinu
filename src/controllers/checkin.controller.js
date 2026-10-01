@@ -187,11 +187,6 @@ async function emergencyHandler(pool, req, res) {
   }
   try {
     const result = await checkinService.triggerEmergency(pool, req.user.id, location);
-    if (!result.deduped) {
-      earlySignalService
-        .evaluateAfterNewHealthData(pool, req.user.id, `checkin-sos:${new Date().toISOString()}`)
-        .catch((err) => console.warn('[EarlySignal] SOS evaluation failed:', err.message));
-    }
     // Emergency is always urgent — tell the client whether anyone is on
     // the other end to receive the alert (MVP audit FIX #4).
     const caregiverStatus = await caregiverStatusService.buildCaregiverStatus(pool, req.user.id, {
