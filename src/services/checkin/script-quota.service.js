@@ -4,17 +4,14 @@
  *   "Mỗi user chỉ được generate script một số lần nhất định trong tháng.
  *    Không cho regenerate liên tục."
  *
- * Free vs Premium budgets are env-driven so product can retune. Quota
+ * One operational budget applies equally to every account. Quota
  * lookups are best-effort: if the ledger table is missing or the DB is
  * down we DO NOT block check-in — instead we fall back to the existing
  * script/rule path so the user is never stuck.
  */
 
 const logger = require('../../lib/logger');
-const { isPremium } = require('../payment/subscription.service');
-
-const DEFAULT_FREE_LIMIT = Number(process.env.SCRIPT_REGEN_LIMIT_FREE || 2);
-const DEFAULT_PREMIUM_LIMIT = Number(process.env.SCRIPT_REGEN_LIMIT_PREMIUM || 10);
+const DEFAULT_LIMIT = Number(process.env.SCRIPT_REGEN_LIMIT || 10);
 
 function thisMonthKey() {
   return new Date().toISOString().slice(0, 7); // YYYY-MM
@@ -56,13 +53,8 @@ async function recordRegeneration(pool, userId, clusterKey, trigger = 'manual') 
  * @returns {Promise<{ used: number, limit: number, allowed: boolean }>}
  */
 async function getScriptRegenStatus(pool, userId) {
-  const [premium, used] = await Promise.all([
-    isPremium(pool, userId).catch(() => false),
-    getMonthlyRegenCount(pool, userId),
-  ]);
-
-  const limit = premium ? DEFAULT_PREMIUM_LIMIT : DEFAULT_FREE_LIMIT;
-  return { used, limit, allowed: used < limit, tier: premium ? 'premium' : 'free' };
+  const used = await getMonthlyRegenCount(pool, userId);
+  return { used, limit: DEFAULT_LIMIT, allowed: used < DEFAULT_LIMIT };
 }
 
 module.exports = {

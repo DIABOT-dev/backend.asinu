@@ -5,11 +5,7 @@
 
 const { t, getLang } = require('../i18n');
 const { parseLogVoice } = require('../services/voice/voice.service');
-const {
-  VOICE_MONTHLY_LIMIT,
-  getVoiceUsageThisMonth,
-  incrementVoiceUsage,
-} = require('../services/payment/subscription.service');
+const { incrementVoiceUsage } = require('../services/payment/subscription.service');
 
 const VALID_LOG_TYPES = ['glucose', 'blood_pressure', 'insulin'];
 
@@ -32,24 +28,6 @@ async function voiceParse(pool, req, res) {
     return res.status(400).json({
       ok: false,
       error: t('voice.invalid_log_type', getLang(req), { types: VALID_LOG_TYPES.join(', ') }),
-    });
-  }
-
-  // Check monthly voice limit
-  let voiceUsed;
-  try {
-    voiceUsed = await getVoiceUsageThisMonth(pool, req.user.id);
-  } catch {
-    voiceUsed = 0;
-  }
-
-  if (voiceUsed >= VOICE_MONTHLY_LIMIT) {
-    return res.status(429).json({
-      ok: false,
-      code: 'VOICE_LIMIT_EXCEEDED',
-      error: t('error.voice_limit_exceeded', getLang(req), { limit: VOICE_MONTHLY_LIMIT }),
-      voiceUsed,
-      voiceLimit: VOICE_MONTHLY_LIMIT,
     });
   }
 

@@ -50,6 +50,7 @@ jest.mock('fs', () => {
 jest.mock('../../src/services/payment/subscription.service', () => ({
   activateFromIap: jest.fn(),
   applyIapWebhookEvent: jest.fn(),
+  getStatus: jest.fn(),
 }));
 
 // Silence Sentry capture — module is optional anyway.
@@ -74,44 +75,6 @@ beforeEach(() => {
   });
 });
 
-// ─── productIdToMonths ─────────────────────────────────────────────
-
-describe('productIdToMonths', () => {
-  const { productIdToMonths } = iapService;
-
-  test('monthly variants → 1', () => {
-    expect(productIdToMonths('asinu.premium.monthly')).toBe(1);
-    expect(productIdToMonths('asinu.premium.month')).toBe(1);
-    expect(productIdToMonths('asinu.premium.1m')).toBe(1);
-    expect(productIdToMonths('ASINU.PREMIUM.MONTHLY')).toBe(1); // case-insensitive
-  });
-
-  test('quarterly → 3', () => {
-    expect(productIdToMonths('asinu.premium.quarterly')).toBe(3);
-    expect(productIdToMonths('asinu.premium.3m')).toBe(3);
-  });
-
-  test('semi-annual → 6', () => {
-    expect(productIdToMonths('asinu.premium.semiannual')).toBe(6);
-    expect(productIdToMonths('asinu.premium.6m')).toBe(6);
-  });
-
-  test('yearly variants → 12', () => {
-    expect(productIdToMonths('asinu.premium.yearly')).toBe(12);
-    expect(productIdToMonths('asinu.premium.annual')).toBe(12);
-    expect(productIdToMonths('asinu.premium.year')).toBe(12);
-    expect(productIdToMonths('asinu.premium.12m')).toBe(12);
-  });
-
-  test('unknown suffix → null (caller maps to UNKNOWN_PRODUCT)', () => {
-    expect(productIdToMonths('asinu.premium.weekly')).toBeNull();
-    expect(productIdToMonths('asinu.lifetime')).toBeNull();
-    expect(productIdToMonths('')).toBeNull();
-    expect(productIdToMonths(null)).toBeNull();
-    expect(productIdToMonths(undefined)).toBeNull();
-  });
-});
-
 // ─── handleAppleNotification ───────────────────────────────────────
 
 describe('handleAppleNotification', () => {
@@ -130,7 +93,7 @@ describe('handleAppleNotification', () => {
     return {
       transactionId: 12345,
       originalTransactionId: 99999,
-      productId: 'asinu.premium.monthly',
+      productId: 'asinu.antam2.monthly',
       expiresDate: new Date('2030-01-01').getTime(),
       ...overrides,
     };
@@ -162,7 +125,7 @@ describe('handleAppleNotification', () => {
       expect.objectContaining({
         platform: 'apple',
         action: 'renew',
-        productId: 'asinu.premium.monthly',
+        productId: 'asinu.antam2.monthly',
         transactionId: '12345',
         originalTransactionId: '99999',
       })
@@ -242,7 +205,7 @@ describe('handleGoogleNotification', () => {
         version: '1.0',
         notificationType,
         purchaseToken,
-        subscriptionId: 'asinu.premium.monthly',
+        subscriptionId: 'asinu.antam2.monthly',
       },
     };
     return {
@@ -257,7 +220,7 @@ describe('handleGoogleNotification', () => {
     return {
       data: {
         latestOrderId: 'GPA.1234-5678-9012-34567..0',
-        lineItems: [{ productId: 'asinu.premium.monthly', expiryTime: '2030-01-01T00:00:00Z' }],
+        lineItems: [{ productId: 'asinu.antam2.monthly', expiryTime: '2030-01-01T00:00:00Z' }],
         ...overrides,
       },
     };
@@ -298,7 +261,7 @@ describe('handleGoogleNotification', () => {
       expect.objectContaining({
         platform: 'google',
         action: 'renew',
-        productId: 'asinu.premium.monthly',
+        productId: 'asinu.antam2.monthly',
         expiresAt: new Date('2030-01-01T00:00:00Z').toISOString(),
       })
     );

@@ -158,14 +158,9 @@ const enhanceReplyWithProfile = (reply, profile) => {
 // SYSTEM PROMPT BUILDING
 // =====================================================
 
-const HISTORY_LIMIT_FREE = Number(process.env.CHAT_HISTORY_LIMIT_FREE || 50);
-const HISTORY_LIMIT_PREMIUM = Number(process.env.CHAT_HISTORY_LIMIT_PREMIUM || 300);
-const HISTORY_LIMIT = HISTORY_LIMIT_FREE; // default export (backward compat)
-// Retention bumped 7 -> 30 days for Free tier to match the MVP pricing
-// card ("Nhật ký dữ liệu sức khỏe / Check-in: 30 ngày gần nhất"). Premium
-// keeps full history. Tunable via env in case product wants to flex it.
-const RETENTION_DAYS_FREE = Number(process.env.CHAT_RETENTION_DAYS_FREE || 30);
-const RETENTION_DAYS_PREMIUM = Number(process.env.CHAT_RETENTION_DAYS_PREMIUM || 365);
+// This only bounds the prompt context sent to the model. Stored and visible
+// chat history has no subscription retention limit in V2.
+const HISTORY_LIMIT = Number(process.env.CHAT_CONTEXT_MESSAGE_LIMIT || 100);
 
 /**
  * Kiểm tra một đoạn text có phải câu hỏi không.
@@ -717,7 +712,7 @@ Asinu: "${selfRef} giải thích ${honorific} nghe nha. Tiền tiểu đường 
 
 [VÍ DỤ 5 — Cấp cứu, TUYỆT ĐỐI KHÔNG emoji — phải nghiêm túc]
 User: "Tôi đau ngực dữ lắm, lan xuống tay trái"
-Asinu: "${honorific} ơi, đau ngực lan tay trái có thể là dấu hiệu nhồi máu cơ tim, KHÔNG được đợi nữa nhé. ${honorific} GỌI 115 NGAY hoặc nhờ người chở đến bệnh viện cấp cứu gần nhất ngay bây giờ. Trong lúc chờ, ${honorific} ngồi yên, hít thở chậm, đừng cố gắng đi lại. Nếu có aspirin 81mg ở nhà thì nhai 1 viên (trừ khi ${honorific} dị ứng aspirin). ${selfRef} ở đây với ${honorific}, nhưng phải đi cấp cứu ngay nha, đừng cố chịu."`);
+Asinu: "${honorific} ơi, đau ngực lan tay trái có thể là dấu hiệu cấp cứu. ${honorific} GỌI 115 NGAY hoặc nhờ người đưa đến cơ sở cấp cứu gần nhất ngay bây giờ. Trong lúc chờ, ${honorific} ngồi yên, hạn chế đi lại và làm theo hướng dẫn của nhân viên cấp cứu. ${selfRef} ở đây với ${honorific}, nhưng phải đi cấp cứu ngay nha, đừng cố chịu."`);
   }
 
   return lines.join('\n');
@@ -738,16 +733,14 @@ Asinu: "${honorific} ơi, đau ngực lan tay trái có thể là dấu hiệu n
 async function getRecentHistory(
   pool,
   userId,
-  limit = HISTORY_LIMIT,
-  retentionDays = RETENTION_DAYS_FREE
+  limit = HISTORY_LIMIT
 ) {
   const result = await pool.query(
     `SELECT message, sender FROM chat_histories
      WHERE user_id = $1
-       AND created_at >= NOW() - ($2 || ' days')::INTERVAL
      ORDER BY created_at DESC, CASE sender WHEN 'user' THEN 1 ELSE 0 END DESC
-     LIMIT $3`,
-    [userId, retentionDays, limit]
+     LIMIT $2`,
+    [userId, limit]
   );
   return result.rows.reverse(); // chronological order
 }
@@ -760,14 +753,16 @@ async function getRecentHistory(
  * @param {number} retentionDays - How many days back
  * @returns {Promise<Array>}
  */
-async function getChatHistory(pool, userId, limit = 100, retentionDays = RETENTION_DAYS_FREE) {
+async function getChatHistory(pool, userId, limit = 100) {
   const result = await pool.query(
-    `SELECT id, message, sender, created_at FROM chat_histories
-     WHERE user_id = $1
-       AND created_at >= NOW() - ($2 || ' days')::INTERVAL
-     ORDER BY created_at ASC, CASE sender WHEN 'user' THEN 0 ELSE 1 END ASC
-     LIMIT $3`,
-    [userId, retentionDays, limit]
+    `SELECT * FROM (
+       SELECT id, message, sender, created_at FROM chat_histories
+        WHERE user_id = $1
+        ORDER BY created_at DESC, id DESC
+        LIMIT $2
+     ) recent
+     ORDER BY created_at ASC, id ASC`,
+    [userId, limit]
   );
   return result.rows;
 }
@@ -913,7 +908,6 @@ async function saveAssistantReply(pool, userId, reply, timestamp) {
  */
 async function processChat(pool, userId, message, context = {}) {
   const { getChatReply } = require('./chat.provider.service');
-  const { isPremium: checkIsPremium } = require('../payment/subscription.service');
 
   logger.debug('[Chat] received message', {
     userId,
@@ -929,7 +923,7 @@ async function processChat(pool, userId, message, context = {}) {
     let systemPrompt = null;
     let logsSummary = null;
 
-    // Determine user language + retention window
+    // Determine user language.
     const {
       rows: [userRow],
     } = await pool.query(
@@ -937,12 +931,9 @@ async function processChat(pool, userId, message, context = {}) {
       [userId, 'vi']
     );
     const userLang = userRow?.lang || context.lang || 'vi';
-    const userIsPremium = await checkIsPremium(pool, userId);
-    const retentionDays = userIsPremium ? RETENTION_DAYS_PREMIUM : RETENTION_DAYS_FREE;
     logger.debug('[Chat] request context', {
       userId,
       provider: provider || 'default',
-      premium: userIsPremium,
       lang: userLang,
     });
 
@@ -970,11 +961,10 @@ async function processChat(pool, userId, message, context = {}) {
     } else {
       // Gemini/other: fetch history + profile + health logs BEFORE saving current message
       try {
-        const historyLimit = userIsPremium ? HISTORY_LIMIT_PREMIUM : HISTORY_LIMIT_FREE;
         let userMemories = [];
         [onboardingProfile, conversationHistory, logsSummary, userMemories] = await Promise.all([
           getOnboardingProfile(pool, userId),
-          getRecentHistory(pool, userId, historyLimit, retentionDays),
+          getRecentHistory(pool, userId, HISTORY_LIMIT),
           getHealthLogsSummary(pool, userId),
           getUserMemories(pool, userId).catch(() => []),
         ]);
@@ -1124,10 +1114,6 @@ module.exports = {
   // Constants
   FALLBACK_CONTEXT,
   HISTORY_LIMIT,
-  HISTORY_LIMIT_FREE,
-  HISTORY_LIMIT_PREMIUM,
-  RETENTION_DAYS_FREE,
-  RETENTION_DAYS_PREMIUM,
 
   // Helpers
   collectIssueItems,

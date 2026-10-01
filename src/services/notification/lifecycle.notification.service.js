@@ -16,18 +16,19 @@ const EXPIRING_DAYS_BEFORE = 3;
 const PROFILE_INCOMPLETE_DAYS_AFTER_SIGNUP = 3;
 
 /**
- * Notify Premium users whose subscription expires in EXPIRING_DAYS_BEFORE days.
+ * Notify An Tam plan owners whose subscription expires soon.
  * Dedup via notifications table (same-type 24h check).
  */
 async function runSubscriptionExpiringSoon(pool) {
   const { rows } = await pool.query(
-    `SELECT u.id, u.push_token, u.subscription_expires_at,
+    `SELECT u.id, u.push_token, h.current_period_end AS subscription_expires_at,
             COALESCE(u.language_preference, 'vi') AS lang
-     FROM users u
-     WHERE u.subscription_tier = 'premium'
-       AND u.subscription_expires_at IS NOT NULL
-       AND u.subscription_expires_at > NOW()
-       AND u.subscription_expires_at <= NOW() + INTERVAL '${EXPIRING_DAYS_BEFORE} days'
+     FROM subscription_households h
+     JOIN users u ON u.id = h.owner_user_id
+     WHERE h.plan_code <> 'free' AND h.status IN ('active', 'grace_period')
+       AND h.current_period_end IS NOT NULL
+       AND h.current_period_end > NOW()
+       AND h.current_period_end <= NOW() + INTERVAL '${EXPIRING_DAYS_BEFORE} days'
        AND u.deleted_at IS NULL
        AND NOT EXISTS (
          SELECT 1 FROM notifications n
@@ -75,17 +76,19 @@ async function runSubscriptionExpiringSoon(pool) {
 }
 
 /**
- * Notify users whose Premium just expired (within last 24 hours), once.
+ * Notify owners whose An Tam plan just expired (within last 24 hours), once.
  * Note: backend logic should already downgrade them at expires_at.
  */
 async function runSubscriptionExpired(pool) {
   const { rows } = await pool.query(
-    `SELECT u.id, u.push_token, u.subscription_expires_at,
+    `SELECT u.id, u.push_token, h.current_period_end AS subscription_expires_at,
             COALESCE(u.language_preference, 'vi') AS lang
-     FROM users u
-     WHERE u.subscription_expires_at IS NOT NULL
-       AND u.subscription_expires_at <= NOW()
-       AND u.subscription_expires_at >= NOW() - INTERVAL '24 hours'
+     FROM subscription_households h
+     JOIN users u ON u.id = h.owner_user_id
+     WHERE h.plan_code <> 'free'
+       AND h.current_period_end IS NOT NULL
+       AND h.current_period_end <= NOW()
+       AND h.current_period_end >= NOW() - INTERVAL '24 hours'
        AND u.deleted_at IS NULL
        AND NOT EXISTS (
          SELECT 1 FROM notifications n

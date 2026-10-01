@@ -2,7 +2,6 @@ const express = require('express');
 const multer = require('multer');
 const { t, getLang } = require('../i18n');
 const { requireAuth } = require('../middleware/auth.middleware');
-const { requirePremium } = require('../middleware/subscription.middleware');
 const { handleUpload, verifyAudioMagicBytes } = require('../middleware/upload.middleware');
 const { voiceChat, getVoiceUsage } = require('../controllers/voice.controller');
 
@@ -33,12 +32,11 @@ function voiceRoutes(pool) {
   router.post(
     '/chat',
     requireAuth,
-    requirePremium(pool),
     handleUpload(voiceUpload.single('audio')),
     verifyAudioMagicBytes,
     (req, res) => voiceChat(pool, req, res)
   );
-  router.get('/usage', requireAuth, requirePremium(pool), (req, res) =>
+  router.get('/usage', requireAuth, (req, res) =>
     getVoiceUsage(pool, req, res)
   );
 

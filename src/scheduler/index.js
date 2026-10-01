@@ -25,6 +25,7 @@ const {
 const { flushCrmEventOutbox } = require('../services/integrations/crm-event.service');
 const { flushDoctorTaskOutbox } = require('../services/integrations/doctor-task.service');
 const checkinCall = require('../services/checkin-call/checkin-call.service');
+const earlySignal = require('../services/early-signal/early-signal.service');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
@@ -133,6 +134,11 @@ function startScheduler(pool) {
   safeCron('0 */6 * * *', 'health_feed_cycle', async () => {
     const stats = await runHealthFeedCycle(pool);
     logger.info('cron.health_feed_cycle.stats', { stats });
+  });
+
+  safeCron('0 8 * * 1', 'early_signal_weekly', async () => {
+    const stats = await earlySignal.runWeekly(pool);
+    logger.info('cron.early_signal_weekly.stats', stats);
   });
 
   // Daily database log cleanup at 03:30 VN time.

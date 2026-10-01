@@ -87,10 +87,18 @@ async function getApplePublicKeys() {
 async function getCrmUserPayload(pool, userId) {
   const result = await pool.query(
     `SELECT u.id, u.email, u.phone_number, u.full_name, u.display_name, u.avatar_url,
-            u.zalo_id, u.subscription_tier, u.subscription_expires_at,
+            u.zalo_id,
+            CASE WHEN h.plan_code <> 'free' AND h.status IN ('active','grace_period')
+                       AND h.current_period_end > NOW()
+                 THEN h.plan_code ELSE 'free' END AS account_tier,
+            CASE WHEN h.plan_code <> 'free' AND h.status IN ('active','grace_period')
+                       AND h.current_period_end > NOW()
+                 THEN h.current_period_end ELSE NULL END AS subscription_expires_at,
             uop.birth_year, uop.gender
        FROM users u
        LEFT JOIN user_onboarding_profiles uop ON uop.user_id = u.id
+       LEFT JOIN subscription_household_members hm ON hm.user_id = u.id AND hm.status = 'active'
+       LEFT JOIN subscription_households h ON h.id = hm.household_id
       WHERE u.id = $1`,
     [userId]
   );
@@ -106,7 +114,7 @@ async function getCrmUserPayload(pool, userId) {
     gender: user.gender || null,
     zalo_user_id: user.zalo_id || null,
     lead_source: 'asinu_app',
-    account_tier: user.subscription_tier || 'free',
+    account_tier: user.account_tier || 'free',
     subscription_expires_at: user.subscription_expires_at
       ? new Date(user.subscription_expires_at).toISOString()
       : null,

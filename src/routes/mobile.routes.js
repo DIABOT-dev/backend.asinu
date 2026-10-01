@@ -1,6 +1,5 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
-const { requirePremium } = require('../middleware/subscription.middleware');
 const { chatbotGate } = require('../middleware/chatbot.gate.middleware');
 const {
   audioUpload,
@@ -103,7 +102,6 @@ function mobileRoutes(pool) {
     chatbotGate(pool),
     handleUpload(audioUpload.single('audio')),
     verifyAudioMagicBytes,
-    requirePremium(pool),
     (req, res) => transcribeAudio(pool, req, res)
   );
 

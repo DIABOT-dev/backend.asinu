@@ -17,6 +17,8 @@ const healthRoutes = require('./src/routes/health.routes');
 const notificationRoutes = require('./src/routes/notifications.routes');
 const paymentRoutes = require('./src/routes/payment.routes');
 const subscriptionRoutes = require('./src/routes/subscription.routes');
+const householdRoutes = require('./src/routes/household.routes');
+const earlySignalRoutes = require('./src/routes/early-signal.routes');
 const voiceRoutes = require('./src/routes/voice.routes');
 const logsRoutes = require('./src/routes/logs.routes');
 const iapRoutes = require('./src/routes/iap.routes');
@@ -158,6 +160,8 @@ app.use('/api/doctor', doctorProfileRoutes(pool));
 app.use('/api/notifications', notificationRoutes(pool));
 app.use('/api/payments', paymentRoutes(pool));
 app.use('/api/subscriptions', subscriptionRoutes(pool));
+app.use('/api/subscription-household', householdRoutes(pool));
+app.use('/api/early-signals', earlySignalRoutes(pool));
 app.use('/api/voice', voiceRoutes(pool));
 app.use('/api/logs', logsRoutes(pool));
 app.use('/api/iap', iapRoutes(pool));
@@ -180,7 +184,7 @@ const GLOBAL_ERROR_MESSAGE_KEYS = {
   PAYMENT_FAILED: 'error.payment_failed',
   PAYMENT_NOT_FOUND: 'error.payment_not_found',
   AMOUNT_MISMATCH: 'error.amount_mismatch',
-  SUBSCRIPTION_REQUIRED: 'error.premium_required',
+  AN_TAM_REQUIRED: 'error.an_tam_required',
   INVALID_FILE: 'error.invalid_data',
   FILE_TOO_LARGE: 'error.file_too_large',
   UPSTREAM_FAILED: 'error.service_unavailable',

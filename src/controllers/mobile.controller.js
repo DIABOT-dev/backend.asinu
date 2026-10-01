@@ -1,6 +1,8 @@
 ﻿const { t, getLang } = require('../i18n');
 const { logBaseSchema, logDataSchemas } = require('../validation/validation.schemas');
 const mobileService = require('../services/profile/mobile.service');
+const entitlementService = require('../services/payment/entitlement.service');
+const earlySignalService = require('../services/early-signal/early-signal.service');
 
 function validateMobileLog(payload) {
   const base = logBaseSchema.safeParse(payload);
@@ -40,6 +42,15 @@ async function createMobileLog(pool, req, res) {
   if (!result.ok) {
     return res.status(result.statusCode || 500).json(result);
   }
+
+  entitlementService.getEntitlement(pool, req.user.id).then((entitlement) => {
+    if (!entitlement.automaticEarlySignals) return;
+    return earlySignalService.evaluate(pool, req.user.id, {
+      requestedBy: req.user.id,
+      triggerType: 'new_log',
+      triggerRef: result.logId,
+    });
+  }).catch(() => {});
 
   return res.status(200).json({ ok: true, log_id: result.logId, log_type: result.logType });
 }

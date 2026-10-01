@@ -1,16 +1,15 @@
 /**
  * Subscription Middleware
- * Protect premium-only endpoints.
+ * Protect An Tam-only endpoints such as the AI call centre.
  */
 
-const { isPremium } = require('../services/payment/subscription.service');
+const { isAnTam } = require('../services/payment/subscription.service');
 const { t, getLang } = require('../i18n');
 
 /**
- * Middleware factory — requires a premium subscription.
- * Usage: router.post('/voice/chat', requireAuth, requirePremium(pool), handler)
+ * Middleware factory — requires an active An Tam household entitlement.
  */
-function requirePremium(pool) {
+function requireAnTam(pool) {
   return async function (req, res, next) {
     const userId = req.user?.id;
     if (!userId) {
@@ -20,12 +19,12 @@ function requirePremium(pool) {
     }
 
     try {
-      const premium = await isPremium(pool, userId);
-      if (!premium) {
+      const enabled = await isAnTam(pool, userId);
+      if (!enabled) {
         return res.status(403).json({
           ok: false,
-          code: 'PREMIUM_REQUIRED',
-          error: t('error.premium_required', getLang(req)),
+          code: 'AN_TAM_REQUIRED',
+          error: t('error.an_tam_required', getLang(req)),
         });
       }
       next();
@@ -35,4 +34,4 @@ function requirePremium(pool) {
   };
 }
 
-module.exports = { requirePremium };
+module.exports = { requireAnTam };

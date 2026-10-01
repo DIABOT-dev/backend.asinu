@@ -4,6 +4,7 @@ const { sendVoipNotification } = require('../notification/apns.voip.service');
 const logger = require('../../lib/logger');
 const { t } = require('../../i18n');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
+const entitlementService = require('../payment/entitlement.service');
 const {
   BODY_LOCATIONS,
   getLocationOptions,
@@ -189,6 +190,10 @@ async function saveSettings(pool, userId, input) {
     ...input,
   });
   if (value.enabled) {
+    const entitlement = await entitlementService.getEntitlement(pool, userId);
+    if (!entitlement.callCenterEnabled) {
+      throw serviceError('An Tam plan required', 403, 'AN_TAM_REQUIRED');
+    }
     const ownToken = await pool.query(
       'SELECT push_token, fcm_token, voip_push_token FROM users WHERE id = $1 AND deleted_at IS NULL',
       [userId]
@@ -948,10 +953,65 @@ async function createDailyEpisodes(pool) {
       "(((now() AT TIME ZONE s.timezone)::date + s.checkin_time) AT TIME ZONE s.timezone) + (s.grace_hours * interval '1 hour'), " +
       "(((now() AT TIME ZONE s.timezone)::date + s.checkin_time) AT TIME ZONE s.timezone) + (s.grace_hours * interval '1 hour'), " +
       'to_jsonb(s) FROM checkin_call_settings s JOIN users u ON u.id = s.user_id ' +
+      "JOIN subscription_household_members hm ON hm.user_id = s.user_id AND hm.status = 'active' " +
+      "JOIN subscription_households h ON h.id = hm.household_id AND h.plan_code <> 'free' " +
+      "AND h.status IN ('active','grace_period') AND h.current_period_end > now() " +
       'WHERE s.enabled = true AND u.deleted_at IS NULL AND (now() AT TIME ZONE s.timezone)::time >= s.checkin_time ' +
-      'ON CONFLICT (user_id, local_date) DO NOTHING RETURNING id'
+      'ON CONFLICT DO NOTHING RETURNING id'
   );
   return result.rowCount;
+}
+
+async function startEarlySignalEpisode(pool, userId, assessmentId) {
+  const entitlement = await entitlementService.getEntitlement(pool, userId);
+  if (!entitlement.callCenterEnabled) return null;
+
+  const db = await pool.connect();
+  try {
+    await db.query('BEGIN');
+    const current = await settings(db, userId);
+    const config = {
+      ...DEFAULTS,
+      ...current,
+      checkin_time: String(current.checkin_time || DEFAULTS.checkin_time).slice(0, 5),
+      enabled: true,
+      early_signal: true,
+    };
+    const inserted = await db.query(
+      `INSERT INTO checkin_call_episodes (
+         user_id, local_date, state, severity, scheduled_at, grace_until,
+         next_action_at, config, trigger_source, early_signal_assessment_id
+       ) VALUES ($1, (now() AT TIME ZONE $2)::date, 'CONTACT_USER', 'URGENT',
+                 now(), now(), NULL, $3::jsonb, 'EARLY_SIGNAL', $4)
+       ON CONFLICT DO NOTHING
+       RETURNING *`,
+      [userId, config.timezone, JSON.stringify(config), assessmentId]
+    );
+    if (!inserted.rowCount) {
+      const existing = await db.query(
+        'SELECT * FROM checkin_call_episodes WHERE early_signal_assessment_id = $1',
+        [assessmentId]
+      );
+      await db.query('COMMIT');
+      return existing.rows[0] || null;
+    }
+    const episode = inserted.rows[0];
+    const attempt = await createAttempt(db, episode, userId, 'USER');
+    await db.query(
+      'UPDATE checkin_call_episodes SET next_action_at = $2, updated_at = now() WHERE id = $1',
+      [episode.id, attempt.ring_deadline]
+    );
+    await event(db, episode.id, 'EARLY_SIGNAL_CONTACT_USER', null, attempt.id, {
+      assessmentId,
+    });
+    await db.query('COMMIT');
+    return episode;
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  } finally {
+    db.release();
+  }
 }
 
 async function advance(pool, id) {
@@ -1256,6 +1316,12 @@ async function startTestCall(pool, userId, options = {}) {
   if (!testCallsEnabled()) {
     throw serviceError('Check-in call testing is disabled', 403, 'checkinCall.error.test_disabled');
   }
+  if (process.env.NODE_ENV === 'production') {
+    const entitlement = await entitlementService.getEntitlement(pool, userId);
+    if (!entitlement.callCenterEnabled) {
+      throw serviceError('An Tam plan required', 403, 'AN_TAM_REQUIRED');
+    }
+  }
 
   const recipient = await pool.query(
     'SELECT id, push_token, fcm_token, voip_push_token FROM users WHERE id = $1 AND deleted_at IS NULL',
@@ -1377,6 +1443,7 @@ module.exports = {
   tick,
   dispatchDeliveries,
   startTestCall,
+  startEarlySignalEpisode,
   cancelActiveForManualCheckin,
   _test: { invalidPushTokenChannels },
 };

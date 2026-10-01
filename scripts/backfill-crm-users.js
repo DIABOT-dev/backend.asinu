@@ -34,7 +34,7 @@ const buildPayload = (user) => ({
   lead_source: 'asinu_app',
   consent_ads: false,
   timezone: 'Asia/Ho_Chi_Minh',
-  account_tier: user.subscription_tier === 'premium' ? 'premium' : user.subscription_tier || 'free',
+  account_tier: user.account_tier || 'free',
   subscription_expires_at: toIso(user.subscription_expires_at),
 });
 
@@ -48,10 +48,18 @@ async function run() {
 
   const result = await pool.query(
     `SELECT u.id, u.phone_number, u.email, u.full_name, u.display_name, u.avatar_url,
-            u.zalo_id, u.subscription_tier, u.subscription_expires_at,
+            u.zalo_id,
+            CASE WHEN h.plan_code <> 'free' AND h.status IN ('active','grace_period')
+                       AND h.current_period_end > NOW()
+                 THEN h.plan_code ELSE 'free' END AS account_tier,
+            CASE WHEN h.plan_code <> 'free' AND h.status IN ('active','grace_period')
+                       AND h.current_period_end > NOW()
+                 THEN h.current_period_end ELSE NULL END AS subscription_expires_at,
             uop.birth_year, uop.gender
        FROM users u
        LEFT JOIN user_onboarding_profiles uop ON uop.user_id = u.id
+       LEFT JOIN subscription_household_members hm ON hm.user_id = u.id AND hm.status = 'active'
+       LEFT JOIN subscription_households h ON h.id = hm.household_id
       WHERE u.deleted_at IS NULL
       ORDER BY u.id`
   );

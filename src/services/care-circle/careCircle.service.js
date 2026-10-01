@@ -5,16 +5,9 @@
 
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { t } = require('../../i18n');
-const {
-  isPremium,
-  PREMIUM_CONNECTION_LIMIT,
-  FREE_CONNECTION_LIMIT,
-} = require('../payment/subscription.service');
+const entitlementService = require('../payment/entitlement.service');
 const { cacheGet, cacheSet } = require('../../lib/redis');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
-
-// Backwards-compat alias — kept so existing references (if any) keep working.
-const FREE_TIER_CONNECTION_LIMIT = FREE_CONNECTION_LIMIT;
 
 // =====================================================
 // CONSTANTS
@@ -110,9 +103,8 @@ async function createInvitation(pool, requesterId, data) {
     return { ok: false, error: t('careCircle.cannot_invite_self') };
   }
 
-  // Check connection limit (1 free, 50 premium)
-  const userIsPremium = await isPremium(pool, requesterId);
-  const connectionLimit = userIsPremium ? PREMIUM_CONNECTION_LIMIT : FREE_TIER_CONNECTION_LIMIT;
+  const entitlement = await entitlementService.getEntitlement(pool, requesterId);
+  const connectionLimit = entitlement.connectionLimit;
   const { rows: countRows } = await pool.query(
     `SELECT COUNT(*) FROM user_connections
      WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'`,
@@ -122,8 +114,8 @@ async function createInvitation(pool, requesterId, data) {
   if (connectionCount >= connectionLimit) {
     return {
       ok: false,
-      error: userIsPremium
-        ? t('careCircle.premium_limit_reached', 'vi', { limit: PREMIUM_CONNECTION_LIMIT })
+      error: entitlement.isAnTam
+        ? t('careCircle.premium_limit_reached', 'vi', { limit: connectionLimit })
         : t('careCircle.upgrade_premium'),
       code: 'CARE_CIRCLE_LIMIT',
       statusCode: 403,
@@ -259,16 +251,14 @@ async function acceptInvitation(pool, invitationId, userId) {
        ) locked`,
       [userId]
     );
-    const addresseeIsPremium = await isPremium(pool, userId);
-    const addresseeLimit = addresseeIsPremium
-      ? PREMIUM_CONNECTION_LIMIT
-      : FREE_TIER_CONNECTION_LIMIT;
+    const addresseeEntitlement = await entitlementService.getEntitlement(client, userId);
+    const addresseeLimit = addresseeEntitlement.connectionLimit;
     if (Number(addresseeCount[0].count) >= addresseeLimit) {
       await client.query('ROLLBACK');
       return {
         ok: false,
-        error: addresseeIsPremium
-          ? t('careCircle.premium_limit_reached', 'vi', { limit: PREMIUM_CONNECTION_LIMIT })
+        error: addresseeEntitlement.isAnTam
+          ? t('careCircle.premium_limit_reached', 'vi', { limit: addresseeLimit })
           : t('careCircle.upgrade_premium_accept'),
         code: 'CARE_CIRCLE_LIMIT',
         statusCode: 403,

@@ -3,7 +3,7 @@
  *
  * POST /api/iap/verify
  *   body: { platform, productId, purchaseToken?, signedTransaction?, receiptData? }
- *   Returns: { ok, expiresAt, planMonths } | { ok: false, code, error }
+ *   Returns: { ok, planCode, billingPeriod, expiresAt } | { ok: false, code, error }
  *
  * GET /api/iap/products
  *   Returns the product ID + price metadata so the mobile client can show
@@ -12,6 +12,7 @@
 
 const { t, getLang } = require('../i18n');
 const iapService = require('../services/payment/iap.service');
+const { products } = require('../services/payment/subscription-catalog');
 
 const APPLE_BUNDLE_ID = process.env.APPLE_BUNDLE_ID || 'com.asinu.lite';
 const GOOGLE_PACKAGE_NAME = process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.asinu.lite';
@@ -60,18 +61,7 @@ function listProducts(_pool, req, res) {
     ok: true,
     apple_bundle_id: APPLE_BUNDLE_ID,
     google_package_name: GOOGLE_PACKAGE_NAME,
-    products: [
-      {
-        id: process.env.IAP_PRODUCT_MONTHLY || 'asinu.premium.monthly',
-        plan_months: 1,
-        display_price_vnd: 199000,
-      },
-      {
-        id: process.env.IAP_PRODUCT_YEARLY || 'asinu.premium.yearly',
-        plan_months: 12,
-        display_price_vnd: 999000,
-      },
-    ],
+    products: products(),
   });
 }
 

@@ -1,22 +1,14 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const {
-  createQR,
-  createQRForRecipient,
   getStatus,
   getPlans,
   getHistory,
-  payWithWallet,
-  payWithWalletForRecipient,
 } = require('../controllers/subscription.controller');
 
 function subscriptionRoutes(pool) {
   const router = express.Router();
 
-  router.post('/qr', requireAuth, (req, res) => createQR(pool, req, res));
-  router.post('/qr/gift', requireAuth, (req, res) => createQRForRecipient(pool, req, res));
-  router.post('/wallet', requireAuth, (req, res) => payWithWallet(pool, req, res));
-  router.post('/wallet/gift', requireAuth, (req, res) => payWithWalletForRecipient(pool, req, res));
   router.get('/status', requireAuth, (req, res) => getStatus(pool, req, res));
   router.get('/plans', (req, res) => getPlans(pool, req, res));
   router.get('/history', requireAuth, (req, res) => getHistory(pool, req, res));

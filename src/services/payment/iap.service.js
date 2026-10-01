@@ -25,6 +25,7 @@ const path = require('path');
 const logger = require('../../lib/logger');
 const { captureException } = require('../../lib/sentry');
 const subscriptionService = require('./subscription.service');
+const { productForId } = require('./subscription-catalog');
 
 function assertIapRuntimeConfig() {
   if (process.env.IAP_ENABLED === 'false' || process.env.NODE_ENV !== 'production') return;
@@ -80,23 +81,6 @@ function isGooglePlatform(p) {
   return (
     String(p || '').toLowerCase() === PLATFORM_GOOGLE || String(p || '').toLowerCase() === 'android'
   );
-}
-
-// ─── Product ID → plan months mapping ──────────────────────────────
-
-function productIdToMonths(productId) {
-  const id = String(productId || '').toLowerCase();
-  if (id.endsWith('.monthly') || id.endsWith('.month') || id.endsWith('.1m')) return 1;
-  if (id.endsWith('.quarterly') || id.endsWith('.3m')) return 3;
-  if (id.endsWith('.semiannual') || id.endsWith('.6m')) return 6;
-  if (
-    id.endsWith('.yearly') ||
-    id.endsWith('.annual') ||
-    id.endsWith('.year') ||
-    id.endsWith('.12m')
-  )
-    return 12;
-  return null;
 }
 
 // ─── Apple verifier ────────────────────────────────────────────────
@@ -215,6 +199,7 @@ async function verifyAppleReceipt({ signedTransaction } = {}) {
       // Apple gives expiresDate in ms since epoch; null when product is not a subscription.
       expiresAt: decoded.expiresDate ? new Date(decoded.expiresDate).toISOString() : null,
       environment: decoded.environment,
+      offerId: decoded.offerIdentifier || null,
     };
   } catch (err) {
     logger.warn('iap.apple_verify.failed', { message: err.message });
@@ -350,6 +335,8 @@ async function verifyGooglePurchase({ productId, purchaseToken } = {}) {
         : null,
       expiresAt: item.expiryTime ? new Date(item.expiryTime).toISOString() : null,
       environment: data.testPurchase ? 'sandbox' : 'production',
+      basePlanId: item.offerDetails?.basePlanId || null,
+      offerId: item.offerDetails?.offerId || null,
     };
   } catch (err) {
     logger.warn('iap.google_verify.failed', { message: err.message, code: err.code });
@@ -362,13 +349,26 @@ async function verifyGooglePurchase({ productId, purchaseToken } = {}) {
 
 async function recordReceipt(
   pool,
-  { userId, platform, productId, transactionId, originalTransactionId, expiresAt, rawPayload }
+  {
+    userId,
+    platform,
+    productId,
+    transactionId,
+    originalTransactionId,
+    expiresAt,
+    planCode,
+    billingPeriod,
+    basePlanId,
+    offerId,
+    rawPayload,
+  }
 ) {
   try {
     const insert = await pool.query(
       `INSERT INTO iap_receipts
-         (user_id, platform, product_id, transaction_id, original_transaction_id, expires_at, raw_payload)
-       VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+         (user_id, platform, product_id, transaction_id, original_transaction_id, expires_at,
+          plan_code, billing_period, base_plan_id, offer_id, raw_payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
        ON CONFLICT (transaction_id) DO NOTHING
        RETURNING id`,
       [
@@ -378,10 +378,19 @@ async function recordReceipt(
         transactionId,
         originalTransactionId || null,
         expiresAt || null,
+        planCode,
+        billingPeriod,
+        basePlanId || null,
+        offerId || null,
         JSON.stringify(rawPayload || {}),
       ]
     );
-    return insert.rowCount > 0;
+    if (insert.rowCount) return { inserted: true, userId: Number(userId) };
+    const existing = await pool.query(
+      'SELECT user_id FROM iap_receipts WHERE transaction_id = $1 LIMIT 1',
+      [transactionId]
+    );
+    return { inserted: false, userId: Number(existing.rows[0]?.user_id || 0) };
   } catch (err) {
     if (err.code === '42P01') {
       logger.warn('iap.receipts_table_missing — migration 072_iap_receipts.sql chưa chạy');
@@ -427,37 +436,72 @@ async function verifyAndActivate(pool, userId, payload = {}) {
     };
   }
 
-  const { productId, transactionId, originalTransactionId, expiresAt } = verification;
-  const months = productIdToMonths(productId);
-  if (!months) {
+  const {
+    productId,
+    transactionId,
+    originalTransactionId,
+    expiresAt,
+    basePlanId,
+    offerId,
+  } = verification;
+  const product = productForId(productId);
+  if (!product) {
     return {
       ok: false,
       code: 'UNKNOWN_PRODUCT',
-      error: `Cannot map productId ${productId} to plan months`,
+      error: `Unknown Asinu subscription product: ${productId}`,
     };
   }
 
-  const isNew = await recordReceipt(pool, {
+  const receipt = await recordReceipt(pool, {
     userId,
     platform: isApplePlatform(platform) ? PLATFORM_APPLE : PLATFORM_GOOGLE,
     productId,
     transactionId,
     originalTransactionId,
     expiresAt,
+    planCode: product.plan_code,
+    billingPeriod: product.billing_period,
+    basePlanId,
+    offerId,
     rawPayload: { ...payload, environment: verification.environment },
   });
 
-  if (!isNew) {
+  if (!receipt.inserted && receipt.userId !== Number(userId)) {
+    return {
+      ok: false,
+      code: 'IAP_RECEIPT_OWNERSHIP_MISMATCH',
+      error: 'This Store transaction belongs to another Asinu account',
+    };
+  }
+
+  if (!receipt.inserted) {
     logger.info('iap.receipt.duplicate', { user_id: userId, transactionId });
-    return { ok: true, alreadyProcessed: true, planMonths: months, expiresAt, platform };
+    const current = await subscriptionService.getStatus(pool, userId);
+    const expectedExpiry = expiresAt ? new Date(expiresAt).getTime() : 0;
+    const currentExpiry = current.expiresAt ? new Date(current.expiresAt).getTime() : 0;
+    if (current.planCode === product.plan_code && currentExpiry >= expectedExpiry) {
+      return {
+        ok: true,
+        alreadyProcessed: true,
+        planCode: product.plan_code,
+        billingPeriod: product.billing_period,
+        expiresAt,
+        platform,
+      };
+    }
   }
 
   const result = await subscriptionService.activateFromIap(pool, userId, {
     productId,
     transactionId,
-    months,
+    originalTransactionId,
+    planCode: product.plan_code,
+    billingPeriod: product.billing_period,
     expiresAt,
     platform: isApplePlatform(platform) ? PLATFORM_APPLE : PLATFORM_GOOGLE,
+    basePlanId,
+    offerId,
   });
 
   return result;
@@ -535,7 +579,7 @@ async function handleAppleNotification(pool, envelope) {
   } else if (notificationType === 'REVOKE') {
     action = 'revoke';
   } else if (notificationType === 'DID_FAIL_TO_RENEW') {
-    // Grace period — leave expiry alone; user is still premium until it ends.
+    // Grace period — leave the current An Tam entitlement active until it ends.
     return { ok: true, ignored: true, reason: 'grace period' };
   } else {
     return { ok: true, ignored: true, reason: `unhandled type ${notificationType}` };
@@ -667,7 +711,6 @@ module.exports = {
   verifyAndActivate,
   verifyAppleReceipt,
   verifyGooglePurchase,
-  productIdToMonths,
   handleAppleNotification,
   handleGoogleNotification,
 };

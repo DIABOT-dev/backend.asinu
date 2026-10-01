@@ -1,6 +1,6 @@
 /**
  * Voice Service — mic → Whisper transcription → AI chat → text reply
- * Premium only feature.
+ * Available to every signed-in user in Asinu V2.
  */
 
 const { t } = require('../../i18n');
