@@ -109,6 +109,16 @@ const careCircleInvitationSchema = z.object({
   permissions: permissionsSchema.optional(),
 });
 
+const careCircleQrTokenSchema = z.object({
+  token: z.string().min(32).max(256),
+});
+
+const careCircleQrInvitationSchema = careCircleQrTokenSchema.extend({
+  relationship_type: z.string().max(255).optional(),
+  role: z.string().max(255).optional(),
+  permissions: permissionsSchema.optional(),
+});
+
 const escalationAckSchema = z.object({
   escalation_id: uuidSchema,
 });
@@ -242,6 +252,8 @@ module.exports = {
   onboardingRequestSchema,
   carePulseEventSchema,
   careCircleInvitationSchema,
+  careCircleQrTokenSchema,
+  careCircleQrInvitationSchema,
   permissionsSchema,
   escalationAckSchema,
   logBaseSchema,

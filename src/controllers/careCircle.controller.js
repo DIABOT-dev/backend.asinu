@@ -4,10 +4,17 @@
  */
 
 const { t, getLang } = require('../i18n');
-const { careCircleInvitationSchema } = require('../validation/validation.schemas');
+const {
+  careCircleInvitationSchema,
+  careCircleQrTokenSchema,
+  careCircleQrInvitationSchema,
+} = require('../validation/validation.schemas');
 const checkinService = require('../services/checkin/checkin.service');
 const {
   createInvitation: serviceCreateInvitation,
+  createQrToken: serviceCreateQrToken,
+  previewQrToken: servicePreviewQrToken,
+  createInvitationFromQr: serviceCreateInvitationFromQr,
   getInvitations: serviceGetInvitations,
   acceptInvitation: serviceAcceptInvitation,
   rejectInvitation: serviceRejectInvitation,
@@ -55,6 +62,58 @@ async function createInvitation(pool, req, res) {
   }
 
   return res.status(200).json({ ok: true, invitation: result.invitation });
+}
+
+async function createQrToken(pool, req, res) {
+  try {
+    const result = await serviceCreateQrToken(pool, req.user.id);
+    return res.status(201).json({ ok: true, ...result });
+  } catch (error) {
+    console.error('[care-circle-qr] create failed:', error?.message || error);
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
+  }
+}
+
+async function previewQrToken(pool, req, res) {
+  const parsed = careCircleQrTokenSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+  }
+  try {
+    const result = await servicePreviewQrToken(pool, parsed.data.token, req.user.id);
+    if (!result.ok) {
+      return res.status(result.statusCode || 400).json({
+        ok: false,
+        error: result.error,
+        code: result.code,
+      });
+    }
+    return res.status(200).json({ ok: true, preview: result.preview });
+  } catch (error) {
+    console.error('[care-circle-qr] preview failed:', error?.message || error);
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
+  }
+}
+
+async function createInvitationFromQr(pool, req, res) {
+  const parsed = careCircleQrInvitationSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+  }
+  try {
+    const result = await serviceCreateInvitationFromQr(pool, req.user.id, parsed.data);
+    if (!result.ok) {
+      return res.status(result.statusCode || 400).json({
+        ok: false,
+        error: result.error,
+        code: result.code,
+      });
+    }
+    return res.status(200).json({ ok: true, invitation: result.invitation });
+  } catch (error) {
+    console.error('[care-circle-qr] invitation failed:', error?.message || error);
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
+  }
 }
 
 /**
@@ -289,6 +348,9 @@ async function getMemberHealthSummary(pool, req, res) {
 
 module.exports = {
   createInvitation,
+  createQrToken,
+  previewQrToken,
+  createInvitationFromQr,
   getInvitations,
   acceptInvitation,
   rejectInvitation,

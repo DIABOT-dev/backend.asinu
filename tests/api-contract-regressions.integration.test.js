@@ -275,4 +275,53 @@ describeDatabase('API contract regressions', () => {
     ]);
     expect(remaining.rowCount).toBe(0);
   });
+
+  test('care circle QR token creates one invitation without exposing a user id', async () => {
+    const ownerId = await createUser('qr-owner');
+    const scannerId = await createUser('qr-scanner');
+
+    const replaced = await careCircleService.createQrToken(pool, ownerId);
+    const created = await careCircleService.createQrToken(pool, ownerId);
+    expect(created.token).toHaveLength(43);
+    expect(created.value).toContain('asinu-lite://care-circle/scan?token=');
+    expect(created.value).not.toContain(String(ownerId));
+
+    const oldCode = await careCircleService.previewQrToken(pool, replaced.token, scannerId);
+    expect(oldCode).toMatchObject({ ok: false, code: 'CARE_CIRCLE_QR_INVALID' });
+
+    const selfScan = await careCircleService.previewQrToken(pool, created.token, ownerId);
+    expect(selfScan).toMatchObject({ ok: false, code: 'CARE_CIRCLE_QR_SELF' });
+
+    const preview = await careCircleService.previewQrToken(pool, created.token, scannerId);
+    expect(preview).toMatchObject({
+      ok: true,
+      preview: { name: 'Contract qr-owner' },
+    });
+
+    const invitation = await careCircleService.createInvitationFromQr(pool, scannerId, {
+      token: created.token,
+      relationship_type: 'Bố',
+      role: 'Người thân',
+      permissions: {
+        can_view_logs: true,
+        can_receive_alerts: true,
+        can_ack_escalation: true,
+      },
+    });
+    expect(invitation).toMatchObject({
+      ok: true,
+      invitation: {
+        requester_id: scannerId,
+        addressee_id: ownerId,
+        status: 'pending',
+      },
+    });
+
+    const reused = await careCircleService.previewQrToken(pool, created.token, scannerId);
+    expect(reused).toMatchObject({
+      ok: false,
+      code: 'CARE_CIRCLE_QR_INVALID',
+      statusCode: 410,
+    });
+  });
 });

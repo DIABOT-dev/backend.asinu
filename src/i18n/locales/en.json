@@ -557,6 +557,8 @@
   "careCircle.premium_limit_reached": "Maximum connection limit of {{limit}} reached",
   "careCircle.upgrade_premium": "Free accounts can connect with 1 person only. Upgrade to An Tam to connect with more family or caregivers.",
   "careCircle.upgrade_premium_accept": "Free accounts can connect with 1 person only. Upgrade to An Tam to accept more invitations.",
+  "careCircle.qr_invalid_or_expired": "This QR code is invalid or has expired. Create a new code.",
+  "careCircle.qr_cannot_scan_self": "You cannot scan your own QR code.",
   "careCircle.alert_not_found_or_confirmed": "Not found or already confirmed",
   "checkinAi.status_very_unwell": "very unwell",
   "checkinAi.status_specific_concern": "having specific symptoms",

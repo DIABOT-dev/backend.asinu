@@ -557,6 +557,8 @@
   "careCircle.premium_limit_reached": "Đã đạt giới hạn tối đa {{limit}} kết nối",
   "careCircle.upgrade_premium": "Tài khoản miễn phí chỉ kết nối được 1 người. Nâng cấp An Tâm để kết nối nhiều người thân/người chăm sóc hơn.",
   "careCircle.upgrade_premium_accept": "Tài khoản miễn phí chỉ kết nối được 1 người. Nâng cấp An Tâm để chấp nhận thêm lời mời.",
+  "careCircle.qr_invalid_or_expired": "Mã QR không hợp lệ hoặc đã hết hạn. Hãy tạo mã mới.",
+  "careCircle.qr_cannot_scan_self": "Bạn không thể quét mã QR của chính mình.",
   "careCircle.alert_not_found_or_confirmed": "Không tìm thấy hoặc đã xác nhận",
   "checkinAi.status_very_unwell": "rất không khoẻ",
   "checkinAi.status_specific_concern": "có triệu chứng cụ thể",

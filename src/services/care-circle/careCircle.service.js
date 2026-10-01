@@ -3,6 +3,7 @@
  * Business logic for care circle connections (invitations, connections, permissions)
  */
 
+const crypto = require('crypto');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { t } = require('../../i18n');
 const entitlementService = require('../payment/entitlement.service');
@@ -18,6 +19,12 @@ const DEFAULT_PERMISSIONS = {
   can_receive_alerts: true,
   can_ack_escalation: true,
 };
+
+const QR_TOKEN_TTL_MINUTES = 10;
+
+function hashQrToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 const emitCareCircleChange = (pool, connection, status = connection?.status) => {
   if (!connection?.id || connection.requester_id == null || connection.addressee_id == null) return;
@@ -82,6 +89,133 @@ async function getUserDisplayName(pool, userId) {
   const name = user?.full_name || user?.display_name || user?.email || t('careCircle.user_label');
   await cacheSet(`user:name:${userId}`, name, 7200); // 2 hours
   return name;
+}
+
+/** Create a short-lived, opaque QR token without exposing the user id. */
+async function createQrToken(pool, ownerUserId) {
+  const token = crypto.randomBytes(32).toString('base64url');
+  const tokenHash = hashQrToken(token);
+  const result = await pool.query(
+    `WITH cleaned AS (
+       DELETE FROM care_circle_qr_tokens
+       WHERE expires_at < NOW() - INTERVAL '7 days'
+       RETURNING id
+     ), revoked AS (
+       UPDATE care_circle_qr_tokens
+       SET revoked_at = NOW()
+       WHERE owner_user_id = $1
+         AND consumed_at IS NULL
+         AND revoked_at IS NULL
+       RETURNING id
+     )
+     INSERT INTO care_circle_qr_tokens (owner_user_id, token_hash, expires_at)
+     VALUES ($1, $2, NOW() + ($3 * INTERVAL '1 minute'))
+     RETURNING expires_at`,
+    [ownerUserId, tokenHash, QR_TOKEN_TTL_MINUTES]
+  );
+  const expiresAt = result.rows[0].expires_at;
+  return {
+    token,
+    value: `asinu-lite://care-circle/scan?token=${encodeURIComponent(token)}`,
+    expiresAt,
+  };
+}
+
+async function resolveQrToken(pool, token, scannerUserId) {
+  const tokenHash = hashQrToken(token);
+  const result = await pool.query(
+    `SELECT q.owner_user_id, q.expires_at,
+            COALESCE(NULLIF(TRIM(u.display_name), ''), NULLIF(TRIM(u.full_name), ''), $2) AS name,
+            u.avatar_url
+     FROM care_circle_qr_tokens q
+     JOIN users u ON u.id = q.owner_user_id
+     WHERE q.token_hash = $1
+       AND q.consumed_at IS NULL
+       AND q.revoked_at IS NULL
+       AND q.expires_at > NOW()
+     LIMIT 1`,
+    [tokenHash, t('careCircle.user_label')]
+  );
+  const qr = result.rows[0];
+  if (!qr) {
+    return {
+      ok: false,
+      error: t('careCircle.qr_invalid_or_expired'),
+      code: 'CARE_CIRCLE_QR_INVALID',
+      statusCode: 410,
+    };
+  }
+  if (Number(qr.owner_user_id) === Number(scannerUserId)) {
+    return {
+      ok: false,
+      error: t('careCircle.qr_cannot_scan_self'),
+      code: 'CARE_CIRCLE_QR_SELF',
+      statusCode: 400,
+    };
+  }
+
+  const existing = await pool.query(
+    `SELECT status
+     FROM user_connections
+     WHERE LEAST(requester_id, addressee_id) = LEAST($1::integer, $2::integer)
+       AND GREATEST(requester_id, addressee_id) = GREATEST($1::integer, $2::integer)
+     LIMIT 1`,
+    [scannerUserId, qr.owner_user_id]
+  );
+  if (existing.rowCount > 0) {
+    return {
+      ok: false,
+      error: t('careCircle.connection_exists'),
+      code: 'CARE_CIRCLE_CONNECTION_EXISTS',
+      statusCode: 409,
+    };
+  }
+
+  return {
+    ok: true,
+    tokenHash,
+    ownerUserId: Number(qr.owner_user_id),
+    preview: {
+      name: qr.name,
+      avatarUrl: qr.avatar_url || null,
+      expiresAt: qr.expires_at,
+    },
+  };
+}
+
+async function previewQrToken(pool, token, scannerUserId) {
+  const result = await resolveQrToken(pool, token, scannerUserId);
+  if (!result.ok) return result;
+  return { ok: true, preview: result.preview };
+}
+
+async function createInvitationFromQr(pool, requesterId, data) {
+  const resolved = await resolveQrToken(pool, data.token, requesterId);
+  if (!resolved.ok) return resolved;
+
+  const invitationResult = await createInvitation(pool, requesterId, {
+    addressee_id: resolved.ownerUserId,
+    relationship_type: data.relationship_type,
+    role: data.role,
+    permissions: data.permissions,
+  });
+  if (!invitationResult.ok) return invitationResult;
+
+  try {
+    await pool.query(
+      `UPDATE care_circle_qr_tokens
+       SET consumed_at = NOW(), consumed_by_user_id = $2
+       WHERE token_hash = $1
+         AND consumed_at IS NULL
+         AND revoked_at IS NULL`,
+      [resolved.tokenHash, requesterId]
+    );
+  } catch (error) {
+    // The invitation already exists at this point. Keep the successful user
+    // action and rely on the unique connection pair to prevent a duplicate.
+    console.error('[care-circle-qr] failed to consume token:', error?.message || error);
+  }
+  return invitationResult;
 }
 
 // =====================================================
@@ -764,6 +898,9 @@ module.exports = {
   // Helpers
   normalizePermissions,
   getUserDisplayName,
+  createQrToken,
+  previewQrToken,
+  createInvitationFromQr,
 
   // Invitations
   createInvitation,

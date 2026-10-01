@@ -3,6 +3,9 @@ const { requireAuth } = require('../middleware/auth.middleware');
 const { careCircleEnabled } = require('../middleware/care-circle.gate.middleware');
 const {
   createInvitation,
+  createQrToken,
+  previewQrToken,
+  createInvitationFromQr,
   getInvitations,
   acceptInvitation,
   rejectInvitation,
@@ -20,6 +23,11 @@ function careCircleRoutes(pool) {
   router.use(careCircleEnabled);
 
   router.post('/invitations', requireAuth, (req, res) => createInvitation(pool, req, res));
+  router.post('/qr-token', requireAuth, (req, res) => createQrToken(pool, req, res));
+  router.post('/qr-token/preview', requireAuth, (req, res) => previewQrToken(pool, req, res));
+  router.post('/qr-token/invitations', requireAuth, (req, res) =>
+    createInvitationFromQr(pool, req, res)
+  );
   router.get('/invitations', requireAuth, (req, res) => getInvitations(pool, req, res));
   router.post('/invitations/:id/accept', requireAuth, (req, res) =>
     acceptInvitation(pool, req, res)
