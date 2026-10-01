@@ -99,7 +99,7 @@ function formatQuestion(engineResult, profile, _previousAnswers = []) {
 
     case 'followup_status': {
       const prev = engineResult.previousSessionSummary || 'không khoẻ';
-      question = `${CallName} ơi, hôm qua ${honorific} nói bị ${prev}. Hôm nay ${honorific} thấy thế nào?`;
+      question = `${CallName} ơi, lần check-in trước ${honorific} nói bị ${prev}. Bây giờ ${honorific} thấy thế nào?`;
       break;
     }
 

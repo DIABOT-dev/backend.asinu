@@ -367,6 +367,7 @@ async function getRecentHealthContext(pool, userId) {
     getSymptomFrequencyContext,
     getMedicationAdherenceContext,
   } = require('./symptom-tracker.service');
+  const currentSessionDate = checkinDateVN();
   const [glucoseRes, bpRes, weightRes, checkinsRes, medRes, symptomFreqCtx, medAdherenceCtx] =
     await Promise.all([
       // Glucose 7 ngày gần nhất (tối đa 5 bản ghi)
@@ -400,9 +401,11 @@ async function getRecentHealthContext(pool, userId) {
       pool.query(
         `SELECT session_date, initial_status, triage_summary, triage_severity
        FROM health_checkins
-       WHERE user_id = $1 AND triage_completed_at IS NOT NULL
+       WHERE user_id = $1
+         AND session_date < $2
+         AND triage_completed_at IS NOT NULL
        ORDER BY session_date DESC LIMIT 3`,
-        [userId]
+        [userId, currentSessionDate]
       ),
       // [G8] Medication log today — check if user took medication
       pool.query(
