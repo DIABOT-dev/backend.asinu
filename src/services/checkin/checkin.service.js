@@ -1713,27 +1713,35 @@ async function runMorningCheckin(pool, hour) {
  * @param {object} pool
  * @param {number} userId
  * @param {number} days - 7 (tuần) hoặc 30 (tháng)
+ * @param {{startDate: string, endDateExclusive: string, totalDays: number}|null} dateRange
  */
-async function getHealthReport(pool, userId, days = 7) {
+async function getHealthReport(pool, userId, days = 7, dateRange = null) {
   const since = new Date();
   since.setDate(since.getDate() - days);
-  const sinceStr = since.toISOString().slice(0, 10);
+  const startDate = dateRange?.startDate || since.toISOString().slice(0, 10);
+  const endDateExclusive = dateRange?.endDateExclusive || null;
+  const totalDays = dateRange?.totalDays || days;
+  const rangeClause = endDateExclusive ? 'AND session_date < $3' : '';
+  const rangeParams = endDateExclusive
+    ? [userId, startDate, endDateExclusive]
+    : [userId, startDate];
 
   // Lấy tất cả sessions trong khoảng thời gian
   const { rows: sessions } = await pool.query(
-    `SELECT id, session_date, initial_status, current_status, flow_state,
+    `SELECT id, session_date::text AS session_date, initial_status, current_status, flow_state,
             triage_summary, triage_severity, triage_messages,
-            resolved_at, family_alerted, emergency_triggered,
-            created_at
+            body_locations, body_location_other, triage_completed_at,
+            resolved_at, family_alerted, emergency_triggered, last_response_at, created_at
      FROM health_checkins
      WHERE user_id = $1 AND session_date >= $2
+       ${rangeClause}
      ORDER BY session_date DESC`,
-    [userId, sinceStr]
+    rangeParams
   );
 
   if (!sessions.length) {
     return {
-      totalDays: days,
+      totalDays,
       checkinDays: 0,
       sessions: [],
       severityDistribution: { low: 0, medium: 0, high: 0, emergency: 0 },
@@ -1867,7 +1875,7 @@ async function getHealthReport(pool, userId, days = 7) {
   // Highlights
   const highlights = [];
   const checkinDays = new Set(sessions.map((s) => s.session_date)).size;
-  highlights.push({ type: 'consistency', value: `${checkinDays}/${days}` });
+  highlights.push({ type: 'consistency', value: `${checkinDays}/${totalDays}` });
   if (severityDist.high + severityDist.emergency > 0)
     highlights.push({
       type: 'high_severity_days',
@@ -1878,12 +1886,21 @@ async function getHealthReport(pool, userId, days = 7) {
 
   // Session summaries cho UI
   const sessionSummaries = sessions.map((s) => ({
+    id: s.id,
     date: s.session_date,
     status: s.initial_status,
+    currentStatus: s.current_status,
     severity: s.triage_severity,
     summary: s.triage_summary,
     flowState: s.flow_state,
     resolved: !!s.resolved_at,
+    resolvedAt: s.resolved_at,
+    createdAt: s.created_at,
+    lastResponseAt: s.last_response_at,
+    triageCompletedAt: s.triage_completed_at,
+    bodyLocations: s.body_locations || [],
+    bodyLocationOther: s.body_location_other,
+    messages: Array.isArray(s.triage_messages) ? s.triage_messages : [],
   }));
 
   // Engagement stats (habit report)
@@ -1893,8 +1910,9 @@ async function getHealthReport(pool, userId, days = 7) {
        COUNT(*) as total,
        AVG(EXTRACT(HOUR FROM created_at)) as avg_checkin_hour
      FROM health_checkins
-     WHERE user_id = $1 AND created_at >= NOW() - INTERVAL '${days} days'`,
-    [userId]
+     WHERE user_id = $1 AND session_date >= $2
+       ${rangeClause}`,
+    rangeParams
   );
 
   const engagement = engagementRes.rows[0];
@@ -1902,7 +1920,7 @@ async function getHealthReport(pool, userId, days = 7) {
     engagement.total > 0 ? Math.round((engagement.responded / engagement.total) * 100) : 0;
 
   return {
-    totalDays: days,
+    totalDays,
     checkinDays,
     sessions: sessionSummaries,
     severityDistribution: severityDist,

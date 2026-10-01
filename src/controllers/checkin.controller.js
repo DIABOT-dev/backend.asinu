@@ -250,10 +250,33 @@ async function healthReportHandler(pool, req, res) {
   if (!['week', 'month'].includes(period)) {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
   }
+
+  let dateRange = null;
+  if (req.query.month !== undefined) {
+    const monthValue = String(req.query.month);
+    const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(monthValue);
+    if (period !== 'month' || !match) {
+      return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
+    }
+
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    if (year < 2000 || year > 2100) {
+      return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
+    }
+    const nextYear = month === 12 ? year + 1 : year;
+    const nextMonth = month === 12 ? 1 : month + 1;
+    dateRange = {
+      startDate: `${match[1]}-${match[2]}-01`,
+      endDateExclusive: `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`,
+      totalDays: new Date(Date.UTC(year, month, 0)).getUTCDate(),
+    };
+  }
+
   const days = period === 'month' ? 30 : 7;
   try {
-    const report = await checkinService.getHealthReport(pool, req.user.id, days);
-    return res.json({ ok: true, period, ...report });
+    const report = await checkinService.getHealthReport(pool, req.user.id, days, dateRange);
+    return res.json({ ok: true, period, month: req.query.month || undefined, ...report });
   } catch (err) {
     return res
       .status(500)
