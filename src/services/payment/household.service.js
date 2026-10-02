@@ -2,16 +2,22 @@
 
 const entitlementService = require('./entitlement.service');
 const { planDefinition } = require('./subscription-catalog');
+const { t } = require('../../i18n');
 
-function serviceError(message, statusCode, code) {
-  return Object.assign(new Error(message), { statusCode, code });
+function serviceError(i18nKey, statusCode, code, i18nParams) {
+  return Object.assign(new Error(t(i18nKey, 'vi', i18nParams)), {
+    statusCode,
+    code,
+    i18nKey,
+    i18nParams,
+  });
 }
 
-async function listProtectedMembers(pool, ownerUserId) {
+async function listProtectedMembers(pool, ownerUserId, lang = 'vi') {
   const household = await entitlementService.householdOwnedBy(pool, ownerUserId);
   const members = await pool.query(
     `SELECT m.user_id, m.added_at,
-            COALESCE(u.display_name, u.full_name, u.email, u.phone_number, 'Thành viên') AS name,
+            COALESCE(u.display_name, u.full_name, u.email, u.phone_number) AS name,
             u.avatar_url
        FROM subscription_household_members m
        JOIN users u ON u.id = m.user_id
@@ -29,12 +35,12 @@ async function listProtectedMembers(pool, ownerUserId) {
     householdId: household.id,
     ownerUserId: Number(ownerUserId),
     planCode,
-    planName: plan.label,
+    planName: plan.code === 'free' ? t('subscription.plan.free', lang) : plan.label,
     protectedMemberLimit: plan.protectedMemberLimit,
     protectedMemberCount: members.rowCount,
     members: members.rows.map((member) => ({
       userId: Number(member.user_id),
-      name: member.name,
+      name: member.name || t('careCircle.user_label', lang),
       avatarUrl: member.avatar_url || null,
       addedAt: member.added_at,
     })),
@@ -53,13 +59,13 @@ async function assertConnected(pool, ownerUserId, memberUserId) {
     [ownerUserId, memberUserId]
   );
   if (!connection.rowCount) {
-    throw serviceError('Người được bảo vệ phải ở trong Vòng kết nối.', 409, 'NOT_CONNECTED');
+    throw serviceError('error.household_not_connected', 409, 'NOT_CONNECTED');
   }
 }
 
-async function addProtectedMember(pool, ownerUserId, memberUserId) {
+async function addProtectedMember(pool, ownerUserId, memberUserId, lang = 'vi') {
   if (!Number.isInteger(Number(memberUserId)) || Number(memberUserId) <= 0) {
-    throw serviceError('Thành viên không hợp lệ.', 400, 'INVALID_MEMBER');
+    throw serviceError('error.household_invalid_member', 400, 'INVALID_MEMBER');
   }
   await assertConnected(pool, ownerUserId, Number(memberUserId));
 
@@ -67,11 +73,15 @@ async function addProtectedMember(pool, ownerUserId, memberUserId) {
   try {
     await db.query('BEGIN');
     const household = await entitlementService.householdOwnedBy(db, ownerUserId);
-    await db.query('SELECT id FROM subscription_households WHERE id = $1 FOR UPDATE', [household.id]);
+    await db.query('SELECT id FROM subscription_households WHERE id = $1 FOR UPDATE', [
+      household.id,
+    ]);
     const plan = planDefinition(
       ['active', 'grace_period'].includes(household.status) &&
         (household.plan_code === 'free' ||
-          Boolean(household.current_period_end && new Date(household.current_period_end) > new Date()))
+          Boolean(
+            household.current_period_end && new Date(household.current_period_end) > new Date()
+          ))
         ? household.plan_code
         : 'free'
     );
@@ -86,7 +96,7 @@ async function addProtectedMember(pool, ownerUserId, memberUserId) {
     const activeMembership = current.rows[0];
     if (activeMembership && Number(activeMembership.household_id) === Number(household.id)) {
       await db.query('COMMIT');
-      return listProtectedMembers(pool, ownerUserId);
+      return listProtectedMembers(pool, ownerUserId, lang);
     }
 
     const countResult = await db.query(
@@ -111,22 +121,17 @@ async function addProtectedMember(pool, ownerUserId, memberUserId) {
       if (removedOwner.rowCount) memberCount -= 1;
     }
     if (memberCount >= plan.protectedMemberLimit) {
-      throw serviceError(
-        `Gói ${plan.label} bảo vệ tối đa ${plan.protectedMemberLimit} người.`,
-        409,
-        'PROTECTED_MEMBER_LIMIT'
-      );
+      throw serviceError('error.household_limit', 409, 'PROTECTED_MEMBER_LIMIT', {
+        plan: plan.code === 'free' ? t('subscription.plan.free', lang) : plan.label,
+        count: plan.protectedMemberLimit,
+      });
     }
     if (activeMembership && Number(activeMembership.household_id) !== Number(household.id)) {
       const isOwnFreeHousehold =
         Number(activeMembership.owner_user_id) === Number(memberUserId) &&
         activeMembership.plan_code === 'free';
       if (!isOwnFreeHousehold) {
-        throw serviceError(
-          'Người này đang được bảo vệ trong một gói khác.',
-          409,
-          'MEMBER_ALREADY_PROTECTED'
-        );
+        throw serviceError('error.household_already_protected', 409, 'MEMBER_ALREADY_PROTECTED');
       }
       await db.query(
         `UPDATE subscription_household_members
@@ -149,7 +154,7 @@ async function addProtectedMember(pool, ownerUserId, memberUserId) {
       entitlementService.invalidateEntitlement(memberUserId),
       entitlementService.invalidateEntitlement(ownerUserId),
     ]);
-    return listProtectedMembers(pool, ownerUserId);
+    return listProtectedMembers(pool, ownerUserId, lang);
   } catch (error) {
     await db.query('ROLLBACK');
     throw error;
@@ -158,13 +163,13 @@ async function addProtectedMember(pool, ownerUserId, memberUserId) {
   }
 }
 
-async function removeProtectedMember(pool, ownerUserId, memberUserId) {
+async function removeProtectedMember(pool, ownerUserId, memberUserId, lang = 'vi') {
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
     const household = await entitlementService.householdOwnedBy(db, ownerUserId);
     if (household.plan_code === 'free' && Number(memberUserId) === Number(ownerUserId)) {
-      throw serviceError('Gói Miễn phí luôn bảo vệ chính tài khoản này.', 409, 'FREE_SELF_REQUIRED');
+      throw serviceError('error.household_free_self', 409, 'FREE_SELF_REQUIRED');
     }
     const removed = await db.query(
       `UPDATE subscription_household_members
@@ -173,7 +178,9 @@ async function removeProtectedMember(pool, ownerUserId, memberUserId) {
         RETURNING user_id`,
       [household.id, memberUserId]
     );
-    if (!removed.rowCount) throw serviceError('Không tìm thấy người được bảo vệ.', 404, 'MEMBER_NOT_FOUND');
+    if (!removed.rowCount) {
+      throw serviceError('error.household_member_not_found', 404, 'MEMBER_NOT_FOUND');
+    }
 
     const ownHousehold = await entitlementService.ensureHousehold(db, Number(memberUserId));
     await db.query(
@@ -188,7 +195,7 @@ async function removeProtectedMember(pool, ownerUserId, memberUserId) {
       entitlementService.invalidateEntitlement(memberUserId),
       entitlementService.invalidateEntitlement(ownerUserId),
     ]);
-    return listProtectedMembers(pool, ownerUserId);
+    return listProtectedMembers(pool, ownerUserId, lang);
   } catch (error) {
     await db.query('ROLLBACK');
     throw error;

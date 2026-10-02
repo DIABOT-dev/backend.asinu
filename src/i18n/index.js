@@ -13,6 +13,12 @@ const vi = require('./locales/vi.json');
 const en = require('./locales/en.json');
 
 const locales = { vi, en };
+const messageKeys = new Map();
+for (const catalog of [vi, en]) {
+  for (const [key, value] of Object.entries(catalog)) {
+    if (typeof value === 'string' && !value.includes('{{')) messageKeys.set(value, key);
+  }
+}
 
 /**
  * Translate a key to the given language
@@ -53,4 +59,9 @@ function getLang(req) {
   return acceptLang.toLowerCase().startsWith('en') ? 'en' : 'vi';
 }
 
-module.exports = { t, getLang };
+function localizeKnownMessage(message, lang = 'vi') {
+  const key = messageKeys.get(message);
+  return key ? t(key, lang) : message;
+}
+
+module.exports = { t, getLang, localizeKnownMessage };

@@ -6,42 +6,119 @@ const { sendAndSave } = require('../notification/basic.notification.service');
 const entitlementService = require('../payment/entitlement.service');
 const checkinCallService = require('../checkin-call/checkin-call.service');
 
-const DISCLAIMER = 'Đây là gợi ý tham khảo, không phải chẩn đoán.';
+const DISCLAIMER_KEY = 'early_signal.disclaimer';
 const SEVERITY_RANK = Object.freeze({ monitor: 0, see_doctor: 1, urgent: 2 });
 const RED_FLAGS = [
-  ['đau ngực', 'Đau ngực'],
-  ['khó thở', 'Khó thở'],
-  ['yếu liệt nửa người', 'Yếu liệt nửa người'],
-  ['liệt nửa người', 'Yếu liệt nửa người'],
-  ['lơ mơ', 'Lơ mơ hoặc thay đổi ý thức'],
-  ['nôn ra máu', 'Nôn ra máu'],
-  ['yếu liệt', 'Yếu liệt'],
-  ['méo miệng', 'Méo miệng hoặc dấu hiệu đột quỵ'],
-  ['nói khó', 'Nói khó hoặc dấu hiệu đột quỵ'],
-  ['bất tỉnh', 'Mất ý thức'],
-  ['co giật', 'Co giật'],
-  ['chest pain', 'Đau ngực'],
-  ['shortness of breath', 'Khó thở'],
-  ['vomiting blood', 'Nôn ra máu'],
+  ['đau ngực', 'chest_pain'],
+  ['khó thở', 'shortness_of_breath'],
+  ['yếu liệt nửa người', 'half_body_weakness'],
+  ['liệt nửa người', 'half_body_weakness'],
+  ['lơ mơ', 'altered_consciousness'],
+  ['nôn ra máu', 'vomiting_blood'],
+  ['yếu liệt', 'weakness'],
+  ['méo miệng', 'stroke'],
+  ['nói khó', 'speech'],
+  ['bất tỉnh', 'unconscious'],
+  ['co giật', 'seizure'],
+  ['chest pain', 'chest_pain'],
+  ['shortness of breath', 'shortness_of_breath'],
+  ['vomiting blood', 'vomiting_blood'],
 ];
 const FORBIDDEN_OUTPUT = [
   /\b(chẩn đoán|mắc bệnh|bị viêm|bị ung thư)\b/i,
+  /\b(you have|has|diagnosed with|suffers from)\s+(?:\S+\s+){0,3}(cancer|disease|syndrome|infection|inflammation)\b/i,
   /\b(paracetamol|aspirin|ibuprofen|warfarin|mg|ml)\b/i,
   /\b(kê|dùng|uống|ngưng|dừng|đổi|tăng|giảm)\s+(?:\S+\s+){0,3}(thuốc|liều)\b/i,
   /không sao đâu/i,
 ];
 
 const SPECIALTY_RULES = [
-  { needles: ['tiêu chảy', 'đi ngoài', 'đau bụng', 'táo bón', 'buồn nôn'], specialty: 'Tiêu hóa' },
-  { needles: ['đau đầu', 'chóng mặt', 'hoa mắt', 'run tay'], specialty: 'Thần kinh' },
-  { needles: ['tim đập nhanh', 'tức ngực'], specialty: 'Tim mạch' },
-  { needles: ['ho', 'khó thở'], specialty: 'Hô hấp' },
-  { needles: ['đau khớp', 'đau lưng'], specialty: 'Cơ xương khớp' },
-  { needles: ['phát ban', 'ngứa'], specialty: 'Da liễu' },
+  {
+    needles: [
+      'tiêu chảy',
+      'đi ngoài',
+      'đau bụng',
+      'táo bón',
+      'buồn nôn',
+      'diarrhea',
+      'abdominal pain',
+      'nausea',
+    ],
+    specialty: 'gastroenterology',
+  },
+  {
+    needles: ['đau đầu', 'chóng mặt', 'hoa mắt', 'run tay', 'headache', 'dizziness'],
+    specialty: 'neurology',
+  },
+  {
+    needles: ['tim đập nhanh', 'tức ngực', 'rapid heartbeat', 'chest tightness'],
+    specialty: 'cardiology',
+  },
+  { needles: ['ho', 'khó thở', 'cough', 'shortness of breath'], specialty: 'respiratory' },
+  { needles: ['đau khớp', 'đau lưng', 'joint pain', 'back pain'], specialty: 'musculoskeletal' },
+  { needles: ['phát ban', 'ngứa', 'rash', 'itching'], specialty: 'dermatology' },
 ];
 
-function serviceError(message, statusCode, code) {
-  return Object.assign(new Error(message), { statusCode, code });
+const normalizeLang = (lang) =>
+  String(lang || '')
+    .toLowerCase()
+    .startsWith('en')
+    ? 'en'
+    : 'vi';
+const descriptor = (key, params = {}) => ({ key, params });
+const translate = (copy, lang) => t(copy.key, normalizeLang(lang), copy.params || {});
+
+function localizeOutput(output, lang = 'vi') {
+  if (!output?._i18n) return output;
+  const copy = output._i18n;
+  const summaryCopy = copy.specialty
+    ? {
+        ...copy.summary,
+        params: {
+          ...(copy.summary.params || {}),
+          specialty: t(`early_signal.specialty.${copy.specialty}`, normalizeLang(lang)),
+        },
+      }
+    : copy.summary;
+  return {
+    ...output,
+    signals: (copy.signals || []).map((item) => translate(item, lang)),
+    summary: translate(summaryCopy, lang),
+    suggested_specialty: copy.specialty
+      ? t(`early_signal.specialty.${copy.specialty}`, normalizeLang(lang))
+      : null,
+    urgent_signs: (copy.urgentSigns || []).map((key) =>
+      t(`early_signal.sign.${key}`, normalizeLang(lang))
+    ),
+    disclaimer: t(DISCLAIMER_KEY, normalizeLang(lang)),
+  };
+}
+
+function localizeAssessment(assessment, lang = 'vi') {
+  if (!assessment) return assessment;
+  let snapshot = assessment.output_snapshot;
+  if (typeof snapshot === 'string') {
+    try {
+      snapshot = JSON.parse(snapshot);
+    } catch {
+      return assessment;
+    }
+  }
+  if (!snapshot?._i18n) return assessment;
+  const localized = localizeOutput(snapshot, lang);
+  return {
+    ...assessment,
+    signals: localized.signals,
+    summary: localized.summary,
+    suggested_specialty: localized.suggested_specialty,
+    urgent_signs: localized.urgent_signs,
+    disclaimer: localized.disclaimer,
+    output_snapshot: localized,
+  };
+}
+
+function serviceError(message, statusCode, code, i18nKey = null, i18nParams = {}) {
+  return Object.assign(new Error(message), { statusCode, code, i18nKey, i18nParams });
 }
 
 function validateSafeOutput(output, medicationNames = []) {
@@ -60,7 +137,7 @@ function validateSafeOutput(output, medicationNames = []) {
   if (blocked || mentionsMedication) {
     throw serviceError('Unsafe early signal output', 500, 'UNSAFE_EARLY_SIGNAL_OUTPUT');
   }
-  if (output.disclaimer !== DISCLAIMER) {
+  if (output.disclaimer !== t(DISCLAIMER_KEY, output._lang || 'vi')) {
     throw serviceError(
       'Missing required early signal disclaimer',
       500,
@@ -88,7 +165,9 @@ async function assertCanView(pool, targetUserId, actorUserId) {
       LIMIT 1`,
     [actorUserId, targetUserId]
   );
-  if (!allowed.rowCount) throw serviceError('Không có quyền xem dữ liệu này.', 403, 'FORBIDDEN');
+  if (!allowed.rowCount) {
+    throw serviceError('Early signal access denied', 403, 'FORBIDDEN', 'early_signal.no_access');
+  }
 }
 
 async function inputSnapshot(pool, userId) {
@@ -148,8 +227,11 @@ async function inputSnapshot(pool, userId) {
       [userId]
     ),
     pool.query(
-      `SELECT age, birth_year, medical_conditions, chronic_symptoms, daily_medication
-         FROM user_onboarding_profiles WHERE user_id = $1`,
+      `SELECT p.age, p.birth_year, p.medical_conditions, p.chronic_symptoms,
+              p.daily_medication, COALESCE(u.language_preference, 'vi') AS language_preference
+         FROM users u
+         LEFT JOIN user_onboarding_profiles p ON p.user_id = u.id
+        WHERE u.id = $1`,
       [userId]
     ),
   ]);
@@ -180,7 +262,7 @@ function specialtyFor(symptom) {
   const normalized = String(symptom || '').toLowerCase();
   return (
     SPECIALTY_RULES.find((rule) => rule.needles.some((needle) => normalized.includes(needle)))
-      ?.specialty || 'Nội tổng quát'
+      ?.specialty || 'general'
   );
 }
 
@@ -216,7 +298,8 @@ function isRecent(value, days) {
   return date.getTime() >= Date.now() - days * 24 * 60 * 60 * 1000;
 }
 
-function analyse(snapshot) {
+function analyse(snapshot, lang = 'vi') {
+  const resolvedLang = normalizeLang(lang);
   const today = dateKey(new Date());
   const recentCheckins = snapshot.checkins.filter((row) => dateKey(row.session_date) === today);
   const recentScriptedCheckins = (snapshot.scripted_checkins || []).filter(
@@ -229,15 +312,13 @@ function analyse(snapshot) {
     symptoms: recentSymptoms,
   }).toLowerCase();
   const urgentSigns = [
-    ...new Set(
-      RED_FLAGS.filter(([needle]) => combinedText.includes(needle)).map(([, label]) => label)
-    ),
+    ...new Set(RED_FLAGS.filter(([needle]) => combinedText.includes(needle)).map(([, key]) => key)),
   ];
   if (recentCheckins.some((row) => row.emergency_triggered)) {
-    urgentSigns.push('Người dùng đã kích hoạt hỗ trợ khẩn cấp');
+    urgentSigns.push('user_emergency');
   }
   if (recentScriptedCheckins.some((row) => row.severity === 'critical')) {
-    urgentSigns.push('Check-in phát hiện dấu hiệu khẩn cấp');
+    urgentSigns.push('checkin_emergency');
   }
   const criticalVitals = snapshot.vitals.filter((row) => {
     if (!isRecent(row.occurred_at, 1)) return false;
@@ -263,54 +344,105 @@ function analyse(snapshot) {
 
   let output;
   if (urgentSigns.length || criticalVitals.length || veryTired7d >= 2) {
-    const signals = [];
-    if (urgentSigns.length) signals.push(...urgentSigns);
-    if (criticalVitals.length) signals.push(`${criticalVitals.length} chỉ số ở mức cần xử lý sớm`);
-    if (veryTired7d >= 2) signals.push(`${veryTired7d} lần ghi nhận rất mệt trong 7 ngày`);
+    const signalCopies = urgentSigns.map((key) => descriptor(`early_signal.sign.${key}`));
+    if (criticalVitals.length)
+      signalCopies.push(
+        descriptor('early_signal.signal.critical_vitals', { count: criticalVitals.length })
+      );
+    if (veryTired7d >= 2)
+      signalCopies.push(descriptor('early_signal.signal.very_tired', { count: veryTired7d }));
     output = {
       severity: 'urgent',
       is_red_flag: urgentSigns.length > 0,
-      signals,
-      summary: urgentSigns.length
-        ? 'Có dấu hiệu cần hỗ trợ khẩn cấp. Hãy gọi 115 và báo ngay cho gia đình.'
-        : 'Các ghi nhận gần đây cần được nhân viên y tế đánh giá ngay.',
+      signals: [],
+      summary: '',
       suggested_specialty: null,
-      urgent_signs: urgentSigns,
-      disclaimer: DISCLAIMER,
+      urgent_signs: [],
+      disclaimer: '',
+      _i18n: {
+        signals: signalCopies,
+        summary: descriptor(
+          urgentSigns.length ? 'early_signal.summary.emergency' : 'early_signal.summary.urgent'
+        ),
+        specialty: null,
+        urgentSigns,
+      },
     };
   } else if ((symptomCounts7d[0]?.[1] || 0) >= 4 || veryTired7d === 1) {
     const [symptom, count] = symptomCounts7d[0] || ['mệt', 1];
     const specialty = specialtyFor(symptom);
+    const urgentSignKeys = [
+      'chest_pain',
+      'shortness_of_breath',
+      'weakness',
+      'drowsiness',
+      'vomiting_blood',
+    ];
     output = {
       severity: 'see_doctor',
       is_red_flag: false,
-      signals: [
-        `${symptom} được ghi nhận ${count} lần trong 7 ngày`,
-        ...(missedCheckins7d ? [`Bỏ lỡ ${missedCheckins7d} lần check-in trong 7 ngày`] : []),
-      ],
-      summary: `Triệu chứng “${symptom}” lặp lại ${count} lần trong 7 ngày. Nên kiểm tra tại chuyên khoa ${specialty}.`,
-      suggested_specialty: specialty,
-      urgent_signs: ['Đau ngực', 'Khó thở', 'Yếu liệt', 'Lơ mơ', 'Nôn ra máu'],
-      disclaimer: DISCLAIMER,
+      signals: [],
+      summary: '',
+      suggested_specialty: null,
+      urgent_signs: [],
+      disclaimer: '',
+      _i18n: {
+        signals: [
+          descriptor('early_signal.signal.symptom_7d', { symptom, count }),
+          ...(missedCheckins7d
+            ? [descriptor('early_signal.signal.missed_7d', { count: missedCheckins7d })]
+            : []),
+        ],
+        summary: descriptor('early_signal.summary.see_doctor', {
+          symptom,
+          count,
+          specialty,
+        }),
+        specialty,
+        urgentSigns: urgentSignKeys,
+      },
     };
   } else {
     const leading = symptomCounts30d[0];
+    const urgentSignKeys = [
+      'chest_pain',
+      'shortness_of_breath',
+      'weakness',
+      'drowsiness',
+      'vomiting_blood',
+    ];
     output = {
       severity: 'monitor',
       is_red_flag: false,
-      signals: [
-        ...(leading ? [`${leading[0]} xuất hiện ${leading[1]} lần trong 30 ngày`] : []),
-        ...(missedCheckins7d ? [`Bỏ lỡ ${missedCheckins7d} lần check-in trong 7 ngày`] : []),
-      ],
-      summary: leading
-        ? 'Chưa thấy xu hướng tăng rõ trong dữ liệu hiện có. Hãy tiếp tục check-in và ghi chỉ số.'
-        : 'Chưa có đủ ghi nhận để phát hiện xu hướng. Hãy tiếp tục check-in mỗi ngày.',
+      signals: [],
+      summary: '',
       suggested_specialty: null,
-      urgent_signs: ['Đau ngực', 'Khó thở', 'Yếu liệt', 'Lơ mơ', 'Nôn ra máu'],
-      disclaimer: DISCLAIMER,
+      urgent_signs: [],
+      disclaimer: '',
+      _i18n: {
+        signals: [
+          ...(leading
+            ? [
+                descriptor('early_signal.signal.symptom_30d', {
+                  symptom: leading[0],
+                  count: leading[1],
+                }),
+              ]
+            : []),
+          ...(missedCheckins7d
+            ? [descriptor('early_signal.signal.missed_7d', { count: missedCheckins7d })]
+            : []),
+        ],
+        summary: descriptor(
+          leading ? 'early_signal.summary.monitor' : 'early_signal.summary.insufficient'
+        ),
+        specialty: null,
+        urgentSigns: urgentSignKeys,
+      },
     };
   }
-  return validateSafeOutput(output, snapshot.vitals.map((row) => row.med_name).filter(Boolean));
+  const localized = localizeOutput({ ...output, _lang: resolvedLang }, resolvedLang);
+  return validateSafeOutput(localized, snapshot.vitals.map((row) => row.med_name).filter(Boolean));
 }
 
 async function notifyFamily(pool, userId, assessment) {
@@ -333,15 +465,17 @@ async function notifyFamily(pool, userId, assessment) {
       [userId]
     ),
     pool.query(
-      `SELECT COALESCE(full_name, display_name, 'Người thân') AS name
+      `SELECT COALESCE(full_name, display_name) AS name
          FROM users WHERE id = $1`,
       [userId]
     ),
   ]);
-  const subjectName = subjectResult.rows[0]?.name || 'Người thân';
   const deliveries = await Promise.all(
-    recipients.rows.map((recipient) =>
-      sendAndSave(
+    recipients.rows.map((recipient) => {
+      const subjectName =
+        subjectResult.rows[0]?.name || t('early_signal.subject_fallback', recipient.lang);
+      const localizedAssessment = localizeAssessment(assessment, recipient.lang);
+      return sendAndSave(
         pool,
         { id: recipient.id, push_token: recipient.push_token },
         'early_signal',
@@ -353,7 +487,7 @@ async function notifyFamily(pool, userId, assessment) {
           { name: subjectName }
         ),
         t('push.early_signal_body', recipient.lang, {
-          summary: assessment.summary,
+          summary: localizedAssessment.summary,
           level: t(
             assessment.severity === 'urgent'
               ? 'push.early_signal_level_urgent'
@@ -374,8 +508,8 @@ async function notifyFamily(pool, userId, assessment) {
           : assessment.severity === 'see_doctor'
             ? 'high'
             : 'medium'
-      ).catch(() => {})
-    )
+      ).catch(() => {});
+    })
   );
   const deliveredCount = deliveries.filter(Boolean).length;
   if (deliveredCount) {
@@ -399,7 +533,7 @@ async function evaluate(pool, userId, options = {}) {
         ORDER BY created_at DESC LIMIT 1`,
       [userId, requestedBy]
     );
-    if (recent.rowCount) return recent.rows[0];
+    if (recent.rowCount) return localizeAssessment(recent.rows[0], options.lang || 'vi');
   }
   if (options.triggerRef) {
     const duplicate = await pool.query(
@@ -409,7 +543,7 @@ async function evaluate(pool, userId, options = {}) {
         ORDER BY created_at DESC LIMIT 1`,
       [userId, String(options.triggerRef), options.triggerType || 'manual']
     );
-    if (duplicate.rowCount) return duplicate.rows[0];
+    if (duplicate.rowCount) return localizeAssessment(duplicate.rows[0], options.lang || 'vi');
   }
 
   const previousResult = await pool.query(
@@ -419,7 +553,7 @@ async function evaluate(pool, userId, options = {}) {
   );
   const previousSeverity = previousResult.rows[0]?.severity || 'monitor';
   const input = await inputSnapshot(pool, userId);
-  const output = analyse(input);
+  const output = analyse(input, options.lang || input.profile?.language_preference || 'vi');
   const requestedTriggerType = options.triggerType || 'manual';
   const isWorsened = SEVERITY_RANK[output.severity] > SEVERITY_RANK[previousSeverity];
   const triggerType =
@@ -478,17 +612,17 @@ async function evaluate(pool, userId, options = {}) {
   return assessment;
 }
 
-async function latest(pool, userId, actorUserId) {
+async function latest(pool, userId, actorUserId, lang = 'vi') {
   await assertCanView(pool, userId, actorUserId);
   const result = await pool.query(
-    `SELECT a.*, COALESCE(u.full_name, u.display_name, 'Người thân') AS user_name,
+    `SELECT a.*, COALESCE(u.full_name, u.display_name, $2) AS user_name,
             u.phone_number AS user_phone
        FROM early_signal_assessments a
        JOIN users u ON u.id = a.user_id
       WHERE a.user_id = $1 ORDER BY a.created_at DESC LIMIT 1`,
-    [userId]
+    [userId, t('early_signal.subject_fallback', normalizeLang(lang))]
   );
-  return result.rows[0] || null;
+  return localizeAssessment(result.rows[0] || null, lang);
 }
 
 async function evaluateAfterNewHealthData(pool, userId, triggerRef) {
@@ -501,9 +635,9 @@ async function evaluateAfterNewHealthData(pool, userId, triggerRef) {
   });
 }
 
-async function familyLatest(pool, ownerUserId) {
+async function familyLatest(pool, ownerUserId, lang = 'vi') {
   const result = await pool.query(
-    `SELECT DISTINCT ON (a.user_id) a.*, COALESCE(u.display_name, u.full_name, u.email, 'Người thân') AS user_name,
+    `SELECT DISTINCT ON (a.user_id) a.*, COALESCE(u.display_name, u.full_name, u.email, $2) AS user_name,
             u.avatar_url
        FROM subscription_households h
        JOIN subscription_household_members m ON m.household_id = h.id AND m.status = 'active'
@@ -511,9 +645,9 @@ async function familyLatest(pool, ownerUserId) {
        LEFT JOIN early_signal_assessments a ON a.user_id = m.user_id
       WHERE h.owner_user_id = $1 AND a.id IS NOT NULL
       ORDER BY a.user_id, a.created_at DESC`,
-    [ownerUserId]
+    [ownerUserId, t('early_signal.subject_fallback', normalizeLang(lang))]
   );
-  return result.rows;
+  return result.rows.map((assessment) => localizeAssessment(assessment, lang));
 }
 
 async function runWeekly(pool) {
@@ -545,5 +679,12 @@ module.exports = {
   familyLatest,
   runWeekly,
   evaluateAfterNewHealthData,
-  _test: { analyse, inputSnapshot, validateSafeOutput, specialtyFor },
+  _test: {
+    analyse,
+    inputSnapshot,
+    validateSafeOutput,
+    specialtyFor,
+    localizeAssessment,
+    localizeOutput,
+  },
 };

@@ -47,7 +47,15 @@ const LOCATION_TO_SYMPTOMS = {
     mental: ['Lo âu', 'Buồn bã', 'Khó ngủ', 'Mất ngủ', 'Căng thẳng', 'Mệt mỏi tinh thần'],
   },
   en: {
-    head: ['Headache', 'Dizziness', 'Light-headed', 'Blurred vision', 'Tinnitus', 'Migraine', 'Fainting'],
+    head: [
+      'Headache',
+      'Dizziness',
+      'Light-headed',
+      'Blurred vision',
+      'Tinnitus',
+      'Migraine',
+      'Fainting',
+    ],
     chest: [
       'Shortness of breath',
       'Chest pain',
@@ -75,7 +83,15 @@ const LOCATION_TO_SYMPTOMS = {
 // Stable keys for API payloads. Labels remain localized by LOCATION_TO_SYMPTOMS,
 // while clients submit these keys so a language change cannot corrupt history.
 const LOCATION_TO_SYMPTOM_KEYS = {
-  head: ['headache', 'dizziness', 'light_headed', 'blurred_vision', 'tinnitus', 'migraine', 'fainting'],
+  head: [
+    'headache',
+    'dizziness',
+    'light_headed',
+    'blurred_vision',
+    'tinnitus',
+    'migraine',
+    'fainting',
+  ],
   chest: [
     'shortness_of_breath',
     'chest_pain',
@@ -84,14 +100,7 @@ const LOCATION_TO_SYMPTOM_KEYS = {
     'rapid_heartbeat',
     'sweating',
   ],
-  abdomen: [
-    'abdominal_pain',
-    'nausea',
-    'diarrhea',
-    'bloating',
-    'indigestion',
-    'constipation',
-  ],
+  abdomen: ['abdominal_pain', 'nausea', 'diarrhea', 'bloating', 'indigestion', 'constipation'],
   limbs: [
     'limb_numbness',
     'joint_pain',
@@ -190,6 +199,21 @@ function getLocationOptions(lang = 'vi') {
 function getSymptomsForLocation(location, lang = 'vi') {
   const map = LOCATION_TO_SYMPTOMS[lang] || LOCATION_TO_SYMPTOMS.vi;
   return map[location] || [];
+}
+
+/** Convert a localized body-location symptom label back to the Vietnamese
+ * canonical label used by the deterministic clinical engine. */
+function normalizeSymptomForEngine(value) {
+  const input = String(value || '').trim();
+  if (!input) return input;
+  const normalized = input.toLowerCase();
+  for (const location of BODY_LOCATIONS) {
+    const viItems = LOCATION_TO_SYMPTOMS.vi[location] || [];
+    const enItems = LOCATION_TO_SYMPTOMS.en[location] || [];
+    const index = enItems.findIndex((item) => item.toLowerCase() === normalized);
+    if (index >= 0) return viItems[index] || input;
+  }
+  return input;
 }
 
 function getSymptomOptionsForLocation(location, lang = 'vi') {
@@ -317,6 +341,7 @@ module.exports = {
   getSymptomsForLocation,
   getSymptomOptionsForLocation,
   getSymptomsForLocations,
+  normalizeSymptomForEngine,
   getGroupedSymptoms,
   buildLocationContext,
   detectEmergency,

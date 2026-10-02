@@ -31,7 +31,8 @@ async function transcribeAudio(audioBuffer, mimeType, filename = 'audio.m4a') {
   const form = new FormData();
   form.append('file', blob, filename);
   form.append('model', 'whisper-1');
-  form.append('language', 'vi'); // Ưu tiên tiếng Việt
+  // Let Whisper detect the spoken language. The app supports both Vietnamese
+  // and English, and the UI language does not always match the spoken language.
 
   const headers = {};
   if (apiKey) {
@@ -65,7 +66,12 @@ async function transcribeAudio(audioBuffer, mimeType, filename = 'audio.m4a') {
  * @param {string} filename
  * @returns {{ transcript: string, reply: string }}
  */
-async function voiceChat(pool, userId, audioBuffer, mimeType, filename) {
+async function voiceChat(pool, userId, audioBuffer, mimeType, filename, lang = 'vi') {
+  const resolvedLang = String(lang || '')
+    .toLowerCase()
+    .startsWith('en')
+    ? 'en'
+    : 'vi';
   if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not configured');
 
   // 1. Transcribe
@@ -74,7 +80,7 @@ async function voiceChat(pool, userId, audioBuffer, mimeType, filename) {
   const latencyTranscribe = Date.now() - startTranscribe;
 
   if (!transcript.trim()) {
-    return { transcript: '', reply: t('voice.no_audio') };
+    return { transcript: '', reply: t('voice.no_audio', resolvedLang) };
   }
 
   // Log Whisper transcription
@@ -98,7 +104,8 @@ async function voiceChat(pool, userId, audioBuffer, mimeType, filename) {
     const { rows } = await pool.query(`SELECT full_name, display_name FROM users WHERE id = $1`, [
       userId,
     ]);
-    userName = rows[0]?.display_name || rows[0]?.full_name || 'bạn';
+    userName =
+      rows[0]?.display_name || rows[0]?.full_name || (resolvedLang === 'en' ? 'there' : 'bạn');
     await cacheSet(`user:name:${userId}`, userName, 7200);
   }
 
@@ -114,9 +121,14 @@ async function voiceChat(pool, userId, audioBuffer, mimeType, filename) {
       messages: [
         {
           role: 'system',
-          content: `Bạn là Asinu, trợ lý sức khỏe AI thông minh và thân thiện. Người dùng tên ${userName}.
-Hãy trả lời ngắn gọn, rõ ràng bằng tiếng Việt. Tập trung vào sức khỏe, dinh dưỡng, lối sống lành mạnh.
-Không cung cấp chẩn đoán y tế. Khuyến khích gặp bác sĩ khi cần.`,
+          content:
+            resolvedLang === 'en'
+              ? `You are Asinu, a warm and helpful health companion. The user's name is ${userName}.
+Reply briefly and clearly in English. Focus on health information, nutrition, and healthy habits.
+Do not diagnose, prescribe, name medicines, or give dosages. Recommend an appropriate qualified health professional when needed.`
+              : `Bạn là Asinu, người đồng hành sức khỏe AI thông minh và thân thiện. Người dùng tên ${userName}.
+Hãy trả lời ngắn gọn, rõ ràng bằng tiếng Việt. Tập trung vào thông tin sức khỏe, dinh dưỡng và lối sống lành mạnh.
+Không chẩn đoán, kê đơn, nêu tên thuốc hoặc liều dùng. Khuyến khích gặp chuyên gia phù hợp khi cần.`,
         },
         {
           role: 'user',
@@ -135,7 +147,7 @@ Không cung cấp chẩn đoán y tế. Khuyến khích gặp bác sĩ khi cần
   }
 
   const chatData = await chatResponse.json();
-  const reply = chatData.choices?.[0]?.message?.content || t('voice.fallback_reply');
+  const reply = chatData.choices?.[0]?.message?.content || t('voice.fallback_reply', resolvedLang);
 
   return { transcript, reply };
 }
@@ -263,7 +275,27 @@ Chỉ trả về JSON thuần, không markdown, không giải thích thêm.`;
  * @param {'glucose'|'blood_pressure'|'insulin'} logType
  * @returns {Promise<{ ok: boolean, transcript: string, parsed: object|null, error: string|null }>}
  */
-async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
+function englishLogPrompt(logType) {
+  const schemas = {
+    glucose:
+      '{"ok":true,"log_type":"glucose","value":120,"context":"fasting|pre_meal|post_meal|before_sleep|random","notes":null}',
+    blood_pressure:
+      '{"ok":true,"log_type":"blood_pressure","systolic":120,"diastolic":80,"pulse":72,"notes":null}',
+    insulin:
+      '{"ok":true,"log_type":"insulin","insulin_type":null,"dose_units":10,"timing":"pre_meal|post_meal|bedtime|correction|null","injection_site":"abdomen|thigh|arm|buttock|null","notes":null}',
+  };
+  return `Extract a ${logType.replace('_', ' ')} health log from English or Vietnamese speech.
+Return JSON only, using this successful shape: ${schemas[logType]}.
+If the value is missing, ambiguous, or unsafe, return {"ok":false,"error":"A short, clear English explanation with an example"}.
+Accept spoken numbers. Glucose must be 1-800, blood pressure must be systolic 60-300 and diastolic 30-200 with systolic greater than diastolic, and insulin dose must be 0.1-200 IU. Do not invent values.`;
+}
+
+async function parseLogVoice(audioBuffer, mimeType, filename, logType, lang = 'vi') {
+  const resolvedLang = String(lang || '')
+    .toLowerCase()
+    .startsWith('en')
+    ? 'en'
+    : 'vi';
   if (!OPENAI_API_KEY) throw new Error('OPENAI_API_KEY not configured');
 
   // Step 1: Whisper transcription
@@ -274,13 +306,19 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
       ok: false,
       transcript: '',
       parsed: null,
-      error: t('voice.no_content'),
+      error: t('voice.no_content', resolvedLang),
     };
   }
 
   // Step 2: GPT-4o parse transcript → structured JSON
   const systemPrompt =
-    logType === 'glucose' ? GLUCOSE_SYSTEM : logType === 'insulin' ? INSULIN_SYSTEM : BP_SYSTEM;
+    resolvedLang === 'en'
+      ? englishLogPrompt(logType)
+      : logType === 'glucose'
+        ? GLUCOSE_SYSTEM
+        : logType === 'insulin'
+          ? INSULIN_SYSTEM
+          : BP_SYSTEM;
 
   const chatRes = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -315,7 +353,7 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
       ok: false,
       transcript,
       parsed: null,
-      error: t('voice.ai_parse_error'),
+      error: t('voice.ai_parse_error', resolvedLang),
     };
   }
 
@@ -324,7 +362,7 @@ async function parseLogVoice(audioBuffer, mimeType, filename, logType) {
       ok: false,
       transcript,
       parsed: null,
-      error: parsed.error || t('voice.invalid_data'),
+      error: parsed.error || t('voice.invalid_data', resolvedLang),
     };
   }
 

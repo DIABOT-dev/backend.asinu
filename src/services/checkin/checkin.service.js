@@ -210,7 +210,7 @@ async function getYesterdaySession(pool, userId) {
 
 // ─── Get today's session ─────────────────────────────────────────────────────
 
-async function getTodayCheckin(pool, userId) {
+async function getTodayCheckin(pool, userId, requestLang = null) {
   const [sessionRes, profileRes, yesterdaySession] = await Promise.all([
     pool.query(`SELECT * FROM health_checkins WHERE user_id = $1 AND session_date = $2`, [
       userId,
@@ -223,7 +223,7 @@ async function getTodayCheckin(pool, userId) {
   ]);
 
   const session = sessionRes.rows[0] || null;
-  const lang = profileRes.rows[0]?.lang || 'vi';
+  const lang = requestLang || profileRes.rows[0]?.lang || 'vi';
   const continuityMessage = buildContinuityMessage(yesterdaySession, lang);
 
   return { session, continuityMessage };
@@ -542,7 +542,7 @@ async function getRecentHealthContext(pool, userId) {
 /**
  * Process one triage step. Returns next question or final summary.
  */
-async function processTriageStep(pool, userId, checkinId, previousAnswers) {
+async function processTriageStep(pool, userId, checkinId, previousAnswers, requestLang = null) {
   const { rows } = await pool.query(
     `SELECT * FROM health_checkins WHERE id = $1 AND user_id = $2`,
     [checkinId, userId]
@@ -563,6 +563,11 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     getUserProfile(pool, userId),
     getRecentHealthContext(pool, userId),
   ]);
+  const selectedLang = String(requestLang || profile.lang || 'vi')
+    .toLowerCase()
+    .startsWith('en')
+    ? 'en'
+    : 'vi';
 
   // Hard limit: force conclusion if AI hasn't stopped in time
   const isFollowUp = isFollowUpPhase;
@@ -585,7 +590,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
       ? session.current_status || session.initial_status
       : session.initial_status,
     phase: isFollowUpPhase ? 'followup' : 'initial',
-    lang: profile.lang || 'vi',
+    lang: selectedLang,
     profile,
     healthContext,
     previousAnswers,
@@ -603,9 +608,9 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     result = {
       ok: true,
       isDone: true,
-      summary: t('checkin.triage_limit_summary', profile.lang || 'vi'),
+      summary: t('checkin.triage_limit_summary', selectedLang),
       severity: isVeryUnwell ? 'high' : 'medium',
-      recommendation: t('checkin.triage_limit_recommendation', profile.lang || 'vi'),
+      recommendation: t('checkin.triage_limit_recommendation', selectedLang),
       needsDoctor: false,
       needsFamilyAlert: isVeryUnwell,
       hasRedFlag: false,
@@ -649,14 +654,11 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     console.log(
       `[Triage] ⛔ User reported new symptom — force ask "what symptom" instead of concluding.`
     );
-    const Hon = profile.honorific || 'bạn';
-    const HonCap = Hon.charAt(0).toUpperCase() + Hon.slice(1);
-    const self = profile.selfRef || 'mình';
     result = {
       ok: true,
       isDone: false,
       step: 'followup_detail',
-      question: `${HonCap} cho ${self} biết triệu chứng mới đó là gì nhé?`,
+      question: t('checkin.triage.question.new_symptom_detail', selectedLang),
       options: [],
       multiSelect: false,
       allowFreeText: true,
@@ -673,22 +675,37 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     const fallbacks = [
       {
         step: 'progression',
-        q: 'Từ lúc bắt đầu đến giờ, tình trạng có thay đổi không?',
-        opts: ['đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn'],
+        q: t('checkin.triage.question.fallback_progression', selectedLang),
+        opts: [
+          t('checkin.triage.option.improving', selectedLang),
+          t('checkin.triage.option.same', selectedLang),
+          t('checkin.triage.option.worsening', selectedLang),
+        ],
         multi: false,
         types: [5],
       },
       {
         step: 'red_flags',
-        q: 'Bạn có dấu hiệu nghiêm trọng nào như khó thở dữ dội, ngất hoặc đau ngực kèm vã mồ hôi không?',
-        opts: ['khó thở dữ dội', 'ngất hoặc lơ mơ', 'đau ngực kèm vã mồ hôi', 'không có'],
+        q: t('checkin.triage.question.fallback_red_flags', selectedLang),
+        opts: [
+          t('checkin.triage.option.severe_shortness_of_breath', selectedLang),
+          t('checkin.triage.option.faint_or_drowsy', selectedLang),
+          t('checkin.triage.option.chest_pain_sweating', selectedLang),
+          t('checkin.triage.option.none', selectedLang),
+        ],
         multi: true,
         types: [6],
       },
       {
         step: 'onset',
-        q: 'Tình trạng này bắt đầu từ khi nào?',
-        opts: ['vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua', 'vài ngày nay'],
+        q: t('checkin.triage.question.fallback_onset', selectedLang),
+        opts: [
+          t('checkin.triage.option.just_now', selectedLang),
+          t('checkin.triage.option.hours_ago', selectedLang),
+          t('checkin.triage.option.since_morning', selectedLang),
+          t('checkin.triage.option.since_yesterday', selectedLang),
+          t('checkin.triage.option.past_few_days', selectedLang),
+        ],
         multi: false,
         types: [2],
       },
@@ -727,7 +744,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
         summary: allSymptoms,
         severity: isVeryUnwell ? 'high' : 'medium',
         recommendation:
-          profile.lang === 'en'
+          selectedLang === 'en'
             ? 'Thank you for sharing. Please rest and take care.'
             : 'Cảm ơn bạn đã chia sẻ. Hãy nghỉ ngơi và theo dõi thêm nhé.',
         needsDoctor: false,
@@ -743,7 +760,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     const illusionCtx = await buildCheckinContext(pool, userId);
     const lastAnswer =
       previousAnswers.length > 0 ? previousAnswers[previousAnswers.length - 1] : null;
-    const illusionUser = { id: userId, ...profile, lang: profile.lang || 'vi' };
+    const illusionUser = { id: userId, ...profile, lang: selectedLang };
 
     if (result.isDone) {
       // Conclusion: add progress feedback
@@ -847,7 +864,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
         );
 
         // Thông báo in-app cho chính user biết gia đình đã được nhắn
-        const userLang = profile.lang || 'vi';
+        const userLang = selectedLang;
         await sendCheckinNotification(
           pool,
           userId,

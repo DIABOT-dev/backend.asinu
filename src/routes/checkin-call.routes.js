@@ -11,7 +11,12 @@ const conclusionAudioLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { ok: false, code: 'RATE_LIMITED', error: 'Too many audio requests; slow down.' },
+  handler: (req, res) =>
+    res.status(429).json({
+      ok: false,
+      code: 'RATE_LIMITED',
+      error: t('error.audio_rate_limited', getLang(req)),
+    }),
   keyGenerator: (req) => `checkin-conclusion:user:${req.user.id}`,
 });
 
@@ -25,13 +30,11 @@ function respond(req, res, error) {
       : error.i18nKey
         ? t(error.i18nKey, lang, error.i18nParams)
         : error.message;
-  return res
-    .status(status)
-    .json({
-      ok: false,
-      code: status === 500 ? 'INTERNAL_ERROR' : 'CHECKIN_CALL_ERROR',
-      error: message,
-    });
+  return res.status(status).json({
+    ok: false,
+    code: status === 500 ? 'INTERNAL_ERROR' : 'CHECKIN_CALL_ERROR',
+    error: message,
+  });
 }
 
 function publicEpisode(episode) {
@@ -153,12 +156,7 @@ function checkinCallRoutes(pool) {
   });
   router.post('/episodes/:id/triage/start', async (req, res) => {
     try {
-      const result = await service.startTriage(
-        pool,
-        req.params.id,
-        req.user.id,
-        getLang(req)
-      );
+      const result = await service.startTriage(pool, req.params.id, req.user.id, getLang(req));
       return res.json({
         ok: true,
         episode: publicEpisode(result.episode),

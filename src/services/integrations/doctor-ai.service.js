@@ -180,9 +180,13 @@ const buildOutput = ({ raw, input, context, ruleFindings }) => {
   // Apply safety only to patient-facing text. Internal facts such as existing
   // medicine names and measurements must not be erased by a broad text filter.
   if (normalized.patient_reply)
-    normalized.patient_reply = filterAiOutput(normalized.patient_reply).text;
+    normalized.patient_reply = filterAiOutput(normalized.patient_reply, 'low', input.locale).text;
   if (normalized.follow_up_draft)
-    normalized.follow_up_draft = filterAiOutput(normalized.follow_up_draft).text;
+    normalized.follow_up_draft = filterAiOutput(
+      normalized.follow_up_draft,
+      'low',
+      input.locale
+    ).text;
   const parsed = doctorCopilotOutputSchema.safeParse(normalized);
   if (!parsed.success) {
     throw integrationError(
@@ -454,5 +458,10 @@ module.exports = {
   loadDoctorRagContext: loadDoctorClinicalContext,
   PROMPT_VERSION,
   OUTPUT_SCHEMA_VERSION,
-  __test__: { buildOutput, parseModelJson, resolveClinicalProvider, isRetryableProviderOutputError },
+  __test__: {
+    buildOutput,
+    parseModelJson,
+    resolveClinicalProvider,
+    isRetryableProviderOutputError,
+  },
 };

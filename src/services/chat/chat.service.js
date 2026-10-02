@@ -20,7 +20,7 @@ const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 // CONSTANTS
 // =====================================================
 
-const FALLBACK_CONTEXT = t('chat.fallback_context');
+const FALLBACK_CONTEXT = t('chat.fallback_context', 'vi');
 
 // =====================================================
 // HELPERS
@@ -58,28 +58,32 @@ const formatIssueList = (items) => collectIssueItems(items).join(', ');
  * @param {Object|null} profile - User onboarding profile
  * @returns {string} - Context string
  */
-const buildOnboardingContext = (profile) => {
-  if (!profile) return FALLBACK_CONTEXT;
+const buildOnboardingContext = (profile, lang = 'vi') => {
+  if (!profile) return t('chat.fallback_context', lang);
 
   const medical = formatIssueList(profile.medical_conditions);
   const symptoms = formatIssueList(profile.chronic_symptoms);
   const joints = formatIssueList(profile.joint_issues);
 
   const notes = [];
-  notes.push(`${t('chat.gender')}: ${profile.gender}. ${t('chat.age_group')}: ${profile.age}.`);
-  notes.push(`${t('chat.goal')}: ${profile.goal}. ${t('chat.body_type')}: ${profile.body_type}.`);
-
-  if (medical) notes.push(`${t('chat.conditions')}: ${medical}.`);
-  if (symptoms) notes.push(`${t('chat.symptoms')}: ${symptoms}.`);
-  if (joints) notes.push(`${t('chat.joint_issues')}: ${joints}.`);
-
   notes.push(
-    `${t('chat.habits')}: ${t('chat.flexibility')} ${profile.flexibility}, ${t('chat.stairs')} ${profile.stairs_performance}, ` +
-      `${t('chat.exercise')} ${profile.exercise_freq}, ${t('chat.walking')} ${profile.walking_habit}, ` +
-      `${t('chat.water')} ${profile.water_intake}, ${t('chat.sleep')} ${profile.sleep_duration}.`
+    `${t('chat.gender', lang)}: ${profile.gender}. ${t('chat.age_group', lang)}: ${profile.age}.`
+  );
+  notes.push(
+    `${t('chat.goal', lang)}: ${profile.goal}. ${t('chat.body_type', lang)}: ${profile.body_type}.`
   );
 
-  notes.push(t('chat.reply_instruction'));
+  if (medical) notes.push(`${t('chat.conditions', lang)}: ${medical}.`);
+  if (symptoms) notes.push(`${t('chat.symptoms', lang)}: ${symptoms}.`);
+  if (joints) notes.push(`${t('chat.joint_issues', lang)}: ${joints}.`);
+
+  notes.push(
+    `${t('chat.habits', lang)}: ${t('chat.flexibility', lang)} ${profile.flexibility}, ${t('chat.stairs', lang)} ${profile.stairs_performance}, ` +
+      `${t('chat.exercise', lang)} ${profile.exercise_freq}, ${t('chat.walking', lang)} ${profile.walking_habit}, ` +
+      `${t('chat.water', lang)} ${profile.water_intake}, ${t('chat.sleep', lang)} ${profile.sleep_duration}.`
+  );
+
+  notes.push(t('chat.reply_instruction', lang));
 
   return notes.join(' ');
 };
@@ -89,7 +93,7 @@ const buildOnboardingContext = (profile) => {
  * @param {Object|null} profile - User onboarding profile
  * @returns {string} - Hint string or empty
  */
-const buildMentionHint = (profile) => {
+const buildMentionHint = (profile, lang = 'vi') => {
   if (!profile) return '';
 
   const symptoms = collectIssueItems(profile.chronic_symptoms);
@@ -97,13 +101,13 @@ const buildMentionHint = (profile) => {
   const primarySymptom = symptoms[0] || joints[0] || '';
 
   if (profile.goal && primarySymptom) {
-    return t('chat.goal_and_symptom', 'vi', { goal: profile.goal, symptom: primarySymptom });
+    return t('chat.goal_and_symptom', lang, { goal: profile.goal, symptom: primarySymptom });
   }
   if (profile.goal) {
-    return t('chat.goal_only', 'vi', { goal: profile.goal });
+    return t('chat.goal_only', lang, { goal: profile.goal });
   }
   if (primarySymptom) {
-    return t('chat.symptom_only', 'vi', { symptom: primarySymptom });
+    return t('chat.symptom_only', lang, { symptom: primarySymptom });
   }
   return '';
 };
@@ -143,11 +147,11 @@ const formatMessageWithContext = (message, context) => {
  * @param {Object|null} profile - User profile
  * @returns {string} - Enhanced reply
  */
-const enhanceReplyWithProfile = (reply, profile) => {
+const enhanceReplyWithProfile = (reply, profile, lang = 'vi') => {
   if (!profile) return reply;
   if (replyMentionsProfile(reply, profile)) return reply;
 
-  const hint = buildMentionHint(profile);
+  const hint = buildMentionHint(profile, lang);
   if (hint) {
     return `${reply} ${hint}`;
   }
@@ -454,7 +458,7 @@ CHUYỂN TUYẾN ĐẶC BIỆT — nếu ${honorific} nhắc đến:
           : `Thông tin người dùng (đã biết sẵn — dùng làm nền tảng, KHÔNG hỏi lại bất kỳ điều nào đã có ở đây): ${profileParts.join('; ')}.`
       );
     }
-    const mentionHint = buildMentionHint(profile);
+    const mentionHint = buildMentionHint(profile, lang);
     if (mentionHint) {
       lines.push(
         isEn
@@ -730,11 +734,7 @@ Asinu: "${honorific} ơi, đau ngực lan tay trái có thể là dấu hiệu c
  * @param {number} retentionDays - How many days back to fetch (based on subscription)
  * @returns {Promise<Array<{message: string, sender: string}>>}
  */
-async function getRecentHistory(
-  pool,
-  userId,
-  limit = HISTORY_LIMIT
-) {
+async function getRecentHistory(pool, userId, limit = HISTORY_LIMIT) {
   const result = await pool.query(
     `SELECT message, sender FROM chat_histories
      WHERE user_id = $1
@@ -908,6 +908,7 @@ async function saveAssistantReply(pool, userId, reply, timestamp) {
  */
 async function processChat(pool, userId, message, context = {}) {
   const { getChatReply } = require('./chat.provider.service');
+  let userLang = context.lang || 'vi';
 
   logger.debug('[Chat] received message', {
     userId,
@@ -930,7 +931,7 @@ async function processChat(pool, userId, message, context = {}) {
       'SELECT COALESCE(language_preference, $2) AS lang FROM users WHERE id = $1',
       [userId, 'vi']
     );
-    const userLang = userRow?.lang || context.lang || 'vi';
+    userLang = context.lang || userRow?.lang || 'vi';
     logger.debug('[Chat] request context', {
       userId,
       provider: provider || 'default',
@@ -945,7 +946,7 @@ async function processChat(pool, userId, message, context = {}) {
           getOnboardingProfile(pool, userId),
           getHealthLogsSummary(pool, userId),
         ]);
-        let contextText = buildOnboardingContext(onboardingProfile);
+        let contextText = buildOnboardingContext(onboardingProfile, userLang);
         if (logsSummary?.latest_glucose) {
           const g = logsSummary.latest_glucose;
           contextText += ` Đường huyết gần nhất: ${g.value} ${g.unit || 'mg/dL'}.`;
@@ -956,7 +957,7 @@ async function processChat(pool, userId, message, context = {}) {
         }
         finalMessage = formatMessageWithContext(message, contextText);
       } catch (err) {
-        finalMessage = formatMessageWithContext(message, FALLBACK_CONTEXT);
+        finalMessage = formatMessageWithContext(message, t('chat.fallback_context', userLang));
       }
     } else {
       // Gemini/other: fetch history + profile + health logs BEFORE saving current message
@@ -1004,8 +1005,8 @@ async function processChat(pool, userId, message, context = {}) {
       .trim();
 
     // Apply AI safety filter
-    const safetyFiltered = reply !== filterChatResponse(reply);
-    reply = filterChatResponse(reply);
+    const safetyFiltered = reply !== filterChatResponse(reply, userLang);
+    reply = filterChatResponse(reply, userLang);
 
     const replyProvider = replyResult.provider || 'unavailable';
 
@@ -1102,7 +1103,7 @@ async function processChat(pool, userId, message, context = {}) {
     };
   } catch (err) {
     console.error(`[Chat] user=${userId} error:`, err.message);
-    return { ok: false, error: t('error.server') };
+    return { ok: false, error: t('error.server', userLang) };
   }
 }
 

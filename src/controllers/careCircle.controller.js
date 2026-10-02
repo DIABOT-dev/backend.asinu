@@ -54,7 +54,7 @@ async function createInvitation(pool, req, res) {
   }
 
   // Call service
-  const result = await serviceCreateInvitation(pool, req.user.id, parsed.data);
+  const result = await serviceCreateInvitation(pool, req.user.id, parsed.data, getLang(req));
 
   if (!result.ok) {
     const statusCode = result.statusCode || 400;
@@ -80,7 +80,7 @@ async function previewQrToken(pool, req, res) {
     return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
   }
   try {
-    const result = await servicePreviewQrToken(pool, parsed.data.token, req.user.id);
+    const result = await servicePreviewQrToken(pool, parsed.data.token, req.user.id, getLang(req));
     if (!result.ok) {
       return res.status(result.statusCode || 400).json({
         ok: false,
@@ -101,7 +101,12 @@ async function createInvitationFromQr(pool, req, res) {
     return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
   }
   try {
-    const result = await serviceCreateInvitationFromQr(pool, req.user.id, parsed.data);
+    const result = await serviceCreateInvitationFromQr(
+      pool,
+      req.user.id,
+      parsed.data,
+      getLang(req)
+    );
     if (!result.ok) {
       return res.status(result.statusCode || 400).json({
         ok: false,
@@ -123,7 +128,7 @@ async function createInvitationFromQr(pool, req, res) {
 async function getInvitations(pool, req, res) {
   const direction = String(req.query.direction || '').toLowerCase();
 
-  const result = await serviceGetInvitations(pool, req.user.id, direction);
+  const result = await serviceGetInvitations(pool, req.user.id, direction, getLang(req));
 
   if (!result.ok) {
     return res.status(500).json(result);
@@ -139,7 +144,7 @@ async function getInvitations(pool, req, res) {
 async function acceptInvitation(pool, req, res) {
   const invitationId = req.params.id;
 
-  const result = await serviceAcceptInvitation(pool, invitationId, req.user.id);
+  const result = await serviceAcceptInvitation(pool, invitationId, req.user.id, getLang(req));
 
   if (!result.ok) {
     const statusCode = result.statusCode || 400;
@@ -156,7 +161,7 @@ async function acceptInvitation(pool, req, res) {
 async function rejectInvitation(pool, req, res) {
   const invitationId = req.params.id;
 
-  const result = await serviceRejectInvitation(pool, invitationId, req.user.id);
+  const result = await serviceRejectInvitation(pool, invitationId, req.user.id, getLang(req));
 
   if (!result.ok) {
     const statusCode = result.statusCode || 400;
@@ -172,7 +177,7 @@ async function rejectInvitation(pool, req, res) {
  */
 async function cancelInvitation(pool, req, res) {
   const invitationId = req.params.id;
-  const result = await serviceCancelInvitation(pool, invitationId, req.user.id);
+  const result = await serviceCancelInvitation(pool, invitationId, req.user.id, getLang(req));
   if (!result.ok) {
     return res.status(result.statusCode || 400).json({ ok: false, error: result.error });
   }
@@ -188,7 +193,7 @@ async function cancelInvitation(pool, req, res) {
  * Get all accepted connections
  */
 async function getConnections(pool, req, res) {
-  const result = await serviceGetConnections(pool, req.user.id);
+  const result = await serviceGetConnections(pool, req.user.id, getLang(req));
 
   if (!result.ok) {
     return res.status(500).json(result);
@@ -204,7 +209,7 @@ async function getConnections(pool, req, res) {
 async function deleteConnection(pool, req, res) {
   const connectionId = req.params.id;
 
-  const result = await serviceDeleteConnection(pool, connectionId, req.user.id);
+  const result = await serviceDeleteConnection(pool, connectionId, req.user.id, getLang(req));
 
   if (!result.ok) {
     const statusCode = result.statusCode || 400;
@@ -225,7 +230,13 @@ async function deleteConnection(pool, req, res) {
 async function updateConnection(pool, req, res) {
   const connectionId = req.params.id;
 
-  const result = await serviceUpdateConnection(pool, connectionId, req.user.id, req.body);
+  const result = await serviceUpdateConnection(
+    pool,
+    connectionId,
+    req.user.id,
+    req.body,
+    getLang(req)
+  );
 
   if (!result.ok) {
     const statusCode = result.statusCode || 400;
@@ -249,7 +260,8 @@ async function updateConnectionPermissions(pool, req, res) {
     pool,
     connectionId,
     req.user.id,
-    permissions
+    permissions,
+    getLang(req)
   );
   if (!result.ok) {
     return res.status(result.statusCode || 400).json({ ok: false, error: result.error });
@@ -264,20 +276,25 @@ async function updateConnectionPermissions(pool, req, res) {
 async function getCaregiverLogs(pool, req, res) {
   const caregiverId = req.user.id;
   const patientId = parseInt(req.params.patientId);
-  if (!patientId) return res.status(400).json({ ok: false, error: 'Invalid patient ID' });
+  if (!patientId) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_patient_id', getLang(req)) });
+  }
 
   try {
     const hasAccess = await verifyCaregiverAccess(pool, caregiverId, patientId);
     if (!hasAccess) {
-      return res.status(403).json({ ok: false, error: 'No permission to view logs' });
+      return res
+        .status(403)
+        .json({ ok: false, error: t('error.no_permission_logs', getLang(req)) });
     }
 
     const logs = await serviceGetCaregiverLogs(pool, patientId, 7);
-    const patientName = (await getPatientName(pool, patientId)) || 'Patient';
+    const patientName =
+      (await getPatientName(pool, patientId)) || t('careCircle.user_label', getLang(req));
 
     return res.json({ ok: true, patientName, logs });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -288,12 +305,16 @@ async function getCaregiverLogs(pool, req, res) {
 async function getCaregiverCheckins(pool, req, res) {
   const caregiverId = req.user.id;
   const patientId = parseInt(req.params.patientId);
-  if (!patientId) return res.status(400).json({ ok: false, error: 'Invalid patient ID' });
+  if (!patientId) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_patient_id', getLang(req)) });
+  }
 
   try {
     const hasAccess = await verifyCaregiverAccess(pool, caregiverId, patientId);
     if (!hasAccess) {
-      return res.status(403).json({ ok: false, error: 'No permission to view logs' });
+      return res
+        .status(403)
+        .json({ ok: false, error: t('error.no_permission_logs', getLang(req)) });
     }
 
     const sessions = await serviceGetCaregiverCheckins(pool, patientId, 14);
@@ -301,7 +322,7 @@ async function getCaregiverCheckins(pool, req, res) {
 
     return res.json({ ok: true, patientName, sessions });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -316,7 +337,7 @@ async function getMemberHealthSummary(pool, req, res) {
   // Verify caregiver has access and can_view_logs permission
   const hasAccess = await verifyCaregiverAccess(pool, caregiverId, memberId);
   if (!hasAccess) {
-    return res.status(403).json({ ok: false, error: 'Không có quyền truy cập' });
+    return res.status(403).json({ ok: false, error: t('error.no_access', getLang(req)) });
   }
 
   try {
@@ -342,7 +363,8 @@ async function getMemberHealthSummary(pool, req, res) {
       },
     });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    console.error('[care-circle] health summary failed:', err);
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 

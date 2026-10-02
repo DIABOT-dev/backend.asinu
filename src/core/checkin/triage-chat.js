@@ -805,6 +805,7 @@ async function processTriageChat(input) {
     history = [],
     healthContext = {},
     previousSessionSummary = null,
+    lang = 'vi',
     _isFollowUpSameDay = false,
   } = input;
 
@@ -873,11 +874,14 @@ async function processTriageChat(input) {
   // GPT's last response is still a valid conversational reply.
 
   // ── 7. Run AI safety filter on the final reply ──
-  const filtered = filterTriageResult({
-    text: cleanReply,
-    severity: analysis.severity,
-    needsDoctor: analysis.needsDoctor,
-  });
+  const filtered = filterTriageResult(
+    {
+      text: cleanReply,
+      severity: analysis.severity,
+      needsDoctor: analysis.needsDoctor,
+    },
+    lang
+  );
   if (filtered.text) cleanReply = filtered.text;
 
   // ── 8. Log the interaction ──

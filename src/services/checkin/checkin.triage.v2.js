@@ -24,6 +24,9 @@ const {
   generateMappingForSymptom,
   classifySymptomSeverity,
 } = require('../../core/checkin/triage-ai-layer');
+const { t } = require('../../i18n');
+const { normalizeAnswer, normalizeLang } = require('../../core/checkin/triage-i18n');
+const { normalizeSymptomForEngine } = require('./body-location');
 const { resolveComplaint } = require('./clinical-mapping');
 
 // ─── Emergency type mapping ─────────────────────────────────────────────────
@@ -54,7 +57,7 @@ const EMERGENCY_TYPE_MAP = {
  * @param {Object} profile   - user profile
  * @returns {Promise<Object>} same shape as getNextTriageQuestion return value
  */
-async function formatEmergencyResult(emergency, profile) {
+async function formatEmergencyResult(emergency, profile, lang = 'vi') {
   const templateKey = EMERGENCY_TYPE_MAP[emergency.type] || null;
 
   // Build a minimal state object so generateConclusion can pick the template.
@@ -64,7 +67,7 @@ async function formatEmergencyResult(emergency, profile) {
     needsDoctor: emergency.needsDoctor,
   };
 
-  const aiConclusion = await generateConclusion(state, profile, 'vi');
+  const aiConclusion = await generateConclusion(state, profile, normalizeLang(lang));
 
   return {
     isDone: true,
@@ -160,14 +163,23 @@ async function getNextTriageQuestion(input) {
     return STEP_ORDER[index] || 'unknown';
   };
 
-  const normalizedAnswers = previousAnswers.map((a, i) => {
+  const answersWithSteps = previousAnswers.map((a, i) => {
     if (a.step) return a;
     const step = inferLegacyStep(a.question, i);
     return { step, answer: a.answer, question: a.question };
   });
+  const normalizedAnswers = answersWithSteps.map((answer) => {
+    const normalizeValue = (value) => normalizeSymptomForEngine(normalizeAnswer(value));
+    return {
+      ...answer,
+      answer: Array.isArray(answer.answer)
+        ? answer.answer.map(normalizeValue)
+        : normalizeValue(answer.answer),
+    };
+  });
 
   // 1. Extract all symptom texts from previous answers for emergency scanning.
-  const allSymptomTexts = normalizedAnswers
+  const allSymptomTexts = answersWithSteps
     .map((a) => {
       if (Array.isArray(a.answer)) return a.answer.join(' ');
       return a.answer;
@@ -177,7 +189,7 @@ async function getNextTriageQuestion(input) {
   // 2. Emergency check — pure keyword matching, instant, zero-cost.
   const emergency = detectEmergency(allSymptomTexts, normalizedProfile);
   if (emergency.isEmergency) {
-    return formatEmergencyResult(emergency, normalizedProfile);
+    return formatEmergencyResult(emergency, normalizedProfile, lang);
   }
 
   // 2b. AI safety classifier. Re-evaluate the first symptom on each request;
@@ -186,7 +198,7 @@ async function getNextTriageQuestion(input) {
   // Backup cho các emergency NGOÀI keyword list (long tail symptoms).
   // Cost: 1 GPT call ~150 tokens, cache theo symptom.
   let safetyHint = null;
-  const symptomAnswer = normalizedAnswers.find((answer) => answer.step === 'symptoms');
+  const symptomAnswer = answersWithSteps.find((answer) => answer.step === 'symptoms');
   if (symptomAnswer) {
     const symptomText = Array.isArray(symptomAnswer.answer)
       ? symptomAnswer.answer.join(' ')
@@ -198,22 +210,16 @@ async function getNextTriageQuestion(input) {
           // Bypass triage, conclude ngay với severity='emergency' (giữ nguyên,
           // không downgrade về 'high' như trước — emergency là level cao nhất
           // báo người thân + gợi ý gọi 115 ngay).
-          const aiConclusion = await generateConclusion(
-            {
-              primarySymptom: symptomText,
-              severity: 'emergency',
-              needsDoctor: true,
-              allSymptoms: [symptomText],
-            },
-            normalizedProfile,
-            lang
-          );
+          const resolvedLang = normalizeLang(lang);
           return {
             isDone: true,
-            summary: aiConclusion.summary || `Triệu chứng "${symptomText}" có dấu hiệu nguy cấp.`,
-            recommendation:
-              aiConclusion.recommendation || '🚨 Gọi 115 hoặc đến cơ sở cấp cứu ngay.',
-            closeMessage: aiConclusion.closeMessage,
+            summary: t('checkin.triage.emergency.detected_summary', resolvedLang, {
+              symptom: symptomText,
+            }),
+            recommendation: t('checkin.triage.emergency.detected_recommendation', resolvedLang),
+            closeMessage: t('checkin.triage.emergency.close_family', resolvedLang, {
+              selfRef: 'Asinu',
+            }),
             severity: 'emergency',
             needsDoctor: true,
             needsFamilyAlert: true,
@@ -223,7 +229,6 @@ async function getNextTriageQuestion(input) {
             _safetyClassifier: {
               triggered: true,
               severity: safety.severity,
-              reason: safety.reason,
             },
           };
         }
@@ -247,6 +252,7 @@ async function getNextTriageQuestion(input) {
     bodyLocation,
     bodyLocations,
     bodyLocationOther,
+    lang,
   });
 
   // 4. If the engine says conclude → generate the conclusion via AI layer.
@@ -348,7 +354,8 @@ async function getNextTriageQuestion(input) {
       bodyLocationOther,
     },
     normalizedProfile,
-    normalizedAnswers
+    normalizedAnswers,
+    lang
   );
 
   return {

@@ -170,7 +170,8 @@ async function triageHandler(pool, req, res) {
       pool,
       req.user.id,
       checkin_id,
-      previous_answers
+      previous_answers,
+      getLang(req)
     );
     return res.json({ ok: true, ...result });
   } catch (err) {
@@ -187,7 +188,11 @@ async function triageHandler(pool, req, res) {
 
 async function todayCheckinHandler(pool, req, res) {
   try {
-    const { session, continuityMessage } = await checkinService.getTodayCheckin(pool, req.user.id);
+    const { session, continuityMessage } = await checkinService.getTodayCheckin(
+      pool,
+      req.user.id,
+      getLang(req)
+    );
     return res.json({ ok: true, session, continuityMessage });
   } catch (err) {
     return res
@@ -281,7 +286,7 @@ async function simulateTimePassHandler(pool, req, res) {
 async function resetTodayHandler(pool, req, res) {
   try {
     await checkinService.resetTodayCheckin(pool, req.user.id);
-    return res.json({ ok: true, message: 'Today session reset' });
+    return res.json({ ok: true, message: t('success.today_session_reset', getLang(req)) });
   } catch (err) {
     return res
       .status(500)

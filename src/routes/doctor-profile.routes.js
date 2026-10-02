@@ -22,6 +22,7 @@ const {
   getDoctorAiContextVersion,
 } = require('../services/integrations/doctor-ai.service');
 const { ingestDoctorLifecycle } = require('../services/integrations/doctor-lifecycle.service');
+const { getLang, t } = require('../i18n');
 
 function doctorProfileRoutes(pool) {
   const router = express.Router();
@@ -51,7 +52,11 @@ function doctorProfileRoutes(pool) {
     if (!parsed.success)
       return res
         .status(400)
-        .json({ ok: false, error: 'Invalid message query.', details: parsed.error.issues });
+        .json({
+          ok: false,
+          error: t('error.invalid_message_query', getLang(req)),
+          details: parsed.error.issues,
+        });
     return Promise.resolve(queryDoctorMessages(pool, req, parsed.data))
       .then((data) => res.json({ ok: true, data }))
       .catch(next);
@@ -61,7 +66,11 @@ function doctorProfileRoutes(pool) {
     if (!parsed.success)
       return res
         .status(400)
-        .json({ ok: false, error: 'Invalid Doctor message.', details: parsed.error.issues });
+        .json({
+          ok: false,
+          error: t('error.invalid_doctor_message', getLang(req)),
+          details: parsed.error.issues,
+        });
     return Promise.resolve(sendDoctorMessage(pool, req, parsed.data))
       .then((data) => res.status(data.duplicate ? 200 : 201).json({ ok: true, data }))
       .catch(next);
@@ -71,7 +80,11 @@ function doctorProfileRoutes(pool) {
     if (!parsed.success)
       return res
         .status(400)
-        .json({ ok: false, error: 'Invalid Doctor message action.', details: parsed.error.issues });
+        .json({
+          ok: false,
+          error: t('error.invalid_doctor_action', getLang(req)),
+          details: parsed.error.issues,
+        });
     return Promise.resolve(doctorMessageAction(pool, req, parsed.data))
       .then((data) => res.json({ ok: true, data }))
       .catch(next);
@@ -81,7 +94,11 @@ function doctorProfileRoutes(pool) {
     if (!parsed.success)
       return res
         .status(400)
-        .json({ ok: false, error: 'Invalid Doctor voice message.', details: parsed.error.issues });
+        .json({
+          ok: false,
+          error: t('error.invalid_voice_message', getLang(req)),
+          details: parsed.error.issues,
+        });
     return Promise.resolve(sendDoctorVoice(pool, req, parsed.data))
       .then((data) => res.status(data.duplicate ? 200 : 201).json({ ok: true, data }))
       .catch(next);
@@ -91,7 +108,11 @@ function doctorProfileRoutes(pool) {
     if (!parsed.success)
       return res
         .status(400)
-        .json({ ok: false, error: 'Invalid Doctor AI request.', details: parsed.error.issues });
+        .json({
+          ok: false,
+          error: t('error.invalid_ai_request', getLang(req)),
+          details: parsed.error.issues,
+        });
     return Promise.resolve(createDoctorAiAssist(pool, parsed.data))
       .then((data) => res.json({ ok: true, data }))
       .catch(next);
@@ -101,7 +122,11 @@ function doctorProfileRoutes(pool) {
     if (!parsed.success)
       return res
         .status(400)
-        .json({ ok: false, error: 'Invalid Doctor AI context request.', details: parsed.error.issues });
+        .json({
+          ok: false,
+          error: t('error.invalid_ai_context', getLang(req)),
+          details: parsed.error.issues,
+        });
     return Promise.resolve(getDoctorAiContextVersion(pool, parsed.data))
       .then((data) => res.json({ ok: true, data }))
       .catch(next);

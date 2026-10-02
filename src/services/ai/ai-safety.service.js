@@ -45,7 +45,14 @@ const BANNED_PHRASES = [
 // Phrases that MUST be present when severity is high
 const REQUIRED_HIGH_SEVERITY = ['chuyên gia', 'healthcare', 'y tế', 'medical'];
 
-function filterAiOutput(text, severity = 'low') {
+const { t } = require('../../i18n');
+
+function filterAiOutput(text, severity = 'low', lang = 'vi') {
+  const resolvedLang = String(lang || '')
+    .toLowerCase()
+    .startsWith('en')
+    ? 'en'
+    : 'vi';
   let filtered = text;
   const warnings = [];
   const matchedPhrases = [];
@@ -59,8 +66,11 @@ function filterAiOutput(text, severity = 'low') {
 
   // Fail closed: do not leave a diagnosis, medicine name or dosage fragment
   // visible after filtering one unsafe phrase.
-  if (matchedPhrases.length > 0 || /\b\d+(?:[.,]\d+)?\s*(?:mg|g|ml|mcg|iu|viên|lần\/ngày)\b/i.test(filtered)) {
-    filtered = 'Nội dung này cần được chuyên gia tư vấn sức khỏe hoặc cơ sở y tế đánh giá trực tiếp.';
+  if (
+    matchedPhrases.length > 0 ||
+    /\b\d+(?:[.,]\d+)?\s*(?:mg|g|ml|mcg|iu|viên|lần\/ngày)\b/i.test(filtered)
+  ) {
+    filtered = t('ai.safe_navigation', resolvedLang);
     matchedPhrases.forEach((phrase) => warnings.push(`Blocked unsafe phrase: "${phrase}"`));
     warnings.push('Replaced unsafe AI output with a safe care-navigation message');
   }
@@ -69,7 +79,7 @@ function filterAiOutput(text, severity = 'low') {
   if (severity === 'high') {
     const hasCareRef = REQUIRED_HIGH_SEVERITY.some((p) => filtered.toLowerCase().includes(p));
     if (!hasCareRef) {
-      filtered += '\n\nNếu có dấu hiệu bất thường, hãy liên hệ cơ sở y tế hoặc chuyên gia phù hợp.';
+      filtered += `\n\n${t('ai.high_severity_append', resolvedLang)}`;
       warnings.push('Added healthcare recommendation for high severity');
     }
   }
@@ -77,14 +87,14 @@ function filterAiOutput(text, severity = 'low') {
   return { text: filtered, warnings, modified: warnings.length > 0 };
 }
 
-function filterTriageResult(result) {
+function filterTriageResult(result, lang = 'vi') {
   if (!result) return result;
 
   const filtered = { ...result };
 
   // Filter recommendation text
   if (filtered.recommendation) {
-    const { text, warnings } = filterAiOutput(filtered.recommendation, filtered.severity);
+    const { text, warnings } = filterAiOutput(filtered.recommendation, filtered.severity, lang);
     filtered.recommendation = text;
     if (warnings.length > 0) {
       console.log('[AI Safety] Filtered triage recommendation:', warnings);
@@ -93,7 +103,7 @@ function filterTriageResult(result) {
 
   // Filter summary text
   if (filtered.summary) {
-    const { text, warnings } = filterAiOutput(filtered.summary, filtered.severity);
+    const { text, warnings } = filterAiOutput(filtered.summary, filtered.severity, lang);
     filtered.summary = text;
     if (warnings.length > 0) {
       console.log('[AI Safety] Filtered triage summary:', warnings);
@@ -109,8 +119,8 @@ function filterTriageResult(result) {
   return filtered;
 }
 
-function filterChatResponse(text) {
-  const { text: filtered, warnings } = filterAiOutput(text);
+function filterChatResponse(text, lang = 'vi') {
+  const { text: filtered, warnings } = filterAiOutput(text, 'low', lang);
   if (warnings.length > 0) {
     console.log('[AI Safety] Filtered chat response:', warnings);
   }

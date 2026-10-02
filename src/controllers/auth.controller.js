@@ -1,4 +1,4 @@
-const { t, getLang } = require('../i18n');
+const { t, getLang, localizeKnownMessage } = require('../i18n');
 const { registerSchema, loginSchema } = require('../validation/validation.schemas');
 const {
   registerByEmail: serviceRegister,
@@ -55,7 +55,9 @@ async function registerByEmail(pool, req, res) {
   try {
     const parsed = registerSchema.safeParse(req.body || {});
     if (!parsed.success) {
-      const errorMessages = parsed.error.issues.map((issue) => issue.message).join(', ');
+      const errorMessages = parsed.error.issues
+        .map((issue) => localizeKnownMessage(issue.message, getLang(req)))
+        .join(', ');
       return res.status(400).json({ ok: false, error: errorMessages });
     }
 
@@ -70,12 +72,15 @@ async function registerByEmail(pool, req, res) {
     );
 
     if (!result.ok) {
-      return res.status(400).json(result);
+      return res.status(400).json({
+        ...result,
+        error: localizeKnownMessage(result.error, getLang(req)),
+      });
     }
     return res.status(200).json(result);
   } catch (err) {
     console.error('[Auth] registerByEmail error:', err.message);
-    return res.status(500).json({ ok: false, error: 'Đăng ký thất bại, vui lòng thử lại.' });
+    return res.status(500).json({ ok: false, error: t('error.register_failed', getLang(req)) });
   }
 }
 
@@ -87,7 +92,9 @@ async function loginByEmail(pool, req, res) {
   try {
     const parsed = loginSchema.safeParse(req.body || {});
     if (!parsed.success) {
-      const errorMessages = parsed.error.issues.map((issue) => issue.message).join(', ');
+      const errorMessages = parsed.error.issues
+        .map((issue) => localizeKnownMessage(issue.message, getLang(req)))
+        .join(', ');
       return res.status(400).json({ ok: false, error: errorMessages });
     }
 
@@ -95,12 +102,15 @@ async function loginByEmail(pool, req, res) {
     const result = await serviceLogin(pool, identifier, password);
 
     if (!result.ok) {
-      return res.status(401).json(result);
+      return res.status(401).json({
+        ...result,
+        error: localizeKnownMessage(result.error, getLang(req)),
+      });
     }
     return res.status(200).json(result);
   } catch (err) {
     console.error('[Auth] loginByEmail error:', err.message);
-    return res.status(500).json({ ok: false, error: 'Đăng nhập thất bại, vui lòng thử lại.' });
+    return res.status(500).json({ ok: false, error: t('error.login_failed', getLang(req)) });
   }
 }
 
@@ -152,7 +162,10 @@ async function loginByProvider(pool, req, res, provider, idColumn) {
   if (!result.ok) {
     // Preserve business conflicts such as an email that already belongs to
     // an email/password account. The client can then show the correct next step.
-    return res.status(result.statusCode || 401).json(result);
+    return res.status(result.statusCode || 401).json({
+      ...result,
+      error: localizeKnownMessage(result.error, getLang(req)),
+    });
   }
 
   return res.status(200).json(result);
@@ -216,7 +229,12 @@ async function loginByZalo(pool, req, res) {
       null,
       zaloPhone
     );
-    if (!result.ok) return res.status(401).json(result);
+    if (!result.ok) {
+      return res.status(401).json({
+        ...result,
+        error: localizeKnownMessage(result.error, lang),
+      });
+    }
     return res.status(200).json(result);
   } catch (err) {
     return res.status(500).json({ ok: false, error: t('error.server', lang) });
@@ -595,8 +613,9 @@ async function exchangeOAuthCodeHandler(pool, req, res) {
     const result = await exchangeOAuthSessionCode(code, codeVerifier);
     return res.status(200).json({ ok: true, token: result.token, user: result.user || null });
   } catch (err) {
-    const status = err instanceof OAuthFlowError && err.code === 'OAUTH_EXCHANGE_UNAVAILABLE' ? 503 : 401;
-    return res.status(status).json({ ok: false, error: 'OAuth code is invalid or expired' });
+    const status =
+      err instanceof OAuthFlowError && err.code === 'OAUTH_EXCHANGE_UNAVAILABLE' ? 503 : 401;
+    return res.status(status).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
   }
 }
 
@@ -607,7 +626,7 @@ async function exchangeOAuthCodeHandler(pool, req, res) {
 async function loginByFacebookToken(pool, req, res) {
   const { access_token, id_token, user_id } = req.body || {};
   if (!access_token && !id_token && !user_id) {
-    return res.status(400).json({ ok: false, error: 'access_token or id_token required' });
+    return res.status(400).json({ ok: false, error: t('error.missing_auth_token', getLang(req)) });
   }
   try {
     const appId = process.env.FACEBOOK_APP_ID;
@@ -620,12 +639,12 @@ async function loginByFacebookToken(pool, req, res) {
       // iOS SDK v16+ Limited Login: verify JWT via Facebook JWKS
       console.log('[FB token] iOS id_token flow');
       if (!appId) {
-        return res.status(503).json({ ok: false, error: 'Facebook login is not configured' });
+        return res.status(503).json({ ok: false, error: t('error.oauth_failed', getLang(req)) });
       }
 
       const tokenParts = String(id_token).split('.');
       if (tokenParts.length !== 3) {
-        return res.status(401).json({ ok: false, error: 'Invalid Facebook id_token' });
+        return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
       }
 
       const [headerB64Pre, payloadB64Pre] = tokenParts;
@@ -639,9 +658,7 @@ async function loginByFacebookToken(pool, req, res) {
         unverifiedPayload.aud !== appId ||
         !validIssuers.includes(unverifiedPayload.iss)
       ) {
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Facebook id_token: aud/iss/alg mismatch' });
+        return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
       }
 
       const jwksUrl =
@@ -659,9 +676,7 @@ async function loginByFacebookToken(pool, req, res) {
 
       if (!jwk || jwk.kty !== 'RSA') {
         console.error('[FB token] JWKS key not found for kid:', header.kid);
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Facebook id_token: key not found' });
+        return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
       }
 
       // Verify JWT signature using Node crypto
@@ -675,9 +690,7 @@ async function loginByFacebookToken(pool, req, res) {
 
       if (!valid) {
         console.error('[FB token] JWT signature invalid');
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Facebook id_token: bad signature' });
+        return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
       }
 
       // The payload was parsed before the signature check and is safe to use
@@ -700,9 +713,7 @@ async function loginByFacebookToken(pool, req, res) {
         typeof payload.sub !== 'string' ||
         payload.sub.length === 0
       ) {
-        return res
-          .status(401)
-          .json({ ok: false, error: 'Invalid Facebook id_token claims' });
+        return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
       }
 
       userId = payload.sub;
@@ -717,7 +728,7 @@ async function loginByFacebookToken(pool, req, res) {
 
       if (!debugJson?.data?.is_valid || debugJson?.data?.app_id !== appId) {
         console.error('[FB token] debug_token invalid:', JSON.stringify(debugJson));
-        return res.status(401).json({ ok: false, error: 'Invalid Facebook access token' });
+        return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
       }
 
       userId = debugJson.data.user_id;
@@ -730,7 +741,7 @@ async function loginByFacebookToken(pool, req, res) {
     }
 
     if (!userId) {
-      return res.status(401).json({ ok: false, error: 'Could not determine Facebook user ID' });
+      return res.status(401).json({ ok: false, error: t('error.oauth_failed', getLang(req)) });
     }
 
     // iOS Limited Login → lưu vào facebook_limited_id (khác facebook_id Standard).
@@ -748,14 +759,19 @@ async function loginByFacebookToken(pool, req, res) {
       null
     );
     if (!result.ok) {
-      return res.status(400).json({ ok: false, error: result.error || 'Login failed' });
+      return res.status(400).json({
+        ok: false,
+        error: result.error
+          ? localizeKnownMessage(result.error, getLang(req))
+          : t('error.login_failed', getLang(req)),
+      });
     }
 
     console.log('[FB token] login success, userId:', userId);
     return res.json({ ok: true, token: result.token });
   } catch (err) {
     console.error('[Facebook token login] error:', err.message);
-    return res.status(500).json({ ok: false, error: 'Server error' });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 

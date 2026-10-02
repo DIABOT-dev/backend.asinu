@@ -27,7 +27,8 @@ async function voiceChat(pool, req, res) {
       req.user.id,
       req.file.buffer,
       req.file.mimetype,
-      req.file.originalname || 'audio.m4a'
+      req.file.originalname || 'audio.m4a',
+      getLang(req)
     );
 
     // Increment counter after successful processing
@@ -42,9 +43,7 @@ async function voiceChat(pool, req, res) {
       unlimited: true,
     });
   } catch (err) {
-    return res
-      .status(500)
-      .json({ ok: false, error: err.message || t('error.voice_processing', getLang(req)) });
+    return res.status(500).json({ ok: false, error: t('error.voice_processing', getLang(req)) });
   }
 }
 

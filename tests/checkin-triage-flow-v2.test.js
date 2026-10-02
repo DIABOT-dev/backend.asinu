@@ -7,6 +7,7 @@ const {
 const { detectEmergency } = require('../src/services/checkin/emergency-detector');
 const { getNextTriageQuestion } = require('../src/services/checkin/checkin.triage.v2');
 const { EMERGENCY_CONCLUSIONS, isSafeConclusion } = require('../src/core/checkin/triage-ai-layer');
+const { t } = require('../src/i18n');
 
 const initialInput = (previousAnswers, profile = {}, healthContext = {}) => ({
   status: 'specific_concern',
@@ -113,6 +114,31 @@ describe('check-in triage V2 flow', () => {
     });
   });
 
+  test('uses the language selected by the user for questions and options', async () => {
+    const first = await getNextTriageQuestion({
+      status: 'specific_concern',
+      phase: 'initial',
+      lang: 'en',
+      profile: { full_name: 'John' },
+      healthContext: {},
+      previousAnswers: [],
+    });
+    expect(first.isDone).toBe(false);
+    expect(first.question).toMatch(/John|symptom|feeling/i);
+    expect(first.options).toContain('Headache');
+
+    const next = await getNextTriageQuestion({
+      status: 'specific_concern',
+      phase: 'initial',
+      lang: 'en',
+      profile: { full_name: 'John' },
+      healthContext: {},
+      previousAnswers: [{ step: 'symptoms', question: first.question, answer: 'Headache' }],
+    });
+    expect(next.question).toMatch(/when|start/i);
+    expect(next.options).toContain('Since this morning');
+  });
+
   test('blocks diagnosis and medication instructions in generated conclusions', () => {
     expect(
       isSafeConclusion({
@@ -135,14 +161,21 @@ describe('check-in triage V2 flow', () => {
         closeMessage: '',
       })
     ).toBe(false);
+    expect(
+      isSafeConclusion({
+        summary: 'You are likely diagnosed with a neurological disease.',
+        recommendation: 'Continue monitoring.',
+        closeMessage: '',
+      })
+    ).toBe(false);
 
     for (const template of Object.values(EMERGENCY_CONCLUSIONS)) {
       const honorifics = { Honorific: 'Bác', honorific: 'bác', selfRef: 'Asinu' };
       expect(
         isSafeConclusion({
-          summary: template.summary(honorifics),
-          recommendation: template.recommendation(honorifics),
-          closeMessage: template.closeMessage(honorifics),
+          summary: t(template.summary, 'vi', honorifics),
+          recommendation: t(template.recommendation, 'vi', honorifics),
+          closeMessage: t(template.closeMessage, 'vi', honorifics),
         })
       ).toBe(true);
     }

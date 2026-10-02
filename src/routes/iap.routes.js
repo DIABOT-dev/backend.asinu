@@ -8,6 +8,7 @@ const {
   appleNotifications,
   googleNotifications,
 } = require('../controllers/iap.controller');
+const { getLang, t } = require('../i18n');
 
 /**
  * Stricter limiter on /verify only. A legitimate user calls /verify
@@ -27,7 +28,12 @@ const verifyLimiter = rateLimit({
   max: 20, // 20 verify attempts per minute per user
   standardHeaders: true,
   legacyHeaders: false,
-  message: { ok: false, code: 'RATE_LIMITED', error: 'Too many verification attempts; slow down.' },
+  handler: (req, res) =>
+    res.status(429).json({
+      ok: false,
+      code: 'RATE_LIMITED',
+      error: t('error.iap_rate_limited', getLang(req)),
+    }),
   keyGenerator: (req) =>
     req.user && req.user.id ? `iap-verify:user:${req.user.id}` : `iap-verify:ip:${req.ip}`,
 });
@@ -45,10 +51,8 @@ function iapRoutes(pool) {
   // Store webhooks — Apple signs the body; Google must also present a
   // verified Pub/Sub OIDC identity. Keep these URLs out of public docs.
   router.post('/apple-notifications', (req, res) => appleNotifications(pool, req, res));
-  router.post(
-    '/google-notifications',
-    requireGooglePubSubAuth,
-    (req, res) => googleNotifications(pool, req, res)
+  router.post('/google-notifications', requireGooglePubSubAuth, (req, res) =>
+    googleNotifications(pool, req, res)
   );
 
   return router;

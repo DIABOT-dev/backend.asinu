@@ -121,7 +121,7 @@ async function createQrToken(pool, ownerUserId) {
   };
 }
 
-async function resolveQrToken(pool, token, scannerUserId) {
+async function resolveQrToken(pool, token, scannerUserId, lang = 'vi') {
   const tokenHash = hashQrToken(token);
   const result = await pool.query(
     `SELECT q.owner_user_id, q.expires_at,
@@ -134,13 +134,13 @@ async function resolveQrToken(pool, token, scannerUserId) {
        AND q.revoked_at IS NULL
        AND q.expires_at > NOW()
      LIMIT 1`,
-    [tokenHash, t('careCircle.user_label')]
+    [tokenHash, t('careCircle.user_label', lang)]
   );
   const qr = result.rows[0];
   if (!qr) {
     return {
       ok: false,
-      error: t('careCircle.qr_invalid_or_expired'),
+      error: t('careCircle.qr_invalid_or_expired', lang),
       code: 'CARE_CIRCLE_QR_INVALID',
       statusCode: 410,
     };
@@ -148,7 +148,7 @@ async function resolveQrToken(pool, token, scannerUserId) {
   if (Number(qr.owner_user_id) === Number(scannerUserId)) {
     return {
       ok: false,
-      error: t('careCircle.qr_cannot_scan_self'),
+      error: t('careCircle.qr_cannot_scan_self', lang),
       code: 'CARE_CIRCLE_QR_SELF',
       statusCode: 400,
     };
@@ -165,7 +165,7 @@ async function resolveQrToken(pool, token, scannerUserId) {
   if (existing.rowCount > 0) {
     return {
       ok: false,
-      error: t('careCircle.connection_exists'),
+      error: t('careCircle.connection_exists', lang),
       code: 'CARE_CIRCLE_CONNECTION_EXISTS',
       statusCode: 409,
     };
@@ -183,22 +183,27 @@ async function resolveQrToken(pool, token, scannerUserId) {
   };
 }
 
-async function previewQrToken(pool, token, scannerUserId) {
-  const result = await resolveQrToken(pool, token, scannerUserId);
+async function previewQrToken(pool, token, scannerUserId, lang = 'vi') {
+  const result = await resolveQrToken(pool, token, scannerUserId, lang);
   if (!result.ok) return result;
   return { ok: true, preview: result.preview };
 }
 
-async function createInvitationFromQr(pool, requesterId, data) {
-  const resolved = await resolveQrToken(pool, data.token, requesterId);
+async function createInvitationFromQr(pool, requesterId, data, lang = 'vi') {
+  const resolved = await resolveQrToken(pool, data.token, requesterId, lang);
   if (!resolved.ok) return resolved;
 
-  const invitationResult = await createInvitation(pool, requesterId, {
-    addressee_id: resolved.ownerUserId,
-    relationship_type: data.relationship_type,
-    role: data.role,
-    permissions: data.permissions,
-  });
+  const invitationResult = await createInvitation(
+    pool,
+    requesterId,
+    {
+      addressee_id: resolved.ownerUserId,
+      relationship_type: data.relationship_type,
+      role: data.role,
+      permissions: data.permissions,
+    },
+    lang
+  );
   if (!invitationResult.ok) return invitationResult;
 
   try {
@@ -229,12 +234,12 @@ async function createInvitationFromQr(pool, requesterId, data) {
  * @param {Object} data - Invitation data
  * @returns {Promise<Object>} - { ok, invitation, error }
  */
-async function createInvitation(pool, requesterId, data) {
+async function createInvitation(pool, requesterId, data, lang = 'vi') {
   const { addressee_id, relationship_type, role, permissions } = data;
 
   // Validate not self-invite
   if (Number(addressee_id) === Number(requesterId)) {
-    return { ok: false, error: t('careCircle.cannot_invite_self') };
+    return { ok: false, error: t('careCircle.cannot_invite_self', lang) };
   }
 
   const entitlement = await entitlementService.getEntitlement(pool, requesterId);
@@ -249,8 +254,8 @@ async function createInvitation(pool, requesterId, data) {
     return {
       ok: false,
       error: entitlement.isAnTam
-        ? t('careCircle.premium_limit_reached', 'vi', { limit: connectionLimit })
-        : t('careCircle.upgrade_premium'),
+        ? t('careCircle.premium_limit_reached', lang, { limit: connectionLimit })
+        : t('careCircle.upgrade_premium', lang),
       code: 'CARE_CIRCLE_LIMIT',
       statusCode: 403,
     };
@@ -308,10 +313,10 @@ async function createInvitation(pool, requesterId, data) {
     return { ok: true, invitation };
   } catch (err) {
     if (err?.code === '23505') {
-      return { ok: false, error: t('careCircle.connection_exists'), statusCode: 409 };
+      return { ok: false, error: t('careCircle.connection_exists', lang), statusCode: 409 };
     }
 
-    return { ok: false, error: t('error.server') };
+    return { ok: false, error: t('error.server', lang) };
   }
 }
 
@@ -322,7 +327,7 @@ async function createInvitation(pool, requesterId, data) {
  * @param {string} direction - 'sent', 'received', or 'all'
  * @returns {Promise<Object>} - { ok, invitations, error }
  */
-async function getInvitations(pool, userId, direction = 'all') {
+async function getInvitations(pool, userId, direction = 'all', lang = 'vi') {
   const conditions = [];
   const params = [];
 
@@ -358,7 +363,7 @@ async function getInvitations(pool, userId, direction = 'all') {
     );
     return { ok: true, invitations: result.rows };
   } catch (err) {
-    return { ok: false, error: t('error.server') };
+    return { ok: false, error: t('error.server', lang) };
   }
 }
 
@@ -369,7 +374,7 @@ async function getInvitations(pool, userId, direction = 'all') {
  * @param {number} userId - Addressee user ID
  * @returns {Promise<Object>} - { ok, connection, error }
  */
-async function acceptInvitation(pool, invitationId, userId) {
+async function acceptInvitation(pool, invitationId, userId, lang = 'vi') {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -392,8 +397,8 @@ async function acceptInvitation(pool, invitationId, userId) {
       return {
         ok: false,
         error: addresseeEntitlement.isAnTam
-          ? t('careCircle.premium_limit_reached', 'vi', { limit: addresseeLimit })
-          : t('careCircle.upgrade_premium_accept'),
+          ? t('careCircle.premium_limit_reached', lang, { limit: addresseeLimit })
+          : t('careCircle.upgrade_premium_accept', lang),
         code: 'CARE_CIRCLE_LIMIT',
         statusCode: 403,
       };
@@ -409,7 +414,7 @@ async function acceptInvitation(pool, invitationId, userId) {
 
     if (result.rows.length === 0) {
       await client.query('ROLLBACK');
-      return { ok: false, error: t('careCircle.invitation_not_found'), statusCode: 404 };
+      return { ok: false, error: t('careCircle.invitation_not_found', lang), statusCode: 404 };
     }
 
     await client.query('COMMIT');
@@ -469,7 +474,7 @@ async function acceptInvitation(pool, invitationId, userId) {
       stack: err?.stack,
     });
     await client.query('ROLLBACK').catch(() => {});
-    return { ok: false, error: t('error.server') };
+    return { ok: false, error: t('error.server', lang) };
   } finally {
     client.release();
   }
@@ -482,7 +487,7 @@ async function acceptInvitation(pool, invitationId, userId) {
  * @param {number} userId - Addressee user ID
  * @returns {Promise<Object>} - { ok, invitation, error }
  */
-async function rejectInvitation(pool, invitationId, userId) {
+async function rejectInvitation(pool, invitationId, userId, lang = 'vi') {
   try {
     // DELETE (not UPDATE) so the unique pair index doesn't block a future invite
     // in either direction between these two users.
@@ -494,7 +499,7 @@ async function rejectInvitation(pool, invitationId, userId) {
     );
 
     if (result.rows.length === 0) {
-      return { ok: false, error: t('careCircle.invitation_not_found'), statusCode: 404 };
+      return { ok: false, error: t('careCircle.invitation_not_found', lang), statusCode: 404 };
     }
 
     const invitation = { ...result.rows[0], status: 'rejected' };
@@ -534,7 +539,7 @@ async function rejectInvitation(pool, invitationId, userId) {
       message: err?.message,
       stack: err?.stack,
     });
-    return { ok: false, error: t('error.server') };
+    return { ok: false, error: t('error.server', lang) };
   }
 }
 
@@ -545,7 +550,7 @@ async function rejectInvitation(pool, invitationId, userId) {
  * @param {number} requesterId - User who originally sent the invitation
  * @returns {Promise<Object>} - { ok, error }
  */
-async function cancelInvitation(pool, invitationId, requesterId) {
+async function cancelInvitation(pool, invitationId, requesterId, lang = 'vi') {
   try {
     const result = await pool.query(
       `DELETE FROM user_connections
@@ -555,12 +560,12 @@ async function cancelInvitation(pool, invitationId, requesterId) {
     );
 
     if (result.rows.length === 0) {
-      return { ok: false, error: t('careCircle.invitation_not_found'), statusCode: 404 };
+      return { ok: false, error: t('careCircle.invitation_not_found', lang), statusCode: 404 };
     }
 
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: t('error.server') };
+    return { ok: false, error: t('error.server', lang) };
   }
 }
 
@@ -574,10 +579,12 @@ async function cancelInvitation(pool, invitationId, requesterId) {
  * @param {number} userId - User ID
  * @returns {Promise<Object>} - { ok, connections, error }
  */
-async function getConnections(pool, userId) {
+async function getConnections(pool, userId, lang = 'vi') {
   try {
     const result = await pool.query(
       `SELECT uc.*,
+              u1.avatar_url as requester_avatar_url,
+              u2.avatar_url as addressee_avatar_url,
               COALESCE(u1.full_name, u1.display_name) as requester_full_name, u1.email as requester_email, u1.phone_number as requester_phone,
               COALESCE(u2.full_name, u2.display_name) as addressee_full_name, u2.email as addressee_email, u2.phone_number as addressee_phone,
               uop1.gender as requester_gender, uop2.gender as addressee_gender
@@ -593,7 +600,7 @@ async function getConnections(pool, userId) {
     );
     return { ok: true, connections: result.rows };
   } catch (err) {
-    return { ok: false, error: t('error.server') };
+    return { ok: false, error: t('error.server', lang) };
   }
 }
 
@@ -604,7 +611,7 @@ async function getConnections(pool, userId) {
  * @param {number} userId - User ID (must be part of connection)
  * @returns {Promise<Object>} - { ok, connection, error }
  */
-async function deleteConnection(pool, connectionId, userId) {
+async function deleteConnection(pool, connectionId, userId, lang = 'vi') {
   try {
     // DELETE (not UPDATE status='removed') so the unique pair index doesn't
     // block a future invite between these two users.
@@ -616,7 +623,7 @@ async function deleteConnection(pool, connectionId, userId) {
     );
 
     if (result.rows.length === 0) {
-      return { ok: false, error: t('careCircle.connection_not_found'), statusCode: 404 };
+      return { ok: false, error: t('careCircle.connection_not_found', lang), statusCode: 404 };
     }
 
     const connection = result.rows[0];
@@ -658,7 +665,7 @@ async function deleteConnection(pool, connectionId, userId) {
       code: err?.code,
       message: err?.message,
     });
-    return { ok: false, error: t('error.server') };
+    return { ok: false, error: t('error.server', lang) };
   }
 }
 
@@ -670,11 +677,11 @@ async function deleteConnection(pool, connectionId, userId) {
  * @param {Object} data - Update data
  * @returns {Promise<Object>} - { ok, connection, error }
  */
-async function updateConnection(pool, connectionId, userId, data) {
+async function updateConnection(pool, connectionId, userId, data, lang = 'vi') {
   const { relationship_type, role } = data;
 
   if (!relationship_type && !role) {
-    return { ok: false, error: t('careCircle.need_at_least_one_field'), statusCode: 400 };
+    return { ok: false, error: t('careCircle.need_at_least_one_field', lang), statusCode: 400 };
   }
 
   try {
@@ -686,7 +693,7 @@ async function updateConnection(pool, connectionId, userId, data) {
     );
 
     if (checkResult.rows.length === 0) {
-      return { ok: false, error: t('careCircle.connection_not_found'), statusCode: 404 };
+      return { ok: false, error: t('careCircle.connection_not_found', lang), statusCode: 404 };
     }
 
     // Build dynamic update query
@@ -736,7 +743,7 @@ async function updateConnection(pool, connectionId, userId, data) {
     emitCareCircleChange(pool, rows[0], 'active');
     return { ok: true, connection: rows[0] };
   } catch (err) {
-    return { ok: false, error: t('error.server') };
+    return { ok: false, error: t('error.server', lang) };
   }
 }
 
@@ -748,7 +755,13 @@ async function updateConnection(pool, connectionId, userId, data) {
  * @param {Object} newPermissions - New permissions object
  * @returns {Promise<Object>} - { ok, connection, error }
  */
-async function updateConnectionPermissions(pool, connectionId, userId, newPermissions) {
+async function updateConnectionPermissions(
+  pool,
+  connectionId,
+  userId,
+  newPermissions,
+  lang = 'vi'
+) {
   const perms = normalizePermissions(newPermissions);
   try {
     // Only the original requester (the user who invited and set the
@@ -764,7 +777,7 @@ async function updateConnectionPermissions(pool, connectionId, userId, newPermis
       [JSON.stringify(perms), connectionId, userId]
     );
     if (result.rows.length === 0) {
-      return { ok: false, error: t('careCircle.connection_not_found'), statusCode: 404 };
+      return { ok: false, error: t('careCircle.connection_not_found', lang), statusCode: 404 };
     }
     // Re-fetch with user names joined
     const { rows } = await pool.query(
@@ -812,7 +825,7 @@ async function updateConnectionPermissions(pool, connectionId, userId, newPermis
       code: err?.code,
       message: err?.message,
     });
-    return { ok: false, error: t('error.server') };
+    return { ok: false, error: t('error.server', lang) };
   }
 }
 

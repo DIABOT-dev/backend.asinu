@@ -201,14 +201,15 @@ async function handleWebhook(pool, req) {
   if (balRows[0]) {
     const u = balRows[0];
     const lang = u.language_preference || 'vi';
+    const numberLocale = lang === 'en' ? 'en-US' : 'vi-VN';
     sendAndSave(
       pool,
       { id: userId, push_token: u.push_token },
       'wallet_topup_success',
       t('push.wallet_topup_title', lang),
       t('push.wallet_topup_body', lang, {
-        amount: Number(transferAmount).toLocaleString('vi-VN'),
-        balance: Number(u.wallet_balance).toLocaleString('vi-VN'),
+        amount: Number(transferAmount).toLocaleString(numberLocale),
+        balance: Number(u.wallet_balance).toLocaleString(numberLocale),
       }),
       { amount: String(transferAmount), balance: String(u.wallet_balance), orderCode }
     ).catch(() => {});
@@ -247,12 +248,13 @@ async function notifyPaymentFailed(pool, userId, amount) {
   if (!rows[0]) return;
   const u = rows[0];
   const lang = u.language_preference || 'vi';
+  const numberLocale = lang === 'en' ? 'en-US' : 'vi-VN';
   return sendAndSave(
     pool,
     { id: userId, push_token: u.push_token },
     'payment_failed',
     t('push.payment_failed_title', lang),
-    t('push.payment_failed_body', lang, { amount: Number(amount).toLocaleString('vi-VN') }),
+    t('push.payment_failed_body', lang, { amount: Number(amount).toLocaleString(numberLocale) }),
     { amount: String(amount) }
   );
 }

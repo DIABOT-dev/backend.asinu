@@ -9,15 +9,19 @@
 
 const { callTextAi } = require('../../services/ai/ai.service');
 const { getHonorifics } = require('../../lib/honorifics');
+const { t } = require('../../i18n');
+const { LOCATION_LABELS } = require('../../services/checkin/body-location');
+const { localizeOption, normalizeLang } = require('./triage-i18n');
 
 // ─── Question Templates (có dấu tiếng Việt) ─────────────────────────────────
 
-function formatQuestion(engineResult, profile, _previousAnswers = []) {
+function formatQuestion(engineResult, profile, _previousAnswers = [], lang = 'vi') {
+  const resolvedLang = normalizeLang(lang);
   const h = getHonorifics({
     birth_year: profile.birth_year,
     gender: profile.gender,
     full_name: profile.full_name,
-    lang: 'vi',
+    lang: resolvedLang,
   });
   const { honorific, selfRef, callName, Honorific } = h;
   // CallName viết hoa chữ đầu (VD: "chú Hùng" → "Chú Hùng")
@@ -27,24 +31,22 @@ function formatQuestion(engineResult, profile, _previousAnswers = []) {
 
   // Lấy bodyLocations từ engineResult để inject vào greeting (T2 → T3 awareness).
   // Map enum key → label tiếng Việt.
-  const LOCATION_LABEL_VI = {
-    head: 'đầu',
-    chest: 'ngực',
-    abdomen: 'bụng',
-    limbs: 'tay chân',
-    skin: 'da',
-    whole_body: 'toàn thân',
-    mental: 'tinh thần',
-  };
+  const locationLabels = LOCATION_LABELS[resolvedLang] || LOCATION_LABELS.vi;
   const locKeys = Array.isArray(engineResult.bodyLocations) ? engineResult.bodyLocations : [];
-  const locLabels = locKeys.map((k) => LOCATION_LABEL_VI[k] || k).filter(Boolean);
+  const locLabels = locKeys
+    .map((key) => locationLabels[key]?.label?.toLowerCase() || key)
+    .filter(Boolean);
   const locOther = (engineResult.bodyLocationOther || '').trim();
   // Build location phrase: "đầu" / "đầu, ngực" / "đầu, ngực, bụng" + " và '<other>'"
   let locPhrase = '';
   if (locLabels.length === 1) locPhrase = locLabels[0];
-  else if (locLabels.length === 2) locPhrase = `${locLabels[0]} và ${locLabels[1]}`;
+  else if (locLabels.length === 2)
+    locPhrase =
+      resolvedLang === 'en'
+        ? `${locLabels[0]} and ${locLabels[1]}`
+        : `${locLabels[0]} và ${locLabels[1]}`;
   else if (locLabels.length >= 3)
-    locPhrase = `${locLabels.slice(0, -1).join(', ')} và ${locLabels[locLabels.length - 1]}`;
+    locPhrase = `${locLabels.slice(0, -1).join(', ')}${resolvedLang === 'en' ? ', and ' : ' và '}${locLabels[locLabels.length - 1]}`;
   if (locOther) locPhrase = locPhrase ? `${locPhrase}, ${locOther}` : locOther;
 
   switch (step) {
@@ -52,62 +54,83 @@ function formatQuestion(engineResult, profile, _previousAnswers = []) {
       // T3 question — aware T2 location nếu có. Nếu không có location (FE cũ) →
       // dùng template chung như cũ.
       if (locPhrase) {
-        question = `${CallName} ơi, ${selfRef} biết ${honorific} đang khó chịu ở ${locPhrase}. ${Honorific} chọn (hoặc gõ thêm) triệu chứng cụ thể nhé 💙`;
+        question = t('checkin.triage.question.symptoms_with_location', resolvedLang, {
+          CallName,
+          selfRef,
+          honorific,
+          Honorific,
+          locations: locPhrase,
+        });
       } else {
-        question = `${CallName} ơi, ${selfRef} nghe ${honorific} đang không khoẻ. ${Honorific} cho ${selfRef} biết ${honorific} đang gặp triệu chứng gì nhé 💙`;
+        question = t('checkin.triage.question.symptoms_general', resolvedLang, {
+          CallName,
+          selfRef,
+          honorific,
+          Honorific,
+        });
       }
       break;
 
     case 'associated': {
-      const sym = engineResult.primarySymptom || 'vấn đề';
-      question = `Ngoài ${sym}, ${honorific} có thấy triệu chứng nào dưới đây không?`;
+      const sym = engineResult.primarySymptom
+        ? localizeOption(engineResult.primarySymptom, resolvedLang)
+        : t('checkin.triage.symptom_unknown', resolvedLang);
+      question = t('checkin.triage.question.associated', resolvedLang, {
+        symptom: sym,
+        honorific,
+      });
       break;
     }
 
     case 'onset':
-      question = `${Honorific} bị từ lúc nào vậy? ${Honorific} chọn hoặc gõ thời gian chính xác nhé 😊`;
+      question = t('checkin.triage.question.onset', resolvedLang, { Honorific });
       break;
 
     case 'progression':
-      question = `Từ lúc bắt đầu đến giờ ${honorific} thấy đỡ hơn chưa, hay vẫn vậy? 💙`;
+      question = t('checkin.triage.question.progression', resolvedLang, { honorific });
       break;
 
     case 'red_flags':
-      question = `${CallName} ơi, ${honorific} có thấy dấu hiệu nào dưới đây không? 🩺`;
+      question = t('checkin.triage.question.red_flags', resolvedLang, { CallName, honorific });
       break;
 
     case 'cause': {
       const sym = engineResult.primarySymptom || '';
       if (sym.includes('đau bụng') || sym.includes('bụng')) {
-        question = `${Honorific} có ăn gì lạ, đồ cay, hay uống thuốc lúc đói không? 🤔`;
+        question = t('checkin.triage.question.cause_abdomen', resolvedLang, { Honorific });
       } else if (sym.includes('đau đầu') || sym.includes('đầu')) {
-        question = `${Honorific} có nhớ gần đây ngủ ít, quên thuốc hay làm việc căng thẳng không? 🤔`;
+        question = t('checkin.triage.question.cause_head', resolvedLang, { Honorific });
       } else if (sym.includes('đau vai') || sym.includes('đau lưng') || sym.includes('khớp')) {
-        question = `${Honorific} có nhớ gần đây vận động nặng, ngồi sai tư thế hay bê vác gì không? 🤔`;
+        question = t('checkin.triage.question.cause_musculoskeletal', resolvedLang, { Honorific });
       } else if (sym.includes('chóng mặt')) {
-        question = `${Honorific} có nhớ gần đây bỏ ăn, đứng dậy nhanh hay quên thuốc không? 🤔`;
+        question = t('checkin.triage.question.cause_dizziness', resolvedLang, { Honorific });
       } else {
-        question = `${Honorific} có nhớ gần đây có gì bất thường không? 🤔`;
+        question = t('checkin.triage.question.cause_default', resolvedLang, { Honorific });
       }
       break;
     }
 
     case 'action':
-      question = `${Honorific} có nghỉ ngơi hay uống thuốc gì chưa? 💊`;
+      question = t('checkin.triage.question.action', resolvedLang, { Honorific });
       break;
 
     case 'followup_status': {
-      const prev = engineResult.previousSessionSummary || 'không khoẻ';
-      question = `${CallName} ơi, lần check-in trước ${honorific} nói bị ${prev}. Bây giờ ${honorific} thấy thế nào?`;
+      const prev =
+        engineResult.previousSessionSummary || t('checkin.triage.previous_unknown', resolvedLang);
+      question = t('checkin.triage.question.followup_status', resolvedLang, {
+        CallName,
+        honorific,
+        previous: prev,
+      });
       break;
     }
 
     case 'followup_detail':
-      question = `${Honorific} có thêm triệu chứng gì mới không?`;
+      question = t('checkin.triage.question.followup_detail', resolvedLang, { Honorific });
       break;
 
     default:
-      question = `${Honorific} có thể cho ${selfRef} biết thêm không? 💙`;
+      question = t('checkin.triage.question.default', resolvedLang, { Honorific, selfRef });
       break;
   }
 
@@ -123,98 +146,95 @@ function formatQuestion(engineResult, profile, _previousAnswers = []) {
 
 const EMERGENCY_CONCLUSIONS = {
   stroke: {
-    summary: (h) => `${h.Honorific} có dấu hiệu thần kinh cần được cấp cứu ngay.`,
-    recommendation: (h) =>
-      `🚨 GỌI CẤP CỨU 115 NGAY. ${h.Honorific} cần được nhân viên y tế đánh giá ngay.`,
-    closeMessage: (h) =>
-      `${h.selfRef} đã thông báo cho người thân. Gọi 115 ngay ${h.honorific} nhé.`,
+    summary: 'checkin.triage.emergency.stroke.summary',
+    recommendation: 'checkin.triage.emergency.stroke.recommendation',
+    closeMessage: 'checkin.triage.emergency.close_call',
   },
   mi: {
-    summary: (h) => `${h.Honorific} có đau ngực kèm dấu hiệu nguy hiểm cần cấp cứu.`,
-    recommendation: (_h) =>
-      `🚨 GỌI CẤP CỨU 115 NGAY. Hạn chế vận động và chờ nhân viên y tế hướng dẫn.`,
-    closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân. Gọi 115 ngay.`,
+    summary: 'checkin.triage.emergency.mi.summary',
+    recommendation: 'checkin.triage.emergency.mi.recommendation',
+    closeMessage: 'checkin.triage.emergency.close_call',
   },
   meningitis: {
-    summary: () => `Sốt cao kèm cứng cổ là dấu hiệu cần được đánh giá khẩn cấp.`,
-    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY để được nhân viên y tế đánh giá.`,
-    closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
+    summary: 'checkin.triage.emergency.meningitis.summary',
+    recommendation: 'checkin.triage.emergency.go_hospital',
+    closeMessage: 'checkin.triage.emergency.close_family',
   },
   pe: {
-    summary: () => `Khó thở đột ngột kèm đau ngực là dấu hiệu cần cấp cứu.`,
-    recommendation: () => `🚨 GỌI CẤP CỨU 115. Hạn chế vận động và chờ nhân viên y tế hướng dẫn.`,
-    closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
+    summary: 'checkin.triage.emergency.pe.summary',
+    recommendation: 'checkin.triage.emergency.pe.recommendation',
+    closeMessage: 'checkin.triage.emergency.close_family',
   },
   cauda_equina: {
-    summary: () => `Đau lưng kèm rối loạn tiểu tiện là dấu hiệu cần được đánh giá khẩn cấp.`,
-    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY để được nhân viên y tế đánh giá.`,
-    closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
+    summary: 'checkin.triage.emergency.cauda_equina.summary',
+    recommendation: 'checkin.triage.emergency.cauda_equina.recommendation',
+    closeMessage: 'checkin.triage.emergency.close_family',
   },
   hemorrhage: {
-    summary: () => `Nôn ra máu hoặc đi ngoài phân đen là dấu hiệu cần cấp cứu.`,
-    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY hoặc gọi 115 để được hướng dẫn.`,
-    closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
+    summary: 'checkin.triage.emergency.hemorrhage.summary',
+    recommendation: 'checkin.triage.emergency.hemorrhage.recommendation',
+    closeMessage: 'checkin.triage.emergency.close_family',
   },
   dengue: {
-    summary: () => `Sốt kèm dấu hiệu chảy máu cần được đánh giá khẩn cấp.`,
-    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY và làm theo hướng dẫn của nhân viên y tế.`,
-    closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
+    summary: 'checkin.triage.emergency.dengue.summary',
+    recommendation: 'checkin.triage.emergency.dengue.recommendation',
+    closeMessage: 'checkin.triage.emergency.close_family',
   },
   dka: {
-    summary: () =>
-      `Người có bệnh nền tiểu đường kèm khát nhiều và buồn nôn cần được đánh giá khẩn cấp.`,
-    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY hoặc gọi 115 nếu tình trạng nặng lên.`,
-    closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
+    summary: 'checkin.triage.emergency.dka.summary',
+    recommendation: 'checkin.triage.emergency.dka.recommendation',
+    closeMessage: 'checkin.triage.emergency.close_family',
   },
   seizure: {
-    summary: (h) => `${h.Honorific} bị co giật.`,
-    recommendation: () =>
-      `🚨 GỌI CẤP CỨU 115. Đặt nằm nghiêng, không đút gì vào miệng, dọn vật sắc nhọn xung quanh.`,
-    closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
+    summary: 'checkin.triage.emergency.seizure.summary',
+    recommendation: 'checkin.triage.emergency.seizure.recommendation',
+    closeMessage: 'checkin.triage.emergency.close_family',
   },
   anaphylaxis: {
-    summary: () => `Khó thở kèm sưng mặt, môi hoặc lưỡi là dấu hiệu cần cấp cứu.`,
-    recommendation: () => `🚨 GỌI CẤP CỨU 115 NGAY và làm theo hướng dẫn của nhân viên y tế.`,
-    closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
+    summary: 'checkin.triage.emergency.anaphylaxis.summary',
+    recommendation: 'checkin.triage.emergency.call_115',
+    closeMessage: 'checkin.triage.emergency.close_family',
   },
   trauma: {
-    summary: (h) => `${h.Honorific} bị chấn thương cần can thiệp y tế ngay.`,
-    recommendation: () =>
-      `🚨 KHÔNG CỬ ĐỘNG vùng bị thương. Gọi cấp cứu 115 hoặc tới bệnh viện ngay. Nếu chảy máu nhiều, dùng vải sạch ép cầm máu.`,
-    closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
+    summary: 'checkin.triage.emergency.trauma.summary',
+    recommendation: 'checkin.triage.emergency.trauma.recommendation',
+    closeMessage: 'checkin.triage.emergency.close_family',
   },
 };
 
 // ─── Conclusion Generator ────────────────────────────────────────────────────
 
 async function generateConclusion(state, profile, lang = 'vi', pool = null) {
+  const resolvedLang = normalizeLang(lang);
   const h = getHonorifics({
     birth_year: profile.birth_year,
     gender: profile.gender,
     full_name: profile.full_name,
-    lang,
+    lang: resolvedLang,
   });
 
   if (state.emergencyType && EMERGENCY_CONCLUSIONS[state.emergencyType]) {
     const tpl = EMERGENCY_CONCLUSIONS[state.emergencyType];
     return {
-      summary: tpl.summary(h),
-      recommendation: tpl.recommendation(h),
-      closeMessage: tpl.closeMessage(h),
+      summary: t(tpl.summary, resolvedLang, h),
+      recommendation: t(tpl.recommendation, resolvedLang, h),
+      closeMessage: t(tpl.closeMessage, resolvedLang, h),
       isEmergency: true,
     };
   }
 
-  return _generateConclusionWithGPT(state, profile, h, lang, pool);
+  return _generateConclusionWithGPT(state, profile, h, resolvedLang, pool);
 }
 
-async function _generateConclusionWithGPT(state, profile, h, _lang, _pool) {
-  const prompt = _buildConclusionPrompt(state, profile, h);
+async function _generateConclusionWithGPT(state, profile, h, lang, _pool) {
+  const prompt = _buildConclusionPrompt(state, profile, h, lang);
 
   try {
     const response = await callTextAi({
       system:
-        'Bạn là trợ lý y tế Asinu. Chỉ trả về JSON. Không chẩn đoán, không nêu tên bệnh, không kê đơn, không nêu tên/liều thuốc và không khuyên đổi hoặc ngưng thuốc. Chỉ sàng lọc và định hướng đi khám. Trả lời có dấu tiếng Việt đầy đủ.',
+        lang === 'en'
+          ? 'You are Asinu, a health screening assistant. Return JSON only. Do not diagnose, name a disease, prescribe, name or dose medicine, or advise changing or stopping medicine. Provide screening and care navigation only. Write in clear English.'
+          : 'Bạn là trợ lý y tế Asinu. Chỉ trả về JSON. Không chẩn đoán, không nêu tên bệnh, không kê đơn, không nêu tên/liều thuốc và không khuyên đổi hoặc ngưng thuốc. Chỉ sàng lọc và định hướng đi khám. Trả lời có dấu tiếng Việt đầy đủ.',
       prompt,
       temperature: 0.3,
       maxTokens: 400,
@@ -231,28 +251,48 @@ async function _generateConclusionWithGPT(state, profile, h, _lang, _pool) {
     };
     if (!isSafeConclusion(candidate)) {
       console.warn('[Triage AI] Rejected unsafe conclusion output');
-      return _buildFallbackConclusion(state, h);
+      return _buildFallbackConclusion(state, h, lang);
     }
 
     return {
       summary: candidate.summary,
       recommendation: candidate.recommendation,
-      closeMessage: candidate.closeMessage || `${h.selfRef} sẽ hỏi lại ${h.honorific} sau nhé.`,
+      closeMessage: candidate.closeMessage || t('checkin.triage.fallback.low.close', lang, h),
       isEmergency: false,
     };
   } catch (err) {
     console.error('[Triage AI] Conclusion GPT failed:', err.message);
-    return _buildFallbackConclusion(state, h);
+    return _buildFallbackConclusion(state, h, lang);
   }
 }
 
-function _buildConclusionPrompt(state, profile, h) {
+function _buildConclusionPrompt(state, profile, h, lang = 'vi') {
   const symptoms = (state.allSymptoms || []).join(', ') || state.primarySymptom || 'không rõ';
   const causes = (state.causesFound || []).join(', ') || 'không rõ';
   const actions = (state.actionsFound || []).join(', ') || 'chưa làm gì';
   const conditions = (profile.medical_conditions || []).join(', ') || 'không';
 
-  return `Viết kết luận triage ngắn gọn cho bệnh nhân. Trả lời bằng tiếng Việt CÓ DẤU đầy đủ.
+  if (lang === 'en') {
+    return `Write a concise health-screening conclusion in clear English.
+
+INFORMATION:
+- Main symptom: ${state.primarySymptom || 'unknown'}
+- Other symptoms: ${symptoms}
+- Onset: ${state.onset || 'unknown'}
+- Progression: ${state.progression || 'unknown'}
+- Possible trigger: ${causes}
+- Actions already taken: ${actions}
+- Existing conditions: ${conditions}
+- Severity: ${state.severity || 'low'}
+- Needs professional assessment: ${state.needsDoctor ? 'YES' : 'no'}
+
+Return JSON:
+{"summary":"1-2 sentence summary","recommendation":"one concrete action for today and one thing to monitor","closeMessage":"I will check on you again in X hours."}
+
+If professional assessment is needed, state clearly when to seek it and why. JSON ONLY. Do not diagnose, name a disease, name medicine, give a dose, or advise changing treatment.`;
+  }
+
+  return `Viết kết luận sàng lọc ngắn gọn cho người dùng. Trả lời bằng tiếng Việt CÓ DẤU đầy đủ.
 
 THÔNG TIN:
 - Triệu chứng chính: ${state.primarySymptom || 'không rõ'}
@@ -276,10 +316,12 @@ CHỈ JSON. Tiếng Việt có dấu.`;
 
 const FORBIDDEN_CONCLUSION_PATTERNS = [
   /(?:chẩn đoán|kết luận)/i,
+  /\b(?:diagnosis|diagnosed with|likely has|probably has|suffers from)\b/i,
   /(?:có thể là|khả năng là|nghi(?: ngờ)?|mắc)(?:\s|:)/i,
   /bị\s+(?:bệnh\s+)?(?:viêm|ung thư|đột quỵ|tai biến|nhồi máu|suy tim|tắc mạch|xuất huyết|nhiễm|hội chứng)/i,
   /(?:aspirin|ibuprofen|paracetamol|acetaminophen|epipen|kháng sinh|insulin)/i,
   /(?:uống|dùng|tiêm|bôi|ngưng|ngừng|giảm|tăng|thay đổi)\s+(?:liều\s+)?thuốc/i,
+  /\b(?:take|start|stop|increase|decrease|change)\s+(?:the\s+)?(?:dose\s+of\s+)?(?:medicine|medication|drug)\b/i,
   /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ml|viên|liều)\b/i,
 ];
 
@@ -289,28 +331,29 @@ function isSafeConclusion(candidate) {
   return !FORBIDDEN_CONCLUSION_PATTERNS.some((pattern) => pattern.test(text));
 }
 
-function _buildFallbackConclusion(state, h) {
+function _buildFallbackConclusion(state, h, lang = 'vi') {
   const symptom = state.primarySymptom || 'triệu chứng';
+  const params = { ...h, symptom: localizeOption(symptom, lang) };
 
   if (state.needsDoctor) {
     return {
-      summary: `${h.Honorific} đã ghi nhận triệu chứng ${symptom}; triệu chứng này cần được bác sĩ đánh giá.`,
-      recommendation: `${h.Honorific} nên đi khám bác sĩ hôm nay. Nếu triệu chứng nặng lên, hãy đi cấp cứu ngay.`,
-      closeMessage: `${h.selfRef} sẽ hỏi lại ${h.honorific} sau 3 tiếng nhé. Nếu nặng hơn, đi khám ngay ${h.honorific} nhé.`,
+      summary: t('checkin.triage.fallback.doctor.summary', lang, params),
+      recommendation: t('checkin.triage.fallback.doctor.recommendation', lang, params),
+      closeMessage: t('checkin.triage.fallback.doctor.close', lang, params),
       isEmergency: false,
     };
   } else if (state.severity === 'medium') {
     return {
-      summary: `${h.Honorific} đã ghi nhận triệu chứng ${symptom} và cần tiếp tục theo dõi.`,
-      recommendation: `Nếu không đỡ, kéo dài hoặc nặng lên, ${h.honorific} nên được bác sĩ đánh giá.`,
-      closeMessage: `${h.selfRef} sẽ hỏi lại ${h.honorific} sau 4 tiếng nhé 💙`,
+      summary: t('checkin.triage.fallback.medium.summary', lang, params),
+      recommendation: t('checkin.triage.fallback.medium.recommendation', lang, params),
+      closeMessage: t('checkin.triage.fallback.medium.close', lang, params),
       isEmergency: false,
     };
   } else {
     return {
-      summary: `${h.Honorific} đã ghi nhận triệu chứng ${symptom}.`,
-      recommendation: `Tiếp tục theo dõi. Nếu kéo dài hoặc nặng lên, ${h.honorific} nên được bác sĩ đánh giá.`,
-      closeMessage: `${h.selfRef} sẽ hỏi lại ${h.honorific} sau 6 tiếng nhé 💙`,
+      summary: t('checkin.triage.fallback.low.summary', lang, params),
+      recommendation: t('checkin.triage.fallback.low.recommendation', lang, params),
+      closeMessage: t('checkin.triage.fallback.low.close', lang, params),
       isEmergency: false,
     };
   }
@@ -430,7 +473,7 @@ async function classifySymptomSeverity(symptom, profile = {}) {
 
   if (_severityCache.has(cacheKey)) return _severityCache.get(cacheKey);
 
-  const prompt = `Bạn là bác sĩ triage. Phân loại mức độ nguy hiểm của triệu chứng sau.
+  const prompt = `Bạn là bộ phân loại sàng lọc sức khỏe. Phân loại mức độ khẩn cấp của triệu chứng sau, không chẩn đoán bệnh.
 
 TRIỆU CHỨNG: "${symptom}"
 TUỔI: ${age || 'không rõ'}

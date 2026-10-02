@@ -105,11 +105,7 @@ function sourceFiles(directory) {
 
 function calleeName(node) {
   if (node?.type === 'Identifier') return node.name;
-  if (
-    node?.type === 'MemberExpression' &&
-    !node.computed &&
-    node.property?.type === 'Identifier'
-  ) {
+  if (node?.type === 'MemberExpression' && !node.computed && node.property?.type === 'Identifier') {
     return node.property.name;
   }
   return null;
@@ -149,7 +145,11 @@ for (const file of sourceFiles(path.join(root, 'src'))) {
 
   const collectCopy = (node, output = []) => {
     if (!node) return output;
-    if (node.type === 'Literal' && typeof node.value === 'string' && /[A-Za-zÀ-ỹ]/u.test(node.value)) {
+    if (
+      node.type === 'Literal' &&
+      typeof node.value === 'string' &&
+      /[A-Za-zÀ-ỹ]/u.test(node.value)
+    ) {
       output.push(node.value);
       return output;
     }
@@ -185,9 +185,15 @@ for (const file of sourceFiles(path.join(root, 'src'))) {
   };
   const relativeFile = path.relative(root, file);
   const localizedApiFiles = new Set([
-    'src/controllers/script-checkin.controller.js',
     'src/services/health_feed/controller.js',
+    'src/routes/checkin-call.routes.js',
+    'src/routes/doctor-profile.routes.js',
+    'src/routes/early-signal.routes.js',
+    'src/routes/household.routes.js',
+    'src/routes/iap.routes.js',
   ]);
+  const enforceLocalizedApi =
+    relativeFile.startsWith('src/controllers/') || localizedApiFiles.has(relativeFile);
 
   walk(ast, (node) => {
     if (
@@ -221,11 +227,7 @@ for (const file of sourceFiles(path.join(root, 'src'))) {
       }
     }
 
-    if (
-      localizedApiFiles.has(relativeFile) &&
-      name === 'json' &&
-      node.arguments[0]?.type === 'ObjectExpression'
-    ) {
+    if (enforceLocalizedApi && name === 'json' && node.arguments[0]?.type === 'ObjectExpression') {
       for (const property of node.arguments[0].properties) {
         if (property.type !== 'Property') continue;
         const key = property.key.type === 'Identifier' ? property.key.name : property.key.value;
@@ -240,7 +242,6 @@ for (const file of sourceFiles(path.join(root, 'src'))) {
         }
       }
     }
-
   });
 }
 

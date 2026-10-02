@@ -127,7 +127,11 @@ const generalLimiter = rateLimit({
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 50, // 50 auth requests per 15 min
-  message: { ok: false, error: t('error.too_many_auth_attempts', getLang(null)) },
+  handler: (req, res) =>
+    res.status(429).json({
+      ok: false,
+      error: t('error.too_many_auth_attempts', getLang(req)),
+    }),
   standardHeaders: true,
   legacyHeaders: false,
   store: createRateLimitStore('auth'),
@@ -244,4 +248,6 @@ server.listen(PORT, () => {
 });
 
 startScheduler(pool);
-prewarmCheckinCallAudio(pool).catch((err) => logger.error('checkin_call.audio_prewarm_failed', { err }));
+prewarmCheckinCallAudio(pool).catch((err) =>
+  logger.error('checkin_call.audio_prewarm_failed', { err })
+);

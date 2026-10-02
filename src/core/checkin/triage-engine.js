@@ -15,6 +15,8 @@
  */
 
 const { resolveComplaint } = require('../../services/checkin/clinical-mapping');
+const { t } = require('../../i18n');
+const { localizeOptions, normalizeLang } = require('./triage-i18n');
 
 // Common chief complaints để hiển thị options ở step `symptoms`.
 // Lấy từ KB clinical-mapping (14 triệu chứng chính).
@@ -88,14 +90,15 @@ const CONDITION_TO_PRIORITY_SYMPTOMS = {
  * @param {string[]} conditions - medical_conditions của user
  * @returns {string[]} options cho T3
  */
-function buildSymptomOptions(bodyLocations, conditions) {
+function buildSymptomOptions(bodyLocations, conditions, lang = 'vi') {
+  const resolvedLang = normalizeLang(lang);
   if (!Array.isArray(bodyLocations) || bodyLocations.length === 0) {
-    return buildPrioritizedSymptomOptions(conditions);
+    return localizeOptions(buildPrioritizedSymptomOptions(conditions), resolvedLang);
   }
   const { getSymptomsForLocations } = require('../../services/checkin/body-location');
-  const merged = getSymptomsForLocations(bodyLocations, 'vi');
+  const merged = getSymptomsForLocations(bodyLocations, resolvedLang);
   if (merged.length === 0) {
-    return buildPrioritizedSymptomOptions(conditions);
+    return localizeOptions(buildPrioritizedSymptomOptions(conditions), resolvedLang);
   }
   // Optional condition priority boost — nếu user có bệnh nền liên quan,
   // đẩy symptom đó lên đầu trong list merged (nếu match).
@@ -396,7 +399,8 @@ function removeStep(steps, name) {
  * @param {object} state - from buildState()
  * @returns {{ question: string, options: string[], multiSelect: boolean, allowFreeText: boolean }}
  */
-function buildQuestion(step, state) {
+function buildQuestion(step, state, lang = 'vi') {
+  const resolvedLang = normalizeLang(lang);
   const mapping = state.primaryMapping; // may be null for generic flow
 
   switch (step) {
@@ -407,13 +411,13 @@ function buildQuestion(step, state) {
       // Ưu tiên: symptoms từ bodyLocations (T2) → fallback condition priority
       // → fallback COMMON_SYMPTOMS_ORDERED. allowFreeText=true để user gõ
       // triệu chứng ngoài list.
-      const flatOptions = buildSymptomOptions(state.bodyLocations, state.conditions);
+      const flatOptions = buildSymptomOptions(state.bodyLocations, state.conditions, resolvedLang);
       // optionsGrouped — chỉ emit khi có bodyLocations để FE render section
       // header theo vùng (tránh user phải tự đoán symptom thuộc vùng nào).
       let optionsGrouped = null;
       if (Array.isArray(state.bodyLocations) && state.bodyLocations.length > 0) {
         const { getGroupedSymptoms } = require('../../services/checkin/body-location');
-        optionsGrouped = getGroupedSymptoms(state.bodyLocations, 'vi');
+        optionsGrouped = getGroupedSymptoms(state.bodyLocations, resolvedLang);
       }
       return {
         question: 'Cụ thể vấn đề là gì? (chọn 1 hoặc nhiều)',
@@ -426,10 +430,16 @@ function buildQuestion(step, state) {
 
     case 'associated': {
       // Use clinical-mapping associated symptoms if available.
-      const options = mapping ? mapping.associatedSymptoms.map((s) => s.text) : [];
+      const options =
+        resolvedLang === 'en'
+          ? ['Nausea', 'Fever', 'Dizziness', 'Weakness']
+          : mapping
+            ? mapping.associatedSymptoms.map((s) => s.text)
+            : [];
       // Always add a "none" escape hatch.
-      if (options.length && !options.includes('không có')) {
-        options.push('không có');
+      const none = t('checkin.triage.option.none', resolvedLang);
+      if (options.length && !options.includes(none)) {
+        options.push(none);
       }
       return {
         question: mapping
@@ -444,7 +454,7 @@ function buildQuestion(step, state) {
     case 'onset':
       return {
         question: 'Triệu chứng này bắt đầu từ khi nào?',
-        options: ONSET_OPTIONS,
+        options: localizeOptions(ONSET_OPTIONS, resolvedLang),
         multiSelect: false,
         allowFreeText: true,
       };
@@ -452,35 +462,48 @@ function buildQuestion(step, state) {
     case 'progression':
       return {
         question: 'So với lúc đầu, triệu chứng hiện tại thế nào?',
-        options: PROGRESSION_OPTIONS,
+        options: localizeOptions(PROGRESSION_OPTIONS, resolvedLang),
         multiSelect: false,
         allowFreeText: false,
       };
 
     case 'red_flags': {
-      const flags = mapping ? mapping.redFlags : [];
+      const flags =
+        resolvedLang === 'en'
+          ? [
+              'Chest pain',
+              'Severe shortness of breath',
+              'Weakness on one side',
+              'Loss of consciousness',
+              'Vomiting blood',
+            ]
+          : mapping
+            ? mapping.redFlags
+            : [];
       // Show at most 6 most critical flags to avoid overwhelming the user.
       const displayFlags = flags.slice(0, 6);
-      if (displayFlags.length && !displayFlags.includes('không có')) {
-        displayFlags.push('không có');
+      const none = t('checkin.triage.option.none', resolvedLang);
+      if (displayFlags.length && !displayFlags.includes(none)) {
+        displayFlags.push(none);
       }
       return {
         question: 'Bạn có gặp tình trạng nào sau đây không? (Quan trọng)',
-        options: displayFlags.length ? displayFlags : ['không có'],
+        options: displayFlags.length ? displayFlags : [none],
         multiSelect: true,
         allowFreeText: false,
       };
     }
 
     case 'cause': {
-      const causes = mapping ? mapping.causes : [];
+      const causes = resolvedLang === 'en' ? [] : mapping ? mapping.causes : [];
       const displayCauses = causes.slice(0, 6);
-      if (displayCauses.length && !displayCauses.includes('không rõ')) {
-        displayCauses.push('không rõ');
+      const unknown = t('checkin.triage.option.unknown', resolvedLang);
+      if (displayCauses.length && !displayCauses.includes(unknown)) {
+        displayCauses.push(unknown);
       }
       return {
         question: 'Bạn nghĩ nguyên nhân có thể là gì?',
-        options: displayCauses.length ? displayCauses : ['không rõ'],
+        options: displayCauses.length ? displayCauses : [unknown],
         multiSelect: true,
         allowFreeText: true,
       };
@@ -489,7 +512,7 @@ function buildQuestion(step, state) {
     case 'action':
       return {
         question: 'Bạn đã làm gì để giảm triệu chứng chưa?',
-        options: ACTION_OPTIONS,
+        options: localizeOptions(ACTION_OPTIONS, resolvedLang),
         multiSelect: true,
         allowFreeText: true,
       };
@@ -499,7 +522,7 @@ function buildQuestion(step, state) {
     case 'followup_status':
       return {
         question: 'So với lần trước, bạn cảm thấy thế nào?',
-        options: FOLLOWUP_STATUS_OPTIONS,
+        options: localizeOptions(FOLLOWUP_STATUS_OPTIONS, resolvedLang),
         multiSelect: false,
         allowFreeText: false,
       };
@@ -507,7 +530,7 @@ function buildQuestion(step, state) {
     case 'followup_detail':
       return {
         question: 'Bạn có triệu chứng mới hoặc thay đổi gì không?',
-        options: FOLLOWUP_DETAIL_OPTIONS,
+        options: localizeOptions(FOLLOWUP_DETAIL_OPTIONS, resolvedLang),
         multiSelect: false,
         allowFreeText: true,
       };
@@ -549,6 +572,7 @@ function getNextStep(input) {
     bodyLocation = null, // legacy single
     bodyLocations = null, // new T2 array
     bodyLocationOther = null,
+    lang = 'vi',
   } = input;
 
   // 1. Rebuild current state from all previous answers.
@@ -576,7 +600,7 @@ function getNextStep(input) {
   }
 
   // 5. Build the question for this step.
-  const questionData = buildQuestion(nextStep, state);
+  const questionData = buildQuestion(nextStep, state, lang);
 
   return {
     action: 'ask',

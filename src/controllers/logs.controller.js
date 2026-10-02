@@ -37,7 +37,8 @@ async function voiceParse(pool, req, res) {
       req.file.buffer,
       req.file.mimetype,
       req.file.originalname || 'voice_log.m4a',
-      log_type
+      log_type,
+      getLang(req)
     );
     const latencyTranscribe = Date.now() - startTranscribe;
 
@@ -73,7 +74,7 @@ async function voiceParse(pool, req, res) {
       ok: false,
       transcript: '',
       parsed: null,
-      error: err.message || t('error.voice_processing', getLang(req)),
+      error: t('error.voice_processing', getLang(req)),
     });
   }
 }

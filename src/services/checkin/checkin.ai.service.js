@@ -2365,7 +2365,7 @@ Trả lời JSON only.`;
       }
     }
     // Apply AI safety filter
-    parsed = filterTriageResult(parsed);
+    parsed = filterTriageResult(parsed, lang);
 
     // ── "bạn" leak fix: AFTER safety filter to catch any appended text ──
     if (honorific !== 'bạn') {
@@ -2378,7 +2378,9 @@ Trả lời JSON only.`;
       }
     }
 
-    console.log(`[TriageAI] response validated isDone=${parsed.isDone}, questionPresent=${Boolean(parsed.question)}`);
+    console.log(
+      `[TriageAI] response validated isDone=${parsed.isDone}, questionPresent=${Boolean(parsed.question)}`
+    );
     return parsed;
   } catch (parseErr) {
     console.error(`[TriageAI] JSON parse failed, using fallback:`, parseErr?.message);

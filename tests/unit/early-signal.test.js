@@ -49,6 +49,25 @@ describe('Early Signals clinical output guardrails', () => {
     expect(result.summary).not.toMatch(/chẩn đoán|mắc bệnh|không sao đâu/i);
   });
 
+  test('localizes the assessment to the selected English language', () => {
+    const occurredDate = new Date().toISOString();
+    const result = _test.analyse(
+      snapshot({
+        symptoms: Array.from({ length: 4 }, () => ({
+          symptom_name: 'dizziness',
+          occurred_date: occurredDate,
+        })),
+      }),
+      'en'
+    );
+    expect(result).toMatchObject({
+      severity: 'see_doctor',
+      suggested_specialty: 'Neurology',
+    });
+    expect(result.summary).toContain('Consider an assessment in Neurology');
+    expect(result.disclaimer).toBe('This information is for guidance only and is not a diagnosis.');
+  });
+
   test('an old red-flag phrase stays in history without showing a current emergency', () => {
     const occurredDate = new Date();
     occurredDate.setDate(occurredDate.getDate() - 2);

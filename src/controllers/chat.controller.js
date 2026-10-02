@@ -4,10 +4,7 @@
  */
 
 const { chatRequestSchema } = require('../validation/validation.schemas');
-const {
-  processChat,
-  getChatHistory,
-} = require('../services/chat/chat.service');
+const { processChat, getChatHistory } = require('../services/chat/chat.service');
 const { getWhisperTranscription } = require('../services/ai/providers/openai');
 const {
   getVoiceUsageThisMonth,
@@ -35,7 +32,10 @@ async function postChat(pool, req, res) {
   const { message, client_ts, context } = parsed.data;
 
   // Call service
-  const result = await processChat(pool, req.user.id, message, context);
+  const result = await processChat(pool, req.user.id, message, {
+    ...context,
+    lang: getLang(req),
+  });
 
   if (!result.ok) {
     return res.status(500).json(result);
