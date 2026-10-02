@@ -205,6 +205,7 @@ async function updateNotificationPreferences(pool, req, res) {
     evening_hour,
     water_hour,
     reminders_enabled,
+    health_feed_enabled,
     morning_time,
     afternoon_time,
     evening_time,
@@ -229,6 +230,9 @@ async function updateNotificationPreferences(pool, req, res) {
   if (reminders_enabled !== undefined && typeof reminders_enabled !== 'boolean') {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
   }
+  if (health_feed_enabled !== undefined && typeof health_feed_enabled !== 'boolean') {
+    return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
+  }
 
   try {
     await updatePreferences(pool, req.user.id, {
@@ -239,6 +243,8 @@ async function updateNotificationPreferences(pool, req, res) {
       afternoon_time,
       evening_time,
       reminders_enabled: reminders_enabled !== undefined ? Boolean(reminders_enabled) : undefined,
+      health_feed_enabled:
+        health_feed_enabled !== undefined ? Boolean(health_feed_enabled) : undefined,
     });
     const prefs = await getPreferences(pool, req.user.id);
     return res.status(200).json({ ok: true, ...prefs });

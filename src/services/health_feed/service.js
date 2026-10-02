@@ -99,7 +99,7 @@ async function buildFeedForUsers(pool, userIds) {
     inserted += newlyInserted.length;
     await repo.upsertUserFlow(pool, user.id, nextFlow, selectedItems);
 
-    if (!user.reminders_enabled) continue;
+    if (!user.health_feed_enabled || !user.reminders_enabled) continue;
 
     const recentHealthFeed = user.recent_health_feed_push;
     const recentReengagement = user.recent_reengagement_push;
@@ -157,6 +157,11 @@ async function dispatchPendingNotifications(pool) {
     const copy = getNotificationCopy(job, payload);
 
     const timezone = resolveTimezone(job.timezone || DEFAULT_TIMEZONE);
+    if (!job.health_feed_enabled) {
+      await repo.markNotificationJobDispatched(pool, job.id, 'skipped_feed_disabled');
+      skipped += 1;
+      continue;
+    }
     if (!job.reminders_enabled) {
       await saveHealthFeedInAppNotification(pool, job, payload);
       await repo.markNotificationJobDispatched(pool, job.id, 'skipped_opt_out');

@@ -125,7 +125,7 @@ async function getPreferences(pool, userId) {
             inferred_morning_hour, inferred_evening_hour, inferred_water_hour,
             morning_time, afternoon_time, evening_time,
             inferred_morning_time, inferred_afternoon_time, inferred_evening_time,
-            inferred_at, updated_at, reminders_enabled
+            inferred_at, updated_at, reminders_enabled, health_feed_enabled
      FROM user_notification_preferences
      WHERE user_id = $1`,
     [userId]
@@ -160,6 +160,7 @@ async function getPreferences(pool, userId) {
     effective_evening_time: p.evening_time ?? p.inferred_evening_time ?? DEFAULT_TIMES.evening,
 
     reminders_enabled: p.reminders_enabled === true,
+    health_feed_enabled: p.health_feed_enabled !== false,
   };
 }
 
@@ -174,12 +175,14 @@ async function updatePreferences(
     evening_hour,
     water_hour,
     reminders_enabled,
+    health_feed_enabled,
     morning_time,
     afternoon_time,
     evening_time,
   }
 ) {
   const hasReminders = reminders_enabled !== undefined;
+  const hasHealthFeed = health_feed_enabled !== undefined;
 
   // Also sync hour from time string for backward compat with cron. Reject
   // malformed text here as a second line of defence behind the controller.
@@ -201,16 +204,17 @@ async function updatePreferences(
     `INSERT INTO user_notification_preferences
        (user_id, morning_hour, evening_hour, water_hour,
         morning_time, afternoon_time, evening_time,
-        reminders_enabled, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+        reminders_enabled, health_feed_enabled, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
      ON CONFLICT (user_id) DO UPDATE SET
        morning_hour      = COALESCE($2, user_notification_preferences.morning_hour),
        evening_hour      = COALESCE($3, user_notification_preferences.evening_hour),
        water_hour        = COALESCE($4, user_notification_preferences.water_hour),
-       morning_time      = CASE WHEN $9 THEN $5 ELSE user_notification_preferences.morning_time END,
-       afternoon_time    = CASE WHEN $10 THEN $6 ELSE user_notification_preferences.afternoon_time END,
-       evening_time      = CASE WHEN $11 THEN $7 ELSE user_notification_preferences.evening_time END,
-       reminders_enabled = CASE WHEN $12 THEN $8 ELSE user_notification_preferences.reminders_enabled END,
+       morning_time      = CASE WHEN $10 THEN $5 ELSE user_notification_preferences.morning_time END,
+       afternoon_time    = CASE WHEN $11 THEN $6 ELSE user_notification_preferences.afternoon_time END,
+       evening_time      = CASE WHEN $12 THEN $7 ELSE user_notification_preferences.evening_time END,
+       reminders_enabled = CASE WHEN $13 THEN $8 ELSE user_notification_preferences.reminders_enabled END,
+       health_feed_enabled = CASE WHEN $14 THEN $9 ELSE user_notification_preferences.health_feed_enabled END,
        updated_at        = NOW()`,
     [
       userId,
@@ -221,10 +225,12 @@ async function updatePreferences(
       normalizedAfternoonTime ?? null,
       normalizedEveningTime ?? null,
       hasReminders ? reminders_enabled === true : false,
+      hasHealthFeed ? health_feed_enabled === true : true,
       normalizedMorningTime !== undefined,
       normalizedAfternoonTime !== undefined,
       normalizedEveningTime !== undefined,
       hasReminders,
+      hasHealthFeed,
     ]
   );
 }

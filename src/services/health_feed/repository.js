@@ -66,7 +66,8 @@ async function getUserContexts(pool, userIds) {
               uop.risk_score, uop.onboarding_completed_at,
               ul.segment, ul.inactive_days, ul.last_checkin_at,
               ub.timezone,
-              COALESCE(unp.reminders_enabled, false) AS reminders_enabled
+              COALESCE(unp.reminders_enabled, false) AS reminders_enabled,
+              COALESCE(unp.health_feed_enabled, true) AS health_feed_enabled
          FROM users u
          LEFT JOIN user_onboarding_profiles uop ON uop.user_id = u.id
          LEFT JOIN user_lifecycle ul ON ul.user_id = u.id
@@ -215,6 +216,7 @@ async function getUserContexts(pool, userIds) {
     inactive_days: Number(user.inactive_days || 0),
     timezone: user.timezone || DEFAULT_TIMEZONE,
     reminders_enabled: Boolean(user.reminders_enabled),
+    health_feed_enabled: user.health_feed_enabled !== false,
     top_cluster: clusterMap.get(user.id) || null,
     latest_session: sessionMap.get(user.id) || null,
     related_patients: familyMap.get(user.id) || [],
@@ -510,6 +512,7 @@ async function getPendingNotificationJobs(pool, limit = 50) {
     `SELECT j.id, j.user_id, j.feed_item_id, j.template_id, j.payload, j.scheduled_for,
             u.push_token, COALESCE(u.language_preference, 'vi') AS language_preference,
             ub.timezone, COALESCE(unp.reminders_enabled, false) AS reminders_enabled,
+            COALESCE(unp.health_feed_enabled, true) AS health_feed_enabled,
             c.title AS content_title, c.summary AS content_summary, c.body AS content_body,
             c.action_label AS content_action_label, c.action_target AS content_action_target,
             c.translations AS content_translations
