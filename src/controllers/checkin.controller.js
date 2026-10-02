@@ -10,11 +10,30 @@ const {
   getSymptomsForLocation,
 } = require('../services/checkin/body-location');
 
+const TRIAGE_STEPS = new Set([
+  'symptoms',
+  'associated',
+  'onset',
+  'progression',
+  'red_flags',
+  'cause',
+  'action',
+  'followup_status',
+  'followup_detail',
+]);
+
+function eventTimestamp(value) {
+  if (value instanceof Date) return value.toISOString();
+  return String(value || Date.now());
+}
+
 async function startCheckinHandler(pool, req, res) {
   const {
     status,
     body_locations: bodyLocations,
     body_location_other: bodyLocationOther,
+    restart = false,
+    source = 'scheduled',
   } = req.body;
   // Backward compat: nếu FE cũ gửi body_location single → wrap vào array
   let locations = bodyLocations;
@@ -24,6 +43,9 @@ async function startCheckinHandler(pool, req, res) {
 
   if (!['fine', 'tired', 'very_tired', 'specific_concern'].includes(status)) {
     return res.status(400).json({ ok: false, error: t('error.invalid_status', getLang(req)) });
+  }
+  if (typeof restart !== 'boolean' || !['scheduled', 'instant'].includes(source)) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
   }
   // Validate locations array (mỗi element phải nằm trong enum)
   if (locations !== undefined && locations !== null) {
@@ -53,7 +75,10 @@ async function startCheckinHandler(pool, req, res) {
   }
 
   try {
-    const session = await checkinService.startCheckin(pool, req.user.id, status, locations, other);
+    const session = await checkinService.startCheckin(pool, req.user.id, status, locations, other, {
+      restart,
+      source,
+    });
     // Update lifecycle before responding so a re-engagement cron cannot read
     // the old inactive/999-day state after the user has checked in.
     await markActive(pool, req.user.id).catch((err) =>
@@ -63,7 +88,9 @@ async function startCheckinHandler(pool, req, res) {
       .evaluateAfterNewHealthData(
         pool,
         req.user.id,
-        `checkin-start:${session.id}:${session.updated_at || status}`
+        `checkin-start:${session.id}:${status}:${eventTimestamp(
+          session.occurrence_started_at || session.updated_at
+        )}`
       )
       .catch((err) => console.warn('[EarlySignal] check-in start evaluation failed:', err.message));
     return res.json({ ok: true, session });
@@ -89,7 +116,7 @@ async function getLocationsHandler(pool, req, res) {
 
 async function followUpHandler(pool, req, res) {
   const { checkin_id, status } = req.body;
-  if (!checkin_id || !['fine', 'tired', 'very_tired'].includes(status)) {
+  if (!checkin_id || !['fine', 'specific_concern', 'tired', 'very_tired'].includes(status)) {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
   }
   try {
@@ -104,7 +131,7 @@ async function followUpHandler(pool, req, res) {
       .evaluateAfterNewHealthData(
         pool,
         req.user.id,
-        `checkin-followup:${session.id}:${session.updated_at || status}`
+        `checkin-followup:${session.id}:${status}:${eventTimestamp(session.updated_at)}`
       )
       .catch((err) => console.warn('[EarlySignal] follow-up evaluation failed:', err.message));
     return res.json({ ok: true, session });
@@ -128,6 +155,8 @@ async function triageHandler(pool, req, res) {
         typeof item.question === 'string' &&
         item.question.trim().length > 0 &&
         item.question.length <= 500 &&
+        (item.step === undefined ||
+          (typeof item.step === 'string' && TRIAGE_STEPS.has(item.step))) &&
         ((typeof item.answer === 'string' && item.answer.length <= 2000) ||
           (Array.isArray(item.answer) &&
             item.answer.length <= 20 &&

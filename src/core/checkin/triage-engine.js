@@ -6,9 +6,9 @@
  * NO AI/GPT calls — pure rule-based logic using clinical-mapping.js data.
  *
  * Two flows:
- *   INITIAL  — up to 8 steps: symptoms → associated → onset → progression →
- *              red_flags → cause → action → conclude
- *   FOLLOWUP — up to 3 steps: followup_status → followup_detail → conclude
+ *   INITIAL  — up to 4 questions: symptoms → onset → progression →
+ *              red_flags → conclude
+ *   FOLLOWUP — up to 2 questions: followup_status → followup_detail → conclude
  *
  * Skip-logic rules are applied deterministically to shorten the flow
  * when clinical context allows it (e.g. progression === 'better' → skip red_flags).
@@ -144,19 +144,10 @@ function buildPrioritizedSymptomOptions(conditions) {
 
 // ─── Step sequences ─────────────────────────────────────────────────────────
 
-/** Maximum 8 questions for a brand-new check-in. */
-const INITIAL_STEPS = [
-  'symptoms', // 1. What's your main complaint?
-  'associated', // 2. Any associated symptoms?
-  'onset', // 3. When did it start?
-  'progression', // 4. Getting better / same / worse?
-  'red_flags', // 5. Any red-flag symptoms?
-  'cause', // 6. Possible causes?
-  'action', // 7. What have you done so far?
-  'conclude', // 8. Wrap up — deterministic severity
-];
+/** Adaptive 2-4 question flow for a brand-new check-in. */
+const INITIAL_STEPS = ['symptoms', 'onset', 'progression', 'red_flags', 'conclude'];
 
-/** Maximum 3 questions for a follow-up visit. */
+/** Maximum 2 questions for a follow-up visit. */
 const FOLLOWUP_STEPS = [
   'followup_status', // 1. How are you feeling compared to last time?
   'followup_detail', // 2. Any new or worsening symptoms?
@@ -232,6 +223,18 @@ function buildState(previousAnswers = [], profile = {}, healthContext = {}) {
           primaryMapping = resolved.data;
         }
         allSymptoms.push(...answers);
+        // Free-text users often include the time in the first answer
+        // ("đau đầu từ sáng"). Count that as onset context so the engine does
+        // not ask for the same information again.
+        const embeddedOnset = String(raw)
+          .toLowerCase()
+          .match(
+            /(?:vừa mới|vài giờ trước|từ sáng|từ hôm qua|hôm qua|vài ngày nay|\d+\s*(?:giờ|ngày)\s*(?:nay|rồi)?)/
+          );
+        if (embeddedOnset) {
+          onset = embeddedOnset[0];
+          completedSteps.add('onset');
+        }
         break;
       }
 
@@ -259,10 +262,19 @@ function buildState(previousAnswers = [], profile = {}, healthContext = {}) {
         break;
 
       case 'red_flags':
-        // Any selected red flag is recorded.
+        // Record affirmative red flags. Legacy clients sometimes sent a
+        // sentence such as "không khó thở và không đau ngực"; treating
+        // that sentence as positive caused false escalation.
         for (const a of answers) {
-          if (a && a.toLowerCase() !== 'không có') {
-            redFlagsFound.push(a);
+          const clauses = String(a || '').split(/\s*(?:,|;|\bvà\b|\bnhưng\b)\s*/i);
+          for (const clause of clauses) {
+            const normalized = clause.toLowerCase().trim();
+            const isNegative =
+              !normalized ||
+              normalized === 'không có' ||
+              normalized === 'none' ||
+              /(?:không|chưa|ko|no|not)\s+(?:(?:có|bị|thấy|cảm thấy)\s+)?/i.test(normalized);
+            if (!isNegative) redFlagsFound.push(clause.trim());
           }
         }
         break;

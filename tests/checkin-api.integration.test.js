@@ -33,12 +33,34 @@ describeDatabase('check-in HTTP API contract', () => {
     originalFetch = global.fetch;
     global.fetch = jest.fn(async () => ({
       ok: true,
-      json: async () => ({ data: [{ status: 'ok', id: 'integration-ticket' }] }),
+      json: async () => ({
+        data: [{ status: 'ok', id: 'integration-ticket' }],
+        model: 'medgemma-integration-test',
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                severity: 'mild',
+                reason: 'Không có dấu hiệu khẩn cấp trong dữ liệu kiểm thử.',
+                needsFamilyAlert: false,
+                needsDoctor: false,
+                summary: 'Triệu chứng cần tiếp tục theo dõi.',
+                recommendation: 'Tiếp tục theo dõi và đi khám nếu tình trạng nặng lên.',
+                closeMessage: 'Asinu sẽ hỏi lại sau.',
+              }),
+            },
+          },
+        ],
+      }),
     }));
 
     jest.resetModules();
     jest.doMock('../src/services/notification/apns.voip.service', () => ({
       sendVoipNotification: jest.fn(async () => ({ ok: true, apnsId: 'integration-apns' })),
+    }));
+    jest.doMock('../src/services/early-signal/early-signal.service', () => ({
+      ...jest.requireActual('../src/services/early-signal/early-signal.service'),
+      evaluateAfterNewHealthData: jest.fn(async () => null),
     }));
     const mobileRoutes = require('../src/routes/mobile.routes');
     const checkinCallRoutes = require('../src/routes/checkin-call.routes');
@@ -172,6 +194,38 @@ describeDatabase('check-in HTTP API contract', () => {
     });
     const checkinId = started.body.session.id;
 
+    const restarted = await request(app)
+      .post('/api/mobile/checkin/start')
+      .set(auth(patientToken))
+      .send({ status: 'specific_concern', restart: true, source: 'instant' })
+      .expect(200);
+    expect(restarted.body).toMatchObject({
+      ok: true,
+      session: {
+        id: checkinId,
+        initial_status: 'specific_concern',
+        current_status: 'specific_concern',
+        occurrence_source: 'instant',
+        triage_messages: [],
+        triage_summary: null,
+        triage_completed_at: null,
+      },
+    });
+
+    const archived = await pool.query(
+      `SELECT source, initial_status, body_locations
+       FROM health_checkin_occurrences
+       WHERE checkin_id = $1
+       ORDER BY archived_at DESC`,
+      [checkinId]
+    );
+    expect(archived.rows).toHaveLength(1);
+    expect(archived.rows[0]).toMatchObject({
+      source: 'scheduled',
+      initial_status: 'tired',
+      body_locations: ['head', 'chest'],
+    });
+
     const todayAfter = await request(app)
       .get('/api/mobile/checkin/today')
       .set(auth(patientToken))
@@ -301,7 +355,11 @@ describeDatabase('check-in HTTP API contract', () => {
       .send({
         checkin_id: started.body.session.id,
         previous_answers: [
-          { question: 'Bạn đang gặp vấn đề gì?', answer: 'Tôi bị ngã nhưng không khó thở' },
+          {
+            step: 'symptoms',
+            question: 'Bạn đang gặp vấn đề gì?',
+            answer: 'Tôi ngã cầu thang và va đập mạnh vào đầu',
+          },
         ],
       })
       .expect(200);
@@ -336,7 +394,7 @@ describeDatabase('check-in HTTP API contract', () => {
     });
   });
 
-  test('triage hard limit persists the conclusion and high-alert state', async () => {
+  test('triage hard limit persists a conclusion without false red-flag escalation', async () => {
     const inserted = await pool.query(
       "INSERT INTO health_checkins (user_id, session_date, initial_status, current_status) VALUES ($1, CURRENT_DATE - 2, 'very_tired', 'very_tired') RETURNING id",
       [familyId]
@@ -354,8 +412,8 @@ describeDatabase('check-in HTTP API contract', () => {
     expect(triage.body).toMatchObject({
       ok: true,
       isDone: true,
-      severity: 'high',
-      needsFamilyAlert: true,
+      severity: 'medium',
+      needsFamilyAlert: false,
     });
 
     const stored = await pool.query(
@@ -363,8 +421,8 @@ describeDatabase('check-in HTTP API contract', () => {
       [inserted.rows[0].id]
     );
     expect(stored.rows[0]).toMatchObject({
-      triage_severity: 'high',
-      flow_state: 'high_alert',
+      triage_severity: 'medium',
+      flow_state: 'follow_up',
     });
     expect(stored.rows[0].triage_completed_at).not.toBeNull();
   });

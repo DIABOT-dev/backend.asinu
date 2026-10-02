@@ -9,7 +9,6 @@
 
 const { callTextAi } = require('../../services/ai/ai.service');
 const { getHonorifics } = require('../../lib/honorifics');
-const _CONCLUSION_MODEL = process.env.TRIAGE_CONCLUSION_MODEL || 'gpt-4o';
 
 // ─── Question Templates (có dấu tiếng Việt) ─────────────────────────────────
 
@@ -124,47 +123,47 @@ function formatQuestion(engineResult, profile, _previousAnswers = []) {
 
 const EMERGENCY_CONCLUSIONS = {
   stroke: {
-    summary: (h) => `${h.Honorific} có triệu chứng nghi đột quỵ.`,
+    summary: (h) => `${h.Honorific} có dấu hiệu thần kinh cần được cấp cứu ngay.`,
     recommendation: (h) =>
-      `🚨 GỌI CẤP CỨU 115 NGAY. ${h.Honorific} cần đến phòng cấp cứu trong vòng vài phút. Trong khi chờ: nằm nghiêng, nới lỏng quần áo, không cho ăn uống.`,
+      `🚨 GỌI CẤP CỨU 115 NGAY. ${h.Honorific} cần được nhân viên y tế đánh giá ngay.`,
     closeMessage: (h) =>
       `${h.selfRef} đã thông báo cho người thân. Gọi 115 ngay ${h.honorific} nhé.`,
   },
   mi: {
-    summary: (h) => `${h.Honorific} có triệu chứng nghi nhồi máu cơ tim.`,
+    summary: (h) => `${h.Honorific} có đau ngực kèm dấu hiệu nguy hiểm cần cấp cứu.`,
     recommendation: (_h) =>
-      `🚨 GỌI CẤP CỨU 115 NGAY. Trong khi chờ: ngồi nghỉ, nới lỏng quần áo, nhai 1 viên aspirin nếu có và không dị ứng.`,
+      `🚨 GỌI CẤP CỨU 115 NGAY. Hạn chế vận động và chờ nhân viên y tế hướng dẫn.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân. Gọi 115 ngay.`,
   },
   meningitis: {
-    summary: () => `Sốt cao kèm cứng cổ, nghi viêm màng não.`,
-    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY. Viêm màng não cần điều trị khẩn cấp.`,
+    summary: () => `Sốt cao kèm cứng cổ là dấu hiệu cần được đánh giá khẩn cấp.`,
+    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY để được nhân viên y tế đánh giá.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   pe: {
-    summary: () => `Khó thở đột ngột kèm đau ngực, nghi tắc mạch phổi.`,
-    recommendation: () => `🚨 GỌI CẤP CỨU 115. Nằm nghỉ, không cử động nhiều.`,
+    summary: () => `Khó thở đột ngột kèm đau ngực là dấu hiệu cần cấp cứu.`,
+    recommendation: () => `🚨 GỌI CẤP CỨU 115. Hạn chế vận động và chờ nhân viên y tế hướng dẫn.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   cauda_equina: {
-    summary: () => `Đau lưng kèm rối loạn tiểu tiện, nghi hội chứng chùm đuôi ngựa.`,
-    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY. Cần phẫu thuật khẩn cấp trong vòng 24-48h.`,
+    summary: () => `Đau lưng kèm rối loạn tiểu tiện là dấu hiệu cần được đánh giá khẩn cấp.`,
+    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY để được nhân viên y tế đánh giá.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   hemorrhage: {
-    summary: () => `Nôn ra máu hoặc phân đen, nghi xuất huyết tiêu hóa.`,
-    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY. Không ăn uống. Nằm nghỉ chờ xe cấp cứu.`,
+    summary: () => `Nôn ra máu hoặc đi ngoài phân đen là dấu hiệu cần cấp cứu.`,
+    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY hoặc gọi 115 để được hướng dẫn.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   dengue: {
-    summary: () => `Sốt kèm dấu hiệu xuất huyết, nghi sốt xuất huyết nặng.`,
-    recommendation: () =>
-      `🚨 ĐẾN BỆNH VIỆN NGAY. Uống nhiều nước, KHÔNG dùng aspirin hoặc ibuprofen. Chỉ dùng paracetamol nếu cần hạ sốt.`,
+    summary: () => `Sốt kèm dấu hiệu chảy máu cần được đánh giá khẩn cấp.`,
+    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY và làm theo hướng dẫn của nhân viên y tế.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   dka: {
-    summary: () => `Tiểu đường kèm khát nước, buồn nôn, nghi nhiễm toan ceton.`,
-    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY. Uống nước, kiểm tra đường huyết nếu có máy.`,
+    summary: () =>
+      `Người có bệnh nền tiểu đường kèm khát nhiều và buồn nôn cần được đánh giá khẩn cấp.`,
+    recommendation: () => `🚨 ĐẾN BỆNH VIỆN NGAY hoặc gọi 115 nếu tình trạng nặng lên.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   seizure: {
@@ -174,9 +173,8 @@ const EMERGENCY_CONCLUSIONS = {
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   anaphylaxis: {
-    summary: () => `Khó thở kèm sưng, nghi phản vệ.`,
-    recommendation: () =>
-      `🚨 GỌI CẤP CỨU 115 NGAY. Nếu có EpiPen, dùng ngay. Nằm ngửa, kê chân cao.`,
+    summary: () => `Khó thở kèm sưng mặt, môi hoặc lưỡi là dấu hiệu cần cấp cứu.`,
+    recommendation: () => `🚨 GỌI CẤP CỨU 115 NGAY và làm theo hướng dẫn của nhân viên y tế.`,
     closeMessage: (h) => `${h.selfRef} đã thông báo cho người thân.`,
   },
   trauma: {
@@ -216,7 +214,7 @@ async function _generateConclusionWithGPT(state, profile, h, _lang, _pool) {
   try {
     const response = await callTextAi({
       system:
-        'Bạn là trợ lý y tế Asinu. Chỉ trả về JSON. Không chẩn đoán. Không kê đơn. Luôn khuyên gặp bác sĩ khi cần. Trả lời có dấu tiếng Việt đầy đủ.',
+        'Bạn là trợ lý y tế Asinu. Chỉ trả về JSON. Không chẩn đoán, không nêu tên bệnh, không kê đơn, không nêu tên/liều thuốc và không khuyên đổi hoặc ngưng thuốc. Chỉ sàng lọc và định hướng đi khám. Trả lời có dấu tiếng Việt đầy đủ.',
       prompt,
       temperature: 0.3,
       maxTokens: 400,
@@ -226,10 +224,20 @@ async function _generateConclusionWithGPT(state, profile, h, _lang, _pool) {
     const parsed = _parseJSON(raw);
     if (!parsed) throw new Error('GPT returned invalid JSON');
 
+    const candidate = {
+      summary: String(parsed.summary || '').trim(),
+      recommendation: String(parsed.recommendation || '').trim(),
+      closeMessage: String(parsed.closeMessage || '').trim(),
+    };
+    if (!isSafeConclusion(candidate)) {
+      console.warn('[Triage AI] Rejected unsafe conclusion output');
+      return _buildFallbackConclusion(state, h);
+    }
+
     return {
-      summary: parsed.summary || '',
-      recommendation: parsed.recommendation || '',
-      closeMessage: parsed.closeMessage || `${h.selfRef} sẽ hỏi lại ${h.honorific} sau nhé.`,
+      summary: candidate.summary,
+      recommendation: candidate.recommendation,
+      closeMessage: candidate.closeMessage || `${h.selfRef} sẽ hỏi lại ${h.honorific} sau nhé.`,
       isEmergency: false,
     };
   } catch (err) {
@@ -266,27 +274,42 @@ Nếu needsDoctor=CÓ: recommendation PHẢI nói rõ "đi khám bác sĩ" + lý
 CHỈ JSON. Tiếng Việt có dấu.`;
 }
 
+const FORBIDDEN_CONCLUSION_PATTERNS = [
+  /(?:chẩn đoán|kết luận)/i,
+  /(?:có thể là|khả năng là|nghi(?: ngờ)?|mắc)(?:\s|:)/i,
+  /bị\s+(?:bệnh\s+)?(?:viêm|ung thư|đột quỵ|tai biến|nhồi máu|suy tim|tắc mạch|xuất huyết|nhiễm|hội chứng)/i,
+  /(?:aspirin|ibuprofen|paracetamol|acetaminophen|epipen|kháng sinh|insulin)/i,
+  /(?:uống|dùng|tiêm|bôi|ngưng|ngừng|giảm|tăng|thay đổi)\s+(?:liều\s+)?thuốc/i,
+  /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ml|viên|liều)\b/i,
+];
+
+function isSafeConclusion(candidate) {
+  if (!candidate || !candidate.summary || !candidate.recommendation) return false;
+  const text = `${candidate.summary} ${candidate.recommendation} ${candidate.closeMessage || ''}`;
+  return !FORBIDDEN_CONCLUSION_PATTERNS.some((pattern) => pattern.test(text));
+}
+
 function _buildFallbackConclusion(state, h) {
   const symptom = state.primarySymptom || 'triệu chứng';
 
   if (state.needsDoctor) {
     return {
-      summary: `${h.Honorific} bị ${symptom} cần được bác sĩ đánh giá.`,
-      recommendation: `${h.Honorific} nên đi khám bác sĩ hôm nay để được tư vấn cụ thể. Trong khi chờ, nghỉ ngơi và uống nhiều nước.`,
+      summary: `${h.Honorific} đã ghi nhận triệu chứng ${symptom}; triệu chứng này cần được bác sĩ đánh giá.`,
+      recommendation: `${h.Honorific} nên đi khám bác sĩ hôm nay. Nếu triệu chứng nặng lên, hãy đi cấp cứu ngay.`,
       closeMessage: `${h.selfRef} sẽ hỏi lại ${h.honorific} sau 3 tiếng nhé. Nếu nặng hơn, đi khám ngay ${h.honorific} nhé.`,
       isEmergency: false,
     };
   } else if (state.severity === 'medium') {
     return {
-      summary: `${h.Honorific} bị ${symptom} mức độ vừa.`,
-      recommendation: `Nghỉ ngơi, uống nhiều nước. Nếu không đỡ sau 24h, nên gặp bác sĩ.`,
+      summary: `${h.Honorific} đã ghi nhận triệu chứng ${symptom} và cần tiếp tục theo dõi.`,
+      recommendation: `Nếu không đỡ, kéo dài hoặc nặng lên, ${h.honorific} nên được bác sĩ đánh giá.`,
       closeMessage: `${h.selfRef} sẽ hỏi lại ${h.honorific} sau 4 tiếng nhé 💙`,
       isEmergency: false,
     };
   } else {
     return {
-      summary: `${h.Honorific} bị ${symptom} nhẹ.`,
-      recommendation: `Nghỉ ngơi, uống đủ nước. Theo dõi trong 24h.`,
+      summary: `${h.Honorific} đã ghi nhận triệu chứng ${symptom}.`,
+      recommendation: `Tiếp tục theo dõi. Nếu kéo dài hoặc nặng lên, ${h.honorific} nên được bác sĩ đánh giá.`,
       closeMessage: `${h.selfRef} sẽ hỏi lại ${h.honorific} sau 6 tiếng nhé 💙`,
       isEmergency: false,
     };
@@ -395,7 +418,7 @@ const _severityCache = new Map();
  * Classify mức độ nguy hiểm của triệu chứng.
  * @param {string} symptom - chuỗi triệu chứng user khai
  * @param {object} profile - { age, medical_conditions[] }
- * @returns {Promise<{severity: 'emergency'|'urgent'|'moderate'|'mild', reason: string, needsFamilyAlert: boolean, needsDoctor: boolean}>}
+ * @returns {Promise<{severity: 'emergency'|'urgent'|'moderate'|'mild'|'unknown', reason?: string, needsFamilyAlert: boolean, needsDoctor: boolean}>}
  */
 async function classifySymptomSeverity(symptom, profile = {}) {
   if (!symptom) return { severity: 'mild', needsFamilyAlert: false, needsDoctor: false };
@@ -445,13 +468,12 @@ CHỈ JSON.`;
     const raw = response.content;
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      // Fail-safe: nếu AI fail → treat as urgent để gọi bác sĩ (không dám
-      // assume mild khi không chắc)
+      // The deterministic detector remains authoritative when AI is unavailable.
       return {
-        severity: 'urgent',
-        reason: 'AI unavailable',
+        severity: 'unknown',
+        reason: 'AI unavailable; deterministic triage continues',
         needsFamilyAlert: false,
-        needsDoctor: true,
+        needsDoctor: false,
       };
     }
 
@@ -459,10 +481,10 @@ CHỈ JSON.`;
     const validSeverities = ['emergency', 'urgent', 'moderate', 'mild'];
     if (!validSeverities.includes(parsed.severity)) {
       return {
-        severity: 'urgent',
-        reason: 'invalid response',
+        severity: 'unknown',
+        reason: 'invalid AI response; deterministic triage continues',
         needsFamilyAlert: false,
-        needsDoctor: true,
+        needsDoctor: false,
       };
     }
 
@@ -478,12 +500,13 @@ CHỈ JSON.`;
     return result;
   } catch (err) {
     console.error('[AI Safety] classify failed:', err.message);
-    // Fail-safe: AI down → urgent (bắt user đi khám) thay vì silent miss
+    // The deterministic detector and question flow remain active when AI is
+    // unavailable. Do not invent an urgent outcome from an infrastructure error.
     return {
-      severity: 'urgent',
-      reason: 'AI error fail-safe',
+      severity: 'unknown',
+      reason: 'AI error; deterministic triage continues',
       needsFamilyAlert: false,
-      needsDoctor: true,
+      needsDoctor: false,
     };
   }
 }
@@ -506,4 +529,5 @@ module.exports = {
   isEmergency,
   getEmergencyTypes,
   EMERGENCY_CONCLUSIONS,
+  isSafeConclusion,
 };

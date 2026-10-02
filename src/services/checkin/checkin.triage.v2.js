@@ -60,7 +60,7 @@ async function formatEmergencyResult(emergency, profile) {
   // Build a minimal state object so generateConclusion can pick the template.
   const state = {
     emergencyType: templateKey,
-    severity: emergency.severity,
+    severity: 'emergency',
     needsDoctor: emergency.needsDoctor,
   };
 
@@ -71,11 +71,12 @@ async function formatEmergencyResult(emergency, profile) {
     summary: aiConclusion.summary,
     recommendation: aiConclusion.recommendation,
     closeMessage: aiConclusion.closeMessage,
-    severity: emergency.severity,
+    severity: 'emergency',
     needsDoctor: emergency.needsDoctor,
     needsFamilyAlert: emergency.needsFamilyAlert,
     hasRedFlag: true,
     followUpHours: emergency.followUpHours,
+    autoEmergency: true,
   };
 }
 
@@ -134,27 +135,34 @@ async function getNextTriageQuestion(input) {
     normalizedHC.medical_conditions = normalizedProfile.medical_conditions;
   }
 
-  // ── Convert previousAnswers from {question, answer} to {step, answer} ──
-  // The API sends {question, answer} but engine expects {step, answer}.
-  // Infer step from answer index and question content.
+  // New clients send an explicit step id. Question-text inference remains only
+  // for older installed builds and in-progress legacy sessions.
   const STEP_ORDER =
     phase === 'followup'
       ? ['followup_status', 'followup_detail', 'conclude']
-      : [
-          'symptoms',
-          'associated',
-          'onset',
-          'progression',
-          'red_flags',
-          'cause',
-          'action',
-          'conclude',
-        ];
+      : ['symptoms', 'onset', 'progression', 'red_flags', 'conclude'];
+
+  const inferLegacyStep = (question, index) => {
+    const value = String(question || '').toLowerCase();
+    if (/(lần trước|so với lần|compared to)/.test(value)) return 'followup_status';
+    if (/(triệu chứng mới|thay đổi gì|new symptom)/.test(value)) return 'followup_detail';
+    if (/(bắt đầu|từ khi nào|bao lâu|how long|when did)/.test(value)) return 'onset';
+    if (/(đỡ hơn|nặng hơn|so với lúc đầu|thay đổi thế nào|progress)/.test(value)) {
+      return 'progression';
+    }
+    if (/(quan trọng|dấu hiệu nghiêm trọng|warning sign|khẩn cấp)/.test(value)) {
+      return 'red_flags';
+    }
+    if (/(đi kèm|triệu chứng nào khác|associated)/.test(value)) return 'associated';
+    if (/(nguyên nhân|dẫn đến|cause)/.test(value)) return 'cause';
+    if (/(đã làm gì|giảm triệu chứng|what have you done)/.test(value)) return 'action';
+    if (/(triệu chứng|vấn đề là gì|khó chịu|symptom)/.test(value)) return 'symptoms';
+    return STEP_ORDER[index] || 'unknown';
+  };
 
   const normalizedAnswers = previousAnswers.map((a, i) => {
-    if (a.step) return a; // already has step
-    // Infer step from position
-    const step = STEP_ORDER[i] || 'unknown';
+    if (a.step) return a;
+    const step = inferLegacyStep(a.question, i);
     return { step, answer: a.answer, question: a.question };
   });
 
@@ -172,13 +180,17 @@ async function getNextTriageQuestion(input) {
     return formatEmergencyResult(emergency, normalizedProfile);
   }
 
-  // 2b. AI safety classifier — chạy khi user VỪA khai symptom (chỉ 1 answer).
+  // 2b. AI safety classifier. Re-evaluate the first symptom on each request;
+  // the provider layer caches it, while the safety hint remains available when
+  // the later request reaches a conclusion.
   // Backup cho các emergency NGOÀI keyword list (long tail symptoms).
   // Cost: 1 GPT call ~150 tokens, cache theo symptom.
-  if (normalizedAnswers.length === 1 && normalizedAnswers[0].step === 'symptoms') {
-    const symptomText = Array.isArray(normalizedAnswers[0].answer)
-      ? normalizedAnswers[0].answer.join(' ')
-      : String(normalizedAnswers[0].answer || '');
+  let safetyHint = null;
+  const symptomAnswer = normalizedAnswers.find((answer) => answer.step === 'symptoms');
+  if (symptomAnswer) {
+    const symptomText = Array.isArray(symptomAnswer.answer)
+      ? symptomAnswer.answer.join(' ')
+      : String(symptomAnswer.answer || '');
     if (symptomText && symptomText.length >= 2) {
       try {
         const safety = await classifySymptomSeverity(symptomText, normalizedProfile);
@@ -200,7 +212,7 @@ async function getNextTriageQuestion(input) {
             isDone: true,
             summary: aiConclusion.summary || `Triệu chứng "${symptomText}" có dấu hiệu nguy cấp.`,
             recommendation:
-              aiConclusion.recommendation || `🚨 Gọi 115 hoặc cấp cứu ngay. ${safety.reason}`,
+              aiConclusion.recommendation || '🚨 Gọi 115 hoặc đến cơ sở cấp cứu ngay.',
             closeMessage: aiConclusion.closeMessage,
             severity: 'emergency',
             needsDoctor: true,
@@ -216,8 +228,7 @@ async function getNextTriageQuestion(input) {
           };
         }
         if (safety.severity === 'urgent') {
-          // Cho phép tiếp tục triage nhưng đánh dấu để conclusion sau bump severity
-          input._safetyHint = { severity: 'urgent', reason: safety.reason, needsDoctor: true };
+          safetyHint = safety;
         }
       } catch (err) {
         console.error('[Triage V2] safety classifier error:', err.message);
@@ -242,6 +253,34 @@ async function getNextTriageQuestion(input) {
   if (engineResult.action === 'conclude') {
     const state = buildState(normalizedAnswers, normalizedProfile, normalizedHC);
     const conclusion = calculateConclusion(state, status);
+    const severityRank = { low: 0, medium: 1, high: 2, emergency: 3 };
+    const applySeverityFloor = (severity, needsDoctor, needsFamilyAlert, followUpHours) => {
+      if ((severityRank[severity] || 0) > (severityRank[conclusion.severity] || 0)) {
+        conclusion.severity = severity;
+      }
+      conclusion.needsDoctor = conclusion.needsDoctor || needsDoctor;
+      conclusion.needsFamilyAlert = conclusion.needsFamilyAlert || needsFamilyAlert;
+      conclusion.followUpHours = Math.min(conclusion.followUpHours, followUpHours);
+    };
+
+    // Keep deterministic, non-emergency risk findings in the final result.
+    if (emergency.severity === 'high') {
+      applySeverityFloor('high', emergency.needsDoctor, emergency.needsFamilyAlert, 1);
+    } else if (emergency.severity === 'medium') {
+      applySeverityFloor('medium', emergency.needsDoctor, emergency.needsFamilyAlert, 3);
+    }
+
+    if (safetyHint?.severity === 'urgent') {
+      const vulnerable = normalizedProfile.age >= 60 || state.hasConditions;
+      applySeverityFloor(
+        vulnerable ? 'high' : 'medium',
+        true,
+        Boolean(safetyHint.needsFamilyAlert) || vulnerable,
+        vulnerable ? 1 : 3
+      );
+    } else if (safetyHint?.severity === 'moderate' && safetyHint.needsDoctor) {
+      applySeverityFloor('medium', true, Boolean(safetyHint.needsFamilyAlert), 6);
+    }
 
     // Merge engine state + conclusion fields for the AI layer prompt.
     const conclusionInput = {
@@ -314,6 +353,7 @@ async function getNextTriageQuestion(input) {
 
   return {
     isDone: false,
+    step: engineResult.step,
     question: formatted.question,
     options: formatted.options || engineResult.options,
     optionsGrouped: engineResult.optionsGrouped || null, // pass T2-grouped symptoms cho FE render section

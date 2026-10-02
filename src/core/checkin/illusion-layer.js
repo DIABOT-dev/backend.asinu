@@ -55,8 +55,8 @@ const BANNED_KEYWORDS = [
 const GREETING_REWRITES = {
   has_symptom_yesterday: {
     id: 'greeting_symptom_yesterday',
-    vi: '{callName} ơi, hôm qua {honorific} có bị {symptom}. Hôm nay {selfRef} hỏi thăm {honorific} nhé',
-    en: '{callName}, you had {symptom} yesterday. Let me check in with you today',
+    vi: '{callName} ơi, trong các lần ghi nhận trước {honorific} có bị {symptom}. Hiện tại {selfRef} hỏi thăm {honorific} nhé',
+    en: '{callName}, earlier records mentioned {symptom}. Let me check how you feel now',
   },
   symptom_trend_worsening: {
     id: 'greeting_trend_worsening',
@@ -136,8 +136,8 @@ const QUESTION_REWRITES = {
 const CONTINUITY_PREFIXES = {
   same_symptom_2d: {
     id: 'continuity_same_2d',
-    vi: 'Hôm qua {honorific} cũng bị {symptom}. ',
-    en: 'You had {symptom} yesterday too. ',
+    vi: 'Trong những ngày gần đây {honorific} cũng từng ghi nhận {symptom}. ',
+    en: 'Your recent records also mentioned {symptom}. ',
   },
   same_symptom_3d: {
     id: 'continuity_same_3d',
@@ -438,7 +438,8 @@ async function buildCheckinContext(pool, userId) {
     pool.query(
       `SELECT session_date, initial_status, triage_summary, triage_severity
        FROM health_checkins
-       WHERE user_id = $1 AND session_date < CURRENT_DATE
+       WHERE user_id = $1
+         AND session_date < DATE(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
        ORDER BY session_date DESC LIMIT 3`,
       [userId]
     ),

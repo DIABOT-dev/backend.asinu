@@ -235,8 +235,62 @@ async function getTodayCheckin(pool, userId) {
  * Create or update today's check-in with user's initial status.
  * Called when user responds to morning push or taps "Update sức khoẻ".
  */
-async function startCheckin(pool, userId, status, bodyLocations = null, bodyLocationOther = null) {
+async function archiveCheckinOccurrence(pool, session) {
+  if (!session) return;
+  await pool.query(
+    `INSERT INTO health_checkin_occurrences
+       (checkin_id, user_id, session_date, source, initial_status, current_status,
+        flow_state, body_locations, body_location_other, triage_messages,
+        triage_summary, triage_severity, family_alerted, emergency_triggered,
+        started_at, completed_at, snapshot_updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14,$15,$16,$17)
+     ON CONFLICT (checkin_id, snapshot_updated_at) DO NOTHING`,
+    [
+      session.id,
+      session.user_id,
+      session.session_date,
+      session.occurrence_source || 'scheduled',
+      session.initial_status,
+      session.current_status,
+      session.flow_state,
+      session.body_locations,
+      session.body_location_other,
+      JSON.stringify(session.triage_messages || []),
+      session.triage_summary,
+      session.triage_severity,
+      session.family_alerted,
+      session.emergency_triggered,
+      session.occurrence_started_at || session.created_at || new Date(),
+      session.triage_completed_at || session.resolved_at || session.updated_at || new Date(),
+      session.updated_at || new Date(),
+    ]
+  );
+}
+
+async function startCheckin(
+  pool,
+  userId,
+  status,
+  bodyLocations = null,
+  bodyLocationOther = null,
+  { restart = false, source = 'scheduled' } = {}
+) {
   const date = checkinDateVN();
+
+  let restartExisting = false;
+  if (restart) {
+    const { rows: existingRows } = await pool.query(
+      `SELECT * FROM health_checkins WHERE user_id = $1 AND session_date = $2`,
+      [userId, date]
+    );
+    const existing = existingRows[0] || null;
+    // An active emergency must be resolved through its follow-up flow. A new
+    // instant check-in must never silently erase an outstanding high alert.
+    if (existing && existing.flow_state !== 'high_alert') {
+      await archiveCheckinOccurrence(pool, existing);
+      restartExisting = true;
+    }
+  }
 
   let flowState;
   if (status === 'fine') flowState = 'monitoring';
@@ -254,25 +308,52 @@ async function startCheckin(pool, userId, status, bodyLocations = null, bodyLoca
     `INSERT INTO health_checkins
        (user_id, session_date, initial_status, current_status, flow_state,
         next_checkin_at, last_response_at, no_response_count,
-        body_location, body_locations, body_location_other, updated_at)
-     VALUES ($1,$2,$3,$3,$4,$5,NOW(),0,$6,$7,$8,NOW())
+        body_location, body_locations, body_location_other,
+        occurrence_source, occurrence_started_at, updated_at)
+     VALUES ($1,$2,$3,$3,$4,$5,NOW(),0,$6,$7,$8,$10,NOW(),NOW())
      ON CONFLICT (user_id, session_date) DO UPDATE SET
-       current_status      = CASE WHEN health_checkins.flow_state = 'high_alert' AND $3 = 'fine'
+       initial_status      = CASE WHEN $9 THEN $3 ELSE health_checkins.initial_status END,
+       current_status      = CASE WHEN $9 THEN $3
+                                  WHEN health_checkins.flow_state = 'high_alert' AND $3 = 'fine'
                                   THEN health_checkins.current_status ELSE $3 END,
-       flow_state          = CASE WHEN health_checkins.flow_state = 'high_alert' AND $4 IN ('monitoring', 'follow_up')
+       flow_state          = CASE WHEN $9 THEN $4
+                                  WHEN health_checkins.flow_state = 'high_alert' AND $4 IN ('monitoring', 'follow_up')
                                   THEN 'high_alert' ELSE $4 END,
-       next_checkin_at     = CASE WHEN health_checkins.flow_state = 'high_alert' AND $4 IN ('monitoring', 'follow_up')
+       next_checkin_at     = CASE WHEN $9 THEN $5
+                                  WHEN health_checkins.flow_state = 'high_alert' AND $4 IN ('monitoring', 'follow_up')
                                   THEN health_checkins.next_checkin_at ELSE $5 END,
        last_response_at    = NOW(),
        no_response_count   = 0,
-       body_location       = COALESCE($6, health_checkins.body_location),
-       body_locations      = COALESCE($7, health_checkins.body_locations),
-       body_location_other = COALESCE($8, health_checkins.body_location_other),
-       resolved_at         = CASE WHEN $3 = 'fine' AND health_checkins.flow_state = 'monitoring'
+       body_location       = CASE WHEN $9 THEN $6 ELSE COALESCE($6, health_checkins.body_location) END,
+       body_locations      = CASE WHEN $9 THEN $7 ELSE COALESCE($7, health_checkins.body_locations) END,
+       body_location_other = CASE WHEN $9 THEN $8 ELSE COALESCE($8, health_checkins.body_location_other) END,
+       triage_messages     = CASE WHEN $9 THEN '[]'::jsonb ELSE health_checkins.triage_messages END,
+       triage_summary      = CASE WHEN $9 THEN NULL ELSE health_checkins.triage_summary END,
+       triage_severity     = CASE WHEN $9 THEN NULL ELSE health_checkins.triage_severity END,
+       triage_completed_at = CASE WHEN $9 THEN NULL ELSE health_checkins.triage_completed_at END,
+       family_alerted      = CASE WHEN $9 THEN FALSE ELSE health_checkins.family_alerted END,
+       family_alerted_at   = CASE WHEN $9 THEN NULL ELSE health_checkins.family_alerted_at END,
+       emergency_triggered = CASE WHEN $9 THEN FALSE ELSE health_checkins.emergency_triggered END,
+       emergency_location  = CASE WHEN $9 THEN NULL ELSE health_checkins.emergency_location END,
+       occurrence_source   = CASE WHEN $9 THEN $10 ELSE health_checkins.occurrence_source END,
+       occurrence_started_at = CASE WHEN $9 THEN NOW() ELSE health_checkins.occurrence_started_at END,
+       resolved_at         = CASE WHEN $9 THEN NULL
+                                  WHEN $3 = 'fine' AND health_checkins.flow_state = 'monitoring'
                                   THEN health_checkins.resolved_at ELSE NULL END,
        updated_at          = NOW()
      RETURNING *`,
-    [userId, date, status, flowState, nextAt, locFirst, locArr, bodyLocationOther]
+    [
+      userId,
+      date,
+      status,
+      flowState,
+      nextAt,
+      locFirst,
+      locArr,
+      bodyLocationOther,
+      restartExisting,
+      source,
+    ]
   );
 
   // A manual check-in is authoritative: stop every active automated call flow
@@ -486,126 +567,11 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
   // Hard limit: force conclusion if AI hasn't stopped in time
   const isFollowUp = isFollowUpPhase;
   const isVeryUnwell = session.initial_status === 'very_tired';
-  const maxQuestions = isFollowUp ? 3 : 8;
+  const maxQuestions = isFollowUp ? 2 : 4;
+  const _safeAns = (value) => (Array.isArray(value) ? value.join(', ') : String(value || ''));
 
-  // ── Hard-coded red flag detection — bypass AI if user already reported danger signs ──
-  const RED_FLAG_KEYWORDS = [
-    'khó thở',
-    'đau ngực',
-    'tức ngực',
-    'hoa mắt',
-    'đau ngực lan',
-    'vã mồ hôi',
-    'ngất',
-    'bị ngã',
-    'té ngã',
-    'ngã',
-    'co giật',
-    'không thở được',
-    'không thể thở',
-    'tim đập nhanh',
-    'chest pain',
-    'difficulty breathing',
-    'shortness of breath',
-    'fainting',
-    'fell down',
-    'fallen',
-    "can't breathe",
-    'cannot breathe',
-    'blurred vision',
-    'chest tightness',
-  ];
-
-  const _safeAns = (v) => (Array.isArray(v) ? v.join(', ') : String(v || ''));
-  const intrinsicallyUrgentNegatives = new Set([
-    'không thở được',
-    'không thể thở',
-    "can't breathe",
-    'cannot breathe',
-  ]);
-  const hasUnnegatedKeyword = (text, keyword) => {
-    let offset = 0;
-    while (offset < text.length) {
-      const index = text.indexOf(keyword, offset);
-      if (index < 0) return false;
-      if (intrinsicallyUrgentNegatives.has(keyword)) return true;
-      const prefix = text.slice(Math.max(0, index - 40), index);
-      const negated =
-        /(?:không|chưa|ko|no|not|without)\s+(?:(?:có|còn|bị|thấy|cảm thấy)\s+){0,2}$/i.test(prefix);
-      if (!negated) return true;
-      offset = index + keyword.length;
-    }
-    return false;
-  };
-  const hasRedFlagInAnswers = previousAnswers.some((answer) => {
-    const text = _safeAns(answer.answer).toLowerCase();
-    return RED_FLAG_KEYWORDS.some((keyword) => hasUnnegatedKeyword(text, keyword));
-  });
-
-  if (hasRedFlagInAnswers) {
-    const allSymptoms = previousAnswers.map((a) => _safeAns(a.answer)).join(', ');
-    // Red-flag = đe doạ tính mạng → escalate severity='emergency' (không phải 'high'),
-    // emergency_triggered=true (auto detect từ AI/triage, không cần SOS button).
-    const urgentResult = {
-      ok: true,
-      isDone: true,
-      summary: allSymptoms,
-      severity: 'emergency',
-      recommendation:
-        profile.lang === 'en'
-          ? '🚨 EMERGENCY — Call 115 or emergency services NOW. Family has been notified.'
-          : '🚨 KHẨN CẤP — Gọi 115 hoặc cấp cứu NGAY. Người thân đã được báo.',
-      needsDoctor: true,
-      needsFamilyAlert: true,
-      hasRedFlag: true,
-      followUpHours: 1,
-      autoEmergency: true, // Auto-escalated từ red-flag detect (khác user SOS button)
-    };
-
-    // Save to DB
-    await pool.query(
-      `UPDATE health_checkins SET
-         triage_summary=$1, triage_severity=$2, triage_messages=$3::jsonb,
-         triage_completed_at=NOW(), next_checkin_at=$4,
-         emergency_triggered=true, flow_state='high_alert',
-         updated_at=NOW()
-       WHERE id=$5`,
-      [
-        urgentResult.summary,
-        urgentResult.severity,
-        JSON.stringify(previousAnswers),
-        hoursFromNow(1),
-        checkinId,
-      ]
-    );
-    await rebuildPatientHealthTimeline(pool, userId);
-
-    // Alert family immediately với alertType='emergency' (priority critical, cooldown 1min)
-    if (!session.family_alerted) {
-      await alertFamily(pool, session, 'emergency');
-      await pool.query(
-        `UPDATE health_checkins SET family_alerted=true, family_alerted_at=NOW() WHERE id=$1`,
-        [checkinId]
-      );
-    }
-
-    // #2: System reacts to AI findings
-    await reactToTriageResult(pool, userId, checkinId, urgentResult);
-
-    // #3: Extract and save symptoms for AI memory
-    evaluateEarlySignalAfterSymptoms(
-      pool,
-      userId,
-      checkinId,
-      previousAnswers,
-      session.session_date
-    );
-
-    // Invalidate health score cache so home screen updates immediately
-    await cacheDel(`health:score:${userId}`);
-
-    return urgentResult;
-  }
+  // Emergency detection is centralized in checkin.triage.v2 so the same
+  // negation-aware, combination-based rules are used for every client.
 
   // For follow-up: pass previous triage Q&A so AI doesn't repeat questions
   const prevTriageMessages = isFollowUpPhase
@@ -614,10 +580,26 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
       : []
     : [];
 
-  let result;
-  if (previousAnswers.length >= maxQuestions) {
-    // Conclude through the normal persistence/escalation path. Returning early
-    // here used to leave triage_completed_at unset and skipped family alerts.
+  let result = await getNextTriageQuestion({
+    status: isFollowUpPhase
+      ? session.current_status || session.initial_status
+      : session.initial_status,
+    phase: isFollowUpPhase ? 'followup' : 'initial',
+    lang: profile.lang || 'vi',
+    profile,
+    healthContext,
+    previousAnswers,
+    previousSessionSummary: session.triage_summary || null,
+    previousTriageMessages: prevTriageMessages,
+    bodyLocation: session.body_location || null,
+    bodyLocations:
+      session.body_locations || (session.body_location ? [session.body_location] : null),
+    bodyLocationOther: session.body_location_other || null,
+    pool,
+    userId,
+  });
+
+  if (!result.isDone && previousAnswers.length >= maxQuestions) {
     result = {
       ok: true,
       isDone: true,
@@ -629,29 +611,11 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
       hasRedFlag: false,
       followUpHours: calcFollowUpHours(isVeryUnwell ? 'high' : 'medium', previousAnswers.length),
     };
-  } else {
-    result = await getNextTriageQuestion({
-      status: isFollowUpPhase
-        ? session.current_status || session.initial_status
-        : session.initial_status,
-      phase: isFollowUpPhase ? 'followup' : 'initial',
-      lang: profile.lang || 'vi',
-      profile,
-      healthContext,
-      previousAnswers,
-      previousSessionSummary: session.triage_summary || null,
-      previousTriageMessages: prevTriageMessages,
-      bodyLocation: session.body_location || null,
-      bodyLocations:
-        session.body_locations || (session.body_location ? [session.body_location] : null),
-      bodyLocationOther: session.body_location_other || null,
-      pool,
-      userId,
-    });
   }
 
-  // ── Double enforcement: block early isDone at service level too ──
-  const minQForPhase = isFollowUp ? 2 : 5;
+  // A conclusion may be immediate for an emergency. Otherwise require enough
+  // context for a meaningful result without forcing a five-question script.
+  const minQForPhase = isFollowUp ? 1 : 2;
   // Follow-up: allow early conclusion if user says "improved" in layer 1
   const IMPROVED_KEYWORDS = [
     'đã đỡ',
@@ -691,6 +655,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     result = {
       ok: true,
       isDone: false,
+      step: 'followup_detail',
       question: `${HonCap} cho ${self} biết triệu chứng mới đó là gì nhé?`,
       options: [],
       multiSelect: false,
@@ -707,41 +672,39 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
     );
     const fallbacks = [
       {
+        step: 'progression',
         q: 'Từ lúc bắt đầu đến giờ, tình trạng có thay đổi không?',
         opts: ['đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn'],
         multi: false,
         types: [5],
       },
       {
-        q: 'Bạn nghĩ điều gì có thể dẫn đến tình trạng này?',
-        opts: ['ngủ ít', 'bỏ bữa', 'căng thẳng', 'quên uống thuốc', 'không rõ'],
+        step: 'red_flags',
+        q: 'Bạn có dấu hiệu nghiêm trọng nào như khó thở dữ dội, ngất hoặc đau ngực kèm vã mồ hôi không?',
+        opts: ['khó thở dữ dội', 'ngất hoặc lơ mơ', 'đau ngực kèm vã mồ hôi', 'không có'],
         multi: true,
-        types: [7],
+        types: [6],
       },
       {
-        q: 'Bạn đã làm gì để cải thiện chưa?',
-        opts: ['nghỉ ngơi', 'ăn uống', 'uống nước', 'uống thuốc', 'chưa làm gì'],
-        multi: true,
-        types: [8],
-      },
-      {
-        q: 'Mức độ khó chịu của bạn hiện tại thế nào?',
-        opts: ['nhẹ', 'trung bình', 'khá nặng'],
+        step: 'onset',
+        q: 'Tình trạng này bắt đầu từ khi nào?',
+        opts: ['vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua', 'vài ngày nay'],
         multi: false,
         types: [2],
-      },
-      {
-        q: 'Tình trạng này có hay xảy ra không?',
-        opts: ['lần đầu', 'thỉnh thoảng', 'hay bị', 'gần đây bị nhiều hơn'],
-        multi: false,
-        types: [10],
       },
     ];
     // Find a question whose TYPE hasn't been used
     const usedQs = new Set(previousAnswers.map((a) => a.question.toLowerCase()));
     const fb =
       fallbacks.find((f) => !usedQs.has(f.q.toLowerCase())) || fallbacks[fallbacks.length - 1];
-    result = { ok: true, isDone: false, question: fb.q, options: fb.opts, multiSelect: fb.multi };
+    result = {
+      ok: true,
+      isDone: false,
+      step: fb.step,
+      question: fb.q,
+      options: fb.opts,
+      multiSelect: fb.multi,
+    };
   }
 
   // ── Anti-loop: if AI returns a question too similar to a previous one → force conclusion ──
@@ -808,7 +771,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers) {
             type: 'single_choice',
           },
           currentStep: previousAnswers.length,
-          totalSteps: 8,
+          totalSteps: isFollowUp ? 2 : 4,
         },
         { greeting: null },
         illusionCtx,
@@ -1771,7 +1734,8 @@ async function getHealthReport(pool, userId, days = 7, dateRange = null) {
     `SELECT id, session_date::text AS session_date, initial_status, current_status, flow_state,
             triage_summary, triage_severity, triage_messages,
             body_locations, body_location_other, triage_completed_at,
-            resolved_at, family_alerted, emergency_triggered, last_response_at, created_at
+            resolved_at, family_alerted, emergency_triggered, last_response_at,
+            occurrence_started_at AS created_at
      FROM health_checkins
      WHERE user_id = $1 AND session_date >= $2
        ${rangeClause}
@@ -1948,7 +1912,7 @@ async function getHealthReport(pool, userId, days = 7, dateRange = null) {
     `SELECT
        COUNT(*) FILTER (WHERE no_response_count = 0) as responded,
        COUNT(*) as total,
-       AVG(EXTRACT(HOUR FROM created_at)) as avg_checkin_hour
+       AVG(EXTRACT(HOUR FROM occurrence_started_at)) as avg_checkin_hour
      FROM health_checkins
      WHERE user_id = $1 AND session_date >= $2
        ${rangeClause}`,
