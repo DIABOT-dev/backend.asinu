@@ -7,9 +7,7 @@
  * All pool.query calls for script check-in sessions live here.
  */
 
-const {
-  dispatch: dispatchNotification,
-} = require('../../core/notification/notification.orchestrator');
+const { sendAndSave } = require('../notification/basic.notification.service');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 
@@ -328,23 +326,26 @@ async function alertFamilyIfNeeded(pool, userId, checkinId, conclusion) {
   );
 
   for (const cg of caregivers) {
-    if (!cg.push_token) continue;
     const cgLang = cg.cg_lang || 'vi';
     const patientDisplay =
       cg.patient_side === 'requester'
         ? getPatientRoleForCaregiver(cg.relationship_type, patientName, cgLang, true)
         : patientName;
     try {
-      await dispatchNotification(pool, {
-        userId: cg.caregiver_id,
-        type: 'caregiver_alert',
-        title: t('checkin.health_check_needed_title', cgLang),
-        body:
-          conclusion.summary ||
+      await sendAndSave(
+        pool,
+        { id: cg.caregiver_id, push_token: cg.push_token },
+        'caregiver_alert',
+        t('checkin.health_check_needed_title', cgLang),
+        conclusion.summary ||
           t('checkin.no_response_family_body', cgLang, { name: patientDisplay }),
-        data: { patient_id: userId, checkin_id: checkinId, severity: conclusion.severity },
-        priority: 'high',
-      });
+        {
+          patient_id: userId,
+          checkin_id: checkinId,
+          severity: conclusion.severity,
+        },
+        'high'
+      );
     } catch (err) {
       console.error(`[ScriptSession] Failed to alert caregiver ${cg.caregiver_id}:`, err.message);
     }

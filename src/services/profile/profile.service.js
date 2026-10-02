@@ -529,7 +529,8 @@ async function updatePushToken(
   fcmToken = null,
   voipToken = null,
   voipEnvironment = null,
-  clearVoipToken = false
+  clearVoipToken = false,
+  clearRegularPushTokens = false
 ) {
   try {
     logger.debug('[updatePushToken] set', {
@@ -538,6 +539,7 @@ async function updatePushToken(
       hasFcmToken: Boolean(fcmToken),
       hasVoipToken: Boolean(voipToken),
       clearVoipToken,
+      clearRegularPushTokens,
     });
     // Clear each token from any other user first (1 device = 1 user).
     if (pushToken) {
@@ -563,6 +565,11 @@ async function updatePushToken(
         'UPDATE users SET voip_push_token = NULL, voip_push_environment = NULL WHERE id = $1',
         [userId]
       );
+    }
+    if (clearRegularPushTokens) {
+      await pool.query('UPDATE users SET push_token = NULL, fcm_token = NULL WHERE id = $1', [
+        userId,
+      ]);
     }
     const result = await pool.query(
       `UPDATE users SET push_token = COALESCE($1, push_token), fcm_token = COALESCE($2, fcm_token), ` +

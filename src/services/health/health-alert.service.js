@@ -3,6 +3,8 @@
  * Business logic for health alerts to care circle members
  */
 
+const { sendAndSave } = require('../notification/basic.notification.service');
+
 /**
  * Get all active care-circle connections for a user
  * @param {Object} pool - Database pool
@@ -46,7 +48,7 @@ async function getUserName(pool, userId) {
 }
 
 /**
- * Build and insert alert notifications for care circle members
+ * Save and push alert notifications for permitted care circle members.
  * @param {Object} pool - Database pool
  * @param {Array} connections - Array of { care_member_id }
  * @param {Object} notificationTemplate - { type, title, message, data }
@@ -55,38 +57,19 @@ async function getUserName(pool, userId) {
 async function insertAlertNotifications(pool, connections, notificationTemplate) {
   if (connections.length === 0) return 0;
 
-  const notifications = connections.map((conn) => ({
-    user_id: conn.care_member_id,
-    type: notificationTemplate.type,
-    title: notificationTemplate.title,
-    message: notificationTemplate.message,
-    data: notificationTemplate.data,
-    is_read: false,
-    created_at: new Date(),
-  }));
-
-  const insertQuery = `
-    INSERT INTO notifications (user_id, type, title, message, data, is_read, created_at)
-    VALUES ${notifications
-      .map(
-        (_, index) =>
-          `($${index * 7 + 1}, $${index * 7 + 2}, $${index * 7 + 3}, $${index * 7 + 4}, $${index * 7 + 5}, $${index * 7 + 6}, $${index * 7 + 7})`
+  const deliveries = await Promise.all(
+    connections.map((connection) =>
+      sendAndSave(
+        pool,
+        connection.care_member_id,
+        notificationTemplate.type,
+        notificationTemplate.title,
+        notificationTemplate.message,
+        notificationTemplate.data
       )
-      .join(', ')}
-  `;
-
-  const insertValues = notifications.flatMap((n) => [
-    n.user_id,
-    n.type,
-    n.title,
-    n.message,
-    JSON.stringify(n.data),
-    n.is_read,
-    n.created_at,
-  ]);
-
-  await pool.query(insertQuery, insertValues);
-  return notifications.length;
+    )
+  );
+  return deliveries.filter(Boolean).length;
 }
 
 module.exports = {

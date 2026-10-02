@@ -62,12 +62,12 @@ async function alertCareCircle(pool, req, res) {
       },
     };
 
-    await insertAlertNotifications(pool, connections, notificationTemplate);
+    const notified = await insertAlertNotifications(pool, connections, notificationTemplate);
 
     return res.status(200).json({
       ok: true,
-      message: t('health.alert_sent_count', getLang(req), { count: connections.length }),
-      notified: connections.length,
+      message: t('health.alert_sent_count', getLang(req), { count: notified }),
+      notified,
       alertType: alertData.alertType,
       severity: alertData.severity,
     });

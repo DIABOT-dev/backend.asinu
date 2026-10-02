@@ -162,9 +162,22 @@ async function updatePushToken(pool, req, res) {
     return res.status(401).json({ ok: false, error: t('error.unauthenticated', getLang(req)) });
   }
 
-  const { push_token, fcm_token, voip_token, voip_environment, clear_voip_token } = req.body || {};
+  const {
+    push_token,
+    fcm_token,
+    voip_token,
+    voip_environment,
+    clear_voip_token,
+    clear_push_tokens,
+  } = req.body || {};
 
-  if (!push_token && !fcm_token && !voip_token && clear_voip_token !== true) {
+  if (
+    !push_token &&
+    !fcm_token &&
+    !voip_token &&
+    clear_voip_token !== true &&
+    clear_push_tokens !== true
+  ) {
     return res.status(400).json({ ok: false, error: t('error.push_token_required', getLang(req)) });
   }
   if (voip_token && !['sandbox', 'production'].includes(voip_environment)) {
@@ -180,7 +193,8 @@ async function updatePushToken(pool, req, res) {
     fcm_token,
     voip_token,
     voip_environment,
-    clear_voip_token === true
+    clear_voip_token === true,
+    clear_push_tokens === true
   );
 
   if (!result.ok) {
@@ -213,7 +227,8 @@ async function featureFlagsHandler(pool, req, res) {
   let entitlement;
   try {
     entitlement = await require('../services/payment/entitlement.service').getEntitlement(
-      pool, req.user?.id
+      pool,
+      req.user?.id
     );
   } catch {
     entitlement = { planCode: 'free', tier: 'free', connectionLimit: 1 };

@@ -41,9 +41,29 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
   const SOUND_MAP = {
     care_circle_invitation: { channelId: 'care-circle', sound: 'asinu_care.wav', priority: 'high' },
     care_circle_accepted: { channelId: 'care-circle', sound: 'asinu_care.wav', priority: 'high' },
+    care_circle_rejected: { channelId: 'care-circle', sound: 'asinu_care.wav', priority: 'high' },
+    care_circle_removed: { channelId: 'care-circle', sound: 'asinu_care.wav', priority: 'high' },
+    care_circle_permission_changed: {
+      channelId: 'care-circle',
+      sound: 'asinu_care.wav',
+      priority: 'high',
+    },
     doctor_message: { channelId: 'doctor-consultation', sound: 'asinu_care.wav', priority: 'high' },
     alert: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
+    health_alert: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
     caregiver_alert: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
+    payment_failed: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
+    subscription_activated: {
+      channelId: 'reminder',
+      sound: 'asinu_reminder.wav',
+      priority: 'high',
+    },
+    subscription_expiring_soon: {
+      channelId: 'reminder',
+      sound: 'asinu_reminder.wav',
+      priority: 'high',
+    },
+    subscription_expired: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
     streak_7: { channelId: 'milestone', sound: 'asinu_milestone.wav', priority: 'normal' },
     streak_14: { channelId: 'milestone', sound: 'asinu_milestone.wav', priority: 'normal' },
     streak_30: { channelId: 'milestone', sound: 'asinu_milestone.wav', priority: 'normal' },
@@ -106,7 +126,25 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
       return { ok: false, error: result.message || t('error.push_service_error') };
     }
 
-    return { ok: true, data: result };
+    const tickets = Array.isArray(result?.data) ? result.data : [];
+    const errors = tickets
+      .map((ticket, index) => ({ ticket, token: validTokens[index] }))
+      .filter(({ ticket }) => ticket?.status === 'error');
+    const invalidTokens = errors
+      .filter(({ ticket }) => ticket?.details?.error === 'DeviceNotRegistered')
+      .map(({ token }) => token)
+      .filter(Boolean);
+
+    if (tickets.length > 0 && errors.length === tickets.length) {
+      return {
+        ok: false,
+        error: errors[0]?.ticket?.message || t('error.push_service_error'),
+        data: result,
+        invalidTokens,
+      };
+    }
+
+    return { ok: true, data: result, invalidTokens };
   } catch (error) {
     return { ok: false, error: error.message };
   }

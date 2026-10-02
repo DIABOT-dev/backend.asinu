@@ -132,6 +132,8 @@ function nowVN() {
  * Core dispatch: send push + save in-app notification.
  * Accepts either a user object (with .id and .push_token) or a plain userId (number).
  * Optional `overridePriority` lets callers (e.g. NotificationOrchestrator) set priority explicitly.
+ * Set `options.push=false` only when a notification is intentionally limited
+ * to the in-app inbox.
  */
 // Reminder types that should be spaced apart (5 min gap between any two)
 const REMINDER_TYPES = new Set([
@@ -152,18 +154,6 @@ const REMINDER_TYPES = new Set([
 ]);
 const CROSS_TYPE_GAP_MINUTES = 5;
 
-// Notification chỉ in-app (không push) — vẫn insert DB để hiện trong
-// notification bell, nhưng KHÔNG gửi push tránh spam điện thoại user.
-const IN_APP_ONLY_TYPES = new Set([
-  'wallet_topup_success', // app đã có UI confirm khi nạp xong
-  'wallet_low_balance', // nudge nhẹ — chỉ banner trong wallet screen
-  'care_circle_permission_changed', // ít khi xảy ra, in-app badge đủ
-  'profile_incomplete', // onboarding nudge — show banner trong home
-  'weekly_wellness_summary', // weekly content — chỉ tạo report card trong /report
-  'reengagement', // đã có nhiều reminder routines
-  'engagement', // tương tự
-]);
-
 async function sendAndSave(
   pool,
   userOrId,
@@ -176,13 +166,14 @@ async function sendAndSave(
 ) {
   const isObject = typeof userOrId === 'object' && userOrId !== null;
   const userId = isObject ? userOrId.id : userOrId;
-  const pushToken = isObject ? userOrId.push_token : null;
+  let pushToken = isObject ? userOrId.push_token : null;
 
   const priority = overridePriority || TYPE_PRIORITY[type] || 'low';
 
   // Non-urgent reminders require an explicit opt-in and are subject to a
   // daily cap. Emergency/health/caregiver alerts are intentionally exempt.
-  if (!ALWAYS_DELIVER_TYPES.has(type) && !(await canSendNonUrgent(pool, userId, type))) return false;
+  if (!ALWAYS_DELIVER_TYPES.has(type) && !(await canSendNonUrgent(pool, userId, type)))
+    return false;
 
   // Cross-type spacing: skip if user received any reminder push in last 5 minutes
   if (REMINDER_TYPES.has(type)) {
@@ -229,21 +220,49 @@ async function sendAndSave(
     return false;
   }
 
-  // In-app only types: skip push, chỉ giữ DB record (notification bell)
-  if (IN_APP_ONLY_TYPES.has(type)) {
-    return true;
-  }
-
   // Push notifications can appear on a lock screen. Callers may keep a rich
   // preview in the in-app notification while using a privacy-safe body for
   // the external push (for example, a Doctor message may contain health data).
   const pushBody = typeof options.pushBody === 'string' ? options.pushBody : body;
 
-  if (pushToken) {
+  // Callers often only have a user id (or a user row without its token). Resolve
+  // the current token here so every event gets the same reliable delivery path.
+  // Use options.push=false only for a notification that is intentionally in-app.
+  if (options.push !== false && !pushToken) {
+    try {
+      const { rows } = await pool.query(
+        'SELECT push_token FROM users WHERE id = $1 AND deleted_at IS NULL',
+        [userId]
+      );
+      pushToken = rows[0]?.push_token || null;
+    } catch (err) {
+      logger.warn('notification.push_token_lookup_failed', { userId, type, err });
+    }
+  }
+
+  if (options.push !== false && pushToken) {
     try {
       const result = await sendPushNotification([pushToken], title, pushBody, { type, ...data });
+      if (result?.invalidTokens?.includes(pushToken)) {
+        await pool
+          .query('UPDATE users SET push_token = NULL WHERE id = $1 AND push_token = $2', [
+            userId,
+            pushToken,
+          ])
+          .catch((err) =>
+            logger.warn('notification.invalid_token_cleanup_failed', { userId, type, err })
+          );
+      }
+      if (!result?.ok) {
+        logger.warn('notification.push_failed', {
+          userId,
+          type,
+          error: result?.error || 'unknown push error',
+        });
+      }
       return result?.ok || false;
-    } catch {
+    } catch (err) {
+      logger.warn('notification.push_failed', { userId, type, err });
       return false;
     }
   }

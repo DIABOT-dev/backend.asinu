@@ -921,21 +921,22 @@ async function reactToTriageResult(pool, userId, checkinId, result) {
     if (result.needsDoctor) {
       // Get user lang
       const { rows: langRows } = await pool.query(
-        `SELECT COALESCE(language_preference,'vi') AS lang FROM users WHERE id=$1`,
+        `SELECT push_token, COALESCE(language_preference,'vi') AS lang FROM users WHERE id=$1`,
         [userId]
       );
       const lang = langRows[0]?.lang || 'vi';
       const title = t('checkin.specialist_visit_title', lang);
       const body = t('checkin.specialist_visit_body', lang);
 
-      await dispatchNotification(pool, {
+      await sendCheckinNotification(
+        pool,
         userId,
-        type: 'health_alert',
+        langRows[0]?.push_token || null,
+        'health_alert',
         title,
         body,
-        data: { checkinId: String(checkinId), severity, needsDoctor: true },
-        priority: 'high',
-      });
+        { checkinId: String(checkinId), severity, needsDoctor: true }
+      );
     }
 
     // Update current_status based on severity progression

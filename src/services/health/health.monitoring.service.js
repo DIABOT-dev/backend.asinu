@@ -10,6 +10,7 @@
 
 const { t } = require('../../i18n');
 const { cacheGet, cacheSet } = require('../../lib/redis');
+const { sendAndSave } = require('../notification/basic.notification.service');
 
 /**
  * Kiểm tra các giá trị đường huyết bất thường
@@ -212,7 +213,8 @@ async function getCareCircleConnections(pool, userId) {
         END as connection_user_id
        FROM user_connections 
        WHERE status = 'accepted' 
-         AND (requester_id = $1 OR addressee_id = $1)`,
+         AND (requester_id = $1 OR addressee_id = $1)
+         AND COALESCE((permissions->>'can_receive_alerts')::boolean, false) = true`,
       [userId]
     );
 
@@ -235,43 +237,33 @@ async function createHealthNotifications(pool, userIds, alert, patientName) {
   try {
     // Lấy lang preference của từng recipient để render title đúng ngôn ngữ
     const { rows: langRows } = await pool.query(
-      `SELECT id, COALESCE(language_preference, 'vi') AS lang FROM users WHERE id = ANY($1::int[])`,
+      `SELECT id, push_token, COALESCE(language_preference, 'vi') AS lang
+         FROM users
+        WHERE id = ANY($1::int[]) AND deleted_at IS NULL`,
       [userIds]
     );
-    const langMap = Object.fromEntries(langRows.map((r) => [r.id, r.lang]));
+    const usersById = new Map(langRows.map((row) => [Number(row.id), row]));
 
     for (const userId of userIds) {
-      const userLang = langMap[userId] || 'vi';
-      await pool.query(
-        `INSERT INTO notifications (
-          user_id,
-          type,
-          title,
-          message,
-          data,
-          is_read,
-          created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
-        [
-          userId,
-          'health_alert',
-          t('health.alert_title', userLang, { name: patientName }),
-          // Render message body theo ngôn ngữ của recipient (caregiver). Trước
-          // đây alert.message đã được pre-render hardcode 'vi' ở check*Alerts
-          // → giờ check trả messageKey + params, render lazy ở đây.
-          alert.messageKey
-            ? t(alert.messageKey, userLang, alert.messageParams || {})
-            : alert.message || '',
-          JSON.stringify({
-            alertType: alert.type,
-            severity: alert.severity,
-            patientUserId: alert.userId,
-            value: alert.value || null,
-            systolic: alert.systolic || null,
-            diastolic: alert.diastolic || null,
-          }),
-          false,
-        ]
+      const recipient = usersById.get(Number(userId));
+      if (!recipient) continue;
+      const userLang = recipient.lang || 'vi';
+      await sendAndSave(
+        pool,
+        recipient,
+        'health_alert',
+        t('health.alert_title', userLang, { name: patientName }),
+        alert.messageKey
+          ? t(alert.messageKey, userLang, alert.messageParams || {})
+          : alert.message || '',
+        {
+          alertType: alert.type,
+          severity: alert.severity,
+          patientUserId: alert.userId,
+          value: alert.value || null,
+          systolic: alert.systolic || null,
+          diastolic: alert.diastolic || null,
+        }
       );
     }
   } catch (error) {}

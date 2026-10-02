@@ -166,7 +166,8 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
     const v = parseFloat(data.value);
     if (v > 250 || v < 70) {
       severity = 'critical';
-      titleKey = v > 250 ? 'push.health_alert_glucose_high_title' : 'push.health_alert_glucose_low_title';
+      titleKey =
+        v > 250 ? 'push.health_alert_glucose_high_title' : 'push.health_alert_glucose_low_title';
       bodyKey = 'push.health_alert_glucose_body';
       messageParams = { value: v };
     }
@@ -197,17 +198,21 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
   const {
     rows: [user],
   } = await pool.query(
-    `SELECT full_name, display_name, COALESCE(language_preference, 'vi') AS lang
+    `SELECT full_name, display_name, push_token,
+            COALESCE(language_preference, 'vi') AS lang
        FROM users WHERE id = $1`,
     [userId]
   );
   const userLang = user?.lang || 'vi';
-  const name = user?.full_name || user?.display_name || t('notification.reengagement.family_fallback', userLang);
+  const name =
+    user?.full_name ||
+    user?.display_name ||
+    t('notification.reengagement.family_fallback', userLang);
 
   // Notify the user themselves
   await sendAndSave(
     pool,
-    { id: userId, push_token: null },
+    { id: userId, push_token: user?.push_token || null },
     'health_alert',
     t(titleKey, userLang),
     t(bodyKey, userLang, messageParams),
@@ -230,15 +235,25 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
 
   for (const cg of caregivers) {
     const alertTitle = t(titleKey, cg.lang);
-    const caregiverName = user?.full_name || user?.display_name || t('notification.reengagement.family_fallback', cg.lang);
-    await sendAndSave(pool, cg, 'health_alert', t('push.health_alert_family_title', cg.lang, {
-      name: caregiverName || name,
-      alert: alertTitle,
-    }), t(bodyKey, cg.lang, messageParams), {
-      alertType: logType,
-      severity,
-      patientId: userId,
-    });
+    const caregiverName =
+      user?.full_name ||
+      user?.display_name ||
+      t('notification.reengagement.family_fallback', cg.lang);
+    await sendAndSave(
+      pool,
+      cg,
+      'health_alert',
+      t('push.health_alert_family_title', cg.lang, {
+        name: caregiverName || name,
+        alert: alertTitle,
+      }),
+      t(bodyKey, cg.lang, messageParams),
+      {
+        alertType: logType,
+        severity,
+        patientId: userId,
+      }
+    );
   }
 }
 
