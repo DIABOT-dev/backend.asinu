@@ -62,7 +62,7 @@ async function postChat(pool, req, res) {
 async function getChatHistoryHandler(pool, req, res) {
   try {
     const userId = req.user.id;
-    const messages = await getChatHistory(pool, userId, 200);
+    const messages = await getChatHistory(pool, userId);
 
     return res.status(200).json({
       ok: true,

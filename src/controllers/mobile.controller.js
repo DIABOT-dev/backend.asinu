@@ -69,6 +69,7 @@ async function getRecentLogs(pool, req, res) {
   const result = await mobileService.getRecentLogs(pool, req.user.id, {
     type: req.query.type,
     limit: req.query.limit,
+    all: req.query.all,
   });
 
   if (!result.ok) {

@@ -55,15 +55,23 @@ docker compose exec asinu_postgres psql -U asinu_user -d asinu_db \
 
 ## 4. Cập nhật `.env` trên VPS
 
-Mở `/root/backend.asinu/.env`, thêm 5 biến IAP (nếu chưa có):
+Mở `/root/backend.asinu/.env`, cấu hình IAP production:
 
 ```env
 APPLE_BUNDLE_ID=com.asinu.lite
 APPLE_APP_APPLE_ID=<10 chữ số từ App Store Connect>
-APPLE_IAP_ENV=sandbox
+APPLE_IAP_ENV=production
+IAP_ALLOW_SANDBOX=false
 
 GOOGLE_PLAY_PACKAGE_NAME=com.asinu.lite
 GOOGLE_PLAY_SERVICE_ACCOUNT_JSON=/etc/secrets/asinu-play-sa.json
+
+IAP_PRODUCT_ANTAM2_MONTHLY=asinu.antam2.monthly
+IAP_PRODUCT_ANTAM2_YEARLY=asinu.antam2.yearly
+IAP_PRODUCT_ANTAM4_MONTHLY=asinu.antam4.monthly
+IAP_PRODUCT_ANTAM4_YEARLY=asinu.antam4.yearly
+IAP_PRODUCT_ANTAM8_MONTHLY=asinu.antam8.monthly
+IAP_PRODUCT_ANTAM8_YEARLY=asinu.antam8.yearly
 ```
 
 **Upload Service Account JSON vào container:**
@@ -96,7 +104,7 @@ Look for:
 
 ```bash
 curl -s https://asinu.top/api/iap/products | jq
-# Phải trả: { ok: true, apple_bundle_id, google_package_name, products: [...] }
+# Phải trả đúng 6 sản phẩm An Tâm 2/4/8, mỗi gói có tháng và năm.
 ```
 
 ## 7. Paste webhook URL vào 2 console
@@ -118,16 +126,7 @@ Phải pass 22/22.
 
 ## 9. Go live
 
-Khi app đã được Apple/Google review approve:
-
-```bash
-# /root/backend.asinu/.env
-APPLE_IAP_ENV=production
-```
-
-```bash
-docker compose restart asinu-api
-```
+Xác nhận lại `APPLE_IAP_ENV=production`, `IAP_ALLOW_SANDBOX=false`, sau đó chạy smoke test catalog trước khi mở bản production.
 
 ## 10. Rollback
 

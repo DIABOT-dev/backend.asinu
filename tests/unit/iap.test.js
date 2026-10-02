@@ -75,6 +75,35 @@ beforeEach(() => {
   });
 });
 
+describe('assertIapRuntimeConfig', () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  const originalAllowSandbox = process.env.IAP_ALLOW_SANDBOX;
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalNodeEnv;
+    if (originalAllowSandbox === undefined) delete process.env.IAP_ALLOW_SANDBOX;
+    else process.env.IAP_ALLOW_SANDBOX = originalAllowSandbox;
+  });
+
+  test('rejects sandbox verification on the production backend by default', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.APPLE_APP_APPLE_ID = '6758967197';
+    process.env.APPLE_IAP_ENV = 'sandbox';
+    delete process.env.IAP_ALLOW_SANDBOX;
+
+    expect(() => iapService.assertIapRuntimeConfig()).toThrow('APPLE_IAP_ENV=production');
+  });
+
+  test('allows sandbox only when an isolated staging backend opts in', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.APPLE_APP_APPLE_ID = '6758967197';
+    process.env.APPLE_IAP_ENV = 'sandbox';
+    process.env.IAP_ALLOW_SANDBOX = 'true';
+
+    expect(() => iapService.assertIapRuntimeConfig()).not.toThrow();
+  });
+});
+
 // ─── handleAppleNotification ───────────────────────────────────────
 
 describe('handleAppleNotification', () => {

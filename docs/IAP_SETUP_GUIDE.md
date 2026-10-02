@@ -1,174 +1,91 @@
-# Hướng dẫn cấu hình IAP cho Asinu (App Store + Google Play)
+# Test IAP Asinu V2
 
-Phần code đã sẵn sàng. Tài liệu này hướng dẫn bạn **bật IAP thật** trên cả 2 store.
+Asinu V2 chỉ bán ba gói An Tâm qua App Store và Google Play. App dùng `expo-iap`; backend luôn xác minh giao dịch trước khi cấp quyền.
 
----
+## Danh mục bắt buộc
 
-## 0. Bật chế độ IAP trong app
+| Gói | Tháng | Năm | Quà gói năm |
+|---|---|---|---|
+| An Tâm 2 | `asinu.antam2.monthly`, 149.000đ | `asinu.antam2.yearly`, 1.199.000đ | 2 lượt dr.asinu |
+| An Tâm 4 | `asinu.antam4.monthly`, 199.000đ | `asinu.antam4.yearly`, 1.499.000đ | 4 lượt dr.asinu |
+| An Tâm 8 | `asinu.antam8.monthly`, 249.000đ | `asinu.antam8.yearly`, 1.799.000đ | 8 lượt dr.asinu |
 
-Trong `.env` (hoặc `.env.local`) của Expo client:
+Không tạo hoặc khôi phục `An Tâm 1` và các SKU `asinu.premium.*`.
 
-```
-EXPO_PUBLIC_PAYMENT_METHOD=iap
-EXPO_PUBLIC_IAP_PRODUCT_MONTHLY=asinu.premium.monthly
-EXPO_PUBLIC_IAP_PRODUCT_YEARLY=asinu.premium.yearly
-```
+## iOS Sandbox trên máy thật
 
-Sau đó rebuild client (KHÔNG expo-go — phải dev-client hoặc EAS build):
+1. Trong App Store Connect, tạo một subscription group và sáu auto-renewable subscription đúng Product ID ở trên.
+2. Điền localization, giá, tax category và review information. Paid Applications Agreement phải ở trạng thái Active.
+3. Tạo Sandbox Apple Account trong Users and Access.
+4. Backend test phải dùng database riêng hoặc local:
 
-```bash
-cd asinu
-npx expo prebuild --clean
-npx expo run:ios       # iOS
-npx expo run:android   # Android
-```
-
----
-
-## 1. App Store Connect (iOS)
-
-### 1.1 Tạo Subscription Group + Products
-
-1. Vào https://appstoreconnect.apple.com → chọn app `Asinu`.
-2. Sidebar → **Monetization** → **Subscriptions** → **+ Create Subscription Group** → đặt tên `Asinu Premium`.
-3. Trong group đó, **+ Create Subscription**:
-   - **Product ID:** `asinu.premium.monthly` *(phải khớp env `IAP_PRODUCT_MONTHLY`)*
-   - **Reference Name:** `Premium Monthly`
-   - **Subscription Duration:** 1 Month
-   - **Price:** 199.000₫ (Vietnam) — Apple tự convert sang các quốc gia khác.
-   - Thêm **Localizations** (vi, en).
-   - **Review Information:** ảnh chụp UI subscription + 1 câu mô tả.
-4. Lặp lại cho `asinu.premium.yearly`:
-   - Duration: 1 Year
-   - Price: 1.999.000₫ (~999.000 × 2 với 17% discount; tùy bạn)
-5. Status mỗi product phải là **Ready to Submit** trước khi submit app review.
-
-### 1.2 Lấy In-App Purchase Key (Apple Server Notifications)
-
-1. **Users and Access** → **Integrations** → **In-App Purchase** → **Generate API Key**.
-2. Tải file `.p8` về. Lưu lại **Key ID** + **Issuer ID** (chỉ hiện 1 lần!).
-3. Đây là API key để backend gọi App Store Server API (nếu bạn muốn poll status sau này). KHÔNG bắt buộc cho luồng verify JWS đơn giản — code hiện tại chỉ cần Root CAs.
-
-### 1.3 Tải Apple Root CA về backend
-
-```bash
-cd backend.asinu/certs/apple
-curl -O https://www.apple.com/certificateauthority/AppleRootCA-G3.cer
-curl -O https://www.apple.com/certificateauthority/AppleRootCA-G2.cer
-curl -O https://www.apple.com/appleca/AppleIncRootCertificate.cer
-```
-
-### 1.4 Tạo Sandbox Tester
-
-1. **Users and Access** → **Sandbox** → **Testers** → **+**.
-2. Đặt email *chưa từng* dùng làm Apple ID (vd `tester+asinu@gmail.com`).
-3. Trên thiết bị test: **Settings → App Store → Sandbox Account** → đăng nhập bằng tester.
-4. Build app dev-client → mua → giao dịch sẽ chạy ở môi trường sandbox (miễn phí, gia hạn 5 phút).
-
----
-
-## 2. Google Play Console — đăng ký + cấu hình
-
-### 2.1 Đăng ký tài khoản
-
-1. Vào https://play.google.com/console → **Get started**.
-2. Chọn **Organization** (nếu bạn có pháp nhân) hoặc **Personal** (cá nhân).
-3. Phí: **$25 (1 lần, vĩnh viễn)** — thanh toán bằng thẻ visa/master.
-4. Xác minh danh tính (CMND/CCCD nếu cá nhân, GP kinh doanh nếu org).
-5. Sau khi approve (vài giờ → 2 ngày), bạn có Play Console.
-
-### 2.2 Tạo app + Subscription products
-
-1. **Create app** → tên `Asinu`, ngôn ngữ mặc định `Tiếng Việt`, package name = `com.asinu.lite` (phải khớp `app.json`).
-2. Upload **internal testing** AAB (build ra bằng `cd asinu/android && ./gradlew bundleRelease`) → mục đích để Play biết package tồn tại.
-3. **Monetize** → **Subscriptions** → **Create subscription**:
-   - **Product ID:** `asinu.premium.monthly`
-   - **Name:** Premium Monthly
-   - **Base plan:** Auto-renewing, billing period 1 month, price 199.000₫.
-   - Activate base plan.
-4. Lặp lại cho `asinu.premium.yearly` (billing period 1 year).
-5. **Quan trọng:** subscription phải có ít nhất 1 *base plan* đang ACTIVE — nếu không, Play Billing trả `offerToken` null và code IAP sẽ báo "Missing offerToken".
-
-### 2.3 Tạo Service Account (để backend verify)
-
-1. **Setup → API access** → **Create new service account** → mở Google Cloud Console.
-2. Trong Cloud Console: **Service Accounts → Create**.
-   - Tên: `asinu-iap-verifier`.
-   - Skip role (sẽ grant trong Play Console).
-   - Tab **Keys → Add Key → JSON** → tải file JSON về.
-3. Quay lại Play Console → **API access** → **Grant access** cho service account này:
-   - Permissions: **View financial data**, **Manage orders and subscriptions**.
-4. Đặt file JSON ở backend, ví dụ `/etc/secrets/asinu-play-sa.json`.
-
-### 2.4 Tạo License Tester (mua test không tốn tiền)
-
-1. **Setup → License testing** → thêm email Gmail của bạn.
-2. Trên Android dev: đăng nhập Play Store bằng email đó → mua subscription qua app sẽ ở chế độ test (refund tự động).
-
----
-
-## 3. Env vars backend
-
-Thêm vào `backend.asinu/.env`:
-
-```bash
-# Apple
+```env
+NODE_ENV=development
+IAP_ENABLED=true
 APPLE_BUNDLE_ID=com.asinu.lite
-APPLE_APP_APPLE_ID=                # ID số của app trên App Store (có sau khi tạo app, optional)
-APPLE_IAP_ENV=sandbox              # 'sandbox' khi test, 'production' khi live
-APPLE_ROOT_CA_DIR=/abs/path/backend.asinu/certs/apple
-
-# Google
-GOOGLE_PLAY_PACKAGE_NAME=com.asinu.lite
-GOOGLE_PLAY_SERVICE_ACCOUNT_JSON=/etc/secrets/asinu-play-sa.json
-# Hoặc inline:
-# GOOGLE_PLAY_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
-
-# Optional — đồng bộ ID với client
-IAP_PRODUCT_MONTHLY=asinu.premium.monthly
-IAP_PRODUCT_YEARLY=asinu.premium.yearly
+APPLE_APP_APPLE_ID=6758967197
+APPLE_IAP_ENV=sandbox
+APPLE_ROOT_CA_DIR=./certs/apple
 ```
 
-Restart backend sau khi đổi env.
+5. Build development client, cài lên iPhone thật và bật Developer Mode:
 
----
+```bash
+cd /Users/ducytcg123456/Desktop/APP/app/asinu
+npx eas-cli@24.8.0 build --platform ios --profile development
+npx expo start --dev-client
+```
 
-## 4. Test flow
+6. Đăng nhập Sandbox Apple Account trong Settings, Developer, rồi mua từ màn Gói chăm sóc.
 
-### 4.1 Sandbox iOS
-1. Build `npx expo run:ios` → mở app trên iPhone đã login Sandbox Tester.
-2. Vào màn `/subscription` → chọn gói → bấm **Nâng cấp ngay**.
-3. Apple sheet hiện → confirm → app gọi `/api/iap/verify` → backend verify JWS → trả `{ ok: true, expiresAt, planMonths }`.
-4. UI hiển thị Alert "Kích hoạt thành công", premium status refresh.
+TestFlight cũng tạo giao dịch sandbox. Nếu dùng backend chạy `NODE_ENV=production`, chỉ backend staging riêng được phép đặt đồng thời:
 
-### 4.2 Sandbox Android
-1. App phải được upload Internal Testing track (Play yêu cầu app đã ở 1 track mới mở Billing).
-2. Tài khoản test phải là License Tester.
-3. Build dev-client cho Android → mua → backend verify với `subscriptionsv2.get`.
+```env
+APPLE_IAP_ENV=sandbox
+IAP_ALLOW_SANDBOX=true
+```
 
-### 4.3 Restore
-- Đăng xuất → đăng nhập lại → vào `/subscription` → bấm **Khôi phục mua hàng** → backend nhận lại transaction id cũ, trả `alreadyProcessed: true` → premium được giữ.
+Không bật `IAP_ALLOW_SANDBOX` trên `asinu.top`.
 
----
+## Android Internal Testing
 
-## 5. Webhook gia hạn (TODO sau khi live)
+1. Trong Play Console, tạo và activate sáu subscription. Mỗi SKU có đúng một auto-renewing base plan tương ứng tháng hoặc năm.
+2. Upload AAB package `com.asinu.lite` vào Internal testing.
+3. Thêm cùng tài khoản Google vào Internal testers và Settings, License testing.
+4. Cài app từ opt-in link của Play Store, không sideload bản release cần test.
+5. Backend test dùng service account có quyền đọc đơn hàng và subscription.
 
-Khi user gia hạn / hủy / refund, store sẽ thông báo cho backend:
+Giao dịch test Google cũng có `testPurchase`. Backend production từ chối giao dịch này trừ khi staging riêng bật `IAP_ALLOW_SANDBOX=true`.
 
-- **Apple:** App Store Server Notifications v2 → URL nhận: `POST /api/iap/apple-notifications` (CHƯA implement — tôi có thể thêm).
-- **Google:** Real-Time Developer Notifications qua Pub/Sub → URL nhận: `POST /api/iap/google-notifications` (CHƯA implement).
+## Ca kiểm thử bắt buộc
 
-Không bắt buộc cho lần submit đầu, nhưng PHẢI có trước khi scale lớn (nếu không, expiry của bạn lệch khỏi Apple/Google).
+- Free lên An Tâm 2 tháng.
+- An Tâm 2 lên 4 và 8: tính chênh lệch ngay.
+- Hạ gói hoặc đổi năm sang tháng: có hiệu lực ở kỳ tiếp theo trên Android.
+- Gói tháng cấp 0 lượt dr.asinu; gói năm cấp đúng 2, 4 hoặc 8.
+- Gỡ/cài lại app rồi Khôi phục giao dịch; không cấp quà hai lần.
+- Gia hạn, hủy, hết hạn, refund và revoke qua Store.
+- Mã ưu đãi mở sheet của App Store hoặc trang redeem của Google Play.
 
----
+## Dấu hiệu thành công
 
-## 6. Checklist trước khi submit
+Client log:
 
-- [ ] Product IDs trên Apple/Google trùng `asinu.premium.monthly` + `asinu.premium.yearly`
-- [ ] App Privacy → khai báo "User pays for subscription"
-- [ ] App Review note: kèm Sandbox Tester credentials
-- [ ] `EXPO_PUBLIC_PAYMENT_METHOD=iap` ở build production
-- [ ] `APPLE_IAP_ENV=production` ở backend prod
-- [ ] Test full flow: mua → verify → premium active → restore → cancel (in iOS Settings)
-- [ ] Test sandbox flow trên thiết bị thật (simulator không có StoreKit thật)
-- [ ] Apple Root CA G3 đã có trong `backend.asinu/certs/apple/`
+```text
+[iap] init success
+[iap] fetch products success
+[iap] purchase updated
+[iap] verify success
+```
+
+Backend log phải có `iap.activated`.
+
+API cần kiểm tra:
+
+- `GET /api/iap/products`: đúng sáu SKU.
+- `POST /api/iap/verify`: trả `ok: true`.
+- `GET /api/subscriptions/status`: đúng gói và thời hạn.
+- `GET /api/subscription-household`: giới hạn đúng 2, 4 hoặc 8.
+- `GET /api/subscriptions/history`: có giao dịch vừa tạo.
+
+Không ghi log hoặc chia sẻ `raw_payload`, purchase token hay JWS.

@@ -16,6 +16,7 @@
  *       APPLE_BUNDLE_ID              e.g. com.asinu.lite
  *       APPLE_APP_APPLE_ID           numeric App Store ID (for online check)
  *       APPLE_IAP_ENV                'sandbox' | 'production'
+ *       IAP_ALLOW_SANDBOX            'true' only on an isolated staging backend
  *       GOOGLE_PLAY_PACKAGE_NAME     e.g. com.asinu.lite
  *       GOOGLE_PLAY_SERVICE_ACCOUNT_JSON  JSON string (or path) of svc-acct creds
  */
@@ -27,6 +28,10 @@ const { captureException } = require('../../lib/sentry');
 const subscriptionService = require('./subscription.service');
 const { productForId } = require('./subscription-catalog');
 
+function sandboxReceiptsAllowed() {
+  return process.env.NODE_ENV !== 'production' || process.env.IAP_ALLOW_SANDBOX === 'true';
+}
+
 function assertIapRuntimeConfig() {
   if (process.env.IAP_ENABLED === 'false' || process.env.NODE_ENV !== 'production') return;
 
@@ -37,8 +42,12 @@ function assertIapRuntimeConfig() {
     'GOOGLE_PLAY_SERVICE_ACCOUNT_JSON',
   ];
   const missing = required.filter((name) => !String(process.env[name] || '').trim());
-  if ((process.env.APPLE_IAP_ENV || '').toLowerCase() !== 'production') {
-    missing.push('APPLE_IAP_ENV=production');
+  const appleEnvironment = (process.env.APPLE_IAP_ENV || '').toLowerCase();
+  const validAppleEnvironment =
+    appleEnvironment === 'production' ||
+    (appleEnvironment === 'sandbox' && sandboxReceiptsAllowed());
+  if (!validAppleEnvironment) {
+    missing.push('APPLE_IAP_ENV=production (or sandbox on opted-in staging only)');
   }
   if (missing.length) {
     throw new Error(`IAP production configuration is incomplete: ${missing.join(', ')}`);
@@ -182,7 +191,11 @@ async function verifyAppleReceipt({ signedTransaction } = {}) {
     }
     const configuredEnvironment = (process.env.APPLE_IAP_ENV || '').toLowerCase();
     const receiptEnvironment = String(decoded.environment || '').toLowerCase();
-    if (configuredEnvironment === 'production' && receiptEnvironment !== 'production') {
+    if (
+      configuredEnvironment === 'production' &&
+      receiptEnvironment !== 'production' &&
+      !sandboxReceiptsAllowed()
+    ) {
       return {
         ok: false,
         code: 'APPLE_SANDBOX_NOT_ALLOWED',
@@ -426,7 +439,7 @@ async function verifyAndActivate(pool, userId, payload = {}) {
   }
 
   if (
-    process.env.NODE_ENV === 'production' &&
+    !sandboxReceiptsAllowed() &&
     String(verification.environment || '').toLowerCase() !== 'production'
   ) {
     return {
@@ -503,6 +516,26 @@ async function verifyAndActivate(pool, userId, payload = {}) {
     basePlanId,
     offerId,
   });
+
+  if (result.ok) {
+    logger.info('iap.activated', {
+      user_id: userId,
+      platform,
+      productId,
+      planCode: product.plan_code,
+      billingPeriod: product.billing_period,
+      transactionId,
+    });
+  } else {
+    logger.warn('iap.activation_failed', {
+      user_id: userId,
+      platform,
+      productId,
+      transactionId,
+      code: result.code,
+      error: result.error,
+    });
+  }
 
   return result;
 }

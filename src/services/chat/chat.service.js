@@ -753,16 +753,17 @@ async function getRecentHistory(pool, userId, limit = HISTORY_LIMIT) {
  * @param {number} retentionDays - How many days back
  * @returns {Promise<Array>}
  */
-async function getChatHistory(pool, userId, limit = 100) {
+async function getChatHistory(pool, userId, limit = null) {
+  const boundedLimit = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Number(limit) : null;
   const result = await pool.query(
     `SELECT * FROM (
        SELECT id, message, sender, created_at FROM chat_histories
         WHERE user_id = $1
         ORDER BY created_at DESC, id DESC
-        LIMIT $2
+        ${boundedLimit ? 'LIMIT $2' : ''}
      ) recent
      ORDER BY created_at ASC, id ASC`,
-    [userId, limit]
+    boundedLimit ? [userId, boundedLimit] : [userId]
   );
   return result.rows;
 }

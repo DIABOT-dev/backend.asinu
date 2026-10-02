@@ -352,11 +352,12 @@ async function createLog(pool, userId, payload) {
  * Get recent logs for a user
  * @param {Object} pool - Database pool
  * @param {number} userId - User ID
- * @param {Object} options - { type, limit }
+ * @param {Object} options - { type, limit, all }
  * @returns {Promise<Object>} - { ok, logs, error }
  */
 async function getRecentLogs(pool, userId, options = {}) {
   const { type, limit: limitRaw = 50 } = options;
+  const fetchAll = options.all === true || options.all === '1' || options.all === 'true';
   const limit = Math.min(Math.max(Number(limitRaw) || 50, 1), 200);
 
   if (type && !VALID_LOG_TYPES.has(type)) {
@@ -372,8 +373,8 @@ async function getRecentLogs(pool, userId, options = {}) {
          FROM logs_common
          WHERE user_id = $1
          ORDER BY occurred_at DESC
-         LIMIT $2`,
-        [userId, limit]
+         ${fetchAll ? '' : 'LIMIT $2'}`,
+        fetchAll ? [userId] : [userId, limit]
       );
 
       // Fetch details for each log type
@@ -415,8 +416,8 @@ async function getRecentLogs(pool, userId, options = {}) {
        JOIN ${detail.table} d ON d.log_id = c.id
        WHERE c.user_id = $1 AND c.log_type = $2
        ORDER BY c.occurred_at DESC
-       LIMIT $3`,
-      [userId, type, limit]
+       ${fetchAll ? '' : 'LIMIT $3'}`,
+      fetchAll ? [userId, type] : [userId, type, limit]
     );
 
     const logs = result.rows.map((row) => {
