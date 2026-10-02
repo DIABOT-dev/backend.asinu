@@ -7,21 +7,29 @@ const {
 } = require('../../src/services/payment/subscription-catalog');
 
 describe('Asinu V2 subscription catalog', () => {
-  test('contains exactly the six An Tam Store products', () => {
+  test('contains monthly and yearly Store products for every An Tam plan', () => {
     const catalog = products();
-    expect(catalog).toHaveLength(6);
-    expect(new Set(catalog.map((item) => item.plan_code)))
-      .toEqual(new Set(['antam_2', 'antam_4', 'antam_8']));
-    expect(new Set(catalog.map((item) => item.billing_period)))
-      .toEqual(new Set(['monthly', 'yearly']));
+    expect(catalog).toHaveLength(8);
+    expect(new Set(catalog.map((item) => item.plan_code))).toEqual(
+      new Set(['antam_1', 'antam_2', 'antam_4', 'antam_8'])
+    );
+    expect(new Set(catalog.map((item) => item.billing_period))).toEqual(
+      new Set(['monthly', 'yearly'])
+    );
   });
 
   test('does not recognise legacy Premium products at runtime', () => {
     expect(productForId('asinu.premium.monthly')).toBeNull();
+    expect(productForId('asinu.antam1.monthly')?.plan_code).toBe('antam_1');
     expect(productForId('asinu.antam2.monthly')?.plan_code).toBe('antam_2');
   });
 
   test('matches approved prices and protected-member limits', () => {
+    expect(planDefinition('antam_1')).toMatchObject({
+      protectedMemberLimit: 1,
+      monthlyPriceVnd: 89000,
+      yearlyPriceVnd: 699000,
+    });
     expect(planDefinition('antam_2')).toMatchObject({
       protectedMemberLimit: 2,
       monthlyPriceVnd: 149000,
