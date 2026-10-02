@@ -79,7 +79,7 @@ async function createQR(pool, userId, amount) {
 
   const { rows: inserted } = await pool.query(
     `INSERT INTO payments (order_code, user_id, amount, qr_url, status, expires_at)
-     VALUES ($1, $2, $3, $4, 'pending', NOW() + INTERVAL '30 minutes')
+     VALUES ($1, $2, $3, $4, 'pending', NOW() + INTERVAL '5 minutes')
      RETURNING expires_at`,
     [orderCode, userId, amount, qrUrl]
   );
@@ -270,7 +270,7 @@ async function getHistory(pool, userId, { page = 1, limit = 20 } = {}) {
   const offset = (page - 1) * limit;
 
   const { rows } = await pool.query(
-    `SELECT id, order_code, amount, status, qr_url, created_at, completed_at
+    `SELECT id, order_code, amount, status, qr_url, expires_at, created_at, completed_at
      FROM payments
      WHERE user_id = $1
      ORDER BY created_at DESC
@@ -283,7 +283,10 @@ async function getHistory(pool, userId, { page = 1, limit = 20 } = {}) {
   ]);
 
   return {
-    payments: rows,
+    payments: rows.map((row) => ({
+      ...row,
+      description: buildDescription(userId, row.order_code),
+    })),
     total: Number(countRows[0].count),
     page,
     limit,
