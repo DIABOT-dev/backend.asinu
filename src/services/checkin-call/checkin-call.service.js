@@ -183,6 +183,10 @@ async function settings(pool, userId) {
 }
 
 async function saveSettings(pool, userId, input) {
+  const entitlement = await entitlementService.getEntitlement(pool, userId);
+  if (!entitlement.callCenterEnabled) {
+    throw serviceError('An Tam plan required', 403, 'error.an_tam_required');
+  }
   const current = await settings(pool, userId);
   const value = validateSettings({
     ...current,
@@ -190,10 +194,6 @@ async function saveSettings(pool, userId, input) {
     ...input,
   });
   if (value.enabled) {
-    const entitlement = await entitlementService.getEntitlement(pool, userId);
-    if (!entitlement.callCenterEnabled) {
-      throw serviceError('An Tam plan required', 403, 'AN_TAM_REQUIRED');
-    }
     const ownToken = await pool.query(
       'SELECT push_token, fcm_token, voip_push_token FROM users WHERE id = $1 AND deleted_at IS NULL',
       [userId]
@@ -1319,7 +1319,7 @@ async function startTestCall(pool, userId, options = {}) {
   if (process.env.NODE_ENV === 'production') {
     const entitlement = await entitlementService.getEntitlement(pool, userId);
     if (!entitlement.callCenterEnabled) {
-      throw serviceError('An Tam plan required', 403, 'AN_TAM_REQUIRED');
+      throw serviceError('An Tam plan required', 403, 'error.an_tam_required');
     }
   }
 

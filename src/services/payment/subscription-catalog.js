@@ -10,6 +10,15 @@ const PLAN_DEFINITIONS = Object.freeze({
     yearlyPriceVnd: 0,
     annualConsultationCredits: 0,
   }),
+  antam_1: Object.freeze({
+    code: 'antam_1',
+    label: 'An Tâm 1',
+    protectedMemberLimit: 1,
+    connectionLimit: Number(process.env.CARE_CIRCLE_AN_TAM_LIMIT || 20),
+    monthlyPriceVnd: 89000,
+    yearlyPriceVnd: 699000,
+    annualConsultationCredits: 1,
+  }),
   antam_2: Object.freeze({
     code: 'antam_2',
     label: 'An Tâm 2',
@@ -40,6 +49,8 @@ const PLAN_DEFINITIONS = Object.freeze({
 });
 
 const PRODUCT_MATRIX = Object.freeze([
+  ['antam_1', 'monthly', 'IAP_PRODUCT_ANTAM1_MONTHLY', 'asinu.antam1.monthly'],
+  ['antam_1', 'yearly', 'IAP_PRODUCT_ANTAM1_YEARLY', 'asinu.antam1.yearly'],
   ['antam_2', 'monthly', 'IAP_PRODUCT_ANTAM2_MONTHLY', 'asinu.antam2.monthly'],
   ['antam_2', 'yearly', 'IAP_PRODUCT_ANTAM2_YEARLY', 'asinu.antam2.yearly'],
   ['antam_4', 'monthly', 'IAP_PRODUCT_ANTAM4_MONTHLY', 'asinu.antam4.monthly'],

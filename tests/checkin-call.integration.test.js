@@ -163,6 +163,7 @@ describeDatabase('check-in call PostgreSQL integration', () => {
     );
     const userId = created.rows[0].id;
     users.push(userId);
+    await expect(service.saveSettings(pool, userId, { enabled: false })).rejects.toThrow('An Tam');
     await expect(service.saveSettings(pool, userId, { enabled: true })).rejects.toThrow('An Tam');
     await activateAnTam(userId);
     await expect(service.saveSettings(pool, userId, { enabled: true })).rejects.toThrow(
