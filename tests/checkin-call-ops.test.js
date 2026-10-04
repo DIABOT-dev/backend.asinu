@@ -72,4 +72,15 @@ describe('check-in call operational monitoring', () => {
       .expect(200);
     expect(timeline.body.events[0].event).toBe('EXHAUSTED');
   });
+
+  test('returns a localized server error without exposing operational failures', async () => {
+    pool.query.mockRejectedValueOnce(new Error('sensitive database details'));
+    const response = await request(app)
+      .get('/api/internal/checkin-call/metrics')
+      .set('x-cron-secret', 'ops-test-secret')
+      .set('accept-language', 'en')
+      .expect(500);
+    expect(response.body).toMatchObject({ ok: false });
+    expect(response.body.error).not.toContain('sensitive database details');
+  });
 });

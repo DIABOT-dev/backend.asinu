@@ -18,30 +18,24 @@ const {
 
 function careCircleRoutes(pool) {
   const router = express.Router();
+  const bind = (handler) => (req, res, next) =>
+    Promise.resolve(handler(pool, req, res)).catch(next);
 
   // All Care Circle endpoints share the same on/off flag.
   router.use(careCircleEnabled);
 
-  router.post('/invitations', requireAuth, (req, res) => createInvitation(pool, req, res));
-  router.post('/qr-token', requireAuth, (req, res) => createQrToken(pool, req, res));
-  router.post('/qr-token/preview', requireAuth, (req, res) => previewQrToken(pool, req, res));
-  router.post('/qr-token/invitations', requireAuth, (req, res) =>
-    createInvitationFromQr(pool, req, res)
-  );
-  router.get('/invitations', requireAuth, (req, res) => getInvitations(pool, req, res));
-  router.post('/invitations/:id/accept', requireAuth, (req, res) =>
-    acceptInvitation(pool, req, res)
-  );
-  router.post('/invitations/:id/reject', requireAuth, (req, res) =>
-    rejectInvitation(pool, req, res)
-  );
-  router.delete('/invitations/:id', requireAuth, (req, res) => cancelInvitation(pool, req, res));
-  router.get('/connections', requireAuth, (req, res) => getConnections(pool, req, res));
-  router.put('/connections/:id', requireAuth, (req, res) => updateConnection(pool, req, res));
-  router.put('/connections/:id/permissions', requireAuth, (req, res) =>
-    updateConnectionPermissions(pool, req, res)
-  );
-  router.delete('/connections/:id', requireAuth, (req, res) => deleteConnection(pool, req, res));
+  router.post('/invitations', requireAuth, bind(createInvitation));
+  router.post('/qr-token', requireAuth, bind(createQrToken));
+  router.post('/qr-token/preview', requireAuth, bind(previewQrToken));
+  router.post('/qr-token/invitations', requireAuth, bind(createInvitationFromQr));
+  router.get('/invitations', requireAuth, bind(getInvitations));
+  router.post('/invitations/:id/accept', requireAuth, bind(acceptInvitation));
+  router.post('/invitations/:id/reject', requireAuth, bind(rejectInvitation));
+  router.delete('/invitations/:id', requireAuth, bind(cancelInvitation));
+  router.get('/connections', requireAuth, bind(getConnections));
+  router.put('/connections/:id', requireAuth, bind(updateConnection));
+  router.put('/connections/:id/permissions', requireAuth, bind(updateConnectionPermissions));
+  router.delete('/connections/:id', requireAuth, bind(deleteConnection));
 
   return router;
 }

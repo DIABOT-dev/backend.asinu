@@ -621,7 +621,7 @@ async function getState(pool, userId) {
  * @param {number} userId - User acknowledging
  * @returns {Promise<Object>} - { ok, status, error }
  */
-async function acknowledgeEscalation(pool, escalationId, userId) {
+async function acknowledgeEscalation(pool, escalationId, userId, lang = 'vi') {
   try {
     // Get escalation
     const escalationResult = await pool.query(
@@ -630,7 +630,7 @@ async function acknowledgeEscalation(pool, escalationId, userId) {
     );
 
     if (escalationResult.rows.length === 0) {
-      return { ok: false, error: t('carePulse.alert_not_found'), statusCode: 404 };
+      return { ok: false, error: t('carePulse.alert_not_found', lang), statusCode: 404 };
     }
 
     const escalation = escalationResult.rows[0];
@@ -646,7 +646,7 @@ async function acknowledgeEscalation(pool, escalationId, userId) {
     );
 
     if (permission.rows.length === 0) {
-      return { ok: false, error: t('carePulse.no_access'), statusCode: 403 };
+      return { ok: false, error: t('carePulse.no_access', lang), statusCode: 403 };
     }
 
     // Already acknowledged
@@ -664,7 +664,7 @@ async function acknowledgeEscalation(pool, escalationId, userId) {
 
     return { ok: true, status: 'acknowledged' };
   } catch (err) {
-    return { ok: false, error: t('error.server') };
+    return { ok: false, error: t('error.server', lang) };
   }
 }
 

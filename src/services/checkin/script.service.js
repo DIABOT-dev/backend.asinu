@@ -18,6 +18,7 @@
 const { resolveComplaint } = require('./clinical-mapping');
 const { validateScript } = require('../../core/checkin/script-runner');
 const { getHonorifics } = require('../../lib/honorifics');
+const { t } = require('../../i18n');
 const { reuseScript } = require('./script-cache.service');
 
 // ─── Cluster key mapping ────────────────────────────────────────────────────
@@ -844,7 +845,7 @@ function _buildFallbackQuestions() {
  * @param {number} userId
  * @returns {Promise<{ script: object, clusters: object[], greeting: string } | null>}
  */
-async function getUserScript(pool, userId) {
+async function getUserScript(pool, userId, lang = 'vi') {
   // Get user's active clusters (sorted by priority)
   const { rows: clusters } = await pool.query(
     `SELECT * FROM problem_clusters
@@ -884,16 +885,16 @@ async function getUserScript(pool, userId) {
     birth_year: profile.birth_year,
     gender: profile.gender,
     full_name: profile.full_name,
-    lang: 'vi',
+    lang,
   });
   const CallName = h.callName.charAt(0).toUpperCase() + h.callName.slice(1);
-  const greeting = `Chào ${CallName}! Hôm nay ${h.honorific} thế nào?`;
+  const greeting = t('checkin.script.greeting', lang, { CallName, honorific: h.honorific });
 
   // Build initial_options
   const initialOptions = [
-    { label: 'Tôi ổn', value: 'fine', emoji: '😊' },
-    { label: 'Hơi mệt', value: 'tired', emoji: '😐' },
-    { label: 'Rất mệt', value: 'very_tired', emoji: '😫' },
+    { label: t('checkin.script.initial_fine', lang), value: 'fine', emoji: '😊' },
+    { label: t('checkin.script.initial_tired', lang), value: 'tired', emoji: '😐' },
+    { label: t('checkin.script.initial_very_tired', lang), value: 'very_tired', emoji: '😫' },
   ];
 
   // Map clusters with their scripts

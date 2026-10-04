@@ -1,9 +1,19 @@
 'use strict';
 
+const { t } = require('../../i18n');
+
+function localizedPlanName(planCode, lang = 'vi') {
+  switch (planCode) {
+    case 'antam_2': return t('subscription.plan.antam_2', lang);
+    case 'antam_4': return t('subscription.plan.antam_4', lang);
+    case 'antam_8': return t('subscription.plan.antam_8', lang);
+    default: return t('subscription.plan.free', lang);
+  }
+}
+
 const PLAN_DEFINITIONS = Object.freeze({
   free: Object.freeze({
     code: 'free',
-    label: 'Miễn phí',
     protectedMemberLimit: 1,
     connectionLimit: 1,
     monthlyPriceVnd: 0,
@@ -12,7 +22,6 @@ const PLAN_DEFINITIONS = Object.freeze({
   }),
   antam_2: Object.freeze({
     code: 'antam_2',
-    label: 'An Tâm 2',
     protectedMemberLimit: 2,
     connectionLimit: Number(process.env.CARE_CIRCLE_AN_TAM_LIMIT || 20),
     monthlyPriceVnd: 149000,
@@ -21,7 +30,6 @@ const PLAN_DEFINITIONS = Object.freeze({
   }),
   antam_4: Object.freeze({
     code: 'antam_4',
-    label: 'An Tâm 4',
     protectedMemberLimit: 4,
     connectionLimit: Number(process.env.CARE_CIRCLE_AN_TAM_LIMIT || 20),
     monthlyPriceVnd: 199000,
@@ -30,7 +38,6 @@ const PLAN_DEFINITIONS = Object.freeze({
   }),
   antam_8: Object.freeze({
     code: 'antam_8',
-    label: 'An Tâm 8',
     protectedMemberLimit: 8,
     connectionLimit: Number(process.env.CARE_CIRCLE_AN_TAM_LIMIT || 20),
     monthlyPriceVnd: 249000,
@@ -53,7 +60,7 @@ const APPLE_ANTAM2_IDS = Object.freeze({
   yearly: 'asinu.premium.yearly',
 });
 
-function products(platform = 'google') {
+function products(platform = 'google', lang = 'vi') {
   return PRODUCT_MATRIX.map(([planCode, billingPeriod, envName, defaultId]) => {
     const plan = PLAN_DEFINITIONS[planCode];
     const appleAntam2Id =
@@ -63,7 +70,7 @@ function products(platform = 'google') {
     return {
       id: appleAntam2Id || process.env[envName] || defaultId,
       plan_code: planCode,
-      plan_name: plan.label,
+      plan_name: localizedPlanName(planCode, lang),
       billing_period: billingPeriod,
       plan_months: billingPeriod === 'yearly' ? 12 : 1,
       protected_members: plan.protectedMemberLimit,
@@ -91,4 +98,5 @@ module.exports = {
   products,
   productForId,
   planDefinition,
+  localizedPlanName,
 };

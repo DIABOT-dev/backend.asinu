@@ -83,10 +83,16 @@ describe('check-in call provider failure handling', () => {
     process.env.VIENEU_API_KEY = 'test-key';
     global.fetch = jest.fn();
 
-    await expect(audio.synthesizeText('   ', 'vi')).rejects.toMatchObject({ statusCode: 400 });
+    await expect(audio.synthesizeText('   ', 'vi')).rejects.toMatchObject({
+      statusCode: 400,
+      i18nKey: 'checkinCall.error.conclusion_required',
+    });
     await expect(
       audio.synthesizeText('a'.repeat(audio.MAX_DYNAMIC_TEXT_LENGTH + 1), 'vi')
-    ).rejects.toMatchObject({ statusCode: 400 });
+    ).rejects.toMatchObject({
+      statusCode: 400,
+      i18nKey: 'checkinCall.error.conclusion_too_long',
+    });
     expect(global.fetch).not.toHaveBeenCalled();
   });
 });

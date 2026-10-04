@@ -56,7 +56,15 @@ async function getVoiceUsage(pool, req, res) {
   return res.status(200).json({ ok: true, voiceUsed, voiceLimit: null, unlimited: true });
 }
 
+function createVoiceController(pool) {
+  return {
+    chat: (req, res) => voiceChat(pool, req, res),
+    usage: (req, res) => getVoiceUsage(pool, req, res),
+  };
+}
+
 module.exports = {
   voiceChat,
   getVoiceUsage,
+  createVoiceController,
 };

@@ -1,7 +1,7 @@
 'use strict';
 
 const entitlementService = require('./entitlement.service');
-const { planDefinition } = require('./subscription-catalog');
+const { planDefinition, localizedPlanName } = require('./subscription-catalog');
 const { t } = require('../../i18n');
 
 function serviceError(i18nKey, statusCode, code, i18nParams) {
@@ -35,7 +35,7 @@ async function listProtectedMembers(pool, ownerUserId, lang = 'vi') {
     householdId: household.id,
     ownerUserId: Number(ownerUserId),
     planCode,
-    planName: plan.code === 'free' ? t('subscription.plan.free', lang) : plan.label,
+    planName: localizedPlanName(plan.code, lang),
     protectedMemberLimit: plan.protectedMemberLimit,
     protectedMemberCount: members.rowCount,
     members: members.rows.map((member) => ({
@@ -122,7 +122,7 @@ async function addProtectedMember(pool, ownerUserId, memberUserId, lang = 'vi') 
     }
     if (memberCount >= plan.protectedMemberLimit) {
       throw serviceError('error.household_limit', 409, 'PROTECTED_MEMBER_LIMIT', {
-        plan: plan.code === 'free' ? t('subscription.plan.free', lang) : plan.label,
+        plan: localizedPlanName(plan.code, lang),
         count: plan.protectedMemberLimit,
       });
     }

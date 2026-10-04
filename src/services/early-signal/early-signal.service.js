@@ -66,7 +66,14 @@ const normalizeLang = (lang) =>
     ? 'en'
     : 'vi';
 const descriptor = (key, params = {}) => ({ key, params });
-const translate = (copy, lang) => t(copy.key, normalizeLang(lang), copy.params || {});
+function translate(copy, lang) {
+  const params = { ...(copy.params || {}) };
+  if (params.symptomKey) {
+    params.symptom = t(params.symptomKey, normalizeLang(lang));
+    delete params.symptomKey;
+  }
+  return t(copy.key, normalizeLang(lang), params);
+}
 
 function localizeOutput(output, lang = 'vi') {
   if (!output?._i18n) return output;
@@ -375,8 +382,11 @@ function analyse(snapshot, lang = 'vi') {
       },
     };
   } else if ((symptomCounts7d[0]?.[1] || 0) >= 4 || veryTired7d === 1) {
-    const [symptom, count] = symptomCounts7d[0] || ['mệt', 1];
-    const specialty = specialtyFor(symptom);
+    const [symptom, count] = symptomCounts7d[0] || [null, 1];
+    const symptomParams = symptom
+      ? { symptom }
+      : { symptomKey: 'early_signal.symptom.very_tired' };
+    const specialty = specialtyFor(symptom || 'fatigue');
     const urgentSignKeys = [
       'chest_pain',
       'shortness_of_breath',
@@ -394,13 +404,13 @@ function analyse(snapshot, lang = 'vi') {
       disclaimer: '',
       _i18n: {
         signals: [
-          descriptor('early_signal.signal.symptom_7d', { symptom, count }),
+          descriptor('early_signal.signal.symptom_7d', { ...symptomParams, count }),
           ...(missedCheckins7d
             ? [descriptor('early_signal.signal.missed_7d', { count: missedCheckins7d })]
             : []),
         ],
         summary: descriptor('early_signal.summary.see_doctor', {
-          symptom,
+          ...symptomParams,
           count,
           specialty,
         }),

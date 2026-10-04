@@ -16,6 +16,12 @@ const {
   createOAuthExchange,
   exchangeOAuthCode: exchangeOAuthSessionCode,
 } = require('../services/auth/oauth-flow.service');
+const {
+  fetchZaloProfile,
+  fetchFacebookProfile,
+  fetchGoogleProfile,
+  verifyFacebookNativeToken,
+} = require('../services/auth/oauth-provider.service');
 
 function backendCallbackUri(provider) {
   const backendUrl = (
@@ -35,16 +41,6 @@ function oauthErrorCode(err) {
 
 function redirectOAuthError(res, provider, error) {
   return res.redirect(appRedirect(provider, { error }));
-}
-
-function decodeJwtJsonPart(value) {
-  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]+$/.test(value)) return null;
-  try {
-    const parsed = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch {
-    return null;
-  }
 }
 
 // =====================================================
@@ -189,42 +185,17 @@ async function loginByZalo(pool, req, res) {
   }
 
   try {
-    // Exchange code for access_token with Zalo
-    const tokenRes = await fetch('https://oauth.zaloapp.com/v4/access_token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        secret_key: process.env.ZALO_SECRET_KEY,
-      },
-      body: new URLSearchParams({
-        app_id: process.env.ZALO_APP_ID,
-        grant_type: 'authorization_code',
-        code,
-        code_verifier,
-      }).toString(),
-    });
-    const tokenData = await tokenRes.json();
-
-    if (!tokenData.access_token) {
-      return res.status(401).json({ ok: false, error: t('error.invalid_token', lang) });
-    }
-
-    // Get Zalo user profile (request phone if app has permission)
-    const profileRes = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name,picture,phone', {
-      headers: { access_token: tokenData.access_token },
-    });
-    const profile = await profileRes.json();
-
-    if (!profile.id) {
+    const verified = await fetchZaloProfile(code, { codeVerifier: code_verifier });
+    if (verified.error) {
       return res.status(401).json({ ok: false, error: t('error.invalid_token', lang) });
     }
 
     const { normalizePhoneNumber } = require('../services/auth/auth.service');
-    const zaloPhone = profile.phone ? normalizePhoneNumber(profile.phone) : null;
+    const zaloPhone = verified.profile.phone ? normalizePhoneNumber(verified.profile.phone) : null;
     const result = await serviceLoginProvider(
       pool,
       'zalo_id',
-      String(profile.id),
+      String(verified.profile.id),
       'zalo',
       null,
       zaloPhone
@@ -261,43 +232,15 @@ async function zaloCallback(pool, req, res) {
   }
 
   try {
-    // Exchange code for access_token
-    const redirectUri = backendCallbackUri('zalo');
-    const tokenRes = await fetch('https://oauth.zaloapp.com/v4/access_token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        secret_key: process.env.ZALO_SECRET_KEY,
-      },
-      body: new URLSearchParams({
-        app_id: process.env.ZALO_APP_ID,
-        grant_type: 'authorization_code',
-        code,
-        redirect_uri: redirectUri,
-      }).toString(),
-    });
-    const tokenData = await tokenRes.json();
-
-    if (!tokenData.access_token) {
-      return redirectOAuthError(res, 'zalo', 'token_exchange_failed');
-    }
-
-    // Get user profile (request phone if app has permission)
-    const profileRes = await fetch('https://graph.zalo.me/v2.0/me?fields=id,name,picture,phone', {
-      headers: { access_token: tokenData.access_token },
-    });
-    const profile = await profileRes.json();
-
-    if (!profile.id) {
-      return redirectOAuthError(res, 'zalo', 'profile_failed');
-    }
+    const verified = await fetchZaloProfile(code, { redirectUri: backendCallbackUri('zalo') });
+    if (verified.error) return redirectOAuthError(res, 'zalo', verified.error);
 
     const { normalizePhoneNumber } = require('../services/auth/auth.service');
-    const zaloPhone = profile.phone ? normalizePhoneNumber(profile.phone) : null;
+    const zaloPhone = verified.profile.phone ? normalizePhoneNumber(verified.profile.phone) : null;
     const result = await serviceLoginProvider(
       pool,
       'zalo_id',
-      String(profile.id),
+      String(verified.profile.id),
       'zalo',
       null,
       zaloPhone
@@ -336,38 +279,14 @@ async function facebookCallback(pool, req, res) {
   }
 
   try {
-    const redirectUri = backendCallbackUri('facebook');
+    const verified = await fetchFacebookProfile(code, backendCallbackUri('facebook'));
+    if (verified.error) return redirectOAuthError(res, 'facebook', verified.error);
 
-    // Exchange code for access_token
-    const tokenRes = await fetch(
-      `https://graph.facebook.com/v18.0/oauth/access_token?${new URLSearchParams({
-        client_id: process.env.FACEBOOK_APP_ID,
-        client_secret: process.env.FACEBOOK_APP_SECRET,
-        redirect_uri: redirectUri,
-        code,
-      })}`
-    );
-    const tokenData = await tokenRes.json();
-
-    if (!tokenData.access_token) {
-      return redirectOAuthError(res, 'facebook', 'token_exchange_failed');
-    }
-
-    // Get user profile
-    const profileRes = await fetch(
-      `https://graph.facebook.com/me?fields=id,name,email,picture&access_token=${tokenData.access_token}`
-    );
-    const profile = await profileRes.json();
-
-    if (!profile.id) {
-      return redirectOAuthError(res, 'facebook', 'profile_failed');
-    }
-
-    const email = profile.email || null;
+    const email = verified.profile.email || null;
     const result = await serviceLoginProvider(
       pool,
       'facebook_id',
-      String(profile.id),
+      String(verified.profile.id),
       'facebook',
       email,
       null
@@ -549,44 +468,15 @@ async function googleCallback(pool, req, res) {
   }
 
   try {
-    const redirectUri = backendCallbackUri('google');
-    const clientId = process.env.GOOGLE_WEB_CLIENT_ID;
-    const clientSecret = process.env.GOOGLE_WEB_CLIENT_SECRET;
-
-    // Exchange code for tokens
-    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        code,
-        client_id: clientId,
-        client_secret: clientSecret,
-        redirect_uri: redirectUri,
-        grant_type: 'authorization_code',
-      }).toString(),
-    });
-    const tokenData = await tokenRes.json();
-
-    if (!tokenData.access_token) {
-      return redirectOAuthError(res, 'google', 'token_exchange_failed');
-    }
-
-    // Get user profile
-    const profileRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
-    });
-    const profile = await profileRes.json();
-
-    if (!profile.id) {
-      return redirectOAuthError(res, 'google', 'profile_failed');
-    }
+    const verified = await fetchGoogleProfile(code, backendCallbackUri('google'));
+    if (verified.error) return redirectOAuthError(res, 'google', verified.error);
 
     const result = await serviceLoginProvider(
       pool,
       'google_id',
-      String(profile.id),
+      String(verified.profile.id),
       'google',
-      profile.email || null,
+      verified.profile.email || null,
       null
     );
     if (!result.ok) {
@@ -624,123 +514,22 @@ async function exchangeOAuthCodeHandler(pool, req, res) {
  * Android native FBSDK flow — receives FB access_token, validates with Graph API, returns app JWT
  */
 async function loginByFacebookToken(pool, req, res) {
-  const { access_token, id_token, user_id } = req.body || {};
-  if (!access_token && !id_token && !user_id) {
+  const { access_token, id_token } = req.body || {};
+  if (!access_token && !id_token) {
     return res.status(400).json({ ok: false, error: t('error.missing_auth_token', getLang(req)) });
   }
   try {
-    const appId = process.env.FACEBOOK_APP_ID;
-    const appSecret = process.env.FACEBOOK_APP_SECRET;
-
-    let userId = null;
-    let email = null;
-
-    if (id_token) {
-      // iOS SDK v16+ Limited Login: verify JWT via Facebook JWKS
-      console.log('[FB token] iOS id_token flow');
-      if (!appId) {
-        return res.status(503).json({ ok: false, error: t('error.oauth_failed', getLang(req)) });
-      }
-
-      const tokenParts = String(id_token).split('.');
-      if (tokenParts.length !== 3) {
-        return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
-      }
-
-      const [headerB64Pre, payloadB64Pre] = tokenParts;
-      const headerPre = decodeJwtJsonPart(headerB64Pre);
-      const unverifiedPayload = decodeJwtJsonPart(payloadB64Pre);
-      const validIssuers = ['https://www.facebook.com', 'https://limited.facebook.com'];
-      if (
-        !headerPre ||
-        !unverifiedPayload ||
-        headerPre.alg !== 'RS256' ||
-        unverifiedPayload.aud !== appId ||
-        !validIssuers.includes(unverifiedPayload.iss)
-      ) {
-        return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
-      }
-
-      const jwksUrl =
-        unverifiedPayload.iss === 'https://limited.facebook.com'
-          ? 'https://limited.facebook.com/.well-known/oauth/openid/jwks/'
-          : 'https://www.facebook.com/.well-known/oauth/openid/jwks/';
-
-      // Fetch JWKS from Facebook
-      const jwksRes = await fetch(jwksUrl);
-      const jwks = await jwksRes.json();
-
-      // The header was parsed and validated above before any network call.
-      const header = headerPre;
-      const jwk = jwks.keys?.find((k) => k.kid === header.kid);
-
-      if (!jwk || jwk.kty !== 'RSA') {
-        console.error('[FB token] JWKS key not found for kid:', header.kid);
-        return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
-      }
-
-      // Verify JWT signature using Node crypto
-      const crypto = require('crypto');
-      const [hB64, pB64, sigB64] = tokenParts;
-      const signingInput = `${hB64}.${pB64}`;
-      const signature = Buffer.from(sigB64, 'base64url');
-
-      const pubKey = crypto.createPublicKey({ key: jwk, format: 'jwk' });
-      const valid = crypto.verify('SHA256', Buffer.from(signingInput), pubKey, signature);
-
-      if (!valid) {
-        console.error('[FB token] JWT signature invalid');
-        return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
-      }
-
-      // The payload was parsed before the signature check and is safe to use
-      // only now that the signature has been verified.
-      const payload = unverifiedPayload;
-      console.log('[FB token] JWT payload verified');
-
-      const now = Math.floor(Date.now() / 1000);
-      const clockSkewSeconds = 60;
-      if (
-        payload.aud !== appId ||
-        !validIssuers.includes(payload.iss) ||
-        typeof payload.exp !== 'number' ||
-        payload.exp <= now - clockSkewSeconds ||
-        typeof payload.iat !== 'number' ||
-        payload.iat > now + clockSkewSeconds ||
-        payload.iat < now - 24 * 60 * 60 ||
-        (payload.nbf !== undefined &&
-          (typeof payload.nbf !== 'number' || payload.nbf > now + clockSkewSeconds)) ||
-        typeof payload.sub !== 'string' ||
-        payload.sub.length === 0
-      ) {
-        return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
-      }
-
-      userId = payload.sub;
-      email = payload.email || null;
-    } else {
-      // Android: standard access_token via debug_token endpoint
-      const debugRes = await fetch(
-        `https://graph.facebook.com/debug_token?input_token=${encodeURIComponent(access_token)}&access_token=${appId}|${appSecret}`
-      );
-      const debugJson = await debugRes.json();
-      console.log('[FB token] debug_token response:', JSON.stringify(debugJson?.data));
-
-      if (!debugJson?.data?.is_valid || debugJson?.data?.app_id !== appId) {
-        console.error('[FB token] debug_token invalid:', JSON.stringify(debugJson));
-        return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
-      }
-
-      userId = debugJson.data.user_id;
-
-      const profileRes = await fetch(
-        `https://graph.facebook.com/${userId}?fields=id,name,email&access_token=${appId}|${appSecret}`
-      );
-      const profile = await profileRes.json();
-      email = profile.email || null;
+    const verified = await verifyFacebookNativeToken({
+      accessToken: access_token,
+      idToken: id_token,
+    });
+    if (verified.error === 'NOT_CONFIGURED') {
+      return res.status(503).json({ ok: false, error: t('error.oauth_failed', getLang(req)) });
     }
-
-    if (!userId) {
+    if (verified.error) {
+      return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
+    }
+    if (!verified.userId) {
       return res.status(401).json({ ok: false, error: t('error.oauth_failed', getLang(req)) });
     }
 
@@ -749,13 +538,13 @@ async function loginByFacebookToken(pool, req, res) {
     //   1. Lookup theo facebook_limited_id → match nếu user iOS đã login trước
     //   2. Lookup theo email → tự link nếu user đã có account từ Android/web
     //   3. Tạo user mới nếu cả 2 không có
-    const idColumn = id_token ? 'facebook_limited_id' : 'facebook_id';
+    const idColumn = verified.limited ? 'facebook_limited_id' : 'facebook_id';
     const result = await serviceLoginProvider(
       pool,
       idColumn,
-      String(userId),
+      String(verified.userId),
       'facebook',
-      email,
+      verified.email,
       null
     );
     if (!result.ok) {
@@ -767,7 +556,7 @@ async function loginByFacebookToken(pool, req, res) {
       });
     }
 
-    console.log('[FB token] login success, userId:', userId);
+    console.log('[FB token] login success, userId:', verified.userId);
     return res.json({ ok: true, token: result.token });
   } catch (err) {
     console.error('[Facebook token login] error:', err.message);
@@ -781,7 +570,7 @@ async function logoutHandler(pool, req, res) {
     await logout(pool, req.user.id).catch(() => {});
     return res.json({ ok: true, message: t('success.logged_out', getLang(req)) });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 

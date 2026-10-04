@@ -5,7 +5,7 @@
 
 const { t, getLang } = require('../i18n');
 const profileService = require('../services/profile/profile.service');
-const { hashPassword, comparePassword } = require('../services/auth/auth.service');
+const passwordService = require('../services/profile/password.service');
 const { uploadAvatar } = require('../services/media/cloudinary.service');
 
 async function changePassword(pool, req, res) {
@@ -25,26 +25,20 @@ async function changePassword(pool, req, res) {
       .json({ ok: false, error: t('error.password_same_as_old', getLang(req)) });
   }
 
-  const { rows } = await pool.query(
-    `SELECT password_hash FROM users WHERE id = $1 AND deleted_at IS NULL`,
-    [req.user.id]
+  const outcome = await passwordService.changePassword(
+    pool,
+    req.user.id,
+    currentPassword,
+    newPassword
   );
-  if (!rows.length || !rows[0].password_hash) {
+  if (outcome === 'PASSWORD_NOT_SET') {
     return res.status(400).json({ ok: false, error: t('error.password_not_set', getLang(req)) });
   }
-
-  const valid = await comparePassword(currentPassword, rows[0].password_hash);
-  if (!valid) {
+  if (outcome === 'CURRENT_PASSWORD_WRONG') {
     return res
       .status(401)
       .json({ ok: false, error: t('error.password_current_wrong', getLang(req)) });
   }
-
-  const newHash = await hashPassword(newPassword);
-  await pool.query(`UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2`, [
-    newHash,
-    req.user.id,
-  ]);
 
   return res.status(200).json({ ok: true, message: t('success.password_changed', getLang(req)) });
 }

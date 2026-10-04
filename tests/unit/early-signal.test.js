@@ -70,6 +70,19 @@ describe('Early Signals clinical output guardrails', () => {
     expect(result.disclaimer).toBe('This information is for guidance only and is not a diagnosis.');
   });
 
+  test('localizes a very-tired result even without a symptom log', () => {
+    const result = _test.analyse(
+      snapshot({
+        checkins: [{ session_date: new Date().toISOString(), current_status: 'very_tired' }],
+      }),
+      'en'
+    );
+    expect(result.severity).toBe('see_doctor');
+    expect(result.summary).toContain('feeling very tired');
+    expect(result.summary).not.toContain('mệt');
+    expect(result.signals[0]).toContain('feeling very tired');
+  });
+
   test('an old red-flag phrase stays in history without showing a current emergency', () => {
     const occurredDate = new Date();
     occurredDate.setDate(occurredDate.getDate() - 2);

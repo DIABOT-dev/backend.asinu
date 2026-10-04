@@ -5,7 +5,7 @@ const { t } = require('../../i18n');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 const entitlementService = require('./entitlement.service');
-const { planDefinition, productForId } = require('./subscription-catalog');
+const { planDefinition, productForId, localizedPlanName } = require('./subscription-catalog');
 
 function currentYearMonth() {
   return new Date().toISOString().slice(0, 7);
@@ -146,7 +146,7 @@ async function activateFromIap(pool, userId, options) {
   return {
     ok: true,
     planCode: plan.code,
-    planName: plan.label,
+    planName: localizedPlanName(plan.code),
     billingPeriod: options.billingPeriod,
     protectedMemberLimit: plan.protectedMemberLimit,
     consultationCreditsGranted:

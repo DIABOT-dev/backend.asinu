@@ -12,10 +12,20 @@
 
 const { t, getLang } = require('../i18n');
 const iapService = require('../services/payment/iap.service');
-const { products } = require('../services/payment/subscription-catalog');
+const { products, localizedPlanName } = require('../services/payment/subscription-catalog');
 
 const APPLE_BUNDLE_ID = process.env.APPLE_BUNDLE_ID || 'com.asinu.lite';
 const GOOGLE_PACKAGE_NAME = process.env.GOOGLE_PLAY_PACKAGE_NAME || 'com.asinu.lite';
+
+function verificationErrorKey(code) {
+  if (code === 'INVALID_PAYLOAD' || code === 'UNKNOWN_PLATFORM') return 'iap.invalid_payload';
+  if (code === 'UNKNOWN_PRODUCT') return 'iap.unknown_product';
+  if (code === 'IAP_SUBSCRIPTION_EXPIRED') return 'iap.expired';
+  if (code === 'IAP_RECEIPT_OWNERSHIP_MISMATCH') return 'iap.ownership_mismatch';
+  if (code === 'IAP_SANDBOX_NOT_ALLOWED' || code === 'APPLE_SANDBOX_NOT_ALLOWED') return 'iap.sandbox_not_allowed';
+  if (code === 'APPLE_VERIFIER_NOT_CONFIGURED' || code === 'GOOGLE_VERIFIER_NOT_CONFIGURED') return 'iap.store_unavailable';
+  return 'iap.verification_failed';
+}
 
 async function verifyReceipt(pool, req, res) {
   const userId = req.user?.id;
@@ -41,10 +51,13 @@ async function verifyReceipt(pool, req, res) {
       // distinguish them from auth or validation errors.
       return res.status(402).json({
         ...result,
-        error: result.error || t('iap.verification_failed', getLang(req)),
+        error: t(verificationErrorKey(result.code), getLang(req)),
       });
     }
-    return res.status(200).json(result);
+    return res.status(200).json({
+      ...result,
+      ...(result.planCode ? { planName: localizedPlanName(result.planCode, getLang(req)) } : {}),
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
@@ -57,11 +70,12 @@ async function verifyReceipt(pool, req, res) {
  */
 function listProducts(_pool, req, res) {
   res.set('Cache-Control', 'public, max-age=3600');
+  res.vary('Accept-Language');
   return res.status(200).json({
     ok: true,
     apple_bundle_id: APPLE_BUNDLE_ID,
     google_package_name: GOOGLE_PACKAGE_NAME,
-    products: products(req.query.platform === 'apple' ? 'apple' : 'google'),
+    products: products(req.query.platform === 'apple' ? 'apple' : 'google', getLang(req)),
   });
 }
 
@@ -82,7 +96,7 @@ async function appleNotifications(pool, req, res) {
     }
     return res.status(200).json(result);
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -100,7 +114,7 @@ async function googleNotifications(pool, req, res) {
     // on 5xx, and we don't want infinite retry on a malformed message.
     return res.status(200).json(result);
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 

@@ -83,7 +83,7 @@ async function ackEscalation(pool, req, res) {
   }
 
   // Call service
-  const result = await acknowledgeEscalation(pool, parsed.data.escalation_id, req.user.id);
+  const result = await acknowledgeEscalation(pool, parsed.data.escalation_id, req.user.id, getLang(req));
 
   if (!result.ok) {
     const statusCode = result.statusCode || 400;

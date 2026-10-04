@@ -1,7 +1,7 @@
 'use strict';
 
 const { cacheDel } = require('../../lib/redis');
-const { planDefinition } = require('./subscription-catalog');
+const { planDefinition, localizedPlanName } = require('./subscription-catalog');
 
 function isActiveHousehold(row) {
   if (!row || !['active', 'grace_period'].includes(row.status)) return false;
@@ -81,7 +81,7 @@ function toEntitlement(household, userId) {
   const isProtectedMember = household?.is_protected_member === true;
   return {
     planCode,
-    planName: plan.label,
+    planName: localizedPlanName(planCode),
     tier: planCode === 'free' ? 'free' : 'antam',
     isAnTam: planCode !== 'free',
     ownerUserId: Number(household?.owner_user_id || userId),

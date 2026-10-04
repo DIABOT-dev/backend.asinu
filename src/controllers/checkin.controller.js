@@ -1,8 +1,6 @@
 const checkinService = require('../services/checkin/checkin.service');
-const caregiverStatusService = require('../services/care-circle/caregiver-status.service');
+const checkinApiService = require('../services/checkin/checkin-api.service');
 const engagementService = require('../services/profile/engagement.service');
-const { markActive } = require('../services/profile/lifecycle.service');
-const earlySignalService = require('../services/early-signal/early-signal.service');
 const { t, getLang } = require('../i18n');
 const {
   BODY_LOCATIONS,
@@ -21,11 +19,6 @@ const TRIAGE_STEPS = new Set([
   'followup_status',
   'followup_detail',
 ]);
-
-function eventTimestamp(value) {
-  if (value instanceof Date) return value.toISOString();
-  return String(value || Date.now());
-}
 
 async function startCheckinHandler(pool, req, res) {
   const {
@@ -75,24 +68,17 @@ async function startCheckinHandler(pool, req, res) {
   }
 
   try {
-    const session = await checkinService.startCheckin(pool, req.user.id, status, locations, other, {
-      restart,
-      source,
-    });
-    // Update lifecycle before responding so a re-engagement cron cannot read
-    // the old inactive/999-day state after the user has checked in.
-    await markActive(pool, req.user.id).catch((err) =>
-      console.warn('[Lifecycle] markActive failed:', err.message)
+    const session = await checkinApiService.startCheckin(
+      pool,
+      req.user.id,
+      status,
+      locations,
+      other,
+      {
+        restart,
+        source,
+      }
     );
-    earlySignalService
-      .evaluateAfterNewHealthData(
-        pool,
-        req.user.id,
-        `checkin-start:${session.id}:${status}:${eventTimestamp(
-          session.occurrence_started_at || session.updated_at
-        )}`
-      )
-      .catch((err) => console.warn('[EarlySignal] check-in start evaluation failed:', err.message));
     return res.json({ ok: true, session });
   } catch (err) {
     return res
@@ -120,20 +106,17 @@ async function followUpHandler(pool, req, res) {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
   }
   try {
-    const session = await checkinService.recordFollowUp(pool, req.user.id, checkin_id, status);
+    const { session, alreadyResolved } = await checkinApiService.recordFollowUp(
+      pool,
+      req.user.id,
+      checkin_id,
+      status
+    );
     if (!session)
       return res.status(404).json({ ok: false, error: t('error.session_not_found', getLang(req)) });
-    if (session.flow_state === 'resolved' && session.current_status !== status) {
-      // Was already resolved before this call — return it as-is
+    if (alreadyResolved) {
       return res.json({ ok: true, session, already_resolved: true });
     }
-    earlySignalService
-      .evaluateAfterNewHealthData(
-        pool,
-        req.user.id,
-        `checkin-followup:${session.id}:${status}:${eventTimestamp(session.updated_at)}`
-      )
-      .catch((err) => console.warn('[EarlySignal] follow-up evaluation failed:', err.message));
     return res.json({ ok: true, session });
   } catch (err) {
     return res
@@ -220,13 +203,8 @@ async function emergencyHandler(pool, req, res) {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
   }
   try {
-    const result = await checkinService.triggerEmergency(pool, req.user.id, location);
-    // Emergency is always urgent — tell the client whether anyone is on
-    // the other end to receive the alert (MVP audit FIX #4).
-    const caregiverStatus = await caregiverStatusService.buildCaregiverStatus(pool, req.user.id, {
-      riskTier: 'emergency',
-    });
-    return res.json({ ...result, ...caregiverStatus });
+    const result = await checkinApiService.triggerEmergency(pool, req.user.id, location);
+    return res.json(result);
   } catch (err) {
     return res
       .status(500)

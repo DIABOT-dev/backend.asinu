@@ -232,6 +232,16 @@ for (const file of sourceFiles(path.join(root, 'src'))) {
         if (property.type !== 'Property') continue;
         const key = property.key.type === 'Identifier' ? property.key.name : property.key.value;
         if (!['error', 'message', 'title', 'body'].includes(key)) continue;
+        if (
+          property.value.type === 'MemberExpression' &&
+          !property.value.computed &&
+          ['err', 'error'].includes(property.value.object?.name) &&
+          property.value.property?.name === 'message'
+        ) {
+          errors.push(
+            `${path.relative(root, file)}:${property.loc.start.line}: API ${key} exposes a raw exception message`
+          );
+        }
         const copy = collectCopy(property.value, []).filter(
           (value) => /\s/u.test(value.trim()) && /[A-Za-zÀ-ỹ]/u.test(value)
         );

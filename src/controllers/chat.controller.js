@@ -88,7 +88,7 @@ async function transcribeAudio(pool, req, res) {
 
   const voiceUsed = await getVoiceUsageThisMonth(pool, req.user.id);
   try {
-    const lang = req.headers['accept-language']?.startsWith('en') ? 'en' : 'vi';
+    const lang = getLang(req);
     const startTranscribe = Date.now();
     const text = await getWhisperTranscription(req.file.buffer, req.file.originalname, lang);
     const latencyTranscribe = Date.now() - startTranscribe;
@@ -115,7 +115,7 @@ async function transcribeAudio(pool, req, res) {
       .status(200)
       .json({ ok: true, text, voiceUsed: voiceUsed + 1, voiceLimit: null, unlimited: true });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 

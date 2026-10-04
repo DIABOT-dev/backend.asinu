@@ -22,7 +22,7 @@ async function createQR(pool, req, res) {
     const result = await paymentService.createQR(pool, userId, amount);
     return res.status(200).json({ ok: true, ...result });
   } catch (err) {
-    return res.status(err.statusCode || 500).json({ ok: false, error: err.message });
+    return res.status(err.statusCode || 500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -35,7 +35,7 @@ async function handleWebhook(pool, req, res) {
     const result = await paymentService.handleWebhook(pool, req);
     return res.status(result.statusCode || 200).json({ ok: result.ok, message: result.message });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -48,7 +48,7 @@ async function getBalance(pool, req, res) {
     const result = await paymentService.getBalance(pool, req.user.id);
     return res.status(200).json({ ok: true, ...result });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -63,7 +63,7 @@ async function getHistory(pool, req, res) {
     const result = await paymentService.getHistory(pool, req.user.id, { page, limit });
     return res.status(200).json({ ok: true, ...result });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 

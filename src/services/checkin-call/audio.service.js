@@ -96,9 +96,9 @@ async function requestSpeech(phrase, voice) {
 async function synthesizeText(input, requestedLanguage = 'vi') {
   const language = normalizeLanguage(requestedLanguage);
   const phrase = typeof input === 'string' ? input.replace(/\s+/g, ' ').trim() : '';
-  if (!phrase) throw audioError('Conclusion text is required', 400);
+  if (!phrase) throw audioError('Conclusion text is required', 400, 'checkinCall.error.conclusion_required');
   if (phrase.length > MAX_DYNAMIC_TEXT_LENGTH) {
-    throw audioError('Conclusion text is too long', 400);
+    throw audioError('Conclusion text is too long', 400, 'checkinCall.error.conclusion_too_long');
   }
   const voice = voiceForLanguage(language);
   if (!voice) {

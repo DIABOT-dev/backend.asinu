@@ -9,7 +9,7 @@ const {
   careCircleQrTokenSchema,
   careCircleQrInvitationSchema,
 } = require('../validation/validation.schemas');
-const checkinService = require('../services/checkin/checkin.service');
+const caregiverView = require('../services/care-circle/caregiver-view.service');
 const {
   createInvitation: serviceCreateInvitation,
   createQrToken: serviceCreateQrToken,
@@ -23,10 +23,6 @@ const {
   deleteConnection: serviceDeleteConnection,
   updateConnection: serviceUpdateConnection,
   updateConnectionPermissions: serviceUpdateConnectionPermissions,
-  verifyCaregiverAccess,
-  getCaregiverLogs: serviceGetCaregiverLogs,
-  getCaregiverCheckins: serviceGetCaregiverCheckins,
-  getPatientName,
 } = require('../services/care-circle/careCircle.service');
 
 // =====================================================
@@ -281,18 +277,13 @@ async function getCaregiverLogs(pool, req, res) {
   }
 
   try {
-    const hasAccess = await verifyCaregiverAccess(pool, caregiverId, patientId);
-    if (!hasAccess) {
+    const result = await caregiverView.caregiverLogs(pool, caregiverId, patientId, getLang(req));
+    if (!result) {
       return res
         .status(403)
         .json({ ok: false, error: t('error.no_permission_logs', getLang(req)) });
     }
-
-    const logs = await serviceGetCaregiverLogs(pool, patientId, 7);
-    const patientName =
-      (await getPatientName(pool, patientId)) || t('careCircle.user_label', getLang(req));
-
-    return res.json({ ok: true, patientName, logs });
+    return res.json({ ok: true, ...result });
   } catch (err) {
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
@@ -310,17 +301,13 @@ async function getCaregiverCheckins(pool, req, res) {
   }
 
   try {
-    const hasAccess = await verifyCaregiverAccess(pool, caregiverId, patientId);
-    if (!hasAccess) {
+    const result = await caregiverView.caregiverCheckins(pool, caregiverId, patientId);
+    if (!result) {
       return res
         .status(403)
         .json({ ok: false, error: t('error.no_permission_logs', getLang(req)) });
     }
-
-    const sessions = await serviceGetCaregiverCheckins(pool, patientId, 14);
-    const patientName = await getPatientName(pool, patientId);
-
-    return res.json({ ok: true, patientName, sessions });
+    return res.json({ ok: true, ...result });
   } catch (err) {
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
@@ -332,36 +319,16 @@ async function getCaregiverCheckins(pool, req, res) {
  */
 async function getMemberHealthSummary(pool, req, res) {
   const caregiverId = req.user.id;
-  const memberId = parseInt(req.params.memberId);
-
-  // Verify caregiver has access and can_view_logs permission
-  const hasAccess = await verifyCaregiverAccess(pool, caregiverId, memberId);
-  if (!hasAccess) {
-    return res.status(403).json({ ok: false, error: t('error.no_access', getLang(req)) });
+  const memberId = Number(req.params.memberId);
+  if (!Number.isSafeInteger(memberId) || memberId <= 0) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_patient_id', getLang(req)) });
   }
-
   try {
-    // Get member's health summary (last 7 days)
-    const report = await checkinService.getHealthReport(pool, memberId, 7);
-    const healthScore = await checkinService.getHealthScore(pool, memberId);
-
-    return res.json({
-      ok: true,
-      healthScore,
-      report: {
-        checkinDays: report.checkinDays,
-        totalDays: report.totalDays,
-        trend: report.trend,
-        severityDistribution: report.severityDistribution,
-        statusDistribution: report.statusDistribution,
-        commonSymptoms: report.commonSymptoms,
-        alerts: report.alerts,
-        sessions: report.sessions || [],
-        highlights: report.highlights || [],
-        responseRate: report.responseRate || 0,
-        avgCheckinHour: report.avgCheckinHour || 0,
-      },
-    });
+    const result = await caregiverView.memberHealthSummary(pool, caregiverId, memberId);
+    if (!result) {
+      return res.status(403).json({ ok: false, error: t('error.no_access', getLang(req)) });
+    }
+    return res.json({ ok: true, ...result });
   } catch (err) {
     console.error('[care-circle] health summary failed:', err);
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });

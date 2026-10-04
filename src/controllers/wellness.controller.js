@@ -5,6 +5,7 @@
 
 const { t, getLang } = require('../i18n');
 const wellnessService = require('../services/wellness/wellness.monitoring.service');
+const wellnessApiService = require('../services/wellness/wellness-api.service');
 const { z } = require('zod');
 
 // =====================================================
@@ -46,34 +47,20 @@ async function postActivity(pool, req, res) {
       });
     }
 
-    const client = await pool.connect();
-    try {
-      const activity = await wellnessService.logUserActivity(
-        client,
-        req.user.id,
-        parsed.data.activity_type,
-        parsed.data.activity_data,
-        parsed.data.session_id
-      );
-
-      // Auto-evaluate after activity
-      const evaluation = await wellnessService.evaluateUserWellness(pool, req.user.id, {
-        executePrompt: false, // Don't auto-prompt from API
-        executeAlert: true,
-      });
-
-      return res.status(200).json({
-        ok: true,
-        activity,
-        evaluation: {
-          score: evaluation.score,
-          status: evaluation.status,
-          statusChanged: Boolean(evaluation.statusChanged),
-        },
-      });
-    } finally {
-      client.release();
-    }
+    const { activity, evaluation } = await wellnessApiService.logActivityAndEvaluate(
+      pool,
+      req.user.id,
+      parsed.data
+    );
+    return res.status(200).json({
+      ok: true,
+      activity,
+      evaluation: {
+        score: evaluation.score,
+        status: evaluation.status,
+        statusChanged: Boolean(evaluation.statusChanged),
+      },
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
@@ -197,19 +184,13 @@ async function getSummary(pool, req, res) {
 // =====================================================
 async function checkShouldPrompt(pool, req, res) {
   try {
-    const client = await pool.connect();
-    try {
-      const decision = await wellnessService.shouldPromptUser(client, req.user.id);
-
-      return res.status(200).json({
-        ok: true,
-        shouldPrompt: decision.shouldPrompt,
-        reason: decision.reason,
-        promptType: decision.promptType,
-      });
-    } finally {
-      client.release();
-    }
+    const decision = await wellnessApiService.shouldPrompt(pool, req.user.id);
+    return res.status(200).json({
+      ok: true,
+      shouldPrompt: decision.shouldPrompt,
+      reason: decision.reason,
+      promptType: decision.promptType,
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
@@ -305,28 +286,18 @@ async function postAckAlert(pool, req, res) {
 // =====================================================
 async function postHelpRequest(pool, req, res) {
   try {
-    const client = await pool.connect();
-    try {
-      const lang = getLang(req);
-      const alerts = await wellnessService.sendCaregiverAlert(
-        client,
-        req.user.id,
-        'EMERGENCY',
-        t('wellness.help_request_title', lang),
-        req.body.message || t('wellness.help_request_default', lang),
-        'user_request',
-        { requestedAt: new Date().toISOString() }
-      );
-
-      return res.status(200).json({
-        ok: true,
-        alertsSent: alerts.length,
-        message:
-          alerts.length > 0 ? t('wellness.alert_sent', lang) : t('wellness.no_caregiver', lang),
-      });
-    } finally {
-      client.release();
-    }
+    const lang = getLang(req);
+    const alerts = await wellnessApiService.sendHelpRequest(
+      pool,
+      req.user.id,
+      req.body.message,
+      lang
+    );
+    return res.status(200).json({
+      ok: true,
+      alertsSent: alerts.length,
+      message: alerts.length > 0 ? t('wellness.alert_sent', lang) : t('wellness.no_caregiver', lang),
+    });
   } catch (err) {
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
