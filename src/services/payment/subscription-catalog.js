@@ -48,11 +48,20 @@ const PRODUCT_MATRIX = Object.freeze([
   ['antam_8', 'yearly', 'IAP_PRODUCT_ANTAM8_YEARLY', 'asinu.antam8.yearly'],
 ]);
 
-function products() {
+const APPLE_ANTAM2_IDS = Object.freeze({
+  monthly: 'asinu.premium.monthly',
+  yearly: 'asinu.premium.yearly',
+});
+
+function products(platform = 'google') {
   return PRODUCT_MATRIX.map(([planCode, billingPeriod, envName, defaultId]) => {
     const plan = PLAN_DEFINITIONS[planCode];
+    const appleAntam2Id =
+      platform === 'apple' && planCode === 'antam_2'
+        ? APPLE_ANTAM2_IDS[billingPeriod]
+        : null;
     return {
-      id: process.env[envName] || defaultId,
+      id: appleAntam2Id || process.env[envName] || defaultId,
       plan_code: planCode,
       plan_name: plan.label,
       billing_period: billingPeriod,
@@ -65,9 +74,12 @@ function products() {
   });
 }
 
-function productForId(productId) {
+function productForId(productId, platform) {
   const normalized = String(productId || '').trim().toLowerCase();
-  return products().find((product) => product.id.toLowerCase() === normalized) || null;
+  const catalogs = platform
+    ? [products(platform)]
+    : [products('apple'), products('google')];
+  return catalogs.flat().find((product) => product.id.toLowerCase() === normalized) || null;
 }
 
 function planDefinition(planCode) {

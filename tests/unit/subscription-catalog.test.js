@@ -22,10 +22,20 @@ describe('Asinu V2 subscription catalog', () => {
     );
   });
 
-  test('does not recognise legacy Premium products at runtime', () => {
-    expect(productForId('asinu.premium.monthly')).toBeNull();
+  test('reuses the approved Premium identifiers for An Tam 2 on iOS only', () => {
+    expect(products('apple').filter((item) => item.plan_code === 'antam_2').map((item) => item.id)).toEqual([
+      'asinu.premium.monthly',
+      'asinu.premium.yearly',
+    ]);
+    expect(products('google').filter((item) => item.plan_code === 'antam_2').map((item) => item.id)).toEqual([
+      'asinu.antam2.monthly',
+      'asinu.antam2.yearly',
+    ]);
+    expect(productForId('asinu.premium.monthly', 'apple')?.plan_code).toBe('antam_2');
+    expect(productForId('asinu.premium.monthly', 'google')).toBeNull();
+    expect(productForId('asinu.antam2.monthly', 'apple')).toBeNull();
     expect(productForId('asinu.antam1.monthly')).toBeNull();
-    expect(productForId('asinu.antam2.monthly')?.plan_code).toBe('antam_2');
+    expect(productForId('asinu.antam2.monthly', 'google')?.plan_code).toBe('antam_2');
     expect(planDefinition('antam_1').code).toBe('free');
   });
 

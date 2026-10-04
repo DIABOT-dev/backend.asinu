@@ -7,7 +7,7 @@ EXPO_PUBLIC_PAYMENT_METHOD=iap
 EXPO_PUBLIC_API_BASE_URL=https://<backend-phù-hợp>
 ```
 
-Product ID được lấy từ `GET /api/iap/products`, không cấu hình SKU cố định trong mobile.
+Product ID được lấy từ `GET /api/iap/products?platform=apple|google`. iOS dùng hai Product ID `asinu.premium.*` đã duyệt cho An Tâm 2; Android dùng `asinu.antam2.*`.
 
 ## Backend dùng chung
 
@@ -26,6 +26,8 @@ IAP_PRODUCT_ANTAM4_YEARLY=asinu.antam4.yearly
 IAP_PRODUCT_ANTAM8_MONTHLY=asinu.antam8.monthly
 IAP_PRODUCT_ANTAM8_YEARLY=asinu.antam8.yearly
 ```
+
+Hai biến `IAP_PRODUCT_ANTAM2_*` áp dụng cho Google Play. Product ID An Tâm 2 trên iOS là `asinu.premium.monthly` và `asinu.premium.yearly`.
 
 ## Production
 

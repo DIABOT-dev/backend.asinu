@@ -10,8 +10,11 @@ function isActiveHousehold(row) {
 }
 
 async function ensureHousehold(pool, ownerUserId) {
-  const client = typeof pool.connect === 'function' ? await pool.connect() : pool;
-  const ownsClient = client !== pool;
+  // A checked-out pg PoolClient still exposes connect(), but calling it again
+  // fails with "Client has already been connected". Only acquire/release when
+  // we were given the Pool rather than a client inside an existing transaction.
+  const ownsClient = typeof pool.connect === 'function' && typeof pool.release !== 'function';
+  const client = ownsClient ? await pool.connect() : pool;
   try {
     if (ownsClient) await client.query('BEGIN');
     const created = await client.query(
@@ -46,17 +49,19 @@ async function householdOwnedBy(pool, ownerUserId) {
   const result = await pool.query(
     `SELECT h.*,
             COALESCE((SELECT SUM(delta) FROM consultation_credit_ledger l WHERE l.household_id = h.id), 0)::integer AS consultation_credits,
-            (SELECT COUNT(*)::integer FROM subscription_household_members m WHERE m.household_id = h.id AND m.status = 'active') AS protected_member_count
+            (SELECT COUNT(*)::integer FROM subscription_household_members m WHERE m.household_id = h.id AND m.status = 'active') AS protected_member_count,
+            EXISTS (SELECT 1 FROM subscription_household_members m WHERE m.household_id = h.id AND m.user_id = $1 AND m.status = 'active') AS is_protected_member
        FROM subscription_households h
       WHERE h.owner_user_id = $1`,
     [ownerUserId]
   );
-  return result.rows[0] || ensureHousehold(pool, ownerUserId);
+  if (result.rows[0]) return result.rows[0];
+  return { ...(await ensureHousehold(pool, ownerUserId)), is_protected_member: true };
 }
 
 async function householdProtecting(pool, userId) {
   const result = await pool.query(
-    `SELECT h.*, m.added_at,
+    `SELECT h.*, m.added_at, true AS is_protected_member,
             COALESCE((SELECT SUM(delta) FROM consultation_credit_ledger l WHERE l.household_id = h.id), 0)::integer AS consultation_credits,
             (SELECT COUNT(*)::integer FROM subscription_household_members x WHERE x.household_id = h.id AND x.status = 'active') AS protected_member_count
        FROM subscription_household_members m
@@ -73,6 +78,7 @@ function toEntitlement(household, userId) {
   const active = isActiveHousehold(household);
   const planCode = active ? household.plan_code : 'free';
   const plan = planDefinition(planCode);
+  const isProtectedMember = household?.is_protected_member === true;
   return {
     planCode,
     planName: plan.label,
@@ -82,13 +88,14 @@ function toEntitlement(household, userId) {
     isOwner: Number(household?.owner_user_id || userId) === Number(userId),
     householdId: household?.id || null,
     protectedMemberLimit: plan.protectedMemberLimit,
-    protectedMemberCount: Number(household?.protected_member_count || 1),
+    protectedMemberCount: Number(household?.protected_member_count ?? 1),
+    isProtectedMember,
     connectionLimit: plan.connectionLimit,
     billingPeriod: planCode === 'free' ? null : household?.billing_period || null,
     expiresAt: planCode === 'free' ? null : household?.current_period_end || null,
     consultationCredits: Number(household?.consultation_credits || 0),
-    callCenterEnabled: planCode !== 'free',
-    automaticEarlySignals: planCode !== 'free',
+    callCenterEnabled: planCode !== 'free' && isProtectedMember,
+    automaticEarlySignals: planCode !== 'free' && isProtectedMember,
   };
 }
 

@@ -14,9 +14,18 @@ function currentYearMonth() {
 async function getStatus(pool, userId) {
   const cacheKey = `subscription:${userId}`;
   const cached = await cacheGet(cacheKey);
-  if (cached) return cached;
+  // An entitlement must stop at the Store period end even if Redis still
+  // holds an older paid snapshot (sandbox periods can be very short).
+  if (cached && (!cached.isAnTam || Date.parse(cached.expiresAt || '') > Date.now())) {
+    return cached;
+  }
   const status = await entitlementService.getEntitlement(pool, userId);
-  await cacheSet(cacheKey, status, 3600);
+  const secondsUntilExpiry = status.expiresAt
+    ? Math.floor((Date.parse(status.expiresAt) - Date.now()) / 1000)
+    : 3600;
+  if (!status.isAnTam || secondsUntilExpiry > 0) {
+    await cacheSet(cacheKey, status, Math.min(3600, secondsUntilExpiry));
+  }
   return status;
 }
 
@@ -160,7 +169,7 @@ async function applyIapWebhookEvent(pool, event) {
   const userId = Number(owner.rows[0]?.user_id);
   if (!userId) return { ok: false, error: 'Unknown subscription chain' };
 
-  const product = productForId(event.productId);
+  const product = productForId(event.productId, event.platform);
   if (event.action === 'renew' && !product) {
     return { ok: false, error: `Unknown Asinu subscription product: ${event.productId}` };
   }
@@ -202,6 +211,21 @@ async function applyIapWebhookEvent(pool, event) {
     return { ok: true, ignored: true };
   }
   const current = await entitlementService.householdOwnedBy(pool, userId);
+  // Store notifications can arrive out of order. A refund/revocation for an
+  // older transaction must not remove a newer upgrade or renewal entitlement.
+  const currentExpiry = Date.parse(current.current_period_end || '');
+  const eventExpiry = Date.parse(event.expiresAt || '');
+  if (
+    current.plan_code === 'free' ||
+    (current.original_transaction_id &&
+      current.original_transaction_id !== event.originalTransactionId) ||
+    (event.productId && current.product_id && current.product_id !== event.productId) ||
+    (Number.isFinite(currentExpiry) &&
+      Number.isFinite(eventExpiry) &&
+      currentExpiry > eventExpiry)
+  ) {
+    return { ok: true, ignored: true, reason: 'newer entitlement active' };
+  }
   const mustDowngrade =
     event.action !== 'expire' ||
     !current.current_period_end ||

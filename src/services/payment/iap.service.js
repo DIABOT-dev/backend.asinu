@@ -449,6 +449,17 @@ async function verifyAndActivate(pool, userId, payload = {}) {
     };
   }
 
+  // A signed transaction proves a purchase happened, not that its subscription
+  // still grants access. Sandbox subscriptions can expire within hours.
+  const expiresAtMs = Date.parse(verification.expiresAt || '');
+  if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
+    return {
+      ok: false,
+      code: 'IAP_SUBSCRIPTION_EXPIRED',
+      error: 'This subscription has expired; purchase a new plan to continue',
+    };
+  }
+
   const {
     productId,
     transactionId,
@@ -457,7 +468,7 @@ async function verifyAndActivate(pool, userId, payload = {}) {
     basePlanId,
     offerId,
   } = verification;
-  const product = productForId(productId);
+  const product = productForId(productId, isApplePlatform(platform) ? PLATFORM_APPLE : PLATFORM_GOOGLE);
   if (!product) {
     return {
       ok: false,

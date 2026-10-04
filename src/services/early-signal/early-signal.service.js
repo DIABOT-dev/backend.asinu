@@ -149,6 +149,12 @@ function validateSafeOutput(output, medicationNames = []) {
 
 async function assertCanView(pool, targetUserId, actorUserId) {
   if (Number(targetUserId) === Number(actorUserId)) return;
+  // Free assessments are private to the person who requested them. Sharing
+  // with family is an active An Tam benefit for a protected household member.
+  const entitlement = await entitlementService.getEntitlement(pool, targetUserId);
+  if (!entitlement.automaticEarlySignals) {
+    throw serviceError('Early signal access denied', 403, 'FORBIDDEN', 'early_signal.no_access');
+  }
   const allowed = await pool.query(
     `SELECT 1
        FROM subscription_households h
@@ -644,6 +650,8 @@ async function familyLatest(pool, ownerUserId, lang = 'vi') {
        JOIN users u ON u.id = m.user_id
        LEFT JOIN early_signal_assessments a ON a.user_id = m.user_id
       WHERE h.owner_user_id = $1 AND a.id IS NOT NULL
+        AND h.plan_code <> 'free' AND h.status IN ('active', 'grace_period')
+        AND h.current_period_end > NOW()
       ORDER BY a.user_id, a.created_at DESC`,
     [ownerUserId, t('early_signal.subject_fallback', normalizeLang(lang))]
   );

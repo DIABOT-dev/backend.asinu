@@ -61,7 +61,7 @@ function listProducts(_pool, req, res) {
     ok: true,
     apple_bundle_id: APPLE_BUNDLE_ID,
     google_package_name: GOOGLE_PACKAGE_NAME,
-    products: products(),
+    products: products(req.query.platform === 'apple' ? 'apple' : 'google'),
   });
 }
 

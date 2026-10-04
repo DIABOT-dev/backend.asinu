@@ -75,6 +75,28 @@ beforeEach(() => {
   });
 });
 
+describe('verifyAndActivate', () => {
+  test('does not record or activate an expired Apple subscription', async () => {
+    mockAppleVerifier.verifyAndDecodeTransaction.mockResolvedValue({
+      productId: 'asinu.antam4.yearly',
+      transactionId: 'expired-test-transaction',
+      expiresDate: new Date('2020-01-01T00:00:00Z').getTime(),
+      environment: 'Sandbox',
+    });
+    const pool = { query: jest.fn() };
+
+    const result = await iapService.verifyAndActivate(pool, 2, {
+      platform: 'apple',
+      productId: 'asinu.antam4.yearly',
+      signedTransaction: 'signed-test-transaction',
+    });
+
+    expect(result).toMatchObject({ ok: false, code: 'IAP_SUBSCRIPTION_EXPIRED' });
+    expect(pool.query).not.toHaveBeenCalled();
+    expect(subscriptionService.activateFromIap).not.toHaveBeenCalled();
+  });
+});
+
 describe('assertIapRuntimeConfig', () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalAllowSandbox = process.env.IAP_ALLOW_SANDBOX;
@@ -122,7 +144,7 @@ describe('handleAppleNotification', () => {
     return {
       transactionId: 12345,
       originalTransactionId: 99999,
-      productId: 'asinu.antam2.monthly',
+      productId: 'asinu.premium.monthly',
       expiresDate: new Date('2030-01-01').getTime(),
       ...overrides,
     };
@@ -154,7 +176,7 @@ describe('handleAppleNotification', () => {
       expect.objectContaining({
         platform: 'apple',
         action: 'renew',
-        productId: 'asinu.antam2.monthly',
+        productId: 'asinu.premium.monthly',
         transactionId: '12345',
         originalTransactionId: '99999',
       })

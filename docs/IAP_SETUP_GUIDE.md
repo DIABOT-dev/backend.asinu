@@ -6,11 +6,11 @@ Asinu V2 chỉ bán ba gói An Tâm qua App Store và Google Play. App dùng `ex
 
 | Gói | Tháng | Năm | Quà gói năm |
 |---|---|---|---|
-| An Tâm 2 | `asinu.antam2.monthly`, 149.000đ | `asinu.antam2.yearly`, 1.199.000đ | 2 lượt dr.asinu |
+| An Tâm 2 | iOS: `asinu.premium.monthly`; Android: `asinu.antam2.monthly`, 149.000đ | iOS: `asinu.premium.yearly`; Android: `asinu.antam2.yearly`, 1.199.000đ | 2 lượt dr.asinu |
 | An Tâm 4 | `asinu.antam4.monthly`, 199.000đ | `asinu.antam4.yearly`, 1.499.000đ | 4 lượt dr.asinu |
 | An Tâm 8 | `asinu.antam8.monthly`, 249.000đ | `asinu.antam8.yearly`, 1.799.000đ | 8 lượt dr.asinu |
 
-Không tạo hoặc khôi phục `An Tâm 1` và các SKU `asinu.premium.*`.
+Hai SKU iOS `asinu.premium.*` đã duyệt được tái sử dụng và ánh xạ thành An Tâm 2; không tạo `An Tâm 1`.
 
 ## iOS Sandbox trên máy thật
 

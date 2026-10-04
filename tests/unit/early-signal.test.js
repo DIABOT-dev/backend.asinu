@@ -7,7 +7,9 @@ jest.mock('../../src/services/checkin-call/checkin-call.service', () => ({
   startEarlySignalEpisode: jest.fn(),
 }));
 
-const { _test } = require('../../src/services/early-signal/early-signal.service');
+const earlySignalService = require('../../src/services/early-signal/early-signal.service');
+const entitlementService = require('../../src/services/payment/entitlement.service');
+const { _test } = earlySignalService;
 
 function snapshot(overrides = {}) {
   return {
@@ -108,5 +110,46 @@ describe('Early Signals clinical output guardrails', () => {
         ['Metformin']
       )
     ).toThrow('Unsafe early signal output');
+  });
+});
+
+describe('Early Signals family access', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  test('free result cannot be evaluated or read by a connected family member', async () => {
+    jest.spyOn(entitlementService, 'getEntitlement').mockResolvedValue({
+      automaticEarlySignals: false,
+    });
+    const pool = { query: jest.fn() };
+
+    await expect(earlySignalService.latest(pool, 8, 7)).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+    });
+    await expect(earlySignalService.evaluate(pool, 8, { requestedBy: 7 })).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+    });
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+
+  test('paid protected member still requires a family relationship or log permission', async () => {
+    jest.spyOn(entitlementService, 'getEntitlement').mockResolvedValue({
+      automaticEarlySignals: true,
+    });
+    const pool = { query: jest.fn().mockResolvedValue({ rowCount: 0, rows: [] }) };
+
+    await expect(earlySignalService.latest(pool, 8, 7)).rejects.toMatchObject({
+      statusCode: 403,
+      code: 'FORBIDDEN',
+    });
+    expect(pool.query).toHaveBeenCalledTimes(1);
+  });
+
+  test('family list excludes free and expired households', async () => {
+    const pool = { query: jest.fn().mockResolvedValue({ rows: [] }) };
+    await earlySignalService.familyLatest(pool, 7);
+    expect(pool.query.mock.calls[0][0]).toContain("h.plan_code <> 'free'");
+    expect(pool.query.mock.calls[0][0]).toContain('h.current_period_end > NOW()');
   });
 });

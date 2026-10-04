@@ -74,6 +74,8 @@ IAP_PRODUCT_ANTAM8_MONTHLY=asinu.antam8.monthly
 IAP_PRODUCT_ANTAM8_YEARLY=asinu.antam8.yearly
 ```
 
+Hai biến `IAP_PRODUCT_ANTAM2_*` cấu hình Google Play. App Store Connect tiếp tục dùng `asinu.premium.monthly` và `asinu.premium.yearly` cho An Tâm 2.
+
 **Upload Service Account JSON vào container:**
 
 ```bash
