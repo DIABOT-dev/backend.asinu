@@ -147,6 +147,8 @@ const pool = createPool({
   idleTimeoutMillis: 30000, // Đóng kết nối nhàn rỗi sau 30 giây
   connectionTimeoutMillis: 2000, // Ngắt kết nối và báo lỗi sau 2 giây nếu DB nghẽn
 });
+// Auth middleware checks the persisted token version on this application's DB.
+app.locals.authPool = pool;
 
 app.use('/api/auth', authLimiter, authRoutes(pool));
 app.use('/api/mobile/auth/login', authLimiter);

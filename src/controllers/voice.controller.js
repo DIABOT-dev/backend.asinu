@@ -5,6 +5,7 @@
 
 const { t, getLang } = require('../i18n');
 const voiceService = require('../services/voice/voice.service');
+const { bindController } = require('../middleware/controller-handler.middleware');
 const {
   getVoiceUsageThisMonth,
   incrementVoiceUsage,
@@ -58,8 +59,8 @@ async function getVoiceUsage(pool, req, res) {
 
 function createVoiceController(pool) {
   return {
-    chat: (req, res) => voiceChat(pool, req, res),
-    usage: (req, res) => getVoiceUsage(pool, req, res),
+    chat: bindController(voiceChat, pool),
+    usage: bindController(getVoiceUsage, pool),
   };
 }
 

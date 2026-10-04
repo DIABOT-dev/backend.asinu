@@ -40,7 +40,9 @@ async function changePassword(pool, req, res) {
       .json({ ok: false, error: t('error.password_current_wrong', getLang(req)) });
   }
 
-  return res.status(200).json({ ok: true, message: t('success.password_changed', getLang(req)) });
+  return res
+    .status(200)
+    .json({ ok: true, token: outcome.token, message: t('success.password_changed', getLang(req)) });
 }
 
 async function getProfile(pool, req, res) {

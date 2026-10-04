@@ -844,6 +844,7 @@
   "iap.invalid_payload": "The purchase information is incomplete. Please try again.",
   "iap.unknown_product": "This plan is not available in the Store yet. Please choose another plan.",
   "iap.expired": "This purchase has expired. Please subscribe to a new plan.",
+  "iap.revoked": "This purchase was refunded or revoked and cannot be restored.",
   "iap.ownership_mismatch": "This purchase belongs to another Asinu account.",
   "iap.sandbox_not_allowed": "Sandbox purchases cannot be used in the production app.",
   "iap.store_unavailable": "The Store purchase could not be verified right now. Please try again later.",

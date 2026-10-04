@@ -1,4 +1,5 @@
-﻿const express = require('express');
+const { bindController } = require('../middleware/controller-handler.middleware');
+const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const {
   postEvent,
@@ -9,9 +10,9 @@ const {
 function carePulseRoutes(pool) {
   const router = express.Router();
 
-  router.post('/events', requireAuth, (req, res) => postEvent(pool, req, res));
-  router.get('/state', requireAuth, (req, res) => getStateHandler(pool, req, res));
-  router.post('/escalations/ack', requireAuth, (req, res) => ackEscalation(pool, req, res));
+  router.post('/events', requireAuth, bindController(postEvent, pool));
+  router.get('/state', requireAuth, bindController(getStateHandler, pool));
+  router.post('/escalations/ack', requireAuth, bindController(ackEscalation, pool));
 
   return router;
 }

@@ -111,7 +111,8 @@ async function activateHouseholdPlan(
   { planCode, billingPeriod, platform, productId, originalTransactionId, startsAt, expiresAt }
 ) {
   const plan = planDefinition(planCode);
-  if (plan.code === 'free') throw new Error('A paid Store transaction cannot activate the free plan');
+  if (plan.code === 'free')
+    throw new Error('A paid Store transaction cannot activate the free plan');
 
   const household = await ensureHousehold(db, ownerUserId);
   const updated = await db.query(
@@ -188,7 +189,13 @@ async function downgradeHouseholdToFree(db, ownerUserId, status = 'expired') {
   };
 }
 
-async function grantAnnualConsultationCredits(db, householdId, credits, referenceId, metadata = {}) {
+async function grantAnnualConsultationCredits(
+  db,
+  householdId,
+  credits,
+  referenceId,
+  metadata = {}
+) {
   if (!credits) return false;
   const result = await db.query(
     `INSERT INTO consultation_credit_ledger (household_id, delta, reason, reference_id, metadata)
@@ -204,11 +211,13 @@ async function invalidateEntitlement(userId) {
 }
 
 async function invalidateHouseholdEntitlements(db, householdId) {
+  // Include former members: a refund retry must clear snapshots left behind
+  // if cache invalidation failed after their membership was removed.
   const result = await db.query(
     `SELECT owner_user_id AS user_id FROM subscription_households WHERE id = $1
      UNION
      SELECT user_id FROM subscription_household_members
-      WHERE household_id = $1 AND status = 'active'`,
+      WHERE household_id = $1`,
     [householdId]
   );
   await Promise.all(result.rows.map((row) => invalidateEntitlement(Number(row.user_id))));

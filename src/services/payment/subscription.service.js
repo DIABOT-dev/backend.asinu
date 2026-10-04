@@ -5,6 +5,7 @@ const { t } = require('../../i18n');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 const entitlementService = require('./entitlement.service');
+const revocations = require('./iap-revocation.service');
 const { planDefinition, productForId, localizedPlanName } = require('./subscription-catalog');
 
 function currentYearMonth() {
@@ -103,6 +104,9 @@ async function activateFromIap(pool, userId, options) {
   let household;
   try {
     await db.query('BEGIN');
+    await revocations.lockPurchaseChain(db, options);
+    await revocations.lockPurchaseOwner(db, userId);
+    await revocations.assertNotRevoked(db, options);
     household = await entitlementService.activateHouseholdPlan(db, userId, {
       planCode: plan.code,
       billingPeriod: options.billingPeriod,
@@ -128,7 +132,11 @@ async function activateFromIap(pool, userId, options) {
     await db.query('COMMIT');
   } catch (error) {
     await db.query('ROLLBACK');
-    return { ok: false, code: 'ACTIVATION_FAILED', error: error.message };
+    return {
+      ok: false,
+      code: error.code === 'IAP_PURCHASE_REVOKED' ? error.code : 'ACTIVATION_FAILED',
+      error: error.message,
+    };
   } finally {
     db.release();
   }
@@ -160,11 +168,15 @@ async function applyIapWebhookEvent(pool, event) {
   if (!event.originalTransactionId) {
     return { ok: false, error: 'Missing originalTransactionId' };
   }
+  if (['refund', 'revoke'].includes(event.action)) {
+    // Record even if the webhook arrives before the app submits its receipt.
+    await revocations.recordRevocation(pool, event);
+  }
   const owner = await pool.query(
     `SELECT user_id FROM iap_receipts
-      WHERE original_transaction_id = $1 OR transaction_id = $1
+      WHERE (original_transaction_id = $1 OR transaction_id = $1) AND platform = $2
       ORDER BY id ASC LIMIT 1`,
-    [event.originalTransactionId]
+    [event.originalTransactionId, event.platform]
   );
   const userId = Number(owner.rows[0]?.user_id);
   if (!userId) return { ok: false, error: 'Unknown subscription chain' };
@@ -210,39 +222,55 @@ async function applyIapWebhookEvent(pool, event) {
   if (!['revoke', 'refund', 'expire'].includes(event.action)) {
     return { ok: true, ignored: true };
   }
-  const current = await entitlementService.householdOwnedBy(pool, userId);
-  // Store notifications can arrive out of order. A refund/revocation for an
-  // older transaction must not remove a newer upgrade or renewal entitlement.
-  const currentExpiry = Date.parse(current.current_period_end || '');
-  const eventExpiry = Date.parse(event.expiresAt || '');
-  if (
-    current.plan_code === 'free' ||
-    (current.original_transaction_id &&
-      current.original_transaction_id !== event.originalTransactionId) ||
-    (event.productId && current.product_id && current.product_id !== event.productId) ||
-    (Number.isFinite(currentExpiry) &&
-      Number.isFinite(eventExpiry) &&
-      currentExpiry > eventExpiry)
-  ) {
-    return { ok: true, ignored: true, reason: 'newer entitlement active' };
+  const db = await pool.connect();
+  let downgraded;
+  let ignored = false;
+  try {
+    await db.query('BEGIN');
+    await revocations.lockPurchaseOwner(db, userId);
+    const current = await entitlementService.householdOwnedBy(db, userId);
+    // Store notifications can arrive out of order. A refund/revocation for an
+    // older transaction must not remove a newer upgrade or renewal entitlement.
+    const currentExpiry = Date.parse(current.current_period_end || '');
+    const eventExpiry = Date.parse(event.expiresAt || '');
+    const mustDowngrade =
+      event.action !== 'expire' ||
+      !current.current_period_end ||
+      new Date(current.current_period_end) <= new Date();
+    if (
+      current.plan_code === 'free' ||
+      (current.original_transaction_id &&
+        current.original_transaction_id !== event.originalTransactionId) ||
+      (event.productId && current.product_id && current.product_id !== event.productId) ||
+      (Number.isFinite(currentExpiry) &&
+        Number.isFinite(eventExpiry) &&
+        currentExpiry > eventExpiry) ||
+      !mustDowngrade
+    ) {
+      downgraded = current;
+      ignored = true;
+    } else {
+      downgraded = await entitlementService.downgradeHouseholdToFree(
+        db,
+        userId,
+        event.action === 'refund' ? 'refunded' : event.action === 'revoke' ? 'revoked' : 'expired'
+      );
+    }
+    await db.query('COMMIT');
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  } finally {
+    db.release();
   }
-  const mustDowngrade =
-    event.action !== 'expire' ||
-    !current.current_period_end ||
-    new Date(current.current_period_end) <= new Date();
-  if (!mustDowngrade) return { ok: true, ignored: true, reason: 'newer entitlement active' };
-
-  const downgraded = await entitlementService.downgradeHouseholdToFree(
-    pool,
-    userId,
-    event.action === 'refund' ? 'refunded' : event.action === 'revoke' ? 'revoked' : 'expired'
-  );
   await entitlementService.invalidateHouseholdEntitlements(pool, downgraded.id);
   await Promise.all(
     (downgraded.affectedUserIds || []).map((affectedUserId) =>
       entitlementService.invalidateEntitlement(affectedUserId)
     )
   );
+  // Retry cache invalidation even when the database downgrade already committed.
+  if (ignored) return { ok: true, ignored: true, reason: 'newer entitlement active' };
   if (event.action === 'refund') {
     emitSubscriptionEvent(pool, 'payment.refunded', {
       userId,
@@ -254,15 +282,19 @@ async function applyIapWebhookEvent(pool, event) {
       status: 'refunded',
     });
   }
-  emitSubscriptionEvent(pool, event.action === 'expire' ? 'subscription.expired' : 'subscription.cancelled', {
-    userId,
-    planCode: 'free',
-    productId: event.productId,
-    transactionId: event.transactionId,
-    platform: event.platform,
-    expiresAt: event.expiresAt,
-    status: event.action,
-  });
+  emitSubscriptionEvent(
+    pool,
+    event.action === 'expire' ? 'subscription.expired' : 'subscription.cancelled',
+    {
+      userId,
+      planCode: 'free',
+      productId: event.productId,
+      transactionId: event.transactionId,
+      platform: event.platform,
+      expiresAt: event.expiresAt,
+      status: event.action,
+    }
+  );
   return { ok: true, userId, planCode: 'free' };
 }
 
@@ -289,12 +321,13 @@ function parseSubDescription(content) {
   return user && order ? { userId: Number(user[1]), orderCode: order[1] } : null;
 }
 
-async function activateSubscription(pool, userId, orderCode) {
-  const db = await pool.connect();
+async function activateSubscription(pool, userId, orderCode, options = {}) {
+  const ownsTransaction = typeof pool.release !== 'function';
+  const db = ownsTransaction ? await pool.connect() : pool;
   let household;
   let expiresAt;
   try {
-    await db.query('BEGIN');
+    if (ownsTransaction) await db.query('BEGIN');
     const pending = await db.query(
       `SELECT * FROM subscriptions
         WHERE order_code = $1 AND user_id = $2 AND status = 'pending'
@@ -302,14 +335,22 @@ async function activateSubscription(pool, userId, orderCode) {
       [orderCode, userId]
     );
     if (!pending.rowCount) {
-      await db.query('ROLLBACK');
+      if (ownsTransaction) await db.query('ROLLBACK');
       return { ok: false, message: 'Không tìm thấy giao dịch còn hiệu lực.' };
+    }
+    if (
+      options.transferAmount !== undefined &&
+      Number(pending.rows[0].amount) !== options.transferAmount
+    ) {
+      if (ownsTransaction) await db.query('ROLLBACK');
+      return { ok: false, message: t('error.payment_amount_mismatch') };
     }
     const months = Number(pending.rows[0].plan_months || 1);
     const current = await entitlementService.householdOwnedBy(db, userId);
-    const base = current.current_period_end && new Date(current.current_period_end) > new Date()
-      ? new Date(current.current_period_end)
-      : new Date();
+    const base =
+      current.current_period_end && new Date(current.current_period_end) > new Date()
+        ? new Date(current.current_period_end)
+        : new Date();
     expiresAt = new Date(base);
     expiresAt.setMonth(expiresAt.getMonth() + months);
     household = await entitlementService.activateHouseholdPlan(db, userId, {
@@ -326,24 +367,29 @@ async function activateSubscription(pool, userId, orderCode) {
               subscription_end = $2, completed_at = NOW() WHERE order_code = $1`,
       [orderCode, expiresAt]
     );
-    await db.query('COMMIT');
+    if (ownsTransaction) await db.query('COMMIT');
   } catch (error) {
-    await db.query('ROLLBACK');
-    return { ok: false, message: error.message };
+    if (ownsTransaction) await db.query('ROLLBACK');
+    throw error;
   } finally {
-    db.release();
+    if (ownsTransaction) db.release();
   }
-  await entitlementService.invalidateHouseholdEntitlements(pool, household.id);
+  const result = { ok: true, planCode: 'antam_2', expiresAt, householdId: household.id };
+  if (!options.deferEffects) await notifyLegacyActivated(pool, userId, orderCode, result);
+  return result;
+}
+
+async function notifyLegacyActivated(pool, userId, orderCode, result) {
+  await entitlementService.invalidateHouseholdEntitlements(pool, result.householdId);
   emitSubscriptionEvent(pool, 'subscription.activated', {
     userId,
     planCode: 'antam_2',
     productId: 'legacy.bank-transfer',
     transactionId: orderCode,
     platform: 'legacy',
-    expiresAt,
+    expiresAt: result.expiresAt,
     status: 'active',
   });
-  return { ok: true, planCode: 'antam_2', expiresAt };
 }
 
 module.exports = {
@@ -356,4 +402,5 @@ module.exports = {
   getHistory,
   parseSubDescription,
   activateSubscription,
+  notifyLegacyActivated,
 };

@@ -26,6 +26,7 @@ const path = require('path');
 const logger = require('../../lib/logger');
 const { captureException } = require('../../lib/sentry');
 const subscriptionService = require('./subscription.service');
+const { assertNotRevoked } = require('./iap-revocation.service');
 const { productForId } = require('./subscription-catalog');
 
 function sandboxReceiptsAllowed() {
@@ -200,6 +201,13 @@ async function verifyAppleReceipt({ signedTransaction } = {}) {
         ok: false,
         code: 'APPLE_SANDBOX_NOT_ALLOWED',
         error: 'Sandbox Apple transaction is not accepted in production',
+      };
+    }
+    if (decoded.revocationDate != null) {
+      return {
+        ok: false,
+        code: 'IAP_PURCHASE_REVOKED',
+        error: 'This Store transaction was refunded or revoked',
       };
     }
     return {
@@ -460,21 +468,31 @@ async function verifyAndActivate(pool, userId, payload = {}) {
     };
   }
 
-  const {
+  const { productId, transactionId, originalTransactionId, expiresAt, basePlanId, offerId } =
+    verification;
+  const product = productForId(
     productId,
-    transactionId,
-    originalTransactionId,
-    expiresAt,
-    basePlanId,
-    offerId,
-  } = verification;
-  const product = productForId(productId, isApplePlatform(platform) ? PLATFORM_APPLE : PLATFORM_GOOGLE);
+    isApplePlatform(platform) ? PLATFORM_APPLE : PLATFORM_GOOGLE
+  );
   if (!product) {
     return {
       ok: false,
       code: 'UNKNOWN_PRODUCT',
       error: `Unknown Asinu subscription product: ${productId}`,
     };
+  }
+
+  const verifiedPurchase = {
+    platform: isApplePlatform(platform) ? PLATFORM_APPLE : PLATFORM_GOOGLE,
+    transactionId,
+  };
+  try {
+    await assertNotRevoked(pool, verifiedPurchase);
+  } catch (error) {
+    if (error.code === 'IAP_PURCHASE_REVOKED') {
+      return { ok: false, code: error.code, error: error.message };
+    }
+    throw error;
   }
 
   const receipt = await recordReceipt(pool, {
@@ -629,6 +647,7 @@ async function handleAppleNotification(pool, envelope) {
     return { ok: true, ignored: true, reason: `unhandled type ${notificationType}` };
   }
 
+  if (tx.revocationDate != null && action === 'renew') action = 'revoke';
   return await subscriptionService.applyIapWebhookEvent(pool, {
     platform: 'apple',
     transactionId: tx.transactionId ? String(tx.transactionId) : null,

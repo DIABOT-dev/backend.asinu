@@ -2,6 +2,7 @@ const http = require('http');
 const jwt = require('jsonwebtoken');
 const { WebSocket, WebSocketServer } = require('ws');
 const { assertTenantAllowed } = require('./doctor-task.service');
+const { isSessionCurrent } = require('../auth/session.service');
 
 const CHAT_PATH = '/api/doctor/chat/ws';
 const CHAT_PROTOCOL = 'asinu-chat';
@@ -19,7 +20,18 @@ const send = (socket, type, data) => {
 const broadcastChatEvent = ({ tenantId, taskId, type, data }) => {
   const clients = connections.get(taskKey(tenantId, taskId));
   if (!clients) return;
-  for (const socket of clients) send(socket, type, data);
+  for (const socket of clients) {
+    // Serialize delivery and revalidate before exposing each health message.
+    socket.delivery = (socket.delivery || Promise.resolve())
+      .then(async () => {
+        if (!(await isSessionCurrent(socket.authPool, socket.authClaims))) {
+          socket.close(1008, 'Session expired');
+          return;
+        }
+        send(socket, type, data);
+      })
+      .catch(() => socket.close(1011, 'Authentication unavailable'));
+  }
 };
 
 const tokenFromProtocols = (request) => {
@@ -45,7 +57,7 @@ const authenticate = (token) => {
     const payload = jwt.verify(token, process.env.JWT_SECRET);
     const userId = payload?.id ?? payload?.user_id;
     if (!userId) return null;
-    return { userId: String(userId) };
+    return { userId: String(userId), claims: payload };
   } catch {
     return null;
   }
@@ -90,6 +102,8 @@ const attachDoctorChatWebSocketServer = (server, pool) => {
   webSocketServer = instance;
 
   instance.on('connection', (socket, request) => {
+    socket.authPool = pool;
+    socket.authClaims = request.doctorChatAuth.claims;
     const url = new URL(request.url || CHAT_PATH, `http://${request.headers.host || 'localhost'}`);
     const tenantId = String(url.searchParams.get('tenant_id') || '').trim();
     const taskId = String(url.searchParams.get('task_id') || '').trim();
@@ -99,13 +113,22 @@ const attachDoctorChatWebSocketServer = (server, pool) => {
     connections.set(key, clients);
 
     let alive = true;
-    const heartbeat = setInterval(() => {
+    const heartbeat = setInterval(async () => {
       if (!alive) {
         socket.terminate();
         return;
       }
-      alive = false;
-      socket.ping();
+      try {
+        if (!(await isSessionCurrent(pool, socket.authClaims))) {
+          socket.close(1008, 'Session expired');
+          return;
+        }
+        if (socket.readyState !== WebSocket.OPEN) return;
+        alive = false;
+        socket.ping();
+      } catch {
+        socket.close(1011, 'Authentication unavailable');
+      }
     }, HEARTBEAT_MS);
     heartbeat.unref();
     socket.on('pong', () => {
@@ -152,7 +175,8 @@ const attachDoctorChatWebSocketServer = (server, pool) => {
       rejectUpgrade(socket);
       return;
     }
-    void ownsTask(pool, tenantId, taskId, auth.userId)
+    void isSessionCurrent(pool, auth.claims)
+      .then((current) => current && ownsTask(pool, tenantId, taskId, auth.userId))
       .then((owned) => {
         if (!owned) {
           rejectUpgrade(socket);

@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
+const { bindController } = require('../middleware/controller-handler.middleware');
 const {
   imageUpload,
   audioUpload,
@@ -28,62 +29,46 @@ const {
 
 function doctorTaskRoutes(pool) {
   const router = express.Router();
-  router.post('/tasks', requireAuth, (req, res, next) =>
-    Promise.resolve(requestDoctorTask(pool, req, res)).catch(next)
-  );
-  router.get('/tasks', requireAuth, (req, res, next) =>
-    Promise.resolve(listDoctorTasks(pool, req, res)).catch(next)
-  );
-  router.get('/tasks/:taskId/messages', requireAuth, (req, res, next) =>
-    Promise.resolve(listDoctorMessages(pool, req, res)).catch(next)
-  );
-  router.post('/tasks/:taskId/messages', requireAuth, (req, res, next) =>
-    Promise.resolve(createDoctorMessage(pool, req, res)).catch(next)
-  );
-  router.post('/tasks/:taskId/messages/action', requireAuth, (req, res, next) =>
-    Promise.resolve(createDoctorMessageAction(pool, req, res)).catch(next)
+  router.post('/tasks', requireAuth, bindController(requestDoctorTask, pool));
+  router.get('/tasks', requireAuth, bindController(listDoctorTasks, pool));
+  router.get('/tasks/:taskId/messages', requireAuth, bindController(listDoctorMessages, pool));
+  router.post('/tasks/:taskId/messages', requireAuth, bindController(createDoctorMessage, pool));
+  router.post(
+    '/tasks/:taskId/messages/action',
+    requireAuth,
+    bindController(createDoctorMessageAction, pool)
   );
   router.post(
     '/tasks/:taskId/attachments',
     requireAuth,
     handleUpload(imageUpload.single('file')),
     verifyImageMagicBytes,
-    (req, res, next) => Promise.resolve(createDoctorAttachment(pool, req, res)).catch(next)
+    bindController(createDoctorAttachment, pool)
   );
   router.post(
     '/tasks/:taskId/voice',
     requireAuth,
     handleUpload(audioUpload.single('file')),
     verifyAudioMagicBytes,
-    (req, res, next) => Promise.resolve(createDoctorVoice(pool, req, res)).catch(next)
+    bindController(createDoctorVoice, pool)
   );
-  router.post('/tasks/:taskId/rating', requireAuth, (req, res, next) =>
-    Promise.resolve(submitDoctorRating(pool, req, res)).catch(next)
+  router.post('/tasks/:taskId/rating', requireAuth, bindController(submitDoctorRating, pool));
+  router.post('/privacy', requireAuth, bindController(requestDoctorPrivacy, pool));
+  router.get('/privacy', requireAuth, bindController(getDoctorPrivacyReceipts, pool));
+  router.post('/recommendations', requireAuth, bindController(recommendDoctor, pool));
+  router.post('/specialists', requireAuth, bindController(listDoctorDirectory, pool));
+  router.get(
+    '/specialty-options',
+    requireAuth,
+    bindController(listDoctorDirectorySpecialties, pool)
   );
-  router.post('/privacy', requireAuth, (req, res, next) =>
-    Promise.resolve(requestDoctorPrivacy(pool, req, res)).catch(next)
+  router.get(
+    '/specialists/:doctorId/reviews',
+    requireAuth,
+    bindController(listDoctorReviews, pool)
   );
-  router.get('/privacy', requireAuth, (req, res, next) =>
-    Promise.resolve(getDoctorPrivacyReceipts(pool, req, res)).catch(next)
-  );
-  router.post('/recommendations', requireAuth, (req, res, next) =>
-    Promise.resolve(recommendDoctor(pool, req, res)).catch(next)
-  );
-  router.post('/specialists', requireAuth, (req, res, next) =>
-    Promise.resolve(listDoctorDirectory(pool, req, res)).catch(next)
-  );
-  router.get('/specialty-options', requireAuth, (req, res, next) =>
-    Promise.resolve(listDoctorDirectorySpecialties(pool, req, res)).catch(next)
-  );
-  router.get('/specialists/:doctorId/reviews', requireAuth, (req, res, next) =>
-    Promise.resolve(listDoctorReviews(pool, req, res)).catch(next)
-  );
-  router.post('/specialties', requireAuth, (req, res, next) =>
-    Promise.resolve(listDoctorSpecialties(pool, req, res)).catch(next)
-  );
-  router.post('/clinics', requireAuth, (req, res, next) =>
-    Promise.resolve(listDoctorClinics(pool, req, res)).catch(next)
-  );
+  router.post('/specialties', requireAuth, bindController(listDoctorSpecialties, pool));
+  router.post('/clinics', requireAuth, bindController(listDoctorClinics, pool));
   return router;
 }
 

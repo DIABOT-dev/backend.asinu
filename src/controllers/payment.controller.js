@@ -14,7 +14,7 @@ async function createQR(pool, req, res) {
   const userId = req.user?.id;
   const amount = Number(req.body?.amount);
 
-  if (!amount || isNaN(amount) || amount < 1000) {
+  if (!Number.isSafeInteger(amount) || amount < 1000) {
     return res.status(400).json({ ok: false, error: t('error.min_amount', getLang(req)) });
   }
 
@@ -22,7 +22,9 @@ async function createQR(pool, req, res) {
     const result = await paymentService.createQR(pool, userId, amount);
     return res.status(200).json({ ok: true, ...result });
   } catch (err) {
-    return res.status(err.statusCode || 500).json({ ok: false, error: t('error.server', getLang(req)) });
+    return res
+      .status(err.statusCode || 500)
+      .json({ ok: false, error: t('error.server', getLang(req)) });
   }
 }
 
@@ -58,7 +60,7 @@ async function getBalance(pool, req, res) {
  */
 async function getHistory(pool, req, res) {
   const page = Math.max(1, parseInt(req.query.page) || 1);
-  const limit = Math.min(50, parseInt(req.query.limit) || 20);
+  const limit = Math.max(1, Math.min(50, parseInt(req.query.limit) || 20));
   try {
     const result = await paymentService.getHistory(pool, req.user.id, { page, limit });
     return res.status(200).json({ ok: true, ...result });

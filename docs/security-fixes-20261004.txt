@@ -1,0 +1,72 @@
+ASINU — SECURITY FIXES — 04/10/2026
+
+Phạm vi: app/asinu và app/backend.asinu. Không đổi bảng giá, quyền lợi gói,
+máy trạng thái check-in hoặc dữ liệu production. Các bước triển khai ở cuối file.
+
+BACKEND
+- Zalo: danh tính chỉ lấy từ token đã được provider xác thực; không liên kết
+  tài khoản bằng email/provider_id tự khai trong request.
+- JWT: auth_token_version lưu trong users, được kiểm tra trên mỗi request.
+  Đăng xuất thu hồi toàn bộ token cũ. Token trước migration được coi là version 0.
+- Đổi mật khẩu: update có kiểm tra password_hash cũ và tăng version nguyên tử;
+  cấp token mới cho thiết bị đang đổi mật khẩu, các phiên khác mất hiệu lực.
+- Doctor WebSocket: kiểm tra phiên ở handshake, heartbeat và trước mỗi tin nhắn.
+- IAP: chặn revocationDate và giao dịch đã ghi nhận refund/revoke. Lưu trạng thái
+  thu hồi kể cả khi webhook đến trước receipt. Lock giao dịch/hộ chống race;
+  refund cũ không thu hồi entitlement của bản nâng gói mới hơn.
+- QR: dedupe webhook, lock payment, cộng ví và hoàn tất payment trong một
+  transaction. Lỗi DB rollback toàn bộ để retry an toàn. Kiểm tra chủ payment,
+  số tiền, chiều chuyển khoản; fail closed nếu thiếu bảng idempotency.
+- QR đăng ký cũ: xác thực đủ số tiền và dùng chung transaction của webhook.
+- Route: 114 callback chuyển sang bindController; voice factory cũng được bảo vệ.
+  Lỗi async được đưa vào error handler thay vì unhandled rejection/treo request.
+
+FRONTEND
+- Không log token, token prefix, SDK response hoặc thông tin cá nhân Zalo.
+- Lưu token đổi mật khẩu vào SecureStore; bảo vệ khỏi tự logout do response
+  401 của request dùng token cũ trong lúc token đang được thay thế.
+- Android release không còn dùng debug key. EAS vẫn inject signing như trước;
+  local release cần ASINU_UPLOAD_STORE_FILE, ASINU_UPLOAD_STORE_PASSWORD,
+  ASINU_UPLOAD_KEY_ALIAS, ASINU_UPLOAD_KEY_PASSWORD (env hoặc Gradle properties).
+  Không đổi/generate keystore thật. Không commit mật khẩu hay release keystore.
+- Config plugin duy trì release-signing guard sau Expo prebuild.
+
+DEPENDENCY PATCHES
+- patches/braces+3.0.3.patch: giới hạn độ sâu parse và các AST walkers.
+- patches/node-forge+1.4.0.patch: từ chối thành phần DigestAlgorithm thừa/sai kiểu.
+- postinstall dùng patch-package --error-on-fail. Không dùng npm audit fix --force.
+- npm audit frontend vẫn báo 18 high do phiên bản upstream chưa đổi. Đây là hai
+  advisory gốc và các dependency kéo theo, không phải 18 lỗi riêng trong app.
+  Bản vá cục bộ đã được replay trên install sạch và kiểm tra regression nhưng
+  không thay thế bản phát hành upstream chính thức hoặc kiểm toán mật mã đầy đủ.
+  Nguồn:
+  https://github.com/advisories/GHSA-vfj7-8cjw-p6xm
+  https://github.com/advisories/GHSA-86w9-cpqp-85rv
+  https://www.rfc-editor.org/rfc/rfc8017
+  https://docs.expo.dev/build-reference/android-builds/
+
+ÁP DỤNG KHI DEPLOY
+1. Backup DB theo quy trình hiện tại; triển khai frontend hỗ trợ token đổi mật khẩu.
+2. Trong backend.asinu chạy: node scripts/migrate.js
+   Hai migration mới: 099_auth_token_version.sql và 100_iap_transaction_revocations.sql.
+   npm start / npm run dev hiện đã tự chạy migration trước khi khởi động server.
+3. Restart backend sau khi migration hoàn tất, rồi kiểm tra login/logout,
+   đổi mật khẩu, mua/restore/refund IAP và webhook QR ở staging.
+4. Trong asinu chạy: npm ci
+   Test: npm run test:security && npm run type-check && npm run test:api-contract
+
+KIỂM TRA DB RIÊNG
+Security integration test chỉ nhận SECURITY_TEST_DATABASE_URL trỏ đến localhost
+và database có tên asinu_security_test_*. Không trỏ test tới DB ứng dụng.
+14 trường hợp PostgreSQL: rollback, retry, concurrent credit, forged owner,
+outgoing/invalid amount, missing table, legacy amount, refund restore,
+webhook đến sớm, retry xoá cache quyền của thành viên đã bị gỡ, refund/restore race,
+nâng gói và backfill migration idempotent.
+
+GIỚI HẠN
+Kết quả local: 69 suites / 432 tests backend đều pass trên database test riêng.
+Frontend: type-check, i18n, API contract, test:security và ESLint các file sửa pass.
+CI/CD frontend đã thêm test:security; backend CI đã bật security DB integration.
+Chưa chạy giao dịch tiền thật hoặc deploy production. Android kiểm tra task graph
+(dry-run): debug thành công; release bị chặn đúng khi thiếu upload keystore.
+Chưa tạo bản build Android release được ký để phát hành.

@@ -76,6 +76,41 @@ beforeEach(() => {
 });
 
 describe('verifyAndActivate', () => {
+  test('rejects a signed Apple transaction containing a revocation date', async () => {
+    mockAppleVerifier.verifyAndDecodeTransaction.mockResolvedValue({
+      productId: 'asinu.antam4.yearly',
+      transactionId: 'refunded-tx',
+      expiresDate: Date.now() + 86400000,
+      revocationDate: Date.now(),
+      environment: 'Sandbox',
+    });
+    const pool = { query: jest.fn() };
+    const result = await iapService.verifyAndActivate(pool, 2, {
+      platform: 'apple',
+      signedTransaction: 'signed',
+    });
+    expect(result).toMatchObject({ ok: false, code: 'IAP_PURCHASE_REVOKED' });
+    expect(pool.query).not.toHaveBeenCalled();
+    expect(subscriptionService.activateFromIap).not.toHaveBeenCalled();
+  });
+
+  test('rejects an older signed receipt after a refund webhook recorded revocation', async () => {
+    mockAppleVerifier.verifyAndDecodeTransaction.mockResolvedValue({
+      productId: 'asinu.antam4.yearly',
+      transactionId: 'refunded-tx',
+      expiresDate: Date.now() + 86400000,
+      environment: 'Sandbox',
+    });
+    const pool = { query: jest.fn().mockResolvedValue({ rows: [{ exists: 1 }] }) };
+    const result = await iapService.verifyAndActivate(pool, 2, {
+      platform: 'apple',
+      signedTransaction: 'old-signed',
+    });
+    expect(result).toMatchObject({ ok: false, code: 'IAP_PURCHASE_REVOKED' });
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(subscriptionService.activateFromIap).not.toHaveBeenCalled();
+  });
+
   test('does not record or activate an expired Apple subscription', async () => {
     mockAppleVerifier.verifyAndDecodeTransaction.mockResolvedValue({
       productId: 'asinu.antam4.yearly',
@@ -154,6 +189,19 @@ describe('handleAppleNotification', () => {
     const r = await handleAppleNotification(pool, {});
     expect(r.ok).toBe(false);
     expect(r.code).toBe('INVALID_PAYLOAD');
+  });
+
+  test('a renewal carrying a revoked signed transaction is treated as revocation', async () => {
+    mockAppleVerifier.verifyAndDecodeNotification.mockResolvedValue(buildNotification('DID_RENEW'));
+    mockAppleVerifier.verifyAndDecodeTransaction.mockResolvedValue(
+      buildTx({ revocationDate: Date.now() })
+    );
+    subscriptionService.applyIapWebhookEvent.mockResolvedValue({ ok: true });
+    await handleAppleNotification(pool, { signedPayload: 'signed' });
+    expect(subscriptionService.applyIapWebhookEvent).toHaveBeenCalledWith(
+      pool,
+      expect.objectContaining({ action: 'revoke' })
+    );
   });
 
   test('returns APPLE_NOTIF_VERIFY_FAILED when JWS signature invalid', async () => {

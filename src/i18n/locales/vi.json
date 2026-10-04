@@ -844,6 +844,7 @@
   "iap.invalid_payload": "Thông tin giao dịch chưa đầy đủ. Vui lòng thử lại.",
   "iap.unknown_product": "Gói này chưa có trên cửa hàng ứng dụng. Vui lòng chọn gói khác.",
   "iap.expired": "Giao dịch đã hết hạn. Vui lòng đăng ký gói mới.",
+  "iap.revoked": "Giao dịch đã được hoàn tiền hoặc thu hồi và không thể khôi phục.",
   "iap.ownership_mismatch": "Giao dịch này thuộc tài khoản Asinu khác.",
   "iap.sandbox_not_allowed": "Giao dịch thử nghiệm không dùng được trong bản chính thức.",
   "iap.store_unavailable": "Chưa thể xác minh giao dịch với cửa hàng ứng dụng. Vui lòng thử lại sau.",

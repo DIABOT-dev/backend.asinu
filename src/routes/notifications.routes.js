@@ -1,3 +1,4 @@
+const { bindController } = require('../middleware/controller-handler.middleware');
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { requireCronSecret } = require('../middleware/cron-auth');
@@ -18,19 +19,17 @@ const {
 function notificationRoutes(pool) {
   const router = express.Router();
 
-  router.get('/', requireAuth, (req, res) => getNotifications(pool, req, res));
-  router.post('/', requireAuth, (req, res) => createNotification(pool, req, res));
-  router.delete('/', requireAuth, (req, res) => deleteAll(pool, req, res));
-  router.put('/mark-all-read', requireAuth, (req, res) => markAllAsRead(pool, req, res));
-  router.put('/:id/read', requireAuth, (req, res) => markAsRead(pool, req, res));
-  router.delete('/:id', requireAuth, (req, res) => deleteOne(pool, req, res));
-  router.get('/preferences', requireAuth, (req, res) => getNotificationPreferences(pool, req, res));
-  router.put('/preferences', requireAuth, (req, res) =>
-    updateNotificationPreferences(pool, req, res)
-  );
-  router.get('/engagement/preview', requireAuth, (req, res) => previewEngagement(pool, req, res));
-  router.post('/engagement/run', requireCronSecret, (req, res) => runEngagement(pool, req, res));
-  router.post('/basic/run', requireCronSecret, (req, res) => runBasic(pool, req, res));
+  router.get('/', requireAuth, bindController(getNotifications, pool));
+  router.post('/', requireAuth, bindController(createNotification, pool));
+  router.delete('/', requireAuth, bindController(deleteAll, pool));
+  router.put('/mark-all-read', requireAuth, bindController(markAllAsRead, pool));
+  router.put('/:id/read', requireAuth, bindController(markAsRead, pool));
+  router.delete('/:id', requireAuth, bindController(deleteOne, pool));
+  router.get('/preferences', requireAuth, bindController(getNotificationPreferences, pool));
+  router.put('/preferences', requireAuth, bindController(updateNotificationPreferences, pool));
+  router.get('/engagement/preview', requireAuth, bindController(previewEngagement, pool));
+  router.post('/engagement/run', requireCronSecret, bindController(runEngagement, pool));
+  router.post('/basic/run', requireCronSecret, bindController(runBasic, pool));
 
   return router;
 }

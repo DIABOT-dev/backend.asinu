@@ -1,3 +1,4 @@
+const { bindController } = require('../middleware/controller-handler.middleware');
 /**
  * Logs Routes
  * POST /api/logs/voice-parse — available to every signed-in user
@@ -21,7 +22,7 @@ function logsRoutes(pool) {
     requireAuth,
     handleUpload(audioUpload.single('audio')),
     verifyAudioMagicBytes,
-    (req, res) => voiceParse(pool, req, res)
+    bindController(voiceParse, pool)
   );
 
   return router;

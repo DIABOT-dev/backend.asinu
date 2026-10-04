@@ -1,3 +1,4 @@
+const { bindController } = require('../middleware/controller-handler.middleware');
 const express = require('express');
 const {
   registerByEmail,
@@ -24,25 +25,28 @@ function authRoutes(pool) {
   const router = express.Router();
 
   // ===== REGISTER & LOGIN =====
-  router.post('/email/register', (req, res) => registerByEmail(pool, req, res));
-  router.post('/email/login', (req, res) => loginByEmail(pool, req, res));
-  router.post('/google', (req, res) => loginByGoogle(pool, req, res));
-  router.post('/apple', (req, res) => loginByApple(pool, req, res));
-  router.post('/zalo', (req, res) => loginByZalo(pool, req, res));
-  router.get('/zalo/initiate', (req, res) => zaloInitiate(pool, req, res));
-  router.get('/zalo/callback', (req, res) => zaloCallback(pool, req, res));
-  router.get('/facebook/initiate', (req, res) => facebookInitiate(pool, req, res));
-  router.get('/facebook/callback', (req, res) => facebookCallback(pool, req, res));
-  router.post('/facebook/token', (req, res) => loginByFacebookToken(pool, req, res));
-  router.get('/google/initiate', (req, res) => googleInitiate(pool, req, res));
-  router.get('/google/callback', (req, res) => googleCallback(pool, req, res));
-  router.post('/oauth/exchange', (req, res) => exchangeOAuthCodeHandler(pool, req, res));
+  router.post('/email/register', bindController(registerByEmail, pool));
+  router.post('/email/login', bindController(loginByEmail, pool));
+  router.post('/google', bindController(loginByGoogle, pool));
+  router.post('/apple', bindController(loginByApple, pool));
+  router.post('/zalo', bindController(loginByZalo, pool));
+  router.get('/zalo/initiate', bindController(zaloInitiate, pool));
+  router.get('/zalo/callback', bindController(zaloCallback, pool));
+  router.get('/facebook/initiate', bindController(facebookInitiate, pool));
+  router.get('/facebook/callback', bindController(facebookCallback, pool));
+  router.post('/facebook/token', bindController(loginByFacebookToken, pool));
+  router.get('/google/initiate', bindController(googleInitiate, pool));
+  router.get('/google/callback', bindController(googleCallback, pool));
+  router.post('/oauth/exchange', bindController(exchangeOAuthCodeHandler, pool));
   // ===== AUTHENTICATED ENDPOINTS =====
-  router.get('/me', requireAuth, (req, res) => getMe(pool, req, res));
-  router.post('/verify', requireAuth, (req, res) => verifyToken(pool, req, res));
+  router.get('/me', requireAuth, bindController(getMe, pool));
+  router.post('/verify', requireAuth, bindController(verifyToken, pool));
   // Phone search is rate-limited per user/day to prevent enumeration (MVP audit #5).
-  router.get('/users/search', requireAuth, phoneSearchRateLimit(pool), (req, res) =>
-    searchUsers(pool, req, res)
+  router.get(
+    '/users/search',
+    requireAuth,
+    phoneSearchRateLimit(pool),
+    bindController(searchUsers, pool)
   );
 
   return router;

@@ -21,9 +21,12 @@ function verificationErrorKey(code) {
   if (code === 'INVALID_PAYLOAD' || code === 'UNKNOWN_PLATFORM') return 'iap.invalid_payload';
   if (code === 'UNKNOWN_PRODUCT') return 'iap.unknown_product';
   if (code === 'IAP_SUBSCRIPTION_EXPIRED') return 'iap.expired';
+  if (code === 'IAP_PURCHASE_REVOKED') return 'iap.revoked';
   if (code === 'IAP_RECEIPT_OWNERSHIP_MISMATCH') return 'iap.ownership_mismatch';
-  if (code === 'IAP_SANDBOX_NOT_ALLOWED' || code === 'APPLE_SANDBOX_NOT_ALLOWED') return 'iap.sandbox_not_allowed';
-  if (code === 'APPLE_VERIFIER_NOT_CONFIGURED' || code === 'GOOGLE_VERIFIER_NOT_CONFIGURED') return 'iap.store_unavailable';
+  if (code === 'IAP_SANDBOX_NOT_ALLOWED' || code === 'APPLE_SANDBOX_NOT_ALLOWED')
+    return 'iap.sandbox_not_allowed';
+  if (code === 'APPLE_VERIFIER_NOT_CONFIGURED' || code === 'GOOGLE_VERIFIER_NOT_CONFIGURED')
+    return 'iap.store_unavailable';
   return 'iap.verification_failed';
 }
 

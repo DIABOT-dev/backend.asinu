@@ -1,3 +1,4 @@
+const { bindController } = require('../middleware/controller-handler.middleware');
 const express = require('express');
 const rateLimit = require('express-rate-limit');
 const { requireAuth } = require('../middleware/auth.middleware');
@@ -42,17 +43,19 @@ function iapRoutes(pool) {
   const router = express.Router();
 
   // Public — client needs pricing before sign-in to render a "from N₫" badge.
-  router.get('/products', (req, res) => listProducts(pool, req, res));
+  router.get('/products', bindController(listProducts, pool));
 
   // Authenticated — every receipt must be tied to a user.
   // requireAuth runs FIRST so the limiter can key by user id.
-  router.post('/verify', requireAuth, verifyLimiter, (req, res) => verifyReceipt(pool, req, res));
+  router.post('/verify', requireAuth, verifyLimiter, bindController(verifyReceipt, pool));
 
   // Store webhooks — Apple signs the body; Google must also present a
   // verified Pub/Sub OIDC identity. Keep these URLs out of public docs.
-  router.post('/apple-notifications', (req, res) => appleNotifications(pool, req, res));
-  router.post('/google-notifications', requireGooglePubSubAuth, (req, res) =>
-    googleNotifications(pool, req, res)
+  router.post('/apple-notifications', bindController(appleNotifications, pool));
+  router.post(
+    '/google-notifications',
+    requireGooglePubSubAuth,
+    bindController(googleNotifications, pool)
   );
 
   return router;

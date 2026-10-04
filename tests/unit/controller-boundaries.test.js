@@ -45,8 +45,16 @@ test('routes and controllers contain no direct database or network I/O', () => {
   expect(violations).toEqual([]);
 });
 
-test('check-in call and voice routes only wire controllers and middleware', () => {
-  const routeFiles = ['checkin-call.routes.js', 'checkin-call.ops.routes.js', 'voice.routes.js'];
+test('extracted routes only wire controllers and middleware', () => {
+  const routeFiles = [
+    'checkin-call.routes.js',
+    'checkin-call.ops.routes.js',
+    'voice.routes.js',
+    'household.routes.js',
+    'early-signal.routes.js',
+    'doctor-task.routes.js',
+    'doctor-profile.routes.js',
+  ];
   const violations = [];
   for (const filename of routeFiles) {
     const source = fs.readFileSync(path.join(sourceRoot, 'routes', filename), 'utf8');
@@ -67,6 +75,30 @@ test('check-in call and voice routes only wire controllers and middleware', () =
         node.arguments[0].value.startsWith('../services/')
       ) {
         violations.push(`${filename}:${node.loc.start.line}: route imports a service`);
+      }
+    });
+  }
+  expect(violations).toEqual([]);
+});
+
+test('controller route callbacks cannot drop rejected promises on Express 4', () => {
+  const violations = [];
+  for (const filename of fs
+    .readdirSync(path.join(sourceRoot, 'routes'))
+    .filter((name) => name.endsWith('.js'))) {
+    const source = fs.readFileSync(path.join(sourceRoot, 'routes', filename), 'utf8');
+    const ast = espree.parse(source, { ecmaVersion: 'latest', sourceType: 'script', loc: true });
+    visit(ast, (node) => {
+      if (
+        node.type === 'ArrowFunctionExpression' &&
+        node.params.map((param) => param.name).join(',') === 'req,res' &&
+        node.body.type === 'CallExpression' &&
+        node.body.callee.type === 'Identifier' &&
+        node.body.arguments.map((arg) => arg.name).join(',') === 'pool,req,res'
+      ) {
+        violations.push(
+          `${filename}:${node.loc.start.line}: use bindController for async error forwarding`
+        );
       }
     });
   }

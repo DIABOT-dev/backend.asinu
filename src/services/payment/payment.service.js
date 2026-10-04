@@ -69,7 +69,7 @@ function parseDescription(content) {
  * @returns {{ orderCode, qrUrl }}
  */
 async function createQR(pool, userId, amount) {
-  if (!amount || amount < 1000) {
+  if (!Number.isSafeInteger(amount) || amount < 1000) {
     throw Object.assign(new Error(t('error.min_amount')), { statusCode: 400 });
   }
 
@@ -110,6 +110,12 @@ async function handleWebhook(pool, req) {
   const body = req.body || {};
   const transferAmount = Number(body.transferAmount);
   const content = String(body.content || '');
+  if (body.transferType && body.transferType !== 'in') {
+    return { ok: true, message: 'ignored' };
+  }
+  if (!Number.isSafeInteger(transferAmount) || transferAmount <= 0) {
+    return { ok: false, statusCode: 400, message: t('error.payment_amount_mismatch') };
+  }
 
   // 2. Timestamp check — reject webhooks older than WEBHOOK_MAX_AGE_MS
   const rawDate = body.transactionDate || body.transaction_date;
@@ -122,9 +128,14 @@ async function handleWebhook(pool, req) {
 
   // 3. Idempotency — skip if we've already processed this webhook id
   const webhookId = body.id != null ? String(body.id) : null;
-  if (webhookId) {
-    try {
-      const insert = await pool.query(
+  const db = await pool.connect();
+  let payment;
+  let balance;
+  let parsed;
+  try {
+    await db.query('BEGIN');
+    if (webhookId) {
+      const insert = await db.query(
         `INSERT INTO processed_webhooks (webhook_id, provider, payload_hash)
          VALUES ($1, 'sepay', $2)
          ON CONFLICT (webhook_id) DO NOTHING
@@ -133,73 +144,93 @@ async function handleWebhook(pool, req) {
       );
       if (insert.rowCount === 0) {
         // Already processed — return 200 so SePay does not retry.
+        await db.query('COMMIT');
         return { ok: true, message: 'duplicate_ignored' };
       }
-    } catch (err) {
-      // If the table is missing (migration not yet run), don't block payments.
-      if (err.code !== '42P01') {
-        throw err;
-      }
     }
-  }
 
-  // 2. Kiểm tra loại giao dịch dựa vào nội dung chuyển khoản
-  // asinusub → subscription payment
-  if (content.includes('asinusub')) {
-    const subParsed = subscriptionService.parseSubDescription(content);
-    if (!subParsed) {
+    // 2. Kiểm tra loại giao dịch dựa vào nội dung chuyển khoản
+    // asinusub → subscription payment
+    if (content.includes('asinusub')) {
+      const subParsed = subscriptionService.parseSubDescription(content);
+      if (!subParsed) {
+        await db.query('ROLLBACK');
+        return { ok: true, message: 'ignored' };
+      }
+
+      const result = await subscriptionService.activateSubscription(
+        db,
+        subParsed.userId,
+        subParsed.orderCode,
+        { transferAmount, deferEffects: true }
+      );
+      await db.query(result.ok ? 'COMMIT' : 'ROLLBACK');
+      if (result.ok)
+        subscriptionService
+          .notifyLegacyActivated(pool, subParsed.userId, subParsed.orderCode, result)
+          .catch(() => {});
+      return { ok: result.ok, message: result.ok ? 'subscription_activated' : result.message };
+    }
+
+    // 3. Parse mô tả để lấy userId và orderCode (wallet top-up)
+    parsed = parseDescription(content);
+    if (!parsed) {
+      // Không phải giao dịch của Asinu — trả 200 để SePay không retry
+
+      await db.query('ROLLBACK');
       return { ok: true, message: 'ignored' };
     }
 
-    const result = await subscriptionService.activateSubscription(
-      pool,
-      subParsed.userId,
-      subParsed.orderCode
+    const { userId, orderCode } = parsed;
+
+    // 3. Atomically claim the pending payment (prevents double-credit on webhook retry)
+    const { rows } = await db.query(
+      `SELECT * FROM payments
+     WHERE order_code = $1 AND user_id = $2 AND status = 'pending' AND expires_at > NOW()
+     FOR UPDATE`,
+      [orderCode, userId]
     );
-    return { ok: result.ok, message: result.ok ? 'subscription_activated' : result.message };
+
+    if (!rows.length) {
+      await db.query('ROLLBACK');
+      return { ok: false, statusCode: 404, message: t('error.payment_not_found') };
+    }
+
+    payment = rows[0];
+
+    // 4. Kiểm tra số tiền
+    if (Number(payment.amount) !== transferAmount) {
+      await db.query(`UPDATE payments SET status = 'failed' WHERE order_code = $1`, [orderCode]);
+      await db.query('COMMIT');
+      // Thông báo thanh toán thất bại
+      notifyPaymentFailed(pool, userId, payment.amount).catch(() => {});
+      return { ok: false, statusCode: 400, message: t('error.payment_amount_mismatch') };
+    }
+
+    // 5. Cộng wallet
+    const { rows: balRows } = await db.query(
+      `UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2 RETURNING wallet_balance, push_token, language_preference`,
+      [transferAmount, payment.user_id]
+    );
+    if (!balRows[0]) throw new Error('Payment owner is unavailable');
+    balance = balRows[0];
+    await db.query(
+      `UPDATE payments SET status = 'completed', completed_at = NOW() WHERE order_code = $1`,
+      [orderCode]
+    );
+    await db.query('COMMIT');
+  } catch (error) {
+    await db.query('ROLLBACK');
+    throw error;
+  } finally {
+    db.release();
   }
-
-  // 3. Parse mô tả để lấy userId và orderCode (wallet top-up)
-  const parsed = parseDescription(content);
-  if (!parsed) {
-    // Không phải giao dịch của Asinu — trả 200 để SePay không retry
-
-    return { ok: true, message: 'ignored' };
-  }
-
-  const { userId, orderCode } = parsed;
-
-  // 3. Atomically claim the pending payment (prevents double-credit on webhook retry)
-  const { rows } = await pool.query(
-    `UPDATE payments SET status = 'completed', completed_at = NOW()
-     WHERE order_code = $1 AND status = 'pending' AND expires_at > NOW()
-     RETURNING *`,
-    [orderCode]
-  );
-
-  if (!rows.length) {
-    return { ok: false, statusCode: 404, message: t('error.payment_not_found') };
-  }
-
-  const payment = rows[0];
-
-  // 4. Kiểm tra số tiền
-  if (Number(payment.amount) !== transferAmount) {
-    await pool.query(`UPDATE payments SET status = 'failed' WHERE order_code = $1`, [orderCode]);
-    // Thông báo thanh toán thất bại
-    notifyPaymentFailed(pool, userId, payment.amount).catch(() => {});
-    return { ok: false, statusCode: 400, message: t('error.payment_amount_mismatch') };
-  }
-
-  // 5. Cộng wallet
-  const { rows: balRows } = await pool.query(
-    `UPDATE users SET wallet_balance = wallet_balance + $1 WHERE id = $2 RETURNING wallet_balance, push_token, language_preference`,
-    [transferAmount, userId]
-  );
+  const userId = Number(payment.user_id);
+  const { orderCode } = parsed;
 
   // Notify wallet topup success (non-blocking)
-  if (balRows[0]) {
-    const u = balRows[0];
+  if (balance) {
+    const u = balance;
     const lang = u.language_preference || 'vi';
     const numberLocale = lang === 'en' ? 'en-US' : 'vi-VN';
     sendAndSave(

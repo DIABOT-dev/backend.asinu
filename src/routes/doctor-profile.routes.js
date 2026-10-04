@@ -1,136 +1,43 @@
 const express = require('express');
-const { getDoctorPatientProfile } = require('../controllers/doctor-profile.controller');
-const {
-  createPatientFile,
-  verifyDoctorSignature,
-} = require('../services/integrations/doctor-profile.service');
-const {
-  doctorMessageQuerySchema,
-  doctorMessageSendSchema,
-  doctorMessageActionSchema,
-  doctorVoiceSendSchema,
-  doctorAiAssistSchema,
-} = require('../services/integrations/doctor-task.policy');
-const {
-  queryDoctorMessages,
-  sendDoctorMessage,
-  doctorMessageAction,
-  sendDoctorVoice,
-} = require('../services/integrations/doctor-messaging.service');
-const {
-  createDoctorAiAssist,
-  getDoctorAiContextVersion,
-} = require('../services/integrations/doctor-ai.service');
-const { ingestDoctorLifecycle } = require('../services/integrations/doctor-lifecycle.service');
-const { getLang, t } = require('../i18n');
+const controller = require('../controllers/doctor-profile.controller');
+const { bindController } = require('../middleware/controller-handler.middleware');
+const { requireDoctorSignature } = require('../middleware/doctor-signature.middleware');
 
 function doctorProfileRoutes(pool) {
   const router = express.Router();
-  const requireDoctorSignature = (req, _res, next) => {
-    try {
-      verifyDoctorSignature(req);
-      return next();
-    } catch (error) {
-      return next(error);
-    }
-  };
-  router.post('/profile', (req, res, next) =>
-    Promise.resolve(getDoctorPatientProfile(pool, req, res)).catch(next)
+  router.post('/profile', bindController(controller.getDoctorPatientProfile, pool));
+  router.post('/patient-files', bindController(controller.createDoctorPatientFile, pool));
+  router.post('/lifecycle', bindController(controller.ingestDoctorPatientLifecycle, pool));
+  router.post(
+    '/messages/query',
+    requireDoctorSignature,
+    bindController(controller.queryDoctorMessages, pool)
   );
-  router.post('/patient-files', (req, res, next) =>
-    Promise.resolve(createPatientFile(pool, req))
-      .then((data) => res.status(201).json({ ok: true, data }))
-      .catch(next)
+  router.post(
+    '/messages/send',
+    requireDoctorSignature,
+    bindController(controller.sendDoctorMessage, pool)
   );
-  router.post('/lifecycle', (req, res, next) =>
-    Promise.resolve(ingestDoctorLifecycle(pool, req))
-      .then((data) => res.status(data.duplicate ? 200 : 201).json({ ok: true, data }))
-      .catch(next)
+  router.post(
+    '/messages/action',
+    requireDoctorSignature,
+    bindController(controller.doctorMessageAction, pool)
   );
-  router.post('/messages/query', requireDoctorSignature, (req, res, next) => {
-    const parsed = doctorMessageQuerySchema.safeParse(req.body);
-    if (!parsed.success)
-      return res
-        .status(400)
-        .json({
-          ok: false,
-          error: t('error.invalid_message_query', getLang(req)),
-          details: parsed.error.issues,
-        });
-    return Promise.resolve(queryDoctorMessages(pool, req, parsed.data))
-      .then((data) => res.json({ ok: true, data }))
-      .catch(next);
-  });
-  router.post('/messages/send', requireDoctorSignature, (req, res, next) => {
-    const parsed = doctorMessageSendSchema.safeParse(req.body);
-    if (!parsed.success)
-      return res
-        .status(400)
-        .json({
-          ok: false,
-          error: t('error.invalid_doctor_message', getLang(req)),
-          details: parsed.error.issues,
-        });
-    return Promise.resolve(sendDoctorMessage(pool, req, parsed.data))
-      .then((data) => res.status(data.duplicate ? 200 : 201).json({ ok: true, data }))
-      .catch(next);
-  });
-  router.post('/messages/action', requireDoctorSignature, (req, res, next) => {
-    const parsed = doctorMessageActionSchema.safeParse(req.body);
-    if (!parsed.success)
-      return res
-        .status(400)
-        .json({
-          ok: false,
-          error: t('error.invalid_doctor_action', getLang(req)),
-          details: parsed.error.issues,
-        });
-    return Promise.resolve(doctorMessageAction(pool, req, parsed.data))
-      .then((data) => res.json({ ok: true, data }))
-      .catch(next);
-  });
-  router.post('/messages/voice', requireDoctorSignature, (req, res, next) => {
-    const parsed = doctorVoiceSendSchema.safeParse(req.body);
-    if (!parsed.success)
-      return res
-        .status(400)
-        .json({
-          ok: false,
-          error: t('error.invalid_voice_message', getLang(req)),
-          details: parsed.error.issues,
-        });
-    return Promise.resolve(sendDoctorVoice(pool, req, parsed.data))
-      .then((data) => res.status(data.duplicate ? 200 : 201).json({ ok: true, data }))
-      .catch(next);
-  });
-  router.post('/ai-assist', requireDoctorSignature, (req, res, next) => {
-    const parsed = doctorAiAssistSchema.safeParse(req.body);
-    if (!parsed.success)
-      return res
-        .status(400)
-        .json({
-          ok: false,
-          error: t('error.invalid_ai_request', getLang(req)),
-          details: parsed.error.issues,
-        });
-    return Promise.resolve(createDoctorAiAssist(pool, parsed.data))
-      .then((data) => res.json({ ok: true, data }))
-      .catch(next);
-  });
-  router.post('/ai-context-version', requireDoctorSignature, (req, res, next) => {
-    const parsed = doctorAiAssistSchema.safeParse(req.body);
-    if (!parsed.success)
-      return res
-        .status(400)
-        .json({
-          ok: false,
-          error: t('error.invalid_ai_context', getLang(req)),
-          details: parsed.error.issues,
-        });
-    return Promise.resolve(getDoctorAiContextVersion(pool, parsed.data))
-      .then((data) => res.json({ ok: true, data }))
-      .catch(next);
-  });
+  router.post(
+    '/messages/voice',
+    requireDoctorSignature,
+    bindController(controller.sendDoctorVoice, pool)
+  );
+  router.post(
+    '/ai-assist',
+    requireDoctorSignature,
+    bindController(controller.createDoctorAiAssist, pool)
+  );
+  router.post(
+    '/ai-context-version',
+    requireDoctorSignature,
+    bindController(controller.getDoctorAiContextVersion, pool)
+  );
   return router;
 }
 

@@ -115,7 +115,7 @@ async function loginByEmail(pool, req, res) {
 // =====================================================
 
 async function loginByProvider(pool, req, res, provider, idColumn) {
-  const { token, provider_id, email, full_name, phone_number } = req.body || {};
+  const { token, full_name, phone_number } = req.body || {};
 
   // Validate token
   if (!token) {
@@ -128,15 +128,10 @@ async function loginByProvider(pool, req, res, provider, idColumn) {
     return res.status(401).json({ ok: false, error: t('error.invalid_token', getLang(req)) });
   }
 
-  // Use verified email/sub from provider if available, fallback to request body
-  const verifiedEmail = verification.profile?.email || email;
-  const verifiedSub = verification.profile?.sub;
-
-  // Get or generate provider_id — prefer verified sub from provider
-  let actualProviderId = verifiedSub || provider_id;
-  if (!actualProviderId && verifiedEmail) {
-    actualProviderId = `${provider}_${verifiedEmail}`;
-  }
+  // Account identity must come only from the verified provider response.
+  // Client email/provider_id are untrusted and must never link another account.
+  const verifiedEmail = verification.profile?.email || null;
+  const actualProviderId = verification.profile?.sub;
 
   if (!actualProviderId) {
     return res
@@ -567,7 +562,7 @@ async function loginByFacebookToken(pool, req, res) {
 async function logoutHandler(pool, req, res) {
   try {
     const { logout } = require('../services/auth/auth.service');
-    await logout(pool, req.user.id).catch(() => {});
+    await logout(pool, req.user.id);
     return res.json({ ok: true, message: t('success.logged_out', getLang(req)) });
   } catch (err) {
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });

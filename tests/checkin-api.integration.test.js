@@ -70,6 +70,7 @@ describeDatabase('check-in HTTP API contract', () => {
     const audioService = require('../src/services/checkin-call/audio.service');
 
     app = express();
+    app.locals.authPool = pool;
     app.use(express.json());
     app.use('/api/mobile', mobileRoutes(pool));
     app.use('/api/mobile/checkin-call', checkinCallRoutes(pool));

@@ -1,17 +1,14 @@
+const { bindController } = require('../middleware/controller-handler.middleware');
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
-const {
-  getStatus,
-  getPlans,
-  getHistory,
-} = require('../controllers/subscription.controller');
+const { getStatus, getPlans, getHistory } = require('../controllers/subscription.controller');
 
 function subscriptionRoutes(pool) {
   const router = express.Router();
 
-  router.get('/status', requireAuth, (req, res) => getStatus(pool, req, res));
-  router.get('/plans', (req, res) => getPlans(pool, req, res));
-  router.get('/history', requireAuth, (req, res) => getHistory(pool, req, res));
+  router.get('/status', requireAuth, bindController(getStatus, pool));
+  router.get('/plans', bindController(getPlans, pool));
+  router.get('/history', requireAuth, bindController(getHistory, pool));
 
   return router;
 }

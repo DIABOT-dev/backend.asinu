@@ -162,9 +162,13 @@ async function emitPrivacyConsentAccepted(pool, userId, version = 'v1.0.0') {
  * @returns {Object} - { ok: true, token, user }
  */
 function issueJwt(user) {
-  const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, {
-    expiresIn: JWT_EXPIRES_IN,
-  });
+  const token = jwt.sign(
+    { id: user.id, email: user.email, auth_version: Number(user.auth_token_version || 0) },
+    JWT_SECRET,
+    {
+      expiresIn: JWT_EXPIRES_IN,
+    }
+  );
   return {
     ok: true,
     token,
@@ -345,7 +349,7 @@ function generateProviderId(provider, providerId, email) {
 async function findUserByEmail(pool, email) {
   const normalizedEmail = String(email).trim().toLowerCase();
   const result = await pool.query(
-    'SELECT id, email, password_hash, phone_number, display_name, full_name FROM users WHERE email = $1 AND deleted_at IS NULL',
+    'SELECT id, email, password_hash, phone_number, display_name, full_name, auth_token_version FROM users WHERE email = $1 AND deleted_at IS NULL',
     [normalizedEmail]
   );
   return result.rows[0] || null;
@@ -359,7 +363,7 @@ async function findUserByEmail(pool, email) {
  */
 async function findUserById(pool, userId) {
   const result = await pool.query(
-    'SELECT id, email, phone_number, full_name, display_name, avatar_url FROM users WHERE id = $1',
+    'SELECT id, email, phone_number, full_name, display_name, avatar_url, auth_token_version FROM users WHERE id = $1 AND deleted_at IS NULL',
     [userId]
   );
   return result.rows[0] || null;
@@ -374,7 +378,7 @@ async function findUserById(pool, userId) {
  */
 async function findUserByProviderId(pool, idColumn, providerId) {
   const result = await pool.query(
-    `SELECT id, email, full_name FROM users WHERE ${idColumn} = $1 AND deleted_at IS NULL`,
+    `SELECT id, email, full_name, auth_token_version FROM users WHERE ${idColumn} = $1 AND deleted_at IS NULL`,
     [providerId]
   );
   return result.rows[0] || null;
@@ -626,7 +630,7 @@ async function loginByEmail(pool, identifier, password) {
       // Search by phone variants
       const variants = getPhoneVariants(identifier);
       const result = await pool.query(
-        'SELECT id, email, password_hash, phone_number, display_name, full_name FROM users WHERE phone_number = ANY($1::text[]) AND deleted_at IS NULL',
+        'SELECT id, email, password_hash, phone_number, display_name, full_name, auth_token_version FROM users WHERE phone_number = ANY($1::text[]) AND deleted_at IS NULL',
         [variants]
       );
       user = result.rows[0];
@@ -664,6 +668,9 @@ async function loginByEmail(pool, identifier, password) {
  * @returns {Promise<Object>} - { ok, token, user, error }
  */
 async function loginByProvider(pool, idColumn, providerId, provider, email, phoneNumber, fullName) {
+  // Zalo does not attest an email address. Keep every Zalo entry point from
+  // linking or updating accounts using an email supplied by the client.
+  if (provider === 'zalo') email = null;
   try {
     // Check if user exists with this provider
     const existing = await findUserByProviderId(pool, idColumn, providerId);
@@ -699,7 +706,7 @@ async function loginByProvider(pool, idColumn, providerId, provider, email, phon
     // If email provided, check if already registered via email/password
     if (email) {
       const emailUser = await pool.query(
-        'SELECT id, email, full_name FROM users WHERE email = $1 AND deleted_at IS NULL',
+        'SELECT id, email, full_name, auth_token_version FROM users WHERE email = $1 AND deleted_at IS NULL',
         [String(email).trim().toLowerCase()]
       );
 
@@ -838,7 +845,7 @@ async function searchUsers(pool, currentUserId, query) {
 
 async function logout(pool, userId) {
   await pool.query(
-    'UPDATE users SET push_token = NULL, fcm_token = NULL, voip_push_token = NULL, voip_push_environment = NULL WHERE id = $1',
+    'UPDATE users SET auth_token_version = auth_token_version + 1, push_token = NULL, fcm_token = NULL, voip_push_token = NULL, voip_push_environment = NULL WHERE id = $1',
     [userId]
   );
   emitCrmEventAsync(
