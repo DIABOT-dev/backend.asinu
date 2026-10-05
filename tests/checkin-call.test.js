@@ -1,6 +1,48 @@
 const service = require('../src/services/checkin-call/checkin-call.service');
 
 describe('check-in call safety rules', () => {
+  test.each([
+    ['CONTACT_USER', 'URGENT'],
+    ['TRIAGE_USER', 'URGENT'],
+    ['CONTACT_USER', 'NONE'],
+    ['TRIAGE_USER', 'NONE'],
+  ])('%s timeout preserves %s escalation urgency', async (state, initialSeverity) => {
+    const episode = {
+      id: 'episode-timeout-regression',
+      user_id: 7,
+      state,
+      severity: initialSeverity,
+      issue_category: initialSeverity === 'URGENT' ? 'URGENT_RED_FLAG' : null,
+      next_action_at: new Date(Date.now() - 1000),
+      config: { family_ring_seconds: 60, max_rounds: 1 },
+      family_ids: [],
+      family_index: 0,
+      round_number: 1,
+    };
+    const db = {
+      query: jest.fn(async (sql) => {
+        if (sql.includes('SELECT * FROM checkin_call_episodes')) return { rows: [episode] };
+        if (sql.includes('FROM user_connections c')) {
+          return { rows: [{ family_id: 37 }, { family_id: 42 }] };
+        }
+        if (sql.includes('INSERT INTO checkin_call_attempts')) {
+          return { rows: [{ id: 'family-attempt', ring_deadline: new Date() }] };
+        }
+        return { rows: [] };
+      }),
+      release: jest.fn(),
+    };
+    await service.advance({ connect: async () => db }, episode.id);
+    const urgent = initialSeverity === 'URGENT';
+    expect(episode.severity).toBe(urgent ? 'URGENT' : 'UNKNOWN');
+    expect(episode.issue_category).toBe(urgent ? 'URGENT_RED_FLAG' : 'UNKNOWN');
+    const familyCalls = db.query.mock.calls.filter(([sql]) => sql.includes('INSERT INTO checkin_call_attempts'));
+    expect(familyCalls.map(([, params]) => params[1])).toEqual(urgent ? [37, 42] : [37]);
+    expect(db.query.mock.calls.some(([sql]) => sql.includes("state = 'URGENT_BROADCAST'"))).toBe(urgent);
+    expect(db.query.mock.calls.some(([sql]) => sql.includes("state = 'MILD_FAMILY_ESCALATION'"))).toBe(!urgent);
+    expect(db.query.mock.calls.some(([sql, params]) => sql.includes('INSERT INTO checkin_call_events') && params[3] === (state === 'TRIAGE_USER' ? 'USER_TRIAGE_TIMEOUT' : 'USER_TIMEOUT'))).toBe(true);
+  });
+
   test('settings enforce the grace and timeout safety bounds', () => {
     expect(service.validateSettings({}).checkin_time).toBe('08:00');
     expect(service.validateSettings({}).grace_hours).toBe(6);

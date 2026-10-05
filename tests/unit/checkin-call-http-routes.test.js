@@ -16,6 +16,7 @@ jest.mock('../../src/services/checkin-call/checkin-call.service', () => ({
   startTestCall: jest.fn(),
   getEpisode: jest.fn(),
   getAttempt: jest.fn(),
+  getFamilyAudio: jest.fn(),
   answer: jest.fn(),
   startTriage: jest.fn(),
   completeTriage: jest.fn(),
@@ -62,6 +63,7 @@ describe('check-in call HTTP routes', () => {
       'GET /audio/:key',
       'POST /audio/conclusion',
       'GET /attempts/:id',
+      'GET /attempts/:id/family-audio',
       'POST /episodes/:id/answer',
       'POST /episodes/:id/triage/start',
       'POST /episodes/:id/triage/complete',
@@ -100,6 +102,14 @@ describe('check-in call HTTP routes', () => {
     });
     const response = await request(app).get('/checkin-call/audio/user_prompt').expect(200);
     expect(response.body).toEqual({ ok: true, mimeType: 'audio/mpeg', base64: 'c291bmQ=' });
+  });
+
+  test('family audio passes the exact recipient and request language to the service', async () => {
+    service.getFamilyAudio.mockResolvedValueOnce({ mime_type: 'audio/mpeg', audio_data: Buffer.from('family-sound') });
+    const response = await request(app).get('/checkin-call/attempts/attempt-1/family-audio')
+      .set('accept-language', 'en').expect(200);
+    expect(service.getFamilyAudio).toHaveBeenCalledWith(pool, 'attempt-1', 7, 'en');
+    expect(response.body).toEqual({ ok: true, mimeType: 'audio/mpeg', base64: Buffer.from('family-sound').toString('base64') });
   });
 
   test('unavailable call token remains a localized 503', async () => {

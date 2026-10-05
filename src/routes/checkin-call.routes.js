@@ -18,6 +18,7 @@ function checkinCallRoutes(pool) {
   router.get('/audio/:key', controller.getAudio);
   router.post('/audio/conclusion', conclusionAudioLimiter, controller.synthesizeConclusion);
   router.get('/attempts/:id', controller.getAttempt);
+  router.get('/attempts/:id/family-audio', conclusionAudioLimiter, controller.getFamilyAudio);
   router.post('/episodes/:id/answer', controller.answerEpisode);
   router.post('/episodes/:id/triage/start', controller.startTriage);
   router.post('/episodes/:id/triage/complete', controller.completeTriage);

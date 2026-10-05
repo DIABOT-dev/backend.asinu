@@ -238,6 +238,30 @@ describeDatabase('check-in call six-account full flow', () => {
     expect((await Promise.all(familyIds.map((id) => service.getActive(pool, id)))).filter(Boolean)).toHaveLength(0);
   });
 
+  test.each(['CONTACT_USER', 'TRIAGE_USER'])('an unanswered urgent early signal in %s still calls every family member', async (state) => {
+    const localDate = state === 'CONTACT_USER' ? '2098-01-06' : '2098-01-07';
+    const { episodeId, active } = await startEpisode(localDate);
+    await pool.query(
+      `UPDATE checkin_call_episodes
+          SET state = $2, severity = 'URGENT', trigger_source = 'EARLY_SIGNAL',
+              config = config || '{"early_signal":true}'::jsonb
+        WHERE id = $1`,
+      [episodeId, state]
+    );
+    await forceEpisodeDue(episodeId);
+    expect(await service.getEpisode(pool, episodeId, patientId)).toMatchObject({
+      state: 'URGENT_BROADCAST', severity: 'URGENT', issue_category: 'URGENT_RED_FLAG',
+    });
+    expect((await service.getAttempt(pool, active.attempt_id, patientId)).state).toBe('NO_ANSWER');
+    const familyCalls = await Promise.all(familyIds.map((id) => service.getActive(pool, id)));
+    expect(familyCalls.filter(Boolean)).toHaveLength(5);
+    familyCalls.forEach((call) => expect(call).toMatchObject({
+      id: episodeId, target_role: 'FAMILY', severity: 'URGENT',
+    }));
+    await service.accept(pool, familyCalls[0].attempt_id, familyIds[0]);
+    expect((await service.confirmFamily(pool, episodeId, familyIds[0], 'ACCEPT_AND_CHECK')).state).toBe('RESOLVED');
+  });
+
   test('user OK resolves without creating any family call', async () => {
     const { episodeId, active } = await startEpisode('2098-01-04');
     await service.accept(pool, active.attempt_id, patientId);
@@ -256,5 +280,41 @@ describeDatabase('check-in call six-account full flow', () => {
     expect(await service.cancelActiveForManualCheckin(pool, patientId)).toBe(1);
     expect((await service.getEpisode(pool, episodeId, patientId)).state).toBe('CANCELLED');
     expect(await service.getActive(pool, patientId)).toBeNull();
+  });
+
+  test('a scheduled call is cancelled if the plan expires before it starts', async () => {
+    const entitlement = await entitlementService.getEntitlement(pool, patientId);
+    const household = await pool.query(
+      'SELECT current_period_end FROM subscription_households WHERE id = $1', [entitlement.householdId]
+    );
+    const settings = await service.settings(pool, patientId);
+    const inserted = await pool.query(
+      `INSERT INTO checkin_call_episodes (
+         user_id, local_date, state, severity, scheduled_at, grace_until, next_action_at, config
+       ) VALUES ($1, DATE '2098-01-08', 'SCHEDULED', 'NONE', now(), now(), now() - interval '1 second', $2::jsonb)
+       RETURNING id`,
+      [patientId, JSON.stringify(settings)]
+    );
+    const episodeId = inserted.rows[0].id;
+    try {
+      await pool.query(
+        "UPDATE subscription_households SET current_period_end = now() - interval '1 second' WHERE id = $1",
+        [entitlement.householdId]
+      );
+      await service.advance(pool, episodeId);
+      expect((await service.getEpisode(pool, episodeId, patientId)).state).toBe('CANCELLED');
+      const attempts = await pool.query(
+        'SELECT COUNT(*)::integer AS count FROM checkin_call_attempts WHERE episode_id = $1', [episodeId]
+      );
+      expect(attempts.rows[0].count).toBe(0);
+      const events = await pool.query(
+        "SELECT detail FROM checkin_call_events WHERE episode_id = $1 AND event = 'CANCELLED'", [episodeId]
+      );
+      expect(events.rows[0].detail.reason).toBe('ENTITLEMENT_REVOKED');
+    } finally {
+      await pool.query('UPDATE subscription_households SET current_period_end = $2 WHERE id = $1', [
+        entitlement.householdId, household.rows[0].current_period_end,
+      ]);
+    }
   });
 });

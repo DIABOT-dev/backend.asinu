@@ -5,6 +5,8 @@ const logger = require('../../lib/logger');
 const { t } = require('../../i18n');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 const entitlementService = require('../payment/entitlement.service');
+const { familyContact, familyNotice } = require('./family-contact.service');
+const { synthesizeText } = require('./audio.service');
 const {
   BODY_LOCATIONS,
   getLocationOptions,
@@ -689,17 +691,38 @@ async function getEpisode(pool, episodeId, userId, lang = 'vi') {
 
 async function getAttempt(pool, attemptId, userId, lang = 'vi') {
   const result = await pool.query(
-    'SELECT a.id, a.episode_id, a.target_role, a.state, a.ring_deadline, a.confirm_deadline, e.state AS episode_state, e.severity, e.issue_category, e.triage_context ' +
+    'SELECT a.id, a.episode_id, a.target_role, a.state, a.ring_deadline, a.confirm_deadline, e.state AS episode_state, e.severity, e.issue_category, e.triage_context, ' +
+      "COALESCE(NULLIF(trim(subject.full_name), ''), NULLIF(trim(subject.display_name), '')) AS subject_name, subject.phone_number AS subject_phone, profile.gender AS subject_gender, c.relationship_type, c.requester_id AS relationship_requester_id " +
       'FROM checkin_call_attempts a JOIN checkin_call_episodes e ON e.id = a.episode_id ' +
+      'JOIN users subject ON subject.id = e.user_id ' +
+      'LEFT JOIN user_onboarding_profiles profile ON profile.user_id = subject.id ' +
+      'LEFT JOIN LATERAL (SELECT relationship_type, requester_id FROM user_connections ' +
+      "WHERE status = 'accepted' AND ((requester_id = $2 AND addressee_id = e.user_id) OR (addressee_id = $2 AND requester_id = e.user_id)) ORDER BY updated_at DESC LIMIT 1) c ON true " +
       'WHERE a.id = $1 AND a.target_user_id = $2',
     [attemptId, userId]
   );
-  const attempt = result.rows[0] || null;
+  const row = result.rows[0];
+  if (!row) return null;
+  // Do not leak internal join columns or an unrelated person's profile.
+  const { subject_name, subject_phone, subject_gender, relationship_type, relationship_requester_id, ...attempt } = row;
   if (attempt) {
     if (!attempt.triage_context?.body_location) attempt.triage_context = null;
     attempt.triage_display = localizeTriageContext(attempt.triage_context, lang);
+    if (attempt.target_role === 'FAMILY') {
+      attempt.subject = familyContact({ subject_name, subject_phone, subject_gender, relationship_type, relationship_requester_id }, userId, lang);
+      attempt.family_notice = familyNotice(attempt, attempt.subject, lang);
+    }
   }
   return attempt;
+}
+
+async function getFamilyAudio(pool, attemptId, userId, lang = 'vi') {
+  // Authorize the exact attempt before exposing identity or requesting TTS.
+  const attempt = await getAttempt(pool, attemptId, userId, lang);
+  if (!attempt || attempt.target_role !== 'FAMILY') {
+    throw serviceError('Family attempt not found', 404, 'checkinCall.error.attempt_not_found');
+  }
+  return synthesizeText(attempt.family_notice.audio_text, lang);
 }
 
 async function seen(pool, attemptId, userId) {
@@ -1035,6 +1058,18 @@ async function advance(pool, id) {
         await event(db, id, 'CONFIG_DISABLED');
         return;
       }
+      // A schedule can outlive its subscription or household membership.
+      // Recheck access before starting a new call, without interrupting an
+      // escalation that has already started.
+      const entitlement = await entitlementService.getEntitlement(db, episode.user_id);
+      if (!entitlement.callCenterEnabled) {
+        await db.query(
+          "UPDATE checkin_call_episodes SET state = 'CANCELLED', next_action_at = NULL, updated_at = now() WHERE id = $1",
+          [id]
+        );
+        await event(db, id, 'CANCELLED', null, null, { reason: 'ENTITLEMENT_REVOKED' });
+        return;
+      }
       const existing = await db.query(
         'SELECT 1 FROM health_checkins WHERE user_id = $1 AND session_date = $2 LIMIT 1',
         [episode.user_id, episode.local_date]
@@ -1054,18 +1089,30 @@ async function advance(pool, id) {
         [id, attempt.ring_deadline]
       );
     } else if (episode.state === 'CONTACT_USER' || episode.state === 'TRIAGE_USER') {
+      // A pre-existing urgent assessment must not become a routine missed check-in
+      // just because the protected person could not answer the call.
+      const urgentTimeout = episode.severity === 'URGENT';
+      const severity = urgentTimeout ? 'URGENT' : 'UNKNOWN';
+      const issueCategory = urgentTimeout
+        ? URGENT_ISSUE_CATEGORIES.has(episode.issue_category)
+          ? episode.issue_category
+          : episode.config?.early_signal === true
+            ? 'URGENT_RED_FLAG'
+            : 'URGENT_UNSPECIFIED'
+        : 'UNKNOWN';
       await db.query(
-        "UPDATE checkin_call_episodes SET severity = 'UNKNOWN', issue_category = 'UNKNOWN', updated_at = now() WHERE id = $1",
-        [id]
+        'UPDATE checkin_call_episodes SET severity = $2, issue_category = $3, updated_at = now() WHERE id = $1',
+        [id, severity, issueCategory]
       );
-      episode.severity = 'UNKNOWN';
-      episode.issue_category = 'UNKNOWN';
+      episode.severity = severity;
+      episode.issue_category = issueCategory;
       const ended = await db.query(
         "UPDATE checkin_call_attempts SET state = 'NO_ANSWER', ended_at = now() WHERE episode_id = $1 AND target_role = 'USER' AND state IN ('RINGING','CONNECTED') RETURNING id",
         [id]
       );
       await event(db, id, episode.state === 'TRIAGE_USER' ? 'USER_TRIAGE_TIMEOUT' : 'USER_TIMEOUT');
-      await startNextFamily(db, episode);
+      if (urgentTimeout) await broadcastUrgent(db, episode);
+      else await startNextFamily(db, episode);
       return { attemptIds: ended.rows.map((row) => row.id) };
     } else if (episode.state === 'MILD_FAMILY_ESCALATION' || episode.state === 'CONTACT_FAMILY') {
       const found = await db.query(
@@ -1435,6 +1482,7 @@ module.exports = {
   getActive,
   getEpisode,
   getAttempt,
+  getFamilyAudio,
   seen,
   accept,
   confirmFamily,

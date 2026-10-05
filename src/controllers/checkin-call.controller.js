@@ -100,6 +100,10 @@ function createCheckinCallController(pool) {
       }
       return res.json({ ok: true, attempt });
     }),
+    getFamilyAudio: handle(async (req, res) => {
+      const data = await service.getFamilyAudio(pool, req.params.id, req.user.id, getLang(req));
+      return res.json({ ok: true, mimeType: data.mime_type, base64: data.audio_data.toString('base64') });
+    }),
     answerEpisode: handle(async (req, res) => {
       const episode = await service.answer(
         pool,
