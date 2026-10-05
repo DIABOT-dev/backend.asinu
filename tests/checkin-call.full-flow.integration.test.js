@@ -145,25 +145,33 @@ describeDatabase('check-in call six-account full flow', () => {
   });
 
   afterAll(async () => {
-    if (createdUserIds.length) {
-      await pool.query(
-        'DELETE FROM user_connections WHERE requester_id = ANY($1::integer[]) OR addressee_id = ANY($1::integer[])',
-        [createdUserIds]
+    try {
+      if (createdUserIds.length) {
+        // A caregiver can be deleted before the patient in an unordered DELETE.
+        // Remove fixture episodes first so acknowledged_by cannot block cleanup.
+        await pool.query('DELETE FROM checkin_call_episodes WHERE user_id = ANY($1::integer[])', [
+          createdUserIds,
+        ]);
+        await pool.query(
+          'DELETE FROM user_connections WHERE requester_id = ANY($1::integer[]) OR addressee_id = ANY($1::integer[])',
+          [createdUserIds]
+        );
+        await pool.query('DELETE FROM users WHERE id = ANY($1::integer[])', [createdUserIds]);
+      }
+      const residue = await pool.query(
+        'SELECT COUNT(*)::integer AS count FROM users WHERE phone_number LIKE $1',
+        [`${prefix}%`]
       );
-      await pool.query('DELETE FROM users WHERE id = ANY($1::integer[])', [createdUserIds]);
+      expect(residue.rows[0].count).toBe(0);
+      const finalResult = await Promise.all([
+        pool.query('SELECT COUNT(*)::integer AS count FROM users'),
+        pool.query('SELECT COUNT(*)::integer AS count FROM checkin_call_episodes'),
+      ]);
+      expect(finalResult[0].rows[0].count).toBe(baseline.users);
+      expect(finalResult[1].rows[0].count).toBe(baseline.episodes);
+    } finally {
+      await pool.end();
     }
-    const residue = await pool.query(
-      'SELECT COUNT(*)::integer AS count FROM users WHERE phone_number LIKE $1',
-      [`${prefix}%`]
-    );
-    expect(residue.rows[0].count).toBe(0);
-    const finalResult = await Promise.all([
-      pool.query('SELECT COUNT(*)::integer AS count FROM users'),
-      pool.query('SELECT COUNT(*)::integer AS count FROM checkin_call_episodes'),
-    ]);
-    expect(finalResult[0].rows[0].count).toBe(baseline.users);
-    expect(finalResult[1].rows[0].count).toBe(baseline.episodes);
-    await pool.end();
   });
 
   test('MILD uses recent context, seen does not resolve, then the next family confirms', async () => {

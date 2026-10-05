@@ -136,6 +136,10 @@ describeDatabase('check-in HTTP API contract', () => {
       await pool.query("DELETE FROM checkin_call_audio WHERE audio_key = 'vi:user_prompt'");
     }
     if (createdUserIds.length) {
+      // Delete patient-owned episodes before their acknowledging caregivers.
+      await pool.query('DELETE FROM checkin_call_episodes WHERE user_id = ANY($1::integer[])', [
+        createdUserIds,
+      ]);
       await pool.query('DELETE FROM mission_history WHERE user_id = ANY($1::integer[])', [
         createdUserIds,
       ]);

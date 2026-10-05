@@ -24,14 +24,21 @@ describeDatabase('check-in call PostgreSQL integration', () => {
   }
 
   afterAll(async () => {
-    if (users.length) {
-      await pool.query(
-        'DELETE FROM user_connections WHERE requester_id = ANY($1::integer[]) OR addressee_id = ANY($1::integer[])',
-        [users]
-      );
-      await pool.query('DELETE FROM users WHERE id = ANY($1::integer[])', [users]);
+    try {
+      if (users.length) {
+        // Explicit ordering avoids caregiver acknowledged_by FK failures.
+        await pool.query('DELETE FROM checkin_call_episodes WHERE user_id = ANY($1::integer[])', [
+          users,
+        ]);
+        await pool.query(
+          'DELETE FROM user_connections WHERE requester_id = ANY($1::integer[]) OR addressee_id = ANY($1::integer[])',
+          [users]
+        );
+        await pool.query('DELETE FROM users WHERE id = ANY($1::integer[])', [users]);
+      }
+    } finally {
+      await pool.end();
     }
-    await pool.end();
   });
 
   test('overdue → user call → MILD first family → seen → confirmation', async () => {
