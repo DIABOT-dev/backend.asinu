@@ -785,7 +785,7 @@ describeDatabase('check-in HTTP API contract', () => {
     }
   });
 
-  test('expired native calls are ended before escalation continues', async () => {
+  test('expired calls advance to family without invalid VoIP control pushes', async () => {
     await request(app)
       .put('/api/mobile/checkin-call/settings')
       .set(auth(patientToken))
@@ -809,29 +809,27 @@ describeDatabase('check-in HTTP API contract', () => {
       [episodeId]
     );
     await checkinCallService.tick(pool);
-    expect(sendVoipNotification).toHaveBeenCalledWith(
-      'voip-patient',
-      expect.objectContaining({ episodeId, attemptId: userAttemptId, kind: 'END_CALL' }),
-      expect.objectContaining({ action: 'END_CALL' })
-    );
+    expect(sendVoipNotification).not.toHaveBeenCalled();
+    const userAttempt = await pool.query('SELECT state FROM checkin_call_attempts WHERE id = $1', [userAttemptId]);
+    expect(userAttempt.rows[0].state).toBe('NO_ANSWER');
 
     const familyActive = await checkinCallService.getActive(pool, familyId);
     expect(familyActive).toMatchObject({ target_role: 'FAMILY', id: episodeId });
+    await checkinCallService.dispatchDeliveries(pool);
+    expect(sendVoipNotification).toHaveBeenCalledWith(
+      'voip-family',
+      expect.objectContaining({ episodeId, attemptId: familyActive.attempt_id, kind: 'INCOMING_CALL' }),
+      expect.objectContaining({ action: 'INCOMING_CALL' })
+    );
     sendVoipNotification.mockClear();
     await pool.query(
       "UPDATE checkin_call_episodes SET next_action_at = now() - interval '1 second' WHERE id = $1",
       [episodeId]
     );
     await checkinCallService.tick(pool);
-    expect(sendVoipNotification).toHaveBeenCalledWith(
-      'voip-family',
-      expect.objectContaining({
-        episodeId,
-        attemptId: familyActive.attempt_id,
-        kind: 'END_CALL',
-      }),
-      expect.objectContaining({ action: 'END_CALL' })
-    );
+    expect(sendVoipNotification).not.toHaveBeenCalled();
+    const expiredFamily = await pool.query('SELECT state FROM checkin_call_attempts WHERE id = $1', [familyActive.attempt_id]);
+    expect(expiredFamily.rows[0].state).toBe('PUSH_WAIT');
   });
 
   test('check-in call rejects invalid IDs, choices, actions and audio keys', async () => {

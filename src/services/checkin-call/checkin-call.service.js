@@ -833,7 +833,7 @@ async function endRemoteCalls(pool, episodeId, exceptAttemptId = null, onlyAttem
   if (!pool?.query) return;
   try {
     const result = await pool.query(
-      "SELECT a.id AS attempt_id, u.fcm_token, u.voip_push_token, u.voip_push_environment, COALESCE(u.language_preference, 'vi') AS lang " +
+      "SELECT a.id AS attempt_id, u.fcm_token, COALESCE(u.language_preference, 'vi') AS lang " +
         'FROM checkin_call_attempts a JOIN users u ON u.id = a.target_user_id ' +
         'WHERE a.episode_id = $1 AND ($2::uuid IS NULL OR a.id != $2::uuid) ' +
         'AND ($3::uuid IS NULL OR a.id = $3::uuid)',
@@ -859,16 +859,10 @@ async function endRemoteCalls(pool, episodeId, exceptAttemptId = null, onlyAttem
             })
           );
         }
-        if (row.voip_push_token) {
-          jobs.push(
-            sendVoipNotification(row.voip_push_token, payload, {
-              action: 'END_CALL',
-              environment: row.voip_push_environment,
-              title,
-              body: '',
-            })
-          );
-        }
+        // Never send END_CALL over PushKit. iOS requires a new CallKit report
+        // for each VoIP push, including ones received after the call ended.
+        // iOS ends via the authenticated call-state polling/answer rejection
+        // in the app and the existing native ringing/response deadlines.
         return jobs;
       })
     );
@@ -1449,7 +1443,7 @@ async function dispatchDeliveries(pool) {
             incomingCall: nativeCall,
           })
         : Promise.resolve({ ok: false, error: 'NO_FCM_TOKEN' }),
-      nativeCall && delivery.voip_push_token
+      incoming && delivery.voip_push_token
         ? sendVoipNotification(delivery.voip_push_token, payload, {
             action: 'INCOMING_CALL',
             environment: delivery.voip_push_environment,
@@ -1479,11 +1473,11 @@ async function dispatchDeliveries(pool) {
       : ticket?.message ||
         ticket?.details?.error ||
         expoFallback?.error ||
-        directApns.error ||
-        directFcm.error ||
-        'PUSH_FAILED';
+        (incoming && delivery.voip_push_token && directApns.error) ||
+        (delivery.fcm_token && directFcm.error) ||
+        'NO_REACHABLE_PUSH_TOKEN';
     const noReachableChannel =
-      !delivery.push_token && !delivery.fcm_token && !(nativeCall && delivery.voip_push_token);
+      !delivery.push_token && !delivery.fcm_token && !(incoming && delivery.voip_push_token);
     await pool.query(
       "UPDATE checkin_call_deliveries SET state = $2, last_error = $3, updated_at = now(), due_at = CASE WHEN $2 = 'PENDING' THEN now() + (LEAST(tries, 5) * interval '30 seconds') ELSE due_at END WHERE id = $1",
       [

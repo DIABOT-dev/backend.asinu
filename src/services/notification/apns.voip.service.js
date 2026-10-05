@@ -59,6 +59,24 @@ async function providerToken(config) {
 }
 
 function buildPayload(data = {}, action = 'INCOMING_CALL') {
+  // Every VoIP push must represent a NEW call reported to CallKit. Control
+  // messages and repeated reminders can otherwise make iOS terminate the app
+  // and eventually stop delivering VoIP pushes altogether.
+  if (
+    action !== 'INCOMING_CALL' ||
+    (data.action && data.action !== 'INCOMING_CALL') ||
+    (data.kind && data.kind !== 'INCOMING_CALL')
+  ) {
+    throw new Error('VOIP_REQUIRES_INCOMING_CALL');
+  }
+  if (
+    typeof data.episodeId !== 'string' ||
+    !data.episodeId.trim() ||
+    typeof data.attemptId !== 'string' ||
+    !data.attemptId.trim()
+  ) {
+    throw new Error('VOIP_REQUIRES_CALL_IDENTITY');
+  }
   const lang = data.lang === 'en' ? 'en' : 'vi';
   return {
     aps: { 'content-available': 1 },
@@ -80,7 +98,12 @@ async function sendVoipNotification(token, data = {}, options = {}) {
   if (!token || typeof token !== 'string') return { ok: false, error: 'NO_VOIP_TOKEN' };
 
   let config;
+  let payload;
   try {
+    payload = buildPayload(
+      { ...data, title: options.title, body: options.body },
+      options.action || 'INCOMING_CALL'
+    );
     config = configuration(options.environment);
   } catch (error) {
     return { ok: false, error: error.message || String(error) };
@@ -88,10 +111,6 @@ async function sendVoipNotification(token, data = {}, options = {}) {
 
   try {
     const jwt = await providerToken(config);
-    const payload = buildPayload(
-      { ...data, title: options.title, body: options.body },
-      options.action || 'INCOMING_CALL'
-    );
 
     return await new Promise((resolve) => {
       const client = http2.connect(APNS_HOSTS[config.environment]);
