@@ -7,6 +7,7 @@ const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 const entitlementService = require('../payment/entitlement.service');
 const { familyContact, familyNotice } = require('./family-contact.service');
 const { synthesizeText } = require('./audio.service');
+const { recordCallResponse, refreshEarlySignals } = require('./response-history.service');
 const {
   BODY_LOCATIONS,
   getLocationOptions,
@@ -39,13 +40,9 @@ const MILD_ISSUE_CATEGORIES = new Set([
 ]);
 const URGENT_ISSUE_CATEGORIES = new Set(['URGENT_RED_FLAG', 'URGENT_UNSPECIFIED']);
 const TRIAGE_INTENSITIES = new Set(['MILD', 'MODERATE', 'URGENT']);
-const URGENT_TRIAGE_SYMPTOMS = new Set(['shortness_of_breath', 'fall', 'fainting']);
+const URGENT_TRIAGE_SYMPTOMS = new Set(['shortness_of_breath', 'chest_pain', 'fall', 'fainting']);
 const TRIAGE_TIMEOUT_SECONDS = 180;
-const INVALID_APNS_REASONS = new Set([
-  'BadDeviceToken',
-  'DeviceTokenNotForTopic',
-  'Unregistered',
-]);
+const INVALID_APNS_REASONS = new Set(['BadDeviceToken', 'DeviceTokenNotForTopic', 'Unregistered']);
 
 function normalizeComparable(value) {
   return String(value || '')
@@ -89,9 +86,7 @@ function serviceError(message, statusCode, i18nKey, i18nParams) {
 }
 
 function isSingleDeviceFamilyTest(episode) {
-  return (
-    episode.config?.test_mode === true && episode.config?.single_device_family_test === true
-  );
+  return episode.config?.test_mode === true && episode.config?.single_device_family_test === true;
 }
 
 function invalidPushTokenChannels(directFcm, directApns, expoTicket) {
@@ -106,8 +101,7 @@ function invalidPushTokenChannels(directFcm, directApns, expoTicket) {
     apns:
       directApns?.ok === false &&
       (Number(directApns.status) === 410 || INVALID_APNS_REASONS.has(apnsError)),
-    expo:
-      expoTicket?.status === 'error' && expoTicket?.details?.error === 'DeviceNotRegistered',
+    expo: expoTicket?.status === 'error' && expoTicket?.details?.error === 'DeviceNotRegistered',
   };
 }
 
@@ -182,6 +176,16 @@ async function settings(pool, userId) {
     userId,
   ]);
   return found.rows[0] || { user_id: userId, ...DEFAULTS };
+}
+
+async function eligibleContacts(pool, userId) {
+  const ids = await familyFor(pool, userId);
+  if (!ids.length) return [];
+  const result = await pool.query(
+    "SELECT u.id, COALESCE(NULLIF(trim(u.full_name), ''), NULLIF(trim(u.display_name), '')) AS name FROM unnest($1::integer[]) WITH ORDINALITY f(id, position) JOIN users u ON u.id = f.id ORDER BY f.position",
+    [ids]
+  );
+  return result.rows;
 }
 
 async function saveSettings(pool, userId, input) {
@@ -463,7 +467,10 @@ async function buildTriageContext(db, userId, lang = 'vi') {
               normalizedLabel.includes(item.normalized)
           );
           const inProfile = profileSymptoms.some(
-            (item) => item === normalizedLabel || item.includes(normalizedLabel) || normalizedLabel.includes(item)
+            (item) =>
+              item === normalizedLabel ||
+              item.includes(normalizedLabel) ||
+              normalizedLabel.includes(item)
           );
           return {
             ...symptom,
@@ -501,7 +508,9 @@ async function buildTriageContext(db, userId, lang = 'vi') {
   return {
     timeout_seconds: TRIAGE_TIMEOUT_SECONDS,
     has_recent_context:
-      recentLocationResult.rows.length > 0 || symptomResult.rows.length > 0 || profileSymptoms.length > 0,
+      recentLocationResult.rows.length > 0 ||
+      symptomResult.rows.length > 0 ||
+      profileSymptoms.length > 0,
     locations,
   };
 }
@@ -537,15 +546,21 @@ async function startTriage(pool, episodeId, userId, lang = 'vi') {
 async function completeTriage(pool, episodeId, userId, input = {}) {
   const bodyLocation = String(input.body_location || '').trim();
   const symptom = String(input.symptom || '').trim();
-  const intensity = String(input.intensity || '').trim().toUpperCase();
+  const intensity = String(input.intensity || '')
+    .trim()
+    .toUpperCase();
   const validSymptom = getSymptomOptionsForLocation(bodyLocation, 'vi').some(
     (option) => option.key === symptom
   );
-  if (!BODY_LOCATIONS.includes(bodyLocation) || !validSymptom || !TRIAGE_INTENSITIES.has(intensity)) {
+  if (
+    !BODY_LOCATIONS.includes(bodyLocation) ||
+    !validSymptom ||
+    !TRIAGE_INTENSITIES.has(intensity)
+  ) {
     throw serviceError('Invalid triage response', 400, 'checkinCall.error.invalid_triage');
   }
 
-  return withEpisode(pool, episodeId, userId, async (db, episode) => {
+  const result = await withEpisode(pool, episodeId, userId, async (db, episode) => {
     if (Number(episode.user_id) !== Number(userId))
       throw serviceError('Forbidden', 403, 'checkinCall.error.forbidden');
     if (episode.state !== 'TRIAGE_USER')
@@ -555,7 +570,8 @@ async function completeTriage(pool, episodeId, userId, input = {}) {
         'checkinCall.error.episode_not_accepting'
       );
 
-    const finalIntensity = URGENT_TRIAGE_SYMPTOMS.has(symptom) ? 'URGENT' : intensity;
+    const finalIntensity =
+      episode.severity === 'URGENT' || URGENT_TRIAGE_SYMPTOMS.has(symptom) ? 'URGENT' : intensity;
     const triageContext = { body_location: bodyLocation, symptom, intensity: finalIntensity };
     const issueCategory = issueCategoryForTriage(symptom, finalIntensity);
     await db.query(
@@ -579,13 +595,23 @@ async function completeTriage(pool, episodeId, userId, input = {}) {
     episode.issue_category = issueCategory;
     episode.triage_context = triageContext;
     await event(db, episodeId, 'USER_TRIAGE_COMPLETED', userId, null, triageContext);
+    await recordCallResponse(
+      db,
+      episode,
+      finalIntensity === 'URGENT' ? 'URGENT' : 'MILD',
+      triageContext
+    );
 
     if (finalIntensity === 'URGENT') await broadcastUrgent(db, episode);
     else await startNextFamily(db, episode);
 
-    const updated = await db.query('SELECT * FROM checkin_call_episodes WHERE id = $1', [episodeId]);
+    const updated = await db.query('SELECT * FROM checkin_call_episodes WHERE id = $1', [
+      episodeId,
+    ]);
     return updated.rows[0];
   });
+  void refreshEarlySignals(pool, result);
+  return result;
 }
 
 async function answer(pool, episodeId, userId, choice, requestedIssueCategory) {
@@ -594,26 +620,20 @@ async function answer(pool, episodeId, userId, choice, requestedIssueCategory) {
   const issueCategory =
     choice === 1
       ? null
-      : String(
-          requestedIssueCategory || (choice === 2 ? 'MILD_UNSPECIFIED' : 'URGENT_UNSPECIFIED')
-        )
+      : String(requestedIssueCategory || (choice === 2 ? 'MILD_UNSPECIFIED' : 'URGENT_UNSPECIFIED'))
           .trim()
           .toUpperCase();
   if (
     (choice === 2 && !MILD_ISSUE_CATEGORIES.has(issueCategory)) ||
     (choice === 3 && !URGENT_ISSUE_CATEGORIES.has(issueCategory))
   ) {
-    throw serviceError(
-      'Invalid issue category',
-      400,
-      'checkinCall.error.invalid_issue_category'
-    );
+    throw serviceError('Invalid issue category', 400, 'checkinCall.error.invalid_issue_category');
   }
-  return withEpisode(pool, episodeId, userId, async (db, episode) => {
+  const result = await withEpisode(pool, episodeId, userId, async (db, episode) => {
     if (episode.user_id !== userId)
       throw serviceError('Forbidden', 403, 'checkinCall.error.forbidden');
     if (episode.state === 'RESOLVED' && choice === 1) return episode;
-    if (episode.state !== 'CONTACT_USER')
+    if (!['CONTACT_USER', 'TRIAGE_USER'].includes(episode.state))
       throw serviceError(
         'Episode no longer accepting user answers',
         409,
@@ -623,13 +643,24 @@ async function answer(pool, episodeId, userId, choice, requestedIssueCategory) {
       "UPDATE checkin_call_attempts SET state = 'COMPLETED', ended_at = now() WHERE episode_id = $1 AND target_role = 'USER' AND state IN ('RINGING','CONNECTED')",
       [episodeId]
     );
-    if (choice === 1) {
-      if (episode.config?.test_mode !== true) {
-        await db.query(
-          "INSERT INTO health_checkins (user_id, session_date, initial_status, current_status, flow_state, resolved_at, last_response_at) VALUES ($1,$2,'fine','fine','resolved',now(),now()) ON CONFLICT (user_id, session_date) DO NOTHING",
-          [userId, episode.local_date]
-        );
-      }
+    const preserveUrgent = episode.severity === 'URGENT';
+    await recordCallResponse(
+      db,
+      episode,
+      preserveUrgent || choice === 3 ? 'URGENT' : choice === 2 ? 'MILD' : 'NONE'
+    );
+    if (preserveUrgent) {
+      // A self-report cannot erase an existing urgent assessment.
+      await event(
+        db,
+        episodeId,
+        choice === 1 ? 'USER_OK_WITH_URGENT_SIGNAL' : 'USER_URGENT',
+        userId,
+        null,
+        { choice }
+      );
+      await broadcastUrgent(db, episode);
+    } else if (choice === 1) {
       await db.query(
         "UPDATE checkin_call_episodes SET state = 'RESOLVED', severity = 'NONE', resolved_at = now(), next_action_at = NULL, updated_at = now() WHERE id = $1",
         [episodeId]
@@ -646,7 +677,7 @@ async function answer(pool, episodeId, userId, choice, requestedIssueCategory) {
       await startNextFamily(db, episode);
     } else {
       await db.query(
-        "UPDATE checkin_call_episodes SET issue_category = $2, updated_at = now() WHERE id = $1",
+        'UPDATE checkin_call_episodes SET issue_category = $2, updated_at = now() WHERE id = $1',
         [episodeId, issueCategory]
       );
       episode.issue_category = issueCategory;
@@ -658,6 +689,8 @@ async function answer(pool, episodeId, userId, choice, requestedIssueCategory) {
     ]);
     return updated.rows[0];
   });
+  void refreshEarlySignals(pool, result);
+  return result;
 }
 
 async function getActive(pool, userId) {
@@ -677,8 +710,10 @@ async function getActive(pool, userId) {
 
 async function getEpisode(pool, episodeId, userId, lang = 'vi') {
   const result = await pool.query(
-    'SELECT e.id, e.user_id, e.state, e.severity, e.issue_category, e.triage_context, e.acknowledged_by, e.created_at, e.resolved_at, e.exhausted_at ' +
-      'FROM checkin_call_episodes e WHERE e.id = $1 AND (e.user_id = $2 OR $2 = ANY(e.family_ids))',
+    'SELECT e.id, e.user_id, e.state, e.severity, e.issue_category, e.triage_context, e.acknowledged_by, e.created_at, e.resolved_at, e.exhausted_at, e.updated_at, e.trigger_source, e.next_action_at, e.triage_started_at, e.triage_completed_at, ' +
+      "COALESCE(NULLIF(trim(ack.full_name), ''), NULLIF(trim(ack.display_name), '')) AS acknowledged_name, " +
+      "(SELECT v.detail->>'reason' FROM checkin_call_events v WHERE v.episode_id = e.id AND v.event = 'CANCELLED' ORDER BY v.id DESC LIMIT 1) AS cancellation_reason " +
+      'FROM checkin_call_episodes e LEFT JOIN users ack ON ack.id = e.acknowledged_by WHERE e.id = $1 AND (e.user_id = $2 OR $2 = ANY(e.family_ids))',
     [episodeId, userId]
   );
   const episode = result.rows[0] || null;
@@ -691,7 +726,8 @@ async function getEpisode(pool, episodeId, userId, lang = 'vi') {
 
 async function getAttempt(pool, attemptId, userId, lang = 'vi') {
   const result = await pool.query(
-    'SELECT a.id, a.episode_id, a.target_role, a.state, a.ring_deadline, a.confirm_deadline, e.state AS episode_state, e.severity, e.issue_category, e.triage_context, ' +
+    'SELECT a.id, a.episode_id, a.target_role, a.state, a.ring_deadline, a.confirm_deadline, a.ended_at, a.target_user_id, e.acknowledged_by, e.resolved_at, e.exhausted_at, e.trigger_source, e.next_action_at, e.state AS episode_state, e.severity, e.issue_category, e.triage_context, ' +
+      "(SELECT v.detail->>'reason' FROM checkin_call_events v WHERE v.episode_id = e.id AND v.event = 'CANCELLED' ORDER BY v.id DESC LIMIT 1) AS cancellation_reason, " +
       "COALESCE(NULLIF(trim(subject.full_name), ''), NULLIF(trim(subject.display_name), '')) AS subject_name, subject.phone_number AS subject_phone, profile.gender AS subject_gender, c.relationship_type, c.requester_id AS relationship_requester_id " +
       'FROM checkin_call_attempts a JOIN checkin_call_episodes e ON e.id = a.episode_id ' +
       'JOIN users subject ON subject.id = e.user_id ' +
@@ -704,12 +740,29 @@ async function getAttempt(pool, attemptId, userId, lang = 'vi') {
   const row = result.rows[0];
   if (!row) return null;
   // Do not leak internal join columns or an unrelated person's profile.
-  const { subject_name, subject_phone, subject_gender, relationship_type, relationship_requester_id, ...attempt } = row;
+  const {
+    subject_name,
+    subject_phone,
+    subject_gender,
+    relationship_type,
+    relationship_requester_id,
+    ...attempt
+  } = row;
   if (attempt) {
     if (!attempt.triage_context?.body_location) attempt.triage_context = null;
     attempt.triage_display = localizeTriageContext(attempt.triage_context, lang);
     if (attempt.target_role === 'FAMILY') {
-      attempt.subject = familyContact({ subject_name, subject_phone, subject_gender, relationship_type, relationship_requester_id }, userId, lang);
+      attempt.subject = familyContact(
+        {
+          subject_name,
+          subject_phone,
+          subject_gender,
+          relationship_type,
+          relationship_requester_id,
+        },
+        userId,
+        lang
+      );
       attempt.family_notice = familyNotice(attempt, attempt.subject, lang);
     }
   }
@@ -733,6 +786,46 @@ async function seen(pool, attemptId, userId) {
   if (!found.rows.length)
     throw serviceError('Attempt not found', 404, 'checkinCall.error.attempt_not_found');
   await event(pool, found.rows[0].episode_id, 'SEEN', userId, attemptId);
+  return { ok: true };
+}
+
+async function decline(pool, attemptId, userId) {
+  const found = await pool.query(
+    'SELECT episode_id FROM checkin_call_attempts WHERE id = $1 AND target_user_id = $2',
+    [attemptId, userId]
+  );
+  if (!found.rows.length)
+    throw serviceError('Attempt not found', 404, 'checkinCall.error.attempt_not_found');
+  const episodeId = found.rows[0].episode_id;
+  await withEpisode(pool, episodeId, userId, async (db, episode) => {
+    const current = await db.query(
+      'SELECT * FROM checkin_call_attempts WHERE id = $1 AND target_user_id = $2 FOR UPDATE',
+      [attemptId, userId]
+    );
+    const attempt = current.rows[0];
+    if (
+      !attempt ||
+      TERMINAL.has(episode.state) ||
+      !['RINGING', 'CONNECTED', 'PUSH_WAIT', 'WAITING_CONFIRMATION'].includes(attempt.state)
+    )
+      return;
+    await db.query(
+      "UPDATE checkin_call_attempts SET state = 'NO_ANSWER', ended_at = now() WHERE id = $1",
+      [attemptId]
+    );
+    await db.query(
+      "UPDATE checkin_call_deliveries SET state = 'CANCELLED' WHERE attempt_id = $1 AND state IN ('PENDING','SENDING')",
+      [attemptId]
+    );
+    await event(db, episodeId, 'CALL_DECLINED', userId, attemptId);
+    if (episode.state !== 'URGENT_BROADCAST') {
+      await db.query(
+        'UPDATE checkin_call_episodes SET next_action_at = now(), updated_at = now() WHERE id = $1',
+        [episodeId]
+      );
+    }
+  });
+  await endRemoteCalls(pool, episodeId, null, attemptId);
   return { ok: true };
 }
 
@@ -793,7 +886,7 @@ async function cancelActiveForManualCheckin(pool, userId) {
   try {
     await db.query('BEGIN');
     const active = await db.query(
-      "SELECT id FROM checkin_call_episodes WHERE user_id = $1 AND state NOT IN ('RESOLVED','EXHAUSTED','EXHAUSTED_MILD','EXHAUSTED_URGENT','CANCELLED','URGENT_ACKNOWLEDGED') FOR UPDATE",
+      "SELECT id FROM checkin_call_episodes WHERE user_id = $1 AND trigger_source = 'MISSED_CHECKIN' AND severity <> 'URGENT' AND state NOT IN ('RESOLVED','EXHAUSTED','EXHAUSTED_MILD','EXHAUSTED_URGENT','CANCELLED','URGENT_ACKNOWLEDGED') FOR UPDATE",
       [userId]
     );
     episodeIds = active.rows.map((row) => row.id);
@@ -830,7 +923,6 @@ async function cancelActiveForManualCheckin(pool, userId) {
 async function accept(pool, attemptId, userId) {
   const db = await pool.connect();
   let result;
-  let urgentEpisodeId = null;
   try {
     await db.query('BEGIN');
     const found = await db.query(
@@ -860,21 +952,21 @@ async function accept(pool, attemptId, userId) {
     } else if (!['RINGING', 'PUSH_WAIT'].includes(episode.attempt_state)) {
       throw serviceError('Attempt closed', 409, 'checkinCall.error.attempt_closed');
     } else if (episode.target_role === 'FAMILY' && episode.state === 'URGENT_BROADCAST') {
-      await db.query(
-        "UPDATE checkin_call_episodes SET state = 'URGENT_ACKNOWLEDGED', acknowledged_by = $2, next_action_at = NULL, updated_at = now() WHERE id = $1",
-        [episode.id, userId]
+      // Picking up is not a commitment to check. Keep other relatives reachable.
+      const connected = await db.query(
+        "UPDATE checkin_call_attempts SET state = 'CONNECTED', connected_at = now(), confirm_deadline = LEAST(now() + interval '120 seconds', $2::timestamptz) WHERE id = $1 RETURNING confirm_deadline",
+        [attemptId, episode.urgent_until]
       );
       await db.query(
-        "UPDATE checkin_call_attempts SET state = CASE WHEN id = $2 THEN 'CONNECTED' ELSE 'CANCELLED' END, connected_at = CASE WHEN id = $2 THEN now() ELSE connected_at END, ended_at = CASE WHEN id = $2 THEN ended_at ELSE now() END WHERE episode_id = $1 AND state IN ('RINGING','PUSH_WAIT','CONNECTED')",
-        [episode.id, attemptId]
+        "UPDATE checkin_call_deliveries SET state = 'CANCELLED' WHERE attempt_id = $1 AND state = 'PENDING'",
+        [attemptId]
       );
-      await db.query(
-        "UPDATE checkin_call_deliveries SET state = 'CANCELLED' WHERE episode_id = $1 AND state = 'PENDING'",
-        [episode.id]
-      );
-      await event(db, episode.id, 'URGENT_ACKNOWLEDGED', userId, attemptId);
-      urgentEpisodeId = episode.id;
-      result = { ok: true, state: 'URGENT_ACKNOWLEDGED' };
+      await event(db, episode.id, 'CALL_ACCEPTED', userId, attemptId);
+      result = {
+        ok: true,
+        state: episode.state,
+        confirm_deadline: connected.rows[0]?.confirm_deadline || null,
+      };
     } else {
       const seconds =
         episode.target_role === 'USER'
@@ -902,7 +994,6 @@ async function accept(pool, attemptId, userId) {
   } finally {
     db.release();
   }
-  if (urgentEpisodeId) await endRemoteCalls(pool, urgentEpisodeId, attemptId);
   return result;
 }
 
@@ -915,7 +1006,12 @@ async function confirmFamily(pool, episodeId, userId, action) {
       throw serviceError('Forbidden', 403, 'checkinCall.error.forbidden');
     if (episode.state === 'RESOLVED' && episode.acknowledged_by === userId) return episode;
     if (
-      !['MILD_FAMILY_ESCALATION', 'CONTACT_FAMILY', 'URGENT_ACKNOWLEDGED'].includes(episode.state)
+      ![
+        'MILD_FAMILY_ESCALATION',
+        'CONTACT_FAMILY',
+        'URGENT_BROADCAST',
+        'URGENT_ACKNOWLEDGED',
+      ].includes(episode.state)
     ) {
       throw serviceError('Episode closed', 409, 'checkinCall.error.episode_closed');
     }
@@ -928,7 +1024,7 @@ async function confirmFamily(pool, episodeId, userId, action) {
     }
     if (episode.state !== 'URGENT_ACKNOWLEDGED') {
       const contacted = await db.query(
-        "SELECT 1 FROM checkin_call_attempts WHERE episode_id = $1 AND target_user_id = $2 AND target_role = 'FAMILY' AND state IN ('RINGING','CONNECTED','PUSH_WAIT','WAITING_CONFIRMATION') LIMIT 1",
+        "SELECT 1 FROM checkin_call_attempts WHERE episode_id = $1 AND target_user_id = $2 AND target_role = 'FAMILY' AND state IN ('RINGING','CONNECTED','PUSH_WAIT','WAITING_CONFIRMATION') AND (confirm_deadline IS NULL OR confirm_deadline > now()) LIMIT 1",
         [episodeId, userId]
       );
       if (!contacted.rows.length)
@@ -949,20 +1045,20 @@ async function confirmFamily(pool, episodeId, userId, action) {
       if (!permission.rows.length)
         throw serviceError('Forbidden', 403, 'checkinCall.error.forbidden');
     }
-    await db.query(
-      "UPDATE checkin_call_episodes SET state = 'RESOLVED', acknowledged_by = $2, resolved_at = now(), next_action_at = NULL, updated_at = now() WHERE id = $1",
+    const resolved = await db.query(
+      "UPDATE checkin_call_episodes SET state = 'RESOLVED', acknowledged_by = $2, resolved_at = now(), next_action_at = NULL, updated_at = now() WHERE id = $1 RETURNING *",
       [episodeId, userId]
     );
     await db.query(
-      "UPDATE checkin_call_attempts SET state = 'COMPLETED', ended_at = now() WHERE episode_id = $1 AND state IN ('RINGING','CONNECTED','PUSH_WAIT','WAITING_CONFIRMATION')",
-      [episodeId]
+      "UPDATE checkin_call_attempts SET state = CASE WHEN target_user_id = $2 THEN 'COMPLETED' ELSE 'CANCELLED' END, ended_at = now() WHERE episode_id = $1 AND state IN ('RINGING','CONNECTED','PUSH_WAIT','WAITING_CONFIRMATION')",
+      [episodeId, userId]
     );
     await db.query(
-      "UPDATE checkin_call_deliveries SET state = 'CANCELLED' WHERE episode_id = $1 AND state = 'PENDING'",
+      "UPDATE checkin_call_deliveries SET state = 'CANCELLED' WHERE episode_id = $1 AND state IN ('PENDING','SENDING')",
       [episodeId]
     );
     await event(db, episodeId, 'FAMILY_CONFIRMED', userId, null, { action });
-    return { ...episode, state: 'RESOLVED', acknowledged_by: userId };
+    return resolved.rows[0] || { ...episode, state: 'RESOLVED', acknowledged_by: userId };
   });
   await endRemoteCalls(pool, episodeId);
   return result;
@@ -992,6 +1088,18 @@ async function startEarlySignalEpisode(pool, userId, assessmentId) {
   const db = await pool.connect();
   try {
     await db.query('BEGIN');
+    await db.query('SELECT pg_advisory_xact_lock($1::bigint)', [userId]);
+    const activeUrgent = await db.query(
+      "SELECT * FROM checkin_call_episodes WHERE user_id = $1 AND severity = 'URGENT' AND state IN ('CONTACT_USER','TRIAGE_USER','URGENT_BROADCAST','URGENT_ACKNOWLEDGED') ORDER BY created_at DESC LIMIT 1",
+      [userId]
+    );
+    if (activeUrgent.rows.length) {
+      await event(db, activeUrgent.rows[0].id, 'EARLY_SIGNAL_ATTACHED', null, null, {
+        assessmentId,
+      });
+      await db.query('COMMIT');
+      return activeUrgent.rows[0];
+    }
     const current = await settings(db, userId);
     const config = {
       ...DEFAULTS,
@@ -1039,6 +1147,25 @@ async function startEarlySignalEpisode(pool, userId, assessmentId) {
 
 async function advance(pool, id) {
   const remoteEnd = await withEpisode(pool, id, null, async (db, episode) => {
+    if (episode.state === 'URGENT_ACKNOWLEDGED') {
+      // Recover calls accepted by the older backend which stopped the entire
+      // escalation on pickup and had no confirmation deadline.
+      const connected = await db.query(
+        "SELECT connected_at FROM checkin_call_attempts WHERE episode_id = $1 AND target_role = 'FAMILY' AND state = 'CONNECTED' ORDER BY connected_at DESC LIMIT 1",
+        [id]
+      );
+      const waitingUntil = connected.rows[0]?.connected_at
+        ? new Date(connected.rows[0].connected_at).getTime() + 120_000
+        : 0;
+      if (waitingUntil > Date.now() && new Date(episode.urgent_until) > new Date()) return;
+      await db.query(
+        "UPDATE checkin_call_episodes SET state = 'URGENT_BROADCAST', acknowledged_by = NULL, next_action_at = now(), updated_at = now() WHERE id = $1",
+        [id]
+      );
+      await event(db, id, 'URGENT_CONFIRMATION_TIMEOUT');
+      episode.state = 'URGENT_BROADCAST';
+      episode.next_action_at = new Date();
+    }
     if (
       !episode.next_action_at ||
       new Date(episode.next_action_at) > new Date() ||
@@ -1158,7 +1285,37 @@ async function advance(pool, id) {
         });
         return { all: true };
       } else {
+        const expired = [];
         for (const familyId of episode.family_ids) {
+          const found = await db.query(
+            "SELECT * FROM checkin_call_attempts WHERE episode_id = $1 AND target_user_id = $2 AND target_role = 'FAMILY' ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
+            [id, familyId]
+          );
+          const attempt = found.rows[0];
+          // Do not ring over somebody who is reading the alert. A pickup has a
+          // bounded confirmation window; if it lapses, a fresh call can resume.
+          if (attempt?.state === 'CONNECTED' && new Date(attempt.confirm_deadline) > new Date())
+            continue;
+          if (
+            !attempt ||
+            ['CONNECTED', 'EXPIRED', 'CANCELLED', 'NO_ANSWER'].includes(attempt.state) ||
+            (attempt.state === 'RINGING' && new Date(attempt.ring_deadline) <= new Date())
+          ) {
+            if (attempt) {
+              await db.query(
+                "UPDATE checkin_call_attempts SET state = 'EXPIRED', ended_at = now() WHERE id = $1",
+                [attempt.id]
+              );
+              await db.query(
+                "UPDATE checkin_call_deliveries SET state = 'CANCELLED' WHERE attempt_id = $1 AND state IN ('PENDING','SENDING')",
+                [attempt.id]
+              );
+              await event(db, id, 'FAMILY_TIMEOUT', null, attempt.id);
+              expired.push(attempt.id);
+            }
+            await createAttempt(db, episode, familyId, 'FAMILY');
+            continue;
+          }
           await db.query(
             'INSERT INTO checkin_call_deliveries (episode_id, attempt_id, target_user_id, kind) ' +
               "SELECT $1, a.id, $2, 'URGENT_REPEAT' FROM checkin_call_attempts a " +
@@ -1171,6 +1328,7 @@ async function advance(pool, id) {
           "UPDATE checkin_call_episodes SET next_action_at = LEAST(now() + interval '60 seconds', urgent_until), updated_at = now() WHERE id = $1",
           [id]
         );
+        return { attemptIds: expired };
       }
     }
   });
@@ -1186,7 +1344,7 @@ async function advance(pool, id) {
 async function tick(pool) {
   await createDailyEpisodes(pool);
   const due = await pool.query(
-    'SELECT id FROM checkin_call_episodes WHERE next_action_at <= now() ORDER BY next_action_at LIMIT 100'
+    "SELECT id FROM checkin_call_episodes WHERE next_action_at <= now() OR state = 'URGENT_ACKNOWLEDGED' ORDER BY COALESCE(next_action_at, created_at) LIMIT 100"
   );
   for (const row of due.rows) {
     try {
@@ -1225,6 +1383,7 @@ async function dispatchDeliveries(pool) {
       }
       if (
         TERMINAL.has(delivery.episode_state) ||
+        (delivery.kind === 'URGENT_REPEAT' && delivery.attempt_state !== 'RINGING') ||
         (delivery.kind === 'INCOMING_CALL' && delivery.attempt_state !== 'RINGING')
       ) {
         await db.query("UPDATE checkin_call_deliveries SET state = 'CANCELLED' WHERE id = $1", [
@@ -1376,12 +1535,8 @@ async function startTestCall(pool, userId, options = {}) {
   );
   const user = recipient.rows[0];
   const hasExpo = /^(Exponent|Expo)PushToken\[/.test(user?.push_token || '');
-  const localSimulation =
-    process.env.NODE_ENV !== 'production' && options.localSimulation === true;
-  if (
-    !user ||
-    (!localSimulation && !hasExpo && !user.fcm_token && !user.voip_push_token)
-  ) {
+  const localSimulation = process.env.NODE_ENV !== 'production' && options.localSimulation === true;
+  if (!user || (!localSimulation && !hasExpo && !user.fcm_token && !user.voip_push_token)) {
     throw serviceError(
       'Notifications are required for check-in call testing',
       409,
@@ -1417,7 +1572,7 @@ async function startTestCall(pool, userId, options = {}) {
       user_timeout_seconds: 180,
     };
     const inserted = await db.query(
-       `INSERT INTO checkin_call_episodes (
+      `INSERT INTO checkin_call_episodes (
          user_id, local_date, state, severity, scheduled_at, grace_until, next_action_at, config,
          family_ids
        ) VALUES ($1, DATE '2099-12-31', 'CONTACT_USER', 'NONE', now(), now(), NULL, $2::jsonb,
@@ -1475,6 +1630,7 @@ module.exports = {
   DEFAULTS,
   validateSettings,
   settings,
+  eligibleContacts,
   saveSettings,
   answer,
   startTriage,
@@ -1484,6 +1640,7 @@ module.exports = {
   getAttempt,
   getFamilyAudio,
   seen,
+  decline,
   accept,
   confirmFamily,
   createDailyEpisodes,

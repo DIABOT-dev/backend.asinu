@@ -8,7 +8,6 @@ const DAILY_CAP_TYPES = new Set([
   'morning_checkin',
   'evening_checkin',
   'checkin_followup',
-  'checkin_followup_urgent',
   'reminder_morning_summary',
   'reminder_afternoon',
   'reminder_evening_summary',
@@ -30,11 +29,7 @@ const DAILY_CAP_TYPES = new Set([
   'engagement',
 ]);
 
-const OPT_IN_TYPES = new Set([
-  ...DAILY_CAP_TYPES,
-  'profile_incomplete',
-  'weekly_wellness_summary',
-]);
+const OPT_IN_TYPES = new Set([...DAILY_CAP_TYPES, 'profile_incomplete', 'weekly_wellness_summary']);
 
 function isOptInType(type) {
   return typeof type === 'string' && (OPT_IN_TYPES.has(type) || type.startsWith('reminder_'));
@@ -57,7 +52,7 @@ async function hasReminderOptIn(pool, userId) {
   return rows[0]?.reminders_enabled === true;
 }
 
-async function hasReachedDailyCap(pool, userId) {
+async function hasReachedDailyCap(pool, userId, excludeNotificationId = null) {
   const cap = getDailyCap();
   if (cap <= 0) return true;
 
@@ -65,10 +60,12 @@ async function hasReachedDailyCap(pool, userId) {
     `SELECT COUNT(*)::int AS count
        FROM notifications
       WHERE user_id = $1
+        AND counts_toward_cap = true
+        AND ($3::int IS NULL OR id <> $3)
         AND type = ANY($2::text[])
         AND DATE(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') =
             DATE(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')`,
-    [userId, [...DAILY_CAP_TYPES]]
+    [userId, [...DAILY_CAP_TYPES], excludeNotificationId]
   );
   return Number(rows[0]?.count || 0) >= cap;
 }

@@ -10,14 +10,43 @@ function createPool(
   pushToken = 'ExpoPushToken[notification-delivery-test]',
   remindersEnabled = false
 ) {
-  return {
-    query: jest.fn(async (sql) => {
+  let notification;
+  const pool = {
+    query: jest.fn(async (sql, values) => {
       const normalized = String(sql).replace(/\s+/g, ' ').trim();
+      if (
+        ['BEGIN', 'COMMIT', 'ROLLBACK'].includes(normalized) ||
+        normalized.startsWith('SELECT pg_advisory_xact_lock')
+      )
+        return { rows: [] };
       if (normalized.includes('SELECT reminders_enabled')) {
         return { rows: [{ reminders_enabled: remindersEnabled }] };
       }
-      if (normalized.startsWith('SELECT 1 FROM notifications')) return { rows: [] };
-      if (normalized.startsWith('INSERT INTO notifications')) return { rows: [], rowCount: 1 };
+      if (
+        normalized.startsWith('SELECT 1 FROM notifications') ||
+        normalized.startsWith('SELECT id FROM notifications')
+      )
+        return { rows: [] };
+      if (normalized.startsWith('INSERT INTO notifications')) {
+        notification = {
+          id: 1,
+          user_id: values[0],
+          type: values[1],
+          title: values[2],
+          push_body: values[3],
+          data: JSON.parse(values[4]),
+          attempts: 0,
+          push_token: pushToken,
+        };
+        return { rows: [{ id: 1 }], rowCount: 1 };
+      }
+      if (normalized.startsWith('INSERT INTO notification_push_outbox')) {
+        notification.push_body = values[1];
+        return { rows: [], rowCount: 1 };
+      }
+      if (normalized.startsWith('SELECT n.id, n.user_id')) return { rows: [notification] };
+      if (normalized.startsWith('UPDATE notification_push_outbox'))
+        return { rows: [], rowCount: 1 };
       if (normalized.startsWith('SELECT push_token FROM users')) {
         return { rows: pushToken ? [{ push_token: pushToken }] : [] };
       }
@@ -26,7 +55,10 @@ function createPool(
       }
       throw new Error(`Unexpected query: ${normalized}`);
     }),
+    release: jest.fn(),
   };
+  pool.connect = jest.fn(async () => pool);
+  return pool;
 }
 
 describe('external notification delivery', () => {

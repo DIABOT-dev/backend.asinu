@@ -650,7 +650,7 @@ describeDatabase('check-in HTTP API contract', () => {
     });
   });
 
-  test('URGENT call stops the other calls after the first family member accepts', async () => {
+  test('URGENT pickup keeps the alert active until the family explicitly confirms', async () => {
     const started = await request(app)
       .post('/api/mobile/checkin-call/test-call')
       .set(auth(patientToken))
@@ -674,7 +674,15 @@ describeDatabase('check-in HTTP API contract', () => {
       .post(`/api/mobile/checkin-call/attempts/${familyActive.body.active.attempt_id}/accept`)
       .set(auth(familyToken))
       .expect(200);
-    expect(accepted.body.state).toBe('URGENT_ACKNOWLEDGED');
+    expect(accepted.body.state).toBe('URGENT_BROADCAST');
+    const connected = await pool.query(
+      `SELECT a.confirm_deadline, e.acknowledged_by
+       FROM checkin_call_attempts a JOIN checkin_call_episodes e ON e.id = a.episode_id
+       WHERE a.id = $1`,
+      [familyActive.body.active.attempt_id]
+    );
+    expect(connected.rows[0].acknowledged_by).toBeNull();
+    expect(connected.rows[0].confirm_deadline.getTime()).toBeGreaterThan(Date.now());
 
     const acceptedAgain = await request(app)
       .post(`/api/mobile/checkin-call/attempts/${familyActive.body.active.attempt_id}/accept`)
@@ -682,7 +690,7 @@ describeDatabase('check-in HTTP API contract', () => {
       .expect(200);
     expect(acceptedAgain.body).toMatchObject({
       ok: true,
-      state: 'URGENT_ACKNOWLEDGED',
+      state: 'URGENT_BROADCAST',
       alreadyAccepted: true,
     });
 
@@ -694,7 +702,7 @@ describeDatabase('check-in HTTP API contract', () => {
       id: episodeId,
       attempt_id: familyActive.body.active.attempt_id,
       attempt_state: 'CONNECTED',
-      state: 'URGENT_ACKNOWLEDGED',
+      state: 'URGENT_BROADCAST',
     });
 
     const confirmed = await request(app)

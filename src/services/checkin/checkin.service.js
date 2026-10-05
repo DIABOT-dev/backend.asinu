@@ -18,7 +18,7 @@
  *   miss × 4+ → mark resolved to stop spamming
  */
 
-const { sendPushNotification } = require('../notification/push.notification.service');
+const { deliverNotification } = require('../notification/notification-dispatch.service');
 const { getPatientRoleForCaregiver } = require('../../lib/relation');
 const {
   getNextTriageQuestion,
@@ -120,14 +120,8 @@ async function sendCheckinNotification(pool, userId, pushToken, type, title, bod
     return;
   }
 
-  if (pushToken) {
-    try {
-      const r = await sendPushNotification([pushToken], title, body, { type, ...data });
-      console.log(`[NOTIF] push type=${type} userId=${userId} ok=${r?.ok}`);
-    } catch (e) {
-      console.error(`[NOTIF] push FAILED:`, e.message);
-    }
-  }
+  // Resolve the current token at delivery time; retain failed sends for retry.
+  await deliverNotification(pool, dispatched.notificationId);
 }
 
 const TZ = 'Asia/Ho_Chi_Minh';

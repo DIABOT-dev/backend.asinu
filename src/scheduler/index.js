@@ -26,6 +26,9 @@ const { flushCrmEventOutbox } = require('../services/integrations/crm-event.serv
 const { flushDoctorTaskOutbox } = require('../services/integrations/doctor-task.service');
 const checkinCall = require('../services/checkin-call/checkin-call.service');
 const earlySignal = require('../services/early-signal/early-signal.service');
+const {
+  retryPendingNotifications,
+} = require('../services/notification/notification-dispatch.service');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
@@ -64,6 +67,7 @@ function safeCron(expression, name, handler) {
 }
 
 function startScheduler(pool) {
+  safeCron('* * * * *', 'notification_push_retry', () => retryPendingNotifications(pool));
   safeCron('*/15 * * * * *', 'checkin_call', async () => {
     await checkinCall.tick(pool);
     await checkinCall.dispatchDeliveries(pool);

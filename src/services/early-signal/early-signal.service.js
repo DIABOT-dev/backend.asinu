@@ -1,4 +1,5 @@
 'use strict';
+const { attendance } = require('./attendance');
 
 const crypto = require('crypto');
 const { t } = require('../../i18n');
@@ -203,12 +204,16 @@ async function inputSnapshot(pool, userId) {
       [userId]
     ),
     pool.query(
-      `SELECT local_date, state, severity, scheduled_at, grace_until,
-              resolved_at, exhausted_at, trigger_source
-         FROM checkin_call_episodes
-        WHERE user_id = $1 AND local_date >= CURRENT_DATE - 29
-          AND trigger_source = 'MISSED_CHECKIN'
-        ORDER BY local_date DESC`,
+      `SELECT e.local_date, e.state, e.severity, e.scheduled_at, e.grace_until,
+              e.resolved_at, e.exhausted_at, e.trigger_source, e.triage_context,
+              (SELECT min(created_at) FROM checkin_call_events v WHERE v.episode_id = e.id
+                AND (v.event IN ('USER_OK','USER_OK_WITH_URGENT_SIGNAL','USER_MILD','USER_URGENT','USER_TRIAGE_STARTED','USER_TRIAGE_COMPLETED')
+                  OR (v.event = 'CANCELLED' AND v.detail->>'reason' = 'MANUAL_CHECKIN'))) AS responded_at,
+              (SELECT h.last_response_at FROM health_checkins h WHERE h.user_id = e.user_id AND h.session_date = e.local_date) AS checked_in_at
+         FROM checkin_call_episodes e
+        WHERE e.user_id = $1 AND e.local_date >= CURRENT_DATE - 29
+          AND e.trigger_source = 'MISSED_CHECKIN'
+        ORDER BY e.local_date DESC`,
       [userId]
     ),
     pool.query(
@@ -256,14 +261,7 @@ async function inputSnapshot(pool, userId) {
     scripted_checkins: scriptedCheckins.rows,
     checkin_schedule: callEpisodes.rows.map((row) => ({
       ...row,
-      attendance:
-        row.state === 'EXHAUSTED' ||
-        row.state === 'EXHAUSTED_MILD' ||
-        row.state === 'EXHAUSTED_URGENT'
-          ? 'missed'
-          : ['CONTACT_USER', 'CONTACT_FAMILY', 'OVERDUE'].includes(row.state)
-            ? 'late'
-            : 'on_time',
+      attendance: attendance(row),
     })),
     symptoms: symptoms.rows,
     vitals: vitals.rows,
@@ -383,9 +381,7 @@ function analyse(snapshot, lang = 'vi') {
     };
   } else if ((symptomCounts7d[0]?.[1] || 0) >= 4 || veryTired7d === 1) {
     const [symptom, count] = symptomCounts7d[0] || [null, 1];
-    const symptomParams = symptom
-      ? { symptom }
-      : { symptomKey: 'early_signal.symptom.very_tired' };
+    const symptomParams = symptom ? { symptom } : { symptomKey: 'early_signal.symptom.very_tired' };
     const specialty = specialtyFor(symptom || 'fatigue');
     const urgentSignKeys = [
       'chest_pain',

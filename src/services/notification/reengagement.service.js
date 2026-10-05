@@ -23,10 +23,16 @@
 const { getHonorifics } = require('../../lib/honorifics');
 const { getUsersBySegment } = require('../profile/lifecycle.service');
 const { t } = require('../../i18n');
+const { readNotificationTopics, topicMetadata } = require('./notification-topic.service');
 
 // ─── Re-engagement Templates ────────────────────────────────────────────────
 
 const REENGAGEMENT_TEMPLATES = {
+  with_condition: {
+    id: 'reengage_condition',
+    level: 'gentle',
+    key: 'notification.reengagement.condition',
+  },
   // D1-2: gentle nudge
   d2_gentle_with_symptom: {
     id: 'reengage_d2_gentle_symptom',
@@ -103,16 +109,11 @@ function getEscalationLevel(inactiveDays) {
  * Lightweight context query for re-engagement.
  * Includes: top symptom, last severity, lifecycle.
  */
-async function buildReengagementContext(pool, userId) {
-  const [clusterRes, sessionRes, lifecycleRes] = await Promise.all([
+async function buildReengagementContext(pool, userId, language = 'vi') {
+  const [topics, sessionRes, lifecycleRes] = await Promise.all([
+    readNotificationTopics(pool, userId, language),
     pool.query(
-      `SELECT display_name, trend FROM problem_clusters
-       WHERE user_id = $1 AND is_active = TRUE
-       ORDER BY priority DESC LIMIT 1`,
-      [userId]
-    ),
-    pool.query(
-      `SELECT severity FROM script_sessions
+      `SELECT severity, created_at FROM script_sessions
        WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,
       [userId]
     ),
@@ -122,9 +123,12 @@ async function buildReengagementContext(pool, userId) {
     ),
   ]);
 
+  const lastSession = sessionRes.rows[0];
+  const sessionAge = (Date.now() - new Date(lastSession?.created_at).getTime()) / 3600000;
   return {
-    topSymptom: clusterRes.rows[0] || null,
-    lastSeverity: sessionRes.rows[0]?.severity || null,
+    topSymptom: topics.topSymptom,
+    topCondition: topics.topCondition,
+    lastSeverity: sessionAge >= 0 && sessionAge <= 48 ? lastSession?.severity || null : null,
     lifecycle: lifecycleRes.rows[0] || { segment: 'active', inactive_days: 0 },
   };
 }
@@ -132,8 +136,11 @@ async function buildReengagementContext(pool, userId) {
 // ─── Select template based on escalation + context ──────────────────────────
 
 function selectReengagementTemplate(ctx, escalation) {
-  const hasSymptom = ctx.topSymptom !== null;
+  const hasSymptom = Boolean(ctx.topSymptom);
   const wasSevere = ctx.lastSeverity === 'high';
+  const conditionTemplate = () => ({
+    template: { ...REENGAGEMENT_TEMPLATES.with_condition, level: escalation.level },
+  });
 
   if (escalation.level === 'urgent') {
     return { template: REENGAGEMENT_TEMPLATES.d8_urgent };
@@ -141,17 +148,20 @@ function selectReengagementTemplate(ctx, escalation) {
 
   if (escalation.level === 'worried') {
     if (hasSymptom) return { template: REENGAGEMENT_TEMPLATES.d7_worried_with_symptom };
+    if (ctx.topCondition) return conditionTemplate();
     return { template: REENGAGEMENT_TEMPLATES.d7_worried_default };
   }
 
   if (escalation.level === 'concerned') {
     if (hasSymptom) return { template: REENGAGEMENT_TEMPLATES.d4_concerned_with_symptom };
     if (wasSevere) return { template: REENGAGEMENT_TEMPLATES.d4_concerned_was_severe };
+    if (ctx.topCondition) return conditionTemplate();
     return { template: REENGAGEMENT_TEMPLATES.d4_concerned_default };
   }
 
   if (escalation.level === 'gentle') {
     if (hasSymptom) return { template: REENGAGEMENT_TEMPLATES.d2_gentle_with_symptom };
+    if (ctx.topCondition) return conditionTemplate();
     return { template: REENGAGEMENT_TEMPLATES.d2_gentle_no_symptom };
   }
 
@@ -166,14 +176,23 @@ function renderReengagementMessage(template, ctx, user, _escalation) {
 
   const text = t(template.key, lang, {
     callName: h.callName,
+    CallName: h.CallName,
     honorific: h.honorific,
     Honorific: h.Honorific,
     selfRef: h.selfRef,
     symptom: ctx.topSymptom?.display_name || t('notification.reengagement.symptom_fallback', lang),
+    condition: ctx.topCondition?.display_name || t('notification.topic.condition.other', lang),
     days: ctx.lifecycle.inactive_days || 0,
   });
 
-  return { text, templateId: template.id, level: template.level };
+  return {
+    text,
+    templateId: template.id,
+    level: template.level,
+    topic: topicMetadata(
+      template.id === REENGAGEMENT_TEMPLATES.with_condition.id ? ctx.topCondition : ctx.topSymptom
+    ),
+  };
 }
 
 // ─── Generate re-engagement message for a user ──────────────────────────────
@@ -184,7 +203,7 @@ function renderReengagementMessage(template, ctx, user, _escalation) {
  * @returns {{ shouldSend: boolean, message: object, escalation: object } | null}
  */
 async function generateReengagementMessage(pool, userId, user) {
-  const ctx = await buildReengagementContext(pool, userId);
+  const ctx = await buildReengagementContext(pool, userId, user.lang || 'vi');
 
   // A user who has never checked in is new, not inactive. Legacy lifecycle
   // rows used inactive_days=999 for this case, so guard by the actual date.
@@ -328,6 +347,7 @@ async function runReengagement(pool, sendAndSave) {
       const ok = await sendAndSave(pool, user, 'reengagement', title, result.message.text, {
         type: 'reengagement',
         templateId: result.message.templateId,
+        topic: result.message.topic,
         level: result.escalation.level,
         inactive_days: lc.inactive_days,
       });

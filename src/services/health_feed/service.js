@@ -1,9 +1,10 @@
 'use strict';
 
-const logger = require('../../lib/logger');
 const { t } = require('../../i18n');
-const { sendPushNotification } = require('../notification/push.notification.service');
-const { saveInAppNotification } = require('../notification/notification.service');
+const {
+  withNotificationTransaction,
+  deliverNotification,
+} = require('../notification/notification-dispatch.service');
 const {
   DEFAULT_TIMEZONE,
   getTimeParts,
@@ -38,10 +39,7 @@ function getNotificationCopy(job, payload) {
   return {
     title: content.title || payload.title || t('health_feed.push_fallback_title', lang),
     body:
-      content.summary ||
-      content.body ||
-      payload.body ||
-      t('health_feed.push_fallback_body', lang),
+      content.summary || content.body || payload.body || t('health_feed.push_fallback_body', lang),
     actionTarget: content.action_target || payload.action_target || '/feed',
   };
 }
@@ -144,70 +142,55 @@ async function runHealthFeedCycle(pool) {
 }
 
 async function dispatchPendingNotifications(pool) {
-  if (!isHealthFeedEnabled()) {
-    return { enabled: false, scanned: 0, sent: 0, skipped: 0 };
-  }
-
+  if (!isHealthFeedEnabled()) return { enabled: false, scanned: 0, sent: 0, skipped: 0 };
   const jobs = await repo.getPendingNotificationJobs(pool);
   let sent = 0;
   let skipped = 0;
-
   for (const job of jobs) {
     const payload = job.payload || {};
     const copy = getNotificationCopy(job, payload);
-
     const timezone = resolveTimezone(job.timezone || DEFAULT_TIMEZONE);
     if (!job.health_feed_enabled) {
       await repo.markNotificationJobDispatched(pool, job.id, 'skipped_feed_disabled');
-      skipped += 1;
+      skipped++;
       continue;
     }
-    if (!job.reminders_enabled) {
-      await saveHealthFeedInAppNotification(pool, job, payload);
-      await repo.markNotificationJobDispatched(pool, job.id, 'skipped_opt_out');
-      skipped += 1;
-      continue;
-    }
-    const dailyCapReached = await hasReachedDailyCap(pool, job.user_id);
-    await saveHealthFeedInAppNotification(pool, job, payload);
-    if (dailyCapReached) {
-      await repo.markNotificationJobDispatched(pool, job.id, 'skipped_daily_cap');
-      skipped += 1;
-      continue;
-    }
-    if (!isWithinPushWindow(timezone)) {
-      skipped += 1;
-      continue;
-    }
-    if (!job.push_token) {
-      await repo.markNotificationJobDispatched(pool, job.id, 'skipped_no_token');
-      skipped += 1;
-      continue;
-    }
-
-    const result = await sendPushNotification(
-      [job.push_token],
-      copy.title,
-      copy.body,
-      {
-        type: 'health_feed',
-        screen: 'feed',
-        contentId: String(payload.content_id || ''),
-        feedItemId: String(payload.feed_item_id || ''),
-        actionTarget: copy.actionTarget,
+    const reservation = await withNotificationTransaction(pool, job.user_id, async (client) => {
+      const notificationId = await saveHealthFeedInAppNotification(client, job, payload);
+      const capped = await hasReachedDailyCap(client, job.user_id, notificationId);
+      const inWindow = isWithinPushWindow(timezone);
+      const eligible = job.reminders_enabled && !capped && inWindow;
+      await client.query('UPDATE notifications SET counts_toward_cap = $2 WHERE id = $1', [
+        notificationId,
+        eligible,
+      ]);
+      if (eligible) {
+        await client.query(
+          'INSERT INTO notification_push_outbox (notification_id, push_body) VALUES ($1,$2) ON CONFLICT DO NOTHING',
+          [notificationId, copy.body]
+        );
       }
-    );
-
-    if (result?.ok) {
-      await repo.markNotificationJobDispatched(pool, job.id, 'sent');
-      sent += 1;
-    } else {
-      logger.warn('health_feed.push_failed', { jobId: job.id, error: result?.error || 'unknown' });
-      await repo.markNotificationJobDispatched(pool, job.id, 'failed');
-      skipped += 1;
+      return { notificationId, capped, inWindow };
+    });
+    if (!job.reminders_enabled || reservation.capped) {
+      await repo.markNotificationJobDispatched(
+        pool,
+        job.id,
+        !job.reminders_enabled ? 'skipped_opt_out' : 'skipped_daily_cap'
+      );
+      skipped++;
+      continue;
     }
+    if (!reservation.inWindow) {
+      skipped++;
+      continue;
+    }
+    // The durable retry worker owns delivery after this point, not the feed job.
+    await repo.markNotificationJobDispatched(pool, job.id, 'queued');
+    const result = await deliverNotification(pool, reservation.notificationId);
+    if (result.ok && !result.skipped) sent++;
+    else skipped++;
   }
-
   return { enabled: true, scanned: jobs.length, sent, skipped };
 }
 
@@ -215,22 +198,11 @@ async function saveHealthFeedInAppNotification(pool, job, payload) {
   const feedItemId = String(payload.feed_item_id || '');
   const contentId = String(payload.content_id || '');
   const existing = await pool.query(
-    `SELECT id
-       FROM notifications
-      WHERE user_id = $1
-        AND type = 'health_feed'
-        AND (
-          data->>'feedItemId' = $2
-          OR ($3 <> '' AND data->>'contentId' = $3)
-        )
-      LIMIT 1`,
+    `SELECT id FROM notifications WHERE user_id = $1 AND type = 'health_feed'
+      AND (data->>'feedItemId' = $2 OR ($3 <> '' AND data->>'contentId' = $3)) LIMIT 1`,
     [job.user_id, feedItemId, contentId]
   );
-
-  if (existing.rows[0]) {
-    return existing.rows[0].id;
-  }
-
+  if (existing.rows[0]) return existing.rows[0].id;
   const priority =
     payload.flow === FLOWS.ALERT ? 'high' : payload.flow === FLOWS.FAMILY ? 'medium' : 'low';
   const copy = getNotificationCopy(job, payload);
@@ -242,17 +214,12 @@ async function saveHealthFeedInAppNotification(pool, job, payload) {
     actionTarget: copy.actionTarget,
     flow: payload.flow || null,
   };
-
-  await saveInAppNotification(
-    pool,
-    job.user_id,
-    'health_feed',
-    copy.title,
-    copy.body,
-    data,
-    priority
+  const inserted = await pool.query(
+    `INSERT INTO notifications (user_id, type, title, message, data, priority, counts_toward_cap)
+     VALUES ($1,'health_feed',$2,$3,$4::jsonb,$5,false) RETURNING id`,
+    [job.user_id, copy.title, copy.body, JSON.stringify(data), priority]
   );
-  return null;
+  return inserted.rows[0].id;
 }
 
 module.exports = {

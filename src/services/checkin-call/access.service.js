@@ -13,7 +13,19 @@ async function createAttemptToken(pool, attemptId, userId) {
     [attemptId, userId]
   );
   const attempt = rows[0];
-  if (!attempt || !['RINGING', 'CONNECTED', 'PUSH_WAIT'].includes(attempt.state)) {
+  const activeEpisodes = [
+    'CONTACT_USER',
+    'TRIAGE_USER',
+    'CONTACT_FAMILY',
+    'MILD_FAMILY_ESCALATION',
+    'URGENT_BROADCAST',
+    'URGENT_ACKNOWLEDGED',
+  ];
+  if (
+    !attempt ||
+    !['RINGING', 'CONNECTED', 'PUSH_WAIT'].includes(attempt.state) ||
+    !activeEpisodes.includes(attempt.episode_state)
+  ) {
     return { notFound: true };
   }
 

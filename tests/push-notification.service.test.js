@@ -54,4 +54,13 @@ describe('Expo push notification service', () => {
       invalidTokens: ['ExpoPushToken[expired-token]'],
     });
   });
+  test.each([{}, { data: [] }, { data: [{}] }])(
+    'does not report success for a malformed ticket response %j',
+    async (result) => {
+      global.fetch = jest.fn(async () => ({ ok: true, json: async () => result }));
+      await expect(
+        sendPushNotification(['ExpoPushToken[fixture]'], 'x', 'x')
+      ).resolves.toMatchObject({ ok: false });
+    }
+  );
 });

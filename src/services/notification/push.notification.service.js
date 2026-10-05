@@ -135,7 +135,10 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
       .map(({ token }) => token)
       .filter(Boolean);
 
-    if (tickets.length > 0 && errors.length === tickets.length) {
+    if (
+      tickets.length !== validTokens.length ||
+      !tickets.some((ticket) => ticket?.status === 'ok')
+    ) {
       return {
         ok: false,
         error: errors[0]?.ticket?.message || t('error.push_service_error'),

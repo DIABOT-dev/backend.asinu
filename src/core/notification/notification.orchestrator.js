@@ -15,7 +15,9 @@ const COOLDOWN_MINUTES = {
   low: 120, // 2h cooldown
 };
 
-const { canSendNonUrgent } = require('../../services/notification/notification.policy');
+const {
+  reserveNotification,
+} = require('../../services/notification/notification-dispatch.service');
 
 const TYPE_PRIORITY = {
   emergency: 'critical',
@@ -44,49 +46,20 @@ const TYPE_PRIORITY = {
  */
 async function dispatch(pool, { userId, type, title, body, data = {}, priority = null }) {
   const effectivePriority = priority || TYPE_PRIORITY[type] || 'low';
-  const cooldownMinutes = COOLDOWN_MINUTES[effectivePriority];
-
-  if (!(await canSendNonUrgent(pool, userId, type))) return null;
-
-  // Use advisory lock per user+type to prevent race conditions
-  // hashtext gives a stable int for the string, ensuring same user+type always gets same lock
-  const client = await pool.connect();
   try {
-    // Advisory lock scoped to this user+type (released on client.release)
-    await client.query(`SELECT pg_advisory_lock(hashtext($1))`, [`notif:${userId}:${type}`]);
-
-    // Check cooldown
-    if (cooldownMinutes > 0) {
-      const { rows: recent } = await client.query(
-        `SELECT 1 FROM notifications WHERE user_id = $1 AND type = $2
-           AND created_at >= NOW() - make_interval(mins => $3) LIMIT 1`,
-        [userId, type, cooldownMinutes]
-      );
-      if (recent.length > 0) {
-        console.log(
-          `[Orchestrator] Skipped ${type} for user ${userId} (cooldown ${cooldownMinutes}min)`
-        );
-        return null;
-      }
-    }
-
-    // Insert
-    const { rows } = await client.query(
-      `INSERT INTO notifications (user_id, type, title, message, data, priority)
-       VALUES ($1, $2, $3, $4, $5::jsonb, $6) RETURNING id`,
-      [userId, type, title, body, JSON.stringify(data), effectivePriority]
-    );
-
-    return { ok: true, notificationId: rows[0].id };
-  } catch (err) {
-    console.error(`[Orchestrator] dispatch failed for ${type} user=${userId}:`, err.message);
+    const reserved = await reserveNotification(pool, {
+      userId,
+      type,
+      title,
+      body,
+      data,
+      priority: effectivePriority,
+      cooldownMinutes: COOLDOWN_MINUTES[effectivePriority] || 5,
+    });
+    return reserved ? { ok: true, ...reserved } : null;
+  } catch (error) {
+    console.error('[Orchestrator] dispatch failed:', error.message);
     return null;
-  } finally {
-    // Advisory lock released when client returns to pool
-    await client
-      .query(`SELECT pg_advisory_unlock(hashtext($1))`, [`notif:${userId}:${type}`])
-      .catch(() => {});
-    client.release();
   }
 }
 

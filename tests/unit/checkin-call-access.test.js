@@ -22,7 +22,46 @@ test('checks the target user and active attempt state before issuing a token', a
   process.env.LIVEKIT_URL = 'wss://test.livekit.cloud';
   process.env.LIVEKIT_API_KEY = 'test-key';
   process.env.LIVEKIT_API_SECRET = 'test-secret-long-enough';
-  const pool = { query: jest.fn().mockResolvedValue({ rows: [{ room_name: 'room-1', state: 'CLOSED' }] }) };
+  const pool = {
+    query: jest.fn().mockResolvedValue({ rows: [{ room_name: 'room-1', state: 'CLOSED' }] }),
+  };
   await expect(createAttemptToken(pool, 'attempt', 7)).resolves.toEqual({ notFound: true });
+  expect(pool.query.mock.calls[0][1]).toEqual(['attempt', 7]);
+});
+
+test.each(['RESOLVED', 'CANCELLED', 'EXHAUSTED', 'EXHAUSTED_MILD', 'EXHAUSTED_URGENT', null])(
+  'rejects a still-ringing attempt when its episode is %s',
+  async (episode_state) => {
+    process.env.LIVEKIT_URL = 'wss://test.livekit.cloud';
+    process.env.LIVEKIT_API_KEY = 'test-key';
+    process.env.LIVEKIT_API_SECRET = 'test-secret-long-enough';
+    const pool = {
+      query: jest
+        .fn()
+        .mockResolvedValue({ rows: [{ room_name: 'room', state: 'RINGING', episode_state }] }),
+    };
+    await expect(createAttemptToken(pool, 'attempt', 7)).resolves.toEqual({ notFound: true });
+  }
+);
+
+test.each([
+  'CONTACT_USER',
+  'TRIAGE_USER',
+  'CONTACT_FAMILY',
+  'MILD_FAMILY_ESCALATION',
+  'URGENT_BROADCAST',
+  'URGENT_ACKNOWLEDGED',
+])('allows the intended recipient in active episode %s', async (episode_state) => {
+  process.env.LIVEKIT_URL = 'wss://test.livekit.cloud';
+  process.env.LIVEKIT_API_KEY = 'test-key';
+  process.env.LIVEKIT_API_SECRET = 'test-secret-long-enough';
+  const pool = {
+    query: jest
+      .fn()
+      .mockResolvedValue({ rows: [{ room_name: 'room', state: 'CONNECTED', episode_state }] }),
+  };
+  const result = await createAttemptToken(pool, 'attempt', 7);
+  expect(result.room).toBe('room');
+  expect(typeof result.token).toBe('string');
   expect(pool.query.mock.calls[0][1]).toEqual(['attempt', 7]);
 });

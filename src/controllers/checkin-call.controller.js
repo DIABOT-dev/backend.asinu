@@ -32,6 +32,15 @@ function publicEpisode(episode) {
     triage_context: episode.triage_context?.body_location ? episode.triage_context : null,
     triage_display: episode.triage_display || null,
     acknowledged_by: episode.acknowledged_by || null,
+    acknowledged_name: episode.acknowledged_name || null,
+    cancellation_reason: episode.cancellation_reason || null,
+    trigger_source: episode.trigger_source || 'MISSED_CHECKIN',
+    resolved_at: episode.resolved_at || null,
+    exhausted_at: episode.exhausted_at || null,
+    updated_at: episode.updated_at || null,
+    next_action_at: episode.next_action_at || null,
+    triage_started_at: episode.triage_started_at || null,
+    triage_completed_at: episode.triage_completed_at || null,
   };
 }
 
@@ -45,8 +54,15 @@ function createCheckinCallController(pool) {
   };
 
   return {
-    getSettings: handle(async (req, res) =>
-      res.json({ ok: true, settings: await service.settings(pool, req.user.id) })
+    getSettings: handle(async (req, res) => {
+      const [settings, contacts] = await Promise.all([
+        service.settings(pool, req.user.id),
+        service.eligibleContacts(pool, req.user.id),
+      ]);
+      return res.json({ ok: true, settings, contacts });
+    }),
+    declineAttempt: handle(async (req, res) =>
+      res.json(await service.decline(pool, req.params.id, req.user.id))
     ),
     saveSettings: handle(async (req, res) =>
       res.json({
@@ -102,7 +118,11 @@ function createCheckinCallController(pool) {
     }),
     getFamilyAudio: handle(async (req, res) => {
       const data = await service.getFamilyAudio(pool, req.params.id, req.user.id, getLang(req));
-      return res.json({ ok: true, mimeType: data.mime_type, base64: data.audio_data.toString('base64') });
+      return res.json({
+        ok: true,
+        mimeType: data.mime_type,
+        base64: data.audio_data.toString('base64'),
+      });
     }),
     answerEpisode: handle(async (req, res) => {
       const episode = await service.answer(

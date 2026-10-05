@@ -16,6 +16,12 @@
 
 const { getHonorifics } = require('../../lib/honorifics');
 const { t } = require('../../i18n');
+const {
+  consecutiveTiredDays,
+  readNotificationTopics,
+  resolveSymptomLabel,
+  topicMetadata,
+} = require('./notification-topic.service');
 
 // ─── User Context Builder ───────────────────────────────────────────────────
 
@@ -23,17 +29,9 @@ const { t } = require('../../i18n');
  * Build full notification context cho 1 user.
  * Gộp dữ liệu từ nhiều bảng → 1 object phẳng.
  */
-async function buildUserContext(pool, userId) {
-  const [clusterRes, sessionRes, checkinRes, lifecycleRes, streakRes] = await Promise.all([
-    // Top active cluster (triệu chứng nổi bật nhất)
-    pool.query(
-      `SELECT cluster_key, display_name, trend, count_7d, priority
-       FROM problem_clusters
-       WHERE user_id = $1 AND is_active = TRUE
-       ORDER BY priority DESC, count_7d DESC
-       LIMIT 3`,
-      [userId]
-    ),
+async function buildUserContext(pool, userId, language = 'vi') {
+  const [topics, sessionRes, checkinRes, lifecycleRes, streakRes] = await Promise.all([
+    readNotificationTopics(pool, userId, language),
     // Last script session (severity gần nhất)
     pool.query(
       `SELECT severity, needs_doctor, needs_family_alert, cluster_key, created_at
@@ -44,10 +42,12 @@ async function buildUserContext(pool, userId) {
     ),
     // Last few check-ins (chỉ trong 7 ngày gần nhất để tránh nhắc triệu chứng cũ)
     pool.query(
-      `SELECT session_date, initial_status, flow_state, triage_summary
+      `SELECT session_date::text AS session_date, initial_status, flow_state, triage_summary
        FROM health_checkins
-       WHERE user_id = $1 AND session_date >= NOW() - INTERVAL '7 days'
-       ORDER BY session_date DESC LIMIT 5`,
+       WHERE user_id = $1
+         AND session_date >= DATE(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh') - 6
+         AND session_date <= DATE(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
+       ORDER BY session_date DESC, updated_at DESC, id DESC LIMIT 7`,
       [userId]
     ),
     // Lifecycle
@@ -61,31 +61,23 @@ async function buildUserContext(pool, userId) {
       .catch(() => ({ rows: [] })), // Table might not exist
   ]);
 
-  const topClusters = clusterRes.rows;
+  const topClusters = topics.recentSymptoms;
   const lastSession = sessionRes.rows[0] || null;
   const recentCheckins = checkinRes.rows;
   const lifecycle = lifecycleRes.rows[0] || { segment: 'unknown', inactive_days: 0 };
   const risk = streakRes.rows[0] || { streak_ok_days: 0, risk_tier: null };
 
   // Derive context
-  const topSymptom = topClusters[0] || null;
+  const topSymptom = topics.topSymptom;
   const lastCheckin = recentCheckins[0] || null;
-  // Đếm số ngày LIÊN TIẾP gần nhất mà user tired/very_tired (từ mới → cũ)
-  let consecutiveTiredDays = 0;
-  for (const c of recentCheckins) {
-    if (c.initial_status === 'tired' || c.initial_status === 'very_tired') {
-      consecutiveTiredDays++;
-    } else {
-      break; // gặp ngày không tired → dừng đếm
-    }
-  }
 
   return {
     topSymptom, // { cluster_key, display_name, trend, count_7d }
+    topCondition: topics.topCondition,
     topClusters, // top 3 clusters
     lastSession, // { severity, needs_doctor, cluster_key }
     lastCheckin, // { session_date, initial_status, triage_summary }
-    consecutiveTiredDays, // số ngày liên tiếp tired/very_tired
+    consecutiveTiredDays: consecutiveTiredDays(recentCheckins),
     lifecycle, // { segment, inactive_days }
     streakOkDays: risk.streak_ok_days || 0,
     riskTier: risk.risk_tier || null,
@@ -122,6 +114,10 @@ const MORNING_TEMPLATES = {
     id: 'morning_high_severity',
     key: 'notification.template.morning_high_severity',
   },
+  has_condition: {
+    id: 'morning_has_condition',
+    key: 'notification.template.morning_has_condition',
+  },
   default: {
     id: 'morning_default',
     key: 'notification.template.morning_default',
@@ -132,6 +128,10 @@ const MORNING_TEMPLATES = {
  * Evening templates
  */
 const EVENING_TEMPLATES = {
+  has_condition: {
+    id: 'evening_has_condition',
+    key: 'notification.template.evening_has_condition',
+  },
   has_symptom: {
     id: 'evening_has_symptom',
     key: 'notification.template.evening_has_symptom',
@@ -150,6 +150,10 @@ const EVENING_TEMPLATES = {
  * Afternoon templates
  */
 const AFTERNOON_TEMPLATES = {
+  has_condition: {
+    id: 'afternoon_has_condition',
+    key: 'notification.template.afternoon_has_condition',
+  },
   has_symptom: {
     id: 'afternoon_has_symptom',
     key: 'notification.template.afternoon_has_symptom',
@@ -186,7 +190,7 @@ function selectMorningTemplate(ctx) {
     const sessionAge = ctx.lastSession.created_at
       ? (Date.now() - new Date(ctx.lastSession.created_at).getTime()) / 3600000
       : 999;
-    if (sessionAge <= 48) {
+    if (sessionAge >= 0 && sessionAge <= 48) {
       return { template: MORNING_TEMPLATES.high_severity, variables: {} };
     }
   }
@@ -214,17 +218,28 @@ function selectMorningTemplate(ctx) {
       return {
         template: MORNING_TEMPLATES.has_symptom_worsening,
         variables: { symptom: ctx.topSymptom.display_name },
+        topic: ctx.topSymptom,
       };
     }
     if (trend === 'decreasing') {
       return {
         template: MORNING_TEMPLATES.has_symptom_improving,
         variables: { symptom: ctx.topSymptom.display_name },
+        topic: ctx.topSymptom,
       };
     }
     return {
       template: MORNING_TEMPLATES.has_symptom_stable,
       variables: { symptom: ctx.topSymptom.display_name },
+      topic: ctx.topSymptom,
+    };
+  }
+
+  if (ctx.topCondition) {
+    return {
+      template: MORNING_TEMPLATES.has_condition,
+      variables: { condition: ctx.topCondition.display_name },
+      topic: ctx.topCondition,
     };
   }
 
@@ -239,6 +254,7 @@ function selectEveningTemplate(ctx, tasks) {
     return {
       template: EVENING_TEMPLATES.improving,
       variables: { tasks: taskStr },
+      topic: ctx.topSymptom,
     };
   }
 
@@ -246,6 +262,15 @@ function selectEveningTemplate(ctx, tasks) {
     return {
       template: EVENING_TEMPLATES.has_symptom,
       variables: { symptom: ctx.topSymptom.display_name, tasks: taskStr },
+      topic: ctx.topSymptom,
+    };
+  }
+
+  if (ctx.topCondition) {
+    return {
+      template: EVENING_TEMPLATES.has_condition,
+      variables: { condition: ctx.topCondition.display_name, tasks: taskStr },
+      topic: ctx.topCondition,
     };
   }
 
@@ -260,6 +285,14 @@ function selectAfternoonTemplate(ctx) {
     return {
       template: AFTERNOON_TEMPLATES.has_symptom,
       variables: { symptom: ctx.topSymptom.display_name },
+      topic: ctx.topSymptom,
+    };
+  }
+  if (ctx.topCondition) {
+    return {
+      template: AFTERNOON_TEMPLATES.has_condition,
+      variables: { condition: ctx.topCondition.display_name },
+      topic: ctx.topCondition,
     };
   }
   return { template: AFTERNOON_TEMPLATES.default, variables: {} };
@@ -305,7 +338,7 @@ function renderMessage(template, variables, user) {
  * @returns {Promise<{ text: string, templateId: string, context: object }>}
  */
 async function generateMessage(pool, userId, triggerType, user, extraVars = {}) {
-  const ctx = await buildUserContext(pool, userId);
+  const ctx = await buildUserContext(pool, userId, user.lang || 'vi');
 
   let selection;
   switch (triggerType) {
@@ -322,14 +355,20 @@ async function generateMessage(pool, userId, triggerType, user, extraVars = {}) 
       selection = {
         template: ALERT_TEMPLATES.severity_high,
         variables: {
-          symptom: ctx.lastSession?.cluster_key || ctx.topSymptom?.display_name || 'triệu chứng',
+          symptom: resolveSymptomLabel(ctx.lastSession?.cluster_key, user.lang || 'vi'),
         },
+        topic:
+          ctx.topClusters.find((topic) => topic.cluster_key === ctx.lastSession?.cluster_key) ||
+          null,
       };
       break;
     case 'alert_trend':
       selection = {
         template: ALERT_TEMPLATES.trend_worsening,
-        variables: { symptom: ctx.topSymptom?.display_name || 'triệu chứng' },
+        variables: {
+          symptom: ctx.topSymptom?.display_name || resolveSymptomLabel(null, user.lang || 'vi'),
+        },
+        topic: ctx.topSymptom,
       };
       break;
     default:
@@ -340,7 +379,7 @@ async function generateMessage(pool, userId, triggerType, user, extraVars = {}) 
   const allVars = { ...selection.variables, ...extraVars };
   const { text, templateId } = renderMessage(selection.template, allVars, user);
 
-  return { text, templateId, context: ctx };
+  return { text, templateId, context: ctx, topic: topicMetadata(selection.topic) };
 }
 
 /**
@@ -355,7 +394,7 @@ async function checkAlertTriggers(pool, userId) {
     // Chỉ trigger nếu session trong 24h gần đây
     const hoursAgo =
       (Date.now() - new Date(ctx.lastSession.created_at).getTime()) / (1000 * 60 * 60);
-    if (hoursAgo <= 24) {
+    if (hoursAgo >= 0 && hoursAgo <= 24) {
       return { trigger: 'alert_severity', context: ctx };
     }
   }

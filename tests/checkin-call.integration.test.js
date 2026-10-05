@@ -1,4 +1,7 @@
 const { Pool } = require('pg');
+jest.mock('../src/services/early-signal/early-signal.service', () => ({
+  evaluateAfterNewHealthData: jest.fn().mockResolvedValue(null),
+}));
 const service = require('../src/services/checkin-call/checkin-call.service');
 const entitlementService = require('../src/services/payment/entitlement.service');
 
@@ -144,16 +147,15 @@ describeDatabase('check-in call PostgreSQL integration', () => {
     const second = await service.getActive(pool, group[2]);
     expect(first.target_role).toBe('FAMILY');
     expect(second.target_role).toBe('FAMILY');
-    expect((await service.accept(pool, first.attempt_id, group[1])).state).toBe(
-      'URGENT_ACKNOWLEDGED'
-    );
-    expect(await service.getActive(pool, group[2])).toBeNull();
-    await expect(service.confirmFamily(pool, userCall.id, group[2], 'ON_MY_WAY')).rejects.toThrow(
-      'Another family member accepted'
-    );
+    expect((await service.accept(pool, first.attempt_id, group[1])).state).toBe('URGENT_BROADCAST');
+    expect(await service.getActive(pool, group[2])).not.toBeNull();
     expect(
       (await service.confirmFamily(pool, userCall.id, group[1], 'ACCEPT_AND_CHECK')).state
     ).toBe('RESOLVED');
+    expect(await service.getActive(pool, group[2])).toBeNull();
+    await expect(
+      service.confirmFamily(pool, userCall.id, group[2], 'ACCEPT_AND_CHECK')
+    ).rejects.toThrow('Episode closed');
   });
 
   test('requires An Tam and then a reachable Care Circle', async () => {

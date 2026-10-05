@@ -8,7 +8,7 @@
  * Called by cron every hour. Each function filters users by their effective hour.
  */
 
-const { sendPushNotification } = require('./push.notification.service');
+const { reserveNotification, deliverNotification } = require('./notification-dispatch.service');
 const {
   runCheckinFollowUps,
   runMorningCheckin,
@@ -18,7 +18,6 @@ const { getHonorifics } = require('../../lib/honorifics');
 const { generateMessage } = require('./notification-intelligence.service');
 const { runReengagement } = require('./reengagement.service');
 const logger = require('../../lib/logger');
-const { canSendNonUrgent } = require('./notification.policy');
 const { t } = require('../../i18n');
 
 const TZ = 'Asia/Ho_Chi_Minh';
@@ -61,8 +60,6 @@ const TYPE_PRIORITY = {
   engagement: 'low',
   doctor_message: 'high',
 };
-
-const ALWAYS_DELIVER_TYPES = new Set(['doctor_message']);
 
 // ─── Exact HH:MM match helpers ────────────────────────────────────
 // Matches both hour AND minute so notifications fire at the exact configured time.
@@ -152,7 +149,6 @@ const REMINDER_TYPES = new Set([
   'streak_30',
   'weekly_recap',
 ]);
-const CROSS_TYPE_GAP_MINUTES = 5;
 
 async function sendAndSave(
   pool,
@@ -164,112 +160,39 @@ async function sendAndSave(
   overridePriority = null,
   options = {}
 ) {
-  const isObject = typeof userOrId === 'object' && userOrId !== null;
-  const userId = isObject ? userOrId.id : userOrId;
-  let pushToken = isObject ? userOrId.push_token : null;
-
-  const priority = overridePriority || TYPE_PRIORITY[type] || 'low';
-
-  // Non-urgent reminders require an explicit opt-in and are subject to a
-  // daily cap. Emergency/health/caregiver alerts are intentionally exempt.
-  if (!ALWAYS_DELIVER_TYPES.has(type) && !(await canSendNonUrgent(pool, userId, type)))
-    return false;
-
-  // Cross-type spacing: skip if user received any reminder push in last 5 minutes
-  if (REMINDER_TYPES.has(type)) {
-    try {
-      const { rows } = await pool.query(
-        `SELECT 1 FROM notifications WHERE user_id = $1
-           AND type = ANY($2::text[])
-           AND created_at >= NOW() - make_interval(mins => $3) LIMIT 1`,
-        [userId, [...REMINDER_TYPES], CROSS_TYPE_GAP_MINUTES]
-      );
-      if (rows.length > 0) return false;
-    } catch (err) {
-      logger.error('notification.spacing_check_failed', { userId, type, err });
-      return false;
-    }
-  }
-
-  // Same-type dedup: skip if exact same type was sent to this user in the last 5 minutes
-  if (!ALWAYS_DELIVER_TYPES.has(type)) {
-    try {
-      const { rows: dup } = await pool.query(
-        `SELECT 1 FROM notifications WHERE user_id = $1 AND type = $2
-           AND created_at >= NOW() - make_interval(mins => 5) LIMIT 1`,
-        [userId, type]
-      );
-      if (dup.length > 0) {
-        logger.debug('notification.dedup_skipped', { userId, type });
-        return false;
-      }
-    } catch (err) {
-      logger.warn('notification.dedup_check_failed', { userId, type, err });
-      return false;
-    }
-  }
-
-  // Insert DB record FIRST, only push if insert succeeds
+  const userId = typeof userOrId === 'object' && userOrId !== null ? userOrId.id : userOrId;
   try {
-    await pool.query(
-      `INSERT INTO notifications (user_id, type, title, message, data, priority) VALUES ($1,$2,$3,$4,$5,$6)`,
-      [userId, type, title, body, JSON.stringify(data), priority]
-    );
-  } catch (err) {
-    logger.error('notification.insert_failed', { userId, type, err });
+    const reserved = await reserveNotification(pool, {
+      userId,
+      type,
+      title,
+      body,
+      data,
+      priority: overridePriority || TYPE_PRIORITY[type] || 'low',
+      spacingTypes: REMINDER_TYPES.has(type) ? [...REMINDER_TYPES] : [],
+      push: options.push !== false,
+      pushBody: typeof options.pushBody === 'string' ? options.pushBody : body,
+    });
+    if (!reserved) return false;
+    if (options.push === false) return !reserved.existing;
+    const result = await deliverNotification(pool, reserved.notificationId);
+    return result.ok;
+  } catch (error) {
+    logger.warn('notification.dispatch_failed', { userId, type, error });
     return false;
   }
-
-  // Push notifications can appear on a lock screen. Callers may keep a rich
-  // preview in the in-app notification while using a privacy-safe body for
-  // the external push (for example, a Doctor message may contain health data).
-  const pushBody = typeof options.pushBody === 'string' ? options.pushBody : body;
-
-  // Callers often only have a user id (or a user row without its token). Resolve
-  // the current token here so every event gets the same reliable delivery path.
-  // Use options.push=false only for a notification that is intentionally in-app.
-  if (options.push !== false && !pushToken) {
-    try {
-      const { rows } = await pool.query(
-        'SELECT push_token FROM users WHERE id = $1 AND deleted_at IS NULL',
-        [userId]
-      );
-      pushToken = rows[0]?.push_token || null;
-    } catch (err) {
-      logger.warn('notification.push_token_lookup_failed', { userId, type, err });
-    }
-  }
-
-  if (options.push !== false && pushToken) {
-    try {
-      const result = await sendPushNotification([pushToken], title, pushBody, { type, ...data });
-      if (result?.invalidTokens?.includes(pushToken)) {
-        await pool
-          .query('UPDATE users SET push_token = NULL WHERE id = $1 AND push_token = $2', [
-            userId,
-            pushToken,
-          ])
-          .catch((err) =>
-            logger.warn('notification.invalid_token_cleanup_failed', { userId, type, err })
-          );
-      }
-      if (!result?.ok) {
-        logger.warn('notification.push_failed', {
-          userId,
-          type,
-          error: result?.error || 'unknown push error',
-        });
-      }
-      return result?.ok || false;
-    } catch (err) {
-      logger.warn('notification.push_failed', { userId, type, err });
-      return false;
-    }
-  }
-  return true;
 }
 
 // ─── Personalization helpers ──────────────────────────────────────
+
+function hasDailyMedication(value) {
+  const normalized = String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase();
+  return ['co', 'yes', 'true', '1'].includes(normalized);
+}
 
 // ─── User query with name + conditions + last checkin ─────────────
 
@@ -277,7 +200,7 @@ const USER_SELECT = `
   SELECT u.id, u.push_token,
          COALESCE(u.language_preference,'vi') AS lang,
          u.display_name, u.full_name,
-         uop.medical_conditions,
+         uop.medical_conditions, uop.daily_medication,
          uop.birth_year, uop.gender,
          (SELECT triage_summary FROM health_checkins hc
           WHERE hc.user_id = u.id AND hc.triage_summary IS NOT NULL
@@ -319,7 +242,7 @@ async function runMorningSummary(pool, hour, minute) {
     SELECT u.id, u.push_token,
            COALESCE(u.language_preference,'vi') AS lang,
            u.display_name, u.full_name,
-           uop.medical_conditions,
+           uop.medical_conditions, uop.daily_medication,
            uop.birth_year, uop.gender,
            (SELECT triage_summary FROM health_checkins hc
             WHERE hc.user_id = u.id AND hc.triage_summary IS NOT NULL
@@ -365,7 +288,7 @@ async function runMorningSummary(pool, hour, minute) {
 
   let sent = 0;
   for (const user of rows) {
-    const { honorific, CallName } = getHonorifics(user);
+    const { CallName } = getHonorifics(user);
     const conditions = parseConditions(user.medical_conditions);
     const lang = user.lang === 'en' ? 'en' : 'vi';
 
@@ -383,7 +306,7 @@ async function runMorningSummary(pool, hour, minute) {
         : '';
       tasks.push(t('notification.task.blood_pressure', lang, { last }));
     }
-    if (conditions.hasAny && user.no_medication_today) {
+    if (hasDailyMedication(user.daily_medication) && user.no_medication_today) {
       tasks.push(t('notification.task.medication', lang));
     }
     if (user.no_log_today && tasks.length === 0) {
@@ -397,10 +320,12 @@ async function runMorningSummary(pool, hour, minute) {
 
     // Personalized body from Intelligence Layer
     let body;
+    let contentMetadata = {};
     try {
       const msg = await generateMessage(pool, user.id, 'morning', user, {
         tasks: tasks.join(', '),
       });
+      contentMetadata = { templateId: msg.templateId, topic: msg.topic || null };
       body =
         msg.text +
         (tasks.length > 0
@@ -408,30 +333,24 @@ async function runMorningSummary(pool, hour, minute) {
           : '');
     } catch {
       // Fallback
-      if (user.last_symptom) {
-        body = t('notification.morning.fallback_with_symptom', lang, {
-          CallName,
-          honorific,
-          symptom: user.last_symptom,
-          tasks: tasks.join(', '),
-        });
-      } else {
-        body = t('notification.morning.fallback_no_data', lang, {
-          CallName,
-          tasks: tasks.join(', '),
-        });
-      }
+      // Avoid quoting an unstructured or stale triage summary as a symptom.
+      body = t('notification.morning.fallback_no_data', lang, {
+        CallName,
+        tasks: tasks.join(', '),
+      });
     }
 
     // Build missing types for deep link
     const missingTypes = [];
     if (conditions.hasDiabetes && user.no_glucose_today) missingTypes.push('glucose');
     if (conditions.hasHypertension && user.no_bp_today) missingTypes.push('blood_pressure');
-    if (conditions.hasAny && user.no_medication_today) missingTypes.push('medication');
+    if (hasDailyMedication(user.daily_medication) && user.no_medication_today)
+      missingTypes.push('medication');
 
     if (
       await sendAndSave(pool, user, 'reminder_morning_summary', title, body, {
         type: 'reminder_morning_summary',
+        ...contentMetadata,
         missingTypes,
         firstMissing: missingTypes[0] || 'checkin',
       })
@@ -461,8 +380,10 @@ async function runAfternoon(pool, hour, minute) {
     const title = t('notification.afternoon.title', lang);
     // Personalized body from Intelligence Layer
     let body;
+    let contentMetadata = {};
     try {
       const msg = await generateMessage(pool, user.id, 'afternoon', user);
+      contentMetadata = { templateId: msg.templateId, topic: msg.topic || null };
       body = msg.text + ' 😊';
     } catch {
       // Fallback
@@ -482,6 +403,7 @@ async function runAfternoon(pool, hour, minute) {
     if (
       await sendAndSave(pool, user, 'reminder_afternoon', title, body, {
         type: 'reminder_afternoon',
+        ...contentMetadata,
         target,
       })
     )
@@ -498,7 +420,7 @@ async function runEveningSummary(pool, hour, minute) {
     SELECT u.id, u.push_token,
            COALESCE(u.language_preference,'vi') AS lang,
            u.display_name, u.full_name,
-           uop.medical_conditions,
+           uop.medical_conditions, uop.daily_medication,
            uop.birth_year, uop.gender,
            (SELECT triage_summary FROM health_checkins hc
             WHERE hc.user_id = u.id AND hc.triage_summary IS NOT NULL
@@ -531,12 +453,11 @@ async function runEveningSummary(pool, hour, minute) {
 
   let sent = 0;
   for (const user of rows) {
-    const { honorific, CallName } = getHonorifics(user);
-    const conditions = parseConditions(user.medical_conditions);
+    const { CallName } = getHonorifics(user);
     const lang = user.lang === 'en' ? 'en' : 'vi';
 
     const tasks = [];
-    if (conditions.hasAny && user.no_medication_today) {
+    if (hasDailyMedication(user.daily_medication) && user.no_medication_today) {
       tasks.push(t('notification.task.evening_medication', lang));
     }
     if (user.no_evening_log) {
@@ -549,35 +470,31 @@ async function runEveningSummary(pool, hour, minute) {
 
     // Personalized body from Intelligence Layer
     let body;
+    let contentMetadata = {};
     try {
       const msg = await generateMessage(pool, user.id, 'evening', user, {
         tasks: tasks.join(', '),
       });
+      contentMetadata = { templateId: msg.templateId, topic: msg.topic || null };
       body = msg.text + ' 🌙';
     } catch {
       // Fallback
-      if (user.last_symptom) {
-        body = t('notification.evening.fallback_with_symptom', lang, {
-          CallName,
-          honorific,
-          symptom: user.last_symptom,
-          tasks: tasks.join(', '),
-        });
-      } else {
-        body = t('notification.evening.fallback_no_data', lang, {
-          CallName,
-          tasks: tasks.join(', '),
-        });
-      }
+      // Avoid quoting an unstructured or stale triage summary as a symptom.
+      body = t('notification.evening.fallback_no_data', lang, {
+        CallName,
+        tasks: tasks.join(', '),
+      });
     }
 
     const missingTypes = [];
-    if (conditions.hasAny && user.no_medication_today) missingTypes.push('medication');
+    if (hasDailyMedication(user.daily_medication) && user.no_medication_today)
+      missingTypes.push('medication');
     if (user.no_evening_log) missingTypes.push('log');
 
     if (
       await sendAndSave(pool, user, 'reminder_evening_summary', title, body, {
         type: 'reminder_evening_summary',
+        ...contentMetadata,
         missingTypes,
         firstMissing: missingTypes[0] || 'home',
       })

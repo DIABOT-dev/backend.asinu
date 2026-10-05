@@ -25,6 +25,7 @@ function checkinCallRoutes(pool) {
   router.post('/episodes/:id/family-confirm', controller.confirmFamily);
   router.post('/attempts/:id/seen', controller.markAttemptSeen);
   router.post('/attempts/:id/accept', controller.acceptAttempt);
+  router.post('/attempts/:id/decline', controller.declineAttempt);
   router.get('/attempts/:id/token', controller.getAttemptToken);
 
   return router;
