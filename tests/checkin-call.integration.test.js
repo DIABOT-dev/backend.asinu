@@ -165,7 +165,7 @@ describeDatabase('check-in call PostgreSQL integration', () => {
     ).rejects.toThrow('Episode closed');
   });
 
-  test('requires An Tam and then a reachable Care Circle', async () => {
+  test('requires An Tam but allows personal reminder settings without a Care Circle', async () => {
     const created = await pool.query(
       'INSERT INTO users (phone_number, push_token) VALUES ($1,$2) RETURNING id',
       ['nofamily' + Date.now(), 'ExponentPushToken[test]']
@@ -175,8 +175,10 @@ describeDatabase('check-in call PostgreSQL integration', () => {
     await expect(service.saveSettings(pool, userId, { enabled: false })).rejects.toThrow('An Tam');
     await expect(service.saveSettings(pool, userId, { enabled: true })).rejects.toThrow('An Tam');
     await activateAnTam(userId);
-    await expect(service.saveSettings(pool, userId, { enabled: true })).rejects.toThrow(
-      'Care Circle'
-    );
+    await expect(service.saveSettings(pool, userId, { enabled: true })).resolves.toMatchObject({
+      user_id: userId, enabled: true,
+    });
+    await expect(service.eligibleContacts(pool, userId)).resolves.toEqual([]);
+    await expect(service.settings(pool, userId)).resolves.toMatchObject({ enabled: true });
   });
 });

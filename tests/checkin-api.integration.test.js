@@ -481,6 +481,33 @@ describeDatabase('check-in HTTP API contract', () => {
       .expect(400);
   });
 
+  test('settings API enables and edits a personal reminder while the Care Circle remains empty', async () => {
+    const created = await pool.query(
+      'INSERT INTO users (phone_number, push_token) VALUES ($1,$2) RETURNING id',
+      [`http-solo-${Date.now()}`, 'ExponentPushToken[http-solo]']
+    );
+    const soloId = created.rows[0].id;
+    createdUserIds.push(soloId);
+    await entitlementService.activateHouseholdPlan(pool, soloId, {
+      planCode: 'antam_2', billingPeriod: 'monthly', platform: 'apple',
+      productId: 'asinu.premium.monthly', originalTransactionId: `http-solo-${soloId}`,
+      startsAt: new Date(), expiresAt: new Date(Date.now() + 86400000),
+    });
+    const soloToken = jwt.sign({ id: soloId }, jwtSecret, { expiresIn: '10m' });
+    const initial = await request(app).get('/api/mobile/checkin-call/settings').set(auth(soloToken)).expect(200);
+    expect(initial.body.contacts).toEqual([]);
+    const enabled = await request(app).put('/api/mobile/checkin-call/settings').set(auth(soloToken))
+      .send({ enabled: true }).expect(200);
+    expect(enabled.body.settings).toMatchObject({ user_id: soloId, enabled: true, user_timeout_seconds: 60 });
+    await request(app).put('/api/mobile/checkin-call/settings').set(auth(soloToken))
+      .send({ checkin_time: '09:30', user_timeout_seconds: 180 }).expect(200);
+    const updated = await request(app).get('/api/mobile/checkin-call/settings').set(auth(soloToken)).expect(200);
+    expect(updated.body.contacts).toEqual([]);
+    expect(updated.body.settings).toMatchObject({ enabled: true, checkin_time: '09:30:00', user_timeout_seconds: 180 });
+    await request(app).put('/api/mobile/checkin-call/settings').set(auth(soloToken))
+      .send({ enabled: false }).expect(200);
+  });
+
   test('test call supports the complete user OK HTTP flow', async () => {
     global.fetch.mockClear();
     const started = await request(app)

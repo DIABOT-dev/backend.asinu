@@ -56,6 +56,24 @@ describe('check-in call safety rules', () => {
     expect(() => service.validateSettings({ checkin_time: '25:00' })).toThrow('checkin_time');
   });
 
+  test.each(['NONE', 'URGENT'])('no relative: %s unanswered reminders exhaust honestly without fake family calls', async severity => {
+    const episode = {
+      id: 'solo-unanswered', user_id: 7, state: 'CONTACT_USER', severity,
+      next_action_at: new Date(Date.now() - 1000), config: { max_rounds: 1 }, family_ids: [],
+    };
+    const db = {
+      query: jest.fn(async sql => ({ rows: sql.includes('SELECT * FROM checkin_call_episodes') ? [episode] : [] })),
+      release: jest.fn(),
+    };
+    await service.advance({ connect: async () => db }, episode.id);
+    expect(db.query.mock.calls.some(([sql]) => sql.includes('INSERT INTO checkin_call_attempts'))).toBe(false);
+    const exhausted = db.query.mock.calls.find(([sql, params]) =>
+      sql.includes('INSERT INTO checkin_call_events') && params[3] === (severity === 'URGENT' ? 'EXHAUSTED_URGENT' : 'EXHAUSTED'));
+    expect(exhausted).toBeDefined();
+    expect(JSON.parse(exhausted[1][4])).toMatchObject({ reason: 'NO_ELIGIBLE_FAMILY' });
+    expect(db.query.mock.calls.some(([sql]) => sql.includes("state = 'RESOLVED'"))).toBe(false);
+  });
+
   test('quick triage rejects a severity/category mismatch', async () => {
     await expect(
       service.answer({}, 'episode-invalid-triage', 7, 2, 'URGENT_RED_FLAG')

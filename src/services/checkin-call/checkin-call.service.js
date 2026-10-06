@@ -212,9 +212,8 @@ async function saveSettings(pool, userId, input) {
         'checkinCall.error.notifications_required'
       );
     }
-    if (!(await familyFor(pool, userId)).length) {
-      throw serviceError('Care Circle member required', 409, 'checkinCall.error.family_required');
-    }
+    // A personal reminder does not require a relative. Family escalation still
+    // resolves recipients through familyFor(), including consent and device checks.
   }
   const saved = await pool.query(
     'INSERT INTO checkin_call_settings (user_id, enabled, checkin_time, timezone, grace_hours, user_timeout_seconds, family_ring_seconds, family_confirm_minutes, max_rounds) ' +

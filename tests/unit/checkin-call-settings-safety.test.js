@@ -52,16 +52,17 @@ test('enabling still requires a notification device for the user', async () => {
   expect(pool.query.mock.calls.some(([sql]) => sql.startsWith('INSERT'))).toBe(false);
 });
 
-test('enabling still requires a connected and reachable relative with alert permissions', async () => {
+test('a personal reminder can be enabled and saved with no eligible Care Circle relatives', async () => {
   const pool = poolFor({ relatives: [] });
-  await expect(service.saveSettings(pool, 7, { enabled: true })).rejects.toMatchObject({
-    statusCode: 409,
-    i18nKey: 'checkinCall.error.family_required',
+  await expect(service.saveSettings(pool, 7, { enabled: true, checkin_time: '08:30' })).resolves.toMatchObject({
+    user_id: 7,
+    enabled: true,
+    checkin_time: '08:30',
   });
-  expect(pool.query.mock.calls.some(([sql]) => sql.startsWith('INSERT'))).toBe(false);
+  expect(pool.query.mock.calls.some(([sql]) => sql.includes('FROM user_connections c'))).toBe(false);
 });
 
-test('backend checks current eligibility and persists the enabled schedule for the session user', async () => {
+test('backend checks the personal notification device and persists the enabled schedule for the session user', async () => {
   const pool = poolFor();
   await expect(
     service.saveSettings(pool, 7, { enabled: true, checkin_time: '08:30' })
@@ -70,6 +71,12 @@ test('backend checks current eligibility and persists the enabled schedule for t
     enabled: true,
     checkin_time: '08:30',
   });
+});
+
+test('the warning never bypasses alert permissions when resolving actual recipients', async () => {
+  const pool = poolFor({ relatives: [] });
+  await expect(service.eligibleContacts(pool, 7)).resolves.toEqual([]);
+  expect(pool.query).toHaveBeenCalledTimes(1);
 });
 
 test('a disabled configuration can be saved without reachable relatives or push tokens', async () => {
