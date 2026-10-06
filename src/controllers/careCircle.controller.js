@@ -11,6 +11,7 @@ const {
 } = require('../validation/validation.schemas');
 const caregiverView = require('../services/care-circle/caregiver-view.service');
 const { healthAccessSchema, memberCalendarSchema } = require('../validation/care-circle-health.schemas');
+const { careCircleConnectionUpdateSchema, familyRoleError } = require('../validation/care-circle-family.schemas');
 const {
   createInvitation: serviceCreateInvitation,
   createQrToken: serviceCreateQrToken,
@@ -26,6 +27,21 @@ const {
   updateConnectionPermissions: serviceUpdateConnectionPermissions,
   updateHealthAccess: serviceUpdateHealthAccess,
 } = require('../services/care-circle/careCircle.service');
+
+function invalidCareCirclePayload(req, res, issues) {
+  const lang = getLang(req);
+  const invalidRole = issues.some((issue) => issue.path[0] === 'role');
+  const emptyUpdate = issues.some((issue) => issue.message === 'careCircle.need_at_least_one_field');
+  const error = invalidRole ? familyRoleError(lang) : {
+    error: t(emptyUpdate ? 'careCircle.need_at_least_one_field' : 'error.invalid_data', lang),
+  };
+  return res.status(400).json({
+    ok: false,
+    error: error.error,
+    ...(error.code ? { code: error.code } : {}),
+    details: issues,
+  });
+}
 
 // =====================================================
 // INVITATION HANDLERS
@@ -44,11 +60,7 @@ async function createInvitation(pool, req, res) {
   // Validate request body
   const parsed = careCircleInvitationSchema.safeParse(req.body || {});
   if (!parsed.success) {
-    return res.status(400).json({
-      ok: false,
-      error: t('error.invalid_data', getLang(req)),
-      details: parsed.error.issues,
-    });
+    return invalidCareCirclePayload(req, res, parsed.error.issues);
   }
 
   // Call service
@@ -96,7 +108,7 @@ async function previewQrToken(pool, req, res) {
 async function createInvitationFromQr(pool, req, res) {
   const parsed = careCircleQrInvitationSchema.safeParse(req.body || {});
   if (!parsed.success) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+    return invalidCareCirclePayload(req, res, parsed.error.issues);
   }
   try {
     const result = await serviceCreateInvitationFromQr(
@@ -227,12 +239,16 @@ async function deleteConnection(pool, req, res) {
  */
 async function updateConnection(pool, req, res) {
   const connectionId = req.params.id;
+  const parsed = careCircleConnectionUpdateSchema.safeParse(req.body || {});
+  if (!parsed.success) {
+    return invalidCareCirclePayload(req, res, parsed.error.issues);
+  }
 
   const result = await serviceUpdateConnection(
     pool,
     connectionId,
     req.user.id,
-    req.body,
+    parsed.data,
     getLang(req)
   );
 

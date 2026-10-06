@@ -9,6 +9,11 @@ const { t } = require('../../i18n');
 const entitlementService = require('../payment/entitlement.service');
 const { cacheGet, cacheSet } = require('../../lib/redis');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
+const {
+  careCircleFamilyRoleSchema,
+  careCircleConnectionUpdateSchema,
+  familyRoleError,
+} = require('../../validation/care-circle-family.schemas');
 
 // =====================================================
 // CONSTANTS
@@ -191,6 +196,8 @@ async function previewQrToken(pool, token, scannerUserId, lang = 'vi') {
 }
 
 async function createInvitationFromQr(pool, requesterId, data, lang = 'vi') {
+  const parsedRole = careCircleFamilyRoleSchema.safeParse(data.role);
+  if (!parsedRole.success) return familyRoleError(lang);
   const resolved = await resolveQrToken(pool, data.token, requesterId, lang);
   if (!resolved.ok) return resolved;
 
@@ -200,7 +207,7 @@ async function createInvitationFromQr(pool, requesterId, data, lang = 'vi') {
     {
       addressee_id: resolved.ownerUserId,
       relationship_type: data.relationship_type,
-      role: data.role,
+      role: parsedRole.data,
       permissions: data.permissions,
     },
     lang
@@ -236,7 +243,10 @@ async function createInvitationFromQr(pool, requesterId, data, lang = 'vi') {
  * @returns {Promise<Object>} - { ok, invitation, error }
  */
 async function createInvitation(pool, requesterId, data, lang = 'vi') {
-  const { addressee_id, relationship_type, role, permissions } = data;
+  const { addressee_id, relationship_type, permissions } = data;
+  const parsedRole = careCircleFamilyRoleSchema.safeParse(data.role);
+  if (!parsedRole.success) return familyRoleError(lang);
+  const role = parsedRole.data;
 
   // Validate not self-invite
   if (Number(addressee_id) === Number(requesterId)) {
@@ -679,11 +689,17 @@ async function deleteConnection(pool, connectionId, userId, lang = 'vi') {
  * @returns {Promise<Object>} - { ok, connection, error }
  */
 async function updateConnection(pool, connectionId, userId, data, lang = 'vi') {
-  const { relationship_type, role } = data;
-
-  if (!relationship_type && !role) {
-    return { ok: false, error: t('careCircle.need_at_least_one_field', lang), statusCode: 400 };
+  const parsed = careCircleConnectionUpdateSchema.safeParse(data || {});
+  if (!parsed.success) {
+    if (parsed.error.issues.some((issue) => issue.path[0] === 'role')) return familyRoleError(lang);
+    const emptyUpdate = parsed.error.issues.some((issue) => issue.message === 'careCircle.need_at_least_one_field');
+    return {
+      ok: false,
+      error: t(emptyUpdate ? 'careCircle.need_at_least_one_field' : 'error.invalid_data', lang),
+      statusCode: 400,
+    };
   }
+  const { relationship_type, role } = parsed.data;
 
   try {
     // First verify the user is part of this connection

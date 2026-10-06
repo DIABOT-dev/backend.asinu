@@ -82,6 +82,7 @@
   "careCircle.invitation_not_found": "Không tìm thấy lời mời",
   "careCircle.connection_not_found": "Không tìm thấy kết nối",
   "careCircle.need_at_least_one_field": "Cần ít nhất một trường để cập nhật",
+  "careCircle.family_role_required": "Vòng kết nối chỉ dành cho người thân và người thân chăm sóc chính.",
   "careCircle.user_label": "Người dùng",
   "careCircle.no_care_circle": "Không có care-circle để thông báo",
   "careCircle.no_permission": "Bạn không có quyền thực hiện hành động này",

@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { careCircleFamilyRoleSchema } = require('./care-circle-family.schemas');
 const { t } = require('../i18n');
 
 const uuidSchema = z.string().uuid();
@@ -76,7 +77,7 @@ const permissionsSchema = z
 const careCircleInvitationSchema = z.object({
   addressee_id: z.number().int().positive(),
   relationship_type: z.string().optional(),
-  role: z.string().optional(),
+  role: careCircleFamilyRoleSchema,
   permissions: permissionsSchema.optional(),
 });
 

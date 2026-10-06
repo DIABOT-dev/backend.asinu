@@ -82,6 +82,7 @@
   "careCircle.invitation_not_found": "Invitation not found",
   "careCircle.connection_not_found": "Connection not found",
   "careCircle.need_at_least_one_field": "At least one field required for update",
+  "careCircle.family_role_required": "Care Circle is only for family members and family caregivers.",
   "careCircle.user_label": "User",
   "careCircle.no_care_circle": "No care-circle to notify",
   "careCircle.no_permission": "You do not have permission to perform this action",
