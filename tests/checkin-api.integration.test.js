@@ -109,9 +109,8 @@ describeDatabase('check-in HTTP API contract', () => {
       "SELECT * FROM checkin_call_audio WHERE audio_key = 'vi:user_prompt'"
     );
     audioBackup = existingAudio.rows[0] || null;
-    const voice = process.env.VIENEU_VOICE || 'Ngọc Lan';
     const phrase = audioService.PHRASES.user_prompt.vi;
-    const hash = createHash('sha256').update(`vi\n${voice}\n${phrase}`).digest('hex');
+    const hash = createHash('sha256').update(`${audioService.audioVersion('vi')}\n${phrase}`).digest('hex');
     await pool.query(
       "INSERT INTO checkin_call_audio (audio_key, text_hash, mime_type, audio_data) VALUES ('vi:user_prompt',$1,'audio/mpeg',$2) ON CONFLICT (audio_key) DO UPDATE SET text_hash = EXCLUDED.text_hash, mime_type = EXCLUDED.mime_type, audio_data = EXCLUDED.audio_data",
       [hash, Buffer.from('checkin-api-integration-audio')]

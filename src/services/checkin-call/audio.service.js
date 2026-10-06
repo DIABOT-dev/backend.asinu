@@ -53,7 +53,26 @@ function voiceForLanguage(language) {
     : process.env.VIENEU_VOICE || 'Ngọc Lan';
 }
 
-async function requestSpeech(phrase, voice) {
+// Opaque public revision: never include API keys or user data in this hash.
+// The optional revision also lets operators invalidate changed provider voices
+// that keep the same name, without rebuilding the mobile app.
+function audioVersion(requestedLanguage = 'vi', selectedVoice) {
+  const language = normalizeLanguage(requestedLanguage);
+  const voice = selectedVoice ?? voiceForLanguage(language) ?? '';
+  return createHash('sha256')
+    .update(JSON.stringify({
+      schema: 'checkin-call-audio-v2',
+      provider: 'vieneu',
+      format: 'mp3',
+      language,
+      voice,
+      revision: process.env.CHECKIN_CALL_AUDIO_REVISION || '1',
+      phrases: AUDIO_KEYS.map((key) => PHRASES[key][language]),
+    }))
+    .digest('hex');
+}
+
+async function requestSpeech(phrase, voice, version) {
   if (!process.env.VIENEU_API_KEY) {
     throw audioError('VieNeu is not configured', 503, 'checkinCall.error.audio_unavailable');
   }
@@ -90,6 +109,7 @@ async function requestSpeech(phrase, voice) {
   return {
     audio_data: data,
     mime_type: responseMimeType?.startsWith('audio/') ? responseMimeType : 'audio/mpeg',
+    audio_version: version,
   };
 }
 
@@ -108,7 +128,7 @@ async function synthesizeText(input, requestedLanguage = 'vi') {
       'checkinCall.error.audio_unavailable'
     );
   }
-  return requestSpeech(phrase, voice);
+  return requestSpeech(phrase, voice, audioVersion(language, voice));
 }
 
 async function getAudio(pool, key, requestedLanguage = 'vi') {
@@ -125,20 +145,21 @@ async function getAudio(pool, key, requestedLanguage = 'vi') {
       'checkinCall.error.audio_unavailable'
     );
   const localizedAudioKey = language + ':' + key;
+  const version = audioVersion(language, voice);
   const hash = createHash('sha256')
-    .update(language + '\n' + voice + '\n' + phrase)
+    .update(version + '\n' + phrase)
     .digest('hex');
   const stored = await pool.query(
     'SELECT audio_data, mime_type FROM checkin_call_audio WHERE audio_key = $1 AND text_hash = $2',
     [localizedAudioKey, hash]
   );
-  if (stored.rows.length) return stored.rows[0];
-  const generated = await requestSpeech(phrase, voice);
+  if (stored.rows.length) return { ...stored.rows[0], audio_version: version };
+  const generated = await requestSpeech(phrase, voice, version);
   const saved = await pool.query(
     'INSERT INTO checkin_call_audio (audio_key, text_hash, mime_type, audio_data) VALUES ($1,$2,$3,$4) ON CONFLICT (audio_key) DO UPDATE SET text_hash = EXCLUDED.text_hash, mime_type = EXCLUDED.mime_type, audio_data = EXCLUDED.audio_data, created_at = now() RETURNING audio_data, mime_type',
     [localizedAudioKey, hash, generated.mime_type, generated.audio_data]
   );
-  return saved.rows[0];
+  return { ...saved.rows[0], audio_version: version };
 }
 
 async function prewarm(pool) {
@@ -159,6 +180,7 @@ module.exports = {
   AUDIO_KEYS,
   MAX_DYNAMIC_TEXT_LENGTH,
   PHRASES,
+  audioVersion,
   getAudio,
   normalizeLanguage,
   prewarm,

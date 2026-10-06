@@ -12,9 +12,14 @@ function checkinCallRoutes(pool) {
 
   router.get('/settings', controller.getSettings);
   router.put('/settings', controller.saveSettings);
+  router.get('/voice-preferences', controller.getVoicePreferences);
+  router.put('/voice-preferences', controller.saveVoicePreferences);
+  router.get('/attempts/:id/user-notice', conclusionAudioLimiter, controller.getUserNotice);
+  router.get('/attempts/:id/user-audio/:key', conclusionAudioLimiter, controller.getUserAudio);
   router.get('/active', controller.getActive);
   router.post('/test-call', controller.startTestCall);
   router.get('/episodes/:id', controller.getEpisode);
+  router.get('/audio-config', controller.getAudioConfig);
   router.get('/audio/:key', controller.getAudio);
   router.post('/audio/conclusion', conclusionAudioLimiter, controller.synthesizeConclusion);
   router.get('/attempts/:id', controller.getAttempt);

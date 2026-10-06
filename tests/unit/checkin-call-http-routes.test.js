@@ -29,15 +29,23 @@ jest.mock('../../src/services/checkin-call/checkin-call.service', () => ({
 jest.mock('../../src/services/checkin-call/audio.service', () => ({
   getAudio: jest.fn(),
   synthesizeText: jest.fn(),
+  audioVersion: jest.fn(() => 'voice-v1'),
 }));
 jest.mock('../../src/services/checkin-call/access.service', () => ({
   createAttemptToken: jest.fn(),
+}));
+jest.mock('../../src/services/checkin-call/personalization.service', () => ({
+  preferences: jest.fn(),
+  savePreferences: jest.fn(),
+  userNotice: jest.fn(),
+  userAudio: jest.fn(),
 }));
 
 const checkinCallRoutes = require('../../src/routes/checkin-call.routes');
 const service = require('../../src/services/checkin-call/checkin-call.service');
 const audio = require('../../src/services/checkin-call/audio.service');
 const { createAttemptToken } = require('../../src/services/checkin-call/access.service');
+const personalization = require('../../src/services/checkin-call/personalization.service');
 
 describe('check-in call HTTP routes', () => {
   const pool = {};
@@ -59,9 +67,14 @@ describe('check-in call HTTP routes', () => {
     expect(actual).toEqual([
       'GET /settings',
       'PUT /settings',
+      'GET /voice-preferences',
+      'PUT /voice-preferences',
+      'GET /attempts/:id/user-notice',
+      'GET /attempts/:id/user-audio/:key',
       'GET /active',
       'POST /test-call',
       'GET /episodes/:id',
+      'GET /audio-config',
       'GET /audio/:key',
       'POST /audio/conclusion',
       'GET /attempts/:id',
@@ -91,6 +104,89 @@ describe('check-in call HTTP routes', () => {
     expect(service.settings).toHaveBeenCalledWith(pool, 7);
   });
 
+  test('voice preferences are read and saved only for the session user, with no shared cache', async () => {
+    const preferences = {
+      use_name: true,
+      use_health: false,
+      weather_enabled: false,
+      address: 'bac',
+    };
+    personalization.preferences.mockResolvedValueOnce({ preferences });
+    const read = await request(app).get('/checkin-call/voice-preferences').expect(200);
+    expect(read.body).toEqual({ ok: true, preferences });
+    expect(read.headers['cache-control']).toBe('no-store');
+    expect(personalization.preferences).toHaveBeenCalledWith(pool, 7);
+    personalization.savePreferences.mockResolvedValueOnce(preferences);
+    const write = await request(app)
+      .put('/checkin-call/voice-preferences')
+      .send(preferences)
+      .expect(200);
+    expect(write.headers['cache-control']).toBe('no-store');
+    expect(personalization.savePreferences).toHaveBeenCalledWith(pool, 7, preferences);
+  });
+
+  test('personalized notice uses authenticated ownership and language without exposing it through caches', async () => {
+    const notice = { version: 'snapshot', prompts: { user_prompt: 'Hello' } };
+    personalization.userNotice.mockResolvedValueOnce(notice);
+    const result = await request(app)
+      .get('/checkin-call/attempts/own/user-notice')
+      .set('accept-language', 'en')
+      .expect(200);
+    expect(result.body).toEqual({ ok: true, notice });
+    expect(result.headers['cache-control']).toBe('no-store');
+    expect(personalization.userNotice).toHaveBeenCalledWith(pool, 'own', 7, 'en');
+  });
+
+  test('personalized audio preserves the exact snapshot and uses the normal base64 contract', async () => {
+    personalization.userAudio.mockResolvedValueOnce({
+      mime_type: 'audio/mpeg',
+      audio_data: Buffer.from('test'),
+    });
+    const result = await request(app)
+      .get('/checkin-call/attempts/own/user-audio/user_prompt')
+      .set('X-Checkin-Notice-Version', 'snapshot')
+      .set('accept-language', 'vi')
+      .expect(200);
+    expect(result.body).toEqual({
+      ok: true,
+      mimeType: 'audio/mpeg',
+      base64: Buffer.from('test').toString('base64'),
+    });
+    expect(result.headers['cache-control']).toBe('no-store');
+    expect(personalization.userAudio).toHaveBeenCalledWith(
+      pool,
+      'own',
+      7,
+      'user_prompt',
+      'vi',
+      'snapshot'
+    );
+  });
+
+  test('foreign-user notices and invalid consent settings return localized errors', async () => {
+    personalization.userNotice.mockRejectedValueOnce(
+      Object.assign(new Error('private details'), {
+        statusCode: 404,
+        i18nKey: 'checkinCall.error.attempt_not_found',
+      })
+    );
+    const foreign = await request(app)
+      .get('/checkin-call/attempts/foreign/user-notice')
+      .expect(404);
+    expect(foreign.body.error).not.toContain('private details');
+    personalization.savePreferences.mockRejectedValueOnce(
+      Object.assign(new Error('invalid'), {
+        statusCode: 400,
+        i18nKey: 'checkinCall.error.invalid_voice_preferences',
+      })
+    );
+    const invalid = await request(app)
+      .put('/checkin-call/voice-preferences')
+      .send({ use_name: 'true' })
+      .expect(400);
+    expect(invalid.body.error).not.toBe('invalid');
+  });
+
   test('episode response exposes only public fields', async () => {
     service.getEpisode.mockResolvedValueOnce({
       id: 'episode-1',
@@ -112,6 +208,31 @@ describe('check-in call HTTP routes', () => {
     });
     const response = await request(app).get('/checkin-call/audio/user_prompt').expect(200);
     expect(response.body).toEqual({ ok: true, mimeType: 'audio/mpeg', base64: 'c291bmQ=' });
+  });
+
+  test('audio metadata is locale-specific, authenticated and never HTTP cached', async () => {
+    const response = await request(app).get('/checkin-call/audio-config')
+      .set('accept-language', 'en').expect(200);
+    expect(audio.audioVersion).toHaveBeenCalledWith('en');
+    expect(response.body).toEqual({ ok: true, version: 'voice-v1', language: 'en' });
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(router.stack.find((layer) => layer.name === 'requireAuth')).toBeDefined();
+  });
+
+  test.each([
+    ['get', '/audio/user_prompt', () => audio.getAudio],
+    ['post', '/audio/conclusion', () => audio.synthesizeText],
+    ['get', '/attempts/attempt-1/user-audio/user_prompt', () => personalization.userAudio],
+    ['get', '/attempts/attempt-1/family-audio', () => service.getFamilyAudio],
+  ])('%s %s includes the actual recording revision', async (method, path, mock) => {
+    mock().mockResolvedValueOnce({
+      mime_type: 'audio/mpeg', audio_data: Buffer.from('sound'), audio_version: 'actual-voice',
+    });
+    const response = await request(app)[method]('/checkin-call' + path)
+      .send(method === 'post' ? { text: 'Conclusion' } : undefined).expect(200);
+    expect(response.body).toEqual({
+      ok: true, mimeType: 'audio/mpeg', base64: 'c291bmQ=', audioVersion: 'actual-voice',
+    });
   });
 
   test('family audio passes the exact recipient and request language to the service', async () => {

@@ -36,6 +36,7 @@ jobs:
       LOG_LEVEL: error
       DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci
       CHECKIN_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci
+      CHECKIN_PERSONALIZATION_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci
       CARE_CIRCLE_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci
       SECURITY_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci
 

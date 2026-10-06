@@ -2,6 +2,7 @@
 
 const service = require('../services/checkin-call/checkin-call.service');
 const audio = require('../services/checkin-call/audio.service');
+const personalization = require('../services/checkin-call/personalization.service');
 const { createAttemptToken } = require('../services/checkin-call/access.service');
 const { getLang, t } = require('../i18n');
 
@@ -44,6 +45,15 @@ function publicEpisode(episode) {
   };
 }
 
+function publicAudio(data) {
+  return {
+    ok: true,
+    mimeType: data.mime_type,
+    base64: data.audio_data.toString('base64'),
+    audioVersion: data.audio_version,
+  };
+}
+
 function createCheckinCallController(pool) {
   const handle = (handler) => async (req, res) => {
     try {
@@ -54,6 +64,42 @@ function createCheckinCallController(pool) {
   };
 
   return {
+    getAudioConfig: handle(async (req, res) => {
+      res.set('Cache-Control', 'no-store');
+      const language = getLang(req);
+      return res.json({ ok: true, version: audio.audioVersion(language), language });
+    }),
+    getVoicePreferences: handle(async (req, res) => {
+      res.set('Cache-Control', 'no-store');
+      const result = await personalization.preferences(pool, req.user.id);
+      return res.json({ ok: true, preferences: result.preferences });
+    }),
+    saveVoicePreferences: handle(async (req, res) => {
+      res.set('Cache-Control', 'no-store');
+      return res.json({
+        ok: true,
+        preferences: await personalization.savePreferences(pool, req.user.id, req.body),
+      });
+    }),
+    getUserNotice: handle(async (req, res) => {
+      res.set('Cache-Control', 'no-store');
+      return res.json({
+        ok: true,
+        notice: await personalization.userNotice(pool, req.params.id, req.user.id, getLang(req)),
+      });
+    }),
+    getUserAudio: handle(async (req, res) => {
+      res.set('Cache-Control', 'no-store');
+      const data = await personalization.userAudio(
+        pool,
+        req.params.id,
+        req.user.id,
+        req.params.key,
+        getLang(req),
+        req.get('X-Checkin-Notice-Version')
+      );
+      return res.json(publicAudio(data));
+    }),
     getSettings: handle(async (req, res) => {
       const [settings, contacts] = await Promise.all([
         service.settings(pool, req.user.id),
@@ -92,20 +138,13 @@ function createCheckinCallController(pool) {
       return res.json({ ok: true, episode: publicEpisode(episode) });
     }),
     getAudio: handle(async (req, res) => {
+      res.set('Cache-Control', 'no-store');
       const data = await audio.getAudio(pool, req.params.key, getLang(req));
-      return res.json({
-        ok: true,
-        mimeType: data.mime_type,
-        base64: data.audio_data.toString('base64'),
-      });
+      return res.json(publicAudio(data));
     }),
     synthesizeConclusion: handle(async (req, res) => {
       const data = await audio.synthesizeText(req.body?.text, getLang(req));
-      return res.json({
-        ok: true,
-        mimeType: data.mime_type,
-        base64: data.audio_data.toString('base64'),
-      });
+      return res.json(publicAudio(data));
     }),
     getAttempt: handle(async (req, res) => {
       const attempt = await service.getAttempt(pool, req.params.id, req.user.id, getLang(req));
@@ -117,12 +156,9 @@ function createCheckinCallController(pool) {
       return res.json({ ok: true, attempt });
     }),
     getFamilyAudio: handle(async (req, res) => {
+      res.set('Cache-Control', 'no-store');
       const data = await service.getFamilyAudio(pool, req.params.id, req.user.id, getLang(req));
-      return res.json({
-        ok: true,
-        mimeType: data.mime_type,
-        base64: data.audio_data.toString('base64'),
-      });
+      return res.json(publicAudio(data));
     }),
     answerEpisode: handle(async (req, res) => {
       const episode = await service.answer(
