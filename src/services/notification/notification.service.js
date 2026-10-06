@@ -4,6 +4,47 @@
  */
 
 const { t } = require('../../i18n');
+const { capitalizeFirstLetter, formatPersonName } = require('../../lib/text-format');
+
+function presentNotification(notification) {
+  const displayed = {
+    ...notification,
+    title: capitalizeFirstLetter(notification.title),
+    message: capitalizeFirstLetter(notification.message),
+  };
+  if (
+    notification.type !== 'caregiver_alert' ||
+    notification.data?.templateId !== 'reengage_care_circle'
+  )
+    return displayed;
+
+  // Older inbox rows contain the rendered sentence, not its name parameters.
+  // Correct only this known template; retain its original name and day count
+  // as a snapshot. Never rewrite stored history or recalculate today's count.
+  const legacyTemplates = [
+    ['vi', /^(.*?) đã (\d+) ngày chưa cập nhật sức khỏe\. Vui lòng liên hệ để kiểm tra\.$/u],
+    [
+      'en',
+      /^(.*?) has not shared a health update for (\d+) days\. Please contact them to check in\.$/u,
+    ],
+  ];
+  for (const [language, pattern] of legacyTemplates) {
+    const match = notification.message?.match(pattern);
+    if (!match) continue;
+    const fallback = t('notification.reengagement.family_fallback', language);
+    const name =
+      match[1].toLowerCase() === fallback.toLowerCase()
+        ? capitalizeFirstLetter(fallback)
+        : formatPersonName(match[1]);
+    displayed.title = t('notification.reengagement.family_title', language);
+    displayed.message = t('notification.reengagement.care_circle_alert', language, {
+      patientName: name,
+      days: match[2],
+    });
+    break;
+  }
+  return displayed;
+}
 
 /**
  * Get user notifications with pagination
@@ -37,7 +78,7 @@ async function getNotifications(pool, userId, options = {}) {
 
     return {
       ok: true,
-      notifications: result.rows,
+      notifications: result.rows.map(presentNotification),
       pagination: {
         page,
         limit,
@@ -123,7 +164,14 @@ async function getUserPushToken(pool, userId) {
 async function saveInAppNotification(pool, userId, type, title, message, data, priority = 'low') {
   await pool.query(
     `INSERT INTO notifications (user_id, type, title, message, data, priority) VALUES ($1,$2,$3,$4,$5,$6)`,
-    [userId, type, title, message, JSON.stringify(data), priority]
+    [
+      userId,
+      type,
+      capitalizeFirstLetter(title),
+      capitalizeFirstLetter(message),
+      JSON.stringify(data),
+      priority,
+    ]
   );
 }
 

@@ -23,6 +23,7 @@
 const { getHonorifics } = require('../../lib/honorifics');
 const { getUsersBySegment } = require('../profile/lifecycle.service');
 const { t } = require('../../i18n');
+const { formatPersonName } = require('../../lib/text-format');
 const { readNotificationTopics, topicMetadata } = require('./notification-topic.service');
 
 // ─── Re-engagement Templates ────────────────────────────────────────────────
@@ -233,9 +234,7 @@ async function sendCareCircleAlert(pool, sendAndSave, patientId, patientName, in
   // Get active care circle members (user_connections + can_receive_alerts)
   const { rows: guardians } = await pool.query(
     `SELECT u.id, u.push_token, u.display_name,
-            COALESCE(u.language_preference, 'vi') AS lang,
-            uc.relationship_type,
-            CASE WHEN uc.requester_id = $1 THEN 'requester' ELSE 'addressee' END as patient_side
+            COALESCE(u.language_preference, 'vi') AS lang
      FROM user_connections uc
      JOIN users u ON u.id = CASE
        WHEN uc.requester_id = $1 THEN uc.addressee_id
@@ -259,18 +258,10 @@ async function sendCareCircleAlert(pool, sendAndSave, patientId, patientName, in
     );
     if (recent.length > 0) continue;
 
-    // Render message with relationship
+    // Use the person's name directly, without inferring a family role.
     const lang = guardian.lang || 'vi';
-    const { getPatientRoleForCaregiver } = require('../../lib/relation');
     const patientDisplay =
-      guardian.patient_side === 'requester'
-        ? getPatientRoleForCaregiver(
-            guardian.relationship_type,
-            patientName || t('notification.reengagement.family_fallback', lang),
-            lang,
-            true
-          )
-        : patientName || t('notification.reengagement.family_fallback', lang);
+      formatPersonName(patientName) || t('notification.reengagement.family_fallback', lang);
 
     const tmpl = REENGAGEMENT_TEMPLATES.care_circle_alert;
     const text = t(tmpl.key, lang, { patientName: patientDisplay, days: inactiveDays });
@@ -342,7 +333,7 @@ async function runReengagement(pool, sendAndSave) {
       if (!result || !result.shouldSend) continue;
 
       // Send re-engagement push
-      const title = t('notification.health_update_title', user.lang);
+      const title = t('notification.reengagement.user_title', user.lang);
 
       const ok = await sendAndSave(pool, user, 'reengagement', title, result.message.text, {
         type: 'reengagement',

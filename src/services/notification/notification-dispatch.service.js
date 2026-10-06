@@ -1,6 +1,7 @@
 'use strict';
 
 const { createHash } = require('node:crypto');
+const { capitalizeFirstLetter } = require('../../lib/text-format');
 const { canSendNonUrgent, hasReminderOptIn, isOptInType } = require('./notification.policy');
 const { sendPushNotification } = require('./push.notification.service');
 const logger = require('../../lib/logger');
@@ -103,13 +104,21 @@ async function reserveNotification(
     const inserted = await client.query(
       `INSERT INTO notifications (user_id, type, title, message, data, priority, event_key)
        VALUES ($1,$2,$3,$4,$5::jsonb,$6,$7) RETURNING id`,
-      [userId, type, title, body, JSON.stringify(data), priority, eventKey]
+      [
+        userId,
+        type,
+        capitalizeFirstLetter(title),
+        capitalizeFirstLetter(body),
+        JSON.stringify(data),
+        priority,
+        eventKey,
+      ]
     );
     const notificationId = inserted.rows[0].id;
     if (push) {
       await client.query(
         `INSERT INTO notification_push_outbox (notification_id, push_body) VALUES ($1,$2)`,
-        [notificationId, pushBody]
+        [notificationId, capitalizeFirstLetter(pushBody)]
       );
     }
     return { notificationId, existing: false };

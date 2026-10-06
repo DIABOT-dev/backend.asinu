@@ -11,6 +11,7 @@
 
 const EXPO_PUSH_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
 const { t } = require('../../i18n');
+const { capitalizeFirstLetter, formatPersonName } = require('../../lib/text-format');
 const { notificationSoundConfig } = require('./notification-sound.config');
 
 /**
@@ -51,8 +52,8 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
   const messages = validTokens.map((token) => ({
     to: token,
     sound: config.sound,
-    title: title,
-    body: body,
+    title: capitalizeFirstLetter(title),
+    body: capitalizeFirstLetter(body),
     data: data,
     priority: config.priority,
     channelId: config.channelId,
@@ -142,7 +143,7 @@ async function notifyCareCircleInvitation(
     return await sendPushNotification(
       [pushToken],
       t('push.invitation_title', lang),
-      t('push.invitation_body', lang, { name: senderName }),
+      t('push.invitation_body', lang, { name: formatPersonName(senderName) }),
       {
         type: 'care_circle_invitation',
         invitationId: String(invitationId),
@@ -178,7 +179,7 @@ async function notifyCareCircleAccepted(pool, requesterId, accepterName, accepte
     return await sendPushNotification(
       [pushToken],
       t('push.accepted_title', lang),
-      t('push.accepted_body', lang, { name: accepterName }),
+      t('push.accepted_body', lang, { name: formatPersonName(accepterName) }),
       {
         type: 'care_circle_accepted',
         accepterId: String(accepterId || requesterId),

@@ -1,5 +1,6 @@
 const fs = require('fs');
 const { GoogleAuth } = require('google-auth-library');
+const { capitalizeFirstLetter } = require('../../lib/text-format');
 
 const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 let cached = null;
@@ -41,7 +42,11 @@ async function sendFcmNotification(token, title, body, data = {}, options = {}) 
     // while the app process is not running and can render a full-screen call.
     const message = {
       token,
-      data: stringData({ ...data, title, body }),
+      data: stringData({
+        ...data,
+        title: capitalizeFirstLetter(title),
+        body: capitalizeFirstLetter(body),
+      }),
       android: {
         priority: 'HIGH',
         ttl: options.incomingCall ? '120s' : '600s',

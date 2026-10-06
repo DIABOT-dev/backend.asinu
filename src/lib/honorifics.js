@@ -5,9 +5,11 @@
  * @param {Object} user - { birth_year, gender, display_name, full_name, lang }
  * @returns {{ honorific: string, selfRef: string, callName: string, Honorific: string }}
  */
+const { formatPersonName } = require('./text-format');
+
 function getHonorifics(user) {
   // Ưu tiên full_name (canonical) hơn display_name
-  const full = user.full_name || user.display_name || '';
+  const full = formatPersonName(user.full_name || user.display_name || '');
   const name = full ? full.trim().split(/\s+/).pop() : '';
   const lang = user.lang || 'vi';
 
