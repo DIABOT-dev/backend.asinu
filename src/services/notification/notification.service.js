@@ -5,6 +5,7 @@
 
 const { t } = require('../../i18n');
 const { capitalizeFirstLetter, formatPersonName } = require('../../lib/text-format');
+const { withNotificationTransaction } = require('./notification-dispatch.service');
 
 function presentNotification(notification) {
   const displayed = {
@@ -159,20 +160,43 @@ async function getUserPushToken(pool, userId) {
  * @param {string} title - Notification title
  * @param {string} message - Notification body
  * @param {Object} data - JSON data payload
- * @returns {Promise<void>}
+ * @returns {Promise<{notificationId: number, existing: boolean}>}
  */
-async function saveInAppNotification(pool, userId, type, title, message, data, priority = 'low') {
-  await pool.query(
-    `INSERT INTO notifications (user_id, type, title, message, data, priority) VALUES ($1,$2,$3,$4,$5,$6)`,
-    [
-      userId,
-      type,
-      capitalizeFirstLetter(title),
-      capitalizeFirstLetter(message),
-      JSON.stringify(data),
-      priority,
-    ]
-  );
+async function saveInAppNotification(
+  pool,
+  userId,
+  type,
+  title,
+  message,
+  data = {},
+  priority = 'low'
+) {
+  const values = [
+    userId,
+    type,
+    capitalizeFirstLetter(title),
+    capitalizeFirstLetter(message),
+    JSON.stringify(data),
+    priority,
+  ];
+  return withNotificationTransaction(pool, userId, async (client) => {
+    // Client retries must not create repeated inbox entries. JSONB equality
+    // ignores object key order, while preserving distinct event payloads.
+    const existing = await client.query(
+      `SELECT id FROM notifications WHERE user_id = $1 AND type = $2
+        AND title = $3 AND message = $4 AND data = $5::jsonb
+        AND created_at >= NOW() - INTERVAL '5 minutes'
+       ORDER BY created_at DESC LIMIT 1`,
+      values.slice(0, 5)
+    );
+    if (existing.rows[0]) return { notificationId: existing.rows[0].id, existing: true };
+    const inserted = await client.query(
+      `INSERT INTO notifications (user_id, type, title, message, data, priority)
+       VALUES ($1,$2,$3,$4,$5::jsonb,$6) RETURNING id`,
+      values
+    );
+    return { notificationId: inserted.rows[0].id, existing: false };
+  });
 }
 
 /**

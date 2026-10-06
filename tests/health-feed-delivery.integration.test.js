@@ -14,6 +14,16 @@ jest.mock('../src/services/health_feed/config', () => ({
 jest.mock('../src/services/notification/push.notification.service', () => ({
   sendPushNotification: jest.fn().mockResolvedValue({ ok: true }),
 }));
+jest.mock('../src/services/notification/notification-schedule.policy', () => {
+  const actual = jest.requireActual('../src/services/notification/notification-schedule.policy');
+  return {
+    ...actual,
+    getScheduledReminderHoldUntil: jest.fn(actual.getScheduledReminderHoldUntil),
+  };
+});
+const {
+  getScheduledReminderHoldUntil,
+} = require('../src/services/notification/notification-schedule.policy');
 const repo = require('../src/services/health_feed/repository');
 const config = require('../src/services/health_feed/config');
 const { sendPushNotification } = require('../src/services/notification/push.notification.service');
@@ -39,6 +49,12 @@ describeDatabase('Health Feed shares atomic budget and durable delivery', () => 
     );
   });
   beforeEach(async () => {
+    getScheduledReminderHoldUntil
+      .mockReset()
+      .mockImplementation(
+        jest.requireActual('../src/services/notification/notification-schedule.policy')
+          .getScheduledReminderHoldUntil
+      );
     await pool.query('DELETE FROM notifications WHERE user_id = $1', [userId]);
     await pool.query(
       'UPDATE user_notification_preferences SET reminders_enabled = true, health_feed_enabled = true WHERE user_id = $1',
@@ -82,6 +98,48 @@ describeDatabase('Health Feed shares atomic budget and durable delivery', () => 
     );
     expect(Number(count.rows[0].count)).toBe(3);
     expect(sendPushNotification).toHaveBeenCalledTimes(1);
+  });
+  test('an imminent fixed reminder keeps the last daily slot while the feed job waits', async () => {
+    await fillTwo();
+    getScheduledReminderHoldUntil.mockResolvedValue(new Date(Date.now() + 5 * 60000));
+    await dispatchPendingNotifications(pool);
+    expect(repo.markNotificationJobDispatched).not.toHaveBeenCalled();
+    expect(sendPushNotification).not.toHaveBeenCalled();
+    expect(
+      (
+        await pool.query(
+          "SELECT counts_toward_cap FROM notifications WHERE user_id = $1 AND type = 'health_feed'",
+          [userId]
+        )
+      ).rows
+    ).toEqual([{ counts_toward_cap: false }]);
+    expect(
+      (
+        await pool.query(
+          'SELECT 1 FROM notification_push_outbox o JOIN notifications n ON n.id = o.notification_id WHERE n.user_id = $1',
+          [userId]
+        )
+      ).rows
+    ).toEqual([]);
+    expect(
+      await sendAndSave(pool, userId, 'reminder_evening_summary', 'Scheduled fixture', 'x')
+    ).toBe(true);
+    expect(sendPushNotification.mock.calls[0][3].type).toBe('reminder_evening_summary');
+  });
+  test('a feed job delayed for a fixed reminder resumes later without a second inbox row', async () => {
+    getScheduledReminderHoldUntil.mockResolvedValue(new Date(Date.now() + 5 * 60000));
+    await dispatchPendingNotifications(pool);
+    expect(repo.markNotificationJobDispatched).not.toHaveBeenCalled();
+    getScheduledReminderHoldUntil.mockResolvedValue(null);
+    await dispatchPendingNotifications(pool);
+    expect(sendPushNotification).toHaveBeenCalledTimes(1);
+    expect(repo.markNotificationJobDispatched).toHaveBeenCalledWith(pool, 1, 'queued');
+    expect(
+      Number(
+        (await pool.query('SELECT COUNT(*) FROM notifications WHERE user_id = $1', [userId]))
+          .rows[0].count
+      )
+    ).toBe(1);
   });
   test('an inbox row created outside the push window does not suppress its later delivery', async () => {
     await fillTwo();

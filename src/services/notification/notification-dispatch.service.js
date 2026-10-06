@@ -2,10 +2,21 @@
 
 const { createHash } = require('node:crypto');
 const { capitalizeFirstLetter } = require('../../lib/text-format');
-const { canSendNonUrgent, hasReminderOptIn, isOptInType } = require('./notification.policy');
+const {
+  canSendNonUrgent,
+  hasReminderOptIn,
+  isOptInType,
+  OPT_IN_TYPES,
+  ROUTINE_SPACING_MINUTES,
+} = require('./notification.policy');
 const { sendPushNotification } = require('./push.notification.service');
 const logger = require('../../lib/logger');
 const { buildNotificationTopics } = require('./notification-topic.service');
+const {
+  SCHEDULED_REMINDER_TYPES,
+  getScheduledReminderHoldUntil,
+  isScheduledReminder,
+} = require('./notification-schedule.policy');
 
 // Every writer sharing the daily budget must use the same per-user transaction lock.
 async function withNotificationTransaction(pool, userId, work) {
@@ -31,16 +42,24 @@ function notificationEventKey(data) {
   for (const key of [
     'eventId',
     'event_id',
+    'invitationId',
+    'invitation_id',
     'messageId',
     'message_id',
     'paymentId',
     'payment_id',
+    'orderCode',
+    'order_code',
     'transactionId',
     'transaction_id',
     'assessmentId',
     'episodeId',
     'alertId',
     'checkinId',
+    'attemptId',
+    'logId',
+    'log_id',
+    'measurementId',
     'task_id',
     'patientId',
     'patient_id',
@@ -53,6 +72,10 @@ function notificationEventKey(data) {
     'subscription_id',
     'feedItemId',
     'sourceUserId',
+    'senderId',
+    'accepterId',
+    'expiresAt',
+    'kind',
     'action',
     'trigger',
     'inactive_days',
@@ -61,6 +84,21 @@ function notificationEventKey(data) {
   }
   if (!Object.keys(identity).length) return null;
   return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
+}
+
+function explicitEventIdentity(data) {
+  for (const aliases of [
+    ['eventId', 'event_id'],
+    ['messageId', 'message_id'],
+    ['transactionId', 'transaction_id'],
+    ['paymentId', 'payment_id'],
+    ['orderCode', 'order_code'],
+    ['invitationId', 'invitation_id'],
+  ]) {
+    const field = aliases.find((key) => data[key] !== undefined && data[key] !== null);
+    if (field) return { aliases, value: String(data[field]) };
+  }
+  return { aliases: [], value: null };
 }
 
 async function reserveNotification(
@@ -79,19 +117,52 @@ async function reserveNotification(
   }
 ) {
   return withNotificationTransaction(pool, userId, async (client) => {
-    const eventKey = notificationEventKey(data);
+    let eventKey = notificationEventKey(data);
+    const eventIdentity = explicitEventIdentity(data);
+    if (type === 'doctor_message' && !data.messageId && !data.message_id) {
+      // Older writers may only supply a task ID. Keep distinct message text
+      // in that conversation, but coalesce retries of identical content.
+      eventKey = createHash('sha256')
+        .update(JSON.stringify([eventKey, title, body]))
+        .digest('hex');
+    }
     // Different patients/events must not suppress each other's alerts. Retrying
     // a failed push reuses the same inbox row rather than consuming the cap again.
-    if (cooldownMinutes > 0 && (type !== 'doctor_message' || eventKey)) {
+    if (cooldownMinutes > 0) {
       const recent = await client.query(
         `SELECT id FROM notifications WHERE user_id = $1 AND type = $2
-           AND event_key IS NOT DISTINCT FROM $3
-           AND created_at >= NOW() - make_interval(mins => $4)
+           AND (event_key IS NOT DISTINCT FROM $3 OR EXISTS (
+             SELECT 1 FROM unnest($5::text[]) AS field
+              WHERE data->>field = $6
+           ))
+           AND (created_at >= NOW() - make_interval(mins => $4) OR EXISTS (
+             SELECT 1 FROM notification_push_outbox o
+              WHERE o.notification_id = notifications.id
+                AND o.state IN ('PENDING','RETRY','INFLIGHT') AND o.expires_at > NOW()
+           ))
          ORDER BY created_at DESC LIMIT 1`,
-        [userId, type, eventKey, cooldownMinutes]
+        [userId, type, eventKey, cooldownMinutes, eventIdentity.aliases, eventIdentity.value]
       );
-      if (recent.rows[0]) return { notificationId: recent.rows[0].id, existing: true };
+      if (recent.rows[0]) {
+        const notificationId = recent.rows[0].id;
+        if (push) {
+          // An event may have been saved inbox-only by another writer. Attach
+          // delivery without ever resetting a SENT or already pending job.
+          await client.query(
+            `INSERT INTO notification_push_outbox (notification_id, push_body)
+             VALUES ($1,$2) ON CONFLICT DO NOTHING`,
+            [notificationId, capitalizeFirstLetter(pushBody)]
+          );
+        }
+        return { notificationId, existing: true };
+      }
     }
+    if (
+      isOptInType(type) &&
+      !isScheduledReminder(type) &&
+      (await getScheduledReminderHoldUntil(client, userId))
+    )
+      return null;
     if (!(await canSendNonUrgent(client, userId, type))) return null;
     if (spacingTypes.length) {
       const recent = await client.query(
@@ -191,6 +262,13 @@ async function deliverNotification(pool, notificationId) {
   let claimed;
   try {
     await client.query('BEGIN');
+    // Acquire the same user lock as reservation BEFORE locking an outbox row.
+    // Separate workers/jobs must not claim two routine pushes for one user,
+    // and consistent lock ordering avoids deadlocks with feed reservations.
+    await client.query(
+      "SELECT pg_advisory_xact_lock(hashtext('notification-user:' || user_id::text)) FROM notifications WHERE id = $1",
+      [notificationId]
+    );
     const selected = await client.query(
       `SELECT n.id, n.user_id, n.type, n.title, n.data, o.push_body, o.attempts,
               u.push_token, u.deleted_at, ub.timezone, o.expires_at <= NOW() AS expired
@@ -241,6 +319,53 @@ async function deliverNotification(pool, notificationId) {
         return { ok: false, skipped: true };
       }
     }
+    if (isOptInType(claimed.type)) {
+      if (!isScheduledReminder(claimed.type)) {
+        const scheduled = await client.query(
+          `SELECT MAX(GREATEST(NOW() + make_interval(mins => $3), o.lease_until)) AS hold_until
+             FROM notifications n JOIN notification_push_outbox o ON o.notification_id = n.id
+            WHERE n.user_id = $1 AND n.id <> $2
+              AND (n.type = ANY($4::text[]) OR LEFT(n.type, 9) = 'reminder_')
+              AND o.expires_at > NOW() AND o.attempts < 5
+              AND ((o.state IN ('PENDING','RETRY') AND o.next_attempt_at <= NOW())
+                OR (o.state = 'INFLIGHT' AND o.lease_until > NOW()))`,
+          [claimed.user_id, notificationId, ROUTINE_SPACING_MINUTES, [...SCHEDULED_REMINDER_TYPES]]
+        );
+        const holdUntil =
+          scheduled.rows[0]?.hold_until ||
+          (await getScheduledReminderHoldUntil(client, claimed.user_id));
+        if (holdUntil) {
+          await client.query(
+            `UPDATE notification_push_outbox SET state = 'RETRY', lease_until = NULL,
+              next_attempt_at = $2, updated_at = NOW() WHERE notification_id = $1`,
+            [notificationId, holdUntil]
+          );
+          await client.query('COMMIT');
+          return { ok: false, skipped: true, deferred: true };
+        }
+      }
+      const recent = await client.query(
+        `SELECT MAX(GREATEST(o.updated_at + make_interval(mins => $4), o.lease_until)) AS next_allowed_at
+           FROM notifications n JOIN notification_push_outbox o ON o.notification_id = n.id
+          WHERE n.user_id = $1 AND n.id <> $2
+            AND (n.type = ANY($3::text[]) OR LEFT(n.type, 9) = 'reminder_')
+            AND ((o.state = 'SENT' AND o.updated_at > NOW() - make_interval(mins => $4))
+              OR (o.state = 'INFLIGHT' AND o.lease_until > NOW()))`,
+        [claimed.user_id, notificationId, [...OPT_IN_TYPES], ROUTINE_SPACING_MINUTES]
+      );
+      const nextAllowedAt = recent.rows[0]?.next_allowed_at;
+      if (nextAllowedAt) {
+        // Keep the inbox and durable job. Deferring is not a failed send and
+        // must not consume an attempt or immediately retry on another worker.
+        await client.query(
+          `UPDATE notification_push_outbox SET state = 'RETRY', lease_until = NULL,
+            next_attempt_at = $2, updated_at = NOW() WHERE notification_id = $1`,
+          [notificationId, nextAllowedAt]
+        );
+        await client.query('COMMIT');
+        return { ok: false, skipped: true, deferred: true };
+      }
+    }
     await client.query(
       `UPDATE notification_push_outbox SET state = 'INFLIGHT', attempts = attempts + 1,
         lease_until = NOW() + INTERVAL '2 minutes', updated_at = NOW() WHERE notification_id = $1`,
@@ -282,11 +407,15 @@ async function deliverNotification(pool, notificationId) {
 
 async function retryPendingNotifications(pool, limit = 50) {
   const { rows } = await pool.query(
-    `SELECT notification_id FROM notification_push_outbox
-      WHERE (state IN ('PENDING','RETRY') AND next_attempt_at <= NOW())
-         OR (state = 'INFLIGHT' AND lease_until < NOW())
-      ORDER BY next_attempt_at LIMIT $1`,
-    [limit]
+    `SELECT o.notification_id FROM notification_push_outbox o
+      JOIN notifications n ON n.id = o.notification_id
+      WHERE (o.state IN ('PENDING','RETRY') AND o.next_attempt_at <= NOW())
+         OR (o.state = 'INFLIGHT' AND o.lease_until < NOW())
+      ORDER BY CASE
+        WHEN NOT (n.type = ANY($2::text[]) OR LEFT(n.type, 9) = 'reminder_') THEN 0
+        WHEN n.type = ANY($3::text[]) OR LEFT(n.type, 9) = 'reminder_' THEN 1
+        ELSE 2 END, o.next_attempt_at, o.notification_id LIMIT $1`,
+    [limit, [...OPT_IN_TYPES], [...SCHEDULED_REMINDER_TYPES]]
   );
   let sent = 0;
   for (const row of rows) {

@@ -28,12 +28,16 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
   }
 
   // Filter valid Expo push tokens
-  const validTokens = expoPushTokens.filter(
-    (token) =>
-      token &&
-      typeof token === 'string' &&
-      (token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken['))
-  );
+  const validTokens = [
+    ...new Set(
+      expoPushTokens.filter(
+        (token) =>
+          token &&
+          typeof token === 'string' &&
+          (token.startsWith('ExponentPushToken[') || token.startsWith('ExpoPushToken['))
+      )
+    ),
+  ];
 
   if (validTokens.length === 0) {
     return { ok: false, error: t('error.no_valid_push_tokens') };
@@ -137,11 +141,13 @@ async function notifyCareCircleInvitation(
       return { ok: false, error: t('error.no_push_token') };
     }
 
-    const pushToken = result.rows[0].push_token;
     const lang = result.rows[0].language_preference || 'vi';
-
-    return await sendPushNotification(
-      [pushToken],
+    // Lazy import: basic dispatch imports this module as its push transport.
+    const { sendAndSave } = require('./basic.notification.service');
+    const ok = await sendAndSave(
+      pool,
+      addresseeId,
+      'care_circle_invitation',
       t('push.invitation_title', lang),
       t('push.invitation_body', lang, { name: formatPersonName(senderName) }),
       {
@@ -151,6 +157,7 @@ async function notifyCareCircleInvitation(
         senderName: senderName,
       }
     );
+    return { ok };
   } catch (error) {
     return { ok: false, error: error.message };
   }
@@ -173,11 +180,12 @@ async function notifyCareCircleAccepted(pool, requesterId, accepterName, accepte
       return { ok: false, error: t('error.no_push_token') };
     }
 
-    const pushToken = result.rows[0].push_token;
     const lang = result.rows[0].language_preference || 'vi';
-
-    return await sendPushNotification(
-      [pushToken],
+    const { sendAndSave } = require('./basic.notification.service');
+    const ok = await sendAndSave(
+      pool,
+      requesterId,
+      'care_circle_accepted',
       t('push.accepted_title', lang),
       t('push.accepted_body', lang, { name: formatPersonName(accepterName) }),
       {
@@ -186,6 +194,7 @@ async function notifyCareCircleAccepted(pool, requesterId, accepterName, accepte
         accepterName: accepterName,
       }
     );
+    return { ok };
   } catch (error) {
     return { ok: false, error: error.message };
   }

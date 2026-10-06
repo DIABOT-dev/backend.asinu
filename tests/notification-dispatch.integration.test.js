@@ -2,11 +2,32 @@
 
 const { Pool } = require('pg');
 jest.mock('../src/services/notification/push.notification.service', () => ({
+  ...jest.requireActual('../src/services/notification/push.notification.service'),
   sendPushNotification: jest.fn().mockResolvedValue({ ok: true }),
 }));
-const { sendPushNotification } = require('../src/services/notification/push.notification.service');
+jest.mock('../src/services/health_feed/config', () => ({
+  ...jest.requireActual('../src/services/health_feed/config'),
+  isWithinPushWindow: () => true,
+}));
+jest.mock('../src/services/notification/notification-schedule.policy', () => {
+  const actual = jest.requireActual('../src/services/notification/notification-schedule.policy');
+  return {
+    ...actual,
+    getScheduledReminderHoldUntil: jest.fn(actual.getScheduledReminderHoldUntil),
+  };
+});
+const {
+  getScheduledReminderHoldUntil,
+} = require('../src/services/notification/notification-schedule.policy');
+const {
+  sendPushNotification,
+  notifyCareCircleInvitation,
+  notifyCareCircleAccepted,
+} = require('../src/services/notification/push.notification.service');
+const { testNotificationHandler } = require('../src/controllers/notification.controller');
 const { sendAndSave } = require('../src/services/notification/basic.notification.service');
 const { dispatch } = require('../src/core/notification/notification.orchestrator');
+const { saveInAppNotification } = require('../src/services/notification/notification.service');
 const {
   reserveNotification,
   deliverNotification,
@@ -29,6 +50,12 @@ describeDatabase(
     });
     beforeEach(async () => {
       sendPushNotification.mockReset().mockResolvedValue({ ok: true });
+      getScheduledReminderHoldUntil
+        .mockReset()
+        .mockImplementation(
+          jest.requireActual('../src/services/notification/notification-schedule.policy')
+            .getScheduledReminderHoldUntil
+        );
       await pool.query('DELETE FROM notifications WHERE user_id = $1', [userId]);
       await pool.query('DELETE FROM user_notification_preferences WHERE user_id = $1', [userId]);
       await pool.query(
@@ -54,7 +81,7 @@ describeDatabase(
       );
     const optIn = () =>
       pool.query(
-        'INSERT INTO user_notification_preferences (user_id, reminders_enabled) VALUES ($1,true)',
+        'INSERT INTO user_notification_preferences (user_id, reminders_enabled, health_feed_enabled) VALUES ($1,true,true)',
         [userId]
       );
     const due = (id) =>
@@ -111,6 +138,30 @@ describeDatabase(
       expect(sendPushNotification).toHaveBeenCalledTimes(2);
       expect(await retryPendingNotifications(pool)).toEqual({ scanned: 0, sent: 0 });
     });
+    test('a deferred event still reuses its pending row after the normal cooldown expires', async () => {
+      const first = await reserveNotification(
+        pool,
+        message({ paymentId: 'pending-event' }, 'payment_failed')
+      );
+      await pool.query(
+        "UPDATE notifications SET created_at = now() - interval '10 minutes' WHERE id = $1",
+        [first.notificationId]
+      );
+      const duplicate = await reserveNotification(
+        pool,
+        message({ paymentId: 'pending-event' }, 'payment_failed')
+      );
+      expect(duplicate).toEqual({ notificationId: first.notificationId, existing: true });
+      expect(await inboxCount()).toBe(1);
+    });
+    test('an inbox-only event can gain one push without recreating its row or resending later', async () => {
+      const data = { eventId: 'shared-inbox-push-event' };
+      await saveInAppNotification(pool, userId, 'payment_failed', 'x', 'x', data);
+      await sendAndSave(pool, userId, 'payment_failed', 'x', 'x', data);
+      await sendAndSave(pool, userId, 'payment_failed', 'x', 'x', data);
+      expect(await inboxCount()).toBe(1);
+      expect(sendPushNotification).toHaveBeenCalledTimes(1);
+    });
     test('concurrent delivery workers claim the push only once', async () => {
       const row = await reserveNotification(pool, message({}, 'payment_failed'));
       await Promise.all([
@@ -118,6 +169,297 @@ describeDatabase(
         deliverNotification(pool, row.notificationId),
       ]);
       expect(sendPushNotification).toHaveBeenCalledTimes(1);
+    });
+    test('25 concurrent retries of the same event produce one inbox row and one push', async () => {
+      await Promise.all(
+        Array.from({ length: 25 }, () =>
+          sendAndSave(pool, userId, 'payment_failed', 'x', 'x', { paymentId: 'same-event' })
+        )
+      );
+      expect(await inboxCount()).toBe(1);
+      expect(sendPushNotification).toHaveBeenCalledTimes(1);
+    });
+    test('distinct invitations remain distinct even if the rendered copy is identical', async () => {
+      const first = await reserveNotification(
+        pool,
+        message({ invitationId: 'a' }, 'care_circle_invitation')
+      );
+      const second = await reserveNotification(
+        pool,
+        message({ invitationId: 'b' }, 'care_circle_invitation')
+      );
+      const duplicate = await reserveNotification(
+        pool,
+        message({ invitationId: 'a' }, 'care_circle_invitation')
+      );
+      expect(first.notificationId).not.toBe(second.notificationId);
+      expect(duplicate.notificationId).toBe(first.notificationId);
+      expect(await inboxCount()).toBe(2);
+    });
+    test('wallet payment order codes preserve separate transactions and deduplicate retries', async () => {
+      await Promise.all(
+        ['order-a', 'order-b', 'order-a'].map((orderCode) =>
+          sendAndSave(pool, userId, 'wallet_topup_success', 'Payment', 'Same amount', { orderCode })
+        )
+      );
+      expect(await inboxCount()).toBe(2);
+      expect(sendPushNotification).toHaveBeenCalledTimes(2);
+    });
+    test('event IDs coalesce writer aliases and extra metadata, including older stored keys', async () => {
+      const first = await reserveNotification(
+        pool,
+        message({ event_id: 'stable-event' }, 'payment_failed')
+      );
+      await pool.query('UPDATE notifications SET event_key = NULL WHERE id = $1', [
+        first.notificationId,
+      ]);
+      const duplicate = await reserveNotification(pool, {
+        ...message({ eventId: 'stable-event', action: 'updated', userId }, 'payment_failed'),
+        title: 'Updated translated title',
+      });
+      expect(duplicate).toEqual({ notificationId: first.notificationId, existing: true });
+      expect(await inboxCount()).toBe(1);
+    });
+    test('different routine queues cannot push together and deferred work keeps its retry budget', async () => {
+      await optIn();
+      const rows = await Promise.all(
+        ['morning_checkin', 'reengagement', 'health_feed'].map((type) =>
+          reserveNotification(pool, message({}, type))
+        )
+      );
+      await Promise.all(rows.map((row) => deliverNotification(pool, row.notificationId)));
+      expect(sendPushNotification).toHaveBeenCalledTimes(1);
+      const states = (
+        await pool.query(
+          'SELECT state, attempts FROM notification_push_outbox WHERE notification_id = ANY($1::int[]) ORDER BY attempts DESC',
+          [rows.map((row) => row.notificationId)]
+        )
+      ).rows;
+      expect(states).toEqual([
+        { state: 'SENT', attempts: 1 },
+        { state: 'RETRY', attempts: 0 },
+        { state: 'RETRY', attempts: 0 },
+      ]);
+      await retryPendingNotifications(pool);
+      expect(sendPushNotification).toHaveBeenCalledTimes(1);
+      await pool.query(
+        "UPDATE notification_push_outbox SET updated_at = now() - interval '6 minutes' WHERE state = 'SENT' AND notification_id = ANY($1::int[])",
+        [rows.map((row) => row.notificationId)]
+      );
+      for (const row of rows) await due(row.notificationId);
+      await retryPendingNotifications(pool);
+      expect(sendPushNotification).toHaveBeenCalledTimes(2);
+      expect(await inboxCount()).toBe(3);
+    });
+    test('a queued fixed-time reminder wins even if an older auxiliary is delivered first', async () => {
+      await optIn();
+      const auxiliary = await reserveNotification(pool, message({}, 'reengagement'));
+      const fixed = await reserveNotification(pool, message({}, 'reminder_morning_summary'));
+      const deferred = await deliverNotification(pool, auxiliary.notificationId);
+      expect(deferred).toEqual({ ok: false, skipped: true, deferred: true });
+      expect(sendPushNotification).not.toHaveBeenCalled();
+      expect(await deliverNotification(pool, fixed.notificationId)).toEqual({ ok: true });
+      expect(sendPushNotification.mock.calls[0][3].type).toBe('reminder_morning_summary');
+      expect(
+        (
+          await pool.query(
+            'SELECT state, attempts, next_attempt_at > NOW() AS waiting FROM notification_push_outbox WHERE notification_id = $1',
+            [auxiliary.notificationId]
+          )
+        ).rows[0]
+      ).toEqual({ state: 'RETRY', attempts: 0, waiting: true });
+    });
+    test('concurrent scheduled and auxiliary workers still deliver only the scheduled reminder', async () => {
+      await optIn();
+      const auxiliary = await reserveNotification(pool, message({}, 'health_feed'));
+      const fixed = await reserveNotification(pool, message({}, 'reminder_evening_summary'));
+      await Promise.all([
+        deliverNotification(pool, auxiliary.notificationId),
+        deliverNotification(pool, fixed.notificationId),
+      ]);
+      expect(sendPushNotification).toHaveBeenCalledTimes(1);
+      expect(sendPushNotification.mock.calls[0][3].type).toBe('reminder_evening_summary');
+    });
+    test('retry batch prioritizes urgent events, then fixed reminders, then older auxiliary work', async () => {
+      await optIn();
+      await reserveNotification(pool, message({}, 'weekly_recap'));
+      await reserveNotification(pool, message({}, 'reminder_morning_summary'));
+      await reserveNotification(pool, message({}, 'emergency'));
+      expect(await retryPendingNotifications(pool, 1)).toEqual({ scanned: 1, sent: 1 });
+      expect(sendPushNotification.mock.calls[0][3].type).toBe('emergency');
+      expect(await retryPendingNotifications(pool, 1)).toEqual({ scanned: 1, sent: 1 });
+      expect(sendPushNotification.mock.calls[1][3].type).toBe('reminder_morning_summary');
+      expect(await retryPendingNotifications(pool, 1)).toEqual({ scanned: 1, sent: 0 });
+    });
+    test('two fixed reminders due together both persist and are delivered with spacing', async () => {
+      await optIn();
+      const first = await reserveNotification(pool, message({}, 'reminder_morning_summary'));
+      const second = await reserveNotification(pool, message({}, 'morning_checkin'));
+      await deliverNotification(pool, first.notificationId);
+      expect(await deliverNotification(pool, second.notificationId)).toEqual({
+        ok: false,
+        skipped: true,
+        deferred: true,
+      });
+      expect(await inboxCount()).toBe(2);
+      await pool.query(
+        "UPDATE notification_push_outbox SET updated_at = NOW() - interval '6 minutes' WHERE notification_id = $1",
+        [first.notificationId]
+      );
+      await due(second.notificationId);
+      expect(await deliverNotification(pool, second.notificationId)).toEqual({ ok: true });
+      expect(sendPushNotification).toHaveBeenCalledTimes(2);
+    });
+    test('an imminent configured reminder is protected before its cron creates the queue row', async () => {
+      await optIn();
+      const auxiliary = await reserveNotification(pool, message({}, 'reengagement'));
+      getScheduledReminderHoldUntil.mockResolvedValue(new Date(Date.now() + 5 * 60000));
+      expect(await reserveNotification(pool, message({}, 'weekly_recap'))).toBeNull();
+      expect(await deliverNotification(pool, auxiliary.notificationId)).toEqual({
+        ok: false,
+        skipped: true,
+        deferred: true,
+      });
+      const fixed = await reserveNotification(pool, message({}, 'reminder_morning_summary'));
+      expect(await deliverNotification(pool, fixed.notificationId)).toEqual({ ok: true });
+      await sendAndSave(pool, userId, 'checkin_followup_urgent', 'Urgent', 'x', {
+        checkinId: 'priority',
+      });
+      expect(sendPushNotification.mock.calls.map((call) => call[3].type)).toEqual([
+        'reminder_morning_summary',
+        'checkin_followup_urgent',
+      ]);
+    });
+    test('a routine send in flight spaces other reminders but never delays an emergency', async () => {
+      await optIn();
+      const first = await reserveNotification(pool, message({}, 'morning_checkin'));
+      const next = await reserveNotification(pool, message({}, 'health_feed'));
+      const urgent = await reserveNotification(pool, message({}, 'emergency'));
+      let release, started;
+      const ready = new Promise((resolve) => {
+        started = resolve;
+      });
+      sendPushNotification.mockImplementationOnce(() => {
+        started();
+        return new Promise((resolve) => {
+          release = resolve;
+        });
+      });
+      const sending = deliverNotification(pool, first.notificationId);
+      await ready;
+      try {
+        expect(await deliverNotification(pool, next.notificationId)).toMatchObject({
+          skipped: true,
+          deferred: true,
+        });
+        expect(await deliverNotification(pool, urgent.notificationId)).toEqual({ ok: true });
+        expect(sendPushNotification).toHaveBeenCalledTimes(2);
+      } finally {
+        release({ ok: true });
+        await sending;
+      }
+    });
+    test('parallel notifications for different users do not block each other', async () => {
+      await optIn();
+      const otherId = (
+        await pool.query(
+          "INSERT INTO users (display_name, push_token) VALUES ('Other notification fixture', 'ExpoPushToken[other-fixture]') RETURNING id"
+        )
+      ).rows[0].id;
+      ids.push(otherId);
+      await pool.query(
+        'INSERT INTO user_notification_preferences (user_id, reminders_enabled) VALUES ($1,true)',
+        [otherId]
+      );
+      const first = await reserveNotification(pool, message({}, 'morning_checkin'));
+      const other = await reserveNotification(pool, {
+        ...message({}, 'morning_checkin'),
+        userId: otherId,
+      });
+      await Promise.all([
+        deliverNotification(pool, first.notificationId),
+        deliverNotification(pool, other.notificationId),
+      ]);
+      expect(sendPushNotification).toHaveBeenCalledTimes(2);
+    });
+    test('repeated client inbox writes are atomic, while different payloads remain distinct', async () => {
+      await Promise.all(
+        Array.from({ length: 25 }, (_, index) =>
+          saveInAppNotification(
+            pool,
+            userId,
+            'health_alert',
+            'x',
+            'x',
+            index % 2
+              ? { logId: 'one', severity: 'critical' }
+              : { severity: 'critical', logId: 'one' }
+          )
+        )
+      );
+      expect(await inboxCount()).toBe(1);
+      await saveInAppNotification(pool, userId, 'health_alert', 'x', 'x', {
+        logId: 'two',
+        severity: 'critical',
+      });
+      expect(await inboxCount()).toBe(2);
+      expect(sendPushNotification).not.toHaveBeenCalled();
+    });
+    test('doctor messages without a message ID deduplicate only identical content', async () => {
+      await sendAndSave(pool, userId, 'doctor_message', 'Doctor', 'First message');
+      await sendAndSave(pool, userId, 'doctor_message', 'Doctor', 'First message');
+      await sendAndSave(pool, userId, 'doctor_message', 'Doctor', 'Second message');
+      expect(await inboxCount()).toBe(2);
+      expect(sendPushNotification).toHaveBeenCalledTimes(2);
+    });
+    test('developer push testing cannot bypass atomic deduplication', async () => {
+      const responses = [];
+      await Promise.all(
+        Array.from({ length: 10 }, () => {
+          const res = {
+            json: (body) => {
+              responses.push(body);
+            },
+            status() {
+              return this;
+            },
+          };
+          return testNotificationHandler(
+            pool,
+            {
+              user: { id: userId },
+              body: { type: 'health_alert' },
+              headers: {},
+            },
+            res
+          );
+        })
+      );
+      expect(responses).toHaveLength(10);
+      expect(await inboxCount()).toBe(1);
+      expect(sendPushNotification).toHaveBeenCalledTimes(1);
+    });
+    test('legacy care-circle push helpers also reuse the durable event row', async () => {
+      // The normal care-circle writer does not include senderId; the helper
+      // does. Both still represent the same invitation, not two events.
+      await reserveNotification(
+        pool,
+        message({ invitationId: 'invitation-one' }, 'care_circle_invitation')
+      );
+      await Promise.all(
+        Array.from({ length: 10 }, () =>
+          notifyCareCircleInvitation(pool, userId, 'Sender fixture', 'invitation-one', 123)
+        )
+      );
+      expect(await inboxCount()).toBe(1);
+      expect(sendPushNotification).toHaveBeenCalledTimes(1);
+      await Promise.all(
+        Array.from({ length: 10 }, () =>
+          notifyCareCircleAccepted(pool, userId, 'Accepter fixture', 456)
+        )
+      );
+      expect(await inboxCount()).toBe(2);
+      expect(sendPushNotification).toHaveBeenCalledTimes(2);
     });
     test('rechecks the current device token rather than retaining an old account token', async () => {
       const row = await reserveNotification(pool, message({}, 'payment_failed'));

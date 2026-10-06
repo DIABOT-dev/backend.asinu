@@ -17,7 +17,13 @@ function response() {
 
 describe('createNotification', () => {
   test('creates the notification only for the authenticated user', async () => {
-    const pool = { query: jest.fn().mockResolvedValue({ rows: [] }) };
+    const pool = {
+      query: jest.fn(async (sql) => ({
+        rows: String(sql).includes('INSERT INTO notifications') ? [{ id: 1 }] : [],
+      })),
+      release: jest.fn(),
+    };
+    pool.connect = jest.fn(async () => pool);
     const req = {
       user: { id: 42 },
       body: {

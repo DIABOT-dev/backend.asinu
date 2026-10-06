@@ -1,5 +1,7 @@
 'use strict';
 
+const { getScheduledReminderHoldUntil } = require('../notification/notification-schedule.policy');
+
 const { t } = require('../../i18n');
 const {
   withNotificationTransaction,
@@ -157,6 +159,11 @@ async function dispatchPendingNotifications(pool) {
     }
     const reservation = await withNotificationTransaction(pool, job.user_id, async (client) => {
       const notificationId = await saveHealthFeedInAppNotification(client, job, payload);
+      if (await getScheduledReminderHoldUntil(client, job.user_id)) {
+        // Keep the feed item/job, but do not consume the last daily slot just
+        // before the user's configured reminder is created by another cron.
+        return { notificationId, deferred: true };
+      }
       const capped = await hasReachedDailyCap(client, job.user_id, notificationId);
       const inWindow = isWithinPushWindow(timezone);
       const eligible = job.reminders_enabled && !capped && inWindow;
@@ -172,6 +179,10 @@ async function dispatchPendingNotifications(pool) {
       }
       return { notificationId, capped, inWindow };
     });
+    if (reservation.deferred) {
+      skipped++;
+      continue;
+    }
     if (!job.reminders_enabled || reservation.capped) {
       await repo.markNotificationJobDispatched(
         pool,

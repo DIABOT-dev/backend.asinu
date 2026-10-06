@@ -54,6 +54,20 @@ describe('Expo push notification service', () => {
       invalidTokens: ['ExpoPushToken[expired-token]'],
     });
   });
+  test('does not send the same device token twice in one batch', async () => {
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ data: [{ status: 'ok', id: 'ticket-unique' }] }),
+    }));
+    await expect(
+      sendPushNotification(
+        ['ExpoPushToken[repeated]', 'ExpoPushToken[repeated]', null, 'not-a-token'],
+        'Thông báo',
+        'Nội dung'
+      )
+    ).resolves.toMatchObject({ ok: true });
+    expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toHaveLength(1);
+  });
   test.each([{}, { data: [] }, { data: [{}] }])(
     'does not report success for a malformed ticket response %j',
     async (result) => {

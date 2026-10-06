@@ -132,24 +132,6 @@ function nowVN() {
  * Set `options.push=false` only when a notification is intentionally limited
  * to the in-app inbox.
  */
-// Reminder types that should be spaced apart (5 min gap between any two)
-const REMINDER_TYPES = new Set([
-  'reminder_morning_summary',
-  'reminder_afternoon',
-  'reminder_evening_summary',
-  'reminder_log_morning',
-  'reminder_log_evening',
-  'reminder_glucose',
-  'reminder_bp',
-  'reminder_medication_morning',
-  'reminder_medication_evening',
-  'morning_checkin',
-  'streak_7',
-  'streak_14',
-  'streak_30',
-  'weekly_recap',
-]);
-
 async function sendAndSave(
   pool,
   userOrId,
@@ -169,7 +151,6 @@ async function sendAndSave(
       body,
       data,
       priority: overridePriority || TYPE_PRIORITY[type] || 'low',
-      spacingTypes: REMINDER_TYPES.has(type) ? [...REMINDER_TYPES] : [],
       push: options.push !== false,
       pushBody: typeof options.pushBody === 'string' ? options.pushBody : body,
     });
@@ -677,12 +658,13 @@ async function runBasicNotifications(pool, forceHour = null, forceMinute = null)
     return { ok: true, hour, minute, quietHours: true, results, totalSent, totalEligible: 0 };
   }
 
-  // Run sequentially so cross-type 5-min gap works (earlier job blocks later ones for same user)
+  // Fixed-time reminders are created before optional/system engagement jobs.
+  // Delivery owns the shared spacing; valid reminders stay queued, not dropped.
   const results = [];
-  results.push(await runTask('morning_checkin', () => runMorningCheckin(pool, hour)));
   results.push(await runTask('morning_summary', () => runMorningSummary(pool, hour, minute)));
   results.push(await runTask('afternoon', () => runAfternoon(pool, hour, minute)));
   results.push(await runTask('evening_summary', () => runEveningSummary(pool, hour, minute)));
+  results.push(await runTask('morning_checkin', () => runMorningCheckin(pool, hour)));
   results.push(await runTask('streak_milestones', () => runStreakMilestones(pool, hour, minute)));
   if (hour === 20 && minute < 5 && dow === 0)
     results.push(await runTask('weekly_recap', () => runWeeklyRecap(pool)));

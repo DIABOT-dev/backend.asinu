@@ -22,6 +22,7 @@ function createPool(
       if (normalized.includes('SELECT reminders_enabled')) {
         return { rows: [{ reminders_enabled: remindersEnabled }] };
       }
+      if (normalized.startsWith('SELECT np.reminders_enabled')) return { rows: [] };
       if (
         normalized.startsWith('SELECT 1 FROM notifications') ||
         normalized.startsWith('SELECT id FROM notifications')

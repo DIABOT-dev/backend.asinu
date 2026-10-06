@@ -6,6 +6,10 @@
 const { NOTIF_MAP } = require('../constants');
 const notificationService = require('../services/notification/notification.service');
 const {
+  reserveNotification,
+  deliverNotification,
+} = require('../services/notification/notification-dispatch.service');
+const {
   runEngagementNotifications,
   previewEngagementNotification,
 } = require('../services/notification/engagement.notification.service');
@@ -21,7 +25,6 @@ const { t, getLang } = require('../i18n');
  * DEV — Send a test push notification
  */
 async function testNotificationHandler(pool, req, res) {
-  const { sendPushNotification } = require('../services/notification/push.notification.service');
   const { type } = req.body;
   if (!type) {
     return res.status(400).json({
@@ -53,21 +56,24 @@ async function testNotificationHandler(pool, req, res) {
     const lang = getLang(req);
     const title = t(notifKeys[0], lang);
     const body = t(notifKeys[1], lang);
-    const result = await sendPushNotification([token], title, body, { type });
-
-    // Also save to in-app notifications
-    await notificationService.saveInAppNotification(
-      pool,
-      req.user.id,
+    // The developer tester must use the same deduplication and durable push
+    // path as production jobs, not a separate direct-send bypass.
+    const reservation = await reserveNotification(pool, {
+      userId: req.user.id,
       type,
       title,
       body,
-      { type, test: true }
-    );
+      data: { type, test: true },
+    });
+    const result = reservation
+      ? await deliverNotification(pool, reservation.notificationId)
+      : { ok: false, skipped: true };
 
     return res.json({ ok: true, type, title, body, pushResult: result });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -156,7 +162,10 @@ async function markAsRead(pool, req, res) {
     const statusCode = result.statusCode || 500;
     return res.status(statusCode).json({
       ...result,
-      error: t(result.statusCode === 404 ? 'notification.not_found' : 'notification.cannot_mark_read', getLang(req)),
+      error: t(
+        result.statusCode === 404 ? 'notification.not_found' : 'notification.cannot_mark_read',
+        getLang(req)
+      ),
       code: result.statusCode === 404 ? 'NOTIFICATION_NOT_FOUND' : 'NOTIFICATION_READ_FAILED',
     });
   }
@@ -191,7 +200,9 @@ async function getNotificationPreferences(pool, req, res) {
     const prefs = await getPreferences(pool, req.user.id);
     return res.status(200).json({ ok: true, ...prefs });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -249,7 +260,9 @@ async function updateNotificationPreferences(pool, req, res) {
     const prefs = await getPreferences(pool, req.user.id);
     return res.status(200).json({ ok: true, ...prefs });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -262,7 +275,9 @@ async function previewEngagement(pool, req, res) {
     const result = await previewEngagementNotification(pool, req.user.id);
     return res.status(200).json({ ok: true, ...result });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -274,11 +289,12 @@ let _engagementRunning = false;
  * Run AI-driven engagement notifications for inactive users (cron)
  */
 async function runEngagement(pool, req, res) {
-  if (_engagementRunning) return res.status(429).json({
-    ok: false,
-    error: t('notification.cron_busy', getLang(req)),
-    code: 'NOTIFICATION_JOB_BUSY',
-  });
+  if (_engagementRunning)
+    return res.status(429).json({
+      ok: false,
+      error: t('notification.cron_busy', getLang(req)),
+      code: 'NOTIFICATION_JOB_BUSY',
+    });
   _engagementRunning = true;
   try {
     const secret = process.env.CRON_SECRET;
@@ -289,7 +305,9 @@ async function runEngagement(pool, req, res) {
     const result = await runEngagementNotifications(pool);
     return res.status(200).json(result);
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   } finally {
     _engagementRunning = false;
   }
@@ -300,11 +318,12 @@ async function runEngagement(pool, req, res) {
  * Run basic scheduled notifications (cron)
  */
 async function runBasic(pool, req, res) {
-  if (_basicRunning) return res.status(429).json({
-    ok: false,
-    error: t('notification.cron_busy', getLang(req)),
-    code: 'NOTIFICATION_JOB_BUSY',
-  });
+  if (_basicRunning)
+    return res.status(429).json({
+      ok: false,
+      error: t('notification.cron_busy', getLang(req)),
+      code: 'NOTIFICATION_JOB_BUSY',
+    });
   const secret = process.env.CRON_SECRET;
   if (!secret || req.headers['x-cron-secret'] !== secret) {
     return res.status(401).json({ ok: false, error: t('error.unauthorized', getLang(req)) });
@@ -327,7 +346,9 @@ async function runBasic(pool, req, res) {
     const result = await runBasicNotifications(pool, forceHour, forceMinute);
     return res.status(200).json(result);
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   } finally {
     _basicRunning = false;
   }
@@ -353,7 +374,9 @@ async function deleteOne(pool, req, res) {
     }
     return res.json({ ok: true });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 
@@ -362,7 +385,9 @@ async function deleteAll(pool, req, res) {
     await notificationService.deleteAllNotifications(pool, req.user.id);
     return res.json({ ok: true });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+    return res
+      .status(500)
+      .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
   }
 }
 

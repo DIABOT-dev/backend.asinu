@@ -3,6 +3,7 @@
 const logger = require('../../lib/logger');
 
 const DEFAULT_DAILY_CAP = 3;
+const ROUTINE_SPACING_MINUTES = 5;
 const DAILY_CAP_TYPES = new Set([
   'health_feed',
   'morning_checkin',
@@ -93,6 +94,8 @@ async function canSendNonUrgent(pool, userId, type) {
 module.exports = {
   DAILY_CAP_TYPES,
   DEFAULT_DAILY_CAP,
+  OPT_IN_TYPES,
+  ROUTINE_SPACING_MINUTES,
   canSendNonUrgent,
   getDailyCap,
   hasReachedDailyCap,
