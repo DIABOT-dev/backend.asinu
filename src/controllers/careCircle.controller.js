@@ -10,6 +10,7 @@ const {
   careCircleQrInvitationSchema,
 } = require('../validation/validation.schemas');
 const caregiverView = require('../services/care-circle/caregiver-view.service');
+const { healthAccessSchema, memberCalendarSchema } = require('../validation/care-circle-health.schemas');
 const {
   createInvitation: serviceCreateInvitation,
   createQrToken: serviceCreateQrToken,
@@ -23,6 +24,7 @@ const {
   deleteConnection: serviceDeleteConnection,
   updateConnection: serviceUpdateConnection,
   updateConnectionPermissions: serviceUpdateConnectionPermissions,
+  updateHealthAccess: serviceUpdateHealthAccess,
 } = require('../services/care-circle/careCircle.service');
 
 // =====================================================
@@ -270,9 +272,10 @@ async function updateConnectionPermissions(pool, req, res) {
  * Caregiver view patient logs (requires can_view_logs permission)
  */
 async function getCaregiverLogs(pool, req, res) {
+  res.set('Cache-Control', 'private, no-store');
   const caregiverId = req.user.id;
-  const patientId = parseInt(req.params.patientId);
-  if (!patientId) {
+  const patientId = Number(req.params.patientId);
+  if (!Number.isSafeInteger(patientId) || patientId <= 0) {
     return res.status(400).json({ ok: false, error: t('error.invalid_patient_id', getLang(req)) });
   }
 
@@ -294,9 +297,10 @@ async function getCaregiverLogs(pool, req, res) {
  * Caregiver view patient's check-in history (requires can_view_logs permission)
  */
 async function getCaregiverCheckins(pool, req, res) {
+  res.set('Cache-Control', 'private, no-store');
   const caregiverId = req.user.id;
-  const patientId = parseInt(req.params.patientId);
-  if (!patientId) {
+  const patientId = Number(req.params.patientId);
+  if (!Number.isSafeInteger(patientId) || patientId <= 0) {
     return res.status(400).json({ ok: false, error: t('error.invalid_patient_id', getLang(req)) });
   }
 
@@ -318,6 +322,7 @@ async function getCaregiverCheckins(pool, req, res) {
  * Care Circle Dashboard — caregiver views member's health summary
  */
 async function getMemberHealthSummary(pool, req, res) {
+  res.set('Cache-Control', 'private, no-store');
   const caregiverId = req.user.id;
   const memberId = Number(req.params.memberId);
   if (!Number.isSafeInteger(memberId) || memberId <= 0) {
@@ -333,6 +338,28 @@ async function getMemberHealthSummary(pool, req, res) {
     console.error('[care-circle] health summary failed:', err);
     return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
   }
+}
+
+async function updateHealthAccess(pool, req, res) {
+  const parsed = healthAccessSchema.safeParse(req.body);
+  if (!parsed.success || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+  }
+  const result = await serviceUpdateHealthAccess(pool, req.params.id, req.user.id, parsed.data.can_view_logs, getLang(req));
+  return res.status(result.ok ? 200 : result.statusCode || 500).json(result);
+}
+
+async function getMemberHealthCalendar(pool, req, res) {
+  res.set('Cache-Control', 'private, no-store');
+  const parsed = memberCalendarSchema.safeParse({ memberId: req.params.memberId, month: req.query.month });
+  if (!parsed.success) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
+  }
+  const result = await caregiverView.memberHealthCalendar(pool, req.user.id, parsed.data.memberId, parsed.data.month);
+  if (!result) {
+    return res.status(403).json({ ok: false, code: 'HEALTH_ACCESS_DENIED', error: t('error.no_permission_logs', getLang(req)) });
+  }
+  return res.json({ ok: true, ...result });
 }
 
 module.exports = {
@@ -351,4 +378,6 @@ module.exports = {
   getCaregiverLogs,
   getCaregiverCheckins,
   getMemberHealthSummary,
+  getMemberHealthCalendar,
+  updateHealthAccess,
 };

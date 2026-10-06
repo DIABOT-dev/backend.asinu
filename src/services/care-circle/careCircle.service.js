@@ -58,14 +58,15 @@ const emitCareCircleChange = (pool, connection, status = connection?.status) => 
 /**
  * Normalize permissions object
  * @param {Object} input - Raw permissions input
+ * @param {boolean} defaultCanViewLogs - Default for an omitted viewing permission
  * @returns {Object} - Normalized permissions
  */
-function normalizePermissions(input) {
+function normalizePermissions(input, defaultCanViewLogs = DEFAULT_PERMISSIONS.can_view_logs) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
-    return { ...DEFAULT_PERMISSIONS };
+    return { ...DEFAULT_PERMISSIONS, can_view_logs: defaultCanViewLogs };
   }
   return {
-    can_view_logs: Boolean(input.can_view_logs),
+    can_view_logs: input.can_view_logs === undefined ? defaultCanViewLogs : input.can_view_logs === true,
     can_receive_alerts: Boolean(input.can_receive_alerts),
     can_ack_escalation: Boolean(input.can_ack_escalation),
   };
@@ -762,7 +763,8 @@ async function updateConnectionPermissions(
   newPermissions,
   lang = 'vi'
 ) {
-  const perms = normalizePermissions(newPermissions);
+  // The invitation default must not re-enable revoked access in an existing connection.
+  const perms = normalizePermissions(newPermissions, false);
   try {
     // Only the original requester (the user who invited and set the
     // initial permissions) is allowed to change them later. Without this
@@ -845,14 +847,42 @@ async function updateConnectionPermissions(
  * @returns {Promise<boolean>} - true if access granted
  */
 async function verifyCaregiverAccess(pool, caregiverId, patientId) {
+  if (Number(caregiverId) === Number(patientId)) return false;
   const { rows } = await pool.query(
     `SELECT id FROM user_connections
      WHERE status = 'accepted'
-       AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))
-       AND COALESCE((permissions->>'can_view_logs')::boolean, false) = true`,
+       AND LEAST(requester_id, addressee_id) = LEAST($1::integer, $2::integer)
+       AND GREATEST(requester_id, addressee_id) = GREATEST($1::integer, $2::integer)
+       AND CASE WHEN requester_id = $1
+         THEN permissions->'can_view_logs' = 'true'::jsonb
+         ELSE addressee_can_view_logs
+       END
+     LIMIT 1`,
     [patientId, caregiverId]
   );
   return rows.length > 0;
+}
+
+/** Each participant can change only consent for their OWN health profile. */
+async function updateHealthAccess(pool, connectionId, ownerId, canViewLogs, lang = 'vi') {
+  const { rows } = await pool.query(
+    `UPDATE user_connections
+     SET permissions = CASE WHEN requester_id = $2
+           THEN jsonb_set(permissions, '{can_view_logs}', to_jsonb($3::boolean))
+           ELSE permissions END,
+         addressee_can_view_logs = CASE WHEN addressee_id = $2
+           THEN $3::boolean ELSE addressee_can_view_logs END,
+         updated_at = NOW()
+     WHERE id = $1 AND status = 'accepted'
+       AND (requester_id = $2 OR addressee_id = $2)
+     RETURNING id, requester_id, addressee_id, status, permissions,
+               addressee_can_view_logs, updated_at`,
+    [connectionId, ownerId, canViewLogs]
+  );
+  if (!rows.length) {
+    return { ok: false, statusCode: 404, error: t('careCircle.connection_not_found', lang) };
+  }
+  return { ok: true, connection: rows[0] };
 }
 
 /**
@@ -927,6 +957,7 @@ module.exports = {
   deleteConnection,
   updateConnection,
   updateConnectionPermissions,
+  updateHealthAccess,
 
   // Caregiver data access
   verifyCaregiverAccess,

@@ -41,4 +41,26 @@ describe('caregiver view authorization', () => {
       report: { checkinDays: 3, totalDays: 7, sessions: [], highlights: [] },
     });
   });
+
+  test('does not fetch a monthly report or name without consent', async () => {
+    circle.verifyCaregiverAccess.mockResolvedValueOnce(false);
+    await expect(view.memberHealthCalendar(pool, 7, 8, '2026-10')).resolves.toBeNull();
+    expect(checkin.getHealthReport).not.toHaveBeenCalled();
+    expect(circle.getPatientName).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    ['2024-02', '2024-03-01', 29],
+    ['2025-02', '2025-03-01', 28],
+    ['2026-12', '2027-01-01', 31],
+  ])('loads the exact month %s, with an exclusive end date', async (month, end, days) => {
+    circle.verifyCaregiverAccess.mockResolvedValueOnce(true);
+    circle.getPatientName.mockResolvedValueOnce('Parent');
+    checkin.getHealthReport.mockResolvedValueOnce({ sessions: [], totalDays: days });
+    const result = await view.memberHealthCalendar(pool, 7, 8, month);
+    expect(checkin.getHealthReport).toHaveBeenCalledWith(pool, 8, days, {
+      startDate: `${month}-01`, endDateExclusive: end, totalDays: days,
+    });
+    expect(result).toEqual({ patientName: 'Parent', report: { sessions: [], totalDays: days, period: 'month', month } });
+  });
 });

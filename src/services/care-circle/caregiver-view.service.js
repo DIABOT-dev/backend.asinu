@@ -47,4 +47,21 @@ async function memberHealthSummary(pool, caregiverId, memberId) {
   };
 }
 
-module.exports = { caregiverLogs, caregiverCheckins, memberHealthSummary };
+async function memberHealthCalendar(pool, caregiverId, memberId, month) {
+  // Never fetch or cache another user's medical data before checking consent.
+  if (!(await verifyCaregiverAccess(pool, caregiverId, memberId))) return null;
+  const [year, monthNumber] = month.split('-').map(Number);
+  const nextMonth = new Date(Date.UTC(year, monthNumber, 1));
+  const dateRange = {
+    startDate: `${month}-01`,
+    endDateExclusive: nextMonth.toISOString().slice(0, 10),
+    totalDays: new Date(Date.UTC(year, monthNumber, 0)).getUTCDate(),
+  };
+  const [report, patientName] = await Promise.all([
+    checkinService.getHealthReport(pool, memberId, dateRange.totalDays, dateRange),
+    getPatientName(pool, memberId),
+  ]);
+  return { patientName, report: { ...report, period: 'month', month } };
+}
+
+module.exports = { caregiverLogs, caregiverCheckins, memberHealthSummary, memberHealthCalendar };

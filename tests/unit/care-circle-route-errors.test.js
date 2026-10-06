@@ -11,6 +11,7 @@ jest.mock('../../src/middleware/auth.middleware', () => ({
 }));
 jest.mock('../../src/middleware/care-circle.gate.middleware', () => ({
   careCircleEnabled: (_req, _res, next) => next(),
+  caregiverViewLogs: (_req, _res, next) => next(),
 }));
 jest.mock('../../src/controllers/careCircle.controller', () => ({
   createInvitation: jest.fn().mockRejectedValue(new Error('database unavailable')),
@@ -25,6 +26,8 @@ jest.mock('../../src/controllers/careCircle.controller', () => ({
   deleteConnection: jest.fn(),
   updateConnection: jest.fn(),
   updateConnectionPermissions: jest.fn(),
+  updateHealthAccess: jest.fn(),
+  getMemberHealthCalendar: jest.fn(),
 }));
 
 const careCircleRoutes = require('../../src/routes/careCircle.routes');
