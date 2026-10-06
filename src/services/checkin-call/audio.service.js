@@ -1,5 +1,6 @@
 const { createHash } = require('crypto');
 const { t } = require('../../i18n');
+const { synthesizeSpeech, voiceMimeType } = require('../voice/vieneu.service');
 
 const MAX_DYNAMIC_TEXT_LENGTH = 1600;
 
@@ -48,9 +49,7 @@ function synthesisTimeoutMs() {
 }
 
 function voiceForLanguage(language) {
-  return language === 'en'
-    ? process.env.VIENEU_VOICE_EN
-    : process.env.VIENEU_VOICE || 'Ngọc Lan';
+  return language === 'en' ? process.env.VIENEU_VOICE_EN : process.env.VIENEU_VOICE || 'Ngọc Lan';
 }
 
 // Opaque public revision: never include API keys or user data in this hash.
@@ -60,63 +59,43 @@ function audioVersion(requestedLanguage = 'vi', selectedVoice) {
   const language = normalizeLanguage(requestedLanguage);
   const voice = selectedVoice ?? voiceForLanguage(language) ?? '';
   return createHash('sha256')
-    .update(JSON.stringify({
-      schema: 'checkin-call-audio-v2',
-      provider: 'vieneu',
-      format: 'mp3',
-      language,
-      voice,
-      revision: process.env.CHECKIN_CALL_AUDIO_REVISION || '1',
-      phrases: AUDIO_KEYS.map((key) => PHRASES[key][language]),
-    }))
+    .update(
+      JSON.stringify({
+        schema: 'checkin-call-audio-v2',
+        provider: 'vieneu',
+        format: voiceMimeType(voice),
+        language,
+        voice,
+        revision: process.env.CHECKIN_CALL_AUDIO_REVISION || '1',
+        phrases: AUDIO_KEYS.map((key) => PHRASES[key][language]),
+      })
+    )
     .digest('hex');
 }
 
+function audioMimeType(requestedLanguage = 'vi') {
+  return voiceMimeType(voiceForLanguage(normalizeLanguage(requestedLanguage)));
+}
+
 async function requestSpeech(phrase, voice, version) {
-  if (!process.env.VIENEU_API_KEY) {
-    throw audioError('VieNeu is not configured', 503, 'checkinCall.error.audio_unavailable');
-  }
-  let response;
   try {
-    response = await fetch('https://api.vieneu.io/api/v1/audio/speech', {
-      method: 'POST',
-      headers: {
-        Authorization: 'Bearer ' + process.env.VIENEU_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        input: phrase,
-        voice,
-        response_format: 'mp3',
-      }),
-      signal: AbortSignal.timeout(synthesisTimeoutMs()),
+    const data = await synthesizeSpeech({
+      text: phrase,
+      voice,
+      apiKey: process.env.VIENEU_API_KEY,
+      timeoutMs: synthesisTimeoutMs(),
     });
+    return { ...data, audio_version: version };
   } catch (error) {
-    throw audioError(
-      error?.name === 'TimeoutError' || error?.name === 'AbortError'
-        ? 'VieNeu timed out'
-        : 'VieNeu unavailable',
-      503,
-      'checkinCall.error.audio_unavailable'
-    );
+    throw audioError(error.message, 503, 'checkinCall.error.audio_unavailable');
   }
-  if (!response.ok) throw audioError('VieNeu failed', 503, 'checkinCall.error.audio_unavailable');
-  const data = Buffer.from(await response.arrayBuffer());
-  if (!data.length || data.length > 2_000_000) {
-    throw audioError('Invalid VieNeu audio', 503, 'checkinCall.error.audio_unavailable');
-  }
-  const responseMimeType = response.headers?.get?.('content-type');
-  return {
-    audio_data: data,
-    mime_type: responseMimeType?.startsWith('audio/') ? responseMimeType : 'audio/mpeg',
-    audio_version: version,
-  };
 }
 
 async function synthesizeText(input, requestedLanguage = 'vi') {
   const language = normalizeLanguage(requestedLanguage);
   const phrase = typeof input === 'string' ? input.replace(/\s+/g, ' ').trim() : '';
-  if (!phrase) throw audioError('Conclusion text is required', 400, 'checkinCall.error.conclusion_required');
+  if (!phrase)
+    throw audioError('Conclusion text is required', 400, 'checkinCall.error.conclusion_required');
   if (phrase.length > MAX_DYNAMIC_TEXT_LENGTH) {
     throw audioError('Conclusion text is too long', 400, 'checkinCall.error.conclusion_too_long');
   }
@@ -181,6 +160,7 @@ module.exports = {
   MAX_DYNAMIC_TEXT_LENGTH,
   PHRASES,
   audioVersion,
+  audioMimeType,
   getAudio,
   normalizeLanguage,
   prewarm,

@@ -67,7 +67,12 @@ function createCheckinCallController(pool) {
     getAudioConfig: handle(async (req, res) => {
       res.set('Cache-Control', 'no-store');
       const language = getLang(req);
-      return res.json({ ok: true, version: audio.audioVersion(language), language });
+      return res.json({
+        ok: true,
+        version: audio.audioVersion(language),
+        language,
+        mimeType: audio.audioMimeType(language),
+      });
     }),
     getVoicePreferences: handle(async (req, res) => {
       res.set('Cache-Control', 'no-store');

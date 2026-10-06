@@ -1,6 +1,7 @@
 'use strict';
 
 jest.mock('../../src/services/checkin-call/audio.service', () => ({
+  audioMimeType: jest.fn(() => 'audio/mpeg'),
   audioVersion: jest.fn((language) => 'revision-' + language),
   getAudio: jest.fn(),
   synthesizeText: jest.fn(),
@@ -45,7 +46,7 @@ beforeEach(() => jest.clearAllMocks());
 test.each(['vi', 'en'])('metadata returns the current %s revision without invoking TTS', async (language) => {
   const res = response();
   await createCheckinCallController({}).getAudioConfig(request(language), res);
-  expect(res.body).toEqual({ ok: true, version: 'revision-' + language, language });
+  expect(res.body).toEqual({ ok: true, version: 'revision-' + language, language, mimeType: 'audio/mpeg' });
   expect(res.headers['Cache-Control']).toBe('no-store');
   expect(audio.getAudio).not.toHaveBeenCalled();
   expect(audio.synthesizeText).not.toHaveBeenCalled();

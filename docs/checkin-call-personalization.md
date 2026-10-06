@@ -15,7 +15,7 @@ Ba lựa chọn dùng tên, nhắc số liệu và thời tiết đều **tắt 
 3. Giữ ba nút trả lời hiện tại: Tôi vẫn ổn / Tôi hơi mệt / Tôi cần hỗ trợ ngay. Có thể bấm ngay, không phải chờ đọc xong. Việc bấm lựa chọn ngắt tiếng cũ ngay, kể cả khi tải âm thanh hoặc chờ API.
 4. Thời tiết chỉ đọc thêm sau khi ghi nhận **Tôi vẫn ổn**, không chen vào bước cần hỗ trợ hay cảnh báo khẩn cấp. Thiếu dự báo thì bỏ qua. Dự báo là cho khu vực đã chọn, không tuyên bố đó là địa chỉ nhà hoặc số đo nhiệt độ trực tiếp tại thiết bị.
 
-Tiếng Việt dùng dịch vụ VieNeu và giọng cấu hình qua `VIENEU_VOICE`, hiện chọn Tuấn Anh. Không tự chuyển sang giọng Apple khi tải âm thanh tiếng Việt thất bại; vẫn giữ các nút phản hồi và nội dung chữ. Tiếng Anh giữ cơ chế hiện tại: dùng giọng tiếng Anh nếu đã cấu hình, nếu không thì giọng thiết bị tiếng Anh. Các nhánh cảnh báo tín hiệu sớm và thông báo người thân giữ lời cảnh báo/nghiệp vụ đang có.
+Tiếng Việt dùng dịch vụ VieNeu và giọng cấu hình qua `VIENEU_VOICE`, hiện chọn giọng nhân bản riêng Asinu Tuan Anh. Không tự chuyển sang giọng Apple khi tải âm thanh tiếng Việt thất bại; vẫn giữ các nút phản hồi và nội dung chữ. Tiếng Anh giữ cơ chế hiện tại: dùng giọng tiếng Anh nếu đã cấu hình, nếu không thì giọng thiết bị tiếng Anh. Các nhánh cảnh báo tín hiệu sớm và thông báo người thân giữ lời cảnh báo/nghiệp vụ đang có.
 
 ## Thời tiết và dữ liệu
 
@@ -25,7 +25,7 @@ Tiếng Việt dùng dịch vụ VieNeu và giọng cấu hình qua `VIENEU_VOIC
 - Có User-Agent nhận diện app, timeout 1,8 giây, cache theo khu vực và Expires/Last-Modified, gộp request đồng thời, tối đa bốn request nguồn đồng thời. Lỗi thường được giữ 5 phút; 403/429 tạm dừng lấy mới một giờ. Dự báo không gần thời điểm hiện tại được bỏ qua.
 - Ghi nguồn MET Norway/CC BY 4.0 và thời điểm dự báo; có liên kết giấy phép trong cấu hình. Nguồn: https://api.met.no/doc/TermsOfService và https://api.met.no/doc/License.
 - Gửi VieNeu chỉ văn bản cần đọc. Có giải thích riêng trước khi đồng ý dùng tên hoặc số liệu; không gửi toàn bộ hồ sơ.
-- Nội dung cá nhân không đưa vào PushKit, CallKit hoặc lời nhắc màn hình khóa. Lời nhắc khóa máy là bản ghi chung đóng gói trong app, đã tạo lại bằng Tuấn Anh cho bản app mới. App ngắt tiếng khi rời màn hình/vào nền.
+- Nội dung cá nhân không đưa vào PushKit, CallKit hoặc lời nhắc màn hình khóa. Lời nhắc khóa máy là bản ghi chung đóng gói trong app, đã tạo lại bằng giọng nhân bản riêng Asinu Tuan Anh cho bản app mới. App ngắt tiếng khi rời màn hình/vào nền.
 - Lời đọc và transcript có version khớp nhau; nếu snapshot thay đổi, backend trả 409 thay vì phát nội dung khác. Cache âm thanh có định danh người nhận/cuộc gọi/version và thời hạn; snapshot không lưu trong bảng âm thanh dùng chung. Tắt lựa chọn rồi lưu có hiệu lực với lời nhắc tiếp theo, không xóa lịch sử sức khỏe.
 
 ## API và triển khai
@@ -41,7 +41,7 @@ Các endpoint đều nằm sau middleware xác thực:
 
 Không cấp dữ liệu USER cho người thân hay người khác, dù có ID attempt. Notice/audio dùng limiter tổng hợp âm thanh hiện tại. Response riêng tư có `Cache-Control: no-store`.
 
-Migration `103_checkin_call_voice_preferences.sql` tạo bảng riêng liên kết `users` với `ON DELETE CASCADE`, không sửa cấu hình/lịch sử cũ. Triển khai **backend trước**, chạy migrator chuẩn qua quy trình deploy hiện tại. Giữ `VIENEU_API_KEY`, đặt `VIENEU_VOICE=Tuấn Anh`; `CHECKIN_WEATHER_USER_AGENT` là tùy chọn nếu muốn thay User-Agent bằng URL/email liên hệ của đơn vị. Không đưa khóa vào app. Cơ chế phiên bản/cache được mô tả trong [checkin-call-audio-version.md](checkin-call-audio-version.md).
+Migration `103_checkin_call_voice_preferences.sql` tạo bảng riêng liên kết `users` với `ON DELETE CASCADE`, không sửa cấu hình/lịch sử cũ. Triển khai **backend trước**, chạy migrator chuẩn qua quy trình deploy hiện tại. Giữ `VIENEU_API_KEY`, đặt `VIENEU_VOICE=clone_b935a451-7d65-4b73-a083-d46e56c47d4f`; `CHECKIN_WEATHER_USER_AGENT` là tùy chọn nếu muốn thay User-Agent bằng URL/email liên hệ của đơn vị. Không đưa khóa vào app. Cơ chế phiên bản/cache được mô tả trong [checkin-call-audio-version.md](checkin-call-audio-version.md).
 
 Sau backend, build/phân phối app mới. Purpose string vị trí iOS đã bổ sung mục đích thời tiết nên cần bản iOS mới để hệ thống hiển thị lời xin quyền mới. Chỉ cập nhật JavaScript không thay được thông báo quyền native trong bản cũ.
 

@@ -29,6 +29,7 @@ jest.mock('../../src/services/checkin-call/checkin-call.service', () => ({
 jest.mock('../../src/services/checkin-call/audio.service', () => ({
   getAudio: jest.fn(),
   synthesizeText: jest.fn(),
+  audioMimeType: jest.fn(() => 'audio/mpeg'),
   audioVersion: jest.fn(() => 'voice-v1'),
 }));
 jest.mock('../../src/services/checkin-call/access.service', () => ({
@@ -214,7 +215,7 @@ describe('check-in call HTTP routes', () => {
     const response = await request(app).get('/checkin-call/audio-config')
       .set('accept-language', 'en').expect(200);
     expect(audio.audioVersion).toHaveBeenCalledWith('en');
-    expect(response.body).toEqual({ ok: true, version: 'voice-v1', language: 'en' });
+    expect(response.body).toEqual({ ok: true, version: 'voice-v1', language: 'en', mimeType: 'audio/mpeg' });
     expect(response.headers['cache-control']).toBe('no-store');
     expect(router.stack.find((layer) => layer.name === 'requireAuth')).toBeDefined();
   });

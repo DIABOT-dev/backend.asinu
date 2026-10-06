@@ -6,10 +6,11 @@ App chỉ dùng lại file đã xác minh thuộc phiên bản hiện tại. N�
 
 ## Cấu hình giọng
 
-Catalogue VieNeu v4 đã được kiểm tra trực tiếp ngày 06/10/2026. Giọng Tuấn Anh có `id: "Tuấn Anh"`, nam miền Bắc. API tổng hợp trên VPS trả `200`, định dạng `audio/mpeg` cho giọng này.
+Dùng giọng nhân bản riêng **Asinu Tuan Anh**, `id: clone_b935a451-7d65-4b73-a083-d46e56c47d4f`, nam miền Bắc, engine v4. Đây là giọng của mẫu người dùng đã nghe và chọn; giọng catalogue cùng tên có ID `Tuấn Anh` là một giọng khác.
 
+Adapter VieNeu chọn `/api/v1/tts` cho `clone_*`, chờ job hoàn tất rồi tải file WAV bằng URL HTTPS không kèm khóa API. Giọng catalogue vẫn dùng `/api/v1/audio/speech` và MP3. `/audio-config` trả thêm `mimeType`; app lưu đúng đuôi WAV/MP3 và kiểm tra phiên bản thật của response. Các job lỗi, hết thời gian chờ hoặc trả sai giọng không được đổi sang giọng catalogue.
 ```dotenv
-VIENEU_VOICE=Tuấn Anh
+VIENEU_VOICE=clone_b935a451-7d65-4b73-a083-d46e56c47d4f
 CHECKIN_CALL_AUDIO_REVISION=1
 ```
 
@@ -19,7 +20,7 @@ Giọng tiếng Anh chưa cấu hình thì dùng cơ chế tiếng Anh hiện t�
 
 ## iPhone khóa máy
 
-Hướng dẫn mở app trong `VoipCallManager.swift` dùng bản ghi đóng gói để hoạt động khi máy khóa hoặc mạng không có. Bản ghi này đã được tạo lại bằng Tuấn Anh; script tạo bản ghi đọc `VIENEU_VOICE` từ cấu hình backend. Nó không cập nhật qua API: cần build app mới để thay bản ghi khi khóa máy. Bản app đã cài vẫn giữ bản ghi cũ.
+Hướng dẫn mở app trong `VoipCallManager.swift` dùng bản ghi đóng gói để hoạt động khi máy khóa hoặc mạng không có. Bản ghi này đã được tạo lại bằng giọng nhân bản Asinu Tuan Anh; script tạo bản ghi đọc `VIENEU_VOICE` từ cấu hình backend. Nó không cập nhật qua API: cần build app mới để thay bản ghi khi khóa máy. Bản app đã cài vẫn giữ bản ghi cũ.
 
 Bốn loại âm thanh nhận qua API đổi giọng theo backend sau khi người dùng cài app có cơ chế phiên bản. Không cần build lại app cho những lần đổi giọng của các loại này.
 
@@ -40,4 +41,4 @@ npm run test:checkin-native
 npm run test:api-contract
 ```
 
-Kiểm tra ngày 06/10/2026: 107 ca backend, 84 ca âm thanh/thao tác app, 10 ca giao diện, TypeScript và hợp đồng API qua. Kiểm thử native kiểm tra bản ghi, checksum, mức âm thanh và vòng đời CallKit/PushKit; cần nghe lại trên iPhone thật sau khi phát hành.
+Kiểm tra ngày 06/10/2026: 119 ca backend, 89 ca âm thanh/thao tác app, 10 ca giao diện, TypeScript và hợp đồng API qua. Kiểm thử native kiểm tra bản ghi, checksum, mức âm thanh và vòng đời CallKit/PushKit; cần nghe lại trên iPhone thật sau khi phát hành.
