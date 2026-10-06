@@ -3,6 +3,7 @@ const { t } = require('../../i18n');
 const { synthesizeSpeech, voiceMimeType } = require('../voice/vieneu.service');
 
 const MAX_DYNAMIC_TEXT_LENGTH = 1600;
+const DEFAULT_ASINU_VOICE = 'clone_b935a451-7d65-4b73-a083-d46e56c47d4f';
 
 const AUDIO_KEYS = Object.freeze([
   'user_prompt',
@@ -48,8 +49,10 @@ function synthesisTimeoutMs() {
   return Number.isFinite(configured) ? Math.max(1000, Math.min(configured, 60000)) : 20000;
 }
 
-function voiceForLanguage(language) {
-  return language === 'en' ? process.env.VIENEU_VOICE_EN : process.env.VIENEU_VOICE || 'Ngọc Lan';
+function voiceForLanguage() {
+  // One Asinu Tuấn Anh identity for all prompts/locales. Language still
+  // versions the transcript/cache, but must not select another narrator.
+  return process.env.VIENEU_VOICE?.trim() || DEFAULT_ASINU_VOICE;
 }
 
 // Opaque public revision: never include API keys or user data in this hash.
@@ -115,14 +118,6 @@ async function getAudio(pool, key, requestedLanguage = 'vi') {
   const phrase = PHRASES[key]?.[language];
   if (!phrase) throw audioError('Unknown audio key', 404, 'checkinCall.error.unknown_audio');
   const voice = voiceForLanguage(language);
-  // Do not synthesize English with a Vietnamese-only voice. The app will use
-  // its en-US system voice until an English-capable backend voice is configured.
-  if (!voice)
-    throw audioError(
-      'English TTS voice is not configured',
-      503,
-      'checkinCall.error.audio_unavailable'
-    );
   const localizedAudioKey = language + ':' + key;
   const version = audioVersion(language, voice);
   const hash = createHash('sha256')
@@ -144,7 +139,6 @@ async function getAudio(pool, key, requestedLanguage = 'vi') {
 async function prewarm(pool) {
   if (!process.env.VIENEU_API_KEY) return;
   for (const language of ['vi', 'en']) {
-    if (language === 'en' && !process.env.VIENEU_VOICE_EN) continue;
     for (const key of AUDIO_KEYS) {
       try {
         await getAudio(pool, key, language);
@@ -157,6 +151,7 @@ async function prewarm(pool) {
 
 module.exports = {
   AUDIO_KEYS,
+  DEFAULT_ASINU_VOICE,
   MAX_DYNAMIC_TEXT_LENGTH,
   PHRASES,
   audioVersion,

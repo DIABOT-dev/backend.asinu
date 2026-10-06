@@ -20,7 +20,7 @@ describe('check-in call operational monitoring', () => {
           return { rows: [{ due_episodes: 1, oldest_due_seconds: 12, stale_deliveries: 0 }] };
         }
         if (sql.includes('FROM checkin_call_audio')) {
-          return { rows: [{ count: 12, newest_at: new Date('2026-09-28T00:00:00Z') }] };
+          return { rows: [{ count: 24, newest_at: new Date('2026-09-28T00:00:00Z') }] };
         }
         if (sql.includes('FROM checkin_call_events')) {
           return { rows: [{ id: 1, event: 'EXHAUSTED', detail: {}, created_at: new Date() }] };
@@ -55,7 +55,7 @@ describe('check-in call operational monitoring', () => {
       attempts_24h: { CONNECTED: 2 },
       deliveries_24h: { FAILED: 1 },
       queue: { due_episodes: 1, oldest_due_seconds: 12, stale_deliveries: 0 },
-      audio_cache: { cached: 12, expected: 12, ready: true },
+      audio_cache: { cached: 24, expected: 24, ready: true },
     });
   });
 

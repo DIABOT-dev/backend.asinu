@@ -99,23 +99,27 @@ describe('family call identity and relationship direction', () => {
     await expect(service.getFamilyAudio(attemptPool('USER'), 'attempt-1', 7)).rejects.toMatchObject({ statusCode: 404 });
   });
 
-  test('personalized family speech uses Ngọc Lan with server-authorized identity', async () => {
+  test('personalized family speech uses the private Tuấn Anh v4 clone with server-authorized identity', async () => {
     const previousKey = process.env.VIENEU_API_KEY;
     const previousVoice = process.env.VIENEU_VOICE;
     const previousFetch = global.fetch;
     process.env.VIENEU_API_KEY = 'test-key';
-    process.env.VIENEU_VOICE = 'Ngọc Lan';
-    global.fetch = jest.fn(async () => ({
-      ok: true, headers: { get: () => 'audio/mpeg' },
-      arrayBuffer: async () => Buffer.from('personalized-family-audio'),
-    }));
+    const voice = 'clone_b935a451-7d65-4b73-a083-d46e56c47d4f';
+    process.env.VIENEU_VOICE = voice;
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        status: 'completed', voiceId: voice, audioUrl: 'https://storage.vieneu.io/family.wav',
+      }) })
+      .mockResolvedValueOnce({ ok: true, headers: { get: () => 'audio/wav' },
+        arrayBuffer: async () => Buffer.from('personalized-family-audio') });
     try {
       const result = await service.getFamilyAudio(attemptPool(), 'attempt-1', 7, 'vi');
       expect(result.audio_data.toString()).toBe('personalized-family-audio');
       const body = JSON.parse(global.fetch.mock.calls[0][1].body);
-      expect(body.voice).toBe('Ngọc Lan');
-      expect(body.input).toContain('Lan, Mẹ của bạn');
-      expect(body.input).toContain('0 9 0 1 2 3 4 5 6 7');
+      expect(body.voiceId).toBe(voice);
+      expect(body.engine).toBe('v4');
+      expect(body.text).toContain('Lan, Mẹ của bạn');
+      expect(body.text).toContain('0 9 0 1 2 3 4 5 6 7');
     } finally {
       if (previousKey === undefined) delete process.env.VIENEU_API_KEY;
       else process.env.VIENEU_API_KEY = previousKey;

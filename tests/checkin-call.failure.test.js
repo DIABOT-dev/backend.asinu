@@ -59,23 +59,24 @@ describe('check-in call provider failure handling', () => {
     expect(audio.synthesisTimeoutMs()).toBe(1000);
   });
 
-  test('synthesizes a dynamic Vietnamese conclusion with the configured Ngọc Lan voice', async () => {
+  test('synthesizes a dynamic conclusion with the private Tuấn Anh v4 clone', async () => {
     process.env.VIENEU_API_KEY = 'test-key';
-    process.env.VIENEU_VOICE = 'Ngọc Lan';
-    global.fetch = jest.fn(async () => ({
-      ok: true,
-      headers: { get: () => 'audio/mpeg' },
-      arrayBuffer: async () => Buffer.from('conclusion-audio'),
-    }));
+    process.env.VIENEU_VOICE = audio.DEFAULT_ASINU_VOICE;
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({
+        status: 'completed', voiceId: audio.DEFAULT_ASINU_VOICE, audioUrl: 'https://storage.vieneu.io/conclusion.wav',
+      }) })
+      .mockResolvedValueOnce({ ok: true, headers: { get: () => 'audio/wav' },
+        arrayBuffer: async () => Buffer.from('conclusion-audio') });
 
     const result = await audio.synthesizeText('  Asinu đã ghi nhận bác vẫn ổn.  ', 'vi');
 
-    expect(result).toMatchObject({ mime_type: 'audio/mpeg' });
+    expect(result).toMatchObject({ mime_type: 'audio/wav' });
     expect(result.audio_data.toString()).toBe('conclusion-audio');
     expect(JSON.parse(global.fetch.mock.calls[0][1].body)).toMatchObject({
-      input: 'Asinu đã ghi nhận bác vẫn ổn.',
-      voice: 'Ngọc Lan',
-      response_format: 'mp3',
+      text: 'Asinu đã ghi nhận bác vẫn ổn.',
+      voiceId: audio.DEFAULT_ASINU_VOICE,
+      engine: 'v4',
     });
   });
 

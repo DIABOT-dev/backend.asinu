@@ -9,7 +9,7 @@ describe('backend-owned check-in call audio revisions', () => {
 
   beforeEach(() => {
     process.env.VIENEU_API_KEY = 'test-key';
-    process.env.VIENEU_VOICE = 'Ngọc Lan';
+    process.env.VIENEU_VOICE = 'test-vietnamese';
     process.env.VIENEU_VOICE_EN = 'test-english';
     process.env.CHECKIN_CALL_AUDIO_REVISION = '1';
     global.fetch = jest.fn(async (_url, options) => ({
@@ -35,14 +35,25 @@ describe('backend-owned check-in call audio revisions', () => {
     expect(audio.audioVersion('vi')).toBe(version);
   });
 
-  test('a Vietnamese voice change invalidates Vietnamese audio independently of English', () => {
+  test('one configured narrator versions both locales; a legacy English override cannot change it', () => {
     const vi = audio.audioVersion('vi');
     const en = audio.audioVersion('en');
     process.env.VIENEU_VOICE = 'other-voice';
     expect(audio.audioVersion('vi')).not.toBe(vi);
-    expect(audio.audioVersion('en')).toBe(en);
-    process.env.VIENEU_VOICE_EN = 'other-english';
     expect(audio.audioVersion('en')).not.toBe(en);
+    const currentEnglish = audio.audioVersion('en');
+    process.env.VIENEU_VOICE_EN = 'other-english';
+    expect(audio.audioVersion('en')).toBe(currentEnglish);
+  });
+
+  test('missing or blank configuration defaults both languages to the private Tuấn Anh clone', () => {
+    delete process.env.VIENEU_VOICE;
+    for (const lang of ['vi', 'en']) {
+      expect(audio.audioMimeType(lang)).toBe('audio/wav');
+      expect(audio.audioVersion(lang)).toBe(audio.audioVersion(lang, audio.DEFAULT_ASINU_VOICE));
+    }
+    process.env.VIENEU_VOICE = '  ';
+    expect(audio.audioMimeType('vi')).toBe('audio/wav');
   });
 
   test('an explicit backend revision forces regeneration without changing the voice name', () => {

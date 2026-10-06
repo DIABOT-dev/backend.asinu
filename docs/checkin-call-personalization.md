@@ -15,7 +15,7 @@ Ba lựa chọn dùng tên, nhắc số liệu và thời tiết đều **tắt 
 3. Giữ ba nút trả lời hiện tại: Tôi vẫn ổn / Tôi hơi mệt / Tôi cần hỗ trợ ngay. Có thể bấm ngay, không phải chờ đọc xong. Việc bấm lựa chọn ngắt tiếng cũ ngay, kể cả khi tải âm thanh hoặc chờ API.
 4. Thời tiết chỉ đọc thêm sau khi ghi nhận **Tôi vẫn ổn**, không chen vào bước cần hỗ trợ hay cảnh báo khẩn cấp. Thiếu dự báo thì bỏ qua. Dự báo là cho khu vực đã chọn, không tuyên bố đó là địa chỉ nhà hoặc số đo nhiệt độ trực tiếp tại thiết bị.
 
-Tiếng Việt dùng dịch vụ VieNeu và giọng cấu hình qua `VIENEU_VOICE`, hiện chọn giọng nhân bản riêng Asinu Tuan Anh. Không tự chuyển sang giọng Apple khi tải âm thanh tiếng Việt thất bại; vẫn giữ các nút phản hồi và nội dung chữ. Tiếng Anh giữ cơ chế hiện tại: dùng giọng tiếng Anh nếu đã cấu hình, nếu không thì giọng thiết bị tiếng Anh. Các nhánh cảnh báo tín hiệu sớm và thông báo người thân giữ lời cảnh báo/nghiệp vụ đang có.
+Tiếng Việt và tiếng Anh đều dùng giọng nhân bản riêng Asinu Tuấn Anh v4 qua cùng `VIENEU_VOICE`. Không dùng giọng Ngọc Lan hay tự chuyển sang giọng Apple khi tải âm thanh thất bại; vẫn giữ các nút phản hồi, nội dung chữ và nghe lại. Các nhánh cảnh báo tín hiệu sớm và thông báo người thân giữ lời cảnh báo/nghiệp vụ đang có.
 
 ## Thời tiết và dữ liệu
 
@@ -60,7 +60,7 @@ Trên iPhone thật sau khi phát hành bản mới:
 3. Khi đang đọc, bấm Tôi vẫn ổn: tiếng cũ dừng, ghi nhận thành công rồi mới đọc thời tiết. Kiểm tra nguồn/thời điểm dự báo. Nghe lại/Dừng đọc phải hoạt động.
 4. Thử Tôi hơi mệt và Tôi cần hỗ trợ ngay: không đọc thời tiết; giữ đúng luồng liên hệ người thân hiện tại, không tự nhận đã cứu hộ.
 5. Khóa máy: không đọc tên/số đo trong lời nhắc CallKit. Chuyển app vào nền rồi mở lại: không đè tiếng hoặc phát câu hỏi cũ.
-6. Tắt các lựa chọn và Lưu; cuộc gọi tiếp theo không dùng tên/số đo/thời tiết. Thử mất mạng: vẫn trả lời bằng nút, không tự chuyển giọng tiếng Việt sang Apple.
+6. Tắt các lựa chọn và Lưu; cuộc gọi tiếp theo không dùng tên/số đo/thời tiết. Thử mất mạng ở cả VI/EN: vẫn trả lời bằng nút, không tự chuyển sang giọng Apple. Kiểm tra kết quả check-in thường và lời nhắc khóa máy cũng cùng giọng Tuấn Anh.
 
 Test tự động và export bundle không thay thế kiểm tra loa, Bluetooth, CallKit và quyền vị trí trên iPhone thật. Việc deploy không tự gửi cuộc gọi hoặc bật consent cho tài khoản demo.
 

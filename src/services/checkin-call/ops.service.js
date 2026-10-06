@@ -34,7 +34,7 @@ async function getMetrics(pool) {
   ]);
   const toCounts = (rows) =>
     Object.fromEntries(rows.map((row) => [row.state, Number(row.count || 0)]));
-  const expectedAudioAssets = AUDIO_KEYS.length * (process.env.VIENEU_VOICE_EN ? 2 : 1);
+  const expectedAudioAssets = AUDIO_KEYS.length * 2;
   const cachedAudioAssets = Number(audio.rows[0]?.count || 0);
 
   return {

@@ -14,13 +14,15 @@ VIENEU_VOICE=clone_b935a451-7d65-4b73-a083-d46e56c47d4f
 CHECKIN_CALL_AUDIO_REVISION=1
 ```
 
-Những lần sau, đổi `VIENEU_VOICE` cho tiếng Việt hoặc `VIENEU_VOICE_EN` cho tiếng Anh rồi khởi động lại backend. Phiên bản tự thay đổi theo giọng, ngôn ngữ và nội dung câu cố định; cache Postgres và lời nhắc cá nhân hóa dùng cùng phiên bản. Tăng `CHECKIN_CALL_AUDIO_REVISION` nếu nhà cung cấp thay âm sắc nhưng giữ nguyên tên giọng. Khóa API và thông tin cá nhân không được đưa vào phiên bản.
+Toàn bộ lời đọc tiếng Việt và tiếng Anh dùng chung `VIENEU_VOICE`, mặc định là giọng riêng Asinu Tuấn Anh v4 ở trên. Biến cũ `VIENEU_VOICE_EN` không còn được dùng. Khi thay cấu hình giọng, khởi động lại backend; phiên bản/cache của cả hai ngôn ngữ tự thay đổi. Tăng `CHECKIN_CALL_AUDIO_REVISION` nếu nhà cung cấp thay âm sắc nhưng giữ nguyên ID giọng. Khóa API và thông tin cá nhân không được đưa vào phiên bản.
 
-Giọng tiếng Anh chưa cấu hình thì dùng cơ chế tiếng Anh hiện tại của app. Tiếng Việt không tự đổi sang giọng thiết bị khi tải âm thanh thất bại.
+Câu cố định, câu cá nhân hóa, thông báo người thân và kết quả check-in trong app đều dùng cùng dịch vụ âm thanh và cache có phiên bản. Không dùng giọng Ngọc Lan hay giọng Apple dự phòng ở bất kỳ ngôn ngữ nào. Nếu tải/giải mã thất bại, vẫn giữ transcript, nút phản hồi và nút nghe lại; không ghi nhận check-in thay người dùng. Nội dung tiếng Anh vẫn là tiếng Anh, chỉ thống nhất người đọc.
 
 ## iPhone khóa máy
 
-Hướng dẫn mở app trong `VoipCallManager.swift` dùng bản ghi đóng gói để hoạt động khi máy khóa hoặc mạng không có. Bản ghi này đã được tạo lại bằng giọng nhân bản Asinu Tuan Anh; script tạo bản ghi đọc `VIENEU_VOICE` từ cấu hình backend. Nó không cập nhật qua API: cần build app mới để thay bản ghi khi khóa máy. Bản app đã cài vẫn giữ bản ghi cũ.
+Hướng dẫn mở app trong `VoipCallManager.swift` dùng hai bản ghi VI/EN đóng gói bằng giọng riêng Asinu Tuấn Anh v4 để hoạt động khi máy khóa hoặc mạng không có. Script `scripts/generate-checkin-handoff-voice.mjs ../backend.asinu/.env --lang vi` (hoặc `--lang en`) ở repo app đọc `VIENEU_VOICE`; kiểm tra checksum, localization và loudness trước khi đóng gói. Cần build app mới để thay bản ghi native. Bản app đã cài vẫn giữ bản ghi cũ.
+
+CallKit báo cuộc gọi có nội dung trực quan vì màn app chứa câu hỏi và nút phản hồi. Không bật camera hay truyền video. Theo [Apple DTS](https://developer.apple.com/forums/thread/798090), iOS có thể xác thực/mở khóa và đưa app lên khi nhận cuộc gọi trực quan; không vượt qua khóa máy và không đảm bảo tự mở nếu người dùng chưa mở khóa. React chỉ chuyển màn sau khi đăng nhập và navigation sẵn sàng; nhận cuộc gọi không đồng nghĩa đã trả lời check-in. Các sự kiện focus/active trùng nhau không phát lại lời đang tải/đang đọc/đã hoàn tất.
 
 Bốn loại âm thanh nhận qua API đổi giọng theo backend sau khi người dùng cài app có cơ chế phiên bản. Không cần build lại app cho những lần đổi giọng của các loại này.
 
