@@ -654,7 +654,7 @@ async function fireCaregiverPushAlerts(pool, alerts) {
       const u = rows[0];
       if (!u) continue;
 
-      // Dùng type 'caregiver_alert' (high priority, channelId 'alert', sound asinu_alert.wav)
+      // 'caregiver_alert' uses the versioned health-alert channel/emergency sound.
       // để caregiver nhận banner + âm thanh đặc biệt.
       await sendAndSave(
         pool,

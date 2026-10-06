@@ -11,6 +11,7 @@
 
 const EXPO_PUSH_ENDPOINT = 'https://exp.host/--/api/v2/push/send';
 const { t } = require('../../i18n');
+const { notificationSoundConfig } = require('./notification-sound.config');
 
 /**
  * Send a push notification via Expo Push Notification Service
@@ -37,53 +38,9 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
     return { ok: false, error: t('error.no_valid_push_tokens') };
   }
 
-  // Map notification type → channel + sound
-  const SOUND_MAP = {
-    care_circle_invitation: { channelId: 'care-circle', sound: 'asinu_care.wav', priority: 'high' },
-    care_circle_accepted: { channelId: 'care-circle', sound: 'asinu_care.wav', priority: 'high' },
-    care_circle_rejected: { channelId: 'care-circle', sound: 'asinu_care.wav', priority: 'high' },
-    care_circle_removed: { channelId: 'care-circle', sound: 'asinu_care.wav', priority: 'high' },
-    care_circle_permission_changed: {
-      channelId: 'care-circle',
-      sound: 'asinu_care.wav',
-      priority: 'high',
-    },
-    doctor_message: { channelId: 'doctor-consultation', sound: 'asinu_care.wav', priority: 'high' },
-    alert: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
-    health_alert: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
-    caregiver_alert: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
-    payment_failed: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
-    subscription_activated: {
-      channelId: 'reminder',
-      sound: 'asinu_reminder.wav',
-      priority: 'high',
-    },
-    subscription_expiring_soon: {
-      channelId: 'reminder',
-      sound: 'asinu_reminder.wav',
-      priority: 'high',
-    },
-    subscription_expired: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
-    streak_7: { channelId: 'milestone', sound: 'asinu_milestone.wav', priority: 'normal' },
-    streak_14: { channelId: 'milestone', sound: 'asinu_milestone.wav', priority: 'normal' },
-    streak_30: { channelId: 'milestone', sound: 'asinu_milestone.wav', priority: 'normal' },
-    weekly_recap: { channelId: 'milestone', sound: 'asinu_milestone.wav', priority: 'normal' },
-    morning_checkin: { channelId: 'checkin', sound: 'asinu_reminder.wav', priority: 'high' },
-    checkin_followup: { channelId: 'checkin', sound: 'asinu_reminder.wav', priority: 'high' },
-    checkin_followup_urgent: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
-    emergency: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
-    checkin_call: { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' },
-    early_signal: { channelId: 'reminder', sound: 'asinu_reminder.wav', priority: 'normal' },
-  };
+  // Same versioned audio contract as the mobile app; Expo sound is iOS-only.
   const notifType = data?.type || '';
-  const config =
-    notifType === 'early_signal' && data?.severity === 'urgent'
-      ? { channelId: 'alert', sound: 'asinu_alert.wav', priority: 'high' }
-      : SOUND_MAP[notifType] || {
-          channelId: 'reminder',
-          sound: 'asinu_reminder.wav',
-          priority: 'normal',
-        };
+  const config = notificationSoundConfig(data || {});
 
   // Caregiver alert cần xác nhận → thêm categoryIdentifier để hiện nút trên notification
   const isCaregiverAlert =

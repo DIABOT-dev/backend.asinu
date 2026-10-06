@@ -1,0 +1,45 @@
+{
+  "version": "warm_v1",
+  "sounds": {
+    "incoming": { "ios": "asinu_incoming.caf", "android": "asinu_incoming.ogg", "durationSeconds": 6.9 },
+    "emergency": { "ios": "asinu_emergency.caf", "android": "asinu_emergency.ogg", "durationSeconds": 3.6 },
+    "missed": { "ios": "asinu_missed.caf", "android": "asinu_missed.ogg", "durationSeconds": 2.2 },
+    "notification": { "ios": "asinu_notification.caf", "android": "asinu_notification.ogg", "durationSeconds": 2.4 },
+    "ringback": { "ios": "asinu_ringback.caf", "android": "asinu_ringback.ogg", "durationSeconds": 5.0 }
+  },
+  "groups": {
+    "reminder": { "channelId": "asinu_reminder_warm_v1", "sound": "notification", "priority": "normal", "label": "notificationChannelReminder" },
+    "alert": { "channelId": "asinu_alert_warm_v1", "sound": "emergency", "priority": "high", "label": "notificationChannelAlert" },
+    "care-circle": { "channelId": "asinu_care_circle_warm_v1", "sound": "notification", "priority": "high", "label": "notificationChannelCareCircle" },
+    "doctor-consultation": { "channelId": "asinu_doctor_warm_v1", "sound": "notification", "priority": "high", "label": "notificationChannelDoctor" },
+    "checkin": { "channelId": "asinu_checkin_warm_v1", "sound": "notification", "priority": "high", "label": "notificationChannelCheckin" },
+    "milestone": { "channelId": "asinu_milestone_warm_v1", "sound": "notification", "priority": "normal", "label": "notificationChannelMilestone" },
+    "incoming": { "channelId": "asinu_incoming_warm_v1", "sound": "incoming", "priority": "high", "label": "notificationChannelIncoming" },
+    "missed": { "channelId": "asinu_missed_warm_v1", "sound": "missed", "priority": "high", "label": "notificationChannelMissed" },
+    "billing": { "channelId": "asinu_billing_warm_v1", "sound": "notification", "priority": "high", "label": "notificationChannelBilling" }
+  },
+  "types": {
+    "care_circle_invitation": "care-circle",
+    "care_circle_accepted": "care-circle",
+    "care_circle_rejected": "care-circle",
+    "care_circle_removed": "care-circle",
+    "care_circle_permission_changed": "care-circle",
+    "doctor_message": "doctor-consultation",
+    "alert": "alert",
+    "health_alert": "alert",
+    "caregiver_alert": "alert",
+    "emergency": "alert",
+    "payment_failed": "billing",
+    "subscription_activated": "billing",
+    "subscription_expiring_soon": "billing",
+    "subscription_expired": "billing",
+    "streak_7": "milestone",
+    "streak_14": "milestone",
+    "streak_30": "milestone",
+    "weekly_recap": "milestone",
+    "morning_checkin": "checkin",
+    "checkin_followup": "checkin",
+    "checkin_followup_urgent": "alert",
+    "early_signal": "reminder"
+  }
+}

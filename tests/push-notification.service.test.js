@@ -25,8 +25,8 @@ describe('Expo push notification service', () => {
 
     const message = JSON.parse(global.fetch.mock.calls[0][1].body)[0];
     expect(message).toMatchObject({
-      channelId: 'alert',
-      sound: 'asinu_alert.wav',
+      channelId: 'asinu_alert_warm_v1',
+      sound: 'asinu_emergency.caf',
       priority: 'high',
     });
   });
