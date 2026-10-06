@@ -66,6 +66,7 @@ describe('check-in call HTTP routes', () => {
         )
       );
     expect(actual).toEqual([
+      'POST /native/attempts/:id/decline',
       'GET /settings',
       'PUT /settings',
       'GET /voice-preferences',

@@ -3,6 +3,7 @@
 const service = require('../services/checkin-call/checkin-call.service');
 const audio = require('../services/checkin-call/audio.service');
 const personalization = require('../services/checkin-call/personalization.service');
+const nativeActions = require('../services/checkin-call/native-action.service');
 const { createAttemptToken } = require('../services/checkin-call/access.service');
 const { getLang, t } = require('../i18n');
 
@@ -73,6 +74,10 @@ function createCheckinCallController(pool) {
         language,
         mimeType: audio.audioMimeType(language),
       });
+    }),
+    declineNativeCall: handle(async (req, res) => {
+      res.set('Cache-Control', 'no-store');
+      return res.json(await nativeActions.declineNativeCall(pool, req.params.id, req.body?.capability));
     }),
     getVoicePreferences: handle(async (req, res) => {
       res.set('Cache-Control', 'no-store');

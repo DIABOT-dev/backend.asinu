@@ -1,6 +1,7 @@
 const { sendPushNotification } = require('../notification/push.notification.service');
 const { sendFcmNotification } = require('../notification/fcm.notification.service');
 const { sendVoipNotification } = require('../notification/apns.voip.service');
+const { createDeclineCapability } = require('./native-action.service');
 const logger = require('../../lib/logger');
 const { t } = require('../../i18n');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
@@ -788,7 +789,7 @@ async function seen(pool, attemptId, userId) {
   return { ok: true };
 }
 
-async function decline(pool, attemptId, userId) {
+async function decline(pool, attemptId, userId, options = {}) {
   const found = await pool.query(
     'SELECT episode_id FROM checkin_call_attempts WHERE id = $1 AND target_user_id = $2',
     [attemptId, userId]
@@ -796,7 +797,7 @@ async function decline(pool, attemptId, userId) {
   if (!found.rows.length)
     throw serviceError('Attempt not found', 404, 'checkinCall.error.attempt_not_found');
   const episodeId = found.rows[0].episode_id;
-  await withEpisode(pool, episodeId, userId, async (db, episode) => {
+  const declined = await withEpisode(pool, episodeId, userId, async (db, episode) => {
     const current = await db.query(
       'SELECT * FROM checkin_call_attempts WHERE id = $1 AND target_user_id = $2 FOR UPDATE',
       [attemptId, userId]
@@ -805,9 +806,10 @@ async function decline(pool, attemptId, userId) {
     if (
       !attempt ||
       TERMINAL.has(episode.state) ||
+      (options.ringingOnly && attempt.state !== 'RINGING') ||
       !['RINGING', 'CONNECTED', 'PUSH_WAIT', 'WAITING_CONFIRMATION'].includes(attempt.state)
     )
-      return;
+      return false;
     await db.query(
       "UPDATE checkin_call_attempts SET state = 'NO_ANSWER', ended_at = now() WHERE id = $1",
       [attemptId]
@@ -823,8 +825,9 @@ async function decline(pool, attemptId, userId) {
         [episodeId]
       );
     }
+    return true;
   });
-  await endRemoteCalls(pool, episodeId, null, attemptId);
+  if (declined || !options.ringingOnly) await endRemoteCalls(pool, episodeId, null, attemptId);
   return { ok: true };
 }
 
@@ -1362,7 +1365,7 @@ async function dispatchDeliveries(pool) {
     try {
       await db.query('BEGIN');
       const found = await db.query(
-        'SELECT d.*, e.state AS episode_state, e.severity, e.issue_category, e.config, a.state AS attempt_state, a.target_role, ' +
+        'SELECT d.*, e.state AS episode_state, e.severity, e.issue_category, e.config, a.state AS attempt_state, a.target_role, a.ring_deadline, ' +
           "u.push_token, u.fcm_token, u.voip_push_token, u.voip_push_environment, COALESCE(u.language_preference, 'vi') AS lang " +
           'FROM checkin_call_deliveries d JOIN checkin_call_episodes e ON e.id = d.episode_id ' +
           'LEFT JOIN checkin_call_attempts a ON a.id = d.attempt_id ' +
@@ -1436,9 +1439,15 @@ async function dispatchDeliveries(pool) {
     };
     const title = t(urgent ? 'checkinCall.push.urgent_title' : 'checkinCall.push.call_title', lang);
     const nativeCall = incoming || delivery.kind === 'URGENT_REPEAT';
+    const fcmPayload = nativeCall && delivery.fcm_token ? {
+      ...payload,
+      ringDeadline: delivery.ring_deadline ? new Date(delivery.ring_deadline).toISOString() : undefined,
+      // Do not persist this credential in the notification inbox or send it to iOS.
+      declineCapability: createDeclineCapability(delivery.attempt_id, delivery.target_user_id, delivery.ring_deadline),
+    } : payload;
     const [directFcm, directApns] = await Promise.all([
       delivery.fcm_token
-        ? sendFcmNotification(delivery.fcm_token, title, message, payload, {
+        ? sendFcmNotification(delivery.fcm_token, title, message, fcmPayload, {
             incomingCall: nativeCall,
           })
         : Promise.resolve({ ok: false, error: 'NO_FCM_TOKEN' }),

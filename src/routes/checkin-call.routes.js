@@ -2,12 +2,15 @@
 
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
-const { conclusionAudioLimiter } = require('../middleware/checkin-call-rate-limit.middleware');
+const { conclusionAudioLimiter, nativeCallActionLimiter } = require('../middleware/checkin-call-rate-limit.middleware');
 const { createCheckinCallController } = require('../controllers/checkin-call.controller');
 
 function checkinCallRoutes(pool) {
   const router = express.Router();
   const controller = createCheckinCallController(pool);
+  // Only an expiring, recipient/attempt/action-scoped capability works here.
+  // All other endpoints retain normal session authentication.
+  router.post('/native/attempts/:id/decline', nativeCallActionLimiter, controller.declineNativeCall);
   router.use(requireAuth);
 
   router.get('/settings', controller.getSettings);
