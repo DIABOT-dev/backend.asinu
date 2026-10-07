@@ -1,4 +1,5 @@
 const { bindController } = require('../middleware/controller-handler.middleware');
+const { getGuidance, updateGuidance, replayGuidance } = require('../controllers/guidance.controller');
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { chatbotGate } = require('../middleware/chatbot.gate.middleware');
@@ -134,6 +135,9 @@ function mobileRoutes(pool) {
   router.post('/onboarding/complete-v2', requireAuth, bindController(onboardingCompleteV2, pool));
 
   // Profile
+  router.get('/guidance', requireAuth, bindController(getGuidance, pool));
+  router.put('/guidance', requireAuth, bindController(updateGuidance, pool));
+  router.post('/guidance/replay', requireAuth, bindController(replayGuidance, pool));
   router.get('/profile/basic', requireAuth, bindController(getBasicProfile, pool));
   router.get('/profile', requireAuth, bindController(getProfile, pool));
   router.put('/profile', requireAuth, bindController(updateProfile, pool));
