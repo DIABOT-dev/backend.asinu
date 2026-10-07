@@ -276,18 +276,20 @@ describeDatabase('API contract regressions', () => {
     expect(remaining.rowCount).toBe(0);
   });
 
-  test('care circle QR token creates one invitation without exposing a user id', async () => {
+  test('care circle QR stays fixed and reusable without exposing a user id', async () => {
     const ownerId = await createUser('qr-owner');
     const scannerId = await createUser('qr-scanner');
 
     const replaced = await careCircleService.createQrToken(pool, ownerId);
     const created = await careCircleService.createQrToken(pool, ownerId);
+    expect(created).toEqual(replaced);
     expect(created.token).toHaveLength(43);
     expect(created.value).toContain('asinu-lite://care-circle/scan?token=');
-    expect(created.value).not.toContain(String(ownerId));
+    expect(created.value).toBe(`asinu-lite://care-circle/scan?token=${created.token}`);
+    expect(created).not.toHaveProperty('expiresAt');
 
     const oldCode = await careCircleService.previewQrToken(pool, replaced.token, scannerId);
-    expect(oldCode).toMatchObject({ ok: false, code: 'CARE_CIRCLE_QR_INVALID' });
+    expect(oldCode.ok).toBe(true);
 
     const selfScan = await careCircleService.previewQrToken(pool, created.token, ownerId);
     expect(selfScan).toMatchObject({ ok: false, code: 'CARE_CIRCLE_QR_SELF' });
@@ -320,8 +322,12 @@ describeDatabase('API contract regressions', () => {
     const reused = await careCircleService.previewQrToken(pool, created.token, scannerId);
     expect(reused).toMatchObject({
       ok: false,
-      code: 'CARE_CIRCLE_QR_INVALID',
-      statusCode: 410,
+      code: 'CARE_CIRCLE_CONNECTION_EXISTS',
+      statusCode: 409,
     });
+    const otherScannerId = await createUser('qr-other-scanner');
+    const otherPreview = await careCircleService.previewQrToken(pool, created.token, otherScannerId);
+    expect(otherPreview.ok).toBe(true);
+    expect(await careCircleService.createQrToken(pool, ownerId)).toEqual(created);
   });
 });

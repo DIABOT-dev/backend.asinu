@@ -1,6 +1,6 @@
 const { z } = require('zod');
 const { t } = require('../i18n');
-const { careCircleFamilyRoleSchema } = require('./care-circle-family.schemas');
+const { careCircleInvitationRoleSchema, careCircleRelationshipSchema } = require('./care-circle-family.schemas');
 
 const uuidSchema = z.string().uuid();
 
@@ -105,8 +105,8 @@ const permissionsSchema = z
 
 const careCircleInvitationSchema = z.object({
   addressee_id: z.string().regex(/^\d+$/, 'addressee_id must be a numeric ID').transform(Number),
-  relationship_type: z.string().optional(),
-  role: careCircleFamilyRoleSchema,
+  relationship_type: careCircleRelationshipSchema,
+  role: careCircleInvitationRoleSchema,
   permissions: permissionsSchema.optional(),
 });
 
@@ -115,8 +115,8 @@ const careCircleQrTokenSchema = z.object({
 });
 
 const careCircleQrInvitationSchema = careCircleQrTokenSchema.extend({
-  relationship_type: z.string().max(255).optional(),
-  role: careCircleFamilyRoleSchema,
+  relationship_type: careCircleRelationshipSchema,
+  role: careCircleInvitationRoleSchema,
   permissions: permissionsSchema.optional(),
 });
 

@@ -145,6 +145,13 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
   assertTenantAllowed(input.tenant_id);
   const envelope = buildPrivacyRequestEnvelope({ userId, input });
   const response = await deliverDoctorRequest('privacy', envelope, envelope.idempotency_key);
+  if (input.action === 'grant_consent') {
+    await pool.query(
+      `UPDATE users SET consent_accepted_at = NOW(), consent_version = $1, updated_at = NOW()
+        WHERE id = $2 AND deleted_at IS NULL`,
+      [input.consent_version, userId]
+    );
+  }
   const recordReceipt = async () => {
     await pool.query(
       `INSERT INTO doctor_privacy_request_receipts(
@@ -291,7 +298,8 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
   return response.data;
 };
 
-const listPrivacyReceipts = async (pool, userId) => {
+const listPrivacyReceipts = async (pool, userId, tenantId) => {
+  if (tenantId) assertTenantAllowed(tenantId);
   const result = await pool.query(
     `SELECT id, tenant_id, action, source_event_id, status, result_summary,
             created_at, completed_at
@@ -299,7 +307,44 @@ const listPrivacyReceipts = async (pool, userId) => {
       WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`,
     [userId]
   );
-  return { items: result.rows };
+  if (!tenantId) return { items: result.rows };
+  // Only explicit specialist consent counts. General signup consent is unrelated.
+  // Compare the original request time so a late delivery cannot undo a withdrawal.
+  const sharing = await pool.query(
+    `SELECT enabled FROM (
+       SELECT action = 'grant_consent' AS enabled, created_at, 1 AS priority
+         FROM doctor_privacy_request_receipts
+        WHERE user_id = $1 AND tenant_id = $2 AND status = 'completed'
+          AND action IN ('grant_consent', 'withdraw_consent', 'anonymize', 'delete')
+       UNION ALL
+       SELECT TRUE AS enabled, created_at, 0 AS priority
+         FROM doctor_task_outbox
+        WHERE tenant_id = $2 AND status = 'sent'
+          AND payload->'payload'->>'app_user_id' = $3
+          AND payload->'payload'->'consent'->>'status' = 'accepted'
+     ) decisions ORDER BY created_at DESC, priority DESC LIMIT 1`,
+    [userId, tenantId, String(userId)]
+  );
+  const anonymization = await pool.query(
+    `WITH removed AS (
+       SELECT MAX(created_at) AS removed_at
+         FROM doctor_privacy_request_receipts
+        WHERE user_id = $1 AND tenant_id = $2 AND status = 'completed'
+          AND action IN ('anonymize', 'delete')
+     )
+     SELECT removed_at IS NOT NULL AND NOT EXISTS (
+       SELECT 1 FROM doctor_task_outbox
+        WHERE tenant_id = $2 AND status = 'sent' AND created_at > removed_at
+          AND payload->'payload'->>'app_user_id' = $3
+          AND payload->'payload'->'consent'->>'status' = 'accepted'
+     ) AS details_anonymized FROM removed`,
+    [userId, tenantId, String(userId)]
+  );
+  return {
+    items: result.rows,
+    sharing_enabled: sharing.rows[0]?.enabled === true,
+    details_anonymized: anonymization.rows[0]?.details_anonymized === true,
+  };
 };
 
 const requestDoctorRecommendations = async ({ input }) => {
@@ -339,7 +384,7 @@ const requestDoctorDirectory = async ({ input }) => {
         routingTenantId: tenantId,
         availability: 'online',
       }));
-    }),
+    })
   );
   const fulfilled = responses.filter((result) => result.status === 'fulfilled');
   if (fulfilled.length === 0) {
@@ -365,7 +410,7 @@ const requestDoctorDirectory = async ({ input }) => {
     .sort(
       (left, right) =>
         Number(right.score ?? 0) - Number(left.score ?? 0) ||
-        Number(left.estimatedWaitMinutes ?? 0) - Number(right.estimatedWaitMinutes ?? 0),
+        Number(left.estimatedWaitMinutes ?? 0) - Number(right.estimatedWaitMinutes ?? 0)
     )
     .slice(0, input.limit);
   return {
@@ -382,7 +427,7 @@ const requestDoctorDirectorySpecialties = async () => {
     tenantIds.map(async (tenantId) => {
       const response = await deliverDoctorRequest('specialties', { tenant_id: tenantId });
       return Array.isArray(response.data?.items) ? response.data.items : [];
-    }),
+    })
   );
   const fulfilled = responses.filter((result) => result.status === 'fulfilled');
   if (fulfilled.length === 0) {
@@ -395,13 +440,17 @@ const requestDoctorDirectorySpecialties = async () => {
       if (item?.code && !byCode.has(item.code)) byCode.set(item.code, item);
     }
   }
-  return { items: [...byCode.values()].sort((left, right) => String(left.name).localeCompare(String(right.name))) };
+  return {
+    items: [...byCode.values()].sort((left, right) =>
+      String(left.name).localeCompare(String(right.name))
+    ),
+  };
 };
 
 const requestDoctorReviews = async ({ input }) => {
   const tenantIds = configuredTenantIds();
   const responses = await Promise.allSettled(
-    tenantIds.map((tenantId) => deliverDoctorRequest('reviews', { tenant_id: tenantId, ...input })),
+    tenantIds.map((tenantId) => deliverDoctorRequest('reviews', { tenant_id: tenantId, ...input }))
   );
   const fulfilled = responses
     .filter((result) => result.status === 'fulfilled')
@@ -420,12 +469,14 @@ const requestDoctorReviews = async ({ input }) => {
       ratingCount: current.ratingCount + Number(result.summary?.ratingCount ?? 0),
       ratingSum: current.ratingSum + Number(result.summary?.ratingSum ?? 0),
     }),
-    { ratingCount: 0, ratingSum: 0 },
+    { ratingCount: 0, ratingSum: 0 }
   );
   return {
     summary: {
       ratingCount: summary.ratingCount,
-      averageRating: summary.ratingCount ? Number((summary.ratingSum / summary.ratingCount).toFixed(2)) : 0,
+      averageRating: summary.ratingCount
+        ? Number((summary.ratingSum / summary.ratingCount).toFixed(2))
+        : 0,
     },
     items,
   };

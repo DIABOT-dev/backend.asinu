@@ -63,12 +63,12 @@ describe.each(endpoints)('%s %s', (method, endpoint, body, operation) => {
     ['Thân nhân', 'than-nhan', 'vi'],
     ['Người thân', 'than-nhan', 'vi'],
     [' Family member ', 'than-nhan', 'en'],
-    ['Người chăm sóc', 'nguoi-cham-soc', 'vi'],
-    ['Người thân chăm sóc chính', 'nguoi-cham-soc', 'vi'],
-    ['Primary Caregiver', 'nguoi-cham-soc', 'en'],
-    ['FAMILY CAREGIVER', 'nguoi-cham-soc', 'en'],
+    ['Người chăm sóc', 'than-nhan', 'vi'],
+    ['Người thân chăm sóc chính', 'than-nhan', 'vi'],
+    ['Primary Caregiver', 'than-nhan', 'en'],
+    ['FAMILY CAREGIVER', 'than-nhan', 'en'],
     ['than-nhan', 'than-nhan', 'en'],
-    ['nguoi-cham-soc', 'nguoi-cham-soc', 'vi'],
+    ['nguoi-cham-soc', 'than-nhan', 'vi'],
     ['Người thân'.normalize('NFD'), 'than-nhan', 'vi'],
   ])('accepts legacy family label %s and sends stable ID %s to the service', async (role, expectedRole, lang) => {
     const response = await request(app)[method](endpoint).set('Accept-Language', lang).send({ ...body, role });
@@ -116,4 +116,27 @@ test('empty connection updates return a localized 400 without calling the servic
   expect(response.status).toBe(400);
   expect(response.body.error).toBe(t('careCircle.need_at_least_one_field', 'en'));
   expect(circle.updateConnection).not.toHaveBeenCalled();
+});
+
+test.each([undefined, null, ''])('new invitations default to the family role for input %j', async role => {
+  for (const [method, endpoint, body, operation] of endpoints.filter(item => item[0] === 'post')) {
+    const response = await request(app)[method](endpoint).send({ ...body, role });
+    expect(response.status).toBe(200);
+    expect(circle[operation].mock.calls.at(-1)[2].role).toBe('than-nhan');
+  }
+  pool.query.mockImplementation(async (sql, values) => {
+    if (sql.includes('COUNT(*)')) return { rows: [{ count: 0 }] };
+    if (sql.includes('INSERT INTO user_connections')) return { rows: [{ id: connectionId, role: values[3] }] };
+    return { rows: [] };
+  });
+  expect(await service.createInvitation(pool, 7, { addressee_id: 8, role }))
+    .toMatchObject({ ok: true, invitation: { role: 'than-nhan' } });
+});
+
+test('a relationship-only update never injects a hidden role update', async () => {
+  const response = await request(app).put(`/circle/connections/${connectionId}`).send({ relationship_type: 'Dì' });
+  expect(response.status).toBe(200);
+  const data = circle.updateConnection.mock.calls[0][3];
+  expect(data.relationship_type).toBe('di');
+  expect(data.role).toBeUndefined();
 });

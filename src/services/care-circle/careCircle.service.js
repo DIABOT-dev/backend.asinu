@@ -11,6 +11,8 @@ const { cacheGet, cacheSet } = require('../../lib/redis');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 const {
   careCircleFamilyRoleSchema,
+  DEFAULT_FAMILY_ROLE,
+  careCircleRelationshipSchema,
   careCircleConnectionUpdateSchema,
   familyRoleError,
 } = require('../../validation/care-circle-family.schemas');
@@ -24,8 +26,6 @@ const DEFAULT_PERMISSIONS = {
   can_receive_alerts: true,
   can_ack_escalation: true,
 };
-
-const QR_TOKEN_TTL_MINUTES = 10;
 
 function hashQrToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
@@ -97,40 +97,30 @@ async function getUserDisplayName(pool, userId) {
   return name;
 }
 
-/** Create a short-lived, opaque QR token without exposing the user id. */
+/** Get the account's permanent, opaque connection code without exposing its id. */
 async function createQrToken(pool, ownerUserId) {
-  const token = crypto.randomBytes(32).toString('base64url');
-  const tokenHash = hashQrToken(token);
+  const candidate = crypto.randomBytes(32).toString('base64url');
   const result = await pool.query(
-    `WITH cleaned AS (
-       DELETE FROM care_circle_qr_tokens
-       WHERE expires_at < NOW() - INTERVAL '7 days'
-       RETURNING id
-     ), revoked AS (
-       UPDATE care_circle_qr_tokens
-       SET revoked_at = NOW()
-       WHERE owner_user_id = $1
-         AND consumed_at IS NULL
-         AND revoked_at IS NULL
-       RETURNING id
-     )
-     INSERT INTO care_circle_qr_tokens (owner_user_id, token_hash, expires_at)
-     VALUES ($1, $2, NOW() + ($3 * INTERVAL '1 minute'))
-     RETURNING expires_at`,
-    [ownerUserId, tokenHash, QR_TOKEN_TTL_MINUTES]
+    `INSERT INTO care_circle_qr_tokens (owner_user_id, token_hash, token_value, expires_at)
+     VALUES ($1, $2, $3, NULL)
+     ON CONFLICT (owner_user_id) WHERE token_value IS NOT NULL
+     DO UPDATE SET owner_user_id = EXCLUDED.owner_user_id
+     RETURNING token_value`,
+    [ownerUserId, hashQrToken(candidate), candidate]
   );
-  const expiresAt = result.rows[0].expires_at;
+  // Return the stored code, not the candidate: another device may have created
+  // this account's code first. The unique owner index makes this atomic.
+  const token = result.rows[0].token_value;
   return {
     token,
     value: `asinu-lite://care-circle/scan?token=${encodeURIComponent(token)}`,
-    expiresAt,
   };
 }
 
 async function resolveQrToken(pool, token, scannerUserId, lang = 'vi') {
   const tokenHash = hashQrToken(token);
   const result = await pool.query(
-    `SELECT q.owner_user_id, q.expires_at,
+    `SELECT q.owner_user_id, (q.token_value IS NOT NULL) AS permanent,
             COALESCE(NULLIF(TRIM(u.display_name), ''), NULLIF(TRIM(u.full_name), ''), $2) AS name,
             u.avatar_url
      FROM care_circle_qr_tokens q
@@ -138,7 +128,7 @@ async function resolveQrToken(pool, token, scannerUserId, lang = 'vi') {
      WHERE q.token_hash = $1
        AND q.consumed_at IS NULL
        AND q.revoked_at IS NULL
-       AND q.expires_at > NOW()
+       AND (q.token_value IS NOT NULL OR q.expires_at > NOW())
      LIMIT 1`,
     [tokenHash, t('careCircle.user_label', lang)]
   );
@@ -180,11 +170,11 @@ async function resolveQrToken(pool, token, scannerUserId, lang = 'vi') {
   return {
     ok: true,
     tokenHash,
+    permanent: qr.permanent === true,
     ownerUserId: Number(qr.owner_user_id),
     preview: {
       name: qr.name,
       avatarUrl: qr.avatar_url || null,
-      expiresAt: qr.expires_at,
     },
   };
 }
@@ -214,19 +204,22 @@ async function createInvitationFromQr(pool, requesterId, data, lang = 'vi') {
   );
   if (!invitationResult.ok) return invitationResult;
 
-  try {
-    await pool.query(
-      `UPDATE care_circle_qr_tokens
-       SET consumed_at = NOW(), consumed_by_user_id = $2
-       WHERE token_hash = $1
-         AND consumed_at IS NULL
-         AND revoked_at IS NULL`,
-      [resolved.tokenHash, requesterId]
-    );
-  } catch (error) {
-    // The invitation already exists at this point. Keep the successful user
-    // action and rely on the unique connection pair to prevent a duplicate.
-    console.error('[care-circle-qr] failed to consume token:', error?.message || error);
+  // Permanent codes remain usable by other relatives. Only historical,
+  // short-lived codes retain their previous one-invitation behavior.
+  if (!resolved.permanent) {
+    try {
+      await pool.query(
+        `UPDATE care_circle_qr_tokens
+         SET consumed_at = NOW(), consumed_by_user_id = $2
+         WHERE token_hash = $1
+           AND consumed_at IS NULL
+           AND revoked_at IS NULL`,
+        [resolved.tokenHash, requesterId]
+      );
+    } catch (error) {
+      // Keep successful legacy invitations; unique pairs prevent duplicates.
+      console.error('[care-circle-qr] failed to consume token:', error?.message || error);
+    }
   }
   return invitationResult;
 }
@@ -243,10 +236,13 @@ async function createInvitationFromQr(pool, requesterId, data, lang = 'vi') {
  * @returns {Promise<Object>} - { ok, invitation, error }
  */
 async function createInvitation(pool, requesterId, data, lang = 'vi') {
-  const { addressee_id, relationship_type, permissions } = data;
+  const { addressee_id, permissions } = data;
+  const parsedRelationship = careCircleRelationshipSchema.safeParse(data.relationship_type);
+  if (!parsedRelationship.success) return { ok: false, statusCode: 400, error: t('error.invalid_data', lang) };
+  const relationship_type = parsedRelationship.data;
   const parsedRole = careCircleFamilyRoleSchema.safeParse(data.role);
   if (!parsedRole.success) return familyRoleError(lang);
-  const role = parsedRole.data;
+  const role = parsedRole.data ?? DEFAULT_FAMILY_ROLE;
 
   // Validate not self-invite
   if (Number(addressee_id) === Number(requesterId)) {

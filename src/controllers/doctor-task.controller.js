@@ -98,8 +98,25 @@ const requestDoctorPrivacy = async (pool, req, res) => {
   return res.status(200).json({ ok: true, data: result });
 };
 
-const getDoctorPrivacyReceipts = async (pool, req, res) =>
-  res.json({ ok: true, data: await listPrivacyReceipts(pool, req.user.id) });
+const getDoctorPrivacyReceipts = async (pool, req, res) => {
+  const tenantId = req.query.tenant_id;
+  if (
+    tenantId !== undefined &&
+    (typeof tenantId !== 'string' || !tenantId.trim() || tenantId.length > 120)
+  ) {
+    return res
+      .status(400)
+      .json({
+        ok: false,
+        error: t('doctor.tenant_required', getLang(req)),
+        code: 'TENANT_REQUIRED',
+      });
+  }
+  return res.json({
+    ok: true,
+    data: await listPrivacyReceipts(pool, req.user.id, tenantId?.trim()),
+  });
+};
 
 const recommendDoctor = async (_pool, req, res) => {
   const parsed = doctorRecommendationRequestSchema.safeParse(req.body);

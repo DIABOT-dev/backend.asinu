@@ -49,12 +49,22 @@ const patientRatingRequestSchema = z
 const privacyRequestSchema = z
   .object({
     tenant_id: z.string().trim().min(1).max(120),
-    action: z.enum(['withdraw_consent', 'export', 'anonymize', 'delete']),
+    action: z.enum(['grant_consent', 'withdraw_consent', 'export', 'anonymize', 'delete']),
+    consent_version: z.string().trim().min(1).max(80).optional(),
     reason: z.string().trim().max(1000).optional(),
     request_id: z.string().uuid().optional(),
     confirmation: z.literal('CONFIRM_DOCTOR_DATA_REQUEST'),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.action === 'grant_consent' && !value.consent_version) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['consent_version'],
+        message: 'A consent version is required.',
+      });
+    }
+  });
 
 const doctorRecommendationRequestSchema = z
   .object({
@@ -419,6 +429,7 @@ const buildPrivacyRequestEnvelope = ({ userId, input }) => {
     payload: {
       app_user_id: String(userId),
       action: input.action,
+      ...(input.action === 'grant_consent' ? { consent_version: input.consent_version } : {}),
       ...(input.reason ? { reason: input.reason } : {}),
     },
   };

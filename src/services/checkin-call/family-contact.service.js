@@ -1,6 +1,7 @@
 'use strict';
 
 const { t } = require('../../i18n');
+const { findFamilyRelationship, getReverseFamilyRelationshipKey } = require('../../validation/family-relationships');
 
 function normalized(value) {
   return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -35,6 +36,16 @@ const NOTICE_KEYS = {
 function relationshipForRecipient(type, recipientIsRequester, subjectGender, lang) {
   let key = RELATIONS.get(normalized(type));
   if (!key) {
+    const relation = findFamilyRelationship(type);
+    if (relation) {
+      if (relation.id === 'khac') return t('checkinCall.contact.relative', lang);
+      const labelKey = recipientIsRequester ? relation.labelKey
+        : getReverseFamilyRelationshipKey(relation.id, subjectGender);
+      const label = t('careCircle.relationship.' + labelKey, lang);
+      return t('checkinCall.contact.custom', lang, {
+        relationship: lang === 'en' ? label.toLowerCase() : label,
+      });
+    }
     // A custom relationship cannot safely be inverted without structured data.
     const custom = typeof type === 'string' ? type.replace(/\s+/g, ' ').trim().slice(0, 80) : '';
     return t(custom && recipientIsRequester ? 'checkinCall.contact.custom' : 'checkinCall.contact.relative', lang, { relationship: custom });

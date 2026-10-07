@@ -128,19 +128,31 @@ describe('ASINU -> Doctor task contract', () => {
   });
 
   test('builds all supported privacy actions and keeps user identity inside the signed payload', () => {
-    for (const action of ['withdraw_consent', 'export', 'anonymize', 'delete']) {
+    for (const action of ['grant_consent', 'withdraw_consent', 'export', 'anonymize', 'delete']) {
       const privacyInput = privacyRequestSchema.parse({
         tenant_id: 'clinic-demo',
         action,
+        ...(action === 'grant_consent' ? { consent_version: 'v1.0.0' } : {}),
         confirmation: 'CONFIRM_DOCTOR_DATA_REQUEST',
         request_id: `20000000-0000-4000-8000-00000000000${
-          ['withdraw_consent', 'export', 'anonymize', 'delete'].indexOf(action) + 1
+          ['grant_consent', 'withdraw_consent', 'export', 'anonymize', 'delete'].indexOf(action) + 1
         }`,
       });
       const envelope = buildPrivacyRequestEnvelope({ userId: 42, input: privacyInput });
       expect(envelope.payload).toMatchObject({ app_user_id: '42', action });
       expect(envelope.event_id).not.toContain('42');
+      if (action === 'grant_consent') expect(envelope.payload.consent_version).toBe('v1.0.0');
     }
+  });
+
+  test('requires a version when explicitly re-enabling specialist consent', () => {
+    expect(
+      privacyRequestSchema.safeParse({
+        tenant_id: 'clinic-demo',
+        action: 'grant_consent',
+        confirmation: 'CONFIRM_DOCTOR_DATA_REQUEST',
+      }).success
+    ).toBe(false);
   });
 
   test('validates patient recommendation limits and rejects arbitrary fields', () => {

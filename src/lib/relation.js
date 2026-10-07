@@ -12,6 +12,9 @@
  * @param {string} lang - 'vi' hoặc 'en'
  * @returns {string} - Cách gọi patient cho caregiver, ví dụ "con trai Hùng"
  */
+const { t } = require('../i18n');
+const { findFamilyRelationship, getReverseFamilyRelationshipKey } = require('../validation/family-relationships');
+
 function getPatientRoleForCaregiver(relType, patientName, lang = 'vi', capitalize = false) {
   if (!relType) return patientName;
   if (lang === 'en') return patientName; // English giữ nguyên tên
@@ -20,7 +23,8 @@ function getPatientRoleForCaregiver(relType, patientName, lang = 'vi', capitaliz
   const r = String(relType)
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/-/g, ' ');
 
   // Mapping: addressee (caregiver's role vs patient) → patient's role (in caregiver's view)
   const reverseMap = {
@@ -42,7 +46,9 @@ function getPatientRoleForCaregiver(relType, patientName, lang = 'vi', capitaliz
     'nguoi yeu': 'người yêu',
   };
 
-  const role = reverseMap[r];
+  const relationship = findFamilyRelationship(relType);
+  const labelKey = relationship && getReverseFamilyRelationshipKey(relationship.id);
+  const role = reverseMap[r] || (labelKey && t('careCircle.relationship.' + labelKey, lang).toLowerCase());
   if (!role) return patientName;
 
   const displayRole = capitalize ? role.charAt(0).toUpperCase() + role.slice(1) : role;

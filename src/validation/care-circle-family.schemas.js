@@ -1,6 +1,10 @@
 'use strict';
 
 const { z } = require('zod');
+const { normalizeFamilyRelationship } = require('./family-relationships');
+
+const DEFAULT_FAMILY_ROLE = 'than-nhan';
+const careCircleRelationshipSchema = z.preprocess(normalizeFamilyRelationship, z.string().max(255).optional());
 
 // Older app versions sent translated labels. Persist stable IDs for both languages.
 const FAMILY_ROLE_ALIASES = new Map([
@@ -14,18 +18,21 @@ const FAMILY_ROLE_ALIASES = new Map([
     'primary caregiver',
     'family caregiver',
     'caregiver',
-  ].map((value) => [value, 'nguoi-cham-soc']),
+  ].map((value) => [value, DEFAULT_FAMILY_ROLE]),
 ]);
 
 const careCircleFamilyRoleSchema = z.preprocess((value) => {
+  if (value == null) return undefined;
   if (typeof value !== 'string') return value;
   const label = value.normalize('NFC').trim();
-  if (!label) return null;
+  if (!label) return undefined;
   return FAMILY_ROLE_ALIASES.get(label.toLowerCase()) || label;
-}, z.enum(['than-nhan', 'nguoi-cham-soc']).nullable().optional());
+}, z.literal(DEFAULT_FAMILY_ROLE).optional());
+
+const careCircleInvitationRoleSchema = careCircleFamilyRoleSchema.transform(value => value ?? DEFAULT_FAMILY_ROLE);
 
 const careCircleConnectionUpdateSchema = z.object({
-  relationship_type: z.string().max(255).optional(),
+  relationship_type: careCircleRelationshipSchema,
   role: careCircleFamilyRoleSchema,
 }).refine((data) => data.relationship_type !== undefined || data.role !== undefined, {
   message: 'careCircle.need_at_least_one_field',
@@ -41,4 +48,7 @@ function familyRoleError(lang) {
   };
 }
 
-module.exports = { careCircleFamilyRoleSchema, careCircleConnectionUpdateSchema, familyRoleError };
+module.exports = {
+  DEFAULT_FAMILY_ROLE, careCircleRelationshipSchema, careCircleFamilyRoleSchema,
+  careCircleInvitationRoleSchema, careCircleConnectionUpdateSchema, familyRoleError,
+};

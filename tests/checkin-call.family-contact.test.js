@@ -27,7 +27,15 @@ describe('family call identity and relationship direction', () => {
     ['Người thân', true, null, 'vi', 'Người thân của bạn'],
     [null, false, null, 'en', 'Your family member'],
     ['Dì', true, null, 'vi', 'Dì của bạn'],
-    ['Dì', false, null, 'vi', 'Người thân của bạn'],
+    ['Dì', false, null, 'vi', 'Cháu (con của anh/chị/em) của bạn'],
+    ['di', true, null, 'en', 'Your maternal aunt'],
+    ['Dì', false, 'Nam', 'vi', 'Cháu trai (con của anh/chị/em) của bạn'],
+    ['chu', false, 'Nữ', 'en', 'Your niece'],
+    ['chau-trai-goi-bang-co-chu', false, 'Nam', 'vi', 'Chú, bác hoặc cậu của bạn'],
+    ['bo-vo', false, 'Nam', 'vi', 'Con rể của bạn'],
+    ['con-re', false, 'Nữ', 'vi', 'Người thân bên vợ hoặc chồng của bạn'],
+    ['me-ke', false, 'Nam', 'en', 'Your stepchild'],
+    ['cu-ba', false, 'Nữ', 'vi', 'Chắt của bạn'],
   ])('%s direction requester=%s gender=%s in %s', (type, forward, gender, lang, expected) => {
     expect(relationshipForRecipient(type, forward, gender, lang)).toBe(expected);
   });
