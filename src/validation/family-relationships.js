@@ -146,4 +146,3 @@ function getReverseFamilyRelationshipKey(id, gender) {
 }
 
 module.exports = { FAMILY_RELATIONSHIPS, findFamilyRelationship, normalizeFamilyRelationship, getReverseFamilyRelationshipKey };
-
