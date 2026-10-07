@@ -1,6 +1,8 @@
 'use strict';
 
 const { ROUTINE_SPACING_MINUTES } = require('./notification.policy');
+const { explicitReminderMinute, isQuietHour } = require('./notification-quiet-hours.policy');
+const { areHealthMetricRemindersEnabled } = require('./health-metric-reminders.policy');
 
 const SCHEDULED_REMINDER_TYPES = new Set([
   'morning_checkin',
@@ -45,22 +47,37 @@ function scheduledHoldUntil(preferences, reference = new Date()) {
   const day = new Date(now + vnOffset);
   const midnight = Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()) - vnOffset;
   const slots = [
-    7 * 60, // The existing system morning check-in.
-    minuteOfDay(
-      [preferences.morning_time],
-      preferences.morning_hour ?? preferences.inferred_morning_hour,
-      8
-    ),
-    minuteOfDay([preferences.afternoon_time, preferences.inferred_afternoon_time], null, 14),
-    minuteOfDay(
-      [preferences.evening_time],
-      preferences.evening_hour ?? preferences.inferred_evening_hour,
-      21
-    ),
+    { minute: 7 * 60, explicit: false }, // The existing system morning check-in.
+    {
+      minute: minuteOfDay(
+        [preferences.morning_time],
+        preferences.morning_hour ?? preferences.inferred_morning_hour,
+        8
+      ),
+      explicit: explicitReminderMinute(preferences, 'morning') !== null,
+    },
+    {
+      minute: minuteOfDay(
+        [preferences.afternoon_time, preferences.inferred_afternoon_time],
+        null,
+        14
+      ),
+      explicit: explicitReminderMinute(preferences, 'afternoon') !== null,
+    },
+    {
+      minute: minuteOfDay(
+        [preferences.evening_time],
+        preferences.evening_hour ?? preferences.inferred_evening_hour,
+        21
+      ),
+      explicit: explicitReminderMinute(preferences, 'evening') !== null,
+    },
   ];
+  // Do not reserve a priority window for a temporarily inactive cron family.
+  const activeSlots = areHealthMetricRemindersEnabled() ? slots : slots.slice(0, 1);
   let holdUntil = null;
-  for (const minute of slots) {
-    if (minute < 5 * 60 || minute >= 22 * 60) continue; // Same quiet hours as cron.
+  for (const { minute, explicit } of activeSlots) {
+    if (isQuietHour(Math.floor(minute / 60)) && !explicit) continue;
     const scheduled = midnight + minute * 60000;
     if (now >= scheduled - ROUTINE_SPACING_MINUTES * 60000 && now < scheduled + 60000) {
       // Leave a complete cron minute to create the fixed-time reminder.

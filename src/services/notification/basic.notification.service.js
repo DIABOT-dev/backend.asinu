@@ -19,6 +19,8 @@ const { generateMessage } = require('./notification-intelligence.service');
 const { runReengagement } = require('./reengagement.service');
 const logger = require('../../lib/logger');
 const { t } = require('../../i18n');
+const { isQuietHour } = require('./notification-quiet-hours.policy');
+const { areHealthMetricRemindersEnabled } = require('./health-metric-reminders.policy');
 
 const TZ = 'Asia/Ho_Chi_Minh';
 
@@ -69,15 +71,18 @@ const safeTime = (field) =>
           AND BTRIM(${field}::text) ~ '^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$'
          THEN ${field}::time END)`;
 
-const morningMatch = (defH = 8) => `
+const morningMatch = (defH = 8, explicitOnly = false) => `
   COALESCE(EXTRACT(HOUR   FROM ${safeTime('np.morning_time')})::int, np.morning_hour, np.inferred_morning_hour, ${defH}) = $1
-  AND COALESCE(EXTRACT(MINUTE FROM ${safeTime('np.morning_time')})::int, 0) = $2`;
-const afternoonMatch = (defH = 14) => `
+  AND COALESCE(EXTRACT(MINUTE FROM ${safeTime('np.morning_time')})::int, 0) = $2
+  ${explicitOnly ? `AND (${safeTime('np.morning_time')} IS NOT NULL OR np.morning_hour IS NOT NULL)` : ''}`;
+const afternoonMatch = (defH = 14, explicitOnly = false) => `
   COALESCE(EXTRACT(HOUR   FROM ${safeTime('np.afternoon_time')})::int, EXTRACT(HOUR   FROM ${safeTime('np.inferred_afternoon_time')})::int, ${defH}) = $1
-  AND COALESCE(EXTRACT(MINUTE FROM ${safeTime('np.afternoon_time')})::int, EXTRACT(MINUTE FROM ${safeTime('np.inferred_afternoon_time')})::int, 0) = $2`;
-const eveningMatch = (defH = 21) => `
+  AND COALESCE(EXTRACT(MINUTE FROM ${safeTime('np.afternoon_time')})::int, EXTRACT(MINUTE FROM ${safeTime('np.inferred_afternoon_time')})::int, 0) = $2
+  ${explicitOnly ? `AND ${safeTime('np.afternoon_time')} IS NOT NULL` : ''}`;
+const eveningMatch = (defH = 21, explicitOnly = false) => `
   COALESCE(EXTRACT(HOUR   FROM ${safeTime('np.evening_time')})::int, np.evening_hour, np.inferred_evening_hour, ${defH}) = $1
-  AND COALESCE(EXTRACT(MINUTE FROM ${safeTime('np.evening_time')})::int, 0) = $2`;
+  AND COALESCE(EXTRACT(MINUTE FROM ${safeTime('np.evening_time')})::int, 0) = $2
+  ${explicitOnly ? `AND (${safeTime('np.evening_time')} IS NOT NULL OR np.evening_hour IS NOT NULL)` : ''}`;
 const remindersEnabled = () => `COALESCE(np.reminders_enabled, false) = true`;
 
 function nowVN() {
@@ -216,7 +221,9 @@ const _NO_LOG_TODAY = (logType = null) =>
 
 // ─── 1. Morning summary (merged: log + glucose + bp + medication) ──
 
-async function runMorningSummary(pool, hour, minute) {
+async function runMorningSummary(pool, hour, minute, explicitOnly = false) {
+  if (!areHealthMetricRemindersEnabled())
+    return { type: 'morning_summary', total: 0, sent: 0, paused: true };
   // Query all users whose morning time matches, not yet sent today
   const { rows } = await pool.query(
     `
@@ -257,7 +264,7 @@ async function runMorningSummary(pool, hour, minute) {
       AND u.deleted_at IS NULL
       AND uop.onboarding_completed_at IS NOT NULL
       AND ${remindersEnabled()}
-      AND ${morningMatch(8)}
+      AND ${morningMatch(8, explicitOnly)}
       AND NOT EXISTS (
         SELECT 1 FROM notifications n
         WHERE n.user_id = u.id AND n.type = 'reminder_morning_summary'
@@ -343,11 +350,13 @@ async function runMorningSummary(pool, hour, minute) {
 
 // ─── 2. Afternoon reminder (NEW — uses afternoon_time) ───────────
 
-async function runAfternoon(pool, hour, minute) {
+async function runAfternoon(pool, hour, minute, explicitOnly = false) {
+  if (!areHealthMetricRemindersEnabled())
+    return { type: 'afternoon', total: 0, sent: 0, paused: true };
   const { rows } = await pool.query(
     `
     ${USER_SELECT}
-    AND ${afternoonMatch(14)}
+    AND ${afternoonMatch(14, explicitOnly)}
     ${NOT_SENT_TODAY('reminder_afternoon')}
   `,
     [hour, minute]
@@ -395,7 +404,9 @@ async function runAfternoon(pool, hour, minute) {
 
 // ─── 3. Evening summary (merged: log + medication) ────────────────
 
-async function runEveningSummary(pool, hour, minute) {
+async function runEveningSummary(pool, hour, minute, explicitOnly = false) {
+  if (!areHealthMetricRemindersEnabled())
+    return { type: 'evening_summary', total: 0, sent: 0, paused: true };
   const { rows } = await pool.query(
     `
     SELECT u.id, u.push_token,
@@ -422,7 +433,7 @@ async function runEveningSummary(pool, hour, minute) {
       AND u.deleted_at IS NULL
       AND uop.onboarding_completed_at IS NOT NULL
       AND ${remindersEnabled()}
-      AND ${eveningMatch(21)}
+      AND ${eveningMatch(21, explicitOnly)}
       AND NOT EXISTS (
         SELECT 1 FROM notifications n
         WHERE n.user_id = u.id AND n.type = 'reminder_evening_summary'
@@ -647,23 +658,31 @@ async function runBasicNotifications(pool, forceHour = null, forceMinute = null)
     }
   };
 
-  // Quiet hours 22:00–05:00 VN: only run urgent jobs, skip all reminders
-  const isQuietHours = hour >= 22 || hour < 5;
+  const isQuietHours = isQuietHour(hour);
+  // Explicitly configured reminders still run overnight. Inferred/default
+  // schedules must not masquerade as permission to wake the user.
+  const results = [];
+  results.push(
+    await runTask('morning_summary', () => runMorningSummary(pool, hour, minute, isQuietHours))
+  );
+  results.push(await runTask('afternoon', () => runAfternoon(pool, hour, minute, isQuietHours)));
+  results.push(
+    await runTask('evening_summary', () => runEveningSummary(pool, hour, minute, isQuietHours))
+  );
   if (isQuietHours) {
-    const results = await Promise.all([
-      runTask('checkin_followups', () => runCheckinFollowUps(pool)),
-      runTask('alert_confirmation_followups', () => runAlertConfirmationFollowUps(pool)),
-    ]);
+    results.push(
+      ...(await Promise.all([
+        runTask('checkin_followups', () => runCheckinFollowUps(pool)),
+        runTask('alert_confirmation_followups', () => runAlertConfirmationFollowUps(pool)),
+      ]))
+    );
     const totalSent = results.reduce((s, r) => s + (r?.sent || 0), 0);
-    return { ok: true, hour, minute, quietHours: true, results, totalSent, totalEligible: 0 };
+    const totalEligible = results.reduce((s, r) => s + (r?.total || 0), 0);
+    return { ok: true, hour, minute, quietHours: true, results, totalSent, totalEligible };
   }
 
   // Fixed-time reminders are created before optional/system engagement jobs.
   // Delivery owns the shared spacing; valid reminders stay queued, not dropped.
-  const results = [];
-  results.push(await runTask('morning_summary', () => runMorningSummary(pool, hour, minute)));
-  results.push(await runTask('afternoon', () => runAfternoon(pool, hour, minute)));
-  results.push(await runTask('evening_summary', () => runEveningSummary(pool, hour, minute)));
   results.push(await runTask('morning_checkin', () => runMorningCheckin(pool, hour)));
   results.push(await runTask('streak_milestones', () => runStreakMilestones(pool, hour, minute)));
   if (hour === 20 && minute < 5 && dow === 0)

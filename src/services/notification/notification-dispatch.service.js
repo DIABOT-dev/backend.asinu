@@ -17,6 +17,14 @@ const {
   getScheduledReminderHoldUntil,
   isScheduledReminder,
 } = require('./notification-schedule.policy');
+const {
+  getQuietHoursHoldUntil,
+  resolveNotificationTimezone,
+} = require('./notification-quiet-hours.policy');
+const {
+  getHiddenNotificationTypes,
+  isHealthMetricReminderSuppressed,
+} = require('./health-metric-reminders.policy');
 
 // Every writer sharing the daily budget must use the same per-user transaction lock.
 async function withNotificationTransaction(pool, userId, work) {
@@ -116,6 +124,7 @@ async function reserveNotification(
     pushBody = body,
   }
 ) {
+  if (isHealthMetricReminderSuppressed(type)) return null;
   return withNotificationTransaction(pool, userId, async (client) => {
     let eventKey = notificationEventKey(data);
     const eventIdentity = explicitEventIdentity(data);
@@ -270,11 +279,14 @@ async function deliverNotification(pool, notificationId) {
       [notificationId]
     );
     const selected = await client.query(
-      `SELECT n.id, n.user_id, n.type, n.title, n.data, o.push_body, o.attempts,
-              u.push_token, u.deleted_at, ub.timezone, o.expires_at <= NOW() AS expired
+      `SELECT n.id, n.user_id, n.type, n.title, n.data, n.priority, n.created_at, o.push_body, o.attempts,
+              u.push_token, u.deleted_at, ub.timezone, o.expires_at <= NOW() AS expired,
+              NOW() AS reference_time, np.reminders_enabled, np.morning_time, np.afternoon_time,
+              np.evening_time, np.morning_hour, np.evening_hour
          FROM notification_push_outbox o JOIN notifications n ON n.id = o.notification_id
          JOIN users u ON u.id = n.user_id
          LEFT JOIN user_baselines ub ON ub.user_id = n.user_id
+         LEFT JOIN user_notification_preferences np ON np.user_id = n.user_id
         WHERE o.notification_id = $1
           AND ((o.state IN ('PENDING','RETRY') AND o.next_attempt_at <= NOW())
             OR (o.state = 'INFLIGHT' AND o.lease_until < NOW()))
@@ -285,6 +297,17 @@ async function deliverNotification(pool, notificationId) {
     if (!claimed) {
       await client.query('COMMIT');
       return { ok: false, skipped: true };
+    }
+    if (isHealthMetricReminderSuppressed(claimed.type)) {
+      // Cancel existing jobs as well: hiding only newly-created notifications
+      // would let older provider retries wake the user after the pause.
+      await client.query(
+        `UPDATE notification_push_outbox SET state = 'CANCELLED', lease_until = NULL,
+          updated_at = NOW() WHERE notification_id = $1`,
+        [notificationId]
+      );
+      await client.query('COMMIT');
+      return { ok: false, skipped: true, reason: 'health_metric_reminders_paused' };
     }
     const optedIn = !isOptInType(claimed.type) || (await hasReminderOptIn(client, claimed.user_id));
     const permitted = await hasCurrentRecipientPermission(client, claimed);
@@ -307,9 +330,28 @@ async function deliverNotification(pool, notificationId) {
         skipped: true,
       };
     }
+    const quietHoldUntil = getQuietHoursHoldUntil(
+      claimed,
+      claimed,
+      claimed.timezone,
+      claimed.reference_time
+    );
+    if (quietHoldUntil) {
+      // Preserve the inbox and durable job. Quiet hours are not a provider
+      // failure: release the lease without consuming a delivery attempt.
+      await client.query(
+        `UPDATE notification_push_outbox SET state = 'RETRY', lease_until = NULL,
+          next_attempt_at = $2, updated_at = NOW() WHERE notification_id = $1`,
+        [notificationId, quietHoldUntil]
+      );
+      await client.query('COMMIT');
+      return { ok: false, skipped: true, deferred: true, reason: 'quiet_hours' };
+    }
     if (claimed.type === 'health_feed') {
-      const { isWithinPushWindow, resolveTimezone } = require('../health_feed/config');
-      if (!isWithinPushWindow(resolveTimezone(claimed.timezone))) {
+      const { isWithinPushWindow } = require('../health_feed/config');
+      if (
+        !isWithinPushWindow(resolveNotificationTimezone(claimed.timezone), claimed.reference_time)
+      ) {
         await client.query(
           `UPDATE notification_push_outbox SET state = 'RETRY', lease_until = NULL,
           next_attempt_at = NOW() + INTERVAL '30 minutes', updated_at = NOW() WHERE notification_id = $1`,
@@ -326,10 +368,17 @@ async function deliverNotification(pool, notificationId) {
              FROM notifications n JOIN notification_push_outbox o ON o.notification_id = n.id
             WHERE n.user_id = $1 AND n.id <> $2
               AND (n.type = ANY($4::text[]) OR LEFT(n.type, 9) = 'reminder_')
+              AND NOT (n.type = ANY($5::text[]))
               AND o.expires_at > NOW() AND o.attempts < 5
               AND ((o.state IN ('PENDING','RETRY') AND o.next_attempt_at <= NOW())
                 OR (o.state = 'INFLIGHT' AND o.lease_until > NOW()))`,
-          [claimed.user_id, notificationId, ROUTINE_SPACING_MINUTES, [...SCHEDULED_REMINDER_TYPES]]
+          [
+            claimed.user_id,
+            notificationId,
+            ROUTINE_SPACING_MINUTES,
+            [...SCHEDULED_REMINDER_TYPES],
+            getHiddenNotificationTypes(),
+          ]
         );
         const holdUntil =
           scheduled.rows[0]?.hold_until ||

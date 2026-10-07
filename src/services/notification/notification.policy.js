@@ -1,6 +1,7 @@
 'use strict';
 
 const logger = require('../../lib/logger');
+const { isHealthMetricReminderSuppressed } = require('./health-metric-reminders.policy');
 
 const DEFAULT_DAILY_CAP = 3;
 const ROUTINE_SPACING_MINUTES = 5;
@@ -66,7 +67,11 @@ async function hasReachedDailyCap(pool, userId, excludeNotificationId = null) {
         AND type = ANY($2::text[])
         AND DATE(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') =
             DATE(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')`,
-    [userId, [...DAILY_CAP_TYPES], excludeNotificationId]
+    [
+      userId,
+      [...DAILY_CAP_TYPES].filter((type) => !isHealthMetricReminderSuppressed(type)),
+      excludeNotificationId,
+    ]
   );
   return Number(rows[0]?.count || 0) >= cap;
 }

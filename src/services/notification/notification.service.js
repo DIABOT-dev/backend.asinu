@@ -6,6 +6,10 @@
 const { t } = require('../../i18n');
 const { capitalizeFirstLetter, formatPersonName } = require('../../lib/text-format');
 const { withNotificationTransaction } = require('./notification-dispatch.service');
+const {
+  getHiddenNotificationTypes,
+  isHealthMetricReminderSuppressed,
+} = require('./health-metric-reminders.policy');
 
 function presentNotification(notification) {
   const displayed = {
@@ -57,24 +61,27 @@ function presentNotification(notification) {
 async function getNotifications(pool, userId, options = {}) {
   const { page = 1, limit = 20 } = options;
   const offset = (page - 1) * limit;
+  const hiddenTypes = getHiddenNotificationTypes();
 
   try {
     const result = await pool.query(
       `SELECT id, type, title, message, data, is_read, created_at, read_at, priority
        FROM notifications
        WHERE user_id = $1
+         AND NOT (type = ANY($4::text[]))
        ORDER BY created_at DESC
        LIMIT $2 OFFSET $3`,
-      [userId, limit, offset]
+      [userId, limit, offset, hiddenTypes]
     );
 
-    const countResult = await pool.query('SELECT COUNT(*) FROM notifications WHERE user_id = $1', [
-      userId,
-    ]);
+    const countResult = await pool.query(
+      'SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND NOT (type = ANY($2::text[]))',
+      [userId, hiddenTypes]
+    );
 
     const unreadResult = await pool.query(
-      'SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false',
-      [userId]
+      'SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND is_read = false AND NOT (type = ANY($2::text[]))',
+      [userId, hiddenTypes]
     );
 
     return {
@@ -131,8 +138,9 @@ async function markAllAsRead(pool, userId) {
       `UPDATE notifications 
        SET is_read = true, read_at = NOW()
        WHERE user_id = $1 AND is_read = false
+         AND NOT (type = ANY($2::text[]))
        RETURNING id`,
-      [userId]
+      [userId, getHiddenNotificationTypes()]
     );
 
     return { ok: true, markedCount: result.rows.length };
@@ -160,7 +168,7 @@ async function getUserPushToken(pool, userId) {
  * @param {string} title - Notification title
  * @param {string} message - Notification body
  * @param {Object} data - JSON data payload
- * @returns {Promise<{notificationId: number, existing: boolean}>}
+ * @returns {Promise<{notificationId: number, existing: boolean}|null>} null when this reminder family is paused
  */
 async function saveInAppNotification(
   pool,
@@ -171,6 +179,7 @@ async function saveInAppNotification(
   data = {},
   priority = 'low'
 ) {
+  if (isHealthMetricReminderSuppressed(type)) return null;
   const values = [
     userId,
     type,

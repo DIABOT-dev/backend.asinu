@@ -7,6 +7,14 @@ const {
 } = require('../../src/services/notification/notification-schedule.policy');
 
 describe('fixed-time notification priority', () => {
+  const originalMetricFlag = process.env.HEALTH_METRIC_REMINDERS_ENABLED;
+  beforeEach(() => {
+    process.env.HEALTH_METRIC_REMINDERS_ENABLED = 'true';
+  });
+  afterAll(() => {
+    if (originalMetricFlag === undefined) delete process.env.HEALTH_METRIC_REMINDERS_ENABLED;
+    else process.env.HEALTH_METRIC_REMINDERS_ENABLED = originalMetricFlag;
+  });
   const preferences = { reminders_enabled: true, morning_time: '09:15' };
   const at = (time) => new Date(`2026-10-06T${time}+07:00`);
 
@@ -80,17 +88,31 @@ describe('fixed-time notification priority', () => {
       at('09:23:00')
     );
   });
-  test('opt-out, invalid dates and quiet-hour schedules do not hold notifications', () => {
+  test('opt-out, invalid dates and inferred quiet-hour schedules do not hold notifications', () => {
     expect(
       scheduledHoldUntil({ ...preferences, reminders_enabled: false }, at('09:15:00'))
     ).toBeNull();
     expect(scheduledHoldUntil(preferences, 'invalid')).toBeNull();
     expect(
-      scheduledHoldUntil({ ...preferences, evening_time: '22:00' }, at('21:58:00'))
+      scheduledHoldUntil(
+        { ...preferences, evening_time: null, inferred_evening_hour: 22 },
+        at('21:58:00')
+      )
     ).toBeNull();
     expect(
-      scheduledHoldUntil({ ...preferences, morning_time: '04:00' }, at('03:58:00'))
+      scheduledHoldUntil(
+        { ...preferences, morning_time: null, inferred_morning_hour: 5 },
+        at('04:58:00')
+      )
     ).toBeNull();
+  });
+  test('explicit night schedules keep fixed-time priority over optional notifications', () => {
+    expect(scheduledHoldUntil({ ...preferences, evening_time: '22:00' }, at('21:58:00'))).toEqual(
+      at('22:05:00')
+    );
+    expect(scheduledHoldUntil({ ...preferences, morning_time: '05:30' }, at('05:28:00'))).toEqual(
+      at('05:35:00')
+    );
   });
   test('uses the database clock and only completed-onboarding schedules', async () => {
     const pool = {
@@ -107,5 +129,10 @@ describe('fixed-time notification priority', () => {
       expect.stringContaining('uop.onboarding_completed_at IS NOT NULL'),
       [42]
     );
+  });
+  test('paused metric slots do not block auxiliary notifications; the 07:00 check-in still has priority', () => {
+    delete process.env.HEALTH_METRIC_REMINDERS_ENABLED;
+    expect(scheduledHoldUntil(preferences, at('09:14:00'))).toBeNull();
+    expect(scheduledHoldUntil(preferences, at('07:00:00'))).toEqual(at('07:05:00'));
   });
 });

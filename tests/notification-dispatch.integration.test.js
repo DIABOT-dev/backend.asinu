@@ -1,6 +1,21 @@
 'use strict';
 
 const { Pool } = require('pg');
+// Existing delivery scenarios run at a deterministic daytime; quiet-hours
+// behavior has its own real-SQL suite with explicit nighttime clocks.
+jest.mock('../src/services/notification/notification-quiet-hours.policy', () => {
+  const actual = jest.requireActual('../src/services/notification/notification-quiet-hours.policy');
+  return {
+    ...actual,
+    getQuietHoursHoldUntil: (notification, preferences, timezone) =>
+      actual.getQuietHoursHoldUntil(
+        notification,
+        preferences,
+        timezone,
+        new Date('2026-10-07T12:00:00+07:00')
+      ),
+  };
+});
 jest.mock('../src/services/notification/push.notification.service', () => ({
   ...jest.requireActual('../src/services/notification/push.notification.service'),
   sendPushNotification: jest.fn().mockResolvedValue({ ok: true }),
@@ -38,6 +53,7 @@ const describeDatabase = process.env.CHECKIN_TEST_DATABASE_URL ? describe : desc
 describeDatabase(
   'notification reservation and durable push delivery (real SQL, fake provider)',
   () => {
+    const originalMetricFlag = process.env.HEALTH_METRIC_REMINDERS_ENABLED;
     const pool = new Pool({ connectionString: process.env.CHECKIN_TEST_DATABASE_URL });
     let userId;
     const ids = [];
@@ -49,6 +65,7 @@ describeDatabase(
       ids.push(userId);
     });
     beforeEach(async () => {
+      process.env.HEALTH_METRIC_REMINDERS_ENABLED = 'true';
       sendPushNotification.mockReset().mockResolvedValue({ ok: true });
       getScheduledReminderHoldUntil
         .mockReset()
@@ -66,6 +83,8 @@ describeDatabase(
     afterAll(async () => {
       await pool.query('DELETE FROM users WHERE id = ANY($1::int[])', [ids]);
       await pool.end();
+      if (originalMetricFlag === undefined) delete process.env.HEALTH_METRIC_REMINDERS_ENABLED;
+      else process.env.HEALTH_METRIC_REMINDERS_ENABLED = originalMetricFlag;
     });
     const message = (data = {}, type = 'caregiver_alert') => ({
       userId,

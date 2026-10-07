@@ -1,6 +1,19 @@
 'use strict';
 
 const { Pool } = require('pg');
+jest.mock('../src/services/notification/notification-quiet-hours.policy', () => {
+  const actual = jest.requireActual('../src/services/notification/notification-quiet-hours.policy');
+  return {
+    ...actual,
+    getQuietHoursHoldUntil: (notification, preferences, timezone) =>
+      actual.getQuietHoursHoldUntil(
+        notification,
+        preferences,
+        timezone,
+        new Date('2026-10-07T12:00:00+07:00')
+      ),
+  };
+});
 jest.mock('../src/services/health_feed/repository', () => ({
   getPendingNotificationJobs: jest.fn(),
   markNotificationJobDispatched: jest.fn(),
@@ -35,6 +48,7 @@ const { sendAndSave } = require('../src/services/notification/basic.notification
 const describeDatabase = process.env.CHECKIN_TEST_DATABASE_URL ? describe : describe.skip;
 
 describeDatabase('Health Feed shares atomic budget and durable delivery', () => {
+  const originalMetricFlag = process.env.HEALTH_METRIC_REMINDERS_ENABLED;
   const pool = new Pool({ connectionString: process.env.CHECKIN_TEST_DATABASE_URL });
   let userId;
   beforeAll(async () => {
@@ -49,6 +63,7 @@ describeDatabase('Health Feed shares atomic budget and durable delivery', () => 
     );
   });
   beforeEach(async () => {
+    process.env.HEALTH_METRIC_REMINDERS_ENABLED = 'true';
     getScheduledReminderHoldUntil
       .mockReset()
       .mockImplementation(
@@ -80,6 +95,8 @@ describeDatabase('Health Feed shares atomic budget and durable delivery', () => 
   afterAll(async () => {
     await pool.query('DELETE FROM users WHERE id = $1', [userId]);
     await pool.end();
+    if (originalMetricFlag === undefined) delete process.env.HEALTH_METRIC_REMINDERS_ENABLED;
+    else process.env.HEALTH_METRIC_REMINDERS_ENABLED = originalMetricFlag;
   });
   const fillTwo = () =>
     pool.query(

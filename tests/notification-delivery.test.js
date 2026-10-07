@@ -38,6 +38,7 @@ function createPool(
           data: JSON.parse(values[4]),
           attempts: 0,
           push_token: pushToken,
+          reference_time: new Date('2026-10-07T12:00:00+07:00'),
         };
         return { rows: [{ id: 1 }], rowCount: 1 };
       }
