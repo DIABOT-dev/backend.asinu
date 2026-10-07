@@ -64,7 +64,7 @@ describe('account-owned contextual guidance', () => {
     { epoch: 0, user_id: 99 }, { epoch: 0, completed: ['invented'] },
     { epoch: -1 }, { epoch: 1.5 }, { epoch: 0, role: 'admin' },
     { epoch: 0, readAloud: 'false' }, { epoch: 0, welcomeSeen: false },
-    { epoch: 0, completed: Array(11).fill('home.fine') }, {}, null,
+    { epoch: 0, completed: Array(service.STEP_IDS.length + 1).fill('home.fine') }, {}, null,
   ])('invalid updates cannot write to the database: %j', async body => {
     const pool = database();
     expect(await service.updateProgress(pool, 1, body)).toMatchObject({ ok: false, statusCode: 400 });
@@ -79,11 +79,44 @@ describe('account-owned contextual guidance', () => {
     expect(await service.updateProgress(pool, 1, { epoch: 0, completed: ['circle.add'] }))
       .toMatchObject({ ok: false, statusCode: 409, code: 'GUIDANCE_STALE' });
   });
+  test('check-in status and location coaches never mark the later symptom-question coaches complete', async () => {
+    const pool = database(); const app = appFor(pool);
+    await request(app).get('/guidance').set('X-Test-Account', '11').expect(200);
+    const completed = ['checkin.status', 'checkin.location', 'checkin.location_other'];
+    const saved = await request(app).put('/guidance').set('X-Test-Account', '11')
+      .send({ epoch: 0, completed }).expect(200);
+    expect(saved.body.progress.completed).toEqual(completed);
+    const reopened = await request(app).get('/guidance').set('X-Test-Account', '11').expect(200);
+    expect(reopened.body.progress.completed).toEqual(completed);
+    expect(reopened.body.progress.completed).not.toContain('checkin.choices');
+    expect(reopened.body.progress.completed).not.toContain('checkin.other');
+    expect((await service.getProgress(pool, 12)).completed).toEqual([]);
+    await request(app).put('/guidance').set('X-Test-Account', '11')
+      .send({ epoch: 0, completed: ['checkin.choices', 'checkin.other'] }).expect(200);
+    expect((await service.getProgress(pool, 11)).completed).toEqual([...completed, 'checkin.choices', 'checkin.other']);
+  });
   test('unauthenticated requests cannot read or alter guidance', async () => {
     const pool = database(); const app = appFor(pool);
     await request(app).get('/guidance').expect(401);
     await request(app).put('/guidance').send({ epoch: 0 }).expect(401);
     await request(app).post('/guidance/replay').expect(401);
+    expect(pool.query).not.toHaveBeenCalled();
+  });
+  test('practice completion stores only guide metadata and never creates real health history', async () => {
+    const pool = database(); const app = appFor(pool);
+    await request(app).get('/guidance').set('X-Test-Account', '11').expect(200);
+    pool.query.mockClear();
+    const response = await request(app).put('/guidance').set('X-Test-Account', '11')
+      .send({ epoch: 0, completed: ['checkin.finished'] }).expect(200);
+    expect(response.body.progress.completed).toEqual(['checkin.finished']);
+    expect(response.body.progress.firstCheckin).toBe(false);
+    expect(pool.query).toHaveBeenCalledTimes(1);
+    expect(pool.query.mock.calls[0][0]).toMatch(/UPDATE user_guidance_progress/);
+    expect(pool.query.mock.calls[0][0]).not.toMatch(/health_checkins|notifications|checkin_call/);
+    expect(pool.query.mock.calls[0][1][5]).toBe('{"checkin.finished":true}');
+    pool.query.mockClear();
+    await request(app).put('/guidance').set('X-Test-Account', '11')
+      .send({ epoch: 0, completed: ['checkin.finished'], answers: ['private answer'], result: { severity: 'high' } }).expect(400);
     expect(pool.query).not.toHaveBeenCalled();
   });
   test('HTTP handlers use only the authenticated account and reject spoofed payloads', async () => {

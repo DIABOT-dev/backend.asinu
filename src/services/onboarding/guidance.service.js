@@ -3,7 +3,11 @@
 const { z } = require('zod');
 
 const STEP_IDS = [
-  'home.fine', 'home.unwell', 'checkin.choices', 'checkin.other', 'home.suggestions',
+  'home.fine', 'home.unwell', 'checkin.status', 'checkin.location', 'checkin.location_other',
+  'checkin.choices', 'checkin.other', 'checkin.practice', 'checkin.voice', 'checkin.location_confirm',
+  'checkin.multiple', 'checkin.single', 'checkin.confirm', 'checkin.result_status', 'checkin.result_symptoms',
+  'checkin.result_advice', 'checkin.result_replay', 'checkin.result_doctor', 'checkin.result_emergency',
+  'checkin.result_family', 'checkin.result_variants', 'checkin.result_close', 'checkin.finished', 'home.suggestions',
   'circle.add', 'circle.phone', 'circle.relationship', 'circle.send', 'circle.member',
 ];
 const patchSchema = z.object({
