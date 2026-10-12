@@ -2,6 +2,7 @@
 
 const service = require('../services/checkin-call/checkin-call.service');
 const audio = require('../services/checkin-call/audio.service');
+const { getConclusionAudio } = require('../services/checkin-call/conclusion-audio.service');
 const personalization = require('../services/checkin-call/personalization.service');
 const nativeActions = require('../services/checkin-call/native-action.service');
 const { createAttemptToken } = require('../services/checkin-call/access.service');
@@ -153,7 +154,8 @@ function createCheckinCallController(pool) {
       return res.json(publicAudio(data));
     }),
     synthesizeConclusion: handle(async (req, res) => {
-      const data = await audio.synthesizeText(req.body?.text, getLang(req));
+      res.set('Cache-Control', 'no-store');
+      const data = await getConclusionAudio(req.user.id, req.body?.text, getLang(req));
       return res.json(publicAudio(data));
     }),
     getAttempt: handle(async (req, res) => {

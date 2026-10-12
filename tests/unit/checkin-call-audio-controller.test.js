@@ -1,6 +1,7 @@
 'use strict';
 
 jest.mock('../../src/services/checkin-call/audio.service', () => ({
+  ...jest.requireActual('../../src/services/checkin-call/audio.service'),
   audioMimeType: jest.fn(() => 'audio/mpeg'),
   audioVersion: jest.fn((language) => 'revision-' + language),
   getAudio: jest.fn(),

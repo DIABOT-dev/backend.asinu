@@ -71,7 +71,7 @@ function audioVersion(requestedLanguage = 'vi', selectedVoice) {
   return createHash('sha256')
     .update(
       JSON.stringify({
-        schema: 'checkin-call-audio-v2',
+        schema: 'checkin-call-audio-v3',
         provider: 'vieneu',
         format: deliveryMimeType(voice),
         language,

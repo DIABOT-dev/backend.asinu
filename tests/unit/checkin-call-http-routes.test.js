@@ -27,6 +27,7 @@ jest.mock('../../src/services/checkin-call/checkin-call.service', () => ({
   decline: jest.fn(),
 }));
 jest.mock('../../src/services/checkin-call/audio.service', () => ({
+  ...jest.requireActual('../../src/services/checkin-call/audio.service'),
   getAudio: jest.fn(),
   synthesizeText: jest.fn(),
   audioMimeType: jest.fn(() => 'audio/mpeg'),
