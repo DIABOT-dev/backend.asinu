@@ -8,7 +8,7 @@ RUN npm ci --omit=dev
 FROM node:20-alpine AS runtime
 
 # Install only what we need at runtime; avoid leaving build tools in the image.
-RUN apk add --no-cache wget tini \
+RUN apk add --no-cache wget tini ffmpeg \
   && addgroup -S asinu \
   && adduser -S -G asinu -h /app asinu
 

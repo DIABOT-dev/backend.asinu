@@ -7,7 +7,9 @@ const { t } = require('../../i18n');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 const entitlementService = require('../payment/entitlement.service');
 const { familyContact, familyNotice } = require('./family-contact.service');
-const { synthesizeText } = require('./audio.service');
+const { synthesizeText, audioVersion } = require('./audio.service');
+const personalization = require('./personalization.service');
+const { createHash } = require('node:crypto');
 const { recordCallResponse, refreshEarlySignals } = require('./response-history.service');
 const {
   BODY_LOCATIONS,
@@ -44,6 +46,9 @@ const TRIAGE_INTENSITIES = new Set(['MILD', 'MODERATE', 'URGENT']);
 const URGENT_TRIAGE_SYMPTOMS = new Set(['shortness_of_breath', 'chest_pain', 'fall', 'fainting']);
 const TRIAGE_TIMEOUT_SECONDS = 180;
 const INVALID_APNS_REASONS = new Set(['BadDeviceToken', 'DeviceTokenNotForTopic', 'Unregistered']);
+const familyRecordings = new Map();
+const familySynthesis = new Map();
+const openingAudioJobs = new Map();
 
 function normalizeComparable(value) {
   return String(value || '')
@@ -775,7 +780,61 @@ async function getFamilyAudio(pool, attemptId, userId, lang = 'vi') {
   if (!attempt || attempt.target_role !== 'FAMILY') {
     throw serviceError('Family attempt not found', 404, 'checkinCall.error.attempt_not_found');
   }
-  return synthesizeText(attempt.family_notice.audio_text, lang);
+  const language = String(lang).startsWith('en') ? 'en' : 'vi';
+  const version = audioVersion(language);
+  const hash = createHash('sha256')
+    .update(
+      JSON.stringify([attemptId, userId, language, version, attempt.family_notice.audio_text])
+    )
+    .digest('hex');
+  const stored = familyRecordings.get(hash);
+  if (stored?.expires > Date.now()) return stored.data;
+  let pending = familySynthesis.get(hash);
+  if (!pending) {
+    pending = synthesizeText(attempt.family_notice.audio_text, language).then((data) => {
+      if (data.audio_version === version) {
+        if (familyRecordings.size >= 64)
+          familyRecordings.delete(familyRecordings.keys().next().value);
+        familyRecordings.set(hash, { data, expires: Date.now() + 5 * 60_000 });
+      }
+      return data;
+    });
+    familySynthesis.set(hash, pending);
+  }
+  try {
+    return await pending;
+  } finally {
+    if (familySynthesis.get(hash) === pending) familySynthesis.delete(hash);
+  }
+}
+
+function prewarmOpeningAudio(pool, delivery, lang) {
+  // Start while the phone is ringing, without delaying any push or escalation.
+  // A request arriving mid-synthesis joins the same attempt-scoped promise.
+  if (!process.env.VIENEU_API_KEY) return;
+  const key = delivery.attempt_id;
+  if (openingAudioJobs.has(key)) return openingAudioJobs.get(key);
+  if (openingAudioJobs.size >= 4) return;
+  const started = Date.now();
+  const pending = (
+    delivery.target_role === 'USER'
+      ? personalization.userAudio(pool, key, delivery.target_user_id, 'user_prompt', lang)
+      : getFamilyAudio(pool, key, delivery.target_user_id, lang)
+  )
+    .then((data) => {
+      logger.info('checkin_call.opening_audio_ready', {
+        attemptId: key,
+        durationMs: Date.now() - started,
+        bytes: data.audio_data.length,
+      });
+    })
+    .catch(() => {
+      // Audio/provider failure must never prevent an incoming safety call.
+      logger.warn('checkin_call.opening_audio_unavailable', { attemptId: key });
+    })
+    .finally(() => openingAudioJobs.delete(key));
+  openingAudioJobs.set(key, pending);
+  return pending;
 }
 
 async function seen(pool, attemptId, userId) {
@@ -1439,12 +1498,22 @@ async function dispatchDeliveries(pool) {
     };
     const title = t(urgent ? 'checkinCall.push.urgent_title' : 'checkinCall.push.call_title', lang);
     const nativeCall = incoming || delivery.kind === 'URGENT_REPEAT';
-    const fcmPayload = nativeCall && delivery.fcm_token ? {
-      ...payload,
-      ringDeadline: delivery.ring_deadline ? new Date(delivery.ring_deadline).toISOString() : undefined,
-      // Do not persist this credential in the notification inbox or send it to iOS.
-      declineCapability: createDeclineCapability(delivery.attempt_id, delivery.target_user_id, delivery.ring_deadline),
-    } : payload;
+    if (nativeCall) prewarmOpeningAudio(pool, delivery, lang);
+    const fcmPayload =
+      nativeCall && delivery.fcm_token
+        ? {
+            ...payload,
+            ringDeadline: delivery.ring_deadline
+              ? new Date(delivery.ring_deadline).toISOString()
+              : undefined,
+            // Do not persist this credential in the notification inbox or send it to iOS.
+            declineCapability: createDeclineCapability(
+              delivery.attempt_id,
+              delivery.target_user_id,
+              delivery.ring_deadline
+            ),
+          }
+        : payload;
     const [directFcm, directApns] = await Promise.all([
       delivery.fcm_token
         ? sendFcmNotification(delivery.fcm_token, title, message, fcmPayload, {
@@ -1652,5 +1721,5 @@ module.exports = {
   startTestCall,
   startEarlySignalEpisode,
   cancelActiveForManualCheckin,
-  _test: { invalidPushTokenChannels },
+  _test: { invalidPushTokenChannels, prewarmOpeningAudio },
 };

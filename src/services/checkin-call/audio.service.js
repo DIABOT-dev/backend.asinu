@@ -1,6 +1,7 @@
 const { createHash } = require('crypto');
 const { t } = require('../../i18n');
 const { synthesizeSpeech, voiceMimeType } = require('../voice/vieneu.service');
+const { encodeMp3 } = require('../voice/mp3.service');
 
 const MAX_DYNAMIC_TEXT_LENGTH = 1600;
 const DEFAULT_ASINU_VOICE = 'clone_b935a451-7d65-4b73-a083-d46e56c47d4f';
@@ -55,6 +56,12 @@ function voiceForLanguage() {
   return process.env.VIENEU_VOICE?.trim() || DEFAULT_ASINU_VOICE;
 }
 
+function deliveryMimeType(voice) {
+  return process.env.CHECKIN_CALL_AUDIO_FORMAT === 'mp3' && voiceMimeType(voice) === 'audio/wav'
+    ? 'audio/mpeg'
+    : voiceMimeType(voice);
+}
+
 // Opaque public revision: never include API keys or user data in this hash.
 // The optional revision also lets operators invalidate changed provider voices
 // that keep the same name, without rebuilding the mobile app.
@@ -66,7 +73,7 @@ function audioVersion(requestedLanguage = 'vi', selectedVoice) {
       JSON.stringify({
         schema: 'checkin-call-audio-v2',
         provider: 'vieneu',
-        format: voiceMimeType(voice),
+        format: deliveryMimeType(voice),
         language,
         voice,
         revision: process.env.CHECKIN_CALL_AUDIO_REVISION || '1',
@@ -77,10 +84,11 @@ function audioVersion(requestedLanguage = 'vi', selectedVoice) {
 }
 
 function audioMimeType(requestedLanguage = 'vi') {
-  return voiceMimeType(voiceForLanguage(normalizeLanguage(requestedLanguage)));
+  return deliveryMimeType(voiceForLanguage(normalizeLanguage(requestedLanguage)));
 }
 
 async function requestSpeech(phrase, voice, version) {
+  const compress = deliveryMimeType(voice) === 'audio/mpeg' && voiceMimeType(voice) === 'audio/wav';
   try {
     const data = await synthesizeSpeech({
       text: phrase,
@@ -88,7 +96,8 @@ async function requestSpeech(phrase, voice, version) {
       apiKey: process.env.VIENEU_API_KEY,
       timeoutMs: synthesisTimeoutMs(),
     });
-    return { ...data, audio_version: version };
+    const delivered = compress ? await encodeMp3(data.audio_data) : data;
+    return { ...delivered, audio_version: version };
   } catch (error) {
     throw audioError(error.message, 503, 'checkinCall.error.audio_unavailable');
   }
