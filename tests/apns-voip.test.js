@@ -64,3 +64,40 @@ describe('APNs VoIP payload', () => {
     ).resolves.toEqual({ ok: false, error: 'VOIP_REQUIRES_INCOMING_CALL' });
   });
 });
+
+describe('APNs environment recovery', () => {
+  test.each(['sandbox', 'production'])('recovers an explicitly rejected %s token once', async environment => {
+    const alternate = environment === 'sandbox' ? 'production' : 'sandbox';
+    const send = jest.fn()
+      .mockResolvedValueOnce({ ok: false, status: 400, error: 'BadDeviceToken' })
+      .mockResolvedValueOnce({ ok: true, apnsId: 'accepted-call' });
+    await expect(_test.sendWithEnvironmentFallback(environment, send)).resolves.toEqual({
+      ok: true, apnsId: 'accepted-call', environment: alternate,
+    });
+    expect(send.mock.calls).toEqual([[environment], [alternate]]);
+  });
+
+  test.each([
+    { ok: true },
+    { ok: false, error: 'APNS_TIMEOUT' },
+    { ok: false, status: 500, error: 'InternalServerError' },
+    { ok: false, status: 410, error: 'Unregistered' },
+    { ok: false, status: 400, error: 'DeviceTokenNotForTopic' },
+    { ok: false, status: 403, error: 'ExpiredProviderToken' },
+  ])('never resends an accepted/ambiguous/unrelated response %j', async result => {
+    const send = jest.fn().mockResolvedValue(result);
+    await expect(_test.sendWithEnvironmentFallback('sandbox', send)).resolves.toEqual({
+      ...result, environment: 'sandbox',
+    });
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  test('stops after both environments explicitly reject the token', async () => {
+    const result = { ok: false, status: 400, error: 'BadDeviceToken' };
+    const send = jest.fn().mockResolvedValue(result);
+    await expect(_test.sendWithEnvironmentFallback('sandbox', send)).resolves.toEqual({
+      ...result, environment: 'production',
+    });
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+});

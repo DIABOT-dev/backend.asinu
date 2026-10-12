@@ -1529,9 +1529,22 @@ async function dispatchDeliveries(pool) {
           })
         : Promise.resolve({ ok: false, error: 'NO_VOIP_TOKEN' }),
     ]);
+    if (
+      directApns.ok &&
+      ['sandbox', 'production'].includes(directApns.environment) &&
+      directApns.environment !== delivery.voip_push_environment
+    ) {
+      await pool.query(
+        'UPDATE users SET voip_push_environment = $3 WHERE id = $1 AND voip_push_token = $2 AND voip_push_environment IS NOT DISTINCT FROM $4',
+        [delivery.target_user_id, delivery.voip_push_token, directApns.environment, delivery.voip_push_environment]
+      );
+    }
     const nativeOk = directFcm.ok || directApns.ok;
+    // An Android token saved on the same account does not prove that its iPhone
+    // received the call. Keep the regular iOS fallback when VoIP was rejected.
+    const iosCallFailed = incoming && delivery.voip_push_token && !directApns.ok;
     const expoFallback =
-      !nativeOk && delivery.push_token
+      (!nativeOk || iosCallFailed) && delivery.push_token
         ? await sendPushNotification([delivery.push_token], title, message, payload)
         : null;
     if (delivery.tries === 0) {

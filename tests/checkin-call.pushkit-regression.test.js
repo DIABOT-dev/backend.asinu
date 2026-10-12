@@ -101,6 +101,29 @@ test('a new iOS call is still delivered once through APNs VoIP', async () => {
   expect(sendPushNotification).not.toHaveBeenCalled();
 });
 
+test('Android success cannot suppress the iPhone fallback after VoIP rejection', async () => {
+  sendVoipNotification.mockResolvedValueOnce({ ok: false, status: 400, error: 'BadDeviceToken' });
+  const { pool } = deliveryPool('INCOMING_CALL', { fcm_token: 'android', push_token: 'ExpoPushToken[iphone]' });
+  await service.dispatchDeliveries(pool);
+  expect(sendFcmNotification).toHaveBeenCalledTimes(1);
+  expect(sendPushNotification).toHaveBeenCalledWith(
+    ['ExpoPushToken[iphone]'], expect.any(String), expect.any(String),
+    expect.objectContaining({ kind: 'INCOMING_CALL', checkinCall: true })
+  );
+});
+
+test('a corrected APNs environment is saved only for the token and environment just sent', async () => {
+  sendVoipNotification.mockResolvedValueOnce({ ok: true, environment: 'sandbox' });
+  const { pool } = deliveryPool('INCOMING_CALL', { push_token: 'ExpoPushToken[iphone]' });
+  await service.dispatchDeliveries(pool);
+  const update = pool.query.mock.calls.find(([sql]) => sql.includes('SET voip_push_environment = $3'));
+  expect(update[0]).toContain('voip_push_token = $2');
+  expect(update[0]).toContain('voip_push_environment IS NOT DISTINCT FROM $4');
+  expect(update[1]).toEqual([7, 'voip-device', 'sandbox', 'production']);
+  expect(sendPushNotification).not.toHaveBeenCalled();
+  expect(pool.query.mock.calls.some(([sql]) => sql.includes('voip_push_token = NULL'))).toBe(false);
+});
+
 test.each(['URGENT_REPEAT', 'FALLBACK'])(
   '%s is a regular notification, never a VoIP push',
   async (kind) => {

@@ -94,6 +94,81 @@ function buildPayload(data = {}, action = 'INCOMING_CALL') {
   };
 }
 
+async function sendWithEnvironmentFallback(environment, send) {
+  const result = await send(environment);
+  // Ad hoc development clients can carry a production token despite reporting
+  // sandbox. Retry only an explicit rejection: an accepted or ambiguous request
+  // must never produce a second CallKit call.
+  if (!result.ok && result.status === 400 && result.error === 'BadDeviceToken') {
+    const alternate = environment === 'production' ? 'sandbox' : 'production';
+    return { ...(await send(alternate)), environment: alternate };
+  }
+  return { ...result, environment };
+}
+
+function sendRequest(token, payload, config, jwt) {
+  return new Promise((resolve) => {
+    const client = http2.connect(APNS_HOSTS[config.environment]);
+    let settled = false;
+    let status = 0;
+    let responseBody = '';
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      client.close();
+      resolve(result);
+    };
+
+    const timer = setTimeout(() => {
+      client.destroy();
+      finish({ ok: false, error: 'APNS_TIMEOUT' });
+    }, 10000);
+
+    client.once('error', (error) => finish({ ok: false, error: error.message || String(error) }));
+
+    const request = client.request({
+      ':method': 'POST',
+      ':path': '/3/device/' + encodeURIComponent(token),
+      authorization: 'bearer ' + jwt,
+      'apns-topic': config.topic,
+      'apns-push-type': 'voip',
+      'apns-priority': '10',
+      'apns-expiration': '0',
+      ...(payload.episodeId ? { 'apns-collapse-id': String(payload.episodeId).slice(0, 64) } : {}),
+    });
+
+    request.setEncoding('utf8');
+    request.on('response', (headers) => {
+      status = Number(headers[':status'] || 0);
+    });
+    request.on('data', (chunk) => {
+      responseBody += chunk;
+    });
+    request.on('error', (error) => finish({ ok: false, error: error.message || String(error) }));
+    request.on('end', () => {
+      let response = {};
+      try {
+        response = responseBody ? JSON.parse(responseBody) : {};
+      } catch {
+        response = {};
+      }
+      if (status === 200) return finish({ ok: true, apnsId: response.apnsId || null });
+      if (status === 403 && response.reason === 'ExpiredProviderToken') {
+        cachedProviderToken = null;
+        cachedProviderTokenAt = 0;
+      }
+      return finish({
+        ok: false,
+        status,
+        error: response.reason || (status ? 'APNS_HTTP_' + status : 'APNS_NO_RESPONSE'),
+      });
+    });
+    request.end(JSON.stringify(payload));
+  });
+}
+
 async function sendVoipNotification(token, data = {}, options = {}) {
   if (!token || typeof token !== 'string') return { ok: false, error: 'NO_VOIP_TOKEN' };
 
@@ -111,67 +186,9 @@ async function sendVoipNotification(token, data = {}, options = {}) {
 
   try {
     const jwt = await providerToken(config);
-
-    return await new Promise((resolve) => {
-      const client = http2.connect(APNS_HOSTS[config.environment]);
-      let settled = false;
-      let status = 0;
-      let responseBody = '';
-
-      const finish = (result) => {
-        if (settled) return;
-        settled = true;
-        clearTimeout(timer);
-        client.close();
-        resolve(result);
-      };
-
-      const timer = setTimeout(() => {
-        client.destroy();
-        finish({ ok: false, error: 'APNS_TIMEOUT' });
-      }, 10000);
-
-      client.once('error', (error) => finish({ ok: false, error: error.message || String(error) }));
-
-      const request = client.request({
-        ':method': 'POST',
-        ':path': '/3/device/' + encodeURIComponent(token),
-        authorization: 'bearer ' + jwt,
-        'apns-topic': config.topic,
-        'apns-push-type': 'voip',
-        'apns-priority': '10',
-        'apns-expiration': '0',
-        ...(data.episodeId ? { 'apns-collapse-id': String(data.episodeId).slice(0, 64) } : {}),
-      });
-
-      request.setEncoding('utf8');
-      request.on('response', (headers) => {
-        status = Number(headers[':status'] || 0);
-      });
-      request.on('data', (chunk) => {
-        responseBody += chunk;
-      });
-      request.on('error', (error) => finish({ ok: false, error: error.message || String(error) }));
-      request.on('end', () => {
-        let response = {};
-        try {
-          response = responseBody ? JSON.parse(responseBody) : {};
-        } catch {
-          response = {};
-        }
-        if (status === 200) return finish({ ok: true, apnsId: response.apnsId || null });
-        if (status === 403 && response.reason === 'ExpiredProviderToken') {
-          cachedProviderToken = null;
-          cachedProviderTokenAt = 0;
-        }
-        return finish({
-          ok: false,
-          status,
-          error: response.reason || (status ? 'APNS_HTTP_' + status : 'APNS_NO_RESPONSE'),
-        });
-      });
-      request.end(JSON.stringify(payload));
-    });
+    return await sendWithEnvironmentFallback(config.environment, (environment) =>
+      sendRequest(token, payload, { ...config, environment }, jwt)
+    );
   } catch (error) {
     return { ok: false, error: error.message || String(error) };
   }
@@ -179,5 +196,5 @@ async function sendVoipNotification(token, data = {}, options = {}) {
 
 module.exports = {
   sendVoipNotification,
-  _test: { normalizeEnvironment, buildPayload },
+  _test: { normalizeEnvironment, buildPayload, sendWithEnvironmentFallback, sendRequest },
 };
