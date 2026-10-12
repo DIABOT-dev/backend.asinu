@@ -13,11 +13,7 @@
  */
 
 const { detectEmergency } = require('./emergency-detector');
-const {
-  getNextStep,
-  calculateConclusion,
-  buildState,
-} = require('../../core/checkin/triage-engine');
+const { getNextStep, calculateConclusion } = require('../../core/checkin/triage-engine');
 const {
   formatQuestion,
   generateConclusion,
@@ -25,9 +21,13 @@ const {
   classifySymptomSeverity,
 } = require('../../core/checkin/triage-ai-layer');
 const { t } = require('../../i18n');
-const { normalizeAnswer, normalizeLang } = require('../../core/checkin/triage-i18n');
-const { normalizeSymptomForEngine } = require('./body-location');
-const { resolveComplaint } = require('./clinical-mapping');
+const { normalizeLang } = require('../../core/checkin/triage-i18n');
+const { getHonorifics } = require('../../lib/honorifics');
+const {
+  normalizeProfile,
+  normalizeAnswers,
+  conditionsOf,
+} = require('../../core/checkin/triage-facts');
 
 // ─── Emergency type mapping ─────────────────────────────────────────────────
 // emergency-detector returns UPPERCASE types (e.g. 'STROKE', 'MI').
@@ -121,22 +121,22 @@ async function getNextTriageQuestion(input) {
     healthContext = {},
     previousAnswers = [],
     previousSessionSummary = null,
+    previousTriageMessages = [],
+    previousSeverity = null,
+    forceConclusion = false,
     bodyLocation = null, // legacy single
     bodyLocations = null, // new array
     bodyLocationOther = null, // free-text
   } = input;
 
   // ── Normalize profile: ensure age is set ──
-  const normalizedProfile = { ...profile };
-  if (!normalizedProfile.age && normalizedProfile.birth_year) {
-    normalizedProfile.age = new Date().getFullYear() - normalizedProfile.birth_year;
-  }
-
-  // ── Normalize healthContext: ensure medical_conditions at top level ──
-  const normalizedHC = { ...healthContext };
-  if (!normalizedHC.medical_conditions && normalizedProfile.medical_conditions) {
-    normalizedHC.medical_conditions = normalizedProfile.medical_conditions;
-  }
+  const normalizedProfile = normalizeProfile(profile);
+  const normalizedHC = {
+    ...healthContext,
+    medical_conditions: conditionsOf(
+      healthContext.medical_conditions || normalizedProfile.medical_conditions
+    ),
+  };
 
   // New clients send an explicit step id. Question-text inference remains only
   // for older installed builds and in-progress legacy sessions.
@@ -145,22 +145,22 @@ async function getNextTriageQuestion(input) {
       ? ['followup_status', 'followup_detail', 'conclude']
       : ['symptoms', 'onset', 'progression', 'red_flags', 'conclude'];
 
-  const inferLegacyStep = (question, index) => {
+  const inferLegacyStep = (question, index, order = STEP_ORDER) => {
     const value = String(question || '').toLowerCase();
     if (/(lần trước|so với lần|compared to)/.test(value)) return 'followup_status';
     if (/(triệu chứng mới|thay đổi gì|new symptom)/.test(value)) return 'followup_detail';
-    if (/(bắt đầu|từ khi nào|bao lâu|how long|when did)/.test(value)) return 'onset';
+    if (/(bắt đầu|từ khi nào|từ lúc nào|bao lâu|how long|when did)/.test(value)) return 'onset';
     if (/(đỡ hơn|nặng hơn|so với lúc đầu|thay đổi thế nào|progress)/.test(value)) {
       return 'progression';
     }
-    if (/(quan trọng|dấu hiệu nghiêm trọng|warning sign|khẩn cấp)/.test(value)) {
+    if (/(quan trọng|dấu hiệu nghiêm trọng|dấu hiệu nào|warning sign|khẩn cấp)/.test(value)) {
       return 'red_flags';
     }
     if (/(đi kèm|triệu chứng nào khác|associated)/.test(value)) return 'associated';
     if (/(nguyên nhân|dẫn đến|cause)/.test(value)) return 'cause';
     if (/(đã làm gì|giảm triệu chứng|what have you done)/.test(value)) return 'action';
     if (/(triệu chứng|vấn đề là gì|khó chịu|symptom)/.test(value)) return 'symptoms';
-    return STEP_ORDER[index] || 'unknown';
+    return order[index] || 'unknown';
   };
 
   const answersWithSteps = previousAnswers.map((a, i) => {
@@ -168,14 +168,28 @@ async function getNextTriageQuestion(input) {
     const step = inferLegacyStep(a.question, i);
     return { step, answer: a.answer, question: a.question };
   });
-  const normalizedAnswers = answersWithSteps.map((answer) => {
-    const normalizeValue = (value) => normalizeSymptomForEngine(normalizeAnswer(value));
-    return {
-      ...answer,
-      answer: Array.isArray(answer.answer)
-        ? answer.answer.map(normalizeValue)
-        : normalizeValue(answer.answer),
-    };
+  const normalizedAnswers = normalizeAnswers(answersWithSteps);
+  const baselineAnswers = normalizeAnswers(
+    previousTriageMessages.map((entry, index) => ({
+      ...entry,
+      step:
+        entry.step ||
+        inferLegacyStep(entry.question, index, ['symptoms', 'onset', 'progression', 'red_flags']),
+    }))
+  );
+  const engineResult = getNextStep({
+    status,
+    phase,
+    profile: normalizedProfile,
+    healthContext: normalizedHC,
+    previousAnswers: normalizedAnswers,
+    baselineAnswers,
+    previousSeverity,
+    forceConclusion,
+    bodyLocation,
+    bodyLocations,
+    bodyLocationOther,
+    lang,
   });
 
   // 1. Extract all symptom texts from previous answers for emergency scanning.
@@ -198,11 +212,8 @@ async function getNextTriageQuestion(input) {
   // Backup cho các emergency NGOÀI keyword list (long tail symptoms).
   // Cost: 1 GPT call ~150 tokens, cache theo symptom.
   let safetyHint = null;
-  const symptomAnswer = answersWithSteps.find((answer) => answer.step === 'symptoms');
-  if (symptomAnswer) {
-    const symptomText = Array.isArray(symptomAnswer.answer)
-      ? symptomAnswer.answer.join(' ')
-      : String(symptomAnswer.answer || '');
+  const symptomText = engineResult.state.currentSymptoms.join(', ');
+  if (symptomText) {
     if (symptomText && symptomText.length >= 2) {
       try {
         const safety = await classifySymptomSeverity(symptomText, normalizedProfile);
@@ -217,9 +228,11 @@ async function getNextTriageQuestion(input) {
               symptom: symptomText,
             }),
             recommendation: t('checkin.triage.emergency.detected_recommendation', resolvedLang),
-            closeMessage: t('checkin.triage.emergency.close_family', resolvedLang, {
-              selfRef: 'Asinu',
-            }),
+            closeMessage: t(
+              'checkin.triage.emergency.close_family',
+              resolvedLang,
+              getHonorifics({ ...normalizedProfile, lang: resolvedLang })
+            ),
             severity: 'emergency',
             needsDoctor: true,
             needsFamilyAlert: true,
@@ -232,32 +245,16 @@ async function getNextTriageQuestion(input) {
             },
           };
         }
-        if (safety.severity === 'urgent') {
-          safetyHint = safety;
-        }
+        safetyHint = safety;
       } catch (err) {
         console.error('[Triage V2] safety classifier error:', err.message);
       }
     }
   }
 
-  // 3. Get next step from the deterministic engine.
-  const engineResult = getNextStep({
-    status,
-    phase,
-    profile: normalizedProfile,
-    healthContext: normalizedHC,
-    previousAnswers: normalizedAnswers,
-    previousSessionSummary,
-    bodyLocation,
-    bodyLocations,
-    bodyLocationOther,
-    lang,
-  });
-
   // 4. If the engine says conclude → generate the conclusion via AI layer.
   if (engineResult.action === 'conclude') {
-    const state = buildState(normalizedAnswers, normalizedProfile, normalizedHC);
+    const state = engineResult.state;
     const conclusion = calculateConclusion(state, status);
     const severityRank = { low: 0, medium: 1, high: 2, emergency: 3 };
     const applySeverityFloor = (severity, needsDoctor, needsFamilyAlert, followUpHours) => {
@@ -295,7 +292,7 @@ async function getNextTriageQuestion(input) {
       primarySymptom: state.primarySymptom || engineResult.primarySymptom,
     };
 
-    const aiConclusion = await generateConclusion(conclusionInput, profile, lang);
+    const aiConclusion = await generateConclusion(conclusionInput, normalizedProfile, lang);
 
     return {
       isDone: true,
@@ -307,21 +304,24 @@ async function getNextTriageQuestion(input) {
       needsFamilyAlert: conclusion.needsFamilyAlert,
       hasRedFlag: conclusion.hasRedFlag,
       followUpHours: conclusion.followUpHours,
+      assessmentIncomplete: Boolean(state.assessmentIncomplete),
+      recordedSymptoms: state.allSymptoms,
     };
   }
 
   // 5. If options empty for associated/red_flags/cause → AI generates mapping
   const needsAIMapping =
-    ['associated', 'red_flags', 'cause'].includes(engineResult.step) &&
+    ['associated', 'cause'].includes(engineResult.step) &&
     (!engineResult.options ||
       engineResult.options.length === 0 ||
-      (engineResult.options.length === 1 && engineResult.options[0] === 'không có'));
+      (engineResult.options.length === 1 &&
+        ['không có', 'không rõ', 'none', 'unsure'].includes(
+          String(engineResult.options[0]).toLowerCase()
+        )));
 
   if (needsAIMapping) {
     // Find the primary symptom from first answer
-    const firstAnswer = normalizedAnswers[0]?.answer || '';
-    const resolved = resolveComplaint(firstAnswer);
-    const primarySymptom = resolved?.key || firstAnswer;
+    const primarySymptom = engineResult.state.allSymptoms.join(', ');
     // Set primarySymptom on engineResult so AI layer can use it in templates
     engineResult.primarySymptom = primarySymptom;
 

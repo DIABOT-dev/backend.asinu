@@ -158,6 +158,10 @@ async function triageHandler(pool, req, res) {
     );
     return res.json({ ok: true, ...result });
   } catch (err) {
+    if (err.code === 'TRIAGE_CHANGED')
+      return res
+        .status(409)
+        .json({ ok: false, code: err.code, error: t('checkin.triage.changed', getLang(req)) });
     if (err.code === 'SESSION_NOT_FOUND') {
       return res
         .status(404)

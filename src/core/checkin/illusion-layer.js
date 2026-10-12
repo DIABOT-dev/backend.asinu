@@ -20,6 +20,8 @@
  */
 
 const { getHonorifics } = require('../../lib/honorifics');
+const { capitalizeSentences } = require('../../lib/text-format');
+const { progressionOf } = require('./triage-facts');
 
 // ─── Symptom name sanitizer ────────────────────────────────────────────────
 // Tránh template injection khi display_name từ DB bị rác (chứa text câu hỏi,
@@ -266,18 +268,6 @@ function selectEmpathyResponse(lastAnswer, user) {
   let category;
 
   // Classify answer
-  const positiveWords = [
-    'đỡ hơn',
-    'đỡ rồi',
-    'ổn rồi',
-    'hết rồi',
-    'đang đỡ',
-    'better',
-    'improved',
-    'fine',
-    'good',
-    'đã đỡ',
-  ];
   const severeWords = [
     'nặng hơn',
     'rất đau',
@@ -289,10 +279,13 @@ function selectEmpathyResponse(lastAnswer, user) {
   ];
   const mildWords = ['vẫn vậy', 'vẫn như cũ', 'same', 'unchanged', 'trung bình', 'nhẹ'];
 
-  if (positiveWords.some((w) => answerStr.includes(w))) {
-    category = 'answer_improving';
-  } else if (severeWords.some((w) => answerStr.includes(w))) {
+  const progression = progressionOf(answerStr);
+  if (progression === 'worse' || (!progression && severeWords.some((w) => answerStr.includes(w)))) {
     category = 'answer_worsening';
+  } else if (progression === 'better') {
+    category = 'answer_improving';
+  } else if (progression === 'same') {
+    category = 'answer_mild';
   } else if (mildWords.some((w) => answerStr.includes(w))) {
     category = 'answer_mild';
   } else if (typeof answer === 'number') {
@@ -315,7 +308,7 @@ function selectEmpathyResponse(lastAnswer, user) {
   text = text.replace(/\{selfRef\}/g, h.selfRef);
   text = text.replace(/\{honorific\}/g, h.honorific);
 
-  return { text, templateId: responses.id };
+  return { text: capitalizeSentences(text), templateId: responses.id };
 }
 
 // ─── #6 Progress Feedback ───────────────────────────────────────────────────
@@ -373,7 +366,7 @@ function generateProgressFeedback(ctx, currentSeverity, user) {
 
   // Priority 1: Severity comparison (today vs yesterday)
   if (ctx.lastSeverity && currentSeverity) {
-    const severityOrder = { low: 1, medium: 2, high: 3 };
+    const severityOrder = { low: 1, medium: 2, high: 3, emergency: 4 };
     const prev = severityOrder[ctx.lastSeverity] || 0;
     const curr = severityOrder[currentSeverity] || 0;
     if (curr < prev) {
@@ -716,7 +709,7 @@ function _renderTemplate(template, variables, honorifics, lang) {
     text = text.replace(new RegExp(`\\{${key}\\}`, 'g'), String(val));
   }
 
-  return text;
+  return capitalizeSentences(text);
 }
 
 // ─── Exports ────────────────────────────────────────────────────────────────

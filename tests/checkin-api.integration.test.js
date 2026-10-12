@@ -110,7 +110,9 @@ describeDatabase('check-in HTTP API contract', () => {
     );
     audioBackup = existingAudio.rows[0] || null;
     const phrase = audioService.PHRASES.user_prompt.vi;
-    const hash = createHash('sha256').update(`${audioService.audioVersion('vi')}\n${phrase}`).digest('hex');
+    const hash = createHash('sha256')
+      .update(`${audioService.audioVersion('vi')}\n${phrase}`)
+      .digest('hex');
     await pool.query(
       "INSERT INTO checkin_call_audio (audio_key, text_hash, mime_type, audio_data) VALUES ('vi:user_prompt',$1,'audio/mpeg',$2) ON CONFLICT (audio_key) DO UPDATE SET text_hash = EXCLUDED.text_hash, mime_type = EXCLUDED.mime_type, audio_data = EXCLUDED.audio_data",
       [hash, Buffer.from('checkin-api-integration-audio')]
@@ -431,6 +433,103 @@ describeDatabase('check-in HTTP API contract', () => {
     expect(stored.rows[0].triage_completed_at).not.toBeNull();
   });
 
+  async function conversationAccount(age = 35, conditions = []) {
+    const inserted = await pool.query(
+      'INSERT INTO users (phone_number, display_name) VALUES ($1,$2) RETURNING id',
+      [`conv-${require('crypto').randomUUID().slice(0, 24)}`, 'Conversation test']
+    );
+    const userId = inserted.rows[0].id;
+    createdUserIds.push(userId);
+    await pool.query(
+      'INSERT INTO user_onboarding_profiles (user_id,birth_year,gender,medical_conditions) VALUES ($1,$2,$3,$4::jsonb)',
+      [userId, new Date().getFullYear() - age, 'Nam', JSON.stringify(conditions)]
+    );
+    const headers = auth(jwt.sign({ id: userId }, jwtSecret, { expiresIn: '10m' }));
+    const started = await request(app)
+      .post('/api/mobile/checkin/start')
+      .set(headers)
+      .send({ status: 'specific_concern', body_locations: ['abdomen'] })
+      .expect(200);
+    const checkinId = started.body.session.id;
+    const entry = (step, answer) => ({ step, question: step, answer });
+    const initialAnswers = [
+      entry('symptoms', 'Tiêu chảy'),
+      entry('onset', 'Từ hôm qua'),
+      entry('progression', 'Vẫn như cũ'),
+      entry('red_flags', 'Không có'),
+    ];
+    const triage = (answers) =>
+      request(app)
+        .post('/api/mobile/checkin/triage')
+        .set(headers)
+        .send({ checkin_id: checkinId, previous_answers: answers });
+    return { userId, checkinId, headers, entry, initialAnswers, triage };
+  }
+
+  test('retrying the same completed check-in returns the same conclusion and severity', async () => {
+    const account = await conversationAccount();
+    const first = await account.triage(account.initialAnswers).expect(200);
+    const replay = await account.triage(account.initialAnswers).expect(200);
+    expect(first.body).toMatchObject({ isDone: true, severity: 'low' });
+    expect(replay.body).toEqual(first.body);
+    expect(first.body.summary).not.toMatch(/đi kèm|chưa.*xử lý/);
+  });
+
+  test('follow-up retains symptoms and allows a required third safety question', async () => {
+    const account = await conversationAccount(70, ['cao huyết áp']);
+    await account.triage(account.initialAnswers).expect(200);
+    await request(app)
+      .post('/api/mobile/checkin/followup')
+      .set(account.headers)
+      .send({ checkin_id: account.checkinId, status: 'tired' })
+      .expect(200);
+    const answers = [
+      account.entry('followup_status', 'Vẫn như cũ'),
+      account.entry('followup_detail', 'Không có triệu chứng mới'),
+    ];
+    const question = await account.triage(answers).expect(200);
+    expect(question.body).toMatchObject({ isDone: false, step: 'red_flags' });
+    expect(question.body.question.toLowerCase()).toContain('tiêu chảy');
+    const conclusion = await account
+      .triage([...answers, account.entry('red_flags', 'Không có')])
+      .expect(200);
+    expect(conclusion.body).toMatchObject({ isDone: true, severity: 'medium', needsDoctor: true });
+    expect(conclusion.body.summary.toLowerCase()).toContain('tiêu chảy');
+    expect(conclusion.body.summary.toLowerCase()).not.toContain('không có triệu chứng mới');
+  });
+
+  test('a newly reported follow-up symptom returns to onset, progression and safety before concluding', async () => {
+    const account = await conversationAccount();
+    await account.triage(account.initialAnswers).expect(200);
+    await request(app)
+      .post('/api/mobile/checkin/followup')
+      .set(account.headers)
+      .send({ checkin_id: account.checkinId, status: 'tired' })
+      .expect(200);
+    const answers = [
+      account.entry('followup_status', 'Vẫn như cũ'),
+      account.entry('followup_detail', 'Có thêm triệu chứng mới'),
+    ];
+    const detail = await account.triage(answers).expect(200);
+    expect(detail.body).toMatchObject({
+      isDone: false,
+      step: 'followup_detail',
+      allowFreeText: true,
+      options: [],
+    });
+    answers.push(account.entry('followup_detail', 'Đau đầu'));
+    expect((await account.triage(answers).expect(200)).body.step).toBe('onset');
+    answers.push(account.entry('onset', 'Từ sáng'));
+    expect((await account.triage(answers).expect(200)).body.step).toBe('progression');
+    answers.push(account.entry('progression', 'Vẫn như cũ'));
+    expect((await account.triage(answers).expect(200)).body.step).toBe('red_flags');
+    answers.push(account.entry('red_flags', 'Không có'));
+    const conclusion = await account.triage(answers).expect(200);
+    expect(conclusion.body.isDone).toBe(true);
+    expect(conclusion.body.summary.toLowerCase()).toContain('đau đầu');
+    expect(conclusion.body.summary.toLowerCase()).toContain('tiêu chảy');
+  });
+
   test('check-in call settings and validation match the frontend contract', async () => {
     const defaults = await request(app)
       .get('/api/mobile/checkin-call/settings')
@@ -489,23 +588,50 @@ describeDatabase('check-in HTTP API contract', () => {
     const soloId = created.rows[0].id;
     createdUserIds.push(soloId);
     await entitlementService.activateHouseholdPlan(pool, soloId, {
-      planCode: 'antam_2', billingPeriod: 'monthly', platform: 'apple',
-      productId: 'asinu.premium.monthly', originalTransactionId: `http-solo-${soloId}`,
-      startsAt: new Date(), expiresAt: new Date(Date.now() + 86400000),
+      planCode: 'antam_2',
+      billingPeriod: 'monthly',
+      platform: 'apple',
+      productId: 'asinu.premium.monthly',
+      originalTransactionId: `http-solo-${soloId}`,
+      startsAt: new Date(),
+      expiresAt: new Date(Date.now() + 86400000),
     });
     const soloToken = jwt.sign({ id: soloId }, jwtSecret, { expiresIn: '10m' });
-    const initial = await request(app).get('/api/mobile/checkin-call/settings').set(auth(soloToken)).expect(200);
+    const initial = await request(app)
+      .get('/api/mobile/checkin-call/settings')
+      .set(auth(soloToken))
+      .expect(200);
     expect(initial.body.contacts).toEqual([]);
-    const enabled = await request(app).put('/api/mobile/checkin-call/settings').set(auth(soloToken))
-      .send({ enabled: true }).expect(200);
-    expect(enabled.body.settings).toMatchObject({ user_id: soloId, enabled: true, user_timeout_seconds: 60 });
-    await request(app).put('/api/mobile/checkin-call/settings').set(auth(soloToken))
-      .send({ checkin_time: '09:30', user_timeout_seconds: 180 }).expect(200);
-    const updated = await request(app).get('/api/mobile/checkin-call/settings').set(auth(soloToken)).expect(200);
+    const enabled = await request(app)
+      .put('/api/mobile/checkin-call/settings')
+      .set(auth(soloToken))
+      .send({ enabled: true })
+      .expect(200);
+    expect(enabled.body.settings).toMatchObject({
+      user_id: soloId,
+      enabled: true,
+      user_timeout_seconds: 60,
+    });
+    await request(app)
+      .put('/api/mobile/checkin-call/settings')
+      .set(auth(soloToken))
+      .send({ checkin_time: '09:30', user_timeout_seconds: 180 })
+      .expect(200);
+    const updated = await request(app)
+      .get('/api/mobile/checkin-call/settings')
+      .set(auth(soloToken))
+      .expect(200);
     expect(updated.body.contacts).toEqual([]);
-    expect(updated.body.settings).toMatchObject({ enabled: true, checkin_time: '09:30:00', user_timeout_seconds: 180 });
-    await request(app).put('/api/mobile/checkin-call/settings').set(auth(soloToken))
-      .send({ enabled: false }).expect(200);
+    expect(updated.body.settings).toMatchObject({
+      enabled: true,
+      checkin_time: '09:30:00',
+      user_timeout_seconds: 180,
+    });
+    await request(app)
+      .put('/api/mobile/checkin-call/settings')
+      .set(auth(soloToken))
+      .send({ enabled: false })
+      .expect(200);
   });
 
   test('test call supports the complete user OK HTTP flow', async () => {
@@ -836,7 +962,9 @@ describeDatabase('check-in HTTP API contract', () => {
     );
     await checkinCallService.tick(pool);
     expect(sendVoipNotification).not.toHaveBeenCalled();
-    const userAttempt = await pool.query('SELECT state FROM checkin_call_attempts WHERE id = $1', [userAttemptId]);
+    const userAttempt = await pool.query('SELECT state FROM checkin_call_attempts WHERE id = $1', [
+      userAttemptId,
+    ]);
     expect(userAttempt.rows[0].state).toBe('NO_ANSWER');
 
     const familyActive = await checkinCallService.getActive(pool, familyId);
@@ -844,7 +972,11 @@ describeDatabase('check-in HTTP API contract', () => {
     await checkinCallService.dispatchDeliveries(pool);
     expect(sendVoipNotification).toHaveBeenCalledWith(
       'voip-family',
-      expect.objectContaining({ episodeId, attemptId: familyActive.attempt_id, kind: 'INCOMING_CALL' }),
+      expect.objectContaining({
+        episodeId,
+        attemptId: familyActive.attempt_id,
+        kind: 'INCOMING_CALL',
+      }),
       expect.objectContaining({ action: 'INCOMING_CALL' })
     );
     sendVoipNotification.mockClear();
@@ -854,7 +986,10 @@ describeDatabase('check-in HTTP API contract', () => {
     );
     await checkinCallService.tick(pool);
     expect(sendVoipNotification).not.toHaveBeenCalled();
-    const expiredFamily = await pool.query('SELECT state FROM checkin_call_attempts WHERE id = $1', [familyActive.attempt_id]);
+    const expiredFamily = await pool.query(
+      'SELECT state FROM checkin_call_attempts WHERE id = $1',
+      [familyActive.attempt_id]
+    );
     expect(expiredFamily.rows[0].state).toBe('PUSH_WAIT');
   });
 

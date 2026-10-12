@@ -6,15 +6,25 @@
  * NO AI/GPT calls — pure rule-based logic using clinical-mapping.js data.
  *
  * Two flows:
- *   INITIAL  — up to 4 questions: symptoms → onset → progression →
+ *   INITIAL  — symptoms → onset → progression →
  *              red_flags → conclude
- *   FOLLOWUP — up to 2 questions: followup_status → followup_detail → conclude
+ *   FOLLOWUP — followup_status → followup_detail → safety checks if needed → conclude
  *
  * Skip-logic rules are applied deterministically to shorten the flow
  * when clinical context allows it (e.g. progression === 'better' → skip red_flags).
  */
 
-const { resolveComplaint } = require('../../services/checkin/clinical-mapping');
+const {
+  textOf,
+  isUnknown,
+  isNone,
+  affirmativeParts,
+  progressionOf,
+  onsetOf,
+  complaintsOf,
+  conditionsOf,
+  normalizeProfile,
+} = require('./triage-facts');
 const { t } = require('../../i18n');
 const { localizeOptions, normalizeLang } = require('./triage-i18n');
 
@@ -150,7 +160,7 @@ function buildPrioritizedSymptomOptions(conditions) {
 /** Adaptive 2-4 question flow for a brand-new check-in. */
 const INITIAL_STEPS = ['symptoms', 'onset', 'progression', 'red_flags', 'conclude'];
 
-/** Maximum 2 questions for a follow-up visit. */
+/** Follow-up baseline; new complaints and unresolved risk need additional checks. */
 const FOLLOWUP_STEPS = [
   'followup_status', // 1. How are you feeling compared to last time?
   'followup_detail', // 2. Any new or worsening symptoms?
@@ -180,12 +190,6 @@ const FOLLOWUP_DETAIL_OPTIONS = [
 // ─── Progression value mapping ──────────────────────────────────────────────
 // Maps the Vietnamese answer text to an internal progression key.
 
-const PROGRESSION_MAP = {
-  'đang đỡ dần': 'better',
-  'vẫn như cũ': 'same',
-  'có vẻ nặng hơn': 'worse',
-};
-
 // ─── State builder ──────────────────────────────────────────────────────────
 
 /**
@@ -198,137 +202,150 @@ const PROGRESSION_MAP = {
  * @param {{ medical_conditions?: string[] }} healthContext
  * @returns {object} state
  */
-function buildState(previousAnswers = [], profile = {}, healthContext = {}) {
+function buildState(previousAnswers = [], profile = {}, healthContext = {}, context = {}) {
   const completedSteps = new Set();
-  let primarySymptom = null; // resolved key from clinical-mapping
-  let primaryMapping = null; // full data object from clinical-mapping
-  const allSymptoms = [];
-  let onset = null;
-  let progression = null; // 'better' | 'same' | 'worse' | null
+  const unknownSteps = new Set();
+  const attempts = {};
+  const complaints = [];
+  const currentSymptoms = [];
   const redFlagsFound = [];
   const causesFound = [];
   const actionsFound = [];
+  let onset = null;
+  let progression = null;
+  let newSymptoms = false;
+  let newSymptomPending = false;
 
-  // Walk through every answered step and extract structured data.
-  for (const entry of previousAnswers) {
-    const { step, answer } = entry;
-    completedSteps.add(step);
+  const addComplaints = (value, current = false) => {
+    const found = complaintsOf(value);
+    for (const complaint of found) {
+      if (!complaints.some((item) => item.text.toLowerCase() === complaint.text.toLowerCase()))
+        complaints.push(complaint);
+      if (current && !currentSymptoms.includes(complaint.text))
+        currentSymptoms.push(complaint.text);
+    }
+    return found.length > 0;
+  };
 
-    const answers = Array.isArray(answer) ? answer : [answer];
+  // Historical symptoms are context, never evidence of improvement today.
+  for (const entry of context.baselineAnswers || []) {
+    if (['symptoms', 'associated', 'followup_detail'].includes(entry.step))
+      addComplaints(entry.answer);
+    if (entry.step === 'onset' && !isUnknown(entry.answer)) onset = textOf(entry.answer);
+    onset ||= onsetOf(entry.answer);
+  }
 
+  const baselineSymptoms = complaints.map((item) => item.text);
+
+  for (const { step, answer } of previousAnswers) {
+    attempts[step] = (attempts[step] || 0) + 1;
+    const text = textOf(answer);
+    let known = Boolean(text) && !isUnknown(answer);
     switch (step) {
-      case 'symptoms': {
-        // First answer is the chief complaint — resolve via clinical-mapping.
-        const raw = answers[0] || '';
-        const resolved = resolveComplaint(raw);
-        if (resolved) {
-          primarySymptom = resolved.key;
-          primaryMapping = resolved.data;
-        }
-        allSymptoms.push(...answers);
-        // Free-text users often include the time in the first answer
-        // ("đau đầu từ sáng"). Count that as onset context so the engine does
-        // not ask for the same information again.
-        const embeddedOnset = String(raw)
-          .toLowerCase()
-          .match(
-            /(?:vừa mới|vài giờ trước|từ sáng|từ hôm qua|hôm qua|vài ngày nay|\d+\s*(?:giờ|ngày)\s*(?:nay|rồi)?)/
-          );
+      case 'symptoms':
+      case 'associated': {
+        known = addComplaints(answer, true);
+        const embeddedOnset = onsetOf(answer);
         if (embeddedOnset) {
-          onset = embeddedOnset[0];
+          onset = embeddedOnset;
           completedSteps.add('onset');
+        }
+        const embeddedProgression = progressionOf(answer);
+        if (embeddedProgression) {
+          progression = embeddedProgression;
+          completedSteps.add('progression');
         }
         break;
       }
-
-      case 'associated':
-        allSymptoms.push(...answers);
-        // Check if any selected associated symptom is a danger-level item.
-        if (primaryMapping) {
-          const dangerItems = (primaryMapping.associatedSymptoms || [])
-            .filter((s) => s.dangerLevel === 'danger')
-            .map((s) => s.text.toLowerCase());
-          for (const a of answers) {
-            if (dangerItems.includes((a || '').toLowerCase())) {
-              redFlagsFound.push(a);
+      case 'onset':
+        if (known) onset = text;
+        break;
+      case 'progression':
+      case 'followup_status':
+        progression = progressionOf(answer);
+        known = Boolean(progression);
+        break;
+      case 'red_flags':
+        redFlagsFound.push(...affirmativeParts(answer));
+        if ((Array.isArray(answer) ? answer : text.split(/[,;]+/)).some(isUnknown)) known = false;
+        break;
+      case 'cause':
+        if (known && !isNone(answer)) causesFound.push(...affirmativeParts(answer));
+        break;
+      case 'action':
+        if (known) actionsFound.push(text);
+        break;
+      case 'followup_detail':
+        if (/^(?:có thêm triệu chứng mới|new symptoms)$/i.test(text)) {
+          newSymptoms = true;
+          newSymptomPending = true;
+          onset = null;
+          progression = null;
+          completedSteps.delete('onset');
+          completedSteps.delete('progression');
+        } else if (/^(?:triệu chứng cũ nặng hơn|existing symptoms are worse)$/i.test(text)) {
+          progression = 'worse';
+        } else if (!isNone(answer) && known) {
+          const found = addComplaints(answer, true);
+          if (found) {
+            if (!newSymptoms) {
+              onset = null;
+              progression = null;
+            }
+            newSymptoms = true;
+            newSymptomPending = false;
+            const embeddedOnset = onsetOf(answer);
+            if (embeddedOnset) {
+              onset = embeddedOnset;
+              completedSteps.add('onset');
+            }
+            const embeddedProgression = progressionOf(answer);
+            if (embeddedProgression) {
+              progression = embeddedProgression;
+              completedSteps.add('progression');
             }
           }
+          known = found;
         }
         break;
-
-      case 'onset':
-        onset = answers[0] || null;
-        break;
-
-      case 'progression':
-        progression = PROGRESSION_MAP[answers[0]] || answers[0] || null;
-        break;
-
-      case 'red_flags':
-        // Record affirmative red flags. Legacy clients sometimes sent a
-        // sentence such as "không khó thở và không đau ngực"; treating
-        // that sentence as positive caused false escalation.
-        for (const a of answers) {
-          const clauses = String(a || '').split(/\s*(?:,|;|\bvà\b|\bnhưng\b)\s*/i);
-          for (const clause of clauses) {
-            const normalized = clause.toLowerCase().trim();
-            const isNegative =
-              !normalized ||
-              normalized === 'không có' ||
-              normalized === 'none' ||
-              /(?:không|chưa|ko|no|not)\s+(?:(?:có|bị|thấy|cảm thấy)\s+)?/i.test(normalized);
-            if (!isNegative) redFlagsFound.push(clause.trim());
-          }
-        }
-        break;
-
-      case 'cause':
-        causesFound.push(...answers.filter(Boolean));
-        break;
-
-      case 'action':
-        actionsFound.push(...answers.filter(Boolean));
-        break;
-
-      case 'followup_status':
-        // Map follow-up status to a pseudo-progression for conclusion logic.
-        if (answers[0] === 'có vẻ nặng hơn') progression = 'worse';
-        else if (answers[0] === 'vẫn như cũ') progression = 'same';
-        else progression = 'better';
-        break;
-
-      case 'followup_detail':
-        // If user reports new or worsening symptoms, treat like a mini red-flag.
-        if (answers[0] === 'triệu chứng cũ nặng hơn') {
-          progression = 'worse';
-        }
-        allSymptoms.push(...answers);
-        break;
-
       default:
         break;
     }
+    if (known) {
+      completedSteps.add(step);
+      unknownSteps.delete(step);
+    } else {
+      completedSteps.delete(step);
+      unknownSteps.add(step);
+    }
   }
 
-  // Derived flags from profile / healthContext
-  const age = profile.age || 0;
-  const isElderly = age >= 60;
-  const conditions = healthContext.medical_conditions || [];
-  const hasConditions = conditions.length > 0;
-
+  const normalizedProfile = normalizeProfile(profile);
+  const conditions = conditionsOf(
+    healthContext.medical_conditions || normalizedProfile.medical_conditions
+  );
   return {
     completedSteps,
-    primarySymptom,
-    primaryMapping,
-    allSymptoms,
+    unknownSteps,
+    attempts,
+    complaints,
+    currentSymptoms,
+    baselineSymptoms,
+    primarySymptom: complaints[0]?.key || complaints[0]?.text || null,
+    primaryMapping: complaints.find((item) => item.mapping)?.mapping || null,
+    mappings: [...new Set(complaints.map((item) => item.mapping).filter(Boolean))],
+    allSymptoms: complaints.map((item) => item.text),
     onset,
     progression,
-    redFlagsFound,
+    redFlagsFound: [...new Set(redFlagsFound)],
     causesFound,
     actionsFound,
-    isElderly,
-    hasConditions,
+    newSymptoms,
+    newSymptomPending,
+    isElderly: normalizedProfile.age >= 60,
+    hasConditions: conditions.length > 0,
     conditions,
+    previousSeverity: context.previousSeverity || null,
   };
 }
 
@@ -366,6 +383,14 @@ function applySkipLogic(baseSteps, state, status) {
     if (!mustKeepRedFlags) {
       removeStep(steps, 'red_flags');
     }
+  }
+
+  if (
+    ['high', 'emergency'].includes(state.previousSeverity) &&
+    state.allSymptoms.length &&
+    !steps.includes('red_flags')
+  ) {
+    steps.splice(steps.indexOf('conclude'), 0, 'red_flags');
   }
 
   // ── Rule 4: elderly + conditions + any symptoms → MUST include red_flags ──
@@ -468,29 +493,30 @@ function buildQuestion(step, state, lang = 'vi') {
       };
 
     case 'red_flags': {
-      const flags =
-        resolvedLang === 'en'
-          ? [
-              'Chest pain',
-              'Severe shortness of breath',
-              'Weakness on one side',
-              'Loss of consciousness',
-              'Vomiting blood',
-            ]
-          : mapping
-            ? mapping.redFlags
-            : [];
-      // Show at most 6 most critical flags to avoid overwhelming the user.
-      const displayFlags = flags.slice(0, 6);
-      const none = t('checkin.triage.option.none', resolvedLang);
-      if (displayFlags.length && !displayFlags.includes(none)) {
-        displayFlags.push(none);
+      const mappings = state.mappings || (mapping ? [mapping] : []);
+      const flags = [];
+      // Round-robin keeps each reported complaint represented in the six choices.
+      for (let index = 0; index < 6 && flags.length < 6; index++) {
+        for (const item of mappings) {
+          const flag = item.redFlags?.[index];
+          if (flag && !flags.includes(flag)) flags.push(flag);
+          if (flags.length === 6) break;
+        }
       }
+      const generic = ['severe_shortness_of_breath', 'chest_pain_sweating', 'faint_or_drowsy'];
+      const displayFlags =
+        resolvedLang === 'vi' && flags.length
+          ? flags
+          : generic.map((key) => t(`checkin.triage.option.${key}`, resolvedLang));
       return {
-        question: 'Bạn có gặp tình trạng nào sau đây không? (Quan trọng)',
-        options: displayFlags.length ? displayFlags : [none],
+        question: 'Có dấu hiệu nào cần chú ý không?',
+        options: [
+          ...displayFlags,
+          t('checkin.triage.option.none', resolvedLang),
+          t('checkin.triage.option.unknown', resolvedLang),
+        ],
         multiSelect: true,
-        allowFreeText: false,
+        allowFreeText: true,
       };
     }
 
@@ -568,7 +594,9 @@ function getNextStep(input) {
     profile = {},
     healthContext = {},
     previousAnswers = [],
-    previousSessionSummary: _previousSessionSummary = null,
+    baselineAnswers = [],
+    previousSeverity = null,
+    forceConclusion = false,
     bodyLocation = null, // legacy single
     bodyLocations = null, // new T2 array
     bodyLocationOther = null,
@@ -576,18 +604,44 @@ function getNextStep(input) {
   } = input;
 
   // 1. Rebuild current state from all previous answers.
-  const state = buildState(previousAnswers, profile, healthContext);
+  const state = buildState(previousAnswers, profile, healthContext, {
+    baselineAnswers,
+    previousSeverity,
+  });
   // Inject T2 location info into state for buildQuestion to use
   state.bodyLocations = bodyLocations || (bodyLocation ? [bodyLocation] : null);
   state.bodyLocationOther = bodyLocationOther;
 
   // 2. Pick the right step sequence and apply skip-logic.
   const isFollowUp = phase === 'followup';
-  const baseSteps = isFollowUp ? [...FOLLOWUP_STEPS] : [...INITIAL_STEPS];
+  const baseSteps = isFollowUp
+    ? [
+        ...FOLLOWUP_STEPS.slice(0, -1),
+        ...(state.newSymptoms ? ['onset', 'progression', 'red_flags'] : []),
+        'conclude',
+      ]
+    : [...INITIAL_STEPS];
   const steps = applySkipLogic(baseSteps, state, status);
 
-  // 3. Find the first step that hasn't been completed yet.
-  const nextStep = steps.find((s) => !state.completedSteps.has(s));
+  // Clarify an ambiguous response once. A finite budget produces an explicitly
+  // incomplete assessment, never a fabricated 'enough information' conclusion.
+  const clarification = [...state.unknownSteps].find((step) => state.attempts[step] < 2);
+  const noComplaintAfterClarification =
+    !isFollowUp && !state.allSymptoms.length && state.attempts.symptoms >= 2;
+  const nextStep =
+    forceConclusion || noComplaintAfterClarification
+      ? 'conclude'
+      : state.newSymptomPending
+        ? 'followup_detail'
+        : clarification ||
+          steps.find((step) => !state.completedSteps.has(step) && !state.unknownSteps.has(step));
+  state.assessmentIncomplete = Boolean(
+    forceConclusion ||
+    state.unknownSteps.size ||
+    !state.allSymptoms.length ||
+    noComplaintAfterClarification ||
+    state.newSymptomPending
+  );
 
   // 4. If no step remains or we've reached 'conclude', wrap up.
   if (!nextStep || nextStep === 'conclude') {
@@ -596,6 +650,7 @@ function getNextStep(input) {
       action: 'conclude',
       primarySymptom: state.primarySymptom || null,
       conclusion,
+      state,
     };
   }
 
@@ -611,6 +666,10 @@ function getNextStep(input) {
     multiSelect: questionData.multiSelect,
     allowFreeText: questionData.allowFreeText,
     primarySymptom: state.primarySymptom || null,
+    symptoms: state.currentSymptoms.length ? state.currentSymptoms : state.allSymptoms,
+    previousSymptoms: state.allSymptoms,
+    clarification: state.newSymptomPending ? 'new_symptom' : clarification || null,
+    state,
   };
 }
 
@@ -647,6 +706,19 @@ function calculateConclusion(state, status) {
   } else if (state.progression === 'same' && (state.isElderly || state.hasConditions)) {
     // Stagnant symptoms in vulnerable population = medium.
     severity = 'medium';
+  }
+
+  if (
+    ['high', 'emergency'].includes(state.previousSeverity) &&
+    !state.completedSteps.has('red_flags')
+  ) {
+    severity = 'high';
+    needsDoctor = true;
+  }
+
+  if (state.assessmentIncomplete) {
+    if (severity === 'low') severity = 'medium';
+    needsDoctor = true;
   }
 
   // 'very_tired' status bumps low → medium (does not downgrade).

@@ -75,6 +75,22 @@ describe('medgemma provider', () => {
     await expect(medgemma.callMedGemma({ prompt: 'hi' })).rejects.toThrow(/502/);
   });
 
+  test('a check-in timeout includes reading the body and does not retry when disabled', async () => {
+    global.fetch = jest.fn(async (_url, { signal }) => ({
+      ok: true,
+      json: () =>
+        new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('aborted while reading body')), {
+            once: true,
+          });
+        }),
+    }));
+    await expect(
+      medgemma.callMedGemmaWithRetry({ prompt: 'check-in', timeoutMs: 10 }, { maxRetries: 0 })
+    ).rejects.toThrow('aborted while reading body');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
   test('getMedGemmaChatReply returns null when not configured', async () => {
     delete process.env.MEDGEMMA_ENDPOINT;
     const r = await medgemma.getMedGemmaChatReply({ message: 'hi' });

@@ -34,12 +34,13 @@ const { updateMissionProgress } = require('../missions/missions.service');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 const { t } = require('../../i18n');
 const { getHonorifics } = require('../../lib/honorifics');
+const { createHash, randomUUID } = require('crypto');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
 const { buildCheckinContext, applyIllusion } = require('../../core/checkin/illusion-layer');
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 const logger = require('../../lib/logger');
 const checkinCallService = require('../checkin-call/checkin-call.service');
-const console = { log: logger.debug, error: logger.error };
+const console = { log: logger.debug, error: logger.error, warn: logger.warn };
 
 function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sessionDate) {
   // Loaded at runtime because the notification service imports this module.
@@ -325,6 +326,7 @@ async function startCheckin(
        triage_summary      = CASE WHEN $9 THEN NULL ELSE health_checkins.triage_summary END,
        triage_severity     = CASE WHEN $9 THEN NULL ELSE health_checkins.triage_severity END,
        triage_completed_at = CASE WHEN $9 THEN NULL ELSE health_checkins.triage_completed_at END,
+       triage_state        = CASE WHEN $9 THEN '{}'::jsonb ELSE health_checkins.triage_state END,
        family_alerted      = CASE WHEN $9 THEN FALSE ELSE health_checkins.family_alerted END,
        family_alerted_at   = CASE WHEN $9 THEN NULL ELSE health_checkins.family_alerted_at END,
        emergency_triggered = CASE WHEN $9 THEN FALSE ELSE health_checkins.emergency_triggered END,
@@ -429,10 +431,30 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
        last_response_at = NOW(),
        no_response_count = 0,
        resolved_at      = $4,
+       triage_state     = $6::jsonb,
        updated_at       = NOW()
      WHERE id = $5
      RETURNING *`,
-    [newStatus, flowState, nextAt, resolvedAt, checkinId]
+    [
+      newStatus,
+      flowState,
+      nextAt,
+      resolvedAt,
+      checkinId,
+      JSON.stringify({
+        phase: 'followup',
+        revision: randomUUID(),
+        baseline_answers: Array.from(
+          new Map(
+            [
+              ...(session.triage_state?.baseline_answers || []),
+              ...(session.triage_messages || []),
+            ].map((entry) => [JSON.stringify(entry), entry])
+          ).values()
+        ),
+        previous_severity: session.triage_severity || null,
+      }),
+    ]
   );
 
   // Track engagement event
@@ -450,7 +472,9 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
  */
 async function getUserProfile(pool, userId) {
   const { rows } = await pool.query(
-    `SELECT uop.*, u.id as uid, COALESCE(u.language_preference, 'vi') as lang
+    `SELECT uop.*, u.id as uid, u.full_name,
+            COALESCE(uop.display_name, u.display_name) AS display_name,
+            COALESCE(u.language_preference, 'vi') as lang
      FROM user_onboarding_profiles uop
      JOIN users u ON u.id = uop.user_id
      WHERE uop.user_id = $1`,
@@ -536,7 +560,24 @@ async function getRecentHealthContext(pool, userId) {
 /**
  * Process one triage step. Returns next question or final summary.
  */
+const triageRequests = new Map();
+function triageFingerprint(answers, lang) {
+  return createHash('sha256').update(JSON.stringify({ answers, lang })).digest('hex');
+}
+
 async function processTriageStep(pool, userId, checkinId, previousAnswers, requestLang = null) {
+  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}`;
+  if (triageRequests.has(key)) return triageRequests.get(key);
+  const pending = processTriageStepOnce(pool, userId, checkinId, previousAnswers, requestLang);
+  triageRequests.set(key, pending);
+  try {
+    return await pending;
+  } finally {
+    if (triageRequests.get(key) === pending) triageRequests.delete(key);
+  }
+}
+
+async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, requestLang = null) {
   const { rows } = await pool.query(
     `SELECT * FROM health_checkins WHERE id = $1 AND user_id = $2`,
     [checkinId, userId]
@@ -549,9 +590,24 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers, reque
   }
   const session = rows[0];
 
-  // Follow-up phase = triage đã hoàn thành ít nhất 1 lần (triage_completed_at đã set)
-  // Nếu triage_completed_at = null → chưa bao giờ hoàn thành → vẫn là initial triage (dù có triage_messages từ lần bỏ dở)
-  const isFollowUpPhase = session.triage_completed_at != null;
+  const persistedState = session.triage_state || {};
+  const cached = persistedState.completed;
+  if (
+    cached &&
+    cached.fingerprint ===
+      triageFingerprint(previousAnswers, requestLang || persistedState.lang || 'vi')
+  )
+    return cached.result;
+  if (cached)
+    throw Object.assign(new Error('Check-in is complete; start a new follow-up'), {
+      code: 'TRIAGE_CHANGED',
+      statusCode: 409,
+    });
+  const isFollowUpPhase =
+    persistedState.phase === 'followup' ||
+    (!persistedState.phase &&
+      session.triage_completed_at != null &&
+      !previousAnswers.some((entry) => entry.step === 'symptoms'));
 
   const [profile, healthContext] = await Promise.all([
     getUserProfile(pool, userId),
@@ -563,23 +619,12 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers, reque
     ? 'en'
     : 'vi';
 
-  // Hard limit: force conclusion if AI hasn't stopped in time
   const isFollowUp = isFollowUpPhase;
-  const isVeryUnwell = session.initial_status === 'very_tired';
-  const maxQuestions = isFollowUp ? 2 : 4;
-  const _safeAns = (value) => (Array.isArray(value) ? value.join(', ') : String(value || ''));
-
-  // Emergency detection is centralized in checkin.triage.v2 so the same
-  // negation-aware, combination-based rules are used for every client.
-
-  // For follow-up: pass previous triage Q&A so AI doesn't repeat questions
   const prevTriageMessages = isFollowUpPhase
-    ? Array.isArray(session.triage_messages)
-      ? session.triage_messages
-      : []
+    ? persistedState.baseline_answers || session.triage_messages || []
     : [];
 
-  let result = await getNextTriageQuestion({
+  const result = await getNextTriageQuestion({
     status: isFollowUpPhase
       ? session.current_status || session.initial_status
       : session.initial_status,
@@ -590,6 +635,9 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers, reque
     previousAnswers,
     previousSessionSummary: session.triage_summary || null,
     previousTriageMessages: prevTriageMessages,
+    previousSeverity:
+      persistedState.previous_severity || (isFollowUpPhase ? session.triage_severity : null),
+    forceConclusion: previousAnswers.length >= 8,
     bodyLocation: session.body_location || null,
     bodyLocations:
       session.body_locations || (session.body_location ? [session.body_location] : null),
@@ -597,157 +645,6 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers, reque
     pool,
     userId,
   });
-
-  if (!result.isDone && previousAnswers.length >= maxQuestions) {
-    result = {
-      ok: true,
-      isDone: true,
-      summary: t('checkin.triage_limit_summary', selectedLang),
-      severity: isVeryUnwell ? 'high' : 'medium',
-      recommendation: t('checkin.triage_limit_recommendation', selectedLang),
-      needsDoctor: false,
-      needsFamilyAlert: isVeryUnwell,
-      hasRedFlag: false,
-      followUpHours: calcFollowUpHours(isVeryUnwell ? 'high' : 'medium', previousAnswers.length),
-    };
-  }
-
-  // A conclusion may be immediate for an emergency. Otherwise require enough
-  // context for a meaningful result without forcing a five-question script.
-  const minQForPhase = isFollowUp ? 1 : 2;
-  // Follow-up: allow early conclusion if user says "improved" in layer 1
-  const IMPROVED_KEYWORDS = [
-    'đã đỡ',
-    'đỡ nhiều',
-    'đỡ rồi',
-    'hết rồi',
-    'ổn rồi',
-    'better',
-    'improved',
-    'đang đỡ',
-  ];
-  const userImproved =
-    isFollowUp &&
-    previousAnswers.some((a) =>
-      IMPROVED_KEYWORDS.some((kw) => _safeAns(a.answer).toLowerCase().includes(kw))
-    );
-  // Nếu user vừa nói "có thêm triệu chứng mới" → KHÔNG cho conclude, phải hỏi
-  // triệu chứng đó là gì rồi triage thêm. Tránh case: user khai có triệu chứng
-  // mới nhưng AI kết luận "mức độ nhẹ" mà không hỏi gì.
-  const lastAnswerText = _safeAns(
-    previousAnswers[previousAnswers.length - 1]?.answer || ''
-  ).toLowerCase();
-  const justReportedNewSymptom =
-    /(thêm.*triệu chứng|triệu chứng.*mới|new symptom|another symptom)/i.test(lastAnswerText) &&
-    !/(không|không có|nothing|no)/i.test(lastAnswerText);
-  console.log(
-    `[Triage] enforcement check: isDone=${result.isDone}, answers=${previousAnswers.length}, min=${minQForPhase}, hasRedFlag=${result.hasRedFlag}, isFollowUp=${isFollowUp}, userImproved=${userImproved}, newSymptomReported=${justReportedNewSymptom}`
-  );
-
-  if (justReportedNewSymptom && !result.hasRedFlag) {
-    console.log(
-      `[Triage] ⛔ User reported new symptom — force ask "what symptom" instead of concluding.`
-    );
-    result = {
-      ok: true,
-      isDone: false,
-      step: 'followup_detail',
-      question: t('checkin.triage.question.new_symptom_detail', selectedLang),
-      options: [],
-      multiSelect: false,
-      allowFreeText: true,
-    };
-  } else if (
-    result.isDone &&
-    previousAnswers.length < minQForPhase &&
-    !result.hasRedFlag &&
-    !userImproved
-  ) {
-    console.log(
-      `[Triage] ⛔ Service-level block: isDone at ${previousAnswers.length}/${minQForPhase}. Returning fallback.`
-    );
-    const fallbacks = [
-      {
-        step: 'progression',
-        q: t('checkin.triage.question.fallback_progression', selectedLang),
-        opts: [
-          t('checkin.triage.option.improving', selectedLang),
-          t('checkin.triage.option.same', selectedLang),
-          t('checkin.triage.option.worsening', selectedLang),
-        ],
-        multi: false,
-        types: [5],
-      },
-      {
-        step: 'red_flags',
-        q: t('checkin.triage.question.fallback_red_flags', selectedLang),
-        opts: [
-          t('checkin.triage.option.severe_shortness_of_breath', selectedLang),
-          t('checkin.triage.option.faint_or_drowsy', selectedLang),
-          t('checkin.triage.option.chest_pain_sweating', selectedLang),
-          t('checkin.triage.option.none', selectedLang),
-        ],
-        multi: true,
-        types: [6],
-      },
-      {
-        step: 'onset',
-        q: t('checkin.triage.question.fallback_onset', selectedLang),
-        opts: [
-          t('checkin.triage.option.just_now', selectedLang),
-          t('checkin.triage.option.hours_ago', selectedLang),
-          t('checkin.triage.option.since_morning', selectedLang),
-          t('checkin.triage.option.since_yesterday', selectedLang),
-          t('checkin.triage.option.past_few_days', selectedLang),
-        ],
-        multi: false,
-        types: [2],
-      },
-    ];
-    // Find a question whose TYPE hasn't been used
-    const usedQs = new Set(previousAnswers.map((a) => a.question.toLowerCase()));
-    const fb =
-      fallbacks.find((f) => !usedQs.has(f.q.toLowerCase())) || fallbacks[fallbacks.length - 1];
-    result = {
-      ok: true,
-      isDone: false,
-      step: fb.step,
-      question: fb.q,
-      options: fb.opts,
-      multiSelect: fb.multi,
-    };
-  }
-
-  // ── Anti-loop: if AI returns a question too similar to a previous one → force conclusion ──
-  // Only apply after minQuestions met (don't cut short initial interview)
-  if (!result.isDone && result.question && previousAnswers.length >= minQForPhase) {
-    const newQ = result.question.toLowerCase();
-    const isDuplicate = previousAnswers.some((a) => {
-      const prevQ = a.question.toLowerCase();
-      const newWords = new Set(newQ.split(/\s+/).filter((w) => w.length > 2));
-      const prevWords = prevQ.split(/\s+/).filter((w) => w.length > 2);
-      if (prevWords.length === 0) return false;
-      const overlap = prevWords.filter((w) => newWords.has(w)).length;
-      return overlap / prevWords.length > 0.7;
-    });
-
-    if (isDuplicate) {
-      const allSymptoms = previousAnswers.map((a) => _safeAns(a.answer)).join(', ');
-      result = {
-        isDone: true,
-        summary: allSymptoms,
-        severity: isVeryUnwell ? 'high' : 'medium',
-        recommendation:
-          selectedLang === 'en'
-            ? 'Thank you for sharing. Please rest and take care.'
-            : 'Cảm ơn bạn đã chia sẻ. Hãy nghỉ ngơi và theo dõi thêm nhé.',
-        needsDoctor: false,
-        needsFamilyAlert: false,
-        hasRedFlag: false,
-        followUpHours: calcFollowUpHours(isVeryUnwell ? 'high' : 'medium', previousAnswers.length),
-      };
-    }
-  }
 
   // ── Illusion Layer: enhance response with continuity/empathy/progress ──
   try {
@@ -797,14 +694,42 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers, reque
     console.warn('[Illusion] Failed in triage, using original:', err.message);
   }
 
-  // Save latest triage messages
-  await pool.query(
-    `UPDATE health_checkins SET
-       triage_messages = $1::jsonb,
-       updated_at = NOW()
-     WHERE id = $2`,
-    [JSON.stringify(previousAnswers), checkinId]
+  const nextState = {
+    phase: isFollowUp ? 'followup' : 'initial',
+    revision: randomUUID(),
+    lang: selectedLang,
+    baseline_answers: prevTriageMessages,
+    previous_severity:
+      persistedState.previous_severity || (isFollowUp ? session.triage_severity : null),
+    ...(result.isDone
+      ? { completed: { fingerprint: triageFingerprint(previousAnswers, selectedLang), result } }
+      : {}),
+  };
+  // Reject a stale concurrent response instead of overwriting a newer answer.
+  const saved = await pool.query(
+    `UPDATE health_checkins SET triage_messages = $1::jsonb,
+       triage_state = $3::jsonb, updated_at = NOW()
+     WHERE id = $2 AND triage_state = $4::jsonb RETURNING id`,
+    [
+      JSON.stringify(previousAnswers),
+      checkinId,
+      JSON.stringify(nextState),
+      JSON.stringify(persistedState),
+    ]
   );
+  if (!saved.rows.length) {
+    const latest = await pool.query(
+      'SELECT triage_state FROM health_checkins WHERE id=$1 AND user_id=$2',
+      [checkinId, userId]
+    );
+    const completed = latest.rows[0]?.triage_state?.completed;
+    if (completed?.fingerprint === triageFingerprint(previousAnswers, selectedLang))
+      return completed.result;
+    throw Object.assign(new Error('Check-in changed; reload the latest conversation'), {
+      code: 'TRIAGE_CHANGED',
+      statusCode: 409,
+    });
+  }
 
   // If AI says done, save summary + update next check-in time
   if (result.isDone) {
@@ -813,7 +738,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers, reque
 
     // Emergency severity → set emergency_triggered=true + flow_state='high_alert'
     const isEmergencyResult = result.severity === 'emergency';
-    await pool.query(
+    const finalized = await pool.query(
       `UPDATE health_checkins SET
          triage_summary       = $1,
          triage_severity      = $2,
@@ -823,7 +748,7 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers, reque
          emergency_triggered  = COALESCE($6, emergency_triggered),
          flow_state           = CASE WHEN $6 = TRUE THEN 'high_alert' ELSE flow_state END,
          updated_at           = NOW()
-       WHERE id = $5`,
+       WHERE id = $5 AND triage_state->>'revision' = $7 RETURNING id`,
       [
         result.summary,
         result.severity,
@@ -831,9 +756,17 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers, reque
         nextAt,
         checkinId,
         isEmergencyResult,
+        nextState.revision,
       ]
     );
-    await rebuildPatientHealthTimeline(pool, userId);
+    if (!finalized.rows.length)
+      throw Object.assign(new Error('Check-in changed before completion'), {
+        code: 'TRIAGE_CHANGED',
+        statusCode: 409,
+      });
+    await rebuildPatientHealthTimeline(pool, userId).catch((error) =>
+      console.warn('[Triage] Timeline refresh unavailable:', error.message)
+    );
 
     // Safety override: severity='emergency' / 'high' → LUÔN cảnh báo người thân,
     // không phụ thuộc vào AI judgment. AI có thể sai. User safety > AI confidence.
@@ -885,6 +818,12 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers, reque
 
     // Invalidate health score cache so home screen updates immediately
     await cacheDel(`health:score:${userId}`);
+    nextState.completed.result = result;
+    await pool.query(
+      `UPDATE health_checkins SET triage_state = $1::jsonb
+       WHERE id=$2 AND triage_state->>'revision' = $3`,
+      [JSON.stringify(nextState), checkinId, nextState.revision]
+    );
   }
 
   return result;

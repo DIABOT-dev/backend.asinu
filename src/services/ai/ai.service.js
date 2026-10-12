@@ -39,6 +39,8 @@ async function callTextAi({
   jsonMode = false,
   provider,
   strictProvider = false,
+  timeoutMs,
+  maxRetries,
 }) {
   const selectedProvider = String(provider || CLINICAL_PROVIDER).toLowerCase();
   // ─── 1. MedGemma Route ───────────────────────────────────────────────────
@@ -62,13 +64,17 @@ async function callTextAi({
         .join('\n');
     }
 
-    const res = await medgemmaProvider.callMedGemmaWithRetry({
-      system: finalSystem,
-      prompt: finalPrompt,
-      temperature: temperature !== undefined ? temperature : 0.3,
-      maxTokens: maxTokens || 800,
-      jsonMode,
-    });
+    const res = await medgemmaProvider.callMedGemmaWithRetry(
+      {
+        system: finalSystem,
+        prompt: finalPrompt,
+        temperature: temperature !== undefined ? temperature : 0.3,
+        maxTokens: maxTokens || 800,
+        jsonMode,
+        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+      },
+      maxRetries !== undefined ? { maxRetries } : undefined
+    );
 
     return {
       content: res.reply,
@@ -98,7 +104,11 @@ async function callTextAi({
   }
 
   const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
-  const client = new OpenAI({ apiKey });
+  const client = new OpenAI({
+    apiKey,
+    ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),
+    ...(maxRetries !== undefined ? { maxRetries } : {}),
+  });
 
   const response = await client.chat.completions.create({
     model,

@@ -7,6 +7,14 @@ function capitalizeFirstLetter(value) {
     : value;
 }
 
+function capitalizeSentences(value, lang = 'vi') {
+  if (typeof value !== 'string') return value;
+  const segmenter = new Intl.Segmenter(lang, { granularity: 'sentence' });
+  return Array.from(segmenter.segment(value.trim()), ({ segment }) =>
+    segment.replace(/\p{L}/u, (letter) => letter.toUpperCase())
+  ).join('');
+}
+
 function formatPersonName(value) {
   if (typeof value !== 'string') return '';
   return value
@@ -22,4 +30,4 @@ function formatPersonName(value) {
     });
 }
 
-module.exports = { capitalizeFirstLetter, formatPersonName };
+module.exports = { capitalizeFirstLetter, capitalizeSentences, formatPersonName };

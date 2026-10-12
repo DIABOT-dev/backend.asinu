@@ -37,6 +37,7 @@ async function callMedGemma({
   temperature = 0.3,
   jsonMode = false,
   signal,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
   if (!isConfigured()) {
     throw new Error('MEDGEMMA_ENDPOINT is not set');
@@ -70,7 +71,7 @@ async function callMedGemma({
   });
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   // If the caller passed their own signal, forward its abort.
   if (signal) {
     signal.addEventListener('abort', () => controller.abort(), { once: true });
@@ -80,18 +81,17 @@ async function callMedGemma({
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
   let response;
+  let data;
   try {
     response = await fetch(endpoint, { method: 'POST', headers, body, signal: controller.signal });
+    if (!response.ok) {
+      const text = await response.text().catch(() => '');
+      throw new Error(`MedGemma API ${response.status}: ${text.slice(0, 300)}`);
+    }
+    data = await response.json();
   } finally {
     clearTimeout(timeout);
   }
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(`MedGemma API ${response.status}: ${text.slice(0, 300)}`);
-  }
-
-  const data = await response.json();
   const reply =
     data.choices?.[0]?.message?.content ?? data.predictions?.[0]?.content ?? data.text ?? '';
 
