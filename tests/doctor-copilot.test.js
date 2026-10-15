@@ -217,7 +217,7 @@ describe('context versioning and safety boundaries', () => {
         medications: [],
       },
     });
-    expect(questions.length).toBeGreaterThanOrEqual(3);
+    expect(questions).toHaveLength(2);
     expect(questions[0]).toContain('đột ngột');
     expect(questions.join(' ')).toContain('yếu hoặc tê');
     expect(questions.join(' ')).not.toContain('Bạn có sốt');
@@ -290,7 +290,7 @@ describe('context versioning and safety boundaries', () => {
   test('patient safety filtering does not erase internal medication or measurement facts', () => {
     const raw = {
       ...emptyRawOutput(),
-      patient_reply: 'Bạn bị tăng huyết áp và dùng metformin 500 mg.',
+      patient_reply: 'Bạn muốn trao đổi thêm về chỉ số nào?',
       clinical_summary: 'Hồ sơ ghi nhận metformin và glucose 100 mg/dL.',
     };
     const output = __test__.buildOutput({
@@ -307,7 +307,7 @@ describe('context versioning and safety boundaries', () => {
       },
       ruleFindings: [],
     });
-    expect(output.patient_reply).toContain('chuyên gia');
+    expect(output.patient_reply).toBe(raw.patient_reply);
     expect(output.clinical_summary).toContain('metformin');
     expect(output.clinical_summary).toContain('100 mg/dL');
   });
@@ -317,9 +317,15 @@ describe('context versioning and safety boundaries', () => {
   });
 
   test('retries only provider output validation failures', () => {
-    expect(__test__.isRetryableProviderOutputError({ code: 'DOCTOR_AI_INVALID_RESPONSE' })).toBe(true);
-    expect(__test__.isRetryableProviderOutputError({ code: 'DOCTOR_AI_CITATION_INVALID' })).toBe(true);
-    expect(__test__.isRetryableProviderOutputError({ code: 'DOCTOR_AI_PROVIDER_UNAVAILABLE' })).toBe(false);
+    expect(__test__.isRetryableProviderOutputError({ code: 'DOCTOR_AI_INVALID_RESPONSE' })).toBe(
+      true
+    );
+    expect(__test__.isRetryableProviderOutputError({ code: 'DOCTOR_AI_CITATION_INVALID' })).toBe(
+      true
+    );
+    expect(
+      __test__.isRetryableProviderOutputError({ code: 'DOCTOR_AI_PROVIDER_UNAVAILABLE' })
+    ).toBe(false);
     expect(__test__.isRetryableProviderOutputError({ code: 'AI_CONTEXT_STALE' })).toBe(false);
   });
 

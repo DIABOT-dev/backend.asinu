@@ -85,8 +85,13 @@ async function callMedGemma({
   try {
     response = await fetch(endpoint, { method: 'POST', headers, body, signal: controller.signal });
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`MedGemma API ${response.status}: ${text.slice(0, 300)}`);
+      // Keep provider failures machine-readable without logging its raw body,
+      // which may echo clinical input. Credit/auth failures cannot be retried.
+      const error = new Error(`MedGemma API ${response.status}`);
+      error.status = response.status;
+      error.code = response.status === 402 ? 'MEDGEMMA_INSUFFICIENT_CREDIT' : 'MEDGEMMA_HTTP_ERROR';
+      await response.body?.cancel().catch(() => undefined);
+      throw error;
     }
     data = await response.json();
   } finally {
@@ -126,6 +131,7 @@ async function callMedGemmaWithRetry(opts, { maxRetries = DEFAULT_MAX_RETRIES } 
     } catch (err) {
       lastErr = err;
       logger.warn('medgemma.attempt_failed', { attempt, err });
+      if (err.status >= 400 && err.status < 500 && ![408, 429].includes(err.status)) throw err;
     }
   }
   throw lastErr;

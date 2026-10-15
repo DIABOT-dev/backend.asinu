@@ -75,6 +75,39 @@ describe('medgemma provider', () => {
     await expect(medgemma.callMedGemma({ prompt: 'hi' })).rejects.toThrow(/502/);
   });
 
+  test.each([400, 401, 402, 403])(
+    'does not retry non-recoverable HTTP %i failures',
+    async (status) => {
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status,
+        text: async () => 'Provider detail that must not reach the log',
+      });
+      await expect(
+        medgemma.callMedGemmaWithRetry({ prompt: 'synthetic test' })
+      ).rejects.toMatchObject({
+        status,
+        code: status === 402 ? 'MEDGEMMA_INSUFFICIENT_CREDIT' : 'MEDGEMMA_HTTP_ERROR',
+        message: `MedGemma API ${status}`,
+      });
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  test.each([429, 502])('retries recoverable HTTP %i failures', async (status) => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ choices: [{ message: { content: 'Recovered' } }] }),
+      });
+    await expect(
+      medgemma.callMedGemmaWithRetry({ prompt: 'synthetic test' }, { maxRetries: 1 })
+    ).resolves.toMatchObject({ reply: 'Recovered' });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
   test('a check-in timeout includes reading the body and does not retry when disabled', async () => {
     global.fetch = jest.fn(async (_url, { signal }) => ({
       ok: true,
