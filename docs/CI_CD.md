@@ -34,4 +34,4 @@ Create GitHub environments named `camp` and `prod`. Configure each environment w
 - `HOST_PORT` (default `3300`)
 - `BASE_URL` (optional external URL used for the final smoke test)
 
-The target VPS must have Docker Compose and a production `.env` file inside `STACK_DIR`. The container runs migrations before starting the API. A failed health check restores the previous image when one exists.
+The target VPS must have Docker Compose, a runtime `.env`, a separate `.env.migrations`, and the readable CA file referenced by `DB_TLS_CA_HOST_FILE` inside the deployment configuration. The workflow runs a one-off migration container before starting the API with its restricted runtime role; administrator credentials are never passed to the API. A failed health check restores the previous image when one exists. The previous image must support verified database TLS and the restricted runtime role; for the first security rollout retain the original deployment configuration as a separate recovery path. See `docs/DEPLOY.md` for provisioning, encrypted backups, and recovery prerequisites.
