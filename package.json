@@ -5,6 +5,8 @@
   "type": "commonjs",
   "scripts": {
     "start": "node scripts/migrate.js && node server.js",
+    "start:runtime": "node server.js",
+    "db:migrate": "node scripts/migrate.js",
     "dev": "node scripts/migrate.js && nodemon server.js",
     "build": "node --check server.js && echo 'Backend build successful'",
     "test": "jest --runInBand",

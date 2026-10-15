@@ -7,8 +7,35 @@ services:
       - .env
     environment:
       NODE_ENV: production
+    command: ['node', 'server.js']
+    volumes:
+      - type: bind
+        source: ${DB_TLS_CA_HOST_FILE:?DB_TLS_CA_HOST_FILE is required}
+        target: /run/asinu-db-tls/ca.pem
+        read_only: true
+        bind:
+          create_host_path: false
     ports:
       - '127.0.0.1:${HOST_PORT:-3300}:3000'
+    networks:
+      - asinu_net
+
+  asinu-migrate:
+    profiles: ['migration']
+    image: ${ASINU_BACKEND_IMAGE:?ASINU_BACKEND_IMAGE is required}
+    restart: 'no'
+    env_file:
+      - .env.migrations
+    command: ['node', 'scripts/migrate.js']
+    volumes:
+      - type: bind
+        source: ${DB_TLS_CA_HOST_FILE:?DB_TLS_CA_HOST_FILE is required}
+        target: /run/asinu-db-tls/ca.pem
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      disable: true
     networks:
       - asinu_net
 

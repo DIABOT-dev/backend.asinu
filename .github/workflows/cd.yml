@@ -161,13 +161,15 @@ jobs:
             set -eu
             cd "$STACK_DIR"
             test -f .env
+            test -f .env.migrations
             docker network inspect asinu_net >/dev/null 2>&1 || docker network create asinu_net
             printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
             previous_image="$(docker inspect --format '{{.Config.Image}}' asinu-backend 2>/dev/null || true)"
             export ASINU_BACKEND_IMAGE HOST_PORT
-            docker compose -f docker-compose.yml pull
-            docker compose -f docker-compose.yml up -d --remove-orphans
+            docker compose -f docker-compose.yml --profile migration pull
+            docker compose -f docker-compose.yml --profile migration run --rm --no-deps asinu-migrate
+            docker compose -f docker-compose.yml up -d --remove-orphans asinu-backend
 
             healthy=0
             for _ in $(seq 1 45); do
@@ -182,7 +184,7 @@ jobs:
               docker compose -f docker-compose.yml logs --tail=150 asinu-backend
               if [ -n "$previous_image" ]; then
                 export ASINU_BACKEND_IMAGE="$previous_image"
-                docker compose -f docker-compose.yml up -d --remove-orphans
+                docker compose -f docker-compose.yml up -d --remove-orphans asinu-backend
               fi
               exit 1
             fi

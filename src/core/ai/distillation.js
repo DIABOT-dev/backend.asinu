@@ -11,55 +11,11 @@
  * Kết quả: Sau thời gian, Small Model trả lời chính xác hơn → ít cần Big Model
  */
 
-const crypto = require('crypto');
-
-// ─── Collect: Save Big Model outputs ────────────────────────────────────────
-
-/**
- * Save an AI interaction for future distillation.
- * Called automatically when Big Model (gpt-4o) is used.
- *
- * @param {object} pool - DB pool
- * @param {string} taskType - 'triage', 'analysis', 'classification', etc.
- * @param {string} model - model name used
- * @param {Array} inputMessages - messages array sent to AI
- * @param {any} outputData - AI response (parsed)
- * @param {number} [qualityScore] - optional initial quality score
- */
-async function collectOutput(
-  pool,
-  taskType,
-  model,
-  inputMessages,
-  outputData,
-  qualityScore = null
-) {
-  const inputHash = crypto.createHash('md5').update(JSON.stringify(inputMessages)).digest('hex');
-
-  // Dedup: skip if same input already collected today
-  const { rows: existing } = await pool.query(
-    `SELECT 1 FROM distillation_data
-     WHERE input_hash = $1 AND task_type = $2
-     AND created_at >= NOW() - INTERVAL '1 day' LIMIT 1`,
-    [inputHash, taskType]
-  );
-  if (existing.length > 0) return null;
-
-  const { rows } = await pool.query(
-    `INSERT INTO distillation_data (task_type, model_used, input_hash, input_data, output_data, quality_score)
-     VALUES ($1, $2, $3, $4::jsonb, $5::jsonb, $6)
-     RETURNING id`,
-    [
-      taskType,
-      model,
-      inputHash,
-      JSON.stringify(inputMessages),
-      JSON.stringify(outputData),
-      qualityScore,
-    ]
-  );
-
-  return rows[0]?.id || null;
+// Collection and cross-user few-shot reuse are suspended until training
+// consent, subject ownership, retention and deletion are implemented.
+// Service/AI consent is not consent to train on patient conversations.
+async function collectOutput() {
+  return null;
 }
 
 // ─── Curate: Rate quality ───────────────────────────────────────────────────
@@ -121,23 +77,8 @@ async function rateOutput(pool, id, qualityScore) {
  * @param {number} limit - max examples to return (default 3)
  * @returns {Array<{input: object, output: object, score: number}>}
  */
-async function getFewShotExamples(pool, taskType, limit = 3) {
-  const { rows } = await pool.query(
-    `SELECT input_data, output_data, quality_score
-     FROM distillation_data
-     WHERE task_type = $1
-       AND quality_score >= 0.7
-       AND model_used IN ('gpt-4o', 'gpt-4')
-     ORDER BY quality_score DESC, created_at DESC
-     LIMIT $2`,
-    [taskType, limit]
-  );
-
-  return rows.map((r) => ({
-    input: r.input_data,
-    output: r.output_data,
-    score: r.quality_score,
-  }));
+async function getFewShotExamples() {
+  return [];
 }
 
 /**

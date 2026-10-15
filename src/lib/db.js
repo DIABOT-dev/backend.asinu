@@ -9,6 +9,7 @@
 
 const { Pool } = require('pg');
 const logger = require('./logger');
+const { databaseOptions } = require('./database-options');
 
 const SLOW_QUERY_MS = Number(process.env.SLOW_QUERY_MS || 100);
 const MAX_QUERY_PREVIEW = 240;
@@ -20,7 +21,7 @@ function preview(sql) {
 }
 
 function createPool(opts) {
-  const pool = new Pool(opts);
+  const pool = new Pool({ ...opts, ...databaseOptions(opts.connectionString) });
   const originalQuery = pool.query.bind(pool);
 
   pool.query = function instrumentedQuery(...args) {

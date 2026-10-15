@@ -66,7 +66,7 @@ async function collectDistillation(pool, { taskType, model, input, output }) {
     output,
     quality
   );
-  return { id, quality };
+  return { id, quality, collected: false, reason: 'TRAINING_COLLECTION_DISABLED' };
 }
 
 async function reuseStats(pool, userId) {

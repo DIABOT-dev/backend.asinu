@@ -1,0 +1,17 @@
+[Unit]
+Description=Asinu encrypted PostgreSQL backup
+After=docker.service
+Wants=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/asinu/backup.env
+ExecStart=/usr/bin/bash /opt/asinu-security/scripts/backup-db.sh
+UMask=0077
+TimeoutStartSec=300
+Nice=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/backups/asinu-encrypted

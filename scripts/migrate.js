@@ -2,6 +2,7 @@ require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') }
 const fs = require('fs');
 const path = require('path');
 const { Client } = require('pg');
+const { databaseOptions } = require('../src/lib/database-options');
 const { seedHealthFeed } = require('../src/services/health_feed/seed');
 
 const DATABASE_URL = process.env.DATABASE_URL;
@@ -13,7 +14,7 @@ if (!DATABASE_URL) {
 const migrationsDir = path.join(__dirname, '..', 'db', 'migrations');
 
 async function run() {
-  const client = new Client({ connectionString: DATABASE_URL });
+  const client = new Client(databaseOptions(DATABASE_URL));
   await client.connect();
 
   try {

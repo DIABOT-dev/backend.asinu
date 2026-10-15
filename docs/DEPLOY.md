@@ -221,3 +221,22 @@ Check cron có fire không:
 ```bash
 docker compose logs --tail=200 asinu-backend | grep -E "Lifecycle|cron|R&D"
 ```
+
+## Bảo vệ dữ liệu — thay đổi 15/10/2026
+
+- API production chạy `npm run start:runtime`. Chạy migration bằng container/job riêng với tài khoản sở hữu schema; không đưa mật khẩu migration vào môi trường API.
+- Provision tài khoản API bằng `scripts/provision-runtime-role.js`: `DATABASE_URL` là kết nối DBA, `RUNTIME_DATABASE_ROLE` là tên role mới, `RUNTIME_DATABASE_PASSWORD_FILE` là file riêng mode 0600. Công cụ từ chối role quản trị/role có membership, role đang sở hữu object hoặc quyền PUBLIC cho phép DDL. Chạy lại provisioning sau migration tạo bảng giới hạn như `schema_migrations`/`distillation_data`.
+- Bật TLS PostgreSQL bằng CA nội bộ; SAN của chứng chỉ phải khớp hostname Docker. API dùng `DB_TLS_REQUIRE=true`, `DB_TLS_CA_FILE=/run/asinu-db-tls/ca.pem`; mount CA read-only. Không đặt `sslmode`/`sslrootcert` trong URI của Node vì có thể ghi đè cấu hình kiểm chứng chứng chỉ. Migration dùng cùng CA nhưng credential riêng. Sao lưu cấu hình PG/HBA trước khi đổi; chỉ chặn kết nối TCP không TLS sau khi mọi client đã chuyển.
+- `backup-db.sh` bắt buộc `BACKUP_AGE_RECIPIENT` (khóa công khai). Dữ liệu đi thẳng qua gzip và age, không có file dump chữ thường. Có thể dùng `POSTGRES_CONTAINER` để chạy pg_dump trong container; credential đi qua môi trường, không có trong argv/log. Backup hoàn tất dùng tên `.sql.gz.age`, quyền 0600; lỗi upload không được coi là thành công. Retention chỉ áp dụng bản mã hóa, không tự xóa bản cũ chưa mã hóa.
+- Khóa giải mã age và khóa ký CA giữ trên máy quản trị, ngoài Git và VPS. Cần sao chép khóa giải mã vào nơi cất giữ an toàn độc lập; mất khóa là không khôi phục được. Bản mã hóa nằm trên cùng VPS vẫn chưa phải backup ngoài máy chủ.
+- `restore-db.sh` yêu cầu khóa giải mã, `DATABASE_URL` và `RESTORE_TARGET_DATABASE` khớp chính xác. Chỉ phục hồi vào DB trống, kiểm tra toàn bộ ciphertext/gzip trước transaction. `RESTORE_TMP_DIR` nên trỏ tới tmpfs riêng, vì staging SQL phục hồi là dữ liệu chữ thường có quyền 0600 và được xóa khi kết thúc.
+- Thu thập distillation và dùng hội thoại người khác làm few-shot đã tắt tại code. Không bật lại bằng biến môi trường. Cần thiết kế riêng ownership, sự đồng ý cho huấn luyện, thời hạn giữ và xóa theo tài khoản trước khi mở lại.
+- Mã hóa backup/TLS và tài khoản API ít quyền không thay thế mã hóa volume, mã hóa từng trường, quản lý khóa từng người dùng hoặc hồ sơ pháp lý. Không công bố hệ thống đã mã hóa đầu cuối hay đạt tuân thủ toàn bộ chỉ vì áp dụng các bước này.
+
+Kiểm thử với dữ liệu tổng hợp trên DB local trống có tên kết thúc `_security_test`:
+
+```bash
+DATA_PROTECTION_TEST_DATABASE_URL=postgresql://localhost/asinu_data_security_test npm test -- --runTestsByPath tests/integration/data-protection.test.js
+```
+
+Test cần PostgreSQL client, Python 3 và age. Nó kiểm tra CRUD của role ít quyền, từ chối DDL/cấp quyền/ghi tập huấn luyện, backup mã hóa, phục hồi nguyên vẹn và chặn ciphertext hỏng/DB không trống/sai đích. Không chạy trên database có dữ liệu thật.

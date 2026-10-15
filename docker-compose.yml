@@ -7,7 +7,7 @@ services:
     # Keep the public API on host port 3300 while the Node process listens on
     # its standard container port. This also matches the Dockerfile healthcheck.
     ports:
-      - '3300:3000'
+      - '127.0.0.1:3300:3000'
     env_file:
       - .env
     networks:
