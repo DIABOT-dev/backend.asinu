@@ -1,3 +1,4 @@
+const { assertAiConsent } = require('../ai-consent.service');
 /**
  * MedGemma provider.
  *
@@ -39,6 +40,7 @@ async function callMedGemma({
   signal,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
+  await assertAiConsent();
   if (!isConfigured()) {
     throw new Error('MEDGEMMA_ENDPOINT is not set');
   }

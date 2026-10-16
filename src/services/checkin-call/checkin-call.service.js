@@ -8,6 +8,8 @@ const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 const entitlementService = require('../payment/entitlement.service');
 const { familyContact, familyNotice } = require('./family-contact.service');
 const { synthesizeText, audioVersion } = require('./audio.service');
+const { withAiUser } = require('../ai/ai-consent.service');
+const audioDataOwner = Symbol('audio-data-owner');
 const personalization = require('./personalization.service');
 const { createHash } = require('node:crypto');
 const { recordCallResponse, refreshEarlySignals } = require('./response-history.service');
@@ -733,7 +735,7 @@ async function getAttempt(pool, attemptId, userId, lang = 'vi') {
   const result = await pool.query(
     'SELECT a.id, a.episode_id, a.target_role, a.state, a.ring_deadline, a.confirm_deadline, a.ended_at, a.target_user_id, e.acknowledged_by, e.resolved_at, e.exhausted_at, e.trigger_source, e.next_action_at, e.state AS episode_state, e.severity, e.issue_category, e.triage_context, ' +
       "(SELECT v.detail->>'reason' FROM checkin_call_events v WHERE v.episode_id = e.id AND v.event = 'CANCELLED' ORDER BY v.id DESC LIMIT 1) AS cancellation_reason, " +
-      "COALESCE(NULLIF(trim(subject.full_name), ''), NULLIF(trim(subject.display_name), '')) AS subject_name, subject.phone_number AS subject_phone, profile.gender AS subject_gender, c.relationship_type, c.requester_id AS relationship_requester_id " +
+      "e.user_id AS subject_user_id, COALESCE(NULLIF(trim(subject.full_name), ''), NULLIF(trim(subject.display_name), '')) AS subject_name, subject.phone_number AS subject_phone, profile.gender AS subject_gender, c.relationship_type, c.requester_id AS relationship_requester_id " +
       'FROM checkin_call_attempts a JOIN checkin_call_episodes e ON e.id = a.episode_id ' +
       'JOIN users subject ON subject.id = e.user_id ' +
       'LEFT JOIN user_onboarding_profiles profile ON profile.user_id = subject.id ' +
@@ -746,6 +748,7 @@ async function getAttempt(pool, attemptId, userId, lang = 'vi') {
   if (!row) return null;
   // Do not leak internal join columns or an unrelated person's profile.
   const {
+    subject_user_id,
     subject_name,
     subject_phone,
     subject_gender,
@@ -754,6 +757,7 @@ async function getAttempt(pool, attemptId, userId, lang = 'vi') {
     ...attempt
   } = row;
   if (attempt) {
+    attempt[audioDataOwner] = subject_user_id;
     if (!attempt.triage_context?.body_location) attempt.triage_context = null;
     attempt.triage_display = localizeTriageContext(attempt.triage_context, lang);
     if (attempt.target_role === 'FAMILY') {
@@ -791,7 +795,7 @@ async function getFamilyAudio(pool, attemptId, userId, lang = 'vi') {
   if (stored?.expires > Date.now()) return stored.data;
   let pending = familySynthesis.get(hash);
   if (!pending) {
-    pending = synthesizeText(attempt.family_notice.audio_text, language).then((data) => {
+    pending = withAiUser(pool, attempt[audioDataOwner], () => synthesizeText(attempt.family_notice.audio_text, language)).then((data) => {
       if (data.audio_version === version) {
         if (familyRecordings.size >= 64)
           familyRecordings.delete(familyRecordings.keys().next().value);

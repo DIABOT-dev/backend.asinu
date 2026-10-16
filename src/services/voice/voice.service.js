@@ -1,3 +1,4 @@
+const { assertAiConsent } = require('../ai/ai-consent.service');
 /**
  * Voice Service — mic → Whisper transcription → AI chat → text reply
  * Available to every signed-in user in Asinu V2.
@@ -19,6 +20,7 @@ const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
  * @returns {Promise<string>} transcript text
  */
 async function transcribeAudio(audioBuffer, mimeType, filename = 'audio.m4a') {
+  await assertAiConsent();
   const endpoint = process.env.WHISPER_ENDPOINT || 'https://api.openai.com/v1/audio/transcriptions';
   const apiKey = process.env.WHISPER_API_KEY || OPENAI_API_KEY;
 
@@ -67,6 +69,7 @@ async function transcribeAudio(audioBuffer, mimeType, filename = 'audio.m4a') {
  * @returns {{ transcript: string, reply: string }}
  */
 async function voiceChat(pool, userId, audioBuffer, mimeType, filename, lang = 'vi') {
+  await assertAiConsent();
   const resolvedLang = String(lang || '')
     .toLowerCase()
     .startsWith('en')
@@ -291,6 +294,7 @@ Accept spoken numbers. Glucose must be 1-800, blood pressure must be systolic 60
 }
 
 async function parseLogVoice(audioBuffer, mimeType, filename, logType, lang = 'vi') {
+  await assertAiConsent();
   const resolvedLang = String(lang || '')
     .toLowerCase()
     .startsWith('en')

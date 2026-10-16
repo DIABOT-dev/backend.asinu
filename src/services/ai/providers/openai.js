@@ -1,3 +1,4 @@
+const { assertAiConsent } = require('../ai-consent.service');
 /**
  * OpenAI Provider
  * Sử dụng OpenAI Chat Completions API để sinh câu hỏi thông minh
@@ -22,6 +23,7 @@ async function getOpenAIReply({
   temperature,
   maxTokens,
 }) {
+  await assertAiConsent();
   const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
@@ -134,6 +136,7 @@ async function getOpenAIReply({
  * @returns {Promise<Object>} - { reply, provider, meta }
  */
 async function getOpenAIChatReply({ message, userId, context, history = [] }) {
+  await assertAiConsent();
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
 
@@ -214,6 +217,7 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
 }
 
 async function getWhisperTranscription(audioBuffer, filename = 'audio.m4a', _lang = 'vi') {
+  await assertAiConsent();
   const endpoint = process.env.WHISPER_ENDPOINT || 'https://api.openai.com/v1/audio/transcriptions';
   const apiKey = process.env.WHISPER_API_KEY || process.env.OPENAI_API_KEY;
 

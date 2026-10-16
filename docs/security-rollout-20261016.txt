@@ -1,0 +1,43 @@
+TRIỂN KHAI BẢN VÁ BẢO MẬT 16/10/2026
+
+Trạng thái: bản sửa local, chưa đưa lên VPS hay phát hành app.
+Không thêm xác minh email hoặc bước xác nhận mật khẩu khi liên kết social login.
+Giữ nguyên tự liên kết cùng email. Rủi ro mật khẩu/phiên cũ của tài khoản đăng ký
+email chưa chứng minh quyền sở hữu (C01) chưa được giải quyết bởi bản vá này.
+
+Thứ tự triển khai quyền xử lý AI:
+1. Sao lưu và áp dụng migration 110_ai_processing_consent.sql trước backend mới.
+   Chạy thử migration/rollback vận hành trên staging trước khi chạm production.
+2. Ban đầu để AI_CONSENT_ENFORCEMENT=false. Đây là chế độ tương thích cho các
+   tài khoản chưa có bản ghi đồng ý trên server trong app đã phát hành.
+   Nếu đã có bản ghi, backend luôn kiểm tra phiên bản, nhà cung cấp và thu hồi.
+   Một yêu cầu từ chối cũng tạo bản ghi, kể cả chưa từng đồng ý trên server.
+3. Phát hành app hỗ trợ GET/PUT/DELETE /api/mobile/ai-consent. Kiểm tra bằng
+   dữ liệu giả: đồng ý, từ chối, đổi tài khoản, thu hồi trên thiết bị khác,
+   check-in, giọng đọc, chat, trợ lý Doctor, lịch chạy nền và cuộc gọi check-in.
+4. Chỉ bật AI_CONSENT_ENFORCEMENT=true sau khi chính sách tương thích với app cũ
+   và trải nghiệm yêu cầu đồng ý đã được kiểm tra. Khi bật, app cũ chưa có receipt
+   sẽ bị chặn ở các lệnh gọi AI. Không được mô tả chế độ false là đã chặn mọi
+   xử lý AI chưa có đồng ý server. Không bật tự động trong bản vá này.
+
+Google login:
+- Backend xác minh chữ ký/issuer/audience/expiry cho ID token.
+- Giữ access-token fallback cho app cũ, kiểm tra tokeninfo và userinfo.
+- Danh sách có client ID công khai của app đang dùng; bổ sung những client ID
+  hợp lệ khác vào GOOGLE_LEGACY_CLIENT_IDS nếu có. Không đổi client secret.
+- Kiểm thử đăng nhập với bản App Store hiện tại trên staging trước triển khai.
+
+Tệp/chat:
+- Link mới dùng Cloudinary authenticated Download API, chữ ký có hạn 5 phút.
+- App/Doctor mới làm mới link khi người dùng mở tệp hoặc nghe voice đã hết hạn.
+- Bản app cũ có thể phải tải lại đoạn chat sau khi giữ màn hình hơn 5 phút.
+  Phối hợp phát hành client và backend; kiểm tra app cũ trước khi triển khai.
+- Link CDN vĩnh viễn đã cấp trước đây KHÔNG bị vô hiệu hóa chỉ nhờ sửa code.
+  Cần kế hoạch đổi định danh/vô hiệu tài sản cũ riêng, tránh làm mất tệp đang dùng.
+- Trong thời hạn, link vẫn là bearer URL: người có link có thể dùng tới khi hết hạn.
+
+Phạm vi kiểm chứng:
+- Kiểm tra tự động và build local, có dữ liệu giả; không thay thế kiểm thử thực tế
+  bản App Store/TestFlight và Android đang cài trên máy.
+- Không xoay khóa, thay đổi dữ liệu bệnh nhân, đẩy GitHub hay triển khai production
+  trong lượt sửa code này. Xem báo cáo trong thư mục security-reports của workspace.

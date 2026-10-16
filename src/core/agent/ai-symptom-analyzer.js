@@ -1,4 +1,5 @@
 'use strict';
+const { assertAiConsent } = require('../../services/ai/ai-consent.service');
 
 /**
  * AI Symptom Analyzer
@@ -20,6 +21,7 @@ const { detectEmergency } = require('../../services/checkin/emergency-detector')
 const { safeValidate, SymptomAnalysisSchema } = require('../../lib/ai-schemas');
 const medgemma = require('../../services/ai/providers/medgemma');
 const logger = require('../../lib/logger');
+const { createHash } = require('node:crypto');
 
 // ─── Provider config ────────────────────────────────────────────────────────
 
@@ -48,6 +50,7 @@ function getClient() {
  * partially-rolled-out env still works.
  */
 async function callProvider({ system, user, temperature, maxTokens }) {
+  await assertAiConsent();
   if (AI_PROVIDER === 'medgemma' && medgemma.isConfigured()) {
     const res = await medgemma.callMedGemmaWithRetry({
       system,
@@ -83,15 +86,13 @@ async function callProvider({ system, user, temperature, maxTokens }) {
 
 // ─── Cache key builders ─────────────────────────────────────────────────────
 
-function analysisCacheKey(rawInput) {
-  // Normalize: lowercase, trim, collapse whitespace
+function symptomCacheKey(kind, rawInput, context) {
+  // Patient-specific analysis must not reuse another patient's clinical
+  // context, or put their symptom narrative in a Redis key.
+  if (!Number.isSafeInteger(Number(context?.userId)) || Number(context.userId) <= 0) return null;
   const normalized = rawInput.toLowerCase().trim().replace(/\s+/g, ' ');
-  return `sym:analysis:${normalized}`;
-}
-
-function urgencyCacheKey(rawInput) {
-  const normalized = rawInput.toLowerCase().trim().replace(/\s+/g, ' ');
-  return `sym:urgency:${normalized}`;
+  const digest = createHash('sha256').update(JSON.stringify([normalized, context])).digest('hex');
+  return `sym:v2:${kind}:user:${context.userId}:${digest}`;
 }
 
 // ─── System prompts ─────────────────────────────────────────────────────────
@@ -193,10 +194,10 @@ async function analyzeSymptom(rawInput, context = {}) {
   if (!input) return _emptyAnalysis(rawInput);
 
   // 1. Check cache first (exact match on normalized input)
-  const cacheKey = analysisCacheKey(input);
-  const cached = await cacheGet(cacheKey);
+  const cacheKey = symptomCacheKey('analysis', input, context);
+  const cached = cacheKey ? await cacheGet(cacheKey) : null;
   if (cached) {
-    console.log(`[AIAnalyzer] Cache hit for: "${input}"`);
+    logger.debug('ai.symptom_analyzer.cache_hit');
     return cached;
   }
 
@@ -216,7 +217,7 @@ async function analyzeSymptom(rawInput, context = {}) {
     const usage = response.usage || {};
 
     console.log(
-      `[AIAnalyzer] AI call: provider=${response.provider}, model=${response.model}, tokens=${usage.total_tokens || '?'}, duration=${duration}ms, input="${input}"`
+      `[AIAnalyzer] AI call: provider=${response.provider}, model=${response.model}, tokens=${usage.total_tokens || '?'}, duration=${duration}ms`
     );
 
     // Parse + validate response against the SymptomAnalysis schema.
@@ -228,7 +229,6 @@ async function analyzeSymptom(rawInput, context = {}) {
       logger.warn('ai.symptom_analyzer.invalid_output', {
         reason: validated.reason,
         issues: validated.issues,
-        preview: raw.slice(0, 200),
       });
       return _emptyAnalysis(rawInput);
     }
@@ -236,7 +236,7 @@ async function analyzeSymptom(rawInput, context = {}) {
     const result = _normalizeAnalysis(validated.data, input);
 
     // 3. Cache the result
-    await cacheSet(cacheKey, result, ANALYSIS_CACHE_TTL);
+    if (cacheKey) await cacheSet(cacheKey, result, ANALYSIS_CACHE_TTL);
 
     return result;
   } catch (err) {
@@ -301,8 +301,8 @@ async function quickUrgencyCheck(rawInput, context = {}) {
   }
 
   // 2. Check urgency cache
-  const cacheKey = urgencyCacheKey(input);
-  const cached = await cacheGet(cacheKey);
+  const cacheKey = symptomCacheKey('urgency', input, context);
+  const cached = cacheKey ? await cacheGet(cacheKey) : null;
   if (cached) {
     return { ...cached, source: 'cache' };
   }
@@ -338,7 +338,7 @@ async function quickUrgencyCheck(rawInput, context = {}) {
         source: 'ai',
       };
       // Cache
-      await cacheSet(cacheKey, result, URGENCY_CACHE_TTL);
+      if (cacheKey) await cacheSet(cacheKey, result, URGENCY_CACHE_TTL);
       return result;
     }
   } catch (err) {

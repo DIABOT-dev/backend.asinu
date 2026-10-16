@@ -1,3 +1,4 @@
+const { withPublicAiTemplate } = require('../ai/ai-consent.service');
 const { createHash } = require('crypto');
 const { t } = require('../../i18n');
 const { synthesizeSpeech, voiceMimeType } = require('../voice/vieneu.service');
@@ -137,7 +138,7 @@ async function getAudio(pool, key, requestedLanguage = 'vi') {
     [localizedAudioKey, hash]
   );
   if (stored.rows.length) return { ...stored.rows[0], audio_version: version };
-  const generated = await requestSpeech(phrase, voice, version);
+  const generated = await withPublicAiTemplate(() => requestSpeech(phrase, voice, version));
   const saved = await pool.query(
     'INSERT INTO checkin_call_audio (audio_key, text_hash, mime_type, audio_data) VALUES ($1,$2,$3,$4) ON CONFLICT (audio_key) DO UPDATE SET text_hash = EXCLUDED.text_hash, mime_type = EXCLUDED.mime_type, audio_data = EXCLUDED.audio_data, created_at = now() RETURNING audio_data, mime_type',
     [localizedAudioKey, hash, generated.mime_type, generated.audio_data]

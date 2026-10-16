@@ -1,3 +1,4 @@
+const { assertAiConsent } = require('../ai-consent.service');
 const DEFAULT_TIMEOUT_MS = 5000;
 
 const buildUrl = (baseUrl, path) => {
@@ -9,6 +10,7 @@ const buildUrl = (baseUrl, path) => {
 const pickOptional = (value) => (value === undefined ? undefined : value);
 
 async function getDiaBrainReply({ message, userId, sessionId }) {
+  await assertAiConsent();
   const baseUrl = process.env.DIABRAIN_BASE_URL;
   const chatPath = process.env.DIABRAIN_CHAT_PATH;
   if (!baseUrl || !chatPath) {

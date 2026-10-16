@@ -265,7 +265,8 @@ const loadPatientProfile = async (pool, req) => {
         ['image', 'video', 'raw'].includes(file.resource_type)
           ? file.resource_type
           : resourceTypeForMime(file.mime_type),
-        file.delivery_type
+        file.delivery_type,
+        file.mime_type
       ),
       source_task_id: file.source_task_id,
       uploaded_by: file.uploaded_by,
@@ -335,7 +336,7 @@ const createPatientFile = async (pool, req) => {
     use_filename: true,
     unique_filename: true,
   });
-  const privateUrl = authenticatedAssetUrl(uploaded.public_id, resourceType, 'authenticated');
+  const privateUrl = authenticatedAssetUrl(uploaded.public_id, resourceType, 'authenticated', normalizedMimeType);
   if (!privateUrl)
     throw integrationError(
       503,

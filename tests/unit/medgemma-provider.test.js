@@ -1,4 +1,10 @@
-const medgemma = require('../../src/services/ai/providers/medgemma');
+const provider = require('../../src/services/ai/providers/medgemma');
+const { withAiUser } = require('../../src/services/ai/ai-consent.service');
+const consentingPool = { query: async () => ({ rows: [{ allowed: 1 }] }) };
+const medgemma = { ...provider,
+  callMedGemma: (...args) => withAiUser(consentingPool, 1, () => provider.callMedGemma(...args)),
+  callMedGemmaWithRetry: (...args) => withAiUser(consentingPool, 1, () => provider.callMedGemmaWithRetry(...args)),
+};
 
 describe('medgemma provider', () => {
   const originalFetch = global.fetch;

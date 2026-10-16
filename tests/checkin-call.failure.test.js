@@ -1,6 +1,9 @@
 const service = require('../src/services/checkin-call/checkin-call.service');
 const audio = require('../src/services/checkin-call/audio.service');
 
+const { withAiUser: withAudioOwner } = require('../src/services/ai/ai-consent.service');
+const consentingSpeech = (...args) => withAudioOwner({ query: async () => ({ rows: [1] }) }, 1, () => audio.synthesizeText(...args));
+
 describe('check-in call provider failure handling', () => {
   const originalApiKey = process.env.VIENEU_API_KEY;
   const originalTimeout = process.env.VIENEU_TIMEOUT_MS;
@@ -69,7 +72,7 @@ describe('check-in call provider failure handling', () => {
       .mockResolvedValueOnce({ ok: true, headers: { get: () => 'audio/wav' },
         arrayBuffer: async () => Buffer.from('conclusion-audio') });
 
-    const result = await audio.synthesizeText('  Asinu đã ghi nhận bác vẫn ổn.  ', 'vi');
+    const result = await consentingSpeech('  Asinu đã ghi nhận bác vẫn ổn.  ', 'vi');
 
     expect(result).toMatchObject({ mime_type: 'audio/wav' });
     expect(result.audio_data.toString()).toBe('conclusion-audio');
@@ -84,12 +87,12 @@ describe('check-in call provider failure handling', () => {
     process.env.VIENEU_API_KEY = 'test-key';
     global.fetch = jest.fn();
 
-    await expect(audio.synthesizeText('   ', 'vi')).rejects.toMatchObject({
+    await expect(consentingSpeech('   ', 'vi')).rejects.toMatchObject({
       statusCode: 400,
       i18nKey: 'checkinCall.error.conclusion_required',
     });
     await expect(
-      audio.synthesizeText('a'.repeat(audio.MAX_DYNAMIC_TEXT_LENGTH + 1), 'vi')
+      consentingSpeech('a'.repeat(audio.MAX_DYNAMIC_TEXT_LENGTH + 1), 'vi')
     ).rejects.toMatchObject({
       statusCode: 400,
       i18nKey: 'checkinCall.error.conclusion_too_long',

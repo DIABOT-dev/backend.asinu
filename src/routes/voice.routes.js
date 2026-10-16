@@ -1,5 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
+const { requireAiConsent } = require('../middleware/ai-consent.middleware');
 const { handleUpload, verifyAudioMagicBytes } = require('../middleware/upload.middleware');
 const { voiceUpload } = require('../middleware/voice-upload.middleware');
 const { createVoiceController } = require('../controllers/voice.controller');
@@ -11,6 +12,7 @@ function voiceRoutes(pool) {
   router.post(
     '/chat',
     requireAuth,
+    requireAiConsent(pool),
     handleUpload(voiceUpload.single('audio')),
     verifyAudioMagicBytes,
     controller.chat

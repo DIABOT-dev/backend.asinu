@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { t, getLang } = require('../i18n');
 const { isSessionCurrent } = require('../services/auth/session.service');
+const { withAiUser } = require('../services/ai/ai-consent.service');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -28,7 +29,7 @@ async function authenticateJWT(req, res, next) {
     return res.status(503).json({ ok: false, error: t('error.server', getLang(req)) });
   }
   req.user = payload;
-  return next();
+  return withAiUser(req.app?.locals?.authPool, payload.id, next);
 }
 
 const requireAuth = authenticateJWT;

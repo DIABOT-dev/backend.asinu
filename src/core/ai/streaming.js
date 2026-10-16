@@ -1,4 +1,5 @@
 'use strict';
+const { assertAiConsent } = require('../../services/ai/ai-consent.service');
 
 /**
  * Streaming Service — SSE cho AI responses
@@ -57,6 +58,7 @@ function sendSSE(res, event, data) {
  * @returns {Promise<string>} full accumulated text
  */
 async function streamOpenAI(res, options = {}) {
+  await assertAiConsent();
   const {
     model = 'gpt-4o-mini',
     messages = [],
@@ -135,6 +137,7 @@ async function streamChunked(res, text, options = {}) {
  * Returns full response at once.
  */
 async function callOpenAI(options = {}) {
+  await assertAiConsent();
   const { model = 'gpt-4o-mini', messages = [], temperature = 0.3, max_tokens = 500 } = options;
 
   const response = await getClient().chat.completions.create({

@@ -2,6 +2,9 @@
 
 const audio = require('../../src/services/checkin-call/audio.service');
 
+const { withAiUser: withAudioOwner } = require('../../src/services/ai/ai-consent.service');
+const consentingSpeech = (...args) => withAudioOwner({ query: async () => ({ rows: [1] }) }, 1, () => audio.synthesizeText(...args));
+
 describe('backend-owned check-in call audio revisions', () => {
   const envNames = ['VIENEU_API_KEY', 'VIENEU_VOICE', 'VIENEU_VOICE_EN', 'CHECKIN_CALL_AUDIO_REVISION'];
   const original = Object.fromEntries(envNames.map((name) => [name, process.env[name]]));
@@ -97,7 +100,7 @@ describe('backend-owned check-in call audio revisions', () => {
         arrayBuffer: async () => Buffer.from('original voice'),
       };
     });
-    const result = await audio.synthesizeText('Kết luận check-in.', 'vi');
+    const result = await consentingSpeech('Kết luận check-in.', 'vi');
     expect(result.audio_version).toBe(expected);
     expect(result.audio_version).not.toBe(audio.audioVersion('vi'));
   });

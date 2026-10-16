@@ -137,7 +137,7 @@ const privateMedia = (media) => {
     ...safeMedia,
     // Legacy public URLs are deliberately not returned. New records carry a
     // public_id and receive a signed authenticated delivery URL.
-    url: authenticatedAssetUrl(media.public_id, resourceType, media.delivery_type),
+    url: authenticatedAssetUrl(media.public_id, resourceType, media.delivery_type, media.mime_type),
   };
 };
 
@@ -415,7 +415,7 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
     use_filename: true,
     unique_filename: true,
   });
-  const privateUrl = authenticatedAssetUrl(uploaded.public_id, 'image', 'authenticated');
+  const privateUrl = authenticatedAssetUrl(uploaded.public_id, 'image', 'authenticated', file.mimetype);
   if (!privateUrl)
     throw integrationError(
       503,
@@ -576,7 +576,7 @@ const sendPatientVoice = async (pool, { userId, taskId, input, file, durationMs 
           public_id: uploaded.public_id,
           resource_type: 'video',
           delivery_type: 'authenticated',
-          url: authenticatedAssetUrl(uploaded.public_id, 'video', 'authenticated'),
+          url: authenticatedAssetUrl(uploaded.public_id, 'video', 'authenticated', file.mimetype),
         })}`,
       },
     });
@@ -1028,7 +1028,7 @@ const sendDoctorVoice = async (pool, req, input) => {
         public_id: uploaded.public_id,
         resource_type: 'video',
         delivery_type: 'authenticated',
-        url: authenticatedAssetUrl(uploaded.public_id, 'video', 'authenticated'),
+        url: authenticatedAssetUrl(uploaded.public_id, 'video', 'authenticated', input.mime_type || 'audio/webm'),
       })}`,
     });
     if (message.duplicate && uploaded.public_id)

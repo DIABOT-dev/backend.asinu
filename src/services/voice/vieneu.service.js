@@ -1,4 +1,5 @@
 'use strict';
+const { assertAiConsent } = require('../ai/ai-consent.service');
 
 const { randomUUID } = require('node:crypto');
 const { setTimeout: delay } = require('node:timers/promises');
@@ -80,6 +81,7 @@ async function clonedSpeech(text, voice, headers, signal) {
 }
 
 async function synthesizeSpeech({ text, voice, apiKey, timeoutMs = 20000 }) {
+  await assertAiConsent();
   if (!apiKey) throw new Error('VieNeu is not configured');
   if (!voice || !text) throw new Error('VieNeu text and voice are required');
   const signal = AbortSignal.timeout(timeoutMs);

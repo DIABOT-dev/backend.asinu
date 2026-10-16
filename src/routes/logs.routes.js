@@ -7,6 +7,7 @@ const { bindController } = require('../middleware/controller-handler.middleware'
 
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
+const { requireAiConsent } = require('../middleware/ai-consent.middleware');
 const {
   audioUpload,
   handleUpload,
@@ -20,6 +21,7 @@ function logsRoutes(pool) {
   router.post(
     '/voice-parse',
     requireAuth,
+    requireAiConsent(pool),
     handleUpload(audioUpload.single('audio')),
     verifyAudioMagicBytes,
     bindController(voiceParse, pool)

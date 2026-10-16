@@ -1,3 +1,4 @@
+const { assertAiConsent } = require('../ai/ai-consent.service');
 /**
  * Onboarding AI Service
  *
@@ -136,13 +137,13 @@ async function callOpenAI(messages, language) {
       }),
       signal: controller.signal,
     });
-    clearTimeout(timeout);
     if (!response.ok) return null;
     const data = await response.json();
     return data.choices?.[0]?.message?.content || null;
   } catch {
-    clearTimeout(timeout);
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -159,12 +160,15 @@ async function callGemini(messages, language) {
     role: m.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: m.content }],
   }));
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), OPENAI_TIMEOUT_MS);
 
   try {
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
       {
         method: 'POST',
+        signal: controller.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents,
@@ -182,6 +186,8 @@ async function callGemini(messages, language) {
     return data?.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch {
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -194,6 +200,10 @@ async function callGemini(messages, language) {
  * @returns {Promise<{ done: boolean, question?: string, type?: string, options?: string[], allow_other?: boolean, field?: string, profile?: object }>}
  */
 async function getNextQuestion(messages, language = 'vi') {
+  const parsed = require('./onboarding-input.policy').onboardingAiInputSchema.parse({ messages, language });
+  messages = parsed.messages;
+  language = parsed.language;
+  await assertAiConsent();
   const provider = String(process.env.AI_PROVIDER || 'openai').toLowerCase();
 
   let raw = null;

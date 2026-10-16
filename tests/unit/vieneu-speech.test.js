@@ -1,6 +1,8 @@
 'use strict';
 
-const { synthesizeSpeech, MAX_AUDIO_BYTES } = require('../../src/services/voice/vieneu.service');
+const { synthesizeSpeech: providerSpeech, MAX_AUDIO_BYTES } = require('../../src/services/voice/vieneu.service');
+const { withAiUser } = require('../../src/services/ai/ai-consent.service');
+const synthesizeSpeech = (...args) => withAiUser({ query: async () => ({ rows: [1] }) }, 1, () => providerSpeech(...args));
 const audio = require('../../src/services/checkin-call/audio.service');
 const voice = 'clone_b935a451-7d65-4b73-a083-d46e56c47d4f';
 const options = { text: 'Xin chào.', voice, apiKey: 'private-test-key', timeoutMs: 5000 };
@@ -17,6 +19,9 @@ const completed = {
   audioUrl: 'https://storage.vieneu.io/test.wav',
 };
 const originalFetch = global.fetch;
+
+const { withAiUser: withAudioOwner } = require('../../src/services/ai/ai-consent.service');
+const consentingSpeech = (...args) => withAudioOwner({ query: async () => ({ rows: [1] }) }, 1, () => audio.synthesizeText(...args));
 
 beforeEach(() => {
   global.fetch = jest.fn();
@@ -132,7 +137,7 @@ test('check-in audio uses the clone for conclusions and returns its actual forma
     process.env.VIENEU_VOICE = voice;
     process.env.VIENEU_API_KEY = options.apiKey;
     global.fetch.mockResolvedValueOnce(json(completed)).mockResolvedValueOnce(recording());
-    expect(await audio.synthesizeText(options.text)).toEqual({
+    expect(await consentingSpeech(options.text)).toEqual({
       audio_data: wav,
       mime_type: 'audio/wav',
       audio_version: audio.audioVersion('vi'),

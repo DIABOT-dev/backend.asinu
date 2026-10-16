@@ -2,6 +2,9 @@ const { t, getLang } = require('../i18n');
 const { onboardingRequestSchema } = require('../validation/validation.schemas');
 const onboardingService = require('../services/onboarding/onboarding.service');
 const onboardingAiService = require('../services/onboarding/onboarding.ai.service');
+const { onboardingAiInputSchema } = require('../services/onboarding/onboarding-input.policy');
+const { acquireOnboardingBudget } = require('../services/onboarding/onboarding-budget.service');
+const { withAiUser, mayProcessAi } = require('../services/ai/ai-consent.service');
 const { createClustersFromOnboarding } = require('../services/checkin/script.service');
 
 async function upsertOnboardingProfile(pool, req, res) {
@@ -36,16 +39,18 @@ async function upsertOnboardingProfile(pool, req, res) {
  * AI-driven: get next onboarding question
  */
 async function onboardingNext(pool, req, res) {
-  const { messages = [], language = 'vi' } = req.body;
-  if (!Array.isArray(messages)) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
-  }
+  const parsed = onboardingAiInputSchema.safeParse(req.body || {});
+  if (!parsed.success) return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+  let release;
   try {
-    const result = await onboardingAiService.getNextQuestion(messages, language);
+    if (!(await mayProcessAi(pool, req.user?.id))) return res.status(403).json({ ok: false, code: 'AI_CONSENT_REQUIRED' });
+    release = await acquireOnboardingBudget(req.user.id);
+    const { messages, language } = parsed.data;
+    const result = await withAiUser(pool, req.user.id, () => onboardingAiService.getNextQuestion(messages, language));
     return res.status(200).json({ ok: true, ...result });
-  } catch (err) {
-    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
-  }
+  } catch (error) {
+    return res.status(error.statusCode || 503).json({ ok: false, code: error.code || 'AI_UNAVAILABLE', error: t('error.server', getLang(req)) });
+  } finally { if (release) await release().catch(() => {}); }
 }
 
 /**

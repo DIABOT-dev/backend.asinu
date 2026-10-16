@@ -1,3 +1,4 @@
+const { withAiUser } = require('../ai/ai-consent.service');
 const { callTextAi } = require('../ai/ai.service');
 const { logAiInteraction } = require('../ai/ai-logger.service');
 const { filterAiOutput } = require('../ai/ai-safety.service');
@@ -428,7 +429,7 @@ const createDoctorAiAssist = async (pool, input) => {
       let attempt = 0;
       for (;;) {
         try {
-          response = await callTextAi(modelRequest);
+          response = await withAiUser(pool, input.app_user_id, () => callTextAi(modelRequest));
           output = buildOutput({
             raw: parseModelJson(response.content),
             input,

@@ -1,4 +1,5 @@
 'use strict';
+const { withAiUser } = require('../ai/ai-consent.service');
 
 /**
  * R&D Cycle Service — Nightly AI Batch Processing
@@ -273,7 +274,7 @@ async function processFallbackLogs(pool, activeUserIds = null) {
     for (const fb of userFallbacks) {
       try {
         // AI labels the unknown symptom
-        const label = await labelSymptom(fb.raw_input, existingClusters);
+        const label = await withAiUser(pool, fb.user_id, () => labelSymptom(fb.raw_input, existingClusters));
         aiCalls++;
 
         if (label.matchExisting) {

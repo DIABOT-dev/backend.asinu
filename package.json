@@ -80,5 +80,8 @@
         "statements": 40
       }
     }
+  },
+  "overrides": {
+    "proxy-addr": "2.0.8"
   }
 }

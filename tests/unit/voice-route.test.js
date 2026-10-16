@@ -24,7 +24,7 @@ const { createVoiceController } = require('../../src/controllers/voice.controlle
 const wav = Buffer.from([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45]);
 
 describe('voice route wiring and upload policy', () => {
-  const pool = {};
+  const pool = { query: jest.fn(async () => ({ rows: [1] })) };
   const app = express();
   app.use('/api/voice', voiceRoutes(pool));
 

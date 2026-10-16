@@ -7,6 +7,7 @@
  */
 
 const { getOpenAIReply } = require('../ai/providers/openai');
+const { withAiUser } = require('../ai/ai-consent.service');
 const { sendAndSave } = require('./basic.notification.service');
 const { t } = require('../../i18n');
 
@@ -398,9 +399,9 @@ async function previewEngagementNotification(pool, userId) {
     language_preference: userRow.language_preference || 'vi',
   };
 
-  const decision = await generateEngagementNotification(user, context, user.language_preference, {
+  const decision = await withAiUser(pool, userId, () => generateEngagementNotification(user, context, user.language_preference, {
     isPreview: true,
-  });
+  }));
 
   if (!decision.body) {
     throw new Error('AI did not generate notification content');
@@ -444,7 +445,7 @@ async function runEngagementNotifications(pool) {
     try {
       const context = contextMap.get(user.id);
       const lang = user.language_preference || 'vi';
-      const decision = await generateEngagementNotification(user, context, lang);
+      const decision = await withAiUser(pool, user.id, () => generateEngagementNotification(user, context, lang));
 
       if (!decision.shouldSend) {
         skipped++;

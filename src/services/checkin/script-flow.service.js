@@ -129,9 +129,10 @@ async function startScriptFlow(pool, userId, { status, cluster_key, symptom_inpu
     } else {
       try {
         console.log(
-          `[ScriptCheckin] No cached script for "${symptom_input}", trying AI analysis...`
+          '[ScriptCheckin] No cached script, trying AI analysis...'
         );
         const aiContext = {
+          userId,
           age: profile.birth_year ? new Date().getFullYear() - profile.birth_year : null,
           gender: profile.gender,
           medical_conditions: Array.isArray(profile.medical_conditions)

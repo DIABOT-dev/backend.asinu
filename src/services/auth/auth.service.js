@@ -11,6 +11,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { t } = require('../../i18n');
 const crypto = require('crypto');
+const { OAuth2Client } = require('google-auth-library');
+const googleVerifier = new OAuth2Client();
+const { googleAudiences } = require('./google-clients.policy');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 
 // =====================================================
@@ -234,6 +237,24 @@ async function verifySocialToken(provider, token) {
 
   try {
     if (provider === 'google') {
+      const audiences = googleAudiences();
+      if (!audiences.length) return { valid: false };
+      if (token.split('.').length === 3) {
+        const ticket = await googleVerifier.verifyIdToken({ idToken: token, audience: audiences });
+        const data = ticket.getPayload();
+        if (!data?.sub || (data.azp && !audiences.includes(data.azp))) return { valid: false };
+        return { valid: true, profile: { sub: data.sub, name: data.name,
+          email: data.email_verified === true ? data.email : null } };
+      }
+      // Older clients send access tokens. Bind these to Asinu's OAuth clients
+      // before fetching userinfo. Credentials never enter request URLs/logs.
+      const tokenInfo = await fetchProviderJson('https://oauth2.googleapis.com/tokeninfo', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+      }, 'google.tokeninfo');
+      if (!tokenInfo.ok || !audiences.includes(tokenInfo.data.aud) ||
+          (tokenInfo.data.azp && !audiences.includes(tokenInfo.data.azp)) ||
+          !(Number(tokenInfo.data.expires_in) > 0)) return { valid: false };
       const result = await fetchProviderJson(
         'https://www.googleapis.com/oauth2/v2/userinfo',
         { headers: { Authorization: `Bearer ${token}` } },
@@ -242,11 +263,12 @@ async function verifySocialToken(provider, token) {
       if (!result.ok) return { valid: false };
 
       const data = result.data;
-      if (!data.id && !data.email) {
+      if (!data.id || (tokenInfo.data.sub && tokenInfo.data.sub !== data.id)) {
         return { valid: false };
       }
 
-      return { valid: true, profile: { email: data.email, name: data.name, sub: data.id } };
+      return { valid: true, profile: { email: data.verified_email === true ? data.email : null,
+        name: data.name, sub: data.id } };
     }
 
     if (provider === 'apple') {

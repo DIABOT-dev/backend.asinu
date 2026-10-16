@@ -1,4 +1,5 @@
 'use strict';
+const { assertAiConsent } = require('./ai-consent.service');
 
 /**
  * Unified AI Service
@@ -42,6 +43,7 @@ async function callTextAi({
   timeoutMs,
   maxRetries,
 }) {
+  await assertAiConsent();
   const selectedProvider = String(provider || CLINICAL_PROVIDER).toLowerCase();
   // ─── 1. MedGemma Route ───────────────────────────────────────────────────
   if (selectedProvider === 'medgemma' && medgemmaProvider.isConfigured()) {

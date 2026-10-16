@@ -14,6 +14,7 @@ const authRoutes = require('../../src/routes/auth.routes');
 const authService = require('../../src/services/auth/auth.service');
 
 const originalFetch = global.fetch;
+process.env.GOOGLE_WEB_CLIENT_ID = 'asinu-test.apps.googleusercontent.com';
 afterEach(() => {
   global.fetch = originalFetch;
 });
@@ -134,7 +135,7 @@ test('invalid Zalo token cannot reach account lookup even with a supplied identi
 });
 
 test('Google continues linking the provider-returned email, never the different client email', async () => {
-  global.fetch = jest.fn().mockResolvedValue(
+  global.fetch = jest.fn().mockResolvedValueOnce(providerResponse({ aud: process.env.GOOGLE_WEB_CLIENT_ID, expires_in: 3600 })).mockResolvedValueOnce(
     providerResponse({
       id: 'own-google-id',
       email: 'verified@example.test',
@@ -182,13 +183,13 @@ test('Apple token without an email cannot fall back to a client-supplied victim 
 });
 
 test('provider response without verified subject cannot use the client provider_id', async () => {
-  global.fetch = jest.fn().mockResolvedValue(providerResponse({ email: 'verified@example.test' }));
+  global.fetch = jest.fn().mockResolvedValueOnce(providerResponse({ aud: process.env.GOOGLE_WEB_CLIENT_ID, expires_in: 3600 })).mockResolvedValueOnce(providerResponse({ email: 'verified@example.test' }));
   const pool = database();
   const res = await request(appFor(pool)).post('/api/auth/google').send({
     token: 'synthetic-token',
     provider_id: 'victim-google-id',
     email: 'victim@example.test',
   });
-  expect(res.status).toBe(400);
+  expect(res.status).toBe(401);
   expect(pool.query).not.toHaveBeenCalled();
 });

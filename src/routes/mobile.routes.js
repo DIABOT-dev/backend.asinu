@@ -2,6 +2,8 @@ const { bindController } = require('../middleware/controller-handler.middleware'
 const { getGuidance, updateGuidance, replayGuidance } = require('../controllers/guidance.controller');
 const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
+const { requireAiConsent } = require('../middleware/ai-consent.middleware');
+const aiConsentController = require('../controllers/ai-consent.controller');
 const { chatbotGate } = require('../middleware/chatbot.gate.middleware');
 const {
   audioUpload,
@@ -101,13 +103,17 @@ function mobileRoutes(pool) {
   router.post(
     '/chat/transcribe',
     requireAuth,
+    requireAiConsent(pool),
     chatbotGate(pool),
     handleUpload(audioUpload.single('audio')),
     verifyAudioMagicBytes,
     bindController(transcribeAudio, pool)
   );
 
-  router.post('/chat', requireAuth, chatbotGate(pool), bindController(postChat, pool));
+  router.get('/ai-consent', requireAuth, bindController(aiConsentController.getAiConsent, pool));
+  router.put('/ai-consent', requireAuth, bindController(aiConsentController.grantAiConsent, pool));
+  router.delete('/ai-consent', requireAuth, bindController(aiConsentController.revokeAiConsent, pool));
+  router.post('/chat', requireAuth, requireAiConsent(pool), chatbotGate(pool), bindController(postChat, pool));
   router.get('/chat/history', requireAuth, bindController(getChatHistoryHandler, pool));
 
   // Chat feedback (like / dislike / note)
@@ -126,7 +132,7 @@ function mobileRoutes(pool) {
   router.post('/onboarding', requireAuth, bindController(upsertOnboardingProfile, pool));
 
   // Onboarding — AI-driven: lấy câu hỏi tiếp theo
-  router.post('/onboarding/next', requireAuth, bindController(onboardingNext, pool));
+  router.post('/onboarding/next', requireAuth, requireAiConsent(pool), bindController(onboardingNext, pool));
 
   // Onboarding — AI-driven: lưu profile khi AI báo done
   router.post('/onboarding/complete', requireAuth, bindController(onboardingComplete, pool));

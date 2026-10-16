@@ -74,12 +74,13 @@ describe('family call identity and relationship direction', () => {
 
   function attemptPool(role = 'FAMILY') {
     return { query: jest.fn(async (sql, params) => {
+      if (sql.includes('FROM user_ai_consents')) return { rows: [1] };
       // Model the SQL's recipient predicate without bypassing the real service.
       expect(sql).toContain('a.target_user_id = $2');
       expect(sql).toContain("status = 'accepted'");
       if (params[1] !== 7) return { rows: [] };
       return { rows: [{
-        id: 'attempt-1', target_role: role, severity: 'UNKNOWN', triage_context: {},
+        id: 'attempt-1', subject_user_id: 9, target_role: role, severity: 'UNKNOWN', triage_context: {},
         subject_name: 'Lan', subject_phone: '0901234567', subject_gender: 'Nữ',
         relationship_type: 'con-trai', relationship_requester_id: 9,
       }] };

@@ -80,6 +80,7 @@ async function fetchGoogleProfile(code, redirectUri) {
   });
   const profile = await profileRes.json();
   if (!profile.id) return { error: 'profile_failed' };
+  if (profile.verified_email !== true) profile.email = null;
   return { profile };
 }
 

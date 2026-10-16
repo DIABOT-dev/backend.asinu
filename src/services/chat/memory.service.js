@@ -8,6 +8,7 @@
  */
 
 const { callTextAi } = require('../ai/ai.service');
+const { withAiUser } = require('../ai/ai-consent.service');
 const MAX_MEMORIES = 20;
 
 /**
@@ -82,11 +83,11 @@ Cập nhật: [{"content":"mới","category":"...","action":"update","old_conten
 CHỈ JSON.`;
 
   try {
-    const response = await callTextAi({
+    const response = await withAiUser(pool, userId, () => callTextAi({
       prompt,
       temperature: 0.3,
       maxTokens: 512,
-    });
+    }));
 
     const raw = response.content;
 

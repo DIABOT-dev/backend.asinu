@@ -1,3 +1,4 @@
+const { assertAiConsent } = require('../ai/ai-consent.service');
 /**
  * Checkin AI Service — Asinu Health Companion
  *
@@ -1202,6 +1203,7 @@ QUY TẮC TỐI THƯỢNG (vi phạm = lỗi hệ thống):
 6. Giọng điệu: ấm áp, chuyên nghiệp, dễ hiểu cho người lớn tuổi.
 Trả lời JSON only.`;
 
+    await assertAiConsent();
     response = await getClient().chat.completions.create(
       {
         model: 'gpt-4o',

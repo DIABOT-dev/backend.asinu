@@ -1,4 +1,5 @@
-﻿const { getDiaBrainReply } = require('../ai/providers/diabrain');
+const { assertAiConsent } = require('../ai/ai-consent.service');
+const { getDiaBrainReply } = require('../ai/providers/diabrain');
 const { getOpenAIChatReply } = require('../ai/providers/openai');
 const {
   getMedGemmaChatReply,
@@ -24,6 +25,7 @@ const GEMINI_MAX_RETRIES = 3;
  * @param {string|null} systemPrompt - System instruction for the AI
  */
 async function callGemini(message, context, history = [], systemPrompt = null) {
+  await assertAiConsent();
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
