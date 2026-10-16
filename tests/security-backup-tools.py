@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+from datetime import datetime, timezone
 
 SCRIPTS = Path(__file__).resolve().parents[1] / 'scripts'
 
@@ -59,6 +60,36 @@ class BackupRecovery(unittest.TestCase):
             pull.prune_backups(root, 14)
             self.assertEqual(len(list(root.glob('*-main-*'))), 2)
             self.assertEqual(len(list(root.glob('*-doctor-*'))), 2)
+
+    def test_success_requires_fresh_sql_and_key_archives(self):
+        pull = module('pull-encrypted-backups')
+        now = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+        files = [f'asinu-{now}-main-fixture.sql.gz.age', f'asinu-{now}-doctor-fixture.sql.gz.age', f'asinu-{now}-fixture.keys.tar.age']
+        pull.require_fresh_recovery_sets(files)
+        with self.assertRaises(RuntimeError):
+            pull.require_fresh_recovery_sets(files[:-1])
+        with self.assertRaises(RuntimeError):
+            pull.require_fresh_recovery_sets([name.replace(now, '20200101T000000Z') for name in files])
+
+    def test_legacy_retention_cannot_delete_outside_private_recovery_root(self):
+        pull = module('pull-encrypted-backups')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            private = root / 'private'; private.mkdir()
+            legacy = private / 'legacy'; legacy.mkdir()
+            identity = private / 'identity'
+            subprocess.run(['age-keygen', '-o', str(identity)], check=True, capture_output=True)
+            recipient = subprocess.check_output(['age-keygen', '-y', str(identity)], text=True).strip()
+            encrypted = subprocess.check_output(['age', '-r', recipient], input=b'legacy fixture')
+            stale = legacy / 'old.age'; stale.write_bytes(encrypted); os.utime(stale, (1, 1))
+            current = legacy / 'current.age'; current.write_bytes(encrypted)
+            pull.prune_legacy_copies({'age_identity': str(identity), 'legacy_directories': [str(legacy)]})
+            self.assertFalse(stale.exists()); self.assertTrue(current.exists())
+            outside = root / 'outside'; outside.mkdir()
+            other = outside / 'other.age'; other.write_bytes(encrypted); os.utime(other, (1, 1))
+            with self.assertRaises(RuntimeError):
+                pull.prune_legacy_copies({'age_identity': str(identity), 'legacy_directories': [str(outside)]})
+            self.assertTrue(other.exists())
 
 
 if __name__ == '__main__':

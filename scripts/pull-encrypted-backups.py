@@ -68,6 +68,38 @@ def prune_backups(destination, retention_days):
                 entry.unlink()
 
 
+def require_fresh_recovery_sets(names):
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=36)
+    for kind in ('main', 'doctor', 'keys'):
+        stamps = []
+        for name in names:
+            match = re.match(r'asinu-(\d{8}T\d{6}Z)-', name)
+            if not match:
+                continue
+            group = 'keys' if name.endswith('.keys.tar.age') else ('doctor' if '-doctor-' in name else 'main')
+            if group == kind:
+                stamps.append(datetime.strptime(match[1], '%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc))
+        if not stamps or max(stamps) < cutoff:
+            raise RuntimeError('A required daily recovery set is missing or stale')
+
+
+def prune_legacy_copies(config):
+    private_root = Path(config['age_identity']).expanduser().resolve().parent
+    cutoff = datetime.now(timezone.utc).timestamp() - config.get('retention_days', 14) * 86400
+    for location in config.get('legacy_directories', []):
+        directory = Path(location).expanduser()
+        if directory.is_symlink() or directory.resolve().parent != private_root:
+            raise RuntimeError('Legacy copies must be in the private recovery directory')
+        for file in directory.glob('*.age'):
+            if file.is_symlink() or not file.is_file():
+                continue
+            with file.open('rb') as stream:
+                if stream.read(22) != b'age-encryption.org/v1\n':
+                    raise RuntimeError('Invalid legacy ciphertext')
+            if file.stat().st_mtime < cutoff:
+                file.unlink()
+
+
 def run_sftp(config, commands, directory=None):
     args = ['sftp', '-q', '-b', '-', '-i', config['ssh_identity'],
             '-o', 'BatchMode=yes', '-o', 'IdentitiesOnly=yes',
@@ -96,6 +128,7 @@ def pull(config):
                         if re.fullmatch(r'/?asinu-[A-Za-z0-9_-]+\.(?:sql\.gz|keys\.tar)\.age', line.strip())})
         if not names:
             raise RuntimeError('No encrypted backups returned by the pinned server')
+        require_fresh_recovery_sets(names)
         copied = 0
         for name in names:
             target = destination / name
@@ -112,6 +145,7 @@ def pull(config):
                 incoming.replace(target)
                 copied += 1
         prune_backups(destination, config.get('retention_days', 14))
+        prune_legacy_copies(config)
         status = {'last_success_at': datetime.now(timezone.utc).isoformat(),
                   'copied': copied, 'available': len(names), 'remote': config['remote']}
         status_file = destination / 'status.json'

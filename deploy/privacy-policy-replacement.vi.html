@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chính sách quyền riêng tư — Asinu</title>
+</head>
+<body>
+<!-- Prepared for the asinu.vn policy page. Not published by the backend deployment. -->
+<main>
+  <article>
+    <h1>Chính sách quyền riêng tư của Asinu</h1>
+    <p>Ngày cập nhật nội dung: 16/10/2026</p>
+
+    <h2>1. Đơn vị xử lý dữ liệu</h2>
+    <p>Asinu là dịch vụ kết nối và ghi nhận sức khỏe gia đình do Công ty Cổ phần DIABOT vận hành. Chính sách này mô tả việc xử lý dữ liệu khi bạn dùng ứng dụng Asinu và website asinu.vn.</p>
+
+    <h2>2. Dữ liệu được xử lý</h2>
+    <p>Tùy tính năng bạn sử dụng, Asinu xử lý thông tin đăng ký và hồ sơ như tên, số điện thoại, email, tuổi, giới tính; thông tin thành viên trong vòng kết nối; dữ liệu check-in, triệu chứng, chỉ số và nhật ký sức khỏe bạn nhập; nội dung trò chuyện, hồ sơ hoặc tệp bạn chọn chia sẻ khi tư vấn.</p>
+    <p>Khi dùng giọng nói, bản ghi âm được xử lý để tạo bản chép lời. Để gửi thông báo và lời nhắc, hệ thống xử lý mã nhận thông báo của thiết bị cùng trạng thái gửi, nhận hoặc phản hồi. Thông tin kỹ thuật cần thiết cũng được sử dụng để vận hành, phát hiện lỗi và bảo vệ tài khoản.</p>
+
+    <h2>3. Mục đích xử lý</h2>
+    <p>Dữ liệu phục vụ việc đăng nhập, lưu và hiển thị nhật ký, tạo biểu đồ hoặc nội dung tổng hợp, chia sẻ với người thân theo lựa chọn của bạn, gửi lời nhắc check-in và cung cấp chức năng tư vấn mà bạn yêu cầu. Nội dung liên quan được dùng để tạo phản hồi AI khi bạn cho phép tính năng đó.</p>
+    <p>Bạn có thể thay đổi lựa chọn trong ứng dụng. Việc từ chối một quyền có thể khiến tính năng phụ thuộc quyền đó không hoạt động. Dịch vụ nhắc nhở không bảo đảm phát hiện mọi tình huống khẩn cấp.</p>
+
+    <h2>4. Người và dịch vụ có thể nhận dữ liệu</h2>
+    <p>Người thân trong vòng kết nối và chuyên gia tư vấn chỉ được cung cấp dữ liệu theo chức năng và phạm vi chia sẻ của bạn. Các nhà cung cấp kỹ thuật xử lý phần dữ liệu cần thiết để thực hiện tính năng:</p>
+    <ul>
+      <li>OpenAI xử lý nội dung liên quan khi dùng tính năng trò chuyện hoặc dịch vụ Whisper của OpenAI; Dr7, sử dụng mô hình MedGemma, xử lý yêu cầu phân tích sức khỏe được gửi tới dịch vụ này.</li>
+      <li>VieNeu nhận văn bản cần đọc khi sử dụng giọng đọc; không cần nhận toàn bộ hồ sơ sức khỏe để tạo âm thanh.</li>
+      <li>Cloudinary xử lý tệp hình ảnh hoặc tài liệu được tải lên qua các chức năng lưu trữ tương ứng.</li>
+      <li>Các dịch vụ thông báo của Apple, Google và Expo xử lý mã thiết bị cùng thông tin cần thiết để chuyển thông báo.</li>
+    </ul>
+    <p>Một số dịch vụ có thể xử lý dữ liệu ngoài Việt Nam. Đây là việc cung cấp dữ liệu cho nhà cung cấp để thực hiện chức năng, vì vậy Asinu không cam kết rằng dữ liệu không bao giờ được chuyển cho bên thứ ba.</p>
+    <p>Luồng thu thập hội thoại để tạo tập huấn luyện riêng và việc dùng hội thoại của người khác làm ví dụ cho phản hồi đã được tắt trong hệ thống Asinu. Chính sách của từng nhà cung cấp cũng áp dụng đối với phần dữ liệu họ xử lý.</p>
+
+    <h2>5. Biện pháp bảo vệ</h2>
+    <p>Ứng dụng kết nối với API qua HTTPS; kết nối giữa API Asinu và PostgreSQL sử dụng TLS với kiểm tra chứng chỉ. Dữ liệu PostgreSQL của Asinu, PostgreSQL của Doctor và dữ liệu lưu bền của Redis trên VPS được đặt trong volume LUKS2 mã hóa AES-256.</p>
+    <p>Một số nội dung nhạy cảm có thêm lớp AES-256-GCM theo từng tài khoản: nội dung chat, ghi chú phản hồi, tin nhắn tư vấn, các trường văn bản hồ sơ tư vấn và bản tổng hợp lịch sử sức khỏe. Những trường dữ liệu khác được bảo vệ bởi lớp mã hóa volume; không phải mọi trường đều được mã hóa riêng.</p>
+    <p>Khóa của từng tài khoản được lưu riêng với database và được giới hạn quyền truy cập trên máy chủ. Hệ thống cần giải mã dữ liệu để cung cấp các chức năng bạn sử dụng; đây là mã hóa phía máy chủ, không phải mã hóa đầu cuối. Nhân sự có quyền quản trị hệ thống vẫn có khả năng truy cập trong phạm vi công việc được giao. Asinu không công bố việc dùng một hệ thống KMS độc lập hoặc bảo mật tuyệt đối.</p>
+    <p>Bản sao database và khóa phục hồi được mã hóa bằng age trước khi sao lưu. Khóa giải mã backup được giữ ngoài VPS. Việc phân quyền, mã hóa và sao lưu giúp giảm rủi ro nhưng không loại bỏ mọi khả năng xảy ra sự cố.</p>
+
+    <h2>6. Lưu giữ, xóa và phục hồi</h2>
+    <p>Dữ liệu được giữ để cung cấp dịch vụ và xử lý các yêu cầu hợp lệ của bạn. Khi tài khoản được xóa, hệ thống xóa dữ liệu thuộc phạm vi tài khoản trên hệ thống chính và hủy khóa đang hoạt động của các trường được mã hóa theo tài khoản.</p>
+    <p>Bản sao lưu định kỳ được quản lý theo chu kỳ lưu giữ 14 ngày. Dữ liệu và bản sao khóa cũ trong backup không bị xóa ngay cùng thời điểm với hệ thống chính. Khi khôi phục bản sao cũ, các yêu cầu xóa phải được áp dụng lại trước khi đưa dữ liệu vào sử dụng. Trường hợp cần giữ dữ liệu để thực hiện nghĩa vụ pháp lý phải được xử lý riêng và giới hạn theo mục đích đó.</p>
+
+    <h2>7. Lựa chọn và yêu cầu của bạn</h2>
+    <p>Bạn có thể quản lý việc chia sẻ, thay đổi lựa chọn sử dụng AI, cập nhật thông tin hoặc gửi yêu cầu tiếp cận, nhận bản sao và xóa dữ liệu. Quyền hệ điều hành như thông báo, micro và camera được quản lý riêng trong cài đặt thiết bị.</p>
+    <p>Để yêu cầu xóa tài khoản và dữ liệu, sử dụng chức năng tương ứng trong ứng dụng hoặc trang <a href="https://asinu.vn/xoa-du-lieu">yêu cầu xóa dữ liệu</a>. Bạn cũng có thể liên hệ bộ phận hỗ trợ để xác minh và xử lý yêu cầu.</p>
+
+    <h2>8. Liên hệ</h2>
+    <p>Email phụ trách hỗ trợ: <a href="mailto:hotro@asinu.vn">hotro@asinu.vn</a>. Điện thoại: <a href="tel:0898888917">0898 888 917</a>.</p>
+    <p>Công ty Cổ phần DIABOT, mã số thuế 0111234998. Địa chỉ: 12A, ngách 1/16, ngõ 1 Thúy Lĩnh, phường Lĩnh Nam, Hà Nội.</p>
+
+    <h2>9. Phạm vi của ứng dụng</h2>
+    <p>Asinu hỗ trợ ghi nhận và kết nối chăm sóc sức khỏe, không phải thiết bị y tế và không thay thế việc khám, chẩn đoán, điều trị hoặc tư vấn trực tiếp của nhân viên y tế.</p>
+  </article>
+</main>
+</body>
+</html>

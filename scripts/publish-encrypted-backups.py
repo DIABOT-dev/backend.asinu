@@ -18,10 +18,30 @@ for file in directory.glob('asinu-*.age'):
         os.fchmod(fd, 0o640)
     finally:
         os.close(fd)
-# Prune only encrypted key archives after a new successful backup job.
-# Database retention is managed by backup-db.sh; no private key is published.
+# Include the unlabeled archives created before per-database naming, keeping
+# recovery copies separately for each database and for the key bundle.
 cutoff = time.time() - int(os.environ.get('BACKUP_RETENTION_DAYS', '14')) * 86400
-archives = sorted(directory.glob('asinu-*.keys.tar.age'), key=lambda f: f.stat().st_mtime)
-for file in archives[:-1]:
-    if file.stat().st_mtime < cutoff:
-        file.unlink()
+for suffix, label in [('.sql.gz.age', 'main'), ('.sql.gz.age', 'doctor'), ('.keys.tar.age', 'keys')]:
+    archives = [file for file in directory.glob('asinu-*' + suffix)
+                if label == 'keys' or ('-doctor-' in file.name) == (label == 'doctor')]
+    archives.sort(key=lambda f: f.stat().st_mtime)
+    for file in archives[:-2]:
+        if file.stat().st_mtime < cutoff:
+            file.unlink()
+
+# Migration recovery archives have the same bounded retention. These paths
+# are explicitly provisioned by the operator, never supplied by API clients.
+for location in os.environ.get('LEGACY_ENCRYPTED_BACKUP_DIRS', '').split(':'):
+    if not location:
+        continue
+    legacy = Path(location)
+    if legacy.is_symlink() or legacy.resolve().parent != Path('/var/backups'):
+        raise SystemExit('Invalid legacy backup directory')
+    for file in legacy.glob('*.age'):
+        if file.is_symlink() or not file.is_file():
+            continue
+        with file.open('rb') as stream:
+            if stream.read(22) != b'age-encryption.org/v1\n':
+                raise SystemExit('Invalid legacy ciphertext')
+        if file.stat().st_mtime < cutoff:
+            file.unlink()

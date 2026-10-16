@@ -251,6 +251,8 @@ Compose production bắt buộc mount `HEALTH_FIELD_KEY_HOST_DIRECTORY` vào `/r
 
 `asinu-encrypted-backup` chạy 03:00; `asinu-doctor-encrypted-backup` chạy 03:10 giờ Việt Nam (có jitter). Job Asinu sao lưu riêng khóa user và volume vào `.keys.tar.age`; VPS chỉ giữ public recipient age. `publish-encrypted-backups.py` cấp group chỉ đọc cho ciphertext hoàn tất. SFTP dùng tài khoản chroot, `internal-sftp -R`, khóa SSH riêng và host key pinning. Máy phục hồi chạy `pull-encrypted-backups.py --config <private-json>` mỗi 15 phút, giải mã kiểm tra toàn bộ rồi mới nhận bản sao; không lưu SQL chữ thường. Config gồm `remote`, `ssh_identity`, `known_hosts`, `age_identity`, `destination`, `retention_days` (14 mặc định). Bản Mac chỉ tự đồng bộ khi máy bật/có mạng; muốn backup ngoài VPS 24/7 cần một máy nhận luôn bật hoặc kho object storage đã cấp quyền.
 
+Sync từ chối báo thành công khi thiếu backup Asinu, Doctor hoặc khóa trong 36 giờ gần nhất. Bản sao chuyển đổi cũ được xóa sau retention bằng `LEGACY_ENCRYPTED_BACKUP_DIRS` trên VPS (chỉ thư mục con trực tiếp của `/var/backups`) và `legacy_directories` trên Mac (chỉ thư mục con của nơi giữ identity). Chỉ cấu hình các bản ciphertext đã kiểm chứng. Directory trong `ReadWritePaths` của systemd phải tồn tại trước khi bật service.
+
 Xóa tài khoản hủy khóa đang hoạt động và tạo tombstone để request cũ không tạo lại khóa. Job theo giờ xử lý lại khóa mồ côi. Bản sao khóa cũ còn trong backup tới hết retention; không hứa hủy khóa trên mọi backup ngay lập tức. Cần bảo vệ khóa age và có quy trình lọc các tài khoản đã xóa trước khi phục hồi backup cũ vào production.
 
 Kiểm thử bổ sung (database local trống đã chạy migration, chỉ dữ liệu tổng hợp):
