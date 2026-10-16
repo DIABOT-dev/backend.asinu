@@ -7,10 +7,13 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: Deploy or inspect SSH without changing the server
+        description: Deploy, inspect SSH, or remove a confirmed operator IP ban
         type: choice
-        options: [deploy, ssh-diagnostics]
+        options: [deploy, ssh-diagnostics, restore-operator-ssh]
         default: deploy
+      operator_ip:
+        description: Confirmed operator IPv4 address to unban (restore operation only)
+        required: false
       environment:
         description: Deployment environment
         type: choice
@@ -35,7 +38,7 @@ permissions:
 
 jobs:
   ssh-diagnostics:
-    if: github.event_name == 'workflow_dispatch' && inputs.operation == 'ssh-diagnostics'
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'restore-operator-ssh')
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     environment: prod
@@ -47,11 +50,18 @@ jobs:
           VPS_HOST: ${{ secrets.VPS_HOST }}
           VPS_USER: ${{ secrets.VPS_USER }}
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          OPERATION: ${{ inputs.operation }}
+          OPERATOR_IP: ${{ inputs.operator_ip }}
         run: |
           set -eu
           test "$VPS_HOST" = '36.50.176.55'
           test -n "$VPS_USER"
           test -n "$VPS_SSH_KEY"
+          if [ "$OPERATION" = 'restore-operator-ssh' ]; then
+            python3 -c 'import ipaddress, os; ipaddress.IPv4Address(os.environ["OPERATOR_IP"])'
+          else
+            OPERATOR_IP=''
+          fi
           task_dir="$(mktemp -d)"
           trap 'rm -rf "$task_dir"' EXIT
           umask 077
@@ -60,7 +70,10 @@ jobs:
           ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
             -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
-            "$VPS_USER@$VPS_HOST" 'sh -s' <<'REMOTE'
+            "$VPS_USER@$VPS_HOST" sh -s -- "$OPERATION" "$OPERATOR_IP" <<'REMOTE'
+          if [ "$1" = 'restore-operator-ssh' ]; then
+            fail2ban-client set sshd unbanip "$2"
+          fi
           systemctl is-active ssh
           /usr/sbin/sshd -t
           ss -lnt 'sport = :22'
@@ -71,7 +84,7 @@ jobs:
 
   package:
     if: >-
-      (github.event_name == 'workflow_dispatch' && inputs.operation != 'ssh-diagnostics') ||
+      (github.event_name == 'workflow_dispatch' && (inputs.operation == 'deploy' || inputs.operation == '')) ||
       (github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push' &&
       github.event.workflow_run.head_branch == 'main' &&
