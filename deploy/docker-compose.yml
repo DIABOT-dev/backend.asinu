@@ -7,8 +7,15 @@ services:
       - .env
     environment:
       NODE_ENV: production
+      HEALTH_FIELD_ENCRYPTION_ENABLED: 'true'
+      HEALTH_FIELD_KEY_DIRECTORY: /run/asinu-health-keys
     command: ['node', 'server.js']
     volumes:
+      - type: bind
+        source: ${HEALTH_FIELD_KEY_HOST_DIRECTORY:?HEALTH_FIELD_KEY_HOST_DIRECTORY is required}
+        target: /run/asinu-health-keys
+        bind:
+          create_host_path: false
       - type: bind
         source: ${DB_TLS_CA_HOST_FILE:?DB_TLS_CA_HOST_FILE is required}
         target: /run/asinu-db-tls/ca.pem

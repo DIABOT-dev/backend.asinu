@@ -1,3 +1,4 @@
+const { encryptHealthField, decryptHealthField, PREFIX } = require('../../security/health-field-encryption');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { assertTenantAllowed, deliverDoctorRequest } = require('./doctor-task.service');
 const { verifyDoctorSignature, assertProfileRequest } = require('./doctor-profile.service');
@@ -73,14 +74,14 @@ const relayDoctorChatChange = ({
 const RAW_MESSAGE_COLUMNS = `id, task_id, sender_type, sender_ref, message_type, content,
   client_message_id, created_at, delivered_at, read_at, read_by_type, read_by_ref,
   edited_at, deleted_at, deleted_by_type, deleted_by_ref, pinned_at, pinned_by_type,
-  pinned_by_ref`;
+  pinned_by_ref, user_id`;
 
 const messageProjection = `
   m.id, m.task_id, m.sender_type, m.sender_ref, m.message_type,
   CASE WHEN m.deleted_at IS NOT NULL OR d.message_id IS NOT NULL THEN NULL ELSE m.content END AS content,
   m.client_message_id, m.created_at, m.delivered_at, m.read_at, m.read_by_type,
   m.read_by_ref, m.edited_at, m.deleted_at, m.pinned_at, m.pinned_by_type,
-  m.pinned_by_ref, (m.deleted_at IS NOT NULL) AS is_deleted,
+  m.pinned_by_ref, m.user_id, (m.deleted_at IS NOT NULL) AS is_deleted,
   (d.message_id IS NOT NULL) AS is_deleted_for_me,
   (m.edited_at IS NOT NULL) AS is_edited,
   (m.pinned_at IS NOT NULL) AS is_pinned,
@@ -140,7 +141,14 @@ const privateMedia = (media) => {
   };
 };
 
+const decryptedMessage = Symbol('decrypted-health-message');
+const decryptMessage = message => {
+  if (!message || message[decryptedMessage] || typeof message.content !== 'string' || !message.content.startsWith(PREFIX)) return message;
+  return { ...message, content: decryptHealthField(message.user_id, 'doctor_task_messages.content', message.content), [decryptedMessage]: true };
+};
+
 const hydrateMessageMedia = (message) => {
+  message = decryptMessage(message);
   if (!message || typeof message.content !== 'string') return message;
   const attachment = parseAttachment(message.content);
   if (attachment) {
@@ -258,18 +266,18 @@ const insertMessage = async (client, input) => {
       input.senderType,
       input.senderRef || null,
       input.messageType,
-      input.content,
+      encryptHealthField(input.userId, 'doctor_task_messages.content', input.content),
       input.clientMessageId,
     ]
   );
-  if (inserted.rows[0]) return { ...inserted.rows[0], duplicate: false };
+  if (inserted.rows[0]) return { ...decryptMessage(inserted.rows[0]), duplicate: false };
   const existing = await client.query(
     `SELECT ${RAW_MESSAGE_COLUMNS}
        FROM doctor_task_messages
       WHERE tenant_id = $1 AND task_id = $2 AND client_message_id = $3`,
     [input.tenantId, input.taskId, input.clientMessageId]
   );
-  const message = existing.rows[0];
+  const message = decryptMessage(existing.rows[0]);
   if (!message || message.sender_type !== input.senderType || message.content !== input.content) {
     throw integrationError(
       409,
@@ -375,7 +383,7 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
     [input.tenant_id, taskId, userId, input.client_message_id]
   );
   if (existingMessage.rows[0]) {
-    const existing = existingMessage.rows[0];
+    const existing = decryptMessage(existingMessage.rows[0]);
     if (existing.sender_type !== 'patient' || existing.message_type !== input.message_type) {
       throw integrationError(
         409,
@@ -531,7 +539,7 @@ const sendPatientVoice = async (pool, { userId, taskId, input, file, durationMs 
     [input.tenant_id, taskId, userId, input.client_message_id]
   );
   if (existingMessage.rows[0]) {
-    const existing = existingMessage.rows[0];
+    const existing = decryptMessage(existingMessage.rows[0]);
     if (existing.sender_type !== 'patient' || existing.message_type !== 'voice') {
       throw integrationError(
         409,
@@ -648,7 +656,7 @@ const loadRawMessage = async (pool, tenantId, taskId, messageId) => {
       WHERE tenant_id = $1 AND task_id = $2 AND id = $3`,
     [tenantId, taskId, messageId]
   );
-  return result.rows[0] || null;
+  return decryptMessage(result.rows[0] || null);
 };
 
 const assertOwnMessage = (message, actorType, actorRef) => {
@@ -782,7 +790,7 @@ const messageAction = async (pool, input) => {
       await pool.query(
         `UPDATE doctor_task_messages SET content = $4, edited_at = NOW()
           WHERE tenant_id = $1 AND task_id = $2 AND id = $3`,
-        [tenantId, taskId, messageId, content]
+        [tenantId, taskId, messageId, encryptHealthField(userId, 'doctor_task_messages.content', content)]
       );
     } else if (action === 'unsend') {
       await pool.query(
@@ -871,7 +879,7 @@ const listPatientTasks = async (pool, userId, tenantId) => {
     tasks: result.rows.map((task) => ({
       ...task,
       latest_message: task.latest_message
-        ? hydrateMessageMedia({ content: task.latest_message }).content
+        ? hydrateMessageMedia({ content: task.latest_message, user_id: userId }).content
         : task.latest_message,
     })),
   };

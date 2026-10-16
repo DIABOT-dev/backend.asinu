@@ -1,3 +1,4 @@
+const { encryptHealthField, decryptHealthRows } = require('../../security/health-field-encryption');
 /**
  * Chat Service
  * Business logic cho AI chat
@@ -742,7 +743,7 @@ async function getRecentHistory(pool, userId, limit = HISTORY_LIMIT) {
      LIMIT $2`,
     [userId, limit]
   );
-  return result.rows.reverse(); // chronological order
+  return decryptHealthRows(userId, 'chat_histories', ['message'], result.rows).reverse(); // chronological order
 }
 
 /**
@@ -765,7 +766,7 @@ async function getChatHistory(pool, userId, limit = null) {
      ORDER BY created_at ASC, id ASC`,
     boundedLimit ? [userId, boundedLimit] : [userId]
   );
-  return result.rows;
+  return decryptHealthRows(userId, 'chat_histories', ['message'], result.rows);
 }
 
 /**
@@ -877,7 +878,7 @@ async function saveUserMessage(pool, userId, message, timestamp) {
   await pool.query(
     `INSERT INTO chat_histories (user_id, message, sender, created_at)
      VALUES ($1, $2, 'user', $3)`,
-    [userId, message, timestamp]
+    [userId, encryptHealthField(userId, 'chat_histories.message', message), timestamp]
   );
 }
 
@@ -894,7 +895,7 @@ async function saveAssistantReply(pool, userId, reply, timestamp) {
     `INSERT INTO chat_histories (user_id, message, sender, created_at)
      VALUES ($1, $2, 'assistant', $3)
      RETURNING id, created_at`,
-    [userId, reply, timestamp]
+    [userId, encryptHealthField(userId, 'chat_histories.message', reply), timestamp]
   );
   return result.rows[0];
 }

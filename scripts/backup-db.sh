@@ -7,6 +7,8 @@ umask 077
 : "${BACKUP_AGE_RECIPIENT:?BACKUP_AGE_RECIPIENT is required; plaintext backups are disabled}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/asinu}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-14}"
+BACKUP_LABEL="${BACKUP_DATABASE_LABEL:-main}"
+[[ "$BACKUP_LABEL" = main || "$BACKUP_LABEL" = doctor ]] || { echo 'Invalid backup database label' >&2; exit 1; }
 [[ "$RETENTION_DAYS" =~ ^[0-9]+$ ]] && (( RETENTION_DAYS >= 1 )) || { echo 'Invalid backup retention' >&2; exit 1; }
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 for dependency in "${POSTGRES_CONTAINER:+docker}" gzip age python3; do
@@ -18,7 +20,7 @@ mkdir -p "$BACKUP_DIR"
 TMP_BACKUP=$(mktemp "$BACKUP_DIR/.asinu-backup.XXXXXX")
 trap 'rm -f "$TMP_BACKUP"' EXIT
 printf '' | age -r "$BACKUP_AGE_RECIPIENT" > "$TMP_BACKUP"
-OUT="$BACKUP_DIR/asinu-$(date -u +'%Y%m%dT%H%M%SZ')-$(basename "$TMP_BACKUP" | cut -d. -f3).sql.gz.age"
+OUT="$BACKUP_DIR/asinu-$(date -u +'%Y%m%dT%H%M%SZ')-${BACKUP_LABEL}-$(basename "$TMP_BACKUP" | cut -d. -f3).sql.gz.age"
 # No plaintext intermediate file or credentials in command arguments/logs.
 python3 "$SCRIPT_DIR/pg-command.py" pg_dump --no-owner --no-privileges --format=plain | gzip -9 | age -r "$BACKUP_AGE_RECIPIENT" > "$TMP_BACKUP"
 test -s "$TMP_BACKUP"
@@ -29,5 +31,5 @@ if [ -n "${S3_BUCKET:-}" ]; then
   aws "${AWS_ARGS[@]}"
 fi
 # Retain legacy copies until an encrypted replacement passes a restore test.
-find "$BACKUP_DIR" -type f -name 'asinu-*.sql.gz.age' -mtime +"$RETENTION_DAYS" -delete
+find "$BACKUP_DIR" -type f -name "asinu-*-${BACKUP_LABEL}-*.sql.gz.age" -mtime +"$RETENTION_DAYS" -delete
 printf 'Encrypted backup complete: %s\n' "$OUT"

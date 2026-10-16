@@ -1,3 +1,4 @@
+const { decryptHealthRows } = require('../../security/health-field-encryption');
 const crypto = require('crypto');
 const {
   authenticatedAssetUrl,
@@ -155,6 +156,7 @@ const loadPatientProfile = async (pool, req) => {
       WHERE user_id = $1 ORDER BY recorded_at DESC LIMIT 100`,
     [appUserId]
   );
+  records.rows = decryptHealthRows(appUserId, 'doctor_patient_medical_records', ['title', 'diagnosis', 'summary', 'treatment', 'notes'], records.rows);
   const files = await pool.query(
     `SELECT id, name, mime_type, size_bytes, public_id, resource_type, delivery_type,
             source_task_id, uploaded_by, created_at

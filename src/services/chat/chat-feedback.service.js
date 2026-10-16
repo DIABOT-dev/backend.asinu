@@ -1,3 +1,4 @@
+const { encryptHealthField, decryptHealthRows } = require('../../security/health-field-encryption');
 /**
  * Chat Feedback Service
  * Database operations for chat feedback (like/dislike/note)
@@ -20,7 +21,7 @@ async function checkExistingNote(pool, userId, messageId) {
 async function saveChatNote(pool, userId, messageId, messageText) {
   await pool.query(
     `INSERT INTO chat_feedback (user_id, message_id, message_text, feedback_type) VALUES ($1,$2,$3,'note')`,
-    [userId, messageId, messageText]
+    [userId, messageId, encryptHealthField(userId, 'chat_feedback.message_text', messageText)]
   );
 }
 
@@ -58,7 +59,7 @@ async function updateFeedbackType(pool, feedbackId, newType) {
 async function saveFeedback(pool, userId, messageId, messageText, feedbackType) {
   await pool.query(
     `INSERT INTO chat_feedback (user_id, message_id, message_text, feedback_type) VALUES ($1,$2,$3,$4)`,
-    [userId, messageId, messageText, feedbackType]
+    [userId, messageId, encryptHealthField(userId, 'chat_feedback.message_text', messageText), feedbackType]
   );
 }
 
@@ -80,7 +81,7 @@ async function getChatNotes(pool, userId, page, limit) {
     ),
   ]);
 
-  return { notes: rows, total: countRows[0]?.total || 0 };
+  return { notes: decryptHealthRows(userId, 'chat_feedback', ['message_text'], rows), total: countRows[0]?.total || 0 };
 }
 
 /**

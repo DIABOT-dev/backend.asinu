@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Asinu Doctor encrypted backup
+
+[Timer]
+OnCalendar=*-*-* 03:10:00 Asia/Ho_Chi_Minh
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

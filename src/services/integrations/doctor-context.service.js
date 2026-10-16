@@ -1,3 +1,4 @@
+const { decryptHealthRows } = require('../../security/health-field-encryption');
 const crypto = require('crypto');
 const { assertTenantAllowed } = require('./doctor-task.service');
 const { assertProfileRequest } = require('./doctor-profile.service');
@@ -118,6 +119,8 @@ const loadDoctorClinicalContext = async (pool, input) => {
         [tenantId, taskId, appUserId]
       ),
     ]);
+  records.rows = decryptHealthRows(appUserId, 'doctor_patient_medical_records', ['diagnosis', 'summary', 'treatment'], records.rows);
+  messages.rows = decryptHealthRows(appUserId, 'doctor_task_messages', ['content'], messages.rows);
   const timelineMarkdown = await rebuildPatientHealthTimeline(pool, appUserId);
   const conversation = messages.rows
     .reverse()

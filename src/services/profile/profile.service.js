@@ -1,3 +1,4 @@
+const { retireHealthKey } = require('../../security/health-field-encryption');
 /**
  * Profile Service
  * Business logic cho user profile operations
@@ -473,6 +474,8 @@ async function deleteAccount(pool, userId) {
 
     // Commit transaction
     await client.query('COMMIT');
+    try { retireHealthKey(userId); }
+    catch { logger.warn('health_key_retirement_pending', { user_id: userId }); }
 
     // Invalidate all caches for this user
     await cacheDel(

@@ -1,4 +1,5 @@
 'use strict';
+const { encryptHealthField, decryptHealthRows } = require('../../security/health-field-encryption');
 
 const escapeMarkdown = (value) =>
   String(value ?? '')
@@ -103,6 +104,8 @@ const rebuildPatientHealthTimeline = async (pool, userId) => {
       [userId]
     ),
   ]);
+  recordsResult.rows = decryptHealthRows(userId, 'doctor_patient_medical_records', ['title', 'diagnosis', 'summary', 'treatment', 'notes'], recordsResult.rows);
+  messagesResult.rows = decryptHealthRows(userId, 'doctor_task_messages', ['content'], messagesResult.rows);
   const profile = profileResult.rows[0] || {};
   const rawProfile =
     profile.raw_profile && typeof profile.raw_profile === 'object' ? profile.raw_profile : {};
@@ -243,7 +246,7 @@ const rebuildPatientHealthTimeline = async (pool, userId) => {
      VALUES ($1, $2, $3, NOW())
      ON CONFLICT (user_id) DO UPDATE SET content_markdown = EXCLUDED.content_markdown,
        checkin_count = EXCLUDED.checkin_count, updated_at = NOW()`,
-    [userId, markdown, rows.length]
+    [userId, encryptHealthField(userId, 'patient_health_timeline_documents.content_markdown', markdown), rows.length]
   );
   return markdown;
 };

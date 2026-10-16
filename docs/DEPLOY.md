@@ -119,10 +119,10 @@ docker run -d --name asinu-backend --restart unless-stopped --network asinu_net 
 
 ### Chạy migration thủ công
 
-App tự chạy migrate qua `scripts/migrate.js` khi container start (gọi trong `npm start`). Nếu cần chạy lại:
+Production chạy migration bằng job quản trị riêng trước khi khởi động API. Nếu cần chạy lại:
 
 ```bash
-docker compose exec asinu-backend node scripts/migrate.js
+docker compose --profile migration run --rm --no-deps asinu-migrate
 ```
 
 Migration `082_private_media_delivery.sql` thêm metadata private delivery cho
@@ -240,3 +240,22 @@ DATA_PROTECTION_TEST_DATABASE_URL=postgresql://localhost/asinu_data_security_tes
 ```
 
 Test cần PostgreSQL client, Python 3 và age. Nó kiểm tra CRUD của role ít quyền, từ chối DDL/cấp quyền/ghi tập huấn luyện, backup mã hóa, phục hồi nguyên vẹn và chặn ciphertext hỏng/DB không trống/sai đích. Không chạy trên database có dữ liệu thật.
+
+## Volume, mã hóa trường và backup ngoài VPS — 16/10/2026
+
+`scripts/prepare-encrypted-volume.py` chỉ tạo file volume mới 8 GiB, LUKS2 AES-XTS với hai khóa AES-256, không format ổ hệ thống hoặc tự chuyển DB. Trước khi chuyển PostgreSQL/Doctor/Redis: backup và thử restore, dừng API ghi dữ liệu, dừng DB, sao chép bằng rsync giữ UID/GID, xác minh checksum trước khi khởi động lại. Thêm `RequiresMountsFor=/srv/asinu-data` cho Docker và bind mount với `create_host_path: false`. Chỉ xóa volume cũ sau khi dữ liệu, TLS, health check và bản khôi phục đã được kiểm chứng; xóa file không chứng minh các snapshot/sector cũ đã được xóa an toàn.
+
+Volume mở tự động bằng file khóa root-only trên VPS để máy khởi động lại được. Đây không phải KMS độc lập; root vẫn có khả năng giải mã. Giữ bản phục hồi khóa ngoài VPS. Không công bố toàn bộ ổ hệ thống, log Docker hoặc ảnh chụp của nhà cung cấp đã mã hóa chỉ vì DB chuyển vào volume này.
+
+Compose production bắt buộc mount `HEALTH_FIELD_KEY_HOST_DIRECTORY` vào `/run/asinu-health-keys` (0700, UID/GID của API). AES-256-GCM dùng khóa riêng từng user, nonce ngẫu nhiên và AAD ràng buộc owner/cột. Phạm vi hiện tại: nội dung chat, feedback, tin nhắn bác sĩ, năm trường hồ sơ tư vấn và timeline Markdown (xem `health-field-specs.js`). Các cột số/JSON/outbox và DB riêng Doctor không được mã hóa từng trường bởi module này; chúng cần lớp mã hóa volume. Đây là mã hóa phía server, không phải E2EE. Chạy migration 109 trước, bật cấu hình/mount khóa, rồi chạy `node scripts/encrypt-health-fields.js` trong container có quyền runtime để chuyển dữ liệu cũ. Backfill chạy lại được và không ghi đè nội dung vừa thay đổi đồng thời.
+
+`asinu-encrypted-backup` chạy 03:00; `asinu-doctor-encrypted-backup` chạy 03:10 giờ Việt Nam (có jitter). Job Asinu sao lưu riêng khóa user và volume vào `.keys.tar.age`; VPS chỉ giữ public recipient age. `publish-encrypted-backups.py` cấp group chỉ đọc cho ciphertext hoàn tất. SFTP dùng tài khoản chroot, `internal-sftp -R`, khóa SSH riêng và host key pinning. Máy phục hồi chạy `pull-encrypted-backups.py --config <private-json>` mỗi 15 phút, giải mã kiểm tra toàn bộ rồi mới nhận bản sao; không lưu SQL chữ thường. Config gồm `remote`, `ssh_identity`, `known_hosts`, `age_identity`, `destination`, `retention_days` (14 mặc định). Bản Mac chỉ tự đồng bộ khi máy bật/có mạng; muốn backup ngoài VPS 24/7 cần một máy nhận luôn bật hoặc kho object storage đã cấp quyền.
+
+Xóa tài khoản hủy khóa đang hoạt động và tạo tombstone để request cũ không tạo lại khóa. Job theo giờ xử lý lại khóa mồ côi. Bản sao khóa cũ còn trong backup tới hết retention; không hứa hủy khóa trên mọi backup ngay lập tức. Cần bảo vệ khóa age và có quy trình lọc các tài khoản đã xóa trước khi phục hồi backup cũ vào production.
+
+Kiểm thử bổ sung (database local trống đã chạy migration, chỉ dữ liệu tổng hợp):
+
+```bash
+SECURITY_TEST_DATABASE_URL=postgresql://localhost/asinu_fields_security_test npx jest --runInBand tests/integration/health-field-storage.test.js tests/unit/health-field-encryption.test.js
+python3 tests/security-backup-tools.py
+```

@@ -31,6 +31,7 @@ const {
 } = require('../services/notification/notification-dispatch.service');
 
 const TZ = 'Asia/Ho_Chi_Minh';
+const { cleanupOrphanHealthKeys } = require('../security/health-field-encryption');
 
 /**
  * Schedule a cron job with a single-flight guard (prevents overlap if a
@@ -67,6 +68,9 @@ function safeCron(expression, name, handler) {
 }
 
 function startScheduler(pool) {
+  // Retry key retirement after a committed account deletion if a filesystem
+  // failure interrupted the initial cleanup. Database ownership is authoritative.
+  safeCron('17 * * * *', 'health_key_retirement', () => cleanupOrphanHealthKeys(pool));
   safeCron('* * * * *', 'notification_push_retry', () => retryPendingNotifications(pool));
   safeCron('*/15 * * * * *', 'checkin_call', async () => {
     await checkinCall.tick(pool);

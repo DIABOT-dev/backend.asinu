@@ -1,3 +1,4 @@
+const { decryptHealthRows } = require('../../security/health-field-encryption');
 const crypto = require('crypto');
 const logger = require('../../lib/logger');
 const { deleteAsset } = require('../media/cloudinary-upload.service');
@@ -205,6 +206,9 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
         [userId]
       ),
     ]);
+    records.rows = decryptHealthRows(userId, 'doctor_patient_medical_records', ['title', 'diagnosis', 'summary', 'treatment', 'notes'], records.rows);
+    messages.rows = decryptHealthRows(userId, 'doctor_task_messages', ['content'], messages.rows);
+    timeline.rows = decryptHealthRows(userId, 'patient_health_timeline_documents', ['content_markdown'], timeline.rows);
     const result = {
       ...response.data,
       asinu_doctor_data: {

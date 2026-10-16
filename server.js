@@ -141,6 +141,7 @@ app.use(generalLimiter);
 app.use(langMiddleware);
 
 // Postgres connection pool (instrumented with slow-query logging)
+require('./src/security/health-field-encryption').assertHealthEncryptionReady();
 const pool = createPool({
   connectionString: DATABASE_URL,
   max: Number(process.env.DB_POOL_MAX || 20), // Tối đa 20 kết nối đồng thời cho tải MVP

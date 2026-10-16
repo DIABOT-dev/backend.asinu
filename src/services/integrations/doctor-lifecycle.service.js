@@ -1,3 +1,4 @@
+const { encryptHealthField } = require('../../security/health-field-encryption');
 const { z } = require('zod');
 const { assertTenantAllowed } = require('./doctor-task.service');
 const { verifyDoctorSignature } = require('./doctor-profile.service');
@@ -133,26 +134,27 @@ const ingestDoctorLifecycle = async (pool, req) => {
          user_id, record_type, title, diagnosis, summary, treatment, notes,
          doctor_ref, source_task_id, recorded_at
        )
-       SELECT $1, 'consultation_summary', 'Tóm tắt tư vấn bác sĩ', $2, $3, $4, $5, $6, $7, $8
+       SELECT $1, 'consultation_summary', $9, $2, $3, $4, $5, $6, $7, $8
        WHERE NOT EXISTS (
          SELECT 1 FROM doctor_patient_medical_records
           WHERE user_id = $1 AND source_task_id = $7 AND record_type = 'consultation_summary'
        )`,
       [
         Number(appUserId),
-        summary.assessment,
-        summary.problem_summary,
-        summary.next_steps,
-        [
+        encryptHealthField(Number(appUserId), 'doctor_patient_medical_records.diagnosis', summary.assessment),
+        encryptHealthField(Number(appUserId), 'doctor_patient_medical_records.summary', summary.problem_summary),
+        encryptHealthField(Number(appUserId), 'doctor_patient_medical_records.treatment', summary.next_steps),
+        encryptHealthField(Number(appUserId), 'doctor_patient_medical_records.notes', [
           `Dấu hiệu cảnh báo: ${summary.warning_signs}`,
           `Theo dõi/tái tư vấn: ${summary.follow_up_recommendation}`,
           payload.follow_up_until ? `Trao đổi bổ sung đến: ${payload.follow_up_until}` : null,
         ]
           .filter(Boolean)
-          .join('\n'),
+          .join('\n')),
         payload.doctor_ref || null,
         payload.app_order_id,
         event.occurred_at,
+        encryptHealthField(Number(appUserId), 'doctor_patient_medical_records.title', 'Tóm tắt tư vấn bác sĩ'),
       ]
     );
     await rebuildPatientHealthTimeline(pool, Number(appUserId));
