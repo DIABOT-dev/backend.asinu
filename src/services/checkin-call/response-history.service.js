@@ -33,6 +33,9 @@ async function recordCallResponse(db, episode, severity, selection) {
       severity === 'URGENT',
     ]
   );
+  await require('../checkin-gifts/gift.service').safeAssign(db, episode.user_id, {
+    id: result.rows[0]?.id, user_id: episode.user_id, current_status: status,
+  });
   if (!selection) return;
   const symptom = getSymptomOptionsForLocation(selection.body_location, 'vi').find(
     (option) => option.key === selection.symptom

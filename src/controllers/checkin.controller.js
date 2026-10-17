@@ -79,7 +79,12 @@ async function startCheckinHandler(pool, req, res) {
         source,
       }
     );
-    return res.json({ ok: true, session });
+    let gift = null;
+    try {
+      const gifts = require('../services/checkin-gifts/gift.service');
+      gift = await gifts.publicGift(pool, await gifts.safeAssign(pool, req.user.id, session), getLang(req));
+    } catch { /* Rewards never block the accepted health response. */ }
+    return res.json({ ok: true, session, gift });
   } catch (err) {
     return res
       .status(500)

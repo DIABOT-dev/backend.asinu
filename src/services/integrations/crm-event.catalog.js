@@ -20,6 +20,8 @@ const CRM_PHASE_ONE_EVENT_TYPES = Object.freeze([
   'content.saved',
   'checkin.started',
   'checkin.completed',
+  'gift.opened',
+  'ticket.issued',
   'checkin_call.started',
   'checkin_call.acknowledged',
   'checkin_call.resolved',

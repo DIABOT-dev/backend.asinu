@@ -72,6 +72,11 @@ function startScheduler(pool) {
   // failure interrupted the initial cleanup. Database ownership is authoritative.
   safeCron('17 * * * *', 'health_key_retirement', () => cleanupOrphanHealthKeys(pool));
   safeCron('* * * * *', 'notification_push_retry', () => retryPendingNotifications(pool));
+  safeCron('* * * * *', 'checkin_gift_delivery', async () => {
+    await pool.query('UPDATE gift_draw_periods SET locked_at=NOW() WHERE active AND locked_at IS NULL AND closes_at <= NOW()');
+    await require('../services/checkin-gifts/gift.service').deliverFamilyEvents(pool);
+    await require('../services/checkin-gifts/draw.service').deliverResults(pool);
+  });
   safeCron('*/15 * * * * *', 'checkin_call', async () => {
     await checkinCall.tick(pool);
     await checkinCall.dispatchDeliveries(pool);

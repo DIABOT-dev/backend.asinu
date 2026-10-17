@@ -1,0 +1,82 @@
+Check-in gifts V2 — implementation and deployment notes (2026-10-17)
+
+Scope: daily gifts only. The 15-day trial and store coupons remain deferred.
+The existing entitlement and payment behavior is unchanged.
+
+Deploy ordering
+1. Back up the target database using the existing encrypted backup procedure.
+2. Apply migrations with npm run db:migrate before starting the new backend:
+   111_checkin_gifts.sql
+   112_gift_draw_results.sql
+   113_pause_gift_draws.sql
+3. Update asinu-crm contracts/backend/frontend for gift.opened and ticket.issued.
+4. Restart the backend, verify health and authenticated gift endpoints, then
+   distribute the matching Asinu app build.
+
+Migration defaults
+- gift_config.enabled = true
+- lucky_draw_enabled = false; ticket_weight = 0 (draw paused)
+- coupon_enabled = false (cannot be enabled in this phase)
+- Planned prize: iPhone 18, with founder-supplied artwork. No active draw period
+  or winners are created; opening a box never directly awards a phone.
+- 60 original bilingual wishes; active health tips require a recorded review.
+- Trial fields and the coupons table reserve future work, but activate no trial,
+  issue no discount, and change no entitlement.
+
+Authenticated mobile API
+GET  /api/mobile/gift/today
+POST /api/mobile/gift/open  {"gift_id":"UUID","box":0..5}
+GET  /api/mobile/gift/history?before=YYYY-MM-DD
+GET  /api/mobile/gift/:id
+GET  /api/mobile/gift/draw/:id/rules
+GET  /api/mobile/gift/draw/:id/results
+GET  /draw-results/:id (public ticket numbers only; disabled with lucky draws)
+
+Management API uses x-cron-secret, never a secret in a URL or mobile code.
+GET/PUT /api/internal/gifts/config
+GET     /api/internal/gifts/loc-items
+PUT     /api/internal/gifts/loc-items/:code
+PUT     /api/internal/gifts/draws/:code
+GET     /api/internal/gifts/draws/:id/tickets.csv
+POST    /api/internal/gifts/draws/:id/results {"ticket_numbers":["A1049"]}
+
+Server-owned randomness and database uniqueness enforce one immutable gift per
+household/Vietnam calendar day. A second unique constraint prevents the original
+account from rerolling by changing households. Box choice is visual only.
+Dismissal does not consume the gift; unopened gifts expire with that VN day.
+Opened receipts persist, including for the original account after a household
+change. Recent fortunes are excluded for 30 days. Gift failures do not roll back
+accepted health responses; call transactions use a savepoint for gift work.
+
+Caregivers need a current accepted connection with can_receive_alerts to read
+opened receipts. Delivery checks permissions again, uses durable notification
+outboxes and deduplicates event IDs. It never requires a financial purchase.
+
+Before enabling lucky draws, supply the actual prize, bilingual rules, dates
+and confirmed registration reference. Closes_at must be 23:59:00 Vietnam time
+on the day before the draw. A closed period is locked by the scheduler/export.
+Periods with tickets cannot be edited. Published results are idempotent and
+cannot be replaced with another winning list. The operator supplies the results
+of the public draw; this code does not choose winners automatically.
+
+Household caveat: Free Care Circle connections currently do not automatically
+share one subscription_household. Gifts follow existing entitlement households;
+unrelated Free accounts each retain their own household. Decide the Free family
+mapping explicitly when implementing trials, without inferring households from
+arbitrary Care Circle graphs or changing current subscription membership.
+
+Validation
+- npm test (database-dependent suites require their own environment)
+- npm run test:crm-events
+- CHECKIN_TEST_DATABASE_URL=<test database> npx jest --runInBand
+  tests/integration/checkin-gifts.test.js tests/unit/checkin-gift-policy.test.js
+  The gift suite uses isolated PostgreSQL schemas and fake accounts; no provider
+  push or phone calls are sent. Use the two test paths on the same command line.
+- App: test:checkin-gifts, test:checkin-state, test:checkin-audio,
+  test:checkin-practice, test:api-contract, test:checkin-contract, i18n:check,
+  type-check.
+- CRM: contracts build/test, backend test/typecheck, frontend typecheck.
+
+Device acceptance remains necessary before release: large fonts, all three
+answers, returning from a real call, network retry, opening rules and returning,
+account switching, and urgent dialogs interrupting an optional gift.

@@ -34,6 +34,8 @@ const doctorTaskRoutes = require('./src/routes/doctor-task.routes');
 const doctorProfileRoutes = require('./src/routes/doctor-profile.routes');
 const checkinCallRoutes = require('./src/routes/checkin-call.routes');
 const checkinCallOpsRoutes = require('./src/routes/checkin-call.ops.routes');
+const checkinGiftRoutes = require('./src/routes/checkin-gifts.routes');
+const checkinGiftOpsRoutes = require('./src/routes/checkin-gifts.ops.routes');
 const { prewarm: prewarmCheckinCallAudio } = require('./src/services/checkin-call/audio.service');
 const {
   attachDoctorChatWebSocketServer,
@@ -154,8 +156,11 @@ app.locals.authPool = pool;
 app.use('/api/auth', authLimiter, authRoutes(pool));
 app.use('/api/mobile/auth/login', authLimiter);
 app.use('/api/mobile', mobileRoutes(pool));
+app.use('/api/mobile/gift', checkinGiftRoutes(pool));
+app.get('/draw-results/:id',require('./src/services/checkin-gifts/draw.service').publicPage(pool));
 app.use('/api/mobile/checkin-call', checkinCallRoutes(pool));
 app.use('/api/internal/checkin-call', checkinCallOpsRoutes(pool));
+app.use('/api/internal/gifts', checkinGiftOpsRoutes(pool));
 app.use('/api/missions', missionsRoutes(pool));
 app.use('/api/care-pulse', carePulseRoutes(pool));
 app.use('/api/care-circle', careCircleRoutes(pool));

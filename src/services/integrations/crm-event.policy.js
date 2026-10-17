@@ -184,6 +184,8 @@ const EVENT_ALLOWLISTS = {
   'content.saved': ENGAGEMENT_FIELDS,
   'checkin.started': ENGAGEMENT_FIELDS,
   'checkin.completed': ENGAGEMENT_FIELDS,
+  'gift.opened': new Set([...ENGAGEMENT_FIELDS, 'household_id', 'gift_event_id', 'loc_id', 'extra', 'answer', 'date_vn']),
+  'ticket.issued': new Set([...ENGAGEMENT_FIELDS, 'household_id', 'gift_event_id', 'ticket_no', 'draw_period']),
   'checkin_call.started': CHECKIN_CALL_FIELDS,
   'checkin_call.acknowledged': CHECKIN_CALL_FIELDS,
   'checkin_call.resolved': CHECKIN_CALL_FIELDS,

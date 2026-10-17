@@ -377,6 +377,7 @@ async function startCheckin(
   // Mark daily_checkin mission as completed
   updateMissionProgress(pool, userId, 'daily_checkin', 1, { goal: 1 }).catch(() => {});
 
+  await require('../checkin-gifts/gift.service').safeAssign(pool, userId, rows[0]);
   return rows[0];
 }
 
