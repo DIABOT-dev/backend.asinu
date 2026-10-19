@@ -38,7 +38,7 @@ jobs:
           umask 077
           printf '%s\n' "$VPS_SSH_KEY" > "$task_dir/key"
           printf '%s\n' '36.50.176.55 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMDOm8XUn1KYdgS2UTE7r4XyrFpWQKpg7Kh+ZdWOm5xL' > "$task_dir/known_hosts"
-          printf '%s\n' 'd76b12bb8cefb34d9194e7e708b2429933a9057272852f2b09c0da42445bd79d  scripts/deploy-doctor-e25aa84.py' | sha256sum -c -
+          printf '%s\n' 'c3ed69fdeadc9298244388debaf0a60602dabadbebd555cc9742067db4963842  scripts/deploy-doctor-e25aa84.py' | sha256sum -c -
           scp -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
             -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \

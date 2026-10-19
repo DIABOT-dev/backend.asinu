@@ -39,14 +39,17 @@ def up():
          'up', '-d', '--no-deps', '--no-build', 'doctor-frontend'])
 
 assert hashlib.sha256(BUNDLE.read_bytes()).hexdigest() == '5afa4e4fd8b8f4f72efb86726a8bd8ba99503cd3958a46a5d958f27e3cf20bd6'
-BACKUP.mkdir(mode=0o700, exist_ok=False)
-before = CONFIG.read_bytes()
-(BACKUP / 'compose.before.json').write_bytes(before)
+BACKUP.mkdir(mode=0o700, exist_ok=True)
+before_file = BACKUP / 'compose.before.json'
+if not before_file.exists():
+    before_file.write_bytes(CONFIG.read_bytes())
+before = before_file.read_bytes()
 os.chmod(BACKUP / 'compose.before.json', 0o600)
 frontend = inspect('asinu-doctor-frontend')
 protected = {name: inspect(name)['Id'] for name in ['asinu-doctor-backend', 'asinu-doctor-postgres']}
 metadata = {'commit': COMMIT, 'previous_frontend_image': frontend['Image'], 'protected_containers': protected}
-(BACKUP / 'deployment.json').write_text(json.dumps(metadata, indent=2))
+if not (BACKUP / 'deployment.json').exists():
+    (BACKUP / 'deployment.json').write_text(json.dumps(metadata, indent=2))
 git = ['git', '-c', f'safe.directory={STACK}', '-C', str(STACK)]
 run(git + ['fetch', str(BUNDLE), 'HEAD'])
 run(git + ['merge', '--ff-only', 'FETCH_HEAD'])
@@ -77,6 +80,7 @@ try:
     service = config['services']['doctor-frontend']
     service['image'] = IMAGE
     service['build']['context'] = str(STACK / 'frontend')
+    service.setdefault('labels', {})['org.opencontainers.image.revision'] = COMMIT
     # Keep future builds pointed at the canonical, up-to-date source checkout.
     config['services']['doctor-backend']['build']['context'] = str(STACK / 'backend')
     temp = CONFIG.with_suffix('.next.json')
@@ -92,7 +96,11 @@ try:
     assert request('http://127.0.0.1:3500/readyz')[0] == 200
     for name, container_id in protected.items():
         assert inspect(name)['Id'] == container_id, f'{name} was unexpectedly recreated'
-    assert inspect('asinu-doctor-frontend')['Config']['Labels']['org.opencontainers.image.revision'] == COMMIT
+    deployed = inspect('asinu-doctor-frontend')
+    built = inspect(IMAGE)
+    assert deployed['Image'] == built['Id']
+    assert built['Config']['Labels']['org.opencontainers.image.revision'] == COMMIT
+    assert deployed['Config']['Labels']['org.opencontainers.image.revision'] == COMMIT
     (BACKUP / 'completed.json').write_text(json.dumps({'commit': COMMIT, 'image': IMAGE, 'login': 200,
         'backend_ready': 200, 'new_asset_verified': True, 'backend_and_database_preserved': True}, indent=2))
     print('DEPLOY_SUCCESS: e25aa84, public login 200, new artwork verified, backend/database preserved.', flush=True)
