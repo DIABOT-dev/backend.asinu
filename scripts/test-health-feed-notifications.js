@@ -121,7 +121,6 @@ async function getSummary(pool, userId) {
          FROM health_feed_feed_items
         WHERE user_id = $1
           AND dismissed_at IS NULL
-          AND expires_at > NOW()
         ORDER BY priority DESC, created_at DESC`,
       [userId]
     ),
@@ -155,7 +154,6 @@ async function ensureNotificationJob(pool, userId) {
        FROM health_feed_feed_items
       WHERE user_id = $1
         AND dismissed_at IS NULL
-        AND expires_at > NOW()
       ORDER BY priority DESC, created_at DESC
       LIMIT 1`,
     [userId]

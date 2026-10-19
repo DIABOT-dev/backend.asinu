@@ -20,9 +20,7 @@ function localizeContent(content, language = 'vi') {
     title: translation.title || content.title,
     summary: translation.summary || content.summary,
     body: translation.body || content.body,
-    checklist: Array.isArray(translation.checklist)
-      ? translation.checklist
-      : content.checklist,
+    checklist: Array.isArray(translation.checklist) ? translation.checklist : content.checklist,
     action_label: translation.action_label || content.action_label,
   };
 }
@@ -143,8 +141,7 @@ async function getUserContexts(pool, userIds) {
       `SELECT user_id, content_id, patient_id
          FROM health_feed_feed_items
         WHERE user_id = ANY($1::int[])
-          AND dismissed_at IS NULL
-          AND expires_at > NOW()`,
+          AND dismissed_at IS NULL`,
       [userIds]
     ),
     pool.query(
@@ -286,9 +283,9 @@ async function insertFeedItems(pool, user, selectedItems) {
     const message = content.summary || content.body.slice(0, 180);
     const result = await pool.query(
       `INSERT INTO health_feed_feed_items (
-         user_id, content_id, patient_id, feed_type, title, message, priority, action_label, action_target, expires_at
+         user_id, content_id, patient_id, feed_type, title, message, priority, action_label, action_target
        )
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,NOW() + INTERVAL '7 days')
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT DO NOTHING
        RETURNING id, user_id, content_id, patient_id, feed_type, title, message, priority, action_label, action_target, created_at, expires_at`,
       [
@@ -330,7 +327,6 @@ async function listFeed(pool, userId) {
        JOIN health_feed_content_items c ON c.id = f.content_id
       WHERE f.user_id = $1
         AND f.dismissed_at IS NULL
-        AND f.expires_at > NOW()
       ORDER BY f.priority DESC, f.created_at DESC
       LIMIT 5`,
     [userId]

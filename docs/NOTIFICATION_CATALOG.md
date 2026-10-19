@@ -15,6 +15,10 @@ Tài liệu này mô tả các notification đang được backend tạo trong b
   check-in và cảnh báo đang cần phản hồi.
 - Scheduler chạy mỗi phút; notification chỉ được gửi khi đúng giờ cấu hình của
   từng người dùng.
+- Bài trong mục “Asinu nhắc bạn” không có hạn hiển thị. Bài đã đọc vẫn xem lại
+  được; chỉ ẩn khi người dùng chủ động bỏ qua. Migration
+  `114_health_feed_no_expiry.sql` bỏ hạn của các bài cũ, giữ nguyên trạng thái
+  đã đọc/bỏ qua và không gửi lại push notification.
 
 ## 2. Notification định kỳ hằng ngày
 
