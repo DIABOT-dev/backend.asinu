@@ -512,6 +512,7 @@
   "push.health_alert_family_title": "{{name}}: {{alert}}",
   "push.doctor_message_title": "Tin nhắn mới từ bác sĩ",
   "push.doctor_voice_preview": "Đã gửi một tin nhắn thoại.",
+  "push.doctor_attachment_preview": "Đã gửi một tệp đính kèm.",
   "push.doctor_message_preview": "Bác sĩ {{name}}: {{preview}}",
   "push.doctor_lockscreen_named": "Bác sĩ {{name}} đã gửi tin nhắn trong cuộc tư vấn của bạn.",
   "push.doctor_lockscreen_generic": "Bác sĩ đã gửi tin nhắn trong cuộc tư vấn của bạn.",

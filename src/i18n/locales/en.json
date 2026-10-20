@@ -512,6 +512,7 @@
   "push.health_alert_family_title": "{{name}}: {{alert}}",
   "push.doctor_message_title": "New message from your doctor",
   "push.doctor_voice_preview": "Sent a voice message.",
+  "push.doctor_attachment_preview": "Sent an attachment.",
   "push.doctor_message_preview": "Dr. {{name}}: {{preview}}",
   "push.doctor_lockscreen_named": "Dr. {{name}} sent a message in your consultation.",
   "push.doctor_lockscreen_generic": "Your doctor sent a message in your consultation.",

@@ -1,4 +1,8 @@
-const { encryptHealthField, decryptHealthField, PREFIX } = require('../../security/health-field-encryption');
+const {
+  encryptHealthField,
+  decryptHealthField,
+  PREFIX,
+} = require('../../security/health-field-encryption');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { assertTenantAllowed, deliverDoctorRequest } = require('./doctor-task.service');
 const { verifyDoctorSignature, assertProfileRequest } = require('./doctor-profile.service');
@@ -14,6 +18,7 @@ const { broadcastChatEvent } = require('./doctor-chat-realtime');
 const { t } = require('../../i18n');
 const logger = require('../../lib/logger');
 const crypto = require('crypto');
+const { resolveDoctorAttachmentContent } = require('./doctor-attachment.service');
 
 const integrationError = (statusCode, code, message) => {
   const error = new Error(message);
@@ -142,9 +147,19 @@ const privateMedia = (media) => {
 };
 
 const decryptedMessage = Symbol('decrypted-health-message');
-const decryptMessage = message => {
-  if (!message || message[decryptedMessage] || typeof message.content !== 'string' || !message.content.startsWith(PREFIX)) return message;
-  return { ...message, content: decryptHealthField(message.user_id, 'doctor_task_messages.content', message.content), [decryptedMessage]: true };
+const decryptMessage = (message) => {
+  if (
+    !message ||
+    message[decryptedMessage] ||
+    typeof message.content !== 'string' ||
+    !message.content.startsWith(PREFIX)
+  )
+    return message;
+  return {
+    ...message,
+    content: decryptHealthField(message.user_id, 'doctor_task_messages.content', message.content),
+    [decryptedMessage]: true,
+  };
 };
 
 const hydrateMessageMedia = (message) => {
@@ -415,7 +430,12 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
     use_filename: true,
     unique_filename: true,
   });
-  const privateUrl = authenticatedAssetUrl(uploaded.public_id, 'image', 'authenticated', file.mimetype);
+  const privateUrl = authenticatedAssetUrl(
+    uploaded.public_id,
+    'image',
+    'authenticated',
+    file.mimetype
+  );
   if (!privateUrl)
     throw integrationError(
       503,
@@ -790,7 +810,12 @@ const messageAction = async (pool, input) => {
       await pool.query(
         `UPDATE doctor_task_messages SET content = $4, edited_at = NOW()
           WHERE tenant_id = $1 AND task_id = $2 AND id = $3`,
-        [tenantId, taskId, messageId, encryptHealthField(userId, 'doctor_task_messages.content', content)]
+        [
+          tenantId,
+          taskId,
+          messageId,
+          encryptHealthField(userId, 'doctor_task_messages.content', content),
+        ]
       );
     } else if (action === 'unsend') {
       await pool.query(
@@ -910,6 +935,12 @@ const sendDoctorMessage = async (pool, req, input) => {
   ) {
     throw integrationError(409, 'TASK_NOT_MESSAGEABLE', 'The consultation conversation is closed.');
   }
+  const content = await resolveDoctorAttachmentContent(pool, {
+    content: input.content,
+    appUserId,
+    taskId,
+    senderRef: input.sender_ref,
+  });
   const message = await insertMessage(pool, {
     tenantId,
     taskId,
@@ -917,7 +948,7 @@ const sendDoctorMessage = async (pool, req, input) => {
     senderType: 'doctor',
     senderRef: input.sender_ref,
     messageType: input.message_type,
-    content: input.content,
+    content,
     clientMessageId: input.client_message_id,
   });
   if (!message.duplicate) {
@@ -930,7 +961,12 @@ const sendDoctorMessage = async (pool, req, input) => {
       const lang = user.rows[0].language === 'en' ? 'en' : 'vi';
       const doctorName = typeof input.sender_name === 'string' ? input.sender_name.trim() : '';
       const voice = parseVoice(input.content);
-      const preview = voice ? t('push.doctor_voice_preview', lang) : input.content.slice(0, 180);
+      const attachment = parseAttachment(content);
+      const preview = voice
+        ? t('push.doctor_voice_preview', lang)
+        : attachment
+          ? t('push.doctor_attachment_preview', lang)
+          : content.slice(0, 180);
       const messagePreview = doctorName
         ? t('push.doctor_message_preview', lang, { name: doctorName, preview })
         : preview;
@@ -963,7 +999,7 @@ const sendDoctorMessage = async (pool, req, input) => {
     });
   }
   await rebuildPatientHealthTimeline(pool, appUserId);
-  return message;
+  return parseAttachment(content) ? hydrateMessageMedia(message) : message;
 };
 
 const sendDoctorVoice = async (pool, req, input) => {
@@ -1028,7 +1064,12 @@ const sendDoctorVoice = async (pool, req, input) => {
         public_id: uploaded.public_id,
         resource_type: 'video',
         delivery_type: 'authenticated',
-        url: authenticatedAssetUrl(uploaded.public_id, 'video', 'authenticated', input.mime_type || 'audio/webm'),
+        url: authenticatedAssetUrl(
+          uploaded.public_id,
+          'video',
+          'authenticated',
+          input.mime_type || 'audio/webm'
+        ),
       })}`,
     });
     if (message.duplicate && uploaded.public_id)
