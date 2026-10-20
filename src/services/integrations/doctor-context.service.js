@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { assertTenantAllowed } = require('./doctor-task.service');
 const { assertProfileRequest } = require('./doctor-profile.service');
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
+const { clinicalConversation } = require('./doctor-conversation-context');
 
 const integrationError = (statusCode, code, message) => {
   const error = new Error(message);
@@ -26,7 +27,10 @@ const canonicalize = (value) => {
 };
 
 const hashClinicalContext = (value) =>
-  crypto.createHash('sha256').update(JSON.stringify(canonicalize(value))).digest('hex');
+  crypto
+    .createHash('sha256')
+    .update(JSON.stringify(canonicalize(value)))
+    .digest('hex');
 
 const buildDataQuality = (context) => {
   const missing = [];
@@ -39,7 +43,9 @@ const buildDataQuality = (context) => {
     missing.push('Chưa có danh sách thuốc đang dùng hoặc xác nhận không dùng thuốc.');
   const medicationDoses = new Map();
   for (const medication of context.medications || []) {
-    const key = String(medication.med_name || '').trim().toLocaleLowerCase('vi');
+    const key = String(medication.med_name || '')
+      .trim()
+      .toLocaleLowerCase('vi');
     if (!key) continue;
     const dose = String(medication.dose_text || '').trim();
     if (medicationDoses.has(key) && medicationDoses.get(key) !== dose)
@@ -48,7 +54,9 @@ const buildDataQuality = (context) => {
   }
   for (const measurement of context.blood_pressure || []) {
     if (Number(measurement.systolic) <= Number(measurement.diastolic))
-      conflicts.push(`Chỉ số huyết áp lúc ${measurement.occurred_at} có tâm thu không lớn hơn tâm trương.`);
+      conflicts.push(
+        `Chỉ số huyết áp lúc ${measurement.occurred_at} có tâm thu không lớn hơn tâm trương.`
+      );
   }
   return { missing_data: [...new Set(missing)], conflicts: [...new Set(conflicts)] };
 };
@@ -57,7 +65,8 @@ const loadDoctorClinicalContext = async (pool, input) => {
   const { tenantId, appUserId, taskId } = assertProfileRequest(input);
   assertTenantAllowed(tenantId);
   const task = await pool.query(
-    `SELECT payload->'payload'->>'app_user_id' AS app_user_id
+    `SELECT payload->'payload'->>'app_user_id' AS app_user_id,
+            payload->'payload'->>'summary' AS summary, created_at
        FROM doctor_task_outbox
       WHERE tenant_id = $1 AND payload->>'event_type' = 'doctor.task.requested'
         AND payload->'payload'->>'task_id' = $2 LIMIT 1`,
@@ -115,24 +124,47 @@ const loadDoctorClinicalContext = async (pool, input) => {
         `SELECT id, sender_type, sender_ref, message_type, content, created_at
            FROM doctor_task_messages
           WHERE tenant_id = $1 AND task_id = $2 AND user_id = $3 AND deleted_at IS NULL
-          ORDER BY created_at DESC, id DESC LIMIT 12`,
+            AND (sender_type = 'patient'
+                 OR (sender_type = 'doctor' AND sender_ref IS DISTINCT FROM 'doctor-sla-worker'))
+          ORDER BY created_at ASC, id ASC`,
         [tenantId, taskId, appUserId]
       ),
     ]);
-  records.rows = decryptHealthRows(appUserId, 'doctor_patient_medical_records', ['diagnosis', 'summary', 'treatment'], records.rows);
+  records.rows = decryptHealthRows(
+    appUserId,
+    'doctor_patient_medical_records',
+    ['diagnosis', 'summary', 'treatment'],
+    records.rows
+  );
   messages.rows = decryptHealthRows(appUserId, 'doctor_task_messages', ['content'], messages.rows);
   const timelineMarkdown = await rebuildPatientHealthTimeline(pool, appUserId);
-  const conversation = messages.rows
-    .reverse()
-    .map((message) => ({
+  const conversation = clinicalConversation({
+    conversation: messages.rows.map((message) => ({
       id: String(message.id),
       role: message.sender_type === 'patient' ? 'patient' : 'doctor',
+      sender_ref: message.sender_ref,
       message: message.content,
       message_type: message.message_type,
       created_at: new Date(message.created_at).toISOString(),
-    }));
+    })),
+  }).map(({ sender_ref: _senderRef, ...turn }) => turn);
   const latestPatientMessage =
     [...conversation].reverse().find((message) => message.role === 'patient') || null;
+  // The request form is also patient-authored. The chat UI displays this
+  // opening complaint, so the copilot must see it even before a chat is sent.
+  // Its synthetic identity must never replace the real patient-message version.
+  const initialPatientStatement = task.rows[0].summary?.trim()
+    ? {
+        id: `intake:${taskId}`,
+        role: 'patient',
+        source: 'intake',
+        message: task.rows[0].summary.trim(),
+        message_type: 'question',
+        created_at: new Date(task.rows[0].created_at).toISOString(),
+      }
+    : null;
+  if (initialPatientStatement && conversation[0]?.message !== initialPatientStatement.message)
+    conversation.unshift(initialPatientStatement);
   const context = {
     profile: profile.rows[0] || {},
     blood_pressure: bloodPressure.rows,
@@ -143,6 +175,7 @@ const loadDoctorClinicalContext = async (pool, input) => {
     checkins: checkins.rows,
     conversation,
     latest_patient_message: latestPatientMessage,
+    initial_patient_statement: initialPatientStatement,
     health_timeline_markdown: timelineMarkdown,
   };
   const quality = buildDataQuality(context);

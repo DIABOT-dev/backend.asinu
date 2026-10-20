@@ -2,6 +2,7 @@ const {
   planClarifyingQuestions,
   resolveClarifyingQuestions,
   buildGroundingFacts,
+  buildAnsweredQuestionEvidence,
   conversationIntent,
   repeatedDurationQuestion,
 } = require('../src/services/integrations/doctor-question-planner');
@@ -32,6 +33,120 @@ const followUpContext = () => ({
 });
 
 describe('Doctor conversational question planning', () => {
+  test('answered-question evidence excludes a prior complaint, uncertainty and measurement timing', () => {
+    const context = {
+      conversation: conversation(
+        'Tôi ho 3 ngày nay.',
+        'Cơn ho kéo dài bao lâu?',
+        'Ba ngày ạ.',
+        'Bạn còn cần trao đổi điều gì?',
+        'Giờ tôi đau bụng.',
+        'Bạn đau ở vùng nào của bụng?',
+        'Tôi chưa rõ. Tôi đã đo huyết áp sáng nay 120/80.'
+      ),
+      latest_patient_message: {
+        message: 'Tôi chưa rõ. Tôi đã đo huyết áp sáng nay 120/80.',
+      },
+    };
+    expect(buildAnsweredQuestionEvidence(context)).toEqual([]);
+  });
+
+  test('understands a short denial as an answer to the preceding specialist question', () => {
+    const context = {
+      conversation: conversation(
+        'Tôi đau đầu 3 ngày nay.',
+        'Cơn đau có đột ngột không? Bạn có yếu hoặc tê một bên, khó nói hay nhìn mờ không?',
+        'Không có các dấu hiệu đó ạ.'
+      ),
+      latest_patient_message: { message: 'Không có các dấu hiệu đó ạ.' },
+    };
+    const questions = planClarifyingQuestions({ context }).join(' ');
+    expect(questions).not.toMatch(/đột ngột|yếu hoặc tê|khó nói|nhìn mờ|từ khi nào/);
+    expect(questions).toContain('lú lẫn');
+  });
+
+  test('does not infer an answer from uncertainty or an unanswered specialist question', () => {
+    const context = {
+      conversation: conversation(
+        'Tôi đau đầu.',
+        'Bạn có yếu hoặc tê một bên, khó nói hay nhìn mờ không?',
+        'Tôi không biết, chưa rõ ạ.'
+      ),
+      latest_patient_message: { message: 'Tôi không biết, chưa rõ ạ.' },
+    };
+    expect(planClarifyingQuestions({ context }).join(' ')).toContain('yếu hoặc tê');
+  });
+
+  test('a yes to one sign is not asked again, while a yes to a list asks which sign', () => {
+    const context = {
+      conversation: conversation('Tôi đau đầu.', 'Bạn có nhìn mờ không?', 'Có ạ.'),
+      latest_patient_message: { message: 'Có ạ.' },
+    };
+    expect(planClarifyingQuestions({ context }).join(' ')).not.toContain('nhìn mờ');
+    context.conversation[1].message = 'Bạn có yếu hoặc tê một bên, khó nói hay nhìn mờ không?';
+    const questions = planClarifyingQuestions({ context });
+    expect(questions).toHaveLength(1);
+    expect(questions[0]).toContain('dấu hiệu nào');
+    context.conversation[1].message = 'Bạn có yếu một bên không? Bạn có nhìn mờ không?';
+    expect(planClarifyingQuestions({ context })[0]).toContain('dấu hiệu nào');
+  });
+
+  test('retains an early patient answer beyond the previous twelve-message window', () => {
+    const context = followUpContext();
+    context.conversation.push(
+      ...Array.from({ length: 24 }, (_, i) => ({
+        role: i % 2 ? 'patient' : 'doctor',
+        message: i % 2 ? 'Tôi đang trao đổi tiếp về tình trạng này.' : 'Bạn nói tiếp nhé.',
+      }))
+    );
+    context.latest_patient_message = { message: context.conversation.at(-1).message };
+    expect(planClarifyingQuestions({ context }).join(' ')).not.toMatch(
+      /từ khi nào|đột ngột|khó nói/
+    );
+  });
+
+  test('an automated reminder is not a specialist response or a reason to stop drafting', () => {
+    const context = {
+      conversation: [
+        { role: 'patient', message: 'Tôi đau bụng từ sáng nay.' },
+        {
+          role: 'doctor',
+          sender_ref: 'doctor-sla-worker',
+          message: 'Ca tư vấn của bạn đang được ưu tiên xử lý.',
+        },
+      ],
+      latest_patient_message: { message: 'Tôi đau bụng từ sáng nay.' },
+    };
+    expect(conversationIntent(context)).toBe('clinical');
+    expect(planClarifyingQuestions({ context }).length).toBeGreaterThan(0);
+  });
+
+  test('preserves safe topic-specific AI questions instead of replacing them with generic templates', () => {
+    const context = {
+      conversation: conversation('Tôi đau bụng từ sáng nay.'),
+      latest_patient_message: { message: 'Tôi đau bụng từ sáng nay.' },
+    };
+    const generated = ['Bạn đau ở vùng nào của bụng?', 'Cơn đau liên tục hay từng cơn?'];
+    expect(resolveClarifyingQuestions({ context, generated })).toEqual(generated);
+  });
+
+  test('does not repeat the preceding question after the patient gave a short contextual answer', () => {
+    const context = {
+      conversation: conversation(
+        'Tôi đau bụng từ sáng nay.',
+        'Bạn đau ở vùng nào của bụng?',
+        'Quanh rốn ạ.'
+      ),
+      latest_patient_message: { message: 'Quanh rốn ạ.' },
+    };
+    const result = resolveClarifyingQuestions({
+      context,
+      generated: ['Bạn đau ở vùng nào của bụng?', 'Cơn đau liên tục hay từng cơn?'],
+    });
+    expect(result).not.toContain('Bạn đau ở vùng nào của bụng?');
+    expect(result).toContain('Cơn đau liên tục hay từng cơn?');
+  });
+
   test('uses earlier patient answers instead of restarting the interview on a short follow-up', () => {
     const questions = planClarifyingQuestions({ context: followUpContext(), locale: 'vi' });
     expect(questions).toHaveLength(2);
@@ -204,6 +319,30 @@ test('a pending patient reply does not produce another outgoing draft', () => {
   expect(output.patient_reply).toBe('');
   expect(output.clarifying_questions).toEqual([]);
   expect(output.uncertainties.join(' ')).toContain('đang chờ phản hồi');
+});
+
+test('a consultation draft cannot ask for a location just supplied in a contextual reply', () => {
+  const context = {
+    ...followUpContext(),
+    conversation: conversation(
+      'Tôi đau bụng từ sáng nay.',
+      'Bạn đau ở vùng nào của bụng?',
+      'Quanh rốn ạ.'
+    ),
+    latest_patient_message: { message: 'Quanh rốn ạ.' },
+  };
+  expect(() =>
+    __test__.buildOutput({
+      raw: { patient_reply: 'Bạn đau ở vùng nào của bụng?' },
+      context,
+      input: {
+        locale: 'vi',
+        touchpoint: 'consultation_draft',
+        clinical_support: { knowledge_chunks: [] },
+      },
+      ruleFindings: [],
+    })
+  ).toThrow('already answered');
 });
 
 test.each(['Tôi thấy mệt.', 'Chào bác sĩ', 'Cảm ơn bác sĩ, tôi hiểu rồi ạ.'])(
