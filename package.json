@@ -11,6 +11,7 @@
     "build": "node --check server.js && echo 'Backend build successful'",
     "test": "jest --runInBand",
     "test:crm-events": "node scripts/check-crm-event-coverage.js",
+    "test:doctor-dialogue": "node scripts/eval-doctor-dialogue.js",
     "test:legacy": "node scripts/run-legacy-test-suites.js",
     "backfill:crm-users": "node scripts/backfill-crm-users.js",
     "test:watch": "jest --watch",

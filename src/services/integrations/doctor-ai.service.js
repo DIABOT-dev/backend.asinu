@@ -27,8 +27,14 @@ const {
   resolveCommunicationStyle,
   communicationConflict,
 } = require('./doctor-communication-style');
+const {
+  DIALOGUE_TOUCHPOINTS,
+  buildDialogueRequest,
+  validateUnderstanding,
+  buildRetrievalContextQuery,
+} = require('./doctor-dialogue');
 
-const PROMPT_VERSION = 'doctor-copilot-2026-10-20.4';
+const PROMPT_VERSION = 'doctor-copilot-2026-10-20.5';
 const OUTPUT_SCHEMA_VERSION = 'doctor-copilot-output-v1';
 
 const buildSystemPrompt = ({ locale, touchpoint, intent = 'clinical', communicationStyle }) =>
@@ -187,6 +193,29 @@ const buildOutput = ({ raw, input, context, ruleFindings }) => {
         : input.touchpoint === 'follow_up_draft'
           ? [normalized.follow_up_draft]
           : [];
+  if (patientFacing.some((text) => /bác\s+sĩ/iu.test(text))) {
+    const error = integrationError(
+      502,
+      'DOCTOR_AI_INVALID_RESPONSE',
+      'The AI draft uses an unsupported service title.'
+    );
+    error.retryInstruction =
+      'Use chuyên gia for the consultant, never bác sĩ, in generated messages. For necessary in-person assessment or emergencies, use cơ sở y tế. Preserve all clinical safety checks and urgency; do not change or invent professional credentials.';
+    throw error;
+  }
+  if (
+    clinicalConversation(context).some((turn) => turn.role === 'doctor') &&
+    patientFacing.some((text) => /^chào\s/iu.test(text.trim()))
+  ) {
+    const error = integrationError(
+      502,
+      'DOCTOR_AI_INVALID_RESPONSE',
+      'The AI draft restarts an ongoing conversation.'
+    );
+    error.retryInstruction =
+      'Continue the existing conversation directly. Remove the repeated greeting and introduction. Address the latest message and preserve the documented facts, forms of address and safety checks.';
+    throw error;
+  }
   if (
     conversationIntent(context) !== 'awaiting_patient' &&
     patientFacing.some((text) => communicationConflict(text, communicationStyle))
@@ -458,51 +487,89 @@ const createDoctorAiAssist = async (pool, input) => {
     answered_questions_do_not_repeat: buildAnsweredQuestionEvidence(context),
   };
   const provider = resolveClinicalProvider();
+  const dialogue = DIALOGUE_TOUCHPOINTS.has(input.touchpoint)
+    ? buildDialogueRequest({
+        context,
+        input,
+        communicationStyle,
+        clinicalContext: {
+          patient_record: promptPayload.patient_record,
+          approved_rule_findings: ruleFindings,
+          approved_knowledge: promptPayload.approved_knowledge,
+        },
+        safetyQuestions: promptPayload.deterministic_tools.next_question_plan,
+      })
+    : null;
+  const requestedModel =
+    (dialogue ? process.env.DOCTOR_AI_CHAT_MODEL : process.env.DOCTOR_AI_MODEL) || undefined;
+  const usage = { prompt: 0, completion: 0 };
+  let lastResponse;
+  let understanding;
   try {
     let response;
     let output;
-    if (input.touchpoint === 'auto_triage' && !context.latest_patient_message) {
+    const awaitingPatient =
+      conversationIntent(context) === 'awaiting_patient' &&
+      ['suggested_questions', 'consultation_draft'].includes(input.touchpoint);
+    if (
+      (input.touchpoint === 'auto_triage' && !context.latest_patient_message) ||
+      awaitingPatient
+    ) {
       // A newly queued task can legitimately arrive before the patient sends
       // the first chat message. Do not spend a model call asking Dr7 to infer
       // urgency from a null current question; the safe result is deterministic
       // and leaves triage ready to run again when the patient replies.
       const raw = emptyCopilotOutput();
       raw.clinical_summary = input.task_summary;
-      raw.clinical_rationale =
-        input.locale === 'en'
+      raw.clinical_rationale = awaitingPatient
+        ? input.locale === 'en'
+          ? 'The consultant has replied and is waiting for the patient.'
+          : 'Chuyên gia đã trả lời, đang chờ người dùng phản hồi.'
+        : input.locale === 'en'
           ? 'No current patient message is available. AI triage is deferred until the patient replies.'
           : 'Chưa có tin nhắn hiện tại của bệnh nhân. Triage AI được chờ đến khi bệnh nhân phản hồi.';
-      raw.uncertainties =
-        input.locale === 'en'
+      raw.uncertainties = awaitingPatient
+        ? []
+        : input.locale === 'en'
           ? ['There is no patient message in the current consultation.']
           : ['Chưa có tin nhắn của bệnh nhân trong ca hiện tại.'];
       output = buildOutput({ raw, input, context, ruleFindings });
       response = {
         provider: 'deterministic',
-        model: 'no-current-patient-message-v1',
+        model: awaitingPatient ? 'awaiting-patient-v1' : 'no-current-patient-message-v1',
         usage: { prompt: 0, completion: 0 },
       };
     } else {
       const modelRequest = {
-        system: buildSystemPrompt({
-          ...input,
-          intent: conversationIntent(context),
-          communicationStyle,
-        }),
+        system:
+          dialogue?.system ||
+          buildSystemPrompt({
+            ...input,
+            intent: conversationIntent(context),
+            communicationStyle,
+          }),
         prompt: JSON.stringify(promptPayload),
+        ...(dialogue ? { messages: dialogue.messages, preserveMessageRoles: true } : {}),
+        ...(requestedModel ? { model: requestedModel } : {}),
         temperature: 0.1,
         maxTokens: 2200,
         jsonMode: true,
         provider,
         strictProvider: true,
+        ...(dialogue ? { timeoutMs: 25000, maxRetries: 0 } : {}),
       };
       const initialSystemPrompt = modelRequest.system;
       let attempt = 0;
       for (;;) {
         try {
           response = await withAiUser(pool, input.app_user_id, () => callTextAi(modelRequest));
+          lastResponse = response;
+          usage.prompt += Math.max(0, Number(response.usage?.prompt) || 0);
+          usage.completion += Math.max(0, Number(response.usage?.completion) || 0);
+          const raw = parseModelJson(response.content);
+          if (dialogue) understanding = validateUnderstanding(raw, context, dialogue.state);
           output = buildOutput({
-            raw: parseModelJson(response.content),
+            raw,
             input,
             context,
             ruleFindings,
@@ -532,6 +599,17 @@ const createDoctorAiAssist = async (pool, input) => {
                 'These topics already have answers in this conversation. Do not ask for the same details again. Correct only the failed output and preserve the documented facts and safety rules.',
             },
           });
+          if (dialogue)
+            modelRequest.messages = [
+              ...dialogue.messages,
+              {
+                role: 'user',
+                content: JSON.stringify({
+                  type: 'output_correction',
+                  ...JSON.parse(modelRequest.prompt).validation_feedback,
+                }),
+              },
+            ];
           console.warn('doctor_ai_output_retry', {
             touchpoint: input.touchpoint,
             provider,
@@ -542,8 +620,8 @@ const createDoctorAiAssist = async (pool, input) => {
         }
       }
     }
-    const inputTokens = Number(response.usage?.prompt || 0) || null;
-    const outputTokens = Number(response.usage?.completion || 0) || null;
+    const inputTokens = usage.prompt || null;
+    const outputTokens = usage.completion || null;
     const latencyMs = Date.now() - startedAt;
     const validationStatus =
       input.clinical_support.knowledge_chunks.length > 0 && output.citations.length === 0
@@ -592,7 +670,14 @@ const createDoctorAiAssist = async (pool, input) => {
         validationStatus === 'insufficient_evidence'
           ? ['Approved knowledge was retrieved but the model did not provide a grounded citation.']
           : [],
-      tools_used: ['clinical_context', 'data_quality', 'approved_rules', 'approved_knowledge'],
+      tools_used: [
+        'clinical_context',
+        'data_quality',
+        'approved_rules',
+        'approved_knowledge',
+        ...(dialogue ? ['consultation_state', 'native_conversation'] : []),
+        ...(understanding ? ['grounded_turn_understanding'] : []),
+      ],
       disclaimer:
         input.locale === 'en'
           ? 'AI-generated decision support. A licensed specialist must review and approve it.'
@@ -605,6 +690,14 @@ const createDoctorAiAssist = async (pool, input) => {
       feature: 'doctor_copilot',
       action: input.touchpoint,
       provider,
+      model:
+        lastResponse?.model ||
+        requestedModel ||
+        (provider === 'medgemma'
+          ? process.env.MEDGEMMA_MODEL || 'medgemma-4b-it'
+          : process.env.OPENAI_MODEL),
+      inputTokens: usage.prompt || null,
+      outputTokens: usage.completion || null,
       latencyMs: Date.now() - startedAt,
       isFallback: false,
       success: false,
@@ -632,6 +725,7 @@ const getDoctorAiContextVersion = async (pool, input) => {
     context_version: context.context_version,
     context_hash: context.context_hash,
     policy_version: input.clinical_support.policy_version,
+    retrieval_query: buildRetrievalContextQuery(context, input.task_summary),
   };
 };
 

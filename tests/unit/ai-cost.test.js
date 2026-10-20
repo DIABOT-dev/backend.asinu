@@ -22,4 +22,13 @@ describe('estimateCost', () => {
   test('handles diabrain free provider', () => {
     expect(estimateCost({ model: 'diabrain', inputTokens: 9999, outputTokens: 9999 })).toBe(0);
   });
+
+  test.each([
+    ['medgemma-4b-it', 0.002],
+    ['medgemma-27b-it', 0.006],
+  ])('estimates the configured DR7 token prices for %s', (model, expected) => {
+    expect(
+      estimateCost({ provider: 'medgemma', model, inputTokens: 1000, outputTokens: 500 })
+    ).toBe(expected);
+  });
 });

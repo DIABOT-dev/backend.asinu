@@ -178,14 +178,16 @@ describe('Doctor conversational question planning', () => {
     expect(questions[0]).not.toContain('yếu');
   });
 
-  test.each(['Cảm ơn bác sĩ, tôi hiểu rồi ạ.', 'Dạ vâng ạ.', 'Thanks doctor, I understand.'])(
-    'does not restart symptom questions after a closing: %s',
-    (message) => {
-      const context = { latest_patient_message: { message } };
-      expect(conversationIntent(context)).toBe('acknowledgement');
-      expect(planClarifyingQuestions({ context })).toEqual([]);
-    }
-  );
+  test.each([
+    'Cảm ơn chuyên gia, tôi hiểu rồi ạ.',
+    'Cảm ơn bác sĩ, tôi hiểu rồi ạ.',
+    'Dạ vâng ạ.',
+    'Thanks doctor, I understand.',
+  ])('does not restart symptom questions after a closing: %s', (message) => {
+    const context = { latest_patient_message: { message } };
+    expect(conversationIntent(context)).toBe('acknowledgement');
+    expect(planClarifyingQuestions({ context })).toEqual([]);
+  });
 
   test('does not treat a new concern as a simple acknowledgement', () => {
     const context = {

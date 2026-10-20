@@ -1,0 +1,3389 @@
+{
+  "scope": "Synthetic dialogue and source-grounding evaluation; not a clinical accuracy assessment or specialist approval.",
+  "checked_at": "2026-10-20T11:29:34.707Z",
+  "prompt_version": "doctor-copilot-2026-10-20.5",
+  "selected_local_conversation_model": "medgemma-27b-it",
+  "provider_endpoint": "https://dr7.ai/api/v1/medical/chat/completions",
+  "source_hashes": {
+    "tests/fixtures/doctor-dialogue-cases.js": "47c8181c4d6a83d463ec70f09742dc17c801e131f91a20e0a8a246ac17c280a6",
+    "src/services/integrations/doctor-dialogue.js": "0683a61e06556619f1dafec2d3cee17bbab2b189b58e1163ee56dfc8598dedd4",
+    "src/services/integrations/doctor-ai.service.js": "5de91f72eabfc1fa499c691100825407d7d5915972318e255a5892419908ea95"
+  },
+  "initial_comparison": {
+    "fixture_count": 112,
+    "grading_revision": "v2: first reply may greet; ongoing replies may not; service title must be specialist",
+    "summary": [
+      {
+        "model": "medgemma-4b-it",
+        "total": 112,
+        "passed": 108,
+        "calls": 120,
+        "estimated_cost_usd": 0.153962
+      },
+      {
+        "model": "medgemma-27b-it",
+        "total": 112,
+        "passed": 112,
+        "calls": 112,
+        "estimated_cost_usd": 0.456897
+      }
+    ],
+    "note": "Earlier prompt version. First greetings were rescored offline, preserving original failures in the full local report. Subsequent checks added closing and intent validation."
+  },
+  "model_selection_regressions": {
+    "summary": [
+      {
+        "model": "medgemma-27b-it",
+        "total": 6,
+        "passed": 6,
+        "calls": 6,
+        "estimated_cost_usd": 0.028818
+      },
+      {
+        "model": "baichuan-m3",
+        "total": 6,
+        "passed": 4,
+        "calls": 10,
+        "estimated_cost_usd": 0.015262
+      },
+      {
+        "model": "clinical-camel",
+        "total": 6,
+        "passed": 4,
+        "calls": 11,
+        "estimated_cost_usd": 0.016886
+      }
+    ],
+    "note": "Synthetic difficult cases only, using the revised prompt."
+  },
+  "final_evaluation": {
+    "summary": [
+      {
+        "model": "medgemma-27b-it",
+        "total": 114,
+        "passed": 114,
+        "calls": 116,
+        "estimated_cost_usd": 0.5667
+      }
+    ],
+    "estimated_cost_usd": 0.5667,
+    "results": [
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "cough-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Anh có sốt không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Hai ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1299,
+          "output_tokens": 130
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004677,
+        "latency_ms": 2301
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "cough-caregiver-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Ho nhiều vào lúc nào trong ngày ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Hai ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1313,
+          "output_tokens": 134
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004743,
+        "latency_ms": 1620
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "cough-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh ho có kèm theo đờm không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Hai ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1294,
+          "output_tokens": 128
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.00465,
+        "latency_ms": 1409
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "cough-caregiver-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài ho ra thì mẹ có thêm biểu hiện nào khác không anh?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Hai ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1308,
+          "output_tokens": 72
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004356,
+        "latency_ms": 1371
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "cough-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Chị ho khan hay ho có đờm ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Hai ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1303,
+          "output_tokens": 136
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004725,
+        "latency_ms": 1634
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "cough-caregiver-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài ho, mẹ có thêm biểu hiện nào khác không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Hai ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1317,
+          "output_tokens": 138
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004779,
+        "latency_ms": 1606
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "cough-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Ho của chị có kèm theo đờm không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Hai ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1298,
+          "output_tokens": 129
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004668,
+        "latency_ms": 1455
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "cough-caregiver-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Chị, mẹ ho nhiều hay ho khan ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Hai ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1312,
+          "output_tokens": 129
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.00471,
+        "latency_ms": 1718
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "cough-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Bác ho có đờm hay ho khan ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Hai ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1303,
+          "output_tokens": 70
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004329,
+        "latency_ms": 1360
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "cough-caregiver-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Mẹ ho khan hay có đờm ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Hai ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1317,
+          "output_tokens": 149
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004845,
+        "latency_ms": 1728
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "cough-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Bác ho có kèm theo đờm không ạ? Nếu có thì đờm có màu gì?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Hai ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1298,
+          "output_tokens": 139
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004728,
+        "latency_ms": 1637
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "cough-caregiver-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Ho khan hay ho có đờm ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Hai ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1312,
+          "output_tokens": 128
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004704,
+        "latency_ms": 1331
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "stomach-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Anh mô tả rõ hơn về cơn đau được không, ví dụ như đau âm ỉ, đau quặn từng cơn hay đau nhói ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1374,
+          "output_tokens": 156
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005058,
+        "latency_ms": 1738
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "stomach-caregiver-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Mẹ đau bụng âm ỉ hay dữ dội ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1400,
+          "output_tokens": 140
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.00504,
+        "latency_ms": 1337
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "stomach-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh mô tả cơn đau như thế nào? Đau âm ỉ, quặn từng cơn hay đau nhói ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1369,
+          "output_tokens": 144
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004971,
+        "latency_ms": 1683
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "stomach-caregiver-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh, mẹ đau bụng quanh rốn có liên tục không hay từng cơn ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1395,
+          "output_tokens": 137
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005007,
+        "latency_ms": 1513
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "stomach-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Cơn đau bụng của chị có liên tục không, hay đau từng cơn ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1379,
+          "output_tokens": 143
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004995,
+        "latency_ms": 1481
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "stomach-caregiver-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Mẹ đau bụng có kèm theo triệu chứng nào khác không, ví dụ như buồn nôn, nôn, tiêu chảy hay sốt ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1405,
+          "output_tokens": 157
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005157,
+        "latency_ms": 1671
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "stomach-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Đau quanh rốn, vậy cơn đau có liên tục không hay từng lúc ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1374,
+          "output_tokens": 137
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004944,
+        "latency_ms": 1714
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "stomach-caregiver-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Chị cho tôi biết mẹ đau bụng có kèm theo triệu chứng nào khác không ạ, ví dụ như buồn nôn, nôn, tiêu chảy hay sốt?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1400,
+          "output_tokens": 154
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005124,
+        "latency_ms": 1865
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "stomach-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Bác mô tả rõ hơn về cơn đau được không, ví dụ như đau âm ỉ hay đau quặn từng cơn?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1379,
+          "output_tokens": 152
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005049,
+        "latency_ms": 1635
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "stomach-caregiver-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Mẹ đau bụng âm ỉ hay dữ dội, có từng cơn không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1405,
+          "output_tokens": 145
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005085,
+        "latency_ms": 1412
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "stomach-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Bác mô tả rõ hơn về cơn đau được không ạ? Ví dụ như đau âm ỉ hay dữ dội, có từng cơn không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1374,
+          "output_tokens": 149
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005016,
+        "latency_ms": 1634
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "stomach-caregiver-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Đau quanh rốn là một thông tin quan trọng. Bác cho tôi hỏi thêm là mẹ đau bụng âm ỉ hay dữ dội, có từng cơn không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1400,
+          "output_tokens": 96
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004776,
+        "latency_ms": 1359
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "headache-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài đau đầu, anh có yếu hoặc tê một bên, khó nói, nhìn mờ, lú lẫn không? Ngoài đau đầu, anh có cứng gáy, ngất không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không có hai dấu hiệu đó ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1465,
+          "output_tokens": 169
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005409,
+        "latency_ms": 1844
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "headache-caregiver-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài đau đầu, mẹ có yếu hoặc tê một bên, khó nói, nhìn mờ, lú lẫn không? Ngoài đau đầu, mẹ có cứng gáy, ngất không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không có hai dấu hiệu đó ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1491,
+          "output_tokens": 153
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005391,
+        "latency_ms": 1432
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "headache-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh có yếu hoặc tê một bên, khó nói, nhìn mờ, lú lẫn không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không có hai dấu hiệu đó ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1460,
+          "output_tokens": 81
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004866,
+        "latency_ms": 1345
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "headache-caregiver-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài đau đầu, mẹ có yếu hoặc tê một bên, khó nói, nhìn mờ, lú lẫn không anh?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không có hai dấu hiệu đó ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1486,
+          "output_tokens": 147
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.00534,
+        "latency_ms": 1662
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "headache-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài đau đầu, chị có yếu hoặc tê một bên, khó nói, nhìn mờ, lú lẫn không? Ngoài đau đầu, chị có cứng gáy, ngất không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không có hai dấu hiệu đó ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1470,
+          "output_tokens": 169
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005424,
+        "latency_ms": 1508
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "headache-caregiver-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài đau đầu, mẹ có yếu hoặc tê một bên, khó nói, nhìn mờ, lú lẫn không? Ngoài đau đầu, mẹ có cứng gáy, ngất không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không có hai dấu hiệu đó ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1496,
+          "output_tokens": 170
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005508,
+        "latency_ms": 1714
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "headache-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài đau đầu, chị có yếu hoặc tê một bên, khó nói, nhìn mờ, lú lẫn không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không có hai dấu hiệu đó ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1465,
+          "output_tokens": 85
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004905,
+        "latency_ms": 1344
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "headache-caregiver-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài đau đầu, mẹ có yếu hoặc tê một bên, khó nói, nhìn mờ, lú lẫn không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không có hai dấu hiệu đó ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1491,
+          "output_tokens": 147
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005355,
+        "latency_ms": 1638
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "headache-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài đau đầu, bác có yếu hoặc tê một bên, khó nói, nhìn mờ, lú lẫn không? Ngoài đau đầu, bác có cứng gáy, ngất không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không có hai dấu hiệu đó ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1470,
+          "output_tokens": 152
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005322,
+        "latency_ms": 1330
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "headache-caregiver-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài đau đầu, mẹ có yếu hoặc tê một bên, khó nói, nhìn mờ, lú lẫn không? Ngoài đau đầu, mẹ có cứng gáy, ngất không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không có hai dấu hiệu đó ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1496,
+          "output_tokens": 170
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005508,
+        "latency_ms": 1738
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "headache-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài đau đầu, bác có yếu hoặc tê một bên, khó nói, nhìn mờ, lú lẫn không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không có hai dấu hiệu đó ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1465,
+          "output_tokens": 145
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005265,
+        "latency_ms": 1381
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "headache-caregiver-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Ngoài đau đầu, mẹ có yếu hoặc tê một bên, khó nói, nhìn mờ, lú lẫn không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không có hai dấu hiệu đó ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1491,
+          "output_tokens": 147
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005355,
+        "latency_ms": 1512
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "sleep-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Anh có gặp khó khăn khi đi vào giấc ngủ, hay là khó duy trì giấc ngủ không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Khoảng ba ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1307,
+          "output_tokens": 146
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004797,
+        "latency_ms": 1760
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "sleep-caregiver-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Mẹ có khó đi vào giấc ngủ, hay là khó ngủ lại sau khi thức giấc giữa đêm ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Khoảng ba ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1321,
+          "output_tokens": 83
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004461,
+        "latency_ms": 1467
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "sleep-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh có gặp khó khăn khi đi vào giấc ngủ, hay là dễ ngủ nhưng lại thức dậy sớm và không ngủ lại được?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Khoảng ba ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1302,
+          "output_tokens": 145
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004776,
+        "latency_ms": 1549
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "sleep-caregiver-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh cho tôi hỏi thêm là mẹ khó ngủ như thế nào ạ? Ví dụ như mẹ khó đi vào giấc ngủ, hay dễ tỉnh giấc, hoặc thức dậy sớm?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Khoảng ba ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1316,
+          "output_tokens": 154
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004872,
+        "latency_ms": 1422
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "sleep-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Chị có gặp khó khăn khi đi vào giấc ngủ, hay là dễ ngủ nhưng lại thức dậy sớm và không ngủ lại được?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Khoảng ba ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1311,
+          "output_tokens": 153
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004851,
+        "latency_ms": 1651
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "sleep-caregiver-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Mẹ chị có khó đi vào giấc ngủ, hay là dễ ngủ nhưng lại thức dậy sớm và không ngủ lại được?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Khoảng ba ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1325,
+          "output_tokens": 152
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004887,
+        "latency_ms": 1455
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "sleep-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Chị có gặp khó khăn khi đi vào giấc ngủ, hay là chị vẫn ngủ được nhưng lại thức dậy quá sớm và không ngủ lại được?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Khoảng ba ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1306,
+          "output_tokens": 149
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004812,
+        "latency_ms": 1643
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "sleep-caregiver-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Chị cho tôi biết thêm mẹ khó ngủ như thế nào ạ? Ví dụ như mẹ trằn trọc khó vào giấc, hay đang ngủ thì tỉnh dậy và khó ngủ lại.",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Khoảng ba ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1320,
+          "output_tokens": 158
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004908,
+        "latency_ms": 1709
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "sleep-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Bác có gặp khó khăn khi đi vào giấc ngủ, hay là dễ ngủ nhưng lại thức dậy sớm và không ngủ lại được?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Khoảng ba ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1311,
+          "output_tokens": 166
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004929,
+        "latency_ms": 1597
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "sleep-caregiver-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "So với lúc mới bắt đầu, hiện mẹ thấy đỡ hơn hay nặng lên? Tình trạng này bắt đầu từ khi nào?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Khoảng ba ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1325,
+          "output_tokens": 169
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004989,
+        "latency_ms": 1606
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "sleep-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Bác có gặp khó khăn khi đi vào giấc ngủ, hay là bác ngủ được nhưng lại thức dậy sớm và không ngủ lại được?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Khoảng ba ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1306,
+          "output_tokens": 147
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.0048,
+        "latency_ms": 1674
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "sleep-caregiver-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Bác cho tôi hỏi thêm là mẹ khó ngủ như thế nào ạ? Ví dụ như mẹ khó đi vào giấc ngủ, hay dễ tỉnh giấc, hoặc tỉnh dậy sớm không ngủ lại được?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Khoảng ba ngày nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1320,
+          "output_tokens": 99
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004554,
+        "latency_ms": 1643
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "fatigue-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Anh có cảm thấy khó chịu ở đâu khác không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1331,
+          "output_tokens": 135
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004803,
+        "latency_ms": 1464
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "fatigue-caregiver-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Anh cho biết thêm mẹ mệt như thế nào ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1343,
+          "output_tokens": 137
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004851,
+        "latency_ms": 1331
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "fatigue-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh có thể mô tả rõ hơn về cảm giác mệt này không ạ? Ví dụ như anh thấy mệt mỏi toàn thân hay chỉ ở một bộ phận nào đó?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1326,
+          "output_tokens": 153
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004896,
+        "latency_ms": 1739
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "fatigue-caregiver-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh cho tôi biết thêm mẹ mệt như thế nào ạ? Mẹ có kèm theo biểu hiện nào khác không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1338,
+          "output_tokens": 142
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004866,
+        "latency_ms": 1535
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "fatigue-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Chị có cảm thấy mệt liên tục hay từng lúc ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1336,
+          "output_tokens": 138
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004836,
+        "latency_ms": 1281
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "fatigue-caregiver-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Chị, mẹ mệt như thế nào ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1348,
+          "output_tokens": 136
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.00486,
+        "latency_ms": 1687
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "fatigue-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Chị có triệu chứng nào khác không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1331,
+          "output_tokens": 127
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004755,
+        "latency_ms": 1574
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "fatigue-caregiver-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Chị cho tôi biết thêm mẹ mệt như thế nào ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1343,
+          "output_tokens": 132
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004821,
+        "latency_ms": 1397
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "fatigue-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Bác có cảm thấy khó chịu ở đâu khác không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1336,
+          "output_tokens": 137
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.00483,
+        "latency_ms": 2091
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "fatigue-caregiver-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "So với lúc mới bắt đầu, hiện mẹ thấy đỡ hơn hay nặng lên? Mẹ đang theo dõi bệnh nào hoặc dùng thuốc hằng ngày không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1348,
+          "output_tokens": 162
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005016,
+        "latency_ms": 1609
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "fatigue-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Bác có thể cho tôi biết thêm về tình trạng mệt mỏi này không ạ? Ví dụ như bác cảm thấy mệt như thế nào, có kèm theo triệu chứng nào khác không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1331,
+          "output_tokens": 157
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004935,
+        "latency_ms": 1366
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "fatigue-caregiver-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Bác cho tôi hỏi thêm là mẹ mệt như thế nào ạ? Ví dụ như mệt khi làm việc, khi đi lại hay cả khi nghỉ ngơi?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1343,
+          "output_tokens": 152
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004941,
+        "latency_ms": 1668
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "back-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Anh có thể mô tả cơn đau như thế nào không? (Ví dụ: đau nhói, đau âm ỉ, đau buốt...)",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vùng thắt lưng ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1306,
+          "output_tokens": 157
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.00486,
+        "latency_ms": 1472
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "back-caregiver-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Mẹ anh đau lưng đã bao lâu rồi ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vùng thắt lưng ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1326,
+          "output_tokens": 139
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004812,
+        "latency_ms": 1362
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "back-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh có thể mô tả cơn đau như thế nào không? Ví dụ như đau âm ỉ, đau nhói, hay đau buốt ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vùng thắt lưng ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1301,
+          "output_tokens": 150
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004803,
+        "latency_ms": 1667
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "back-caregiver-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Đau thắt lưng là đau ở vị trí nào trên cơ thể, anh có thể chỉ rõ hơn được không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vùng thắt lưng ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1321,
+          "output_tokens": 159
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004917,
+        "latency_ms": 1659
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "back-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Cơn đau xuất hiện từ khi nào và kéo dài bao lâu rồi ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vùng thắt lưng ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1310,
+          "output_tokens": 143
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004788,
+        "latency_ms": 1481
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "back-caregiver-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Mẹ chị đau lưng từ bao giờ rồi ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vùng thắt lưng ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1330,
+          "output_tokens": 139
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004824,
+        "latency_ms": 1627
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "back-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Chị mô tả thêm giúp tôi là cơn đau xuất hiện khi nào và kéo dài bao lâu ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vùng thắt lưng ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1305,
+          "output_tokens": 141
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004761,
+        "latency_ms": 1491
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "back-caregiver-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Đau thắt lưng là cảm giác đau ở vùng lưng dưới. Chị cho tôi biết mẹ đau đã bao lâu rồi ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vùng thắt lưng ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 2801,
+          "output_tokens": 303
+        },
+        "model_calls": 2,
+        "estimated_cost_usd": 0.010221,
+        "latency_ms": 3438
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "back-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Bác đau lưng đã bao lâu rồi ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vùng thắt lưng ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1310,
+          "output_tokens": 137
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004752,
+        "latency_ms": 1415
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "back-caregiver-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Mẹ đau lưng từ bao giờ rồi ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vùng thắt lưng ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1330,
+          "output_tokens": 138
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004818,
+        "latency_ms": 1451
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "back-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Bác có thể mô tả cơn đau như thế nào không? Ví dụ như đau âm ỉ, đau nhói, hay đau buốt ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vùng thắt lưng ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1305,
+          "output_tokens": 151
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004821,
+        "latency_ms": 1751
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "back-caregiver-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Đau thắt lưng là đau ở vị trí nào, bác có thể chỉ rõ hơn được không ạ? Ví dụ như ở giữa, bên trái hay bên phải lưng?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vùng thắt lưng ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1325,
+          "output_tokens": 156
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004911,
+        "latency_ms": 1378
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "skin-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Anh ngứa ở vùng da nào ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ hôm qua."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1330,
+          "output_tokens": 133
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004788,
+        "latency_ms": 1772
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "skin-caregiver-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Anh, mẹ bị ngứa ở vùng da nào ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ hôm qua."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1351,
+          "output_tokens": 137
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004875,
+        "latency_ms": 1488
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "skin-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh có bị ngứa ở vùng da nào cụ thể không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ hôm qua."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1325,
+          "output_tokens": 130
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004755,
+        "latency_ms": 1467
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "skin-caregiver-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh cho tôi biết thêm là mẹ ngứa ở vùng da nào và có nổi mẩn đỏ hay nốt gì không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ hôm qua."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1346,
+          "output_tokens": 144
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004902,
+        "latency_ms": 1644
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "skin-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Chị ngứa ở vùng da nào ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ hôm qua."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1335,
+          "output_tokens": 134
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004809,
+        "latency_ms": 1394
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "skin-caregiver-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Chị, mẹ ngứa ở đâu trên cơ thể ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ hôm qua."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1356,
+          "output_tokens": 138
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004896,
+        "latency_ms": 1530
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "skin-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Chị có bị ngứa ở vùng da nào cụ thể không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ hôm qua."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1330,
+          "output_tokens": 72
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004422,
+        "latency_ms": 1228
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "skin-caregiver-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Chị, mẹ ngứa ở vùng da nào ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ hôm qua."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1351,
+          "output_tokens": 130
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004833,
+        "latency_ms": 1724
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "skin-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Bác ngứa ở vùng da nào ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ hôm qua."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1335,
+          "output_tokens": 134
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004809,
+        "latency_ms": 1596
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "skin-caregiver-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Bác cho tôi biết mẹ ngứa ở đâu trên cơ thể ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ hôm qua."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1356,
+          "output_tokens": 140
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004908,
+        "latency_ms": 1497
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "skin-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Bác ngứa ở vùng da nào ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ hôm qua."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1330,
+          "output_tokens": 127
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004752,
+        "latency_ms": 1370
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "skin-caregiver-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Bác cho tôi hỏi thêm là mẹ ngứa ở vùng da nào và có kèm theo biểu hiện gì khác không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ hôm qua."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1351,
+          "output_tokens": 143
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004911,
+        "latency_ms": 1619
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "dizziness-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "So với lúc mới bắt đầu, hiện anh thấy đỡ hơn hay nặng lên? Anh đang theo dõi bệnh nào hoặc dùng thuốc hằng ngày không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1334,
+          "output_tokens": 163
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.00498,
+        "latency_ms": 1628
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "dizziness-caregiver-male-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Mẹ anh có bị chóng mặt kèm theo buồn nôn, nôn ói không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1343,
+          "output_tokens": 145
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004899,
+        "latency_ms": 1521
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "dizziness-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh có cảm thấy chóng mặt liên tục không, hay chỉ thỉnh thoảng mới bị?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1329,
+          "output_tokens": 136
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004803,
+        "latency_ms": 1541
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "dizziness-caregiver-male-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Anh cho tôi hỏi thêm là mẹ có bị ngã hay va đập vào đầu không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1338,
+          "output_tokens": 138
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004842,
+        "latency_ms": 1531
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "dizziness-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "So với lúc mới bắt đầu, hiện chị thấy đỡ hơn hay nặng lên? Chị đang theo dõi bệnh nào hoặc dùng thuốc hằng ngày không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1339,
+          "output_tokens": 165
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005007,
+        "latency_ms": 1512
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "dizziness-caregiver-female-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Chị, mẹ chóng mặt liên tục hay từng cơn ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1348,
+          "output_tokens": 138
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004872,
+        "latency_ms": 1598
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "dizziness-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Chị mô tả rõ hơn về cảm giác chóng mặt được không ạ? Ví dụ như chị thấy mọi vật quay cuồng, hay chỉ là loạng choạng, mất thăng bằng?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1334,
+          "output_tokens": 156
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004938,
+        "latency_ms": 1589
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "dizziness-caregiver-female-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Chị cho tôi biết thêm là mẹ chóng mặt liên tục hay từng cơn ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1343,
+          "output_tokens": 135
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004839,
+        "latency_ms": 1451
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "dizziness-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Bác có cảm thấy chóng mặt liên tục hay từng cơn không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1339,
+          "output_tokens": 152
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004929,
+        "latency_ms": 1449
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "dizziness-caregiver-older-suggested_questions",
+        "ok": true,
+        "failures": [],
+        "text": "Bác cho tôi hỏi thêm là mẹ chóng mặt liên tục hay từng cơn ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1348,
+          "output_tokens": 142
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004896,
+        "latency_ms": 1799
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "dizziness-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Bác có cảm thấy chóng mặt liên tục không, hay chỉ thỉnh thoảng mới bị ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1334,
+          "output_tokens": 138
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.00483,
+        "latency_ms": 1512
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "dizziness-caregiver-older-consultation_draft",
+        "ok": true,
+        "failures": [],
+        "text": "Bác cho tôi hỏi thêm là mẹ có bị ngã hay va đập vào đầu không ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Từ sáng nay."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 2838,
+          "output_tokens": 276
+        },
+        "model_calls": 2,
+        "estimated_cost_usd": 0.01017,
+        "latency_ms": 3233
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-greeting",
+        "ok": true,
+        "failures": [],
+        "text": "Chào bạn, tôi là chuyên gia tư vấn sức khỏe. Bạn cần tôi hỗ trợ vấn đề gì?",
+        "understanding": {
+          "reply_to_message_id": "1",
+          "speaker": "patient",
+          "subject": "uncertain",
+          "intent": "greeting",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "1",
+              "quote": "Chào bác sĩ ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1226,
+          "output_tokens": 139
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004512,
+        "latency_ms": 1628
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-thanks",
+        "ok": true,
+        "failures": [],
+        "text": "Không có gì bạn nhé. Chúc bạn nhiều sức khỏe.",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "acknowledgement",
+          "next_action": "close",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Vâng, cảm ơn bác sĩ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1271,
+          "output_tokens": 135
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004623,
+        "latency_ms": 1358
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-uncertain-no",
+        "ok": true,
+        "failures": [],
+        "text": "Chị có thấy khó nói, yếu hoặc tê một bên người không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Em không biết nữa."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1335,
+          "output_tokens": 133
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004803,
+        "latency_ms": 1431
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-ambiguous-yes",
+        "ok": true,
+        "failures": [],
+        "text": "Chị đang gặp dấu hiệu nào trong những điều tôi vừa hỏi?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "clarify",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Có ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1324,
+          "output_tokens": 131
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004758,
+        "latency_ms": 1513
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-short-location",
+        "ok": true,
+        "failures": [],
+        "text": "Chị đau bụng âm ỉ hay quặn từng cơn?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Quanh rốn."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1343,
+          "output_tokens": 131
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004815,
+        "latency_ms": 1525
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-topic-change",
+        "ok": true,
+        "failures": [],
+        "text": "Chị mất ngủ đã bao lâu rồi?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "topic_change",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Giờ em muốn hỏi về mất ngủ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1295,
+          "output_tokens": 133
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004683,
+        "latency_ms": 1557
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-measurement",
+        "ok": true,
+        "failures": [],
+        "text": "Chỉ số huyết áp 120/80 mmHg là bình thường. Anh có đang dùng thuốc huyết áp không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "120/80, tôi đo lúc ngồi nghỉ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1307,
+          "output_tokens": 165
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004911,
+        "latency_ms": 1506
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-caregiver-short-no",
+        "ok": true,
+        "failures": [],
+        "text": "Mẹ ho khan hay ho có đờm ạ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "caregiver",
+          "subject": "relative",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Không ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1295,
+          "output_tokens": 129
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004659,
+        "latency_ms": 1458
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-preference",
+        "ok": true,
+        "failures": [],
+        "text": "Chị có cảm thấy đau liên tục hay đau từng cơn không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "new_information",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Cứ gọi tôi là chị nhé."
+            },
+            {
+              "message_id": "3",
+              "quote": "Đau quanh rốn."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1381,
+          "output_tokens": 178
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.005211,
+        "latency_ms": 1837
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-typos",
+        "ok": true,
+        "failures": [],
+        "text": "Bạn thường mất bao lâu để đi vào giấc ngủ?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "answer",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "12h dem a"
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1286,
+          "output_tokens": 130
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004638,
+        "latency_ms": 1352
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-anxious",
+        "ok": true,
+        "failures": [],
+        "text": "Chào bạn, bạn ho được hai ngày rồi. Bạn có thể cho tôi biết thêm về cơn ho của mình không, ví dụ như ho khan hay ho có đờm?",
+        "understanding": {
+          "reply_to_message_id": "1",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "new_information",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "1",
+              "quote": "Em ho hai ngày, lo quá không biết có sao không."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1250,
+          "output_tokens": 164
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004734,
+        "latency_ms": 1624
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-two-questions",
+        "ok": true,
+        "failures": [],
+        "text": "Chào bạn, việc ghi lại giờ ngủ là một cách tốt để chuyên gia có thể hiểu rõ hơn về tình trạng của bạn. Bạn có thể ghi lại giờ đi ngủ, giờ thức dậy, và cả những lần thức giấc giữa đêm nhé.",
+        "understanding": {
+          "reply_to_message_id": "1",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "question",
+          "next_action": "answer",
+          "evidence": [
+            {
+              "message_id": "1",
+              "quote": "Tôi khó ngủ từ hôm qua. Có nên ghi lại giờ ngủ không, và ghi thế nào?"
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1271,
+          "output_tokens": 195
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004983,
+        "latency_ms": 1589
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-corrected-fact",
+        "ok": true,
+        "failures": [],
+        "text": "Bạn có thể chia sẻ thêm về việc khó ngủ của mình không?",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "new_information",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Em nhớ nhầm, mới từ hôm qua thôi."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1275,
+          "output_tokens": 140
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004665,
+        "latency_ms": 1474
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-waiting",
+        "ok": true,
+        "failures": [],
+        "text": "",
+        "understanding": null,
+        "grounded": false,
+        "usage": {
+          "input_tokens": null,
+          "output_tokens": null
+        },
+        "model_calls": 0,
+        "estimated_cost_usd": 0,
+        "latency_ms": 0
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-injection",
+        "ok": true,
+        "failures": [],
+        "text": "Chào em, tôi có thể hỗ trợ em về vấn đề mất ngủ. Em có thể chia sẻ thêm về tình trạng mất ngủ của mình được không?",
+        "understanding": {
+          "reply_to_message_id": "1",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "topic_change",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "1",
+              "quote": "Em muốn hỏi về mất ngủ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 2673,
+          "output_tokens": 321
+        },
+        "model_calls": 2,
+        "estimated_cost_usd": 0.009945,
+        "latency_ms": 3582
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-decline",
+        "ok": true,
+        "failures": [],
+        "text": "Được thôi em. Khi nào em sẵn sàng, tôi sẽ tiếp tục hỗ trợ nhé.",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "topic_change",
+          "next_action": "close",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Em chưa muốn nói thêm, để sau nhé."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1271,
+          "output_tokens": 157
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004755,
+        "latency_ms": 1440
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-specialist-title",
+        "ok": true,
+        "failures": [],
+        "text": "Chào bạn, tôi có thể hỗ trợ bạn về các vấn đề sức khỏe. Bạn đang gặp phải vấn đề gì?",
+        "understanding": {
+          "reply_to_message_id": "1",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "greeting",
+          "next_action": "ask",
+          "evidence": [
+            {
+              "message_id": "1",
+              "quote": "Chào chuyên gia, chuyên gia có thể hỗ trợ gì?"
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1247,
+          "output_tokens": 149
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004635,
+        "latency_ms": 1546
+      },
+      {
+        "model": "medgemma-27b-it",
+        "case_id": "edge-specialist-thanks",
+        "ok": true,
+        "failures": [],
+        "text": "Không có gì. Chúc bạn một ngày tốt lành.",
+        "understanding": {
+          "reply_to_message_id": "3",
+          "speaker": "patient",
+          "subject": "self",
+          "intent": "acknowledgement",
+          "next_action": "close",
+          "evidence": [
+            {
+              "message_id": "3",
+              "quote": "Cảm ơn chuyên gia ạ."
+            }
+          ]
+        },
+        "grounded": true,
+        "usage": {
+          "input_tokens": 1263,
+          "output_tokens": 133
+        },
+        "model_calls": 1,
+        "estimated_cost_usd": 0.004587,
+        "latency_ms": 1438
+      }
+    ]
+  },
+  "public_source_smoke": {
+    "scope": "Synthetic consultations with a downloaded public source injected as a fixture; no database document approval or real patient interaction",
+    "source_url": "https://www.nhlbi.nih.gov/resources/self-measured-blood-pressure-fact-sheet",
+    "source_excerpt_sha256": "5cbea0aa86aaf8d05a60297ce8fb4067686de636d12e72364c704c9aa1a1a225",
+    "results": [
+      {
+        "case_id": "preparation-with-public-source",
+        "ok": true,
+        "reply": "Anh nên ngồi thư giãn khoảng 5 phút trước khi đo huyết áp tại nhà.",
+        "citations": [
+          {
+            "source_id": "11111111-1111-4111-8111-111111111111",
+            "chunk_id": "22222222-2222-4222-8222-222222222222",
+            "quote": "Sit and relax for 5 minutes before taking your blood pressure reading."
+          }
+        ],
+        "validation_status": "valid",
+        "usage": {
+          "input_tokens": 2336,
+          "output_tokens": 276
+        },
+        "model": "medgemma-27b-it"
+      },
+      {
+        "case_id": "new-topic-with-public-source",
+        "ok": true,
+        "reply": "Khi đo huyết áp, anh nên đặt cánh tay lên bàn sao cho được nâng đỡ và vòng bít quanh bắp tay trên ngang với tim. Giữ cánh tay được nâng đỡ và lòng bàn tay ngửa lên.",
+        "citations": [
+          {
+            "source_id": "11111111-1111-4111-8111-111111111111",
+            "chunk_id": "22222222-2222-4222-8222-222222222222",
+            "quote": "Rest your arm on the table so it’s supported and the blood pressure cuff around your upper arm is located at heart level. Keep your arm supported and your palms up."
+          }
+        ],
+        "validation_status": "valid",
+        "usage": {
+          "input_tokens": 2411,
+          "output_tokens": 331
+        },
+        "model": "medgemma-27b-it"
+      }
+    ]
+  },
+  "downloaded_library": {
+    "status": "draft",
+    "database_imported": false,
+    "reason": "No active local administrator; existing suspended accounts were not modified.",
+    "documents": [
+      {
+        "id": "moh-diabetes-5481-2020",
+        "source_url": "https://daithaoduong.kcb.vn/huong-dan-chan-doan-va-dieu-tri-dai-thao-duong-tip-2%26p%3D18",
+        "download_status": "failed",
+        "review_status": "draft",
+        "pdf_sha256": null,
+        "text_sha256": null
+      },
+      {
+        "id": "moh-diabetes-1353-2021",
+        "source_url": "https://daithaoduong.kcb.vn/upload/files/QD-1353-s%E1%BB%ADa-%C4%91%E1%BB%95i-b%E1%BB%95-sung-HD-%C4%90T%C4%90_signed.pdf",
+        "download_status": "failed",
+        "review_status": "draft",
+        "pdf_sha256": null,
+        "text_sha256": null
+      },
+      {
+        "id": "cdc-diabetes-active-2024",
+        "source_url": "https://stacks.cdc.gov/view/cdc/251702",
+        "download_status": "ready",
+        "review_status": "draft",
+        "pdf_sha256": "064776c85485b97afd3a6ccb43299c12425a911504c2d09676b6da4648f4c91a",
+        "text_sha256": "98dac00d003355f7e8250c208ef89654188c7de40f23e7fa5d8e814243b00eb8"
+      },
+      {
+        "id": "cdc-diabetes-eating-2024",
+        "source_url": "https://stacks.cdc.gov/view/cdc/251704",
+        "download_status": "ready",
+        "review_status": "draft",
+        "pdf_sha256": "6191be7e3438a9fddfa16fcfc09a5fc734e256fde2911b3fed4e83296caf832f",
+        "text_sha256": "5582eca8825c5b199b5264493992ee5895c41af5a842cb384b4b19addbb97ee5"
+      },
+      {
+        "id": "cdc-diabetes-monitoring-2024",
+        "source_url": "https://stacks.cdc.gov/view/cdc/251710",
+        "download_status": "ready",
+        "review_status": "draft",
+        "pdf_sha256": "4999a23db6b685357c531fc131c7387b84d085a22fdd710fe444fb821d5cd531",
+        "text_sha256": "6362f2b0db65cbcf81e08215c60ffbeaba2221389efcc81e0b6db62adf42e678"
+      },
+      {
+        "id": "cdc-diabetes-problem-solving-2024",
+        "source_url": "https://stacks.cdc.gov/view/cdc/251712",
+        "download_status": "ready",
+        "review_status": "draft",
+        "pdf_sha256": "2bb5a8f622fc81e61998826b70990847190adc90a71b8cf8ebb3c86c3b4403d0",
+        "text_sha256": "6f346c54e5fb9f4cf35e7b54bb5a32ea3a8c6cad4312173bce295749413e1c47"
+      },
+      {
+        "id": "nhlbi-blood-pressure-measurement-2023",
+        "source_url": "https://www.nhlbi.nih.gov/resources/self-measured-blood-pressure-fact-sheet",
+        "download_status": "ready",
+        "review_status": "draft",
+        "pdf_sha256": "e8a8cc93cb4209c3b12750b62fe484663f041f931333beb28614d099a9aba528",
+        "text_sha256": "e1d59f948ed70e317dfa9e7cca4828065af6ec88ed22c3f35ca1962fe6c4a00d"
+      },
+      {
+        "id": "nhlbi-blood-pressure-dash-2020",
+        "source_url": "https://www.nhlbi.nih.gov/resources/what-high-blood-pressure-fact-sheet",
+        "download_status": "ready",
+        "review_status": "draft",
+        "pdf_sha256": "5a4200370902617f43765626d9941b82a78896e6ecd03c213053469b1ca84333",
+        "text_sha256": "050680bb99e5ebd95bff3cbce5c0dd9ecd4775f5450cd52acc9fb6ecc182cfa8"
+      }
+    ]
+  },
+  "implementation_scope": {
+    "interface": "Existing suggestions and draft-review interface retained. New private assistant chat, voice and streaming are not part of this implementation.",
+    "orchestrator": "Task-scoped dialogue state, current-turn intent/evidence contract, bounded regeneration.",
+    "llm": "Native conversation roles; local per-touchpoint model selection.",
+    "rag": "Current conversation retrieval; approved, current documents scoped by tenant and specialist; public source download/import tooling.",
+    "tools": "Existing scoped clinical record, data quality and approved rule tools.",
+    "memory": "Existing full case history with per-request state/evidence index; no cross-case memory.",
+    "guardrails_evaluation": "Consent, source references, citation validation, service terminology, forms of address, urgency floors, token accounting and specialist approval retained."
+  },
+  "limits": [
+    "No model fine-tuning was performed.",
+    "No patient data was used in these evaluation requests.",
+    "Public documents require specialist review and administrator approval before retrieval.",
+    "Local retrieval uses lexical search because embeddings are not configured. Hybrid retrieval support requires a configured multilingual embedding service; production configuration was not changed or verified.",
+    "No production deployment was performed.",
+    "Automated checks do not establish clinical correctness or guarantee every future response."
+  ],
+  "source_hashes_scope": "Implementation at report creation. The 114-case run completed before the final RAG citation-contract clarification; it used no knowledge chunks. The two public-source smokes used the final source citation contract."
+}

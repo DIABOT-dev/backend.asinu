@@ -70,7 +70,16 @@ const normalizeCopilotOutput = (raw) => {
     clinical_summary: textValue(value.clinical_summary || value.summary, 6000),
     clinical_rationale: textValue(value.clinical_rationale, 6000),
     clarifying_questions: textArray(
-      value.clarifying_questions || value.questions,
+      (Array.isArray(value.clarifying_questions || value.questions)
+        ? value.clarifying_questions || value.questions
+        : []
+      ).map((question) =>
+        typeof question === 'string'
+          ? question
+          : question && typeof question === 'object' && typeof question.question === 'string'
+            ? question.question
+            : ''
+      ),
       6,
       500
     ),

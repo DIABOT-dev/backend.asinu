@@ -35,6 +35,8 @@ async function callTextAi({
   system,
   prompt,
   messages,
+  preserveMessageRoles = false,
+  model: requestedModel,
   temperature,
   maxTokens,
   jsonMode = false,
@@ -51,7 +53,7 @@ async function callTextAi({
     let finalSystem = system || '';
 
     // If messages array is provided, flatten it to a single prompt (MedGemma format)
-    if (messages && messages.length > 0) {
+    if (messages && messages.length > 0 && !preserveMessageRoles) {
       const systemMsg = messages.find((m) => m.role === 'system');
       if (systemMsg) {
         finalSystem = systemMsg.content;
@@ -70,6 +72,8 @@ async function callTextAi({
       {
         system: finalSystem,
         prompt: finalPrompt,
+        ...(preserveMessageRoles && messages ? { messages } : {}),
+        ...(requestedModel ? { model: requestedModel } : {}),
         temperature: temperature !== undefined ? temperature : 0.3,
         maxTokens: maxTokens || 800,
         jsonMode,
@@ -83,6 +87,7 @@ async function callTextAi({
       usage: res.meta?.tokens_used || { prompt: 0, completion: 0, total: 0 },
       provider: 'medgemma',
       model: res.meta?.model || 'medgemma',
+      credits_remaining: res.meta?.credits_remaining || null,
     };
   }
 
@@ -92,6 +97,8 @@ async function callTextAi({
 
   // ─── 2. OpenAI Route (Default / Fallback) ───────────────────────────────
   let openaiMessages = messages;
+  if (preserveMessageRoles && messages && system)
+    openaiMessages = [{ role: 'system', content: system }, ...messages];
   if (!openaiMessages) {
     openaiMessages = [
       ...(system ? [{ role: 'system', content: system }] : []),
@@ -105,7 +112,7 @@ async function callTextAi({
     throw new Error('OPENAI_API_KEY is not set in environment variables');
   }
 
-  const model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+  const model = requestedModel || process.env.OPENAI_MODEL || 'gpt-4o-mini';
   const client = new OpenAI({
     apiKey,
     ...(timeoutMs !== undefined ? { timeout: timeoutMs } : {}),

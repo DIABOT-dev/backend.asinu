@@ -93,6 +93,20 @@ test('retains an established address beyond twelve messages', () => {
   expect(result).toMatchObject({ patient_address: 'bác', clinician_self: 'cháu' });
 });
 
+test.each(['Đừng gọi tôi là bác.', 'Không cần gọi tôi là bác.', 'Gọi tôi là bác sĩ.'])(
+  'does not turn a rejected address or clinician title into a patient preference: %s',
+  (message) => {
+    const result = styleOf(
+      context([
+        ['doctor', 'Chị đau ở đâu?'],
+        ['patient', message],
+      ])
+    );
+    expect(result.patient_address).toBe('chị');
+    expect(result.source).toBe('conversation');
+  }
+);
+
 test('does not treat a patient greeting to a doctor as evidence that the patient is an elderly person', () => {
   const result = styleOf(context([['patient', 'Chào bác sĩ, tôi đau bụng từ sáng nay.']]));
   expect(result.patient_address).toBe('bạn');
@@ -150,6 +164,18 @@ test('the fallback safety questions follow the same address as model questions',
   const questions = resolveClarifyingQuestions({ context: current, generated: [] });
   expect(questions.join(' ')).not.toMatch(/bạn/iu);
   expect(questions.join(' ')).toContain('bác');
+});
+
+test('mandatory safety questions concern the relative rather than the caregiver', () => {
+  const current = context([
+    ['patient', 'Tôi hỏi cho mẹ, mẹ đau đầu tăng dần từ hôm qua.'],
+    ['doctor', 'Chị ơi, mẹ có sốt hay nôn không?'],
+    ['patient', 'Không có hai dấu hiệu đó ạ.'],
+  ]);
+  const questions = resolveClarifyingQuestions({ context: current, generated: [] }).join(' ');
+  expect(questions).toContain('mẹ có');
+  expect(questions).not.toContain('chị có');
+  expect(questions).not.toContain('nôn');
 });
 
 test('only code-owned templates are reformatted and the original conversation stays intact', () => {

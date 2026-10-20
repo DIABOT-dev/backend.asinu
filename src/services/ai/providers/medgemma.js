@@ -34,6 +34,8 @@ function isConfigured() {
 async function callMedGemma({
   prompt,
   system,
+  messages,
+  model: requestedModel,
   maxTokens = 800,
   temperature = 0.3,
   jsonMode = false,
@@ -50,7 +52,17 @@ async function callMedGemma({
   // Resolve this at request time so a process manager/container can inject or
   // rotate the model setting before the next request without relying on the
   // module import order.
-  const model = process.env.MEDGEMMA_MODEL || DEFAULT_MODEL;
+  const model = requestedModel || process.env.MEDGEMMA_MODEL || DEFAULT_MODEL;
+  if (
+    messages !== undefined &&
+    (!Array.isArray(messages) ||
+      !messages.length ||
+      messages.some(
+        (turn) =>
+          !turn || !['user', 'assistant'].includes(turn.role) || typeof turn.content !== 'string'
+      ))
+  )
+    throw new Error('MedGemma conversation must contain user/assistant text messages');
 
   // Body shape mirrors the OpenAI Chat Completions schema since Vertex
   // AI accepts it and most self-hosted serving frameworks do too. Adapt
@@ -59,7 +71,7 @@ async function callMedGemma({
     model,
     messages: [
       ...(system ? [{ role: 'system', content: system }] : []),
-      { role: 'user', content: String(prompt || '') },
+      ...(messages || [{ role: 'user', content: String(prompt || '') }]),
     ],
     temperature,
     max_tokens: maxTokens,
@@ -112,6 +124,7 @@ async function callMedGemma({
     provider: 'medgemma',
     meta: {
       model: data.model || model,
+      credits_remaining: response.headers?.get?.('x-dr7-credit-remaining') || null,
       tokens_used: {
         prompt: usage.prompt_tokens,
         completion: usage.completion_tokens,

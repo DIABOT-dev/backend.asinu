@@ -48,12 +48,26 @@ const patientSelf = (text) => {
 };
 
 const requestedAddress = (text) => {
-  const match = normalize(text).match(
-    new RegExp(
-      `(?:gọi|xưng hô với)\\s+(?:tôi|em|cháu|con|mình)\\s+(?:là|bằng)\\s+(${ADDRESS})(?!\\p{L})`,
-      'u'
-    )
-  );
+  const normalized = normalize(text);
+  const matches = [
+    ...normalized.matchAll(
+      new RegExp(
+        `(?:gọi|xưng hô với)\\s+(?:tôi|em|cháu|con|mình)\\s+(?:là|bằng)\\s+(${ADDRESS})(?!\\p{L})`,
+        'gu'
+      )
+    ),
+  ];
+  const match = matches.reverse().find((candidate) => {
+    const before = normalized
+      .slice(0, candidate.index)
+      .split(/[.!?;,]/u)
+      .at(-1);
+    const after = normalized.slice(candidate.index + candidate[0].length);
+    return (
+      !/(?:không|đừng|chớ)(?:\s+(?:cần|nên|hãy))?\s*$/u.test(before) &&
+      !(candidate[1] === 'bác' && /^\s+sĩ(?!\p{L})/u.test(after))
+    );
+  });
   return match ? match[1] : null;
 };
 
@@ -91,6 +105,12 @@ const resolveCommunicationStyle = (context = {}, { locale = 'vi', now = new Date
   const patients = turns.filter((turn) => turn.role === 'patient');
   const specialists = turns.filter((turn) => turn.role === 'doctor');
   const caregiver = patients.some((turn) => isCaregiverMessage(turn.message));
+  const relative = [...patients]
+    .reverse()
+    .find((turn) => isCaregiverMessage(turn.message))
+    ?.message.match(
+      /(?:giúp|thay|cho)\s+(bố|mẹ|ba|má|ông|bà|vợ|chồng|con|bé)|(?:^|[.!?,]\s*)(bố|mẹ|ba|má|ông|bà|vợ|chồng|con)\s+(?:tôi|em|cháu|con|mình|của tôi|của em)/iu
+    );
   const self =
     [...specialists]
       .reverse()
@@ -123,6 +143,9 @@ const resolveCommunicationStyle = (context = {}, { locale = 'vi', now = new Date
             ? 'profile'
             : 'neutral',
     caregiver,
+    ...(caregiver
+      ? { subject_address: normalize(relative?.[1] || relative?.[2] || 'người thân') }
+      : {}),
   };
 };
 

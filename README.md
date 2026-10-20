@@ -1,5 +1,30 @@
 # Asinu Backend API
 
+## Trợ lý chuyên gia: hội thoại và RAG
+
+Các lượt gợi ý câu hỏi, soạn phản hồi và theo dõi dùng toàn bộ hội thoại của
+đúng ca, giữ riêng vai người cần tư vấn và chuyên gia khi gửi tới provider.
+Chỉ mục trạng thái ca giữ ID lượt hiện tại, câu hỏi đã trả lời và dẫn chứng;
+chỉ mục này không thay thế lịch sử gốc. Không dùng chung bộ nhớ giữa các ca.
+Nội dung tự tạo dùng danh xưng “chuyên gia”; việc gửi phản hồi vẫn do chuyên
+gia duyệt qua quy trình hiện có.
+
+`DOCTOR_AI_CHAT_MODEL` chọn model riêng cho các lượt hội thoại. Nếu không đặt,
+hệ thống giữ model hiện có của provider; các tác vụ báo cáo lâm sàng vẫn dùng
+`DOCTOR_AI_MODEL` hoặc cấu hình provider. Token tính cả những lượt tạo lại đã
+nhận phản hồi từ provider. Giá trong log là ước tính theo token.
+
+Liệt kê bộ hội thoại giả lập bằng `npm run test:doctor-dialogue` (không gọi API).
+Chạy đánh giá trả phí bằng key đang cấu hình, chỉ dùng dữ liệu giả lập:
+
+```bash
+npm run test:doctor-dialogue -- --live --models=medgemma-27b-it --max-cost=1 --output=/tmp/doctor-eval.json
+```
+
+Có thể giới hạn bằng `--case-ids=<id1>,<id2>`. Kết quả chỉ kiểm tra hành vi hội
+thoại, cấu trúc và dẫn chứng; cần chuyên gia đánh giá chất lượng tư vấn.
+Không ghi hội thoại thật hoặc key vào báo cáo đánh giá.
+
 Backend Node.js/Express cho ứng dụng Asinu - Hỗ trợ theo dõi sức khỏe.
 
 ## Cấu trúc thư mục

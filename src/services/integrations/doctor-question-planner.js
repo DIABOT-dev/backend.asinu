@@ -69,14 +69,14 @@ const conversationIntent = (context = {}) => {
     .trim();
   if (!text) return 'no_message';
   if (
-    /^(?:(?:vâng|dạ|ừ|ok(?:ay)?|được|rồi|tôi hiểu rồi|mình hiểu rồi|đã rõ|cảm ơn(?:\s+(?:bác sĩ|bạn|anh|chị|nhiều))?|thank(?:s| you)(?: doctor)?|i understand|got it)(?:\s+(?:ạ|nhé|vâng|rồi|dạ|tôi hiểu rồi|mình hiểu rồi))?[\s,]*)+$/.test(
+    /^(?:(?:vâng|dạ|ừ|ok(?:ay)?|được|rồi|tôi hiểu rồi|mình hiểu rồi|đã rõ|cảm ơn(?:\s+(?:chuyên gia|bác sĩ|bạn|anh|chị|nhiều))?|thank(?:s| you)(?: doctor)?|i understand|got it)(?:\s+(?:ạ|nhé|vâng|rồi|dạ|tôi hiểu rồi|mình hiểu rồi))?[\s,]*)+$/.test(
       text
     )
   ) {
     return 'acknowledgement';
   }
   if (
-    /^(?:(?:xin )?chào(?: bác sĩ| bạn| anh| chị)?(?: ạ)?|hello(?: doctor)?|hi(?: doctor)?)$/.test(
+    /^(?:(?:xin )?chào(?: chuyên gia| bác sĩ| bạn| anh| chị)?(?: ạ)?|hello(?: doctor)?|hi(?: doctor)?)$/.test(
       text
     )
   ) {
@@ -131,7 +131,7 @@ const contextualAnswers = (context) => {
     } else if (questions.length && !uncertainAnswer(turn.message)) {
       const answer = normalize(turn.message);
       const denial =
-        /^(?:(?:dạ|vâng)\s+)?(?:không|ko|khong|no)(?:\s+(?:có|bị))?(?:\s+(?:(?:các|những)\s+)?(?:dấu hiệu|triệu chứng|biểu hiện)(?:\s+(?:đó|này|nào))?)?(?:\s+(?:nào|cả|hết|đâu|ạ|nhé))*[.!?,…]*$/u.test(
+        /^(?:(?:dạ|vâng)\s+)?(?:không|ko|khong|no)(?:\s+(?:có|bị))?(?:\s+(?:(?:các|những|hai|ba|cả hai|cả ba|\d+)\s+)?(?:dấu hiệu|triệu chứng|biểu hiện)(?:\s+(?:đó|này|nào))?)?(?:\s+(?:nào|cả|hết|đâu|ạ|nhé))*[.!?,…]*$/u.test(
           answer
         );
       const affirmation =
@@ -538,7 +538,12 @@ const addressedQuestionPlan = (input = {}) => {
   const style = resolveCommunicationStyle(input.context, { locale: input.locale });
   return buildQuestionPlan(input).map((item) => ({
     ...item,
-    text: addressQuestionTemplate(item.text, style),
+    text: addressQuestionTemplate(
+      item.text,
+      style.caregiver && item.id !== 'opening'
+        ? { ...style, patient_address: style.subject_address || 'người thân' }
+        : style
+    ),
   }));
 };
 

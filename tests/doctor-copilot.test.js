@@ -47,6 +47,17 @@ describe('Doctor clinical copilot schema and grounding', () => {
     expect(normalized.clarifying_questions).toEqual(['Câu hỏi?']);
   });
 
+  test('retains provider-specific questions when a model wraps a question in an object', () => {
+    const output = normalizeCopilotOutput({
+      clarifying_questions: [
+        { question: 'Mẹ ho khan hay có đờm chị?' },
+        'Mẹ có sốt không?',
+        { unrelated: 'Not a question' },
+      ],
+    });
+    expect(output.clarifying_questions).toEqual(['Mẹ ho khan hay có đờm chị?', 'Mẹ có sốt không?']);
+  });
+
   test('rejects citations to unknown chunks and non-verbatim quotes', () => {
     const chunks = [
       { source_id: sourceId, chunk_id: chunkId, content: 'Theo dõi huyết áp hằng ngày.' },

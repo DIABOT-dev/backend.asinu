@@ -97,3 +97,58 @@ test('rejects repeated unsafe drafts after the bounded retry budget', async () =
   expect(systems[1]).toContain('failed the safety check');
   expect(systems[2]).toContain('preserve urgent care advice');
 });
+
+test('records tokens for rejected attempts as well as the final valid generation', async () => {
+  const { logAiInteraction } = require('../src/services/ai/ai-logger.service');
+  callTextAi
+    .mockResolvedValueOnce({
+      content: '{}',
+      model: 'medgemma-4b-it',
+      usage: { prompt: 100, completion: 10 },
+    })
+    .mockResolvedValueOnce({
+      content: JSON.stringify({ patient_reply: 'Bạn cần trao đổi điều gì?' }),
+      model: 'medgemma-4b-it',
+      usage: { prompt: 120, completion: 20 },
+    });
+  const output = await createDoctorAiAssist({}, input);
+  expect(output.usage).toEqual({ input_tokens: 220, output_tokens: 30 });
+  expect(logAiInteraction).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.objectContaining({ inputTokens: 220, outputTokens: 30, success: true })
+  );
+});
+
+test('does not spend a model call while the specialist is waiting for an answer', async () => {
+  loadDoctorClinicalContext.mockResolvedValue({
+    profile: {},
+    conversation: [
+      { id: '1', role: 'patient', message: 'Tôi mất ngủ.' },
+      { id: '2', role: 'doctor', message: 'Bạn thường ngủ lúc mấy giờ?' },
+    ],
+    latest_patient_message: { id: '1', message: 'Tôi mất ngủ.' },
+    context_version: '1',
+    missing_data: [],
+    conflicts: [],
+  });
+  const output = await createDoctorAiAssist({}, input);
+  expect(callTextAi).not.toHaveBeenCalled();
+  expect(output.patient_reply).toBe('');
+  expect(output.model).toBe('awaiting-patient-v1');
+  expect(output.uncertainties.join(' ')).toContain('đang chờ');
+});
+
+test('regenerates drafts using the wrong service title instead of publishing them', async () => {
+  callTextAi
+    .mockResolvedValueOnce({
+      content: JSON.stringify({ patient_reply: 'Tôi là bác sĩ, bạn cần hỗ trợ gì?' }),
+    })
+    .mockResolvedValueOnce({
+      content: JSON.stringify({ patient_reply: 'Chuyên gia có thể hỗ trợ bạn điều gì?' }),
+    });
+  const result = await createDoctorAiAssist({}, input);
+  expect(result.patient_reply).toContain('Chuyên gia');
+  expect(result.patient_reply).not.toMatch(/bác sĩ/iu);
+  expect(callTextAi).toHaveBeenCalledTimes(2);
+  expect(callTextAi.mock.calls[1][0].system).toContain('Use chuyên gia');
+});
