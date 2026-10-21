@@ -9,6 +9,7 @@ Deploy ordering
    111_checkin_gifts.sql
    112_gift_draw_results.sql
    113_pause_gift_draws.sql
+   115_gift_fortune_variety.sql
 3. Update asinu-crm contracts/backend/frontend for gift.opened and ticket.issued.
 4. Restart the backend, verify health and authenticated gift endpoints, then
    distribute the matching Asinu app build.
@@ -20,6 +21,11 @@ Migration defaults
 - Planned prize: iPhone 18, with founder-supplied artwork. No active draw period
   or winners are created; opening a box never directly awards a phone.
 - 60 original bilingual wishes; active health tips require a recorded review.
+- Migration 115 adds 20 active traditional sayings and 12 inactive tip drafts.
+  Tips stay inactive until reviewed through the content operations API. Existing
+  assigned receipts and operator edits are preserved, including on migration retries.
+  Selection chooses an eligible fortune kind first, then an item in that kind,
+  so the larger wish catalog does not dominate proverbs or reviewed tips.
 - Trial fields and the coupons table reserve future work, but activate no trial,
   issue no discount, and change no entitlement.
 

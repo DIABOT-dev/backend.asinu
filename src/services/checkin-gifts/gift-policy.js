@@ -3,6 +3,17 @@
 const { randomInt } = require('node:crypto');
 const SCALE = 1000000;
 
+// Choose an eligible kind first so a larger wish catalog does not drown out
+// proverbs and reviewed tips. Eligibility and the 30-day exclusion live in SQL.
+function selectLoc(items, choose = randomInt) {
+  const groups = ['wish', 'proverb', 'health_tip']
+    .map((type) => items.filter((item) => item.type === type))
+    .filter((group) => group.length);
+  if (!groups.length) return null;
+  const group = groups[choose(groups.length)];
+  return group[choose(group.length)];
+}
+
 // No answer, streak or plan enters the random draw. Eligibility only folds
 // unavailable extra categories back into the ordinary fortune category.
 function selectExtra(config, eligibility, value = randomInt(SCALE)) {
@@ -19,4 +30,4 @@ function selectExtra(config, eligibility, value = randomInt(SCALE)) {
   return eligibility.coupon ? 'coupon' : 'none';
 }
 
-module.exports = { selectExtra, SCALE };
+module.exports = { selectExtra, selectLoc, SCALE };

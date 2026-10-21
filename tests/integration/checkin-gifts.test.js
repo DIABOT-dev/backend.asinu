@@ -99,6 +99,23 @@ describeDb('server-owned check-in gifts on isolated PostgreSQL tables', () => {
     await request(app).post('/gift/open').send({}).expect(401);
     await request(app).get('/ops/config').expect(401);
   });
+  test('the variety migration adds proverbs and inactive tip drafts without replacing saved gifts or edited content', async () => {
+    const f = await fixture();
+    const saved = await gifts.assign(pool, f.user, f.session);
+    const migration = fs.readFileSync(path.join(__dirname, '../../db/migrations/115_gift_fortune_variety.sql'), 'utf8');
+    await pool.query(migration);
+    const proverb = (await pool.query("SELECT * FROM loc_items WHERE code='proverb_01'")).rows[0];
+    expect(proverb).toMatchObject({ type: 'proverb', active: true, serif: true });
+    const drafts = (await pool.query("SELECT * FROM loc_items WHERE code LIKE 'tip_draft_%'")).rows;
+    expect(drafts).toHaveLength(12);
+    expect(drafts.every(item => item.type === 'health_tip' && !item.active && !item.reviewed_by && !item.reviewed_at)).toBe(true);
+    await pool.query("UPDATE loc_items SET text='Operator-reviewed wording' WHERE code='proverb_01'");
+    await pool.query(migration);
+    expect((await pool.query("SELECT text FROM loc_items WHERE code='proverb_01'")).rows[0].text).toBe('Operator-reviewed wording');
+    expect((await pool.query("SELECT count(*)::int n FROM loc_items WHERE code LIKE 'proverb_%'")).rows[0].n).toBe(20);
+    expect((await gifts.assign(pool, f.user, f.session)).loc_snapshot).toEqual(saved.loc_snapshot);
+    await pool.query("UPDATE loc_items SET text=$1 WHERE code='proverb_01'", [proverb.text]);
+  });
   test('the pause migration keeps ticket issuance at zero without removing fortunes', async () => {
     const migration = fs.readFileSync(
       path.join(__dirname, '../../db/migrations/113_pause_gift_draws.sql'),

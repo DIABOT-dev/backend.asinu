@@ -2,7 +2,7 @@
 
 const { randomInt, randomUUID } = require('node:crypto');
 const entitlement = require('../payment/entitlement.service');
-const { selectExtra, SCALE } = require('./gift-policy');
+const { selectExtra, selectLoc, SCALE } = require('./gift-policy');
 const { enqueueCrmEvent } = require('../integrations/crm-event.service');
 const logger = require('../../lib/logger');
 const DAY_SQL = "(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date";
@@ -74,7 +74,7 @@ async function assign(pool, userId, session) {
     );
     // An exhausted/empty catalog must never silently repeat a recent fortune.
     if (!eligible.rows.length) return null;
-    const loc = eligible.rows[randomInt(eligible.rows.length)];
+    const loc = selectLoc(eligible.rows);
     const period = config.lucky_draw_enabled
       ? (
           await db.query(

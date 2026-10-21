@@ -1,6 +1,21 @@
 'use strict';
-const { selectExtra } = require('../../src/services/checkin-gifts/gift-policy');
+const { selectExtra, selectLoc } = require('../../src/services/checkin-gifts/gift-policy');
 const config = { loc_weight: 60, ticket_weight: 30, coupon_weight: 10 };
+
+test('fortune selection gives each available kind equal weight despite a larger wish catalog', () => {
+  const items = [
+    ...Array.from({ length: 60 }, (_, id) => ({ id, type: 'wish' })),
+    { id: 61, type: 'proverb' },
+    { id: 62, type: 'health_tip' },
+  ];
+  for (const [index, expected] of ['wish', 'proverb', 'health_tip'].entries()) {
+    const choose = jest.fn().mockReturnValueOnce(index).mockReturnValueOnce(0);
+    expect(selectLoc(items, choose).type).toBe(expected);
+    expect(choose.mock.calls[0]).toEqual([3]);
+  }
+  expect(selectLoc([], () => { throw new Error('No draw when empty'); })).toBe(null);
+  expect(selectLoc([items[61]], () => 0)).toEqual(items[61]);
+});
 
 test('category boundaries are exact and unavailable rewards fold into fortunes', () => {
   for (const [value, expected] of [
