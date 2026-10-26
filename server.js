@@ -169,6 +169,7 @@ app.use('/api/health', healthRoutes(pool));
 app.use('/api/health-feed', healthFeedRoutes(pool));
 app.use('/api/doctor', doctorTaskRoutes(pool));
 app.use('/api/doctor', doctorProfileRoutes(pool));
+app.use('/api/doctor', require('./src/routes/doctor-ivr.routes')(pool));
 app.use('/api/notifications', notificationRoutes(pool));
 app.use('/api/payments', paymentRoutes(pool));
 app.use('/api/subscriptions', subscriptionRoutes(pool));
@@ -256,6 +257,7 @@ server.listen(PORT, () => {
 });
 
 startScheduler(pool);
+require('./src/services/doctor-ivr/ivr.worker').startDoctorIvrWorker(pool);
 prewarmCheckinCallAudio(pool).catch((err) =>
   logger.error('checkin_call.audio_prewarm_failed', { err })
 );

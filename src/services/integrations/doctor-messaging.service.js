@@ -221,7 +221,7 @@ const loadOwnedTask = async (pool, tenantId, taskId, userId) => {
     );
   }
   const lifecycle = await pool.query(
-    `SELECT status, payload->>'follow_up_until' AS follow_up_until
+    `SELECT status, doctor_ref, payload->>'follow_up_until' AS follow_up_until
        FROM doctor_task_lifecycle_events
       WHERE tenant_id = $1 AND task_id = $2
       ORDER BY occurred_at DESC, created_at DESC
@@ -231,6 +231,7 @@ const loadOwnedTask = async (pool, tenantId, taskId, userId) => {
   return {
     ...result.rows[0],
     lifecycle_status: lifecycle.rows[0]?.status || null,
+    doctor_ref: lifecycle.rows[0]?.doctor_ref || null,
     follow_up_until: lifecycle.rows[0]?.follow_up_until || null,
   };
 };
@@ -1104,6 +1105,7 @@ const doctorMessageAction = async (pool, req, input) => {
 };
 
 module.exports = {
+  loadOwnedTask,
   listMessages,
   listPatientTasks,
   sendPatientMessage,

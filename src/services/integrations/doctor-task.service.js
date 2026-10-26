@@ -206,12 +206,43 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
         [userId]
       ),
     ]);
-    records.rows = decryptHealthRows(userId, 'doctor_patient_medical_records', ['title', 'diagnosis', 'summary', 'treatment', 'notes'], records.rows);
+    records.rows = decryptHealthRows(
+      userId,
+      'doctor_patient_medical_records',
+      ['title', 'diagnosis', 'summary', 'treatment', 'notes'],
+      records.rows
+    );
     messages.rows = decryptHealthRows(userId, 'doctor_task_messages', ['content'], messages.rows);
-    timeline.rows = decryptHealthRows(userId, 'patient_health_timeline_documents', ['content_markdown'], timeline.rows);
+    timeline.rows = decryptHealthRows(
+      userId,
+      'patient_health_timeline_documents',
+      ['content_markdown'],
+      timeline.rows
+    );
+    let ivrSessions = [];
+    if (
+      (await pool.query("SELECT to_regclass('public.doctor_ivr_sessions') AS name")).rows[0]?.name
+    ) {
+      const ivr = require('../doctor-ivr/ivr.service');
+      const rows = (
+        await pool.query(
+          'SELECT id FROM doctor_ivr_sessions WHERE user_id=$1 ORDER BY created_at',
+          [userId]
+        )
+      ).rows;
+      ivrSessions = await Promise.all(
+        rows.map(async (row) =>
+          ivr.serialize(pool, await ivr.getSession(pool, row.id, userId), {
+            doctor: true,
+            actor: String(userId),
+          })
+        )
+      );
+    }
     const result = {
       ...response.data,
       asinu_doctor_data: {
+        ivr_sessions: ivrSessions,
         medical_records: records.rows,
         patient_files: files.rows,
         task_messages: messages.rows,
@@ -255,6 +286,15 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      if (
+        (await client.query("SELECT to_regclass('public.doctor_ivr_sessions') AS name")).rows[0]
+          ?.name
+      ) {
+        await client.query('DELETE FROM doctor_ivr_templates WHERE source_user_id=$1', [userId]);
+        await client.query('DELETE FROM doctor_ivr_sessions WHERE user_id=$1', [userId]);
+        await client.query('DELETE FROM doctor_ivr_question_sets WHERE user_id=$1', [userId]);
+        await client.query('DELETE FROM doctor_ivr_events WHERE user_id=$1', [userId]);
+      }
       await client.query('DELETE FROM doctor_patient_files WHERE user_id = $1', [userId]);
       await client.query('DELETE FROM doctor_patient_medical_records WHERE user_id = $1', [userId]);
       await client.query('DELETE FROM doctor_task_messages WHERE user_id = $1', [userId]);
