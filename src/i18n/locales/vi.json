@@ -1047,5 +1047,7 @@
   "checkin.triage.conclusion.worse": "hiện nặng hơn trước",
   "checkin.triage.conclusion.close": "{{SelfRef}} sẽ hỏi thăm lại {{honorific}} sau khoảng {{hours}} tiếng.",
   "checkin.triage.conclusion.previous": "Lần trước {{honorific}} đã báo {{symptoms}}.",
-  "checkin.triage.changed": "Lượt check-in này đã được cập nhật. Vui lòng mở lại để xem trạng thái mới nhất."
+  "checkin.triage.changed": "Lượt check-in này đã được cập nhật. Vui lòng mở lại để xem trạng thái mới nhất.",
+  "notification.checkin_inactivity.title": "Tạm dừng nhắc check-in",
+  "notification.checkin_inactivity.body": "{{patientName}} đã 7 ngày không check-in. Asinu tạm dừng thông báo nhắc và cuộc gọi check-in cho người này. Khi check-in trở lại, lịch nhắc sẽ tiếp tục."
 }

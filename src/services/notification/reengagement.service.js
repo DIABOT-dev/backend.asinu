@@ -16,7 +16,8 @@
  *
  * Constraints:
  *   - Max 1 re-engagement push/day per user (dedup)
- *   - Max 1 care-circle alert/3 days per user
+ *   - Connected people pause at 7 days; a separate durable notice informs
+ *     their family once per absence (no recurring care-circle nags).
  *   - Skip if user has recent activity (lifecycle updates segment)
  */
 
@@ -25,6 +26,7 @@ const { getUsersBySegment } = require('../profile/lifecycle.service');
 const { t } = require('../../i18n');
 const { formatPersonName } = require('../../lib/text-format');
 const { readNotificationTopics, topicMetadata } = require('./notification-topic.service');
+const { getCheckinInactivity } = require('../checkin/checkin-inactivity.policy');
 
 // ─── Re-engagement Templates ────────────────────────────────────────────────
 
@@ -300,6 +302,12 @@ async function runReengagement(pool, sendAndSave) {
 
   for (const lc of allUsers) {
     try {
+      // The weekly pause uses actual check-ins, not the nightly segment cache.
+      // Its one-off family notice is handled by checkin-inactivity.service.
+      if ((await getCheckinInactivity(pool, lc.user_id)).paused) {
+        skipped++;
+        continue;
+      }
       // Get full user details
       const { rows: users } = await pool.query(
         `SELECT u.id, u.push_token, u.display_name, u.full_name,

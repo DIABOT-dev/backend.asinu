@@ -14,6 +14,11 @@ const personalization = require('./personalization.service');
 const { createHash } = require('node:crypto');
 const { recordCallResponse, refreshEarlySignals } = require('./response-history.service');
 const {
+  inactivityStateSql,
+  getCheckinInactivity,
+  routineCall,
+} = require('../checkin/checkin-inactivity.policy');
+const {
   BODY_LOCATIONS,
   getLocationOptions,
   getSymptomOptionsForLocation,
@@ -1135,6 +1140,7 @@ async function createDailyEpisodes(pool) {
       "JOIN subscription_households h ON h.id = hm.household_id AND h.plan_code <> 'free' " +
       "AND h.status IN ('active','grace_period') AND h.current_period_end > now() " +
       'WHERE s.enabled = true AND u.deleted_at IS NULL AND (now() AT TIME ZONE s.timezone)::time >= s.checkin_time ' +
+      `AND NOT EXISTS (SELECT 1 FROM (${inactivityStateSql('s.user_id')}) inactivity WHERE inactivity.paused) ` +
       'ON CONFLICT DO NOTHING RETURNING id'
   );
   return result.rowCount;
@@ -1204,8 +1210,32 @@ async function startEarlySignalEpisode(pool, userId, assessmentId) {
   }
 }
 
+async function cancelForInactivity(db, episode) {
+  await db.query(
+    "UPDATE checkin_call_episodes SET state = 'CANCELLED', next_action_at = NULL, updated_at = now() WHERE id = $1",
+    [episode.id]
+  );
+  await db.query(
+    "UPDATE checkin_call_attempts SET state = 'CANCELLED', ended_at = COALESCE(ended_at, now()) WHERE episode_id = $1 AND state IN ('RINGING','CONNECTED','PUSH_WAIT','WAITING_CONFIRMATION')",
+    [episode.id]
+  );
+  await db.query(
+    "UPDATE checkin_call_deliveries SET state = 'CANCELLED', updated_at = now() WHERE episode_id = $1 AND state IN ('PENDING','SENDING')",
+    [episode.id]
+  );
+  await event(db, episode.id, 'CANCELLED', null, null, { reason: 'CHECKIN_INACTIVITY_7_DAYS' });
+  return { all: true };
+}
+
 async function advance(pool, id) {
   const remoteEnd = await withEpisode(pool, id, null, async (db, episode) => {
+    if (
+      !TERMINAL.has(episode.state) &&
+      routineCall(episode) &&
+      (await getCheckinInactivity(db, episode.user_id)).paused
+    ) {
+      return cancelForInactivity(db, episode);
+    }
     if (episode.state === 'URGENT_ACKNOWLEDGED') {
       // Recover calls accepted by the older backend which stopped the entire
       // escalation on pickup and had no confirmation deadline.
@@ -1428,7 +1458,7 @@ async function dispatchDeliveries(pool) {
     try {
       await db.query('BEGIN');
       const found = await db.query(
-        'SELECT d.*, e.state AS episode_state, e.severity, e.issue_category, e.config, a.state AS attempt_state, a.target_role, a.ring_deadline, ' +
+        'SELECT d.*, e.state AS episode_state, e.user_id AS subject_user_id, e.trigger_source, e.severity, e.issue_category, e.config, a.state AS attempt_state, a.target_role, a.ring_deadline, ' +
           "u.push_token, u.fcm_token, u.voip_push_token, u.voip_push_environment, COALESCE(u.language_preference, 'vi') AS lang " +
           'FROM checkin_call_deliveries d JOIN checkin_call_episodes e ON e.id = d.episode_id ' +
           'LEFT JOIN checkin_call_attempts a ON a.id = d.attempt_id ' +
@@ -1438,6 +1468,21 @@ async function dispatchDeliveries(pool) {
       delivery = found.rows[0];
       if (!delivery || delivery.state !== 'PENDING') {
         await db.query('ROLLBACK');
+        continue;
+      }
+      if (
+        !TERMINAL.has(delivery.episode_state) &&
+        routineCall(delivery) &&
+        (await getCheckinInactivity(db, delivery.subject_user_id)).paused
+      ) {
+        await db.query(
+          "UPDATE checkin_call_deliveries SET state = 'CANCELLED', updated_at = now() WHERE id = $1",
+          [row.id]
+        );
+        await db.query('COMMIT');
+        // Release the delivery lock before taking the episode lock: advance()
+        // always locks episode -> attempts/deliveries. It also ends native calls.
+        await advance(pool, delivery.episode_id);
         continue;
       }
       if (

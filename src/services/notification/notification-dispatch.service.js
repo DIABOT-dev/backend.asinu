@@ -3,6 +3,10 @@
 const { createHash } = require('node:crypto');
 const { capitalizeFirstLetter } = require('../../lib/text-format');
 const {
+  INACTIVITY_NOTICE_TYPE,
+  suppressInactivityNotification,
+} = require('../checkin/checkin-inactivity.policy');
+const {
   canSendNonUrgent,
   hasReminderOptIn,
   isOptInType,
@@ -126,6 +130,26 @@ async function reserveNotification(
 ) {
   if (isHealthMetricReminderSuppressed(type)) return null;
   return withNotificationTransaction(pool, userId, async (client) => {
+    if (await suppressInactivityNotification(client, userId, type, data)) return null;
+    if (type === INACTIVITY_NOTICE_TYPE) {
+      if (!(await hasCurrentRecipientPermission(client, { user_id: userId, type, data }))) return null;
+      const receipt = await client.query(
+        `INSERT INTO checkin_inactivity_notices (subject_user_id, recipient_user_id, inactive_since_date)
+         VALUES ($1,$2,$3::date) ON CONFLICT DO NOTHING RETURNING subject_user_id`,
+        [data.patient_id, userId, data.inactive_since_date]
+      );
+      if (!receipt.rowCount) {
+        const existing = await client.query(
+          `SELECT notification_id FROM checkin_inactivity_notices
+           WHERE subject_user_id = $1 AND recipient_user_id = $2 AND inactive_since_date = $3::date`,
+          [data.patient_id, userId, data.inactive_since_date]
+        );
+        // NULL means the user deleted this notice. Do not recreate it.
+        return existing.rows[0]?.notification_id
+          ? { notificationId: existing.rows[0].notification_id, existing: true }
+          : null;
+      }
+    }
     let eventKey = notificationEventKey(data);
     const eventIdentity = explicitEventIdentity(data);
     if (type === 'doctor_message' && !data.messageId && !data.message_id) {
@@ -137,7 +161,7 @@ async function reserveNotification(
     }
     // Different patients/events must not suppress each other's alerts. Retrying
     // a failed push reuses the same inbox row rather than consuming the cap again.
-    if (cooldownMinutes > 0) {
+    if (cooldownMinutes > 0 && type !== INACTIVITY_NOTICE_TYPE) {
       const recent = await client.query(
         `SELECT id FROM notifications WHERE user_id = $1 AND type = $2
            AND (event_key IS NOT DISTINCT FROM $3 OR EXISTS (
@@ -195,6 +219,13 @@ async function reserveNotification(
       ]
     );
     const notificationId = inserted.rows[0].id;
+    if (type === INACTIVITY_NOTICE_TYPE) {
+      await client.query(
+        `UPDATE checkin_inactivity_notices SET notification_id = $4
+         WHERE subject_user_id = $1 AND recipient_user_id = $2 AND inactive_since_date = $3::date`,
+        [data.patient_id, userId, data.inactive_since_date, notificationId]
+      );
+    }
     if (push) {
       await client.query(
         `INSERT INTO notification_push_outbox (notification_id, push_body) VALUES ($1,$2)`,
@@ -297,6 +328,15 @@ async function deliverNotification(pool, notificationId) {
     if (!claimed) {
       await client.query('COMMIT');
       return { ok: false, skipped: true };
+    }
+    if (await suppressInactivityNotification(client, claimed.user_id, claimed.type, claimed.data)) {
+      await client.query(
+        `UPDATE notification_push_outbox SET state = 'CANCELLED', lease_until = NULL,
+          updated_at = NOW() WHERE notification_id = $1`,
+        [notificationId]
+      );
+      await client.query('COMMIT');
+      return { ok: false, skipped: true, reason: 'checkin_inactivity_paused' };
     }
     if (isHealthMetricReminderSuppressed(claimed.type)) {
       // Cancel existing jobs as well: hiding only newly-created notifications

@@ -25,6 +25,7 @@ const {
 const { flushCrmEventOutbox } = require('../services/integrations/crm-event.service');
 const { flushDoctorTaskOutbox } = require('../services/integrations/doctor-task.service');
 const checkinCall = require('../services/checkin-call/checkin-call.service');
+const { notifyInactiveCareCircles } = require('../services/checkin/checkin-inactivity.service');
 const earlySignal = require('../services/early-signal/early-signal.service');
 const {
   retryPendingNotifications,
@@ -72,6 +73,7 @@ function startScheduler(pool) {
   // failure interrupted the initial cleanup. Database ownership is authoritative.
   safeCron('17 * * * *', 'health_key_retirement', () => cleanupOrphanHealthKeys(pool));
   safeCron('* * * * *', 'notification_push_retry', () => retryPendingNotifications(pool));
+  safeCron('* * * * *', 'checkin_inactivity_notice', () => notifyInactiveCareCircles(pool));
   safeCron('* * * * *', 'checkin_gift_delivery', async () => {
     await pool.query('UPDATE gift_draw_periods SET locked_at=NOW() WHERE active AND locked_at IS NULL AND closes_at <= NOW()');
     await require('../services/checkin-gifts/gift.service').deliverFamilyEvents(pool);

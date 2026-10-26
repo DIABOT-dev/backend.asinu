@@ -1047,5 +1047,7 @@
   "checkin.triage.conclusion.worse": "now getting worse",
   "checkin.triage.conclusion.close": "I will check in with you again in about {{hours}} hours.",
   "checkin.triage.conclusion.previous": "At the previous check-in, you reported {{symptoms}}.",
-  "checkin.triage.changed": "This check-in has been updated. Please reopen it to see the latest status."
+  "checkin.triage.changed": "This check-in has been updated. Please reopen it to see the latest status.",
+  "notification.checkin_inactivity.title": "Check-in reminders paused",
+  "notification.checkin_inactivity.body": "{{patientName}} has not checked in for 7 days. Asinu has paused their check-in reminders and calls. Reminders will resume when they check in again."
 }
