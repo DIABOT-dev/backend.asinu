@@ -402,8 +402,12 @@ async function runDoctorIvrWorker(pool) {
     Object.entries(tasks).map(([name, work]) => guarded(name, () => work(pool)))
   );
   for (const [index, result] of results.entries())
-    if (result.status === 'rejected')
+    if (result.status === 'rejected') {
       console.warn('[doctor-ivr]', Object.keys(tasks)[index], result.reason?.code || 'job_failed');
+      require('../../lib/sentry').captureException(result.reason, {
+        component: 'doctor-ivr', job: Object.keys(tasks)[index],
+      });
+    }
 }
 function startDoctorIvrWorker(pool) {
   if (!ivr.enabled()) return;

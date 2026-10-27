@@ -9,7 +9,7 @@
     "db:migrate": "node scripts/migrate.js",
     "dev": "node scripts/migrate.js && nodemon server.js",
     "build": "node --check server.js && echo 'Backend build successful'",
-    "test": "jest --runInBand",
+    "test": "npm run test:sentry && jest --runInBand",
     "test:crm-events": "node scripts/check-crm-event-coverage.js",
     "test:doctor-dialogue": "node scripts/eval-doctor-dialogue.js",
     "test:legacy": "node scripts/run-legacy-test-suites.js",
@@ -25,7 +25,9 @@
     "db:backup": "./scripts/backup-db.sh",
     "test:health-feed": "node scripts/simulate-feed.js",
     "simulate-feed": "node scripts/simulate-feed.js",
-    "seed:care-circle-demo": "node scripts/seed-care-circle-demo.js"
+    "seed:care-circle-demo": "node scripts/seed-care-circle-demo.js",
+    "test:sentry": "node --test tests/sentry.test.cjs",
+    "sentry:smoke": "node scripts/sentry-smoke.cjs"
   },
   "dependencies": {
     "@apple/app-store-server-library": "^3.1.0",

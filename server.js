@@ -1,11 +1,13 @@
 require('dotenv').config();
+const { initSentry, sentryRequestHandler, sentryErrorHandler, captureException } = require('./src/lib/sentry');
+// Start fatal error monitoring before loading application modules.
+initSentry();
 const http = require('http');
 const express = require('express');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const logger = require('./src/lib/logger');
 const { createPool } = require('./src/lib/db');
-const { initSentry, sentryRequestHandler, sentryErrorHandler } = require('./src/lib/sentry');
 const { t, getLang } = require('./src/i18n');
 const authRoutes = require('./src/routes/auth.routes');
 const mobileRoutes = require('./src/routes/mobile.routes');
@@ -49,8 +51,7 @@ app.set('trust proxy', 1);
 assertCrmIntegrationConfig();
 assertIapRuntimeConfig();
 
-// Sentry MUST be initialized before other middleware so it can capture them
-initSentry();
+// Observe error responses without collecting HTTP request payloads.
 app.use(sentryRequestHandler());
 
 app.use(
@@ -247,6 +248,7 @@ getRedis()
   .connect()
   .catch((err) => {
     logger.warn('redis.connect_failed', { err });
+    captureException(err, { component: 'redis', operation: 'connect' });
   });
 
 const server = http.createServer(app);
@@ -259,5 +261,8 @@ server.listen(PORT, () => {
 startScheduler(pool);
 require('./src/services/doctor-ivr/ivr.worker').startDoctorIvrWorker(pool);
 prewarmCheckinCallAudio(pool).catch((err) =>
-  logger.error('checkin_call.audio_prewarm_failed', { err })
+  {
+    logger.error('checkin_call.audio_prewarm_failed', { err });
+    captureException(err, { job: 'checkin_audio_prewarm' });
+  }
 );
