@@ -21,24 +21,24 @@ jobs:
       postgres:
         image: postgres:14
         env:
-          POSTGRES_DB: asinu_ci_security_test
+          POSTGRES_DB: asinu_security_test_ci_security_test
           POSTGRES_USER: asinu
           POSTGRES_PASSWORD: asinu_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U asinu -d asinu_ci_security_test"
+          --health-cmd "pg_isready -U asinu -d asinu_security_test_ci_security_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
     env:
       NODE_ENV: test
       LOG_LEVEL: error
-      DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_ci_security_test
-      CHECKIN_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_ci_security_test
-      CHECKIN_PERSONALIZATION_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_ci_security_test
-      CARE_CIRCLE_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_ci_security_test
-      SECURITY_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_ci_security_test
+      DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci_security_test
+      CHECKIN_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci_security_test
+      CHECKIN_PERSONALIZATION_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci_security_test
+      CARE_CIRCLE_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci_security_test
+      SECURITY_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci_security_test
 
     steps:
       - name: Checkout
