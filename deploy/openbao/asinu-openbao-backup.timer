@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily off-host OpenBao snapshot
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 Asia/Ho_Chi_Minh
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

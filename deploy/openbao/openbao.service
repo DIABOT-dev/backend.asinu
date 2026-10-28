@@ -1,0 +1,50 @@
+[Unit]
+Description=Asinu OpenBao key management service
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=openbao
+Group=openbao
+ExecStart=/usr/local/bin/bao server -config=/etc/openbao/openbao.hcl
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+LimitNOFILE=65536
+LimitCORE=0
+UMask=0077
+StateDirectory=openbao
+StateDirectoryMode=0700
+LogsDirectory=openbao
+LogsDirectoryMode=0700
+RuntimeDirectory=openbao
+RuntimeDirectoryMode=0700
+MemoryHigh=384M
+MemoryMax=512M
+MemorySwapMax=0
+CPUQuota=100%
+TasksMax=128
+Nice=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadWritePaths=/var/lib/openbao /var/log/openbao /run/openbao
+
+[Install]
+WantedBy=multi-user.target

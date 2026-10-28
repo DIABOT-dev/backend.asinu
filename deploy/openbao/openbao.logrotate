@@ -1,0 +1,14 @@
+/var/log/openbao/audit.jsonl {
+    daily
+    maxsize 20M
+    rotate 14
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0600 openbao openbao
+    sharedscripts
+    postrotate
+        /bin/systemctl kill -s HUP --kill-whom=main openbao.service >/dev/null 2>&1 || true
+    endscript
+}

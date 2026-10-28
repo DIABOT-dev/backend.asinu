@@ -1,0 +1,17 @@
+[Unit]
+Description=Encrypted off-host backup of Asinu OpenBao
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/asinu-openbao/snapshot.py --config /etc/asinu/openbao/snapshot.json
+UMask=0077
+TimeoutStartSec=180
+Nice=10
+MemoryMax=128M
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/backups/asinu-openbao
