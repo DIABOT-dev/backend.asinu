@@ -1053,5 +1053,10 @@
   "notification.doctor_ivr_reply_title": "Your doctor has replied",
   "notification.doctor_ivr_request_title": "Your doctor needs more information",
   "notification.doctor_ivr_reply_body": "You can read or listen to your consultation result on Asinu.",
-  "notification.doctor_ivr_request_body": "Dr. {{doctorName}} needs more information. Please respond when convenient."
+  "notification.doctor_ivr_request_body": "Dr. {{doctorName}} needs more information. Please respond when convenient.",
+  "notification.doctor_ivr_request_count_body": "Dr. {{doctorName}} has {{count}} questions, taking about {{minutes}} minutes.",
+  "doctor_ivr.some_questions": "a few",
+  "doctor_ivr.invalid_input": "The interview input is not valid.",
+  "notification.doctor_ivr_call_title": "Dr. {{doctorName}} needs more information",
+  "notification.doctor_ivr_call_body": "Listen to the questions and choose your answers."
 }

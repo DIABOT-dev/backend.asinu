@@ -11,6 +11,7 @@ const { getWhisperTranscription } = require('../ai/providers/openai');
 const { deliverDoctorRequest } = require('../integrations/doctor-task.service');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const busy = new Set();
+const { runCalls } = require('./ivr.calls');
 async function guarded(name, work) {
   if (busy.has(name)) return;
   busy.add(name);
@@ -30,8 +31,23 @@ async function notifyPatient(pool, s, type = 'doctor_ivr_session') {
     pool,
     s.user_id,
     type,
-    t(type === 'doctor_ivr_reply' ? 'notification.doctor_ivr_reply_title' : 'notification.doctor_ivr_request_title', 'vi'),
-    t(type === 'doctor_ivr_reply' ? 'notification.doctor_ivr_reply_body' : 'notification.doctor_ivr_request_body', 'vi', { doctorName: s.doctor_name }),
+    t(
+      type === 'doctor_ivr_reply'
+        ? 'notification.doctor_ivr_reply_title'
+        : 'notification.doctor_ivr_request_title',
+      'vi'
+    ),
+    t(
+      type === 'doctor_ivr_reply'
+        ? 'notification.doctor_ivr_reply_body'
+        : 'notification.doctor_ivr_request_count_body',
+      'vi',
+      {
+        doctorName: s.doctor_name,
+        count: s.question_count || t('doctor_ivr.some_questions', 'vi'),
+        minutes: s.duration_minutes || 3,
+      }
+    ),
     {
       type,
       sessionId: s.id,
@@ -126,36 +142,58 @@ async function transcribe(pool) {
     try {
       await ivr.scope(pool, { tenant_id: s.tenant_id, task_id: s.task_id, app_user_id: s.user_id });
       const bytes = Buffer.from(ivr.reveal(s.user_id, 'audio', a.audio_enc), 'base64');
-      const text = await withAiUser(pool, s.user_id, () =>
-        getWhisperTranscription(bytes, 'answer.m4a', 'vi')
+      const result = await withAiUser(pool, s.user_id, () =>
+        getWhisperTranscription(
+          bytes,
+          a.mime_type === 'audio/webm' ? 'answer.webm' : 'answer.m4a',
+          'vi',
+          { detailed: true }
+        )
       );
+      const text = typeof result === 'string' ? result : result.text;
+      const confidence =
+        typeof result === 'object' && Number.isFinite(result.confidence) ? result.confidence : null;
+      const needsReview = confidence === null || confidence < 0.6 || result?.needs_review === true;
+      const status = confidence !== null && needsReview && a.stt_attempts < 3 ? 'retry' : 'done';
       const saved = await pool.query(
-        "UPDATE doctor_ivr_answers SET transcript_enc=$2,stt_status='done',stt_confidence=NULL WHERE id=$1 AND client_request_id=$3",
-        [a.id, ivr.seal(s.user_id, 'transcript', String(text || '').trim()), a.client_request_id]
+        'UPDATE doctor_ivr_answers SET transcript_enc=$2,stt_status=$4,stt_confidence=$5,stt_needs_review=$6 WHERE id=$1 AND client_request_id=$3',
+        [
+          a.id,
+          ivr.seal(s.user_id, 'transcript', String(text || '').trim()),
+          a.client_request_id,
+          status,
+          confidence,
+          needsReview,
+        ]
       );
       if (!saved.rowCount) continue;
-      // The current provider returns no calibrated confidence. Keep NULL and require
-      // listening instead of fabricating a score. Rules only flag, never replace an answer.
-      const danger = String(process.env.DOCTOR_IVR_RED_FLAG_PHRASES || '')
-        .split('|')
+      const danger = (
+        s.policy?.red_flag_phrases ||
+        String(process.env.DOCTOR_IVR_RED_FLAG_PHRASES || '').split('|')
+      )
         .map((v) => v.trim().toLocaleLowerCase('vi'))
         .filter(Boolean);
-      const matches = danger.filter((phrase) =>
-        String(text).toLocaleLowerCase('vi').includes(phrase)
-      );
+      const fold = (value) =>
+        String(value)
+          .toLocaleLowerCase('vi')
+          .normalize('NFD')
+          .replace(/\p{Diacritic}/gu, '')
+          .replace(/đ/gu, 'd');
+      const matches = danger.filter((phrase) => fold(text).includes(fold(phrase)));
       if (matches.length) {
-        await pool.query(
-          'UPDATE doctor_ivr_answers SET is_red_flag=TRUE WHERE id=$1 AND client_request_id=$2',
+        const flagged = await pool.query(
+          'UPDATE doctor_ivr_answers SET is_red_flag=TRUE WHERE id=$1 AND client_request_id=$2 AND NOT is_red_flag',
           [a.id, a.client_request_id]
         );
-        await ivr.audit(
-          pool,
-          s,
-          'system',
-          'red_flag.detected',
-          { question_id: a.question_id, source: 'transcript_rule', needs_review: true },
-          s.id
-        );
+        if (flagged.rowCount)
+          await ivr.audit(
+            pool,
+            s,
+            'system',
+            'red_flag.detected',
+            { question_id: a.question_id, source: 'transcript_rule', needs_review: true },
+            s.id
+          );
       }
     } catch (e) {
       await pool.query(
@@ -338,7 +376,17 @@ async function deadlines(pool) {
     )
   ).rows;
   for (const s of reminders) {
-    const sent = await notifyPatient(pool, s);
+    const set = (
+      await pool.query('SELECT content_enc FROM doctor_ivr_question_sets WHERE id=$1', [
+        s.question_set_id,
+      ])
+    ).rows[0];
+    const content = ivr.reveal(s.user_id, 'question-set', set.content_enc);
+    const sent = await notifyPatient(pool, {
+      ...s,
+      question_count: content.questions.length,
+      duration_minutes: Math.max(1, Math.ceil(content.est_duration_s / 60)),
+    });
     if (sent)
       await pool.query(
         'UPDATE doctor_ivr_sessions SET reminder_count=reminder_count+1,remind_at=NULL WHERE id=$1 AND remind_at=$2',
@@ -356,7 +404,7 @@ async function deadlines(pool) {
 async function events(pool, urgent = false) {
   const rows = (
     await pool.query(
-      "SELECT * FROM doctor_ivr_events WHERE delivered_at IS NULL AND next_attempt_at<=NOW() AND (event_type='red_flag.detected')=$1 AND event_type IN ('session.sent','answer.recorded','red_flag.detected','session.completed','session.reported','session.closed','session.expired','session.cancelled','session.replied') ORDER BY CASE WHEN event_type='red_flag.detected' THEN 0 ELSE 1 END,created_at LIMIT 5",
+      "SELECT * FROM doctor_ivr_events WHERE delivered_at IS NULL AND next_attempt_at<=NOW() AND (event_type='red_flag.detected')=$1 AND event_type IN ('session.sent','answer.recorded','red_flag.detected','session.completed','session.reported','session.closed','session.expired','session.cancelled','session.replied','session.unreachable') ORDER BY CASE WHEN event_type='red_flag.detected' THEN 0 ELSE 1 END,created_at LIMIT 5",
       [urgent]
     )
   ).rows;
@@ -396,6 +444,7 @@ async function runDoctorIvrWorker(pool) {
     transcribe,
     reports,
     deadlines,
+    calls: runCalls,
   };
   const results = await Promise.allSettled(
     Object.entries(tasks).map(([name, work]) => guarded(name, () => work(pool)))
@@ -404,7 +453,8 @@ async function runDoctorIvrWorker(pool) {
     if (result.status === 'rejected') {
       console.warn('[doctor-ivr]', Object.keys(tasks)[index], result.reason?.code || 'job_failed');
       require('../../lib/sentry').captureException(result.reason, {
-        component: 'doctor-ivr', job: Object.keys(tasks)[index],
+        component: 'doctor-ivr',
+        job: Object.keys(tasks)[index],
       });
     }
 }

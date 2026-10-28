@@ -216,7 +216,12 @@ async function getOpenAIChatReply({ message, userId, context, history = [] }) {
   return null;
 }
 
-async function getWhisperTranscription(audioBuffer, filename = 'audio.m4a', _lang = 'vi') {
+async function getWhisperTranscription(
+  audioBuffer,
+  filename = 'audio.m4a',
+  _lang = 'vi',
+  options = {}
+) {
   await assertAiConsent();
   const endpoint = process.env.WHISPER_ENDPOINT || 'https://api.openai.com/v1/audio/transcriptions';
   const apiKey = process.env.WHISPER_API_KEY || process.env.OPENAI_API_KEY;
@@ -227,8 +232,21 @@ async function getWhisperTranscription(audioBuffer, filename = 'audio.m4a', _lan
 
   const { Blob } = require('buffer');
   const formData = new FormData();
-  formData.append('file', new Blob([audioBuffer], { type: 'audio/m4a' }), filename);
-  formData.append('model', 'whisper-1');
+  const mime = filename.endsWith('.webm')
+    ? 'audio/webm'
+    : filename.endsWith('.wav')
+      ? 'audio/wav'
+      : filename.endsWith('.mp3')
+        ? 'audio/mpeg'
+        : 'audio/m4a';
+  formData.append('file', new Blob([audioBuffer], { type: mime }), filename);
+  const model = options.detailed ? process.env.DOCTOR_IVR_STT_MODEL || 'whisper-1' : 'whisper-1';
+  formData.append('model', model);
+  if (options.detailed) {
+    formData.append('language', _lang);
+    formData.append('response_format', model === 'whisper-1' ? 'verbose_json' : 'json');
+    if (model !== 'whisper-1') formData.append('include[]', 'logprobs');
+  }
   // Không truyền language → Whisper tự detect, tránh lỗi khi UI dùng tiếng Anh nhưng người dùng nói tiếng Việt
 
   const headers = {};
@@ -244,10 +262,14 @@ async function getWhisperTranscription(audioBuffer, filename = 'audio.m4a', _lan
   });
 
   if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Whisper API error (${endpoint}) ${response.status}: ${err}`);
+    // Provider bodies can contain transcript/audio diagnostics; never log PHI.
+    await response.body?.cancel();
+    throw Object.assign(new Error('Speech transcription failed'), {
+      code: `STT_HTTP_${response.status}`,
+    });
   }
   const data = await response.json();
+  if (options.detailed) return require('../../doctor-ivr/stt-quality').transcriptionResult(data);
   return data.text || '';
 }
 

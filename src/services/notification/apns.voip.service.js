@@ -80,7 +80,8 @@ function buildPayload(data = {}, action = 'INCOMING_CALL') {
   const lang = data.lang === 'en' ? 'en' : 'vi';
   return {
     aps: { 'content-available': 1 },
-    type: 'checkin_call',
+    type: data.callType === 'doctor_ivr' ? 'doctor_ivr_call' : 'checkin_call',
+    ...(data.callType === 'doctor_ivr' ? { callType: 'doctor_ivr' } : {}),
     checkinCall: true,
     action,
     episodeId: data.episodeId || '',

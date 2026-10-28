@@ -1053,5 +1053,10 @@
   "notification.doctor_ivr_reply_title": "Bác sĩ đã trả lời",
   "notification.doctor_ivr_request_title": "Bác sĩ cần hỏi thêm",
   "notification.doctor_ivr_reply_body": "Bạn có thể đọc hoặc nghe kết quả tư vấn trên Asinu.",
-  "notification.doctor_ivr_request_body": "Bác sĩ {{doctorName}} cần hỏi thêm thông tin. Mời bạn trả lời khi thuận tiện."
+  "notification.doctor_ivr_request_body": "Bác sĩ {{doctorName}} cần hỏi thêm thông tin. Mời bạn trả lời khi thuận tiện.",
+  "notification.doctor_ivr_request_count_body": "Bác sĩ {{doctorName}} cần hỏi anh/chị {{count}} câu, khoảng {{minutes}} phút.",
+  "doctor_ivr.some_questions": "một số",
+  "doctor_ivr.invalid_input": "Dữ liệu phiên chưa hợp lệ.",
+  "notification.doctor_ivr_call_title": "Bác sĩ {{doctorName}} cần hỏi thêm",
+  "notification.doctor_ivr_call_body": "Nghe câu hỏi và chọn câu trả lời."
 }

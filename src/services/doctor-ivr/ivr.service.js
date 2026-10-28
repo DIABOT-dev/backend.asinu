@@ -1,8 +1,11 @@
 const { getSecret, keyringEnabled } = require('../../security/openbao-keyring.cjs');
-'use strict';
+('use strict');
 const crypto = require('node:crypto');
+const { compatibleDeviceTokens } = require('./ivr.devices');
 const { inspectRecording } = require('./recording');
 const { questionSpeech } = require('./question-speech');
+const { questionSetChanges } = require('./question-set.diff');
+const { patientPolicy, nextEvening, nextCallTime, questionFingerprint } = require('./ivr.policy');
 const { reportFlags, asksForMoreInformation } = require('./content-quality');
 const {
   validateQuestionSet,
@@ -24,7 +27,9 @@ const error = (code, message, statusCode = 409) =>
   Object.assign(new Error(message), { code, statusCode });
 const enabled = () => process.env.DOCTOR_IVR_ENABLED === 'true';
 function key() {
-  const value = keyringEnabled() ? getSecret('doctor-ivr') : process.env.DOCTOR_IVR_ENCRYPTION_KEY || '';
+  const value = keyringEnabled()
+    ? getSecret('doctor-ivr')
+    : process.env.DOCTOR_IVR_ENCRYPTION_KEY || '';
   if (!/^[a-f0-9]{64}$/i.test(value))
     throw error('IVR_NOT_CONFIGURED', 'IVR encryption is not configured.', 503);
   return Buffer.from(value, 'hex');
@@ -136,10 +141,14 @@ async function serialize(db, s, { doctor = false, actor = String(s.user_id) } = 
     audio_duration_s: a.audio_duration_s == null ? null : Number(a.audio_duration_s),
     transcript: reveal(s.user_id, 'transcript', a.transcript_enc),
     stt_confidence: a.stt_confidence == null ? null : Number(a.stt_confidence),
+    stt_confidence_source: a.stt_confidence == null ? null : 'model_likelihood_estimate',
     stt_status: a.stt_status,
     needs_review:
       a.answer_type === 'voice' &&
-      (a.stt_status !== 'done' || a.stt_confidence === null || Number(a.stt_confidence) < 0.6),
+      (a.stt_status !== 'done' ||
+        a.stt_needs_review ||
+        a.stt_confidence === null ||
+        Number(a.stt_confidence) < 0.6),
     is_red_flag: a.is_red_flag,
     skip_reason: a.skip_reason,
     answered_at: a.answered_at,
@@ -175,8 +184,9 @@ async function serialize(db, s, { doctor = false, actor = String(s.user_id) } = 
   };
   return {
     safety_notice: answers.some((a) => a.is_red_flag)
-      ? String(process.env.DOCTOR_IVR_SAFETY_MESSAGE || '')
+      ? s.policy?.safety_message || String(process.env.DOCTOR_IVR_SAFETY_MESSAGE || '')
       : null,
+    response_timeout_seconds: s.policy?.response_timeout_seconds || 10,
     id: s.id,
     task_id: s.task_id,
     question_set_id: s.question_set_id,
@@ -201,6 +211,8 @@ async function serialize(db, s, { doctor = false, actor = String(s.user_id) } = 
   };
 }
 async function doctorOperation(pool, input) {
+  const requestStartedAt = Date.now();
+  if (input.operation === 'list' && !enabled()) return { enabled: false };
   const s = await scope(pool, input),
     actor = String(input.doctor_id || '');
   if (!actor) throw error('IVR_INVALID_DOCTOR', 'Thiếu bác sĩ phụ trách.', 400);
@@ -221,7 +233,11 @@ async function doctorOperation(pool, input) {
     ).rows;
     return {
       enabled: true,
-      capabilities: { app: true, call: false, confidence: false },
+      capabilities: {
+        app: true,
+        call: process.env.DOCTOR_IVR_CALL_ENABLED === 'true',
+        confidence: 'model_likelihood_estimate',
+      },
       question_sets: sets.map((q) => ({
         id: q.id,
         version: q.version,
@@ -236,14 +252,15 @@ async function doctorOperation(pool, input) {
       ),
       templates: (
         await pool.query(
-          'SELECT id,name,specialty,content_enc FROM doctor_ivr_templates WHERE tenant_id=$1 AND owner_id=$2 ORDER BY created_at DESC',
+          'SELECT id,name,specialty,content_enc,owner_id,is_shared FROM doctor_ivr_templates WHERE tenant_id=$1 AND (owner_id=$2 OR is_shared) ORDER BY created_at DESC',
           [s.tenant, actor]
         )
       ).rows.map((t) => ({
         id: t.id,
         name: t.name,
         specialty: t.specialty,
-        content: reveal(actor, 'template', t.content_enc),
+        content: reveal(t.owner_id, 'template', t.content_enc),
+        is_shared: t.is_shared,
       })),
     };
   }
@@ -330,7 +347,7 @@ async function doctorOperation(pool, input) {
     };
     let last, previousDraft;
     const repairs = [];
-    const deadline = Date.now() + 10000;
+    const deadline = requestStartedAt + 10000;
     for (let attempt = 0; attempt < 3; attempt++) {
       const targets = last ? compoundRepairTargets(previousDraft, address) : [];
       const remainingMs = deadline - Date.now();
@@ -438,12 +455,29 @@ async function doctorOperation(pool, input) {
         403
       );
     const content = validateQuestionSet(data.content, { supplement: !!data.supplement });
-    if (op === 'approve' && data.channel && data.channel !== 'app')
-      throw error(
-        'IVR_CALL_UNAVAILABLE',
-        'Bản thử hiện hỗ trợ thông báo và nghe, chọn trong app.',
-        400
-      );
+    const channel = data.channel === undefined ? 'app' : data.channel;
+    if (!['app', 'call', 'both'].includes(channel))
+      throw error('IVR_INVALID_CHANNEL', 'Kênh gửi chưa hợp lệ.', 400);
+    if (op === 'approve' && channel !== 'app' && process.env.DOCTOR_IVR_CALL_ENABLED !== 'true')
+      throw error('IVR_CALL_UNAVAILABLE', 'Kênh gọi chưa được bật trên hệ thống này.', 400);
+    if (op === 'approve' && channel !== 'app') {
+      const device = (
+        await pool.query(
+          'SELECT doctor_ivr_calls,voip_push_token,fcm_token,doctor_ivr_fcm_hash,doctor_ivr_voip_hash FROM users WHERE id=$1',
+          [s.user]
+        )
+      ).rows[0];
+      const tokens = compatibleDeviceTokens(device);
+      if (!device?.doctor_ivr_calls || !(tokens.voip || tokens.fcm))
+        throw error(
+          'IVR_CALL_DEVICE_NOT_READY',
+          'Người bệnh cần mở bản Asinu hỗ trợ cuộc gọi bác sĩ và cho phép nhận cuộc gọi.',
+          409
+        );
+      if (!content.greeting.startsWith('Cuộc gọi có thể được ghi âm.'))
+        content.greeting = `Cuộc gọi có thể được ghi âm. ${content.greeting}`;
+      Object.assign(content, validateQuestionSet(content, { supplement: !!data.supplement }));
+    }
     return transaction(pool, async (db) => {
       await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`ivr:${s.tenant}:${s.taskId}`]);
       const current = (
@@ -456,7 +490,7 @@ async function doctorOperation(pool, input) {
         throw error('IVR_SESSION_ACTIVE', 'Phiên đã bắt đầu, không được thay bộ câu hỏi.');
       const prior = (
         await db.query(
-          "SELECT is_supplement,status FROM doctor_ivr_sessions WHERE tenant_id=$1 AND task_id=$2 AND status<>'cancelled'",
+          "SELECT is_supplement,status FROM doctor_ivr_sessions WHERE tenant_id=$1 AND task_id=$2 AND status NOT IN ('cancelled','unreachable')",
           [s.tenant, s.taskId]
         )
       ).rows;
@@ -502,14 +536,25 @@ async function doctorOperation(pool, input) {
           op === 'approve' ? actor : null,
         ]
       );
+      const previousEvent = (
+        await db.query(
+          "SELECT detail_enc FROM doctor_ivr_events WHERE tenant_id=$1 AND task_id=$2 AND user_id=$3 AND event_type IN ('question_set.generated','question_set.saved','question_set.approved') ORDER BY created_at DESC,id DESC LIMIT 1",
+          [s.tenant, s.taskId, s.user]
+        )
+      ).rows[0];
+      const previousContent = previousEvent
+        ? reveal(s.user, 'event', previousEvent.detail_enc)?.content
+        : null;
       await audit(db, s, actor, `question_set.${op === 'approve' ? 'approved' : 'saved'}`, {
         version,
         content,
+        changes: questionSetChanges(previousContent, content),
       });
       if (op === 'save') return { question_set_id: id, version };
       const sessionId = crypto.randomUUID();
+      const policy = await patientPolicy(db, s.tenant, s.user);
       await db.query(
-        "INSERT INTO doctor_ivr_sessions(id,question_set_id,tenant_id,task_id,user_id,doctor_id,doctor_name,status,current_question_id,is_supplement) VALUES($1,$2,$3,$4,$5,$6,$7,'draft',$8,$9)",
+        "INSERT INTO doctor_ivr_sessions(id,question_set_id,tenant_id,task_id,user_id,doctor_id,doctor_name,status,current_question_id,is_supplement,channel,policy) VALUES($1,$2,$3,$4,$5,$6,$7,'draft',$8,$9,$10,$11)",
         [
           sessionId,
           id,
@@ -520,6 +565,8 @@ async function doctorOperation(pool, input) {
           String(input.doctor_name || 'Bác sĩ'),
           content.questions[0].id,
           !!data.supplement,
+          channel,
+          policy,
         ]
       );
       await audit(db, s, actor, 'session.preparing', {}, sessionId);
@@ -703,10 +750,7 @@ async function patientAction(pool, user, id, input, file = null) {
         throw error('IVR_INVALID_REMINDER', 'Lịch nhắc không hợp lệ.', 400);
       let when = Date.now() + delay * 60000;
       if (input.minutes === 'tonight') {
-        const date = new Date(Date.now() + 7 * 3600000);
-        date.setUTCHours(19, 0, 0, 0);
-        when = date.getTime() - 7 * 3600000;
-        if (when <= Date.now()) when += 86400000;
+        when = nextEvening(new Date(), s.policy?.timezone || 'Asia/Ho_Chi_Minh').getTime();
       }
       if (when >= new Date(s.expires_at).getTime())
         throw error('IVR_REMINDER_TOO_LATE', 'Lịch nhắc nằm sau thời hạn phiên.', 400);
@@ -714,9 +758,18 @@ async function patientAction(pool, user, id, input, file = null) {
         id,
         new Date(when),
       ]);
+      const policy = { ...require('./ivr.policy').defaults(), ...s.policy };
+      await db.query(
+        "UPDATE doctor_ivr_call_attempts SET scheduled_at=$2 WHERE session_id=$1 AND status='queued'",
+        [id, nextCallTime(new Date(when), policy)]
+      );
       return serialize(db, await getSession(db, id, user));
     }
     if (input.action === 'start') {
+      await db.query(
+        "UPDATE doctor_ivr_call_attempts SET status='cancelled',finished_at=NOW() WHERE session_id=$1 AND status IN ('queued','ringing','dispatching')",
+        [id]
+      );
       await db.query(
         "UPDATE doctor_ivr_sessions SET status='in_progress',started_at=COALESCE(started_at,NOW()),updated_at=NOW() WHERE id=$1",
         [id]
@@ -795,9 +848,9 @@ async function patientAction(pool, user, id, input, file = null) {
       id
     );
     await db.query(
-      `INSERT INTO doctor_ivr_answers(id,session_id,question_id,option_id,answer_type,client_request_id,audio_enc,mime_type,audio_duration_s,transcript_enc,stt_status,is_red_flag,skip_reason)
-   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-   ON CONFLICT(session_id,question_id) DO UPDATE SET option_id=EXCLUDED.option_id,answer_type=EXCLUDED.answer_type,client_request_id=EXCLUDED.client_request_id,audio_enc=EXCLUDED.audio_enc,mime_type=EXCLUDED.mime_type,audio_duration_s=EXCLUDED.audio_duration_s,transcript_enc=NULL,stt_status=EXCLUDED.stt_status,stt_confidence=NULL,stt_attempts=0,stt_started_at=NULL,is_red_flag=EXCLUDED.is_red_flag,skip_reason=EXCLUDED.skip_reason,active=TRUE,answered_at=NOW()`,
+      `INSERT INTO doctor_ivr_answers(id,session_id,question_id,option_id,answer_type,client_request_id,audio_enc,mime_type,audio_duration_s,transcript_enc,stt_status,is_red_flag,skip_reason,question_fingerprint)
+   VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+   ON CONFLICT(session_id,question_id) DO UPDATE SET option_id=EXCLUDED.option_id,answer_type=EXCLUDED.answer_type,client_request_id=EXCLUDED.client_request_id,audio_enc=EXCLUDED.audio_enc,mime_type=EXCLUDED.mime_type,audio_duration_s=EXCLUDED.audio_duration_s,transcript_enc=NULL,stt_status=EXCLUDED.stt_status,stt_confidence=NULL,stt_needs_review=FALSE,stt_attempts=0,stt_started_at=NULL,is_red_flag=EXCLUDED.is_red_flag,skip_reason=EXCLUDED.skip_reason,question_fingerprint=EXCLUDED.question_fingerprint,active=TRUE,answered_at=NOW()`,
       [
         answerId,
         id,
@@ -812,6 +865,7 @@ async function patientAction(pool, user, id, input, file = null) {
         type === 'voice' ? (audio ? 'pending' : 'awaiting_upload') : 'none',
         !skip && !!o?.red_flag,
         skip ? input.skip_reason : null,
+        questionFingerprint(s.tenant_id, q),
       ]
     );
     if (!skip && o.red_flag)

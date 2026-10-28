@@ -6,6 +6,24 @@ const {
   nextQuestion,
   materializeGeneratedQuestions,
 } = require('../src/services/doctor-ivr/question-set.schema');
+function fixtureWav() {
+  const bytes = Buffer.alloc(44 + 16000 * 2 * 2);
+  bytes.write('RIFF', 0);
+  bytes.writeUInt32LE(bytes.length - 8, 4);
+  bytes.write('WAVEfmt ', 8);
+  bytes.writeUInt32LE(16, 16);
+  bytes.writeUInt16LE(1, 20);
+  bytes.writeUInt16LE(1, 22);
+  bytes.writeUInt32LE(16000, 24);
+  bytes.writeUInt32LE(32000, 28);
+  bytes.writeUInt16LE(2, 32);
+  bytes.writeUInt16LE(16, 34);
+  bytes.write('data', 36);
+  bytes.writeUInt32LE(bytes.length - 44, 40);
+  for (let i = 44; i < bytes.length; i += 2)
+    bytes.writeInt16LE(Math.round(Math.sin(i / 10) * 6000), i);
+  return bytes;
+}
 function content() {
   return {
     title: 'Hỏi thêm tình trạng',
@@ -211,7 +229,8 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
       connectionString: url.toString(),
       options: `-c search_path=${schema},public`,
     });
-    await pool.query(`CREATE TABLE users(id INTEGER PRIMARY KEY,deleted_at TIMESTAMPTZ);INSERT INTO users VALUES(1,NULL),(2,NULL);
+    await pool.query(`CREATE TABLE users(id INTEGER PRIMARY KEY,deleted_at TIMESTAMPTZ,fcm_token TEXT,voip_push_token TEXT,voip_push_environment TEXT);INSERT INTO users(id) VALUES(1),(2);
+   CREATE TABLE checkin_call_attempts(target_user_id INTEGER,state TEXT,ring_deadline TIMESTAMPTZ,confirm_deadline TIMESTAMPTZ);
    CREATE TABLE doctor_task_outbox(id SERIAL,tenant_id TEXT,payload JSONB,created_at TIMESTAMPTZ DEFAULT NOW());
    CREATE TABLE doctor_task_lifecycle_events(tenant_id TEXT,task_id TEXT,status TEXT,doctor_ref TEXT,payload JSONB,occurred_at TIMESTAMPTZ,created_at TIMESTAMPTZ);
    CREATE TABLE doctor_privacy_request_receipts(user_id INTEGER,tenant_id TEXT,action TEXT,status TEXT,created_at TIMESTAMPTZ DEFAULT NOW());
@@ -245,6 +264,24 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     await pool.query(
       fs.readFileSync(
         require('path').join(__dirname, '../db/migrations/118_doctor_ivr_outbox_recovery.sql'),
+        'utf8'
+      )
+    );
+    await pool.query(
+      fs.readFileSync(
+        require('path').join(__dirname, '../db/migrations/120_doctor_ivr_delivery_policy.sql'),
+        'utf8'
+      )
+    );
+    await pool.query(
+      fs.readFileSync(
+        require('path').join(__dirname, '../db/migrations/121_doctor_ivr_question_metrics.sql'),
+        'utf8'
+      )
+    );
+    await pool.query(
+      fs.readFileSync(
+        require('path').join(__dirname, '../db/migrations/122_doctor_ivr_device_capabilities.sql'),
         'utf8'
       )
     );
@@ -293,6 +330,12 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     }));
     jest.doMock('../src/services/ai/providers/openai', () => ({
       getWhisperTranscription: jest.fn(async () => 'Câu trả lời bằng giọng nói.'),
+    }));
+    jest.doMock('../src/services/notification/fcm.notification.service', () => ({
+      sendFcmNotification: jest.fn(async () => ({ ok: true })),
+    }));
+    jest.doMock('../src/services/notification/apns.voip.service', () => ({
+      sendVoipNotification: jest.fn(async () => ({ ok: true })),
     }));
     worker = require('../src/services/doctor-ivr/ivr.worker');
   });
@@ -549,21 +592,7 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     expect(s.current_question_id).toBe('q2');
     expect(s.answers[0].stt_status).toBe('awaiting_upload');
     // A real two-second PCM WAV exercises ffprobe; no provider receives this fixture.
-    const bytes = Buffer.alloc(44 + 16000 * 2 * 2);
-    bytes.write('RIFF', 0);
-    bytes.writeUInt32LE(bytes.length - 8, 4);
-    bytes.write('WAVEfmt ', 8);
-    bytes.writeUInt32LE(16, 16);
-    bytes.writeUInt16LE(1, 20);
-    bytes.writeUInt16LE(1, 22);
-    bytes.writeUInt32LE(16000, 24);
-    bytes.writeUInt32LE(32000, 28);
-    bytes.writeUInt16LE(2, 32);
-    bytes.writeUInt16LE(16, 34);
-    bytes.write('data', 36);
-    bytes.writeUInt32LE(bytes.length - 44, 40);
-    for (let i = 44; i < bytes.length; i += 2)
-      bytes.writeInt16LE(Math.round(Math.sin(i / 10) * 6000), i);
+    const bytes = fixtureWav();
     s = await ivr.patientAction(
       pool,
       1,
@@ -629,6 +658,213 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
         { buffer: Buffer.from('not audio'), mimetype: 'audio/wav' }
       )
     ).rejects.toMatchObject({ code: 'IVR_INVALID_AUDIO_DURATION' });
+  });
+  test('low-confidence STT retries are bounded and a dangerous transcript alerts the doctor only once', async () => {
+    await newTask('stt-confidence');
+    const sent = await invoke('approve', { content: content() });
+    await worker.runDoctorIvrWorker(pool);
+    let current = await ivr.patientGet(pool, 1, sent.session_id);
+    await pool.query(
+      "UPDATE doctor_ivr_sessions SET policy=jsonb_set(policy,'{red_flag_phrases}',$2::jsonb) WHERE id=$1",
+      [sent.session_id, JSON.stringify(['khó thở'])]
+    );
+    const transcriber = require('../src/services/ai/providers/openai').getWhisperTranscription;
+    transcriber.mockResolvedValue({ text: 'KHO THO', confidence: 0.3, needs_review: true });
+    try {
+      await ivr.patientAction(
+        pool,
+        1,
+        current.id,
+        {
+          action: 'answer',
+          revision: current.revision,
+          question_id: 'q1',
+          option_id: 'q1_x',
+          request_id: randomUUID(),
+          recording_consent: true,
+        },
+        { buffer: fixtureWav(), mimetype: 'audio/wav' }
+      );
+      for (let n = 0; n < 4; n++) await worker.runDoctorIvrWorker(pool);
+      current = await ivr.patientGet(pool, 1, sent.session_id);
+      expect(current.answers[0]).toMatchObject({
+        stt_status: 'done',
+        stt_confidence: 0.3,
+        needs_review: true,
+        is_red_flag: true,
+      });
+      expect(
+        (
+          await pool.query('SELECT stt_attempts FROM doctor_ivr_answers WHERE session_id=$1', [
+            sent.session_id,
+          ])
+        ).rows[0].stt_attempts
+      ).toBe(3);
+      expect(
+        (
+          await pool.query(
+            "SELECT 1 FROM doctor_ivr_events WHERE session_id=$1 AND event_type='red_flag.detected'",
+            [sent.session_id]
+          )
+        ).rowCount
+      ).toBe(1);
+    } finally {
+      transcriber.mockResolvedValue('Câu trả lời bằng giọng nói.');
+    }
+  });
+  test('policy changes affect only new sessions and shared templates stay tenant-scoped', async () => {
+    await newTask('policy');
+    const policy = require('../src/services/doctor-ivr/ivr.policy');
+    const old = await invoke('approve', { content: content() });
+    const config = { ...policy.defaults(), response_timeout_seconds: 15 };
+    const adminInput = { tenant_id: input.tenant_id, admin_id: randomUUID() };
+    await policy.adminOperation(pool, { ...adminInput, operation: 'save', data: config });
+    expect((await ivr.patientGet(pool, 1, old.session_id)).response_timeout_seconds).toBe(10);
+    await newTask('policy-new');
+    const next = await invoke('approve', { content: content() });
+    expect((await ivr.patientGet(pool, 1, next.session_id)).response_timeout_seconds).toBe(15);
+    expect((await policy.getPolicy(pool, 'other-tenant')).response_timeout_seconds).toBe(10);
+    const created = await policy.adminOperation(pool, {
+      ...adminInput,
+      operation: 'template_save',
+      data: { name: 'Hỏi thêm sức khỏe', content: content() },
+    });
+    expect((await invoke('list', {})).templates.find((t) => t.id === created.id)).toMatchObject({
+      is_shared: true,
+      content: { greeting: '', closing: '' },
+    });
+    const listed = await policy.adminOperation(pool, {
+      ...adminInput,
+      operation: 'templates',
+      data: {},
+    });
+    expect(listed.items.some((t) => t.id === created.id)).toBe(true);
+    await policy.adminOperation(pool, {
+      ...adminInput,
+      operation: 'template_delete',
+      data: { id: created.id },
+    });
+    expect((await invoke('list', {})).templates.some((t) => t.id === created.id)).toBe(false);
+    await policy.adminOperation(pool, {
+      ...adminInput,
+      operation: 'save',
+      data: policy.defaults(),
+    });
+  });
+  test('native call delivery requires a compatible device, accepts once, isolates capabilities and retries at most twice', async () => {
+    const calls = require('../src/services/doctor-ivr/ivr.calls');
+    const { defaults } = require('../src/services/doctor-ivr/ivr.policy');
+    const previous = process.env.DOCTOR_IVR_CALL_ENABLED;
+    try {
+      await newTask('call');
+      process.env.DOCTOR_IVR_CALL_ENABLED = 'false';
+      await expect(
+        invoke('approve', { content: content(), channel: 'call' })
+      ).rejects.toMatchObject({ code: 'IVR_CALL_UNAVAILABLE' });
+      process.env.DOCTOR_IVR_CALL_ENABLED = 'true';
+      await expect(
+        invoke('approve', { content: content(), channel: 'call' })
+      ).rejects.toMatchObject({ code: 'IVR_CALL_DEVICE_NOT_READY' });
+      await pool.query("UPDATE users SET fcm_token='fixture-device' WHERE id=1");
+      await expect(
+        calls.registerDevice(pool, 1, true, 'android', 'old-token')
+      ).rejects.toMatchObject({ code: 'IVR_CALL_DEVICE_NOT_READY' });
+      await calls.registerDevice(pool, 1, true, 'android', 'fixture-device');
+      const offset = 12 - new Date().getUTCHours();
+      const policy = {
+        ...defaults(),
+        timezone: `Etc/GMT${offset <= 0 ? '+' : '-'}${Math.abs(offset)}`,
+      };
+      const sent = await invoke('approve', { content: content(), channel: 'both' });
+      await pool.query('UPDATE doctor_ivr_sessions SET policy=$2 WHERE id=$1', [
+        sent.session_id,
+        policy,
+      ]);
+      await worker.runDoctorIvrWorker(pool);
+      await calls.runCalls(pool);
+      await calls.runCalls(pool);
+      let rows = (
+        await pool.query(
+          'SELECT * FROM doctor_ivr_call_attempts WHERE session_id=$1 ORDER BY attempt_no',
+          [sent.session_id]
+        )
+      ).rows;
+      expect(rows).toHaveLength(1);
+      expect(rows[0].status).toBe('ringing');
+      const first = rows[0];
+      await expect(calls.callAction(pool, 2, first.id, 'accept')).rejects.toMatchObject({
+        code: 'IVR_NOT_FOUND',
+      });
+      await expect(calls.callAction(pool, 1, first.id, 'accept')).resolves.toMatchObject({
+        session_id: sent.session_id,
+      });
+      await expect(calls.callAction(pool, 1, first.id, 'accept')).resolves.toMatchObject({
+        session_id: sent.session_id,
+      });
+      const cap = calls.capability(first.id, 1, first.ring_deadline);
+      await calls.callAction(pool, null, first.id, 'decline', cap);
+      expect(
+        (await pool.query('SELECT status FROM doctor_ivr_call_attempts WHERE id=$1', [first.id]))
+          .rows[0].status
+      ).toBe('accepted');
+      await expect(
+        calls.callAction(
+          pool,
+          null,
+          first.id,
+          'decline',
+          cap.slice(0, -1) + (cap.endsWith('a') ? 'b' : 'a')
+        )
+      ).rejects.toMatchObject({ statusCode: 401 });
+      await calls.callAction(pool, 1, first.id, 'end');
+      await calls.runCalls(pool);
+      rows = (
+        await pool.query(
+          'SELECT * FROM doctor_ivr_call_attempts WHERE session_id=$1 ORDER BY attempt_no',
+          [sent.session_id]
+        )
+      ).rows;
+      expect(rows).toHaveLength(2);
+      expect(rows[1].status).toBe('queued');
+      expect(new Date(rows[1].scheduled_at) - new Date(rows[0].finished_at)).toBeGreaterThanOrEqual(
+        30 * 60000
+      );
+      await pool.query(
+        "UPDATE doctor_ivr_call_attempts SET scheduled_at=NOW()-INTERVAL '1 minute' WHERE id=$1",
+        [rows[1].id]
+      );
+      await calls.runCalls(pool);
+      await pool.query(
+        "UPDATE doctor_ivr_call_attempts SET status='missed',finished_at=NOW()-INTERVAL '31 minutes' WHERE id=$1",
+        [rows[1].id]
+      );
+      await calls.runCalls(pool);
+      rows = (
+        await pool.query(
+          'SELECT * FROM doctor_ivr_call_attempts WHERE session_id=$1 ORDER BY attempt_no',
+          [sent.session_id]
+        )
+      ).rows;
+      expect(rows).toHaveLength(3);
+      expect(rows[2].status).toBe('ringing');
+      await pool.query(
+        "UPDATE doctor_ivr_call_attempts SET status='missed',finished_at=NOW()-INTERVAL '31 minutes' WHERE id=$1",
+        [rows[2].id]
+      );
+      await calls.runCalls(pool);
+      expect((await ivr.patientGet(pool, 1, sent.session_id)).status).toBe('unreachable');
+      expect(
+        (
+          await pool.query(
+            'SELECT count(*)::int n FROM doctor_ivr_call_attempts WHERE session_id=$1',
+            [sent.session_id]
+          )
+        ).rows[0].n
+      ).toBe(3);
+    } finally {
+      if (previous === undefined) delete process.env.DOCTOR_IVR_CALL_ENABLED;
+      else process.env.DOCTOR_IVR_CALL_ENABLED = previous;
+    }
   });
   test('withdrawal blocks reads and provider calls; a later explicit grant restores access', async () => {
     await pool.query(

@@ -2,6 +2,8 @@
 
 Ngày: 21/10/2026. Bản thử chạy local, mặc định tắt khi triển khai mới.
 
+> Các mục ngày 21–25/10 dưới đây mô tả pilot cũ, được giữ để truy vết. Các bổ sung và giới hạn kiểm thử hiện tại được ghi tại [Đối chiếu SRS 27/10/2026](doctor-ivr-srs-20261027.md).
+
 ## Luồng đã nối
 
 1. Bác sĩ phụ trách ca mở tab **Tổng đài** ở cột công cụ bên phải. Tab cũng có trong chi tiết ca để đọc lại báo cáo sau khi đóng.

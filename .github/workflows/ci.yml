@@ -39,6 +39,7 @@ jobs:
       CHECKIN_PERSONALIZATION_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci_security_test
       CARE_CIRCLE_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci_security_test
       SECURITY_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci_security_test
+      DOCTOR_IVR_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci_security_test
 
     steps:
       - name: Checkout
