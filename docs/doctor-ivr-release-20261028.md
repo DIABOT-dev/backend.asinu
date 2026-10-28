@@ -27,3 +27,9 @@ Dữ liệu/schema, khóa fixture được xóa sau kiểm thử. Không xóa d�
 Đây là bằng chứng component/UI trình duyệt và kiểm thử native tự động; không thay cho iPhone/Android thật khi khóa màn hình, micro/Bluetooth hay đánh giá STT giọng vùng miền/người lớn tuổi. Chưa xác nhận SLA production bằng tải thực tế. Không có PSTN/DTMF hệ điều hành.
 
 Triển khai server với DOCTOR_IVR_ENABLED=true, DOCTOR_IVR_CALL_ENABLED=false cho tới khi nghiệm thu cuộc gọi trên thiết bị thật. Doctor web cho phép soạn/gửi vào app; app cài từ store vẫn giữ Doctor ẩn theo yêu cầu trước. Dùng bản development mới để kiểm tra trên VPS; commit/native code không cập nhật các IPA đã cài.
+
+## Ngoại lệ bổ sung theo yêu cầu ngày 28/10
+
+Bộ PostgreSQL IVR tăng từ 52 lên **56/56** kiểm thử qua. Bốn tình huống mới: từ chối câu trả lời sau expires_at dù cron chưa chạy; STT provider lỗi ba lần vẫn giữ đúng byte bản gốc và không bịa transcript; upload cũ gửi muộn sau Back/sửa đáp án không ghi đè lựa chọn mới; AI báo cáo lỗi (kể cả hết credit) vẫn giữ bảng trả lời, cho bác sĩ duyệt trả lời thủ công và tự đóng sau 24 giờ đúng một lần.
+
+Sau deploy, cả backend Asinu, Doctor và web Doctor đều trả health/readiness HTTP 200. Bản đọc/ghi kiểm chứng OpenBao giữ nguyên digest dữ liệu cũ. Kiểm tra HTTP có xác thực trên VPS xác nhận IVR app bật, kênh gọi tắt, cầu nối HMAC Doctor→Asinu hoạt động và các request thiếu/sai JWT hoặc dữ liệu sai bị chặn. Các probe không tạo ca bệnh hoặc gửi thông báo cho người dùng; phiên xác thực kiểm thử tạm được xóa.

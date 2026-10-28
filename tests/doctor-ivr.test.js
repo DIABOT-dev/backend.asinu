@@ -866,6 +866,137 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
       else process.env.DOCTOR_IVR_CALL_ENABLED = previous;
     }
   });
+  test('expiry rejects new answers before the deadline worker runs and keeps progress unchanged', async () => {
+    await newTask('expiry-before-cron');
+    const created = await invoke('approve', { content: content() });
+    await worker.runDoctorIvrWorker(pool);
+    const before = await ivr.patientGet(pool, 1, created.session_id);
+    await pool.query(
+      "UPDATE doctor_ivr_sessions SET expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
+      [before.id]
+    );
+    await expect(answer(before, 'q1', 'q1_a')).rejects.toMatchObject({ code: 'IVR_SESSION_ENDED' });
+    const after = await ivr.patientGet(pool, 1, before.id);
+    expect(after.revision).toBe(before.revision);
+    expect(after.answers).toHaveLength(0);
+  });
+  test('STT outage exhausts three retries without losing the original or inventing a transcript', async () => {
+    await newTask('stt-provider-outage');
+    const created = await invoke('approve', { content: content() });
+    await worker.runDoctorIvrWorker(pool);
+    const s = await ivr.patientGet(pool, 1, created.session_id);
+    const transcriber = require('../src/services/ai/providers/openai').getWhisperTranscription;
+    transcriber.mockRejectedValue(new Error('Synthetic STT outage'));
+    const bytes = fixtureWav();
+    try {
+      await ivr.patientAction(
+        pool,
+        1,
+        s.id,
+        {
+          action: 'answer',
+          revision: s.revision,
+          question_id: 'q1',
+          option_id: 'q1_x',
+          request_id: randomUUID(),
+          recording_consent: true,
+        },
+        { buffer: bytes, mimetype: 'audio/wav' }
+      );
+      for (let n = 0; n < 4; n++) await worker.runDoctorIvrWorker(pool);
+      const after = await ivr.patientGet(pool, 1, s.id);
+      expect(after.current_question_id).toBe('q2');
+      expect(after.answers[0]).toMatchObject({
+        stt_status: 'failed',
+        transcript: null,
+        stt_confidence: null,
+        needs_review: true,
+      });
+      const saved = (
+        await pool.query(
+          'SELECT audio_enc,stt_attempts FROM doctor_ivr_answers WHERE session_id=$1',
+          [s.id]
+        )
+      ).rows[0];
+      expect(saved.stt_attempts).toBe(3);
+      expect(Buffer.from(ivr.reveal(1, 'audio', saved.audio_enc), 'base64').equals(bytes)).toBe(
+        true
+      );
+    } finally {
+      transcriber.mockResolvedValue('Câu trả lời bằng giọng nói.');
+    }
+  });
+  test('a late upload for a replaced answer cannot overwrite the patient correction', async () => {
+    await newTask('late-upload-after-back');
+    const created = await invoke('approve', { content: content() });
+    await worker.runDoctorIvrWorker(pool);
+    let s = await ivr.patientGet(pool, 1, created.session_id);
+    const oldRequest = randomUUID();
+    s = await answer(s, 'q1', 'q1_x', {
+      request_id: oldRequest,
+      voice_pending: true,
+      recording_consent: true,
+    });
+    s = await ivr.patientAction(pool, 1, s.id, {
+      action: 'back',
+      revision: s.revision,
+      request_id: randomUUID(),
+    });
+    s = await answer(s, 'q1', 'q1_b');
+    await expect(
+      ivr.patientAction(
+        pool,
+        1,
+        s.id,
+        { action: 'answer', request_id: oldRequest },
+        { buffer: fixtureWav(), mimetype: 'audio/wav' }
+      )
+    ).rejects.toMatchObject({ code: 'IVR_STALE_REVISION' });
+    const after = await ivr.patientGet(pool, 1, s.id);
+    expect(after.revision).toBe(s.revision);
+    expect(after.answers).toHaveLength(1);
+    expect(after.answers[0]).toMatchObject({
+      option_id: 'q1_b',
+      answer_type: 'option',
+      audio_url: null,
+    });
+  });
+  test('AI report failure preserves structured answers and permits a manual reviewed reply and automatic closure once', async () => {
+    await newTask('report-provider-outage');
+    const created = await invoke('approve', { content: content() });
+    await worker.runDoctorIvrWorker(pool);
+    let s = await ivr.patientGet(pool, 1, created.session_id);
+    for (const q of content().questions) s = await answer(s, q.id, q.options[0].id);
+    const ai = require('../src/services/ai/ai.service').callTextAi;
+    ai.mockRejectedValueOnce(Object.assign(new Error('Synthetic credit failure'), { status: 402 }));
+    await worker.runDoctorIvrWorker(pool);
+    s = (await invoke('list')).sessions[0];
+    expect(s.status).toBe('reported');
+    expect(s.report.answers).toHaveLength(4);
+    expect(
+      (await pool.query('SELECT ai_status FROM doctor_ivr_reports WHERE session_id=$1', [s.id]))
+        .rows[0].ai_status
+    ).toBe('failed');
+    await invoke('reply', {
+      session_id: s.id,
+      reply: 'Anh/chị giữ giờ ngủ đều đặn và trao đổi lại với bác sĩ nếu tình trạng kéo dài.',
+    });
+    await pool.query(
+      "UPDATE doctor_ivr_sessions SET replied_at=NOW()-INTERVAL '25 hours' WHERE id=$1",
+      [s.id]
+    );
+    await worker.runDoctorIvrWorker(pool);
+    await worker.runDoctorIvrWorker(pool);
+    expect((await ivr.patientGet(pool, 1, s.id)).status).toBe('closed');
+    expect(
+      (
+        await pool.query(
+          "SELECT 1 FROM doctor_ivr_events WHERE session_id=$1 AND event_type='session.closed'",
+          [s.id]
+        )
+      ).rowCount
+    ).toBe(1);
+  });
   test('withdrawal blocks reads and provider calls; a later explicit grant restores access', async () => {
     await pool.query(
       "INSERT INTO doctor_privacy_request_receipts(user_id,tenant_id,action,status) VALUES(1,$1,'withdraw_consent','completed')",
