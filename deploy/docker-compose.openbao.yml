@@ -1,0 +1,24 @@
+services:
+  asinu-backend:
+    volumes:
+      - type: bind
+        source: ${OPENBAO_CLIENT_HOST_DIRECTORY:-/etc/asinu/openbao/asinu-backend}
+        target: /run/asinu-openbao
+        read_only: true
+        bind:
+          create_host_path: false
+    mem_limit: 1g
+    memswap_limit: 1g
+    ulimits:
+      core:
+        soft: 0
+        hard: 0
+
+  asinu-migrate:
+    volumes:
+      - type: bind
+        source: ${OPENBAO_CLIENT_HOST_DIRECTORY:-/etc/asinu/openbao/asinu-backend}
+        target: /run/asinu-openbao
+        read_only: true
+        bind:
+          create_host_path: false

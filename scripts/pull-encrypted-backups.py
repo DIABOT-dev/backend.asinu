@@ -24,11 +24,18 @@ def validate_backup(incoming, identity, key_archive=False):
             with tarfile.open(fileobj=process.stdout, mode='r|') as archive:
                 for member in archive:
                     if not member.isfile() or not (re.fullmatch(r'users/[1-9][0-9]*\.key(?:\.deleted)?', member.name)
-                                                   or member.name == 'volume/database-volume.key'):
+                                                   or member.name == 'volume/database-volume.key'
+                                                   or re.fullmatch(r'openbao/(?:asinu-backend|doctor-backend|crm-backend|volume)\.json', member.name)):
                         raise RuntimeError('Unexpected recovery archive member')
-                    maximum = 64 if member.name.endswith('.deleted') or member.name.startswith('volume/') else 32
-                    if member.size > maximum or (member.name.endswith('.key') and member.size != maximum):
+                    maximum = 65536 if member.name.startswith('openbao/') else 64 if member.name.endswith('.deleted') or member.name.startswith('volume/') else 128
+                    if member.size > maximum:
                         raise RuntimeError('Invalid recovery key archive')
+                    if member.name.endswith('.key'):
+                        data = archive.extractfile(member).read()
+                        valid = len(data) == 64 if member.name.startswith('volume/') else (
+                            len(data) == 32 or (len(data) == 93 and data.startswith(b'asinu:key:v2:')))
+                        if not valid:
+                            raise RuntimeError('Invalid recovery key archive')
             # tar can stop before the age stream ends. Consume the remainder so
             # authentication covers the entire ciphertext, including its tail.
             while process.stdout.read(65536):

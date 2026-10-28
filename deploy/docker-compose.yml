@@ -9,7 +9,7 @@ services:
       NODE_ENV: production
       HEALTH_FIELD_ENCRYPTION_ENABLED: 'true'
       HEALTH_FIELD_KEY_DIRECTORY: /run/asinu-health-keys
-    command: ['node', 'server.js']
+    command: ['node', 'src/security/start-with-keyring.cjs', 'server.js']
     volumes:
       - type: bind
         source: ${HEALTH_FIELD_KEY_HOST_DIRECTORY:?HEALTH_FIELD_KEY_HOST_DIRECTORY is required}
@@ -33,7 +33,7 @@ services:
     restart: 'no'
     env_file:
       - .env.migrations
-    command: ['node', 'scripts/migrate.js']
+    command: ['node', 'src/security/start-with-keyring.cjs', 'scripts/migrate.js']
     volumes:
       - type: bind
         source: ${DB_TLS_CA_HOST_FILE:?DB_TLS_CA_HOST_FILE is required}

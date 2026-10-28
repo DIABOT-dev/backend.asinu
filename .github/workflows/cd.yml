@@ -193,7 +193,7 @@ jobs:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: deploy/docker-compose.yml
+          source: deploy/docker-compose.yml,deploy/docker-compose.openbao.yml
           target: ${{ env.STACK_DIR }}
           strip_components: 1
 
@@ -220,9 +220,13 @@ jobs:
 
             previous_image="$(docker inspect --format '{{.Config.Image}}' asinu-backend 2>/dev/null || true)"
             export ASINU_BACKEND_IMAGE HOST_PORT
-            docker compose -f docker-compose.yml --profile migration pull
-            docker compose -f docker-compose.yml --profile migration run --rm --no-deps asinu-migrate
-            docker compose -f docker-compose.yml up -d --remove-orphans asinu-backend
+            export COMPOSE_FILE=docker-compose.yml
+            if grep -q '^KEY_MANAGEMENT_PROVIDER=openbao$' .env; then
+              export COMPOSE_FILE=docker-compose.yml:docker-compose.openbao.yml
+            fi
+            docker compose --profile migration pull
+            docker compose --profile migration run --rm --no-deps asinu-migrate
+            docker compose up -d --remove-orphans asinu-backend
 
             healthy=0
             for _ in $(seq 1 45); do
@@ -234,10 +238,10 @@ jobs:
             done
 
             if [ "$healthy" -ne 1 ]; then
-              docker compose -f docker-compose.yml logs --tail=150 asinu-backend
+              docker compose logs --tail=150 asinu-backend
               if [ -n "$previous_image" ]; then
                 export ASINU_BACKEND_IMAGE="$previous_image"
-                docker compose -f docker-compose.yml up -d --remove-orphans asinu-backend
+                docker compose up -d --remove-orphans asinu-backend
               fi
               exit 1
             fi

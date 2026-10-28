@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Stream separately stored recovery keys into an age-encrypted tar archive."""
 import io
+import json
 import os
 from pathlib import Path
 import re
@@ -25,11 +26,19 @@ def backup_keys(directory, destination, recipient, volume_key='/etc/asinu/keys/d
         os.close(fd)
         fd = None
         with tarfile.open(fileobj=process.stdin, mode='w|') as archive:
-            sources = [('users/' + name, directory / name, 32 if name.endswith('.key') else 64)
+            sources = [('users/' + name, directory / name, 128 if name.endswith('.key') else 64)
                        for name in sorted(os.listdir(directory)) if re.fullmatch(r'[1-9][0-9]*\.key(?:\.deleted)?', name)]
             volume = Path(volume_key)
             if volume.is_file():
                 sources.append(('volume/database-volume.key', volume, 64))
+            keyring_root = Path(os.environ.get('OPENBAO_KEYRING_HOST_DIRECTORY', '/etc/asinu/openbao'))
+            for label, relative in [('asinu-backend', 'asinu-backend/wrapped-keys.json'),
+                                    ('doctor-backend', 'doctor-backend/wrapped-keys.json'),
+                                    ('crm-backend', 'crm-backend/wrapped-keys.json'),
+                                    ('volume', 'volume-keyring.json')]:
+                source = keyring_root / relative
+                if source.is_file():
+                    sources.append(('openbao/' + label + '.json', source, 65536))
             for name, source, maximum in sources:
                 try:
                     key_fd = os.open(source, os.O_RDONLY | os.O_NOFOLLOW)
@@ -40,9 +49,16 @@ def backup_keys(directory, destination, recipient, volume_key='/etc/asinu/keys/d
                     if not stat.S_ISREG(key_stat.st_mode) or key_stat.st_mode & 0o077 or key_stat.st_size > maximum:
                         raise RuntimeError('Unsafe recovery key file')
                     data = os.read(key_fd, maximum + 1)
-                    expected = 64 if name.startswith('volume/') else 32
-                    if len(data) > maximum or (name.endswith('.key') and len(data) != expected):
+                    valid_key = len(data) == 64 if name.startswith('volume/') else (
+                        len(data) == 32 or (len(data) == 93 and data.startswith(b'asinu:key:v2:')))
+                    if len(data) > maximum or (name.endswith('.key') and not valid_key):
                         raise RuntimeError('Invalid recovery key')
+                    if name.startswith('openbao/'):
+                        bundle = json.loads(data)
+                        if bundle.get('version') != 1 or not bundle.get('entries') or any(
+                            set(entry) != {'id', 'ciphertext'} or not re.fullmatch(r'(?:bao|vault):v[1-9][0-9]*:[A-Za-z0-9+/=]+', entry['ciphertext'])
+                            for entry in bundle['entries']):
+                            raise RuntimeError('Invalid wrapped key metadata')
                     info = tarfile.TarInfo(name)
                     info.size = len(data)
                     info.mode = 0o600

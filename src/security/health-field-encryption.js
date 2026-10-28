@@ -3,10 +3,15 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const { keyringEnabled, keyringReady } = require('./openbao-keyring.cjs');
+const { protectHealthKey, unprotectHealthKey } = require('./health-key-envelope');
 
 const PREFIX = 'asinu:enc:v1:';
 
 function config() {
+  if (keyringEnabled() && process.env.HEALTH_FIELD_ENCRYPTION_ENABLED !== 'true') {
+    throw new Error('Health field encryption is required with OpenBao');
+  }
   if (!process.env.HEALTH_FIELD_ENCRYPTION_ENABLED || process.env.HEALTH_FIELD_ENCRYPTION_ENABLED === 'false') return null;
   if (process.env.HEALTH_FIELD_ENCRYPTION_ENABLED !== 'true') throw new Error('Invalid health field encryption configuration');
   if (!process.env.HEALTH_FIELD_KEY_DIRECTORY) throw new Error('Health encryption key directory is required');
@@ -22,6 +27,7 @@ function keyFile(userId, directory) {
 function assertHealthEncryptionReady() {
   const directory = config();
   if (!directory) return;
+  if (keyringEnabled() && !keyringReady()) throw new Error('Health key service is unavailable');
   const stat = fs.lstatSync(directory);
   if (!stat.isDirectory() || (stat.mode & 0o077)) throw new Error('Unsafe health key directory');
   fs.accessSync(directory, fs.constants.R_OK | fs.constants.W_OK | fs.constants.X_OK);
@@ -36,7 +42,13 @@ function loadKey(userId, directory, create = false) {
   if (create && !fs.existsSync(file)) {
     const temporary = file + '.' + crypto.randomUUID() + '.pending';
     const fd = fs.openSync(temporary, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW, 0o600);
-    try { fs.writeFileSync(fd, crypto.randomBytes(32)); fs.fsyncSync(fd); }
+    try {
+      const key = crypto.randomBytes(32);
+      try { fs.writeFileSync(fd, keyringEnabled() ? protectHealthKey(userId, key) : key); }
+      finally { key.fill(0); }
+      fs.fsyncSync(fd);
+    }
+    catch (error) { fs.unlinkSync(temporary); throw error; }
     finally { fs.closeSync(fd); }
     try { fs.linkSync(temporary, file); }
     catch (error) { if (error.code !== 'EEXIST') throw error; }
@@ -48,8 +60,9 @@ function loadKey(userId, directory, create = false) {
   const fd = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
   try {
     const stat = fs.fstatSync(fd);
-    if (!stat.isFile() || (stat.mode & 0o077) || stat.size !== 32) throw new Error('Unsafe health encryption key file');
+    if (!stat.isFile() || (stat.mode & 0o077) || stat.size > 128) throw new Error('Unsafe health encryption key file');
     const key = fs.readFileSync(fd);
+    if (keyringEnabled()) return unprotectHealthKey(userId, key);
     if (key.length !== 32) throw new Error('Invalid health encryption key');
     return key;
   } finally { fs.closeSync(fd); }

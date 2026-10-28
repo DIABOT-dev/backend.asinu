@@ -9,6 +9,7 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timezone
 
 SCRIPTS = Path(__file__).resolve().parents[1] / 'scripts'
@@ -22,6 +23,38 @@ def module(name):
 
 
 class BackupRecovery(unittest.TestCase):
+    def test_openbao_wrapped_user_keys_and_keyring_metadata_survive_backup(self):
+        backup = module('backup-health-keys')
+        pull = module('pull-encrypted-backups')
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            identity = root / 'identity'
+            subprocess.run(['age-keygen', '-o', str(identity)], check=True, capture_output=True)
+            recipient = subprocess.check_output(['age-keygen', '-y', str(identity)], text=True).strip()
+            keys = root / 'keys'; keys.mkdir(mode=0o700)
+            opaque = b'asinu:key:v2:' + b'A' * 80
+            key = keys / '42.key'; key.write_bytes(opaque); key.chmod(0o600)
+            keyrings = root / 'openbao'; (keyrings / 'asinu-backend').mkdir(parents=True)
+            import json
+            wrapped = keyrings / 'asinu-backend/wrapped-keys.json'
+            wrapped.write_text(json.dumps({'version': 1, 'role': 'asinu-backend',
+                'transit_key': 'asinu-health', 'entries': [{'id': 'health-key-wrap', 'ciphertext': 'vault:v1:AA=='}]}))
+            wrapped.chmod(0o600)
+            crm = keyrings / 'crm-backend/wrapped-keys.json'
+            crm.parent.mkdir()
+            crm.write_text(json.dumps({'version': 1, 'role': 'crm-backend',
+                'transit_key': 'asinu-crm', 'entries': [{'id': 'crm-pii', 'ciphertext': 'vault:v1:AA=='}]}))
+            crm.chmod(0o600)
+            with patch.dict(os.environ, {'OPENBAO_KEYRING_HOST_DIRECTORY': str(keyrings)}):
+                with contextlib.redirect_stdout(io.StringIO()):
+                    archive = backup.backup_keys(keys, root, recipient, root / 'absent-volume')
+            pull.validate_backup(archive, str(identity), True)
+            decrypted = subprocess.check_output(['age', '-d', '-i', str(identity), str(archive)])
+            with tarfile.open(fileobj=io.BytesIO(decrypted)) as recovered:
+                self.assertEqual(recovered.extractfile('users/42.key').read(), opaque)
+                self.assertEqual(recovered.extractfile('openbao/asinu-backend.json').read(), wrapped.read_bytes())
+                self.assertEqual(recovered.extractfile('openbao/crm-backend.json').read(), crm.read_bytes())
+
     def test_recovery_and_tamper_detection(self):
         backup = module('backup-health-keys')
         pull = module('pull-encrypted-backups')

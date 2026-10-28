@@ -1,3 +1,4 @@
+const { getSecret, keyringEnabled } = require('../../security/openbao-keyring.cjs');
 'use strict';
 const crypto = require('node:crypto');
 const { inspectRecording } = require('./recording');
@@ -23,7 +24,7 @@ const error = (code, message, statusCode = 409) =>
   Object.assign(new Error(message), { code, statusCode });
 const enabled = () => process.env.DOCTOR_IVR_ENABLED === 'true';
 function key() {
-  const value = process.env.DOCTOR_IVR_ENCRYPTION_KEY || '';
+  const value = keyringEnabled() ? getSecret('doctor-ivr') : process.env.DOCTOR_IVR_ENCRYPTION_KEY || '';
   if (!/^[a-f0-9]{64}$/i.test(value))
     throw error('IVR_NOT_CONFIGURED', 'IVR encryption is not configured.', 503);
   return Buffer.from(value, 'hex');
