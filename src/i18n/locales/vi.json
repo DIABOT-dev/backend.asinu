@@ -1049,5 +1049,9 @@
   "checkin.triage.conclusion.previous": "Lần trước {{honorific}} đã báo {{symptoms}}.",
   "checkin.triage.changed": "Lượt check-in này đã được cập nhật. Vui lòng mở lại để xem trạng thái mới nhất.",
   "notification.checkin_inactivity.title": "Tạm dừng nhắc check-in",
-  "notification.checkin_inactivity.body": "{{patientName}} đã 7 ngày không check-in. Asinu tạm dừng thông báo nhắc và cuộc gọi check-in cho người này. Khi check-in trở lại, lịch nhắc sẽ tiếp tục."
+  "notification.checkin_inactivity.body": "{{patientName}} đã 7 ngày không check-in. Asinu tạm dừng thông báo nhắc và cuộc gọi check-in cho người này. Khi check-in trở lại, lịch nhắc sẽ tiếp tục.",
+  "notification.doctor_ivr_reply_title": "Bác sĩ đã trả lời",
+  "notification.doctor_ivr_request_title": "Bác sĩ cần hỏi thêm",
+  "notification.doctor_ivr_reply_body": "Bạn có thể đọc hoặc nghe kết quả tư vấn trên Asinu.",
+  "notification.doctor_ivr_request_body": "Bác sĩ {{doctorName}} cần hỏi thêm thông tin. Mời bạn trả lời khi thuận tiện."
 }

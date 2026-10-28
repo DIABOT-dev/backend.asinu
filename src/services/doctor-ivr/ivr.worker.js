@@ -1,5 +1,6 @@
 'use strict';
 const { createHash } = require('node:crypto');
+const { t } = require('../../i18n');
 const ivr = require('./ivr.service');
 const { questionSpeech } = require('./question-speech');
 const { applyReportQuality, reportFlags } = require('./content-quality');
@@ -29,10 +30,8 @@ async function notifyPatient(pool, s, type = 'doctor_ivr_session') {
     pool,
     s.user_id,
     type,
-    type === 'doctor_ivr_reply' ? 'Bác sĩ đã trả lời' : 'Bác sĩ cần hỏi thêm',
-    type === 'doctor_ivr_reply'
-      ? 'Bạn có thể đọc hoặc nghe kết quả tư vấn trên Asinu.'
-      : `Bác sĩ ${s.doctor_name} cần hỏi thêm thông tin. Mời bạn trả lời khi thuận tiện.`,
+    t(type === 'doctor_ivr_reply' ? 'notification.doctor_ivr_reply_title' : 'notification.doctor_ivr_request_title', 'vi'),
+    t(type === 'doctor_ivr_reply' ? 'notification.doctor_ivr_reply_body' : 'notification.doctor_ivr_request_body', 'vi', { doctorName: s.doctor_name }),
     {
       type,
       sessionId: s.id,
