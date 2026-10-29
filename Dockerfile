@@ -24,6 +24,7 @@ COPY --chown=asinu:asinu . .
 USER asinu
 
 ENV NODE_ENV=production
+ENV NODE_OPTIONS=--enable-source-maps
 
 EXPOSE 3000
 

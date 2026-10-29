@@ -24,6 +24,15 @@ const loadSdk = (0, node_module_1.createRequire)(__filename);
 let service = DEFAULT_SERVICE;
 let enabled = false;
 const capturedRequest = Symbol('sentryCaptured');
+function releaseName(value) {
+  if (
+    typeof value === 'string' &&
+    /^(?:asinu-doctor|backend\.asinu|asinu-crm|crm(?:\.sentry)?)-[a-f0-9]{7,40}$/i.test(value)
+  )
+    return value;
+  return technicalName(value);
+}
+
 function technicalName(value) {
   if (
     typeof value !== 'string' ||
@@ -124,7 +133,7 @@ function sanitizeEvent(event, hint) {
     level: event.level,
     environment:
       technicalName(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV) || 'development',
-    release: technicalName(process.env.SENTRY_RELEASE),
+    release: releaseName(process.env.SENTRY_RELEASE),
     tags,
     // Route stays templated; merging scope data cannot inject a raw URL.
     ...(tags.route ? { transaction: (tags.method || 'HTTP') + ' ' + tags.route } : {}),
@@ -157,7 +166,7 @@ function initSentry(name = DEFAULT_SERVICE, transport) {
       dsn,
       environment:
         technicalName(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV) || 'development',
-      release: technicalName(process.env.SENTRY_RELEASE),
+      release: releaseName(process.env.SENTRY_RELEASE),
       serverName: service,
       sendDefaultPii: false,
       sendClientReports: false,
