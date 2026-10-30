@@ -9,6 +9,7 @@
 
 const { callTextAi } = require('../../services/ai/ai.service');
 const { generateStructuredConclusion, isSafeConclusion } = require('./triage-conclusion');
+const { structuredConclusionEnabled, legacyConclusion } = require('./triage-conclusion-release');
 const { getHonorifics } = require('../../lib/honorifics');
 const { capitalizeSentences } = require('../../lib/text-format');
 const { buildState } = require('./triage-engine');
@@ -262,6 +263,7 @@ async function generateConclusion(state, profile, lang = 'vi', _pool = null, hea
     };
   }
 
+  if (!structuredConclusionEnabled()) return legacyConclusion(state, h, resolvedLang);
   return generateStructuredConclusion(state, profile, resolvedLang, healthContext);
 }
 

@@ -117,6 +117,21 @@ docker run -d --name asinu-backend --restart unless-stopped --network asinu_net 
 
 ## Database operations
 
+### Kết luận check-in SRS — chờ duyệt AC-9
+
+`CHECKIN_STRUCTURED_CONCLUSION_ENABLED` chỉ bật khi giá trị là `true` hoặc `1`.
+Nếu chưa đặt biến này, kết luận mới bật ở `development`/`test` và tắt ở mọi
+môi trường khác. Production tiếp tục trả các trường kết quả cũ bằng câu dự
+phòng do server soạn; không gọi model tạo sáu khối kết luận mới. Luồng cấp cứu
+vẫn dùng nguyên mẫu cố định, không phụ thuộc cờ này.
+
+Trước khi bật cho người dùng thật: chuyên gia có chuyên môn y tế duyệt đủ 30
+mẫu và P6 duyệt disclaimer theo AC-9 của `SRS_AI_ket_luan_checkin.docx`.
+Lưu hồ sơ duyệt khớp mã nguồn/packet hiện tại, chạy
+`npm run check:checkin-conclusion-approval -- --packet=<packet> --approval=<record>`,
+rồi mới đặt biến trên production và recreate API. Cờ cấu hình không tự kiểm
+chứng người duyệt hoặc hồ sơ; kiểm tra hồ sơ là bước triển khai riêng.
+
 ### Chạy migration thủ công
 
 Production chạy migration bằng job quản trị riêng trước khi khởi động API. Nếu cần chạy lại:
