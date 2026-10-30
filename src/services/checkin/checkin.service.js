@@ -593,13 +593,17 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
 
   const persistedState = session.triage_state || {};
   const cached = persistedState.completed;
-  if (
-    cached &&
-    cached.fingerprint ===
-      triageFingerprint(previousAnswers, requestLang || persistedState.lang || 'vi')
-  )
-    return cached.result;
-  if (cached)
+  const cachedMatches =
+    cached?.fingerprint ===
+    triageFingerprint(previousAnswers, requestLang || persistedState.lang || 'vi');
+  const cachedResult =
+    cachedMatches && cached.result?.isDone ? structuredClone(cached.result) : null;
+  // The first CAS reserves an answer; it does not prove that completion and
+  // next_checkin_at were committed. Recover the saved answer after a failed
+  // completion write, without calling AI again or reporting a false success.
+  if (cachedResult && cached.finalized !== false && session.triage_completed_at)
+    return cachedResult;
+  if (cached && !cachedMatches)
     throw Object.assign(new Error('Check-in is complete; start a new follow-up'), {
       code: 'TRIAGE_CHANGED',
       statusCode: 409,
@@ -625,27 +629,29 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
     ? persistedState.baseline_answers || session.triage_messages || []
     : [];
 
-  const result = await getNextTriageQuestion({
-    status: isFollowUpPhase
-      ? session.current_status || session.initial_status
-      : session.initial_status,
-    phase: isFollowUpPhase ? 'followup' : 'initial',
-    lang: selectedLang,
-    profile,
-    healthContext,
-    previousAnswers,
-    previousSessionSummary: session.triage_summary || null,
-    previousTriageMessages: prevTriageMessages,
-    previousSeverity:
-      persistedState.previous_severity || (isFollowUpPhase ? session.triage_severity : null),
-    forceConclusion: previousAnswers.length >= 8,
-    bodyLocation: session.body_location || null,
-    bodyLocations:
-      session.body_locations || (session.body_location ? [session.body_location] : null),
-    bodyLocationOther: session.body_location_other || null,
-    pool,
-    userId,
-  });
+  const result =
+    cachedResult ||
+    (await getNextTriageQuestion({
+      status: isFollowUpPhase
+        ? session.current_status || session.initial_status
+        : session.initial_status,
+      phase: isFollowUpPhase ? 'followup' : 'initial',
+      lang: selectedLang,
+      profile,
+      healthContext,
+      previousAnswers,
+      previousSessionSummary: session.triage_summary || null,
+      previousTriageMessages: prevTriageMessages,
+      previousSeverity:
+        persistedState.previous_severity || (isFollowUpPhase ? session.triage_severity : null),
+      forceConclusion: previousAnswers.length >= 8,
+      bodyLocation: session.body_location || null,
+      bodyLocations:
+        session.body_locations || (session.body_location ? [session.body_location] : null),
+      bodyLocationOther: session.body_location_other || null,
+      pool,
+      userId,
+    }));
 
   // ── Illusion Layer: enhance response with continuity/empathy/progress ──
   try {
@@ -703,7 +709,13 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
     previous_severity:
       persistedState.previous_severity || (isFollowUp ? session.triage_severity : null),
     ...(result.isDone
-      ? { completed: { fingerprint: triageFingerprint(previousAnswers, selectedLang), result } }
+      ? {
+          completed: {
+            fingerprint: triageFingerprint(previousAnswers, selectedLang),
+            result,
+            finalized: false,
+          },
+        }
       : {}),
   };
   // Reject a stale concurrent response instead of overwriting a newer answer.
@@ -724,7 +736,10 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
       [checkinId, userId]
     );
     const completed = latest.rows[0]?.triage_state?.completed;
-    if (completed?.fingerprint === triageFingerprint(previousAnswers, selectedLang))
+    if (
+      completed?.fingerprint === triageFingerprint(previousAnswers, selectedLang) &&
+      completed.finalized !== false
+    )
       return completed.result;
     throw Object.assign(new Error('Check-in changed; reload the latest conversation'), {
       code: 'TRIAGE_CHANGED',
@@ -820,6 +835,7 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
     // Invalidate health score cache so home screen updates immediately
     await cacheDel(`health:score:${userId}`);
     nextState.completed.result = result;
+    nextState.completed.finalized = true;
     await pool.query(
       `UPDATE health_checkins SET triage_state = $1::jsonb
        WHERE id=$2 AND triage_state->>'revision' = $3`,

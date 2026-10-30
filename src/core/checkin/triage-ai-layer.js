@@ -8,12 +8,26 @@
  */
 
 const { callTextAi } = require('../../services/ai/ai.service');
+const { generateStructuredConclusion, isSafeConclusion } = require('./triage-conclusion');
 const { getHonorifics } = require('../../lib/honorifics');
 const { capitalizeSentences } = require('../../lib/text-format');
 const { buildState } = require('./triage-engine');
 const { t } = require('../../i18n');
 const { LOCATION_LABELS } = require('../../services/checkin/body-location');
 const { localizeOption, normalizeLang } = require('./triage-i18n');
+
+const symptomListFormatters = {
+  vi: new Intl.ListFormat('vi', { style: 'long', type: 'conjunction' }),
+  en: new Intl.ListFormat('en', { style: 'long', type: 'conjunction' }),
+};
+
+function formatSymptomList(values, lang) {
+  const labels = (values || [])
+    .slice(0, 3)
+    .map((value) => localizeOption(value, lang).trim().toLowerCase())
+    .filter(Boolean);
+  return symptomListFormatters[lang].format(labels);
+}
 
 // ─── Question Templates (có dấu tiếng Việt) ─────────────────────────────────
 
@@ -27,16 +41,11 @@ function formatQuestion(engineResult, profile, _previousAnswers = [], lang = 'vi
   let question;
   const facts = engineResult.state || buildState(_previousAnswers, profile);
   const reported = engineResult.symptoms || facts.allSymptoms;
-  const reportedPhrase =
-    (reported || [])
-      .slice(0, 3)
-      .map((value) => localizeOption(value, resolvedLang).toLowerCase())
-      .join(resolvedLang === 'en' ? ' and ' : ' và ') ||
-    t('checkin.triage.symptom_unknown', resolvedLang);
+  const reportedPhrase = formatSymptomList(reported, resolvedLang);
   const symptoms =
-    reportedPhrase.length <= 160
+    reportedPhrase && reportedPhrase.length <= 160
       ? reportedPhrase
-      : t('checkin.triage.symptom_unknown', resolvedLang);
+      : t('checkin.triage.symptom_generic', resolvedLang);
   const params = { ...h, CallName, symptoms, onset: facts.onset || '' };
   if (engineResult.clarification) {
     const key = engineResult.clarification === 'new_symptom' ? 'new_symptom_detail' : 'clarify';
@@ -73,7 +82,10 @@ function formatQuestion(engineResult, profile, _previousAnswers = [], lang = 'vi
       // T3 question — aware T2 location nếu có. Nếu không có location (FE cũ) →
       // dùng template chung như cũ.
       if (locPhrase) {
-        question = t('checkin.triage.question.symptoms_with_location', resolvedLang, {
+        const locationQuestion = locKeys.length === 1 && locKeys[0] === 'mental' && !locOther
+          ? 'symptoms_mental'
+          : 'symptoms_with_location';
+        question = t(`checkin.triage.question.${locationQuestion}`, resolvedLang, {
           CallName,
           selfRef,
           honorific,
@@ -135,16 +147,15 @@ function formatQuestion(engineResult, profile, _previousAnswers = [], lang = 'vi
 
     case 'followup_status': {
       const previousPhrase =
-        (
+        formatSymptomList(
           engineResult.previousSymptoms ||
           (facts.allSymptoms.length
             ? facts.allSymptoms
             : engineResult.previousSessionSummary
               ? [engineResult.previousSessionSummary]
-              : [])
-        )
-          .slice(0, 3)
-          .join(resolvedLang === 'en' ? ' and ' : ' và ') ||
+              : []),
+          resolvedLang
+        ) ||
         t('checkin.triage.previous_unknown', resolvedLang);
       const prev =
         previousPhrase.length <= 160
@@ -237,7 +248,7 @@ const EMERGENCY_CONCLUSIONS = {
 
 // ─── Conclusion Generator ────────────────────────────────────────────────────
 
-async function generateConclusion(state, profile, lang = 'vi', pool = null) {
+async function generateConclusion(state, profile, lang = 'vi', _pool = null, healthContext = {}) {
   const resolvedLang = normalizeLang(lang);
   const h = getHonorifics({ ...profile, lang: resolvedLang });
 
@@ -251,154 +262,7 @@ async function generateConclusion(state, profile, lang = 'vi', pool = null) {
     };
   }
 
-  return _generateConclusionWithGPT(state, profile, h, resolvedLang, pool);
-}
-
-function groundedSummary(state, h, lang) {
-  const symptoms = (
-    state.newSymptoms && state.currentSymptoms?.length
-      ? state.currentSymptoms
-      : state.allSymptoms || []
-  ).join(', ');
-  if (!symptoms) return t('checkin.triage.conclusion.insufficient', lang, h);
-  const details = [symptoms];
-  if (state.onset) details.push(t('checkin.triage.conclusion.onset', lang, { onset: state.onset }));
-  if (state.progression) details.push(t(`checkin.triage.conclusion.${state.progression}`, lang));
-  let summary = t('checkin.triage.conclusion.recorded', lang, {
-    ...h,
-    details: details.join('; '),
-  });
-  if (state.newSymptoms && state.baselineSymptoms?.length)
-    summary += ` ${t('checkin.triage.conclusion.previous', lang, { ...h, symptoms: state.baselineSymptoms.join(', ') })}`;
-  return state.assessmentIncomplete
-    ? `${summary} ${t('checkin.triage.conclusion.insufficient', lang, h)}`
-    : summary;
-}
-
-function closeMessage(state, h, lang) {
-  return capitalizeSentences(
-    t('checkin.triage.conclusion.close', lang, {
-      ...h,
-      hours: state.followUpHours || (state.isElderly ? 4 : 6),
-    })
-  );
-}
-
-async function _generateConclusionWithGPT(state, profile, h, lang, _pool) {
-  const fallback = _buildFallbackConclusion(state, h, lang);
-  // A summary describes confirmed facts, so it is built from the session.
-  // AI writes care guidance only; it cannot invent symptoms, past actions,
-  // a follow-up schedule or a successfully delivered family notification.
-  try {
-    const response = await callTextAi({
-      system:
-        lang === 'en'
-          ? 'You are Asinu, a health screening assistant. Return JSON only. Do not diagnose, prescribe, name or dose medicine, or advise changing treatment. Do not claim any symptom, action or absence of a symptom that is not confirmed in the supplied facts.'
-          : 'Bạn là Asinu, trợ lý sàng lọc sức khỏe. Chỉ trả JSON. Không chẩn đoán, kê đơn, nêu tên/liều thuốc hay đổi điều trị. Không suy đoán triệu chứng, việc đã làm hoặc dấu hiệu không có khi dữ liệu chưa xác nhận. Viết ngắn, tự nhiên, không chào lại, không dùng emoji.',
-      prompt: _buildConclusionPrompt(state, profile, h, lang),
-      temperature: 0.2,
-      maxTokens: 250,
-      timeoutMs: 5000,
-      maxRetries: 0,
-    });
-    const parsed = _parseJSON(response.content);
-    const candidate = { ...fallback, recommendation: String(parsed?.recommendation || '').trim() };
-    if (!isSafeConclusion(candidate) || !isGroundedRecommendation(candidate.recommendation, state))
-      return fallback;
-    const recommendation =
-      lang === 'vi'
-        ? candidate.recommendation.replace(
-            /(?<![\p{L}\p{M}])([Bb])ạn(?![\p{L}\p{M}]|\s+bè)/gu,
-            (_, first) => (first === 'B' ? h.Honorific : h.honorific)
-          )
-        : candidate.recommendation;
-    return { ...fallback, recommendation: capitalizeSentences(recommendation) };
-  } catch (err) {
-    console.error('[Triage AI] Conclusion unavailable; using grounded guidance:', err.message);
-    return fallback;
-  }
-}
-
-function _buildConclusionPrompt(state, profile, h, lang = 'vi') {
-  const facts = {
-    confirmed_symptoms: state.allSymptoms || [],
-    onset: state.onset || null,
-    progression: state.progression || null,
-    confirmed_warning_signs: state.redFlagsFound || [],
-    warning_signs_checked: state.completedSteps?.has('red_flags') || false,
-    actions_reported: state.actionsFound?.length ? state.actionsFound : null,
-    conditions: profile.medical_conditions || [],
-    severity: state.severity,
-    needs_professional_assessment: Boolean(state.needsDoctor),
-    assessment_incomplete: Boolean(state.assessmentIncomplete),
-  };
-  return lang === 'en'
-    ? `Write at most two short sentences of care guidance using only these facts: ${JSON.stringify(facts)}.
-Null or an empty list means not recorded, never that a symptom is absent or no action was taken.
-Do not repeat or reinterpret the symptom history. If professional assessment is required, clearly advise it. If data is incomplete, acknowledge the uncertainty. Return {"recommendation":"..."}.`
-    : `Viết tối đa hai câu lời khuyên dựa trên dữ liệu: ${JSON.stringify(facts)}.
-Xưng "${h.selfRef}", gọi "${h.honorific}". Null hoặc danh sách rỗng là CHƯA GHI NHẬN, không có nghĩa là không có triệu chứng hoặc chưa làm gì.
-Không kể lại hoặc suy diễn lịch sử triệu chứng. Nếu cần chuyên gia đánh giá, nói rõ nên đi khám. Nếu chưa đủ dữ liệu, nói rõ chưa đủ thông tin. Trả {"recommendation":"..."}.`;
-}
-
-function isGroundedRecommendation(text, state) {
-  if (text.length > 500) return false;
-  if (/(?:vì|bởi|because|given|since)\s/i.test(text)) return false;
-  if (
-    state.allSymptoms?.length < 2 &&
-    /có (?:kèm theo )?(?:các )?triệu chứng(?: khác| đi kèm)/i.test(text)
-  )
-    return false;
-  if (
-    state.needsDoctor &&
-    !/(đi khám|được.*(?:chuyên gia|nhân viên y tế).*đánh giá|seek|medical|professional|specialist)/i.test(
-      text
-    )
-  )
-    return false;
-  // Unknown history cannot be turned into affirmative past-tense claims.
-  if (
-    !state.actionsFound?.length &&
-    /(?:chưa (?:làm gì|xử lý|có biện pháp)|chưa dùng|haven.t (?:done|taken)|no action)/i.test(text)
-  )
-    return false;
-  if (/đã thông báo|đã liên hệ.*người thân|family (?:has been|was) notified/i.test(text))
-    return false;
-  if (
-    !state.completedSteps?.has('red_flags') &&
-    /(?:không có dấu hiệu|no warning signs|no red flags)/i.test(text)
-  )
-    return false;
-  return true;
-}
-
-const FORBIDDEN_CONCLUSION_PATTERNS = [
-  /(?:chẩn đoán|kết luận)/i,
-  /\b(?:diagnosis|diagnosed with|likely has|probably has|suffers from)\b/i,
-  /(?:có thể là|khả năng là|nghi(?: ngờ)?|mắc)(?:\s|:)/i,
-  /bị\s+(?:bệnh\s+)?(?:viêm|ung thư|đột quỵ|tai biến|nhồi máu|suy tim|tắc mạch|xuất huyết|nhiễm|hội chứng)/i,
-  /(?:aspirin|ibuprofen|paracetamol|acetaminophen|epipen|kháng sinh|insulin)/i,
-  /(?:uống|dùng|tiêm|bôi|ngưng|ngừng|giảm|tăng|thay đổi)\s+(?:liều\s+)?thuốc/i,
-  /\b(?:take|start|stop|increase|decrease|change)\s+(?:the\s+)?(?:dose\s+of\s+)?(?:medicine|medication|drug)\b/i,
-  /\b\d+(?:[.,]\d+)?\s*(?:mg|mcg|g|ml|viên|liều)\b/i,
-];
-
-function isSafeConclusion(candidate) {
-  if (!candidate || !candidate.summary || !candidate.recommendation) return false;
-  const text = `${candidate.summary} ${candidate.recommendation} ${candidate.closeMessage || ''}`;
-  return !FORBIDDEN_CONCLUSION_PATTERNS.some((pattern) => pattern.test(text));
-}
-
-function _buildFallbackConclusion(state, h, lang = 'vi') {
-  const tier = state.needsDoctor ? 'doctor' : state.severity === 'medium' ? 'medium' : 'low';
-  return {
-    summary: capitalizeSentences(groundedSummary(state, h, lang)),
-    recommendation: capitalizeSentences(
-      t(`checkin.triage.fallback.${tier}.recommendation`, lang, h)
-    ),
-    closeMessage: closeMessage(state, h, lang),
-    isEmergency: false,
-  };
+  return generateStructuredConclusion(state, profile, resolvedLang, healthContext);
 }
 
 function _parseJSON(raw) {

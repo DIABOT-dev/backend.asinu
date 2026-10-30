@@ -1,0 +1,31 @@
+{
+  "xung_ho": {
+    "goi": "anh",
+    "tu_xung": "em"
+  },
+  "tuoi": 52,
+  "gioi": "nam",
+  "benh_nen_da_khai": ["Mỡ máu cao"],
+  "trieu_chung": ["Mệt mỏi", "Khó ngủ", "Ăn không ngon", "Đau nhức người", "Buồn bã"],
+  "bat_dau": "vài ngày nay",
+  "dien_bien": "vẫn như cũ",
+  "dau_hieu_nguy_hiem_da_hoi": true,
+  "dau_hieu_nguy_hiem_gap": [],
+  "care_level": "dat_lich_kham",
+  "chi_so_24h": [],
+  "chi_so_7_ngay": [
+    {
+      "loai": "huyet_ap",
+      "gia_tri": "128/82",
+      "luc": "27/10 20:10"
+    }
+  ],
+  "uong_thuoc_hom_nay": "chưa ghi",
+  "check_in_truoc": [
+    {
+      "ngay": "27/10",
+      "trang_thai": "Hơi mệt",
+      "tom_tat": "khó ngủ"
+    }
+  ]
+}

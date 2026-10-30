@@ -40,7 +40,9 @@ function t(key, lang = 'vi', params = {}) {
   // Keep the role wording consistent in AI prompts and legacy catalog entries.
   // Internal API names such as /api/doctor are intentionally not translated;
   // this only affects text shown to a user or sent to the model.
-  if (typeof text === 'string') {
+  // The SRS disclaimer is fixed text, including the reference
+  // to medical diagnosis/treatment. Do not rewrite its legal wording.
+  if (typeof text === 'string' && key !== 'checkin.conclusion.disclaimer') {
     text = text.replace(/bác sĩ/gi, 'chuyên gia').replace(/\bdoctor\b/gi, 'specialist');
   }
 

@@ -292,13 +292,17 @@ async function getNextTriageQuestion(input) {
       primarySymptom: state.primarySymptom || engineResult.primarySymptom,
     };
 
-    const aiConclusion = await generateConclusion(conclusionInput, normalizedProfile, lang);
+    const aiConclusion = await generateConclusion(
+      conclusionInput,
+      normalizedProfile,
+      lang,
+      null,
+      normalizedHC
+    );
 
     return {
       isDone: true,
-      summary: aiConclusion.summary,
-      recommendation: aiConclusion.recommendation,
-      closeMessage: aiConclusion.closeMessage,
+      ...aiConclusion,
       severity: conclusion.severity,
       needsDoctor: conclusion.needsDoctor,
       needsFamilyAlert: conclusion.needsFamilyAlert,

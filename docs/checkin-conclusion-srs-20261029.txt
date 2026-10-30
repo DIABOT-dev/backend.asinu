@@ -1,0 +1,131 @@
+SRS: AI kết luận sau check-in, 29/10/2026
+Trạng thái: đã triển khai và kiểm tra ở local; chưa bật cho người dùng thật.
+Báo cáo bàn giao theo từng mục SRS, việc cần duyệt và việc còn phải kiểm:
+docs/bao-cao-trien-khai-srs-checkin-20261029.txt (kèm bản PDF tại APP/preview/checkin-srs-handover-20261029).
+Đối chiếu SRS mới nhất: AC-4 đạt 0/30 = 0% dùng dự phòng (dưới 10%);
+AC-5 đã sửa code/luồng cho dev/staging/prod. AC-9 còn chờ người có chuyên
+môn và P6 duyệt thật nên CHƯA ĐỦ ĐIỀU KIỆN BẬT THẬT. Báo cáo hiện tại:
+docs/checkin-conclusion-retest2-20261029.txt; bảng 26 mã và phiếu duyệt tại
+APP/preview/checkin-conclusion-implementation-20261029-retest-2-fix.
+Các báo cáo srs-acceptance cũ là lịch sử trước khi sửa AC-4 / AC-5.
+
+Quyết định sản phẩm
+Founder đã đồng ý hướng P2 sau biên bản 5 prompt x 3 lần. Bản sửa giữ
+bố cục 4 trường AI, cấm trích số cũ khi loại chỉ số đó chưa đo trong 24 giờ,
+chỉ so sánh khi có hai bản ghi cùng loại, không suy diễn từ việc thiếu log thuốc.
+Không tự điền điểm Founder hay ghi nhận phê duyệt chuyên môn y tế.
+
+Backend
+- src/core/checkin/triage-conclusion.js: ngữ cảnh có chọn lọc, prompt Việt/Anh,
+  MedGemma 27B (temperature 0.2, 700 token, timeout 10 giây, không retry hoặc
+  chuyển provider), kiểm tra riêng từng khối và câu dự phòng 7 nhóm triệu chứng.
+- Khối bị loại được thay riêng, log conclusion_rejected chỉ có block/reason,
+  không ghi nội dung sức khỏe. Thuốc chưa ghi không được suy ra đã quên uống.
+- Prompt tách chỉ dẫn ngắn khỏi dữ kiện, yêu cầu rõ hành động có con số và
+  nhắc đo đúng bệnh nền. Chỉ chuẩn hóa dấu câu của các mốc số đo rõ ràng;
+  sai giá trị, đơn vị, ngày hoặc giờ vẫn bị chặn. Câu xác nhận thiếu thông tin
+  thuốc được phân biệt với lệnh dùng thuốc, không được che chỉ dẫn hay suy diễn.
+- Kiểm tra lại phát hiện model có thể viết tiếng Việt khi yêu cầu tiếng Anh.
+  Đã nhắc rõ ngôn ngữ trong prompt, chặn riêng khối sai ngôn ngữ, dùng câu dự
+  phòng tiếng Anh và dịch nhãn bệnh nền đã biết trong phần server ghép.
+- Kiểm tra thêm chiều ngược lại: chặn văn xuôi tiếng Anh rõ ràng trong kết
+  quả tiếng Việt, không loại nhãn bệnh gốc hoặc tiếng Việt không dấu chỉ vì
+  có ký tự Latin. Đây là kiểm tra hữu hạn, không phải bộ nhận dạng mọi ngôn ngữ.
+- Prompt chia rõ một câu giải thích và các câu số đo nguyên văn để giữ 2–3
+  câu mà không xóa số liệu. Hai mẫu xác nhận thiếu thông tin thuốc chỉ được
+  miễn nhận dạng lệnh khi nguồn thật sự chưa có bản ghi; suy diễn vẫn bị chặn.
+- Bệnh nền và số đo 24 giờ từ server được bổ sung vào khối 2 nếu AI bỏ sót;
+  server không tự phân loại chỉ số. Không tự lấy số cũ làm số hiện tại.
+- API thêm conclusionVersion, personalMessage, explanation, todo[],
+  seeDoctorWhen[], disclaimer, closeMessage, speechText. Giữ summary và
+  recommendation cho client cũ; lưu qua cơ chế hoàn tất check-in hiện có.
+- Disclaimer lấy nguyên văn từ key checkin.conclusion.disclaimer, ngoại lệ
+  riêng với bộ thay từ bác sĩ thành chuyên gia; không đi qua bộ lọc lời AI.
+- calculateConclusion và toàn bộ EMERGENCY_CONCLUSIONS giữ nguyên nguồn.
+- Không thêm bảng/cột; không có migration mới cho tính năng này.
+
+App
+- Màn kết quả nhận đủ dữ liệu server, hiển thị sáu khối; bỏ phần nhắc khám
+  và lời nhận xét tình trạng chung bị lặp khi có kết luận mới.
+- Đọc đúng khối 1 + 4 + 6, không đọc phần giải thích/disclaimer; chỉ dùng một
+  mốc followUpHours. Có kết quả thì hiển thị ngay trong lúc tải âm thanh.
+- Nút chuyên gia hiện khi needsDoctor=true. Liên kết disclaimer luôn có trong
+  kết quả cấu trúc; dùng cờ tư vấn độc lập, bật cả dev/staging/prod, gồm navigator,
+  danh sách chuyên gia, hội thoại và thông báo. Cờ ẩn IVR/phỏng vấn cũ giữ nguyên.
+- Giữ màn cũ khi nhận dữ liệu server cũ. Cấp cứu và Tôi ổn giữ luồng riêng.
+- Đóng kết quả rồi về Trang chủ mới nhận hộp quà, không mở chồng hai màn.
+- Một agent rà UI theo yêu cầu: sáu khối nằm trong thẻ kết quả hiện có, màu và
+  khoảng cách đồng bộ; chữ đọc được trên thẻ trắng khi dark mode, body 20px,
+  nút tối thiểu 56px. Mũi tên header sáng có màu riêng, không đổi mặc định màn khác.
+
+Kiểm chứng
+- 3 lượt P2 đã sửa trên ca SRS cố định; sau đó 30 ca đủ 7 nhóm, bệnh nền có/
+  không, số đo mới/cũ, thông tin chưa hỏi kỹ, tiếng Anh. Có vòng sửa prompt và
+  sửa bộ nhận dạng ngày giờ; không hạ điều kiện để bỏ qua sai số thật.
+- Vòng cuối retest-2-fix: 3 lượt prompt cố định + 30 ca tổng hợp gọi thật,
+  đều là dữ liệu giả lập. P95 của 30 ca là 2253 ms, 30/30 dưới 10 giây.
+- 0/30 (0%) ca dùng dự phòng: ĐẠT AC-4. Replay raw response tại thời điểm
+  gốc cho 0 lỗi đầu ra theo bộ kiểm tra máy, không phải chứng nhận lâm sàng.
+  Giữ các vòng trước làm lịch sử. Vòng retest-20261029-1 dù có AC-4 1/30 vẫn
+  bị đánh dấu chưa đạt E8 vì đọc trực tiếp phát hiện tiếng Việt trong ca en.
+- Vòng retest-20261029-2 có 3/30 = 10%, chưa đạt AC-4; giữ nguyên lịch sử.
+- 1.665 test backend đạt (gồm 29 test SRS, 13 định dạng/grounding, 12 ngôn ngữ,
+  12 kiểm biên bản duyệt), 206 test bỏ qua theo cấu hình hiện có. 126 suite đạt,
+  17 suite bỏ qua; không tính test bỏ qua là đã kiểm chứng.
+- Thêm 238 kiểm tra chấm điểm follow-up cũ đạt; các script legacy khác phụ
+  thuộc DB và user hardcode không chạy trên dữ liệu hiện tại.
+- Audit độc lập trên 30 mẫu không import validator production: 0 lỗi trong
+  các kiểm tra kỹ thuật đã định nghĩa; hash source trước/sau lượt gọi trùng.
+- Một lượt test QR HTTP bị 400 thay vì 401 từ mock, chưa xác định chắc nguyên
+  nhân ban đầu. Đã cô lập server/client trong fixture, giữ mọi assert; suite
+  đầy đủ và 10 lượt QR sau đó đều đạt. Không đổi code QR/xác thực production.
+- Tái hiện và sửa ràng buộc số/ngày/giờ/loại chỉ số, phủ định hướng khám,
+  tên bệnh có ký tự regex, suy diễn thuốc/người thân/hẹn hỏi lại, lưu hoàn tất
+  sau lỗi DB và tự đọc kết quả mới trên màn vẫn đang mở. 2.160 biến thể offline
+  nằm trong một test Jest, không phải 2.160 lượt gọi model hoặc test độc lập.
+- HTTP dùng controller/engine/service thực, mock DB/provider/tác động ngoài
+  và tiêm xác thực test; chưa thay cho kiểm tra PostgreSQL/JWT/thiết bị thật.
+- 19 kiểm tra giao diện/kết luận; 14 cờ/route; 79 hồi quy hộp quà;
+  kiểm tra âm thanh, TypeScript, i18n, API contract và cờ Dr.Asinu đạt.
+- Render toàn khung CheckinScreen/DoneScreen thực qua React Native Web trong
+  6 tình huống Việt/Anh, sáng/tối, 320–390px, chữ 100/130/200%: không tràn, không lỗi JS,
+  link/đóng hoạt động với API/TTS/router giả lập. Chưa kiểm binary/thiết bị thật.
+- Đã nạp bản sửa vào backend local, /api/healthz HTTP 200; Metro 8081/8082
+  vẫn chạy. Không reset dữ liệu tài khoản. Chi tiết trong local-health.json.
+
+Lệnh kiểm tra
+Backend: npm test
+Backend: node tools/checkin-conclusion-lab/srs-audit.cjs --round=retest-2-fix
+Backend: npm run check:checkin-conclusion-approval -- --packet=<packet.json> --approval=<biên-bản-người-duyệt.json>
+App: npm run test:checkin-conclusion
+App: npm run type-check
+App: npm run test:checkin-gifts
+App: npm run test:checkin-practice
+App: npm run test:checkin-contract
+
+Hồ sơ cần duyệt
+APP/preview/checkin-conclusion-implementation-20261029-retest-2-fix/index.html
+APP/preview/checkin-conclusion-implementation-20261029-retest-2-fix/srs-matrix.json
+APP/preview/checkin-conclusion-implementation-20261029-retest-2-fix/srs-audit.json
+APP/preview/checkin-conclusion-implementation-20261029-retest-2-fix/clinical-review.html
+Packet cũ không khớp source sau sửa ngôn ngữ; phải duyệt mẫu/phiếu bản mới.
+Phiếu để trống tên, chuyên môn và cả 30 quyết định; P6 chưa đồng ý disclaimer.
+Xuất JSON sau khi người thật duyệt. Lệnh kiểm từ chối thiếu phê duyệt, đổi mẫu
+hoặc đổi source; đây là lệnh kiểm hồ sơ, chưa gắn vào CI/deploy hoặc runtime.
+Tool không xác minh danh tính/bằng cấp và không thay việc duyệt chuyên môn.
+
+Chưa hoàn tất về nghiệm thu/bật thật
+AC-9: người có chuyên môn y tế đọc và đồng ý 30 kết luận mẫu; P6 duyệt disclaimer.
+Không tự ghi nhận đã duyệt. Chưa deploy lên VPS trong công việc này.
+Phiên check-in đã hoàn tất vẫn giữ kết quả đã lưu; thử tính năng bằng phiên mới.
+
+Nguồn đối chiếu cho nội dung dự phòng (vẫn cần chuyên môn duyệt bản Việt):
+https://www.nhs.uk/symptoms/dizziness/
+https://www.nhs.uk/symptoms/headaches/
+https://www.nhs.uk/symptoms/chest-pain/
+https://www.nhs.uk/symptoms/shortness-of-breath/
+https://www.nhs.uk/symptoms/stomach-ache/
+https://www.nhs.uk/conditions/back-pain/
+https://www.nhs.uk/conditions/insomnia/
+Số cấp cứu trong sản phẩm là 115 theo luồng Việt Nam hiện có, không sao chép
+số điện thoại của hệ thống y tế Anh.

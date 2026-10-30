@@ -27,7 +27,8 @@
     "simulate-feed": "node scripts/simulate-feed.js",
     "seed:care-circle-demo": "node scripts/seed-care-circle-demo.js",
     "test:sentry": "node --test tests/sentry.test.cjs",
-    "sentry:smoke": "node scripts/sentry-smoke.cjs"
+    "sentry:smoke": "node scripts/sentry-smoke.cjs",
+    "check:checkin-conclusion-approval": "node tools/checkin-conclusion-lab/verify-clinical-review.cjs"
   },
   "dependencies": {
     "@apple/app-store-server-library": "^3.1.0",

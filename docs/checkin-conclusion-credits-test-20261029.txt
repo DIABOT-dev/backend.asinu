@@ -1,0 +1,48 @@
+Asinu - Kiểm thử lại kết luận check-in và DR7 credits - 29/10/2026
+
+Credits thực tế
+- Nguồn: x-dr7-credit-remaining trên response API DR7.
+- Trước bộ 33 lượt thử: 22.6602 credits.
+- Sau bộ thử: 22.4616 credits.
+- Chênh lệch số dư quan sát: 0.1986 credits cho 33 lượt.
+- 30 kết luận: tổng 0.1821, trung bình 0.00607 credits/kết luận;
+  thấp nhất 0.0043, cao nhất 0.0066.
+- Tổng token của 33 lượt: 59176.
+- Giá model API xác nhận: $0.003 / 1.000 token vào và $0.006 / 1.000 token ra.
+  Ước tính từ token: $0.198624; tách riêng với số dư thực.
+- Có thêm 1 lượt kiểm tra kết nối rất ngắn trước mốc số dư trên (93 token vào,
+  1 token ra); chưa có số dư trước lượt đó nên không gán chi phí thực đo cho nó.
+- Header làm tròn 4 chữ số; số dư là của tài khoản, có thể gồm lượt gọi đồng thời.
+- Đây chỉ là phần KẾT LUẬN; chưa tính phân loại triệu chứng, các lượt hỏi khác,
+  TTS hoặc trợ lý chuyên gia. Không coi token là credits.
+
+Phạm vi key
+- Key lấy trực tiếp từ .env backend local, không in/lưu key vào báo cáo.
+- Chưa xác minh được trùng key VPS: SSH từ chối xác thực. Không sửa VPS.
+
+Kết quả kiểm thử mới
+- 3 lượt prompt cố định và 30 ca giả lập mới gọi medgemma-27b-it thật.
+- Cả 30 ca nhận kết quả dưới 10 giây; P95 = 2461 ms.
+- 29/30 ca dùng đủ các khối AI; 1 ca incomplete-assessment bị loại riêng khối
+  giải thích vì AI nêu huyết áp của 48 giờ trước khi 24h không có số đo.
+  Bộ lọc đã chặn đúng và thay khối đó bằng nội dung dự phòng; không hạ luật.
+- 1.599 test backend đạt ở lượt full suite cuối, 206 test bỏ qua theo cấu hình.
+- 14 kiểm tra UI kết luận, 79 hộp quà, âm thanh/màn gọi/native 131+28+19,
+  TypeScript và 36 test phòng thử SRS đạt.
+- Lượt full suite đầu có 1 test Care Circle nhận 401 thay vì 200. Chạy riêng
+  15 lần và chạy lại toàn suite đều đạt; chưa xác định nguyên nhân. Ghi nhận
+  là test không ổn định, KHÔNG khẳng định đã sửa lỗi production.
+
+Giới hạn
+- Dữ liệu thử giả lập, không đọc/xoá/sửa hồ sơ người dùng cho bộ gọi model.
+- Test HTTP dùng controller/engine/service thực nhưng DB/provider/tác động
+  ngoài được mock. Kiểm tra JSX/web chưa thay thế chạy thiết bị iOS/Android.
+- Các test bị bỏ qua và các file bị loại bởi cấu hình Jest chưa được kiểm chứng.
+- Chưa thêm migration, chưa deploy, chưa commit/push trong vòng kiểm tra này.
+- AC-9: còn người có chuyên môn y tế duyệt 30 mẫu và P6 duyệt disclaimer.
+
+Bằng chứng
+/Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-credits-retest/results.json
+/Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-credits-retest/credits-per-call.csv
+/Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-credits-retest/credits-summary.json
+Giá tham chiếu: https://dr7.ai/docs

@@ -1,0 +1,7 @@
+{
+  "sourceSha256": "36ce0662c7bffe22d474e2852385a580d7f121a42bec1a91e83ec25270521ad2",
+  "id": "P1",
+  "label": "Prompt hiện tại",
+  "system": "Bạn là Asinu, trợ lý sàng lọc sức khỏe. Chỉ trả JSON. Không chẩn đoán, kê đơn, nêu tên/liều thuốc hay đổi điều trị. Không suy đoán triệu chứng, việc đã làm hoặc dấu hiệu không có khi dữ liệu chưa xác nhận. Viết ngắn, tự nhiên, không chào lại, không dùng emoji.",
+  "prompt": "Viết tối đa hai câu lời khuyên dựa trên dữ liệu: {\"confirmed_symptoms\":[\"Mệt mỏi\",\"Khó ngủ\",\"Ăn không ngon\",\"Đau nhức người\",\"Buồn bã\"],\"onset\":\"vài ngày nay\",\"progression\":\"vẫn như cũ\",\"confirmed_warning_signs\":[],\"warning_signs_checked\":true,\"actions_reported\":null,\"conditions\":[\"Mỡ máu cao\"],\"severity\":\"medium\",\"needs_professional_assessment\":true,\"assessment_incomplete\":false}.\nXưng \"em\", gọi \"anh\". Null hoặc danh sách rỗng là CHƯA GHI NHẬN, không có nghĩa là không có triệu chứng hoặc chưa làm gì.\nKhông kể lại hoặc suy diễn lịch sử triệu chứng. Nếu cần chuyên gia đánh giá, nói rõ nên đi khám. Nếu chưa đủ dữ liệu, nói rõ chưa đủ thông tin. Trả {\"recommendation\":\"...\"}."
+}
