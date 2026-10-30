@@ -57,4 +57,27 @@ describe('doctor patient conversation rules', () => {
       task_status: null,
     });
   });
+
+  test('keeps a newly queued consultation unknown while Doctor has not received the task', async () => {
+    messaging.listMessages.mockResolvedValueOnce({ summary: 'Synthetic request', messages: [] });
+    requestDoctorTaskStatus.mockRejectedValueOnce(Object.assign(new Error('Pending delivery'), {
+      statusCode: 404,
+      code: 'PATIENT_TASK_NOT_FOUND',
+    }));
+    await expect(conversation.listPatientConversation(pool, 'tenant', 'task', 5)).resolves.toEqual({
+      summary: 'Synthetic request',
+      messages: [],
+      task_status: null,
+    });
+  });
+
+  test('returns the assigned status once Doctor receives the queued task', async () => {
+    messaging.listMessages.mockResolvedValueOnce({ messages: [] });
+    const status = { status: 'assigned', rateable: false, follow_up_open: false };
+    requestDoctorTaskStatus.mockResolvedValueOnce(status);
+    await expect(conversation.listPatientConversation(pool, 'tenant', 'task', 5)).resolves.toEqual({
+      messages: [],
+      task_status: status,
+    });
+  });
 });

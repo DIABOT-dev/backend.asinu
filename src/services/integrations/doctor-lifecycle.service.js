@@ -3,6 +3,7 @@ const { z } = require('zod');
 const { assertTenantAllowed } = require('./doctor-task.service');
 const { verifyDoctorSignature } = require('./doctor-profile.service');
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
+const { broadcastChatEvent } = require('./doctor-chat-realtime');
 
 const consultationSummarySchema = z
   .object({
@@ -200,6 +201,16 @@ const ingestDoctorLifecycle = async (pool, req) => {
       ]
     );
     await persistConsultationOutcome();
+    // pool.query has committed this INSERT before resolving. Only the winning
+    // insert announces the change; existing events and conflict retries stay silent.
+    if (inserted.rows[0]) {
+      broadcastChatEvent({
+        tenantId: payload.tenant_id,
+        taskId: payload.app_order_id,
+        type: 'chat.task.status.changed',
+        data: { task_id: payload.app_order_id, status: payload.status },
+      });
+    }
     return {
       ...(inserted.rows[0] || {
         event_id: event.event_id,

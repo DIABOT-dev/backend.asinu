@@ -345,7 +345,7 @@ async function doctorOperation(pool, input) {
       required_content_questions: data.supplement ? '1–3' : '3–7',
       known_facts: knownFacts,
     };
-    let last, previousDraft;
+    let last, previousDraft, accepted;
     const repairs = [];
     const deadline = requestStartedAt + 10000;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -428,18 +428,27 @@ async function doctorOperation(pool, input) {
               o.red_flag = false;
             }
         const content = validateQuestionSet(value, { supplement: !!data.supplement });
-        await audit(pool, s, actor, 'question_set.generated', {
+        accepted = {
           attempt: attempt + 1,
           provider: result.provider,
           model: result.model,
           repairs,
           content,
-        });
-        return { content };
+        };
+        break;
       } catch (e) {
         last = e;
         if (e.code === 'AI_CONSENT_REQUIRED') throw e;
       }
+    }
+    if (accepted) {
+      await audit(pool, s, actor, 'question_set.generated', accepted);
+      const saved = await doctorOperation(pool, {
+        ...input,
+        operation: 'save',
+        data: { content: accepted.content, source: 'ai', supplement: !!data.supplement },
+      });
+      return { content: accepted.content, ...saved };
     }
     throw error(
       'IVR_GENERATION_FAILED',
