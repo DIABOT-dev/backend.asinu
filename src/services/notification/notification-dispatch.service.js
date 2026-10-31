@@ -238,6 +238,21 @@ async function reserveNotification(
 
 async function hasCurrentRecipientPermission(client, notification) {
   const data = notification.data || {};
+  if (notification.type === 'med_reminder') {
+    return (await client.query(`SELECT 1 FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id
+      JOIN user_notification_preferences n ON n.user_id=e.patient_user_id AND n.reminders_enabled
+      WHERE e.id=$1 AND e.patient_user_id=$2 AND e.state='CALLING' AND s.active
+        AND v21_allowed(e.patient_user_id,'medication') AND e.scheduled_at>NOW()-INTERVAL '2 hours'`,
+      [data.medDoseId, notification.user_id])).rows.length > 0;
+  }
+  if (['coin_card','med_schedule_changed','med_consent_pending','weekly_v21'].includes(notification.type)
+      && data.patientId && String(data.patientId) !== String(notification.user_id)) {
+    if (notification.type === 'weekly_v21') {
+      // Continue through the normal alert permission check below.
+    } else {
+      return require('../v21/common').hasConnection(client, data.patientId, notification.user_id);
+    }
+  }
   if (data.topic?.kind === 'medical_condition') {
     const profile = await client.query(
       'SELECT medical_conditions FROM user_onboarding_profiles WHERE user_id = $1',

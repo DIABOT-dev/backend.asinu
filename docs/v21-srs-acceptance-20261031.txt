@@ -1,0 +1,83 @@
+ASINU V2.1 — ĐỐI CHIẾU SRS TRƯỚC PHÁT HÀNH 31/10/2026
+
+Nguồn: SRS_V2_1_Nhac_thuoc_va_Xu.docx, 29/10/2026.
+Áp dụng điều chỉnh của người dùng: gọi 07:00–21:00; nút 2 Bỏ qua/SKIPPED,
+ghi nhận uống không đều và không gọi lại. Không nghe máy vẫn retry 15 phút,
+tối đa 2 attempt/cữ. Xem srs-v21-decisions-20261030.txt.
+
+Kết quả tự động
+- npm run test:v21: 98/98 ở cả TZ=Asia/Ho_Chi_Minh và TZ=UTC, PostgreSQL
+  thật trên schema cô lập; gồm nguyên bộ tests/integration/checkin-gifts.test.js.
+- Backend toàn bộ: 1.715 qua; các suite cần biến môi trường riêng được bỏ qua
+  trong lần chạy tổng thể; bộ V2.1 DB được chạy riêng như trên.
+- App: TypeScript, i18n, hợp đồng API, bộ V2.1, tổng đài check-in native,
+  Doctor IVR, check-in audio, hộp quà và bảo mật đều qua.
+- Android: 55 test Robolectric. iOS: build Simulator. Chưa thay nghiệm thu
+  trên iPhone/Android thật bằng các kết quả này.
+- 28 tình huống UI render source thực qua web/mocks đã qua trong lượt trước;
+  source UI không đổi từ lượt đó. 7 hồi quy màn trả lời và secureStorage được
+  chạy lại trong lượt phát hành này.
+
+Phần A — tiêu chí và bằng chứng
+AC-A1  Chờ máy thật: 07:00/19:00, khóa màn hình, độ lệch <=1 phút.
+AC-A2  Qua tự động: TAKEN, SKIPPED, OUT_OF_MEDS, UNCONFIRMED; mọi nút nhận
+       Xu bằng nhau; Bỏ qua kết thúc ngay; không quá 2 attempt khi không nghe.
+AC-A3  Qua backend: gọi service check-in gốc, occurrence_source=med_call,
+       idempotent, gift_events chờ mở. Bộ hồi quy check-in gốc qua. Cần xác nhận
+       chuỗi thao tác native và Home trên điện thoại thật.
+AC-A4  Qua dữ liệu/policy: can_receive_alerts, problems_only, không đưa tên
+       thuốc vào push. Transport thật đến máy người thân còn phải thử.
+AC-A5  Qua tích hợp log: chỉ MEDICINE tạo medication_logs và adherence,
+       các reader giải mã; tóm tắt sáng/tối bỏ nhắc thuốc khi có lịch bật.
+AC-A6  Không sửa schema/máy trạng thái checkin_call_* hoặc bài gift gốc;
+       tổng đài check-in và Doctor IVR vẫn qua. Native chỉ thêm nhánh medCall.
+AC-A7  Qua tự động: cờ native tắt/thiết bị không hỗ trợ/lỗi native -> push
+       thường trong cùng attempt; cần thử push actions trên điện thoại thật.
+AC-A8  Qua DB: lease/receipt, chạy tick nhiều lần/restart logic không nhân cữ;
+       mất tiến trình/hệ điều hành trên điện thoại thật còn phải thử.
+AC-A9  EA1–13 có policy/tích hợp: khung giờ, gộp cữ và retry gộp, cuộc gọi ưu
+       tiên, không có thiết bị 1 lần/ngày, fallback, trả lời muộn, first answer,
+       giữ snapshot khi sửa/xóa, không có người thân, đã check-in trong app,
+       đổi múi giờ hồ sơ, hết thuốc lặp trong 7 ngày, tắt reminders_enabled.
+AC-A10 Chờ P6 duyệt/NGHE bản TTS và thông báo. Không tự ghi đã được duyệt.
+AC-A11 Qua tự động: tài khoản mới không có lịch/cữ/cuộc gọi mặc định.
+AC-A12 Chờ thử 5 người, ít nhất 2 trên 55 tuổi: 3 món từ đơn in, không gõ,
+       dưới 90 giây. Wizard/confirm/meal anchor/back đã có kiểm tự động.
+AC-A13 Qua backend: từ xa là PENDING, chỉ chủ tài khoản nhận consent, duyệt
+       nhiều giờ nguyên tử; adapter native có nhánh mở consent. Cần máy thật.
+AC-A14 Có bài 20 ảnh bao bì thật và bảng đối chiếu, chờ Founder duyệt. Chưa
+       đại diện đủ đơn in/đơn viết tay/ảnh mờ lóa. Server loại liều/công dụng.
+AC-A15 Qua nội dung cố định và payload: không có tên/liều trong âm thanh/push;
+       tên/ảnh chỉ ở màn app được cấp quyền. Cần nghe thử máy thật với thiết bị.
+
+Phần B — tiêu chí và bằng chứng
+AC-B1  Qua DB: 42 Xu/ngày khi đủ 1 check-in/4 đáp án/2 chỉ số/1 mở quà;
+       thêm sự kiện không vượt cap. Thưởng tuần 5/7 thứ Hai–Chủ nhật giờ VN.
+AC-B2  Qua DB: mọi câu trả lời sức khỏe và nút thuốc được mức Xu như nhau.
+AC-B3  Qua DB: unique event, 5 yêu cầu đổi song song chỉ trừ một lần,
+       lock balance + lots, không có số dư âm.
+AC-B4  Qua fault injection: hỏng enqueue Xu không rollback check-in, đáp án
+       hoặc gift. Dùng trigger/outbox có subtransaction.
+AC-B5  Qua DB: cờ bốc thăm tắt -> ẩn/từ chối; kỳ hợp lệ đang mở -> tối đa
+       3 phiếu/tháng, draw_tickets và CSV đúng nguồn. Không tự bật bốc thăm.
+AC-B6  Qua DB: mất kết nối trước gửi -> hoàn Xu một lần bằng ledger ngược.
+       Thiệp đến điện thoại thật dưới 1 phút vẫn phải thử khi có mẫu được duyệt.
+AC-B7  Qua UI/API: chỉ số Xu, không đường mua/chuyển/đổi tiền hoặc mở hộp thêm.
+AC-B8  Nguyên bộ gift backend và app qua, không sửa bài test backend gift gốc.
+AC-B9  EB1–13: duplicate/cap/xóa rồi nhập lại/thiếu Xu/quota/đóng kỳ/refund/
+       mất kết nối/expiry 12 tháng/nhắc trước 7 ngày/đi theo tài khoản/xóa
+       tài khoản/ngày VN có tích hợp hoặc policy. Kết quả gửi thật xem AC-B6.
+AC-B10 Màn thể lệ có trong app; P3 duyệt mẫu thiệp, P6/thể lệ/đăng ký kỳ
+       bốc thăm vẫn chờ. Các mẫu chưa duyệt inactive theo migration.
+
+Đưa lên VPS
+- Chỉ source/backend có thay đổi mới phát hành; Doctor/CRM sạch không rebuild.
+- Build từ Git commit đã push, archive có revision; không ghi đè worktree
+  cũ đang có thay đổi trên VPS, không chép .env/khóa local lên production.
+- Backup mã hóa trước migration; migration 123–124; kiểm quyền runtime,
+  TLS database, OpenBao, Sentry release và HTTP health sau restart.
+- Các cờ V2.1 mặc định false trên production; không tự bật cho toàn hệ thống.
+  Việc deploy source không đồng nghĩa đã hoàn tất các nghiệm thu con người.
+- App có native module mới: điện thoại cần bản development/release build mới
+  để nhận nhắc thuốc bằng CallKit/Telecom. Deploy backend không tự cập nhật app
+  đã cài trên điện thoại.

@@ -1,0 +1,27 @@
+ASINU V2.1 — KIỂM TRA LẠI 31/10/2026
+
+Kết quả: backend V2.1 94/94 ở UTC và VN; backend đầy đủ 1715 qua, 256 bỏ qua; Android 55/55; iOS Simulator build thành công; 28 tình huống UI giả lập; 7 hồi quy màn trả lời + secureStorage; 6 API local HTTP 200.
+
+ĐÃ SỬA
+- Các cữ đã gộp bị tách thành hai cuộc gọi lúc retry; giữ nguyên nhóm, kiểm lại trạng thái đến hạn dưới khoá.
+- Mở lại cữ phụ trên thiết bị khác mất câu check-in của cữ đầu; trả về đúng checkinDoseId và khôi phục câu đọc.
+- Cữ tương lai giữ múi giờ cũ sau đổi hồ sơ; chỉ điều chỉnh cữ tương lai chưa chạy, giữ kết quả quá khứ.
+- PostgreSQL deadlock khi timeout chạy cùng trả lời/xoá lịch; khoá người nhận theo cùng thứ tự và dùng NO KEY UPDATE để tránh xung đột FK gia đình.
+- Quyền Care Circle bị thu hồi giữa kiểm tra và ghi; kiểm lại trong transaction cho tạo mục, xoá lịch, giờ ăn và tuỳ chọn.
+- Đọc giọng nói từ xa thiếu kiểm consent AI của người nhận; từ chối trước khi gọi nhà cung cấp.
+- Tên nhập tay có thể lọt đơn vị liều g/U/units; đồng bộ bộ lọc FE/BE.
+- Ngày cộng Xu bị lùi khi Node chạy giờ Việt Nam do chuyển DATE qua UTC; dùng chuỗi ngày PostgreSQL.
+- Âm thanh xác nhận theo nút bấm thay vì kết quả server khi thiết bị khác đã trả lời; đọc kết quả thực nhận.
+- Trả lời quá hai giờ vẫn phát âm thanh đã uống; ngừng âm thanh thành công và hiện trạng thái hết hạn.
+- Đổi đáp án sau lỗi mạng bị replay nút cũ; cùng nút dùng lại request_id, nút khác có request_id mới.
+- Poll chậm có thể đè kết quả vừa lưu; chặn kết quả cũ bằng revision/session, không cho phản hồi cũ chạm tài khoản mới.
+- Pending đáp án nằm ở AsyncStorage; chuyển sang secureStorage, dọn dữ liệu cũ và không fallback về bản rõ.
+
+CÒN NGHIỆM THU
+- iPhone/Android thật khoá màn hình: 07:00 và 19:00, lệch không quá 1 phút; kill/restart, mạng yếu, ưu tiên cuộc gọi và dừng khi xoá lịch.
+- P6 duyệt TTS/push; P3 duyệt mẫu thiệp; Founder duyệt bài 20 ảnh và các giá trị cấu hình đề xuất.
+- 5 người thử, ít nhất 2 người trên 55 tuổi: tạo 3 món từ đơn in trong 90 giây không gõ.
+- Xác nhận thiệp tới máy con trong 1 phút trên môi trường thật; kỳ bốc thăm chỉ bật sau duyệt thể lệ/đăng ký.
+- Bài 20 ảnh trước đây chỉ là ảnh bao bì; chưa đủ đại diện đơn in, đơn viết tay, ảnh mờ/lóa.
+
+Không gọi nhà cung cấp AI/TTS tính phí trong lượt test này. API local đã restart. Không reset dữ liệu, deploy VPS hoặc commit trong lượt này.

@@ -1,0 +1,16 @@
+SRS V2.1 — Điều chỉnh đã được người dùng chốt ngày 30/10/2026
+
+Nguồn: trao đổi trực tiếp sau khi đọc SRS_V2_1_Nhac_thuoc_va_Xu.docx.
+
+1. Khung gọi nhắc thuốc: 07:00–21:00 theo múi giờ hồ sơ người bệnh.
+2. Thay lựa chọn “Lát nữa” bằng “Bỏ qua”. Ghi nhận bỏ cữ để báo cáo uống
+   không đều; không lên lịch gọi lại vì người dùng chọn Bỏ qua.
+   Đây là lựa chọn rõ ràng của người dùng, khác với không nghe máy/chưa xác nhận.
+3. Yêu cầu thử đọc 20 ảnh thuốc thật tìm trên mạng: tải ảnh về, ghi nguồn,
+   thử model và đối chiếu kết quả. Ảnh internet không tự chứng minh khả năng
+   đọc đơn viết tay hoặc ảnh chụp mờ từ người dùng thật.
+
+Các điều chỉnh này thay nhánh LATER và retry sau LATER trong bản SRS gốc.
+Quy tắc gọi lại khi không nghe máy chưa được thay đổi bởi quyết định này.
+Xu vẫn bằng nhau cho mọi lựa chọn theo SRS; không đổi Bỏ qua thành Đã uống.
+Chưa bật tính năng nhắc thuốc hoặc đổi cấu hình gọi của An Tâm/Doctor IVR.

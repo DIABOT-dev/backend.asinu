@@ -169,7 +169,7 @@ const loadDoctorClinicalContext = async (pool, input) => {
     profile: profile.rows[0] || {},
     blood_pressure: bloodPressure.rows,
     glucose: glucose.rows,
-    medications: medication.rows,
+    medications: require('../../security/health-field-encryption').decryptHealthRows(appUserId, 'medication_logs', ['med_name'], medication.rows),
     symptoms: symptoms.rows,
     medical_records: records.rows,
     checkins: checkins.rows,

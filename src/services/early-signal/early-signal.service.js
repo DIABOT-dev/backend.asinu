@@ -264,7 +264,7 @@ async function inputSnapshot(pool, userId) {
       attendance: attendance(row),
     })),
     symptoms: symptoms.rows,
-    vitals: vitals.rows,
+    vitals: require('../../security/health-field-encryption').decryptHealthRows(userId, 'medication_logs', ['med_name'], vitals.rows),
     profile: profile.rows[0] || null,
   };
 }

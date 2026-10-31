@@ -170,7 +170,9 @@ test('HTTP response and stored replay preserve six blocks and legacy fields', as
 test('concurrent HTTP submissions share one conclusion and one completion', async () => {
   const h = harness();
   const responses = await Promise.all([h.submit(), h.submit(), h.submit()]);
-  expect(responses.every((r) => r.status === 200)).toBe(true);
+  expect(responses.map((r) => ({ status: r.status, code: r.body.code }))).toEqual(
+    Array.from({ length: 3 }, () => ({ status: 200, code: undefined }))
+  );
   expect(responses[1].body).toEqual(responses[0].body);
   expect(generations()).toHaveLength(1);
   expect(

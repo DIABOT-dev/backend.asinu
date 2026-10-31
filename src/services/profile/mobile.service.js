@@ -7,6 +7,7 @@ const { t } = require('../../i18n');
 const { cacheDel } = require('../../lib/redis');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
+const { decryptHealthField } = require('../../security/health-field-encryption');
 
 const VALID_LOG_TYPES = new Set([
   'glucose',
@@ -391,7 +392,7 @@ async function getRecentLogs(pool, userId, options = {}) {
 
             if (detailResult.rows.length > 0) {
               detail.columns.forEach((col) => {
-                detailData[col] = detailResult.rows[0][col];
+                detailData[col] = col === 'med_name' ? decryptHealthField(userId, 'medication_logs.med_name', detailResult.rows[0][col]) : detailResult.rows[0][col];
               });
             }
           }
@@ -423,7 +424,7 @@ async function getRecentLogs(pool, userId, options = {}) {
     const logs = result.rows.map((row) => {
       const detailData = {};
       for (const col of detail.columns) {
-        detailData[col] = row[col];
+        detailData[col] = col === 'med_name' ? decryptHealthField(userId, 'medication_logs.med_name', row[col]) : row[col];
         delete row[col];
       }
       return { ...row, detail: detailData };
@@ -473,7 +474,7 @@ async function getTodayLogs(pool, userId, options = {}) {
 
             if (detailResult.rows.length > 0) {
               detail.columns.forEach((col) => {
-                detailData[col] = detailResult.rows[0][col];
+                detailData[col] = col === 'med_name' ? decryptHealthField(userId, 'medication_logs.med_name', detailResult.rows[0][col]) : detailResult.rows[0][col];
               });
             }
           }
@@ -510,7 +511,7 @@ async function getTodayLogs(pool, userId, options = {}) {
     const logs = result.rows.map((row) => {
       const detailData = {};
       for (const col of detail.columns) {
-        detailData[col] = row[col];
+        detailData[col] = col === 'med_name' ? decryptHealthField(userId, 'medication_logs.med_name', row[col]) : row[col];
         delete row[col];
       }
       return { ...row, detail: detailData };

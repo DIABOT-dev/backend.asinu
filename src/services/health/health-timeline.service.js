@@ -105,6 +105,7 @@ const rebuildPatientHealthTimeline = async (pool, userId) => {
     ),
   ]);
   recordsResult.rows = decryptHealthRows(userId, 'doctor_patient_medical_records', ['title', 'diagnosis', 'summary', 'treatment', 'notes'], recordsResult.rows);
+  logsResult.rows = decryptHealthRows(userId, 'medication_logs', ['med_name'], logsResult.rows);
   messagesResult.rows = decryptHealthRows(userId, 'doctor_task_messages', ['content'], messagesResult.rows);
   const profile = profileResult.rows[0] || {};
   const rawProfile =

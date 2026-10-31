@@ -840,7 +840,7 @@ async function getHealthLogsSummary(pool, userId) {
       latest_bp: bpResult.rows[0] || null,
       latest_weight: weightResult.rows[0] || null,
       water_today_ml: waterResult.rows[0]?.total_ml || null,
-      recent_medications: medResult.rows,
+      recent_medications: decryptHealthRows(userId, 'medication_logs', ['med_name'], medResult.rows),
     };
   } catch (err) {
     return {

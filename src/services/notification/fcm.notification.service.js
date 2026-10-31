@@ -47,6 +47,7 @@ async function sendFcmNotification(token, title, body, data = {}, options = {}) 
         title: capitalizeFirstLetter(title),
         body: capitalizeFirstLetter(body),
       }),
+      ...(data.type === 'med_reminder' ? { apns: { payload: { aps: { category: 'MEDICATION_DOSE', sound: 'default' } } } } : {}),
       android: {
         priority: 'HIGH',
         ttl: options.incomingCall ? '120s' : '600s',

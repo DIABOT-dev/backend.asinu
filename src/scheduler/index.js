@@ -69,6 +69,16 @@ function safeCron(expression, name, handler) {
 }
 
 function startScheduler(pool) {
+  safeCron('*/15 * * * * *', 'v21_medication_and_coins', async () => {
+    const maintenance = require('../services/v21/maintenance.service');
+    await maintenance.endPausedCalls(pool);
+    await require('../services/v21/medication-calls.service').tick(pool);
+    await maintenance.consents(pool);
+    await require('../services/v21/coins.service').processEvents(pool);
+    await require('../services/v21/messages.service').processMessages(pool);
+  });
+  safeCron('5 0 * * *', 'v21_daily', () => require('../services/v21/maintenance.service').daily(pool));
+  safeCron('0 8 * * 1', 'v21_weekly_report', () => require('../services/v21/messages.service').weekly(pool));
   // Retry key retirement after a committed account deletion if a filesystem
   // failure interrupted the initial cleanup. Database ownership is authoritative.
   safeCron('17 * * * *', 'health_key_retirement', () => cleanupOrphanHealthKeys(pool));
