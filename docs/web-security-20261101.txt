@@ -1,0 +1,15 @@
+Validation security update (2026-11-01)
+
+Zod 4 replaces Zod 3. Record schemas now specify string keys explicitly.
+The JSON complexity guard executes before route validation: at most 20,000
+nodes, depth 32, 10,000 entries per array and 1,000 keys per object. It rejects
+over-budget inputs with HTTP 413 before allocating a large validation error.
+Existing HTTP body byte limits remain unchanged. Upload strings are counted as
+one node, so legitimate image uploads are not rejected by this node budget.
+
+The regression fixture runs in a separate Node process with a 128 MiB heap.
+It checks the original large-invalid-array condition without contacting a live
+service. tests/unit/json-budget-security.test.js also checks valid upload and
+bulk-ID shapes, excessive nesting and early middleware rejection.
+
+No schema migration, mobile rebuild or feature-flag change is required.

@@ -59,7 +59,7 @@ function createDoctorIvrController(pool) {
           doctor_name: z.string().min(1).max(160),
           specialty: z.string().max(160).optional(),
           operation: z.enum(['list', 'generate', 'save', 'approve', 'template', 'cancel', 'reply']),
-          data: z.record(z.unknown()).default({}),
+          data: z.record(z.string(), z.unknown()).default({}),
         })
         .strict()
         .parse(req.body);
@@ -75,7 +75,7 @@ function createDoctorIvrController(pool) {
           tenant_id: z.string().min(1).max(120),
           admin_id: z.string().uuid(),
           operation: z.enum(['get', 'save', 'templates', 'template_save', 'template_delete']),
-          data: z.record(z.unknown()).default({}),
+          data: z.record(z.string(), z.unknown()).default({}),
         })
         .strict()
         .parse(req.body);

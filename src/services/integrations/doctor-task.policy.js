@@ -288,7 +288,7 @@ const doctorAiAssistSchema = doctorMessageQuerySchema
                 version: z.string().trim().min(1).max(80),
                 rule_type: z.enum(['observation_threshold', 'symptom_duration']),
                 severity: z.enum(['soon', 'urgent', 'emergency']),
-                config: z.record(z.unknown()),
+                config: z.record(z.string(), z.unknown()),
                 patient_message: z.string().trim().min(1).max(1000),
                 expert_message: z.string().trim().min(1).max(1000),
                 source_document_id: z.string().uuid(),

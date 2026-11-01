@@ -76,8 +76,13 @@ const routes = [
 
 beforeEach(() => {
   jest.clearAllMocks();
+  requireAuth.mockReset().mockImplementation((req, _res, next) => {
+    req.user = { id: 42 };
+    req.middlewareOrder = ['auth'];
+    next();
+  });
   for (const [name, handler] of Object.entries(controller)) {
-    handler.mockImplementation((_pool, req, res) =>
+    handler.mockReset().mockImplementation((_pool, req, res) =>
       res.json({ handler: name, userId: req.user.id, middlewareOrder: req.middlewareOrder })
     );
   }

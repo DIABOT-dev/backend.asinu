@@ -7,7 +7,7 @@ const uuidSchema = z.string().uuid();
 const chatRequestSchema = z.object({
   message: z.string().min(1).max(2000),
   client_ts: z.number(),
-  context: z.record(z.any()).optional(),
+  context: z.record(z.string(), z.any()).optional(),
 });
 
 const onboardingIssueItemSchema = z
@@ -99,8 +99,8 @@ const logBaseSchema = z.object({
   occurred_at: z.string().min(1),
   source: z.string().optional(),
   note: z.string().optional().nullable(),
-  metadata: z.record(z.any()).optional(),
-  data: z.record(z.any()),
+  metadata: z.record(z.string(), z.any()).optional(),
+  data: z.record(z.string(), z.any()),
 });
 
 const numberField = (min, max) =>

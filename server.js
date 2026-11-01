@@ -74,6 +74,7 @@ app.use(
     },
   })
 );
+app.use(require('./src/security/json-budget').limitJsonComplexity);
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- OPS HEALTH CHECK ---
