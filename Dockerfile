@@ -1,11 +1,11 @@
-FROM node:20-alpine AS deps
+FROM node:24-alpine AS deps
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-FROM node:20-alpine AS runtime
+FROM node:24-alpine AS runtime
 
 # Install only what we need at runtime; avoid leaving build tools in the image.
 RUN apk add --no-cache wget tini ffmpeg \
