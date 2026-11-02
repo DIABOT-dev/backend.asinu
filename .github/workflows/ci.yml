@@ -2,7 +2,7 @@ name: Backend CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'release/**']
   pull_request:
     branches: [main]
 
@@ -57,7 +57,10 @@ jobs:
       - name: Install call audio encoder
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
+          sudo apt-get install -y --no-install-recommends ffmpeg age
+
+      - name: Operations monitor and encrypted-retirement regressions
+        run: python3 -m unittest discover -s deploy/openbao -p 'test_*.py'
 
       - name: Lint
         run: npm run lint

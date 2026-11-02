@@ -154,6 +154,16 @@ const pool = createPool({
 });
 // Auth middleware checks the persisted token version on this application's DB.
 app.locals.authPool = pool;
+app.get('/api/readyz', async (_req, res) => {
+  try {
+    if (!require('./src/security/openbao-keyring.cjs').keyringReady()) throw new Error('Encryption keys unavailable');
+    await pool.query('SELECT 1');
+    await getRedis().ping();
+    res.status(200).json({ status: 'ok' });
+  } catch {
+    res.status(503).json({ status: 'unavailable' });
+  }
+});
 
 app.use('/api/auth', authLimiter, authRoutes(pool));
 app.use('/api/mobile/auth/login', authLimiter);
