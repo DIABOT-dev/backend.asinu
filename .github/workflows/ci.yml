@@ -60,7 +60,9 @@ jobs:
           sudo apt-get install -y --no-install-recommends ffmpeg age
 
       - name: Operations monitor and encrypted-retirement regressions
-        run: python3 -m unittest discover -s deploy/openbao -p 'test_*.py'
+        run: |
+          python3 -m unittest discover -s deploy/openbao -p 'test_*.py'
+          python3 tests/security-crm-receiver.py
 
       - name: Lint
         run: npm run lint

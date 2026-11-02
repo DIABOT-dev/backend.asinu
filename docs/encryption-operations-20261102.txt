@@ -62,3 +62,11 @@ splitting copies of an existing combined recovery bundle does not revoke prior
 copies. The current limited operator can rotate Transit versions but cannot
 update auto_rotate_period or grant policies; an authorized OpenBao admin session
 is needed for those settings. Never persist a root token to solve this.
+CRM off-server copy
+The dedicated asinu-crm-backup-pull timer copies only age ciphertext to the
+second VPS. The private SSH identity is generated there, has no root shell or
+sudo on the source, and cannot request arbitrary files. Host keys are pinned.
+The age decryption identity remains off both VPS. The source completion time is
+preserved so retrying an old file cannot reset the freshness alarm. Integrity
+checks cover the entire transferred ciphertext; operator decryption/restore
+validation is a separate recovery drill.
