@@ -1,5 +1,27 @@
 Rotation permission change prepared on 2026-11-02
 
+Deployment completed on 2026-11-02, owner-authorized recovery
+The reviewed grant is active in the production operator ACL. Existing rules were
+preserved. Only auto_rotate_period can be written on the four exact key config
+paths; ACL/auth administration, key export and data decryption remain denied.
+The complete maintenance sequence took 8.754 seconds. Readiness probes for all
+three backends stayed at HTTP 200 in the observed samples. No application
+containers were restarted. Read-only authentication of all 122 existing tracked
+ciphertext values passed after the change (46 Asinu, 4 Doctor, 72 CRM).
+
+Both the recovered root token and a separate non-renewable root token limited to
+300 seconds were revoked and their subsequent lookup attempts returned 403.
+The listener temporarily accepted recovery only on loopback with original mTLS.
+The original configuration SHA-256 was restored exactly; the legacy recovery
+endpoint again returned 405. The 90-second emergency restoration timer was
+disarmed and the temporary listener config removed. A fresh post-change Raft
+snapshot was encrypted, copied off both VPS and authenticated with age.
+
+This deployment grants permission; it does not select a rotation interval.
+All four keys remain at version 1 with auto_rotate_period=0. Source grant:
+deploy/openbao/operator-rotation-policy.hcl. Sanitized acceptance evidence:
+docs/evidence/openbao-rotation-grant-20261102.json.
+
 Production state before approval
 The offline operator can already POST to rotate all four Transit keys. It cannot
 update key configuration, edit ACLs, change certificate roles or initiate the
@@ -23,6 +45,11 @@ succeeded; every unsafe parameter and unrelated key schedule was rejected with
 forbidden. The disposable instance and temporary log were removed.
 scripts/test-openbao-rotation-policy.py reproduces this test under unshare --net.
 Never start the test against production or supply production key material.
+
+Before production, a separate persistent Raft rehearsal also verified the full
+3-of-5 recovery, root-token revocation, ACL grant and restart with recovery closed.
+The temporary disable_unauthed_generate_root_endpoints=false setting belongs
+inside the listener block, not at the top level of the server configuration.
 
 Application procedure with an existing authorized administrator
 1. Check the administrator's effective permission to read/update the operator ACL.

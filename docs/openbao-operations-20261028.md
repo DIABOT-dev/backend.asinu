@@ -28,12 +28,19 @@ chỉ thêm tích hợp quản lý khóa.
 | Doctor | Chứng chỉ `doctor-backend`, chỉ khóa `asinu-doctor` |
 | CRM | Chứng chỉ `crm-backend`, chỉ khóa `asinu-crm` |
 | Backup | Chỉ đọc Raft snapshot, không có quyền giải mã dữ liệu |
-| Operator | Quyền đọc metadata khóa, snapshot và đổi phiên bản khóa |
+| Operator | Đọc metadata, snapshot, đổi phiên bản khóa; từ 02/11 được đặt lịch cho đúng 4 khóa Transit |
 
 Các khóa Transit không cho phép xuất khóa hoặc sao lưu khóa dưới dạng rõ.
 Token xác thực ứng dụng có thời hạn 15 phút, tối đa 1 giờ. Token root khởi
 tạo đã thu hồi. Chứng chỉ có thời hạn 365 ngày kể từ 28/10/2026; cần gia hạn
 trước khi hết hạn. CA riêng không được thêm vào trust store toàn hệ thống.
+
+Cập nhật 02/11/2026: chủ hệ thống đã duyệt khôi phục quản trị một lần để cấp
+quyền đặt `auto_rotate_period` cho `asinu-health`, `asinu-doctor`, `asinu-crm`
+và `asinu-crm-volume`. Quyền này không cho thay các tham số khác, sửa ACL hay
+vai trò xác thực. Hai token root tạm đã thu hồi; endpoint recovery đã đóng,
+cấu hình listener khôi phục nguyên bản. Các khóa vẫn ở phiên bản 1 và chưa
+đặt chu kỳ tự động. Xem [biên bản cấp quyền](openbao-rotation-permission-20261102.txt).
 
 Thông tin kết nối nằm trên host, không nằm trong Git hay image ứng dụng:
 

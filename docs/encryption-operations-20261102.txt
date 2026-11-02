@@ -59,9 +59,13 @@ two voters on two VPS do not provide that availability. Do not store a quorum
 of Shamir shares on either server as an auto-unseal workaround.
 Assign share holders and perform a controlled rekey after custody is agreed;
 splitting copies of an existing combined recovery bundle does not revoke prior
-copies. The current limited operator can rotate Transit versions but cannot
-update auto_rotate_period or grant policies; an authorized OpenBao admin session
-is needed for those settings. Never persist a root token to solve this.
+copies. On 2026-11-02 the owner approved one-time quorum administrator recovery.
+The operator now can set auto_rotate_period only for asinu-health, asinu-doctor,
+asinu-crm and asinu-crm-volume. It cannot change other key parameters, grant
+policies or change authentication roles. All four rotation periods remain zero
+until a rotation interval is selected. Recovery was closed, the original service
+configuration restored and both temporary root tokens revoked after the grant.
+See openbao-rotation-permission-20261102.txt. Never persist a root token.
 CRM off-server copy
 The dedicated asinu-crm-backup-pull timer copies only age ciphertext to the
 second VPS. The private SSH identity is generated there, has no root shell or
