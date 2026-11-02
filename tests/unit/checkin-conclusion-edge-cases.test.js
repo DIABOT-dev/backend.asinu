@@ -25,6 +25,22 @@ const facts = (context = {}, override = {}) =>
   buildConclusionFacts({ ...state, ...override }, profile, context, 'vi', now);
 const pair = () => facts({ recentBP: [bp(128, 82, 6), bp(130, 84, 5)], tookMedicationToday: true });
 
+test.each(['vi', 'en'])('follow-up conclusion preserves previous symptoms without assigning them the new onset (%s)', async (lang) => {
+  callTextAi.mockRejectedValueOnce(new Error('synthetic provider unavailable'));
+  const result = await generateStructuredConclusion({
+    ...state,
+    allSymptoms: ['tiêu chảy', 'đau đầu'],
+    currentSymptoms: ['đau đầu'],
+    baselineSymptoms: ['tiêu chảy'],
+    newSymptoms: true,
+    onset: 'Từ sáng',
+    progression: 'same',
+  }, profile, lang);
+  expect(result.personalMessage.toLowerCase()).toContain(lang === 'vi' ? 'tiêu chảy' : 'diarrhea');
+  expect(result.personalMessage.toLowerCase()).toContain(lang === 'vi' ? 'đau đầu' : 'headache');
+  expect(result.personalMessage.toLowerCase()).toContain(lang === 'vi' ? 'trước đó' : 'earlier');
+});
+
 test('measurement year must match the actual century', () => {
   expect(
     validateBlock('lien_quan', 'Huyết áp 128/82 mmHg lúc 13:00 ngày 29/10/1926.', pair())

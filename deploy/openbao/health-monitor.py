@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import ssl
+import subprocess
 import tempfile
 import time
 import urllib.parse
@@ -17,6 +18,16 @@ import uuid
 def check_health(check, now=None):
     now = time.time() if now is None else now
     try:
+        if check['type'] == 'container':
+            name = check['container']
+            if not re.fullmatch(r'[a-zA-Z0-9_-]+', name):
+                return 'CONTAINER_UNAVAILABLE'
+            result = subprocess.run(['docker', 'inspect', '--format', '{{json .State}}', name],
+                                    capture_output=True, text=True, timeout=5)
+            if result.returncode:
+                return 'CONTAINER_UNAVAILABLE'
+            state = json.loads(result.stdout)
+            return None if state.get('Running') is True and state.get('Health', {}).get('Status') != 'unhealthy' else 'CONTAINER_UNAVAILABLE'
         if check['type'] == 'backup':
             files = [p for p in Path(check['directory']).glob(check['pattern']) if p.is_file() and not p.is_symlink()]
             files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
@@ -85,7 +96,7 @@ def run(config, clock=time.time, check=check_health, deliver=send_event):
             failed.append({'check': name, 'code': code})
         if needs_event:
             try:
-                event_id = deliver(config['sentry_dsn'], name, code or previous['code'], not code)
+                event_id = deliver(item.get('sentry_dsn', config['sentry_dsn']), name, code or previous['code'], not code)
                 next_state.update({'last_sent_at': now, 'event_id': event_id})
             except Exception:
                 delivery_failed = True

@@ -166,6 +166,9 @@ function buildConclusionFacts(state, profile, context = {}, lang = 'vi', now = n
     trieu_chung: list(
       state.newSymptoms && state.currentSymptoms?.length ? state.currentSymptoms : state.allSymptoms
     ),
+    ...(state.newSymptoms
+      ? { trieu_chung_truoc_do: list(state.baselineSymptoms).filter((symptom) => !state.currentSymptoms?.includes(symptom)) }
+      : {}),
     bat_dau: short(state.onset) || null,
     dien_bien:
       { same: 'vẫn như cũ', better: 'đang đỡ dần', worse: 'nặng hơn' }[state.progression] ||
@@ -355,6 +358,10 @@ function fallbackBlocks(state, facts, lang) {
       .filter(Boolean)
       .map((s) => `, ${short(localizeConclusionText(s, lang), 80)}`)
       .join(''),
+    baseline: (facts.trieu_chung_truoc_do || [])
+      .slice(0, 2)
+      .map((symptom) => short(localizeConclusionText(symptom, lang), 80))
+      .join(', '),
     conditions: facts.benh_nen_da_khai
       .map((value) => localizeConclusionCondition(value, lang))
       .join(', '),
@@ -373,7 +380,7 @@ function fallbackBlocks(state, facts, lang) {
   const todo = [key(`${group}.action1`), key(`${group}.action2`)];
   if (requiredMeasurementTypes(facts).length) todo.push(key('measure'));
   return {
-    loi_nhan: key(facts.assessment_incomplete ? 'incomplete' : 'message'),
+    loi_nhan: key(facts.assessment_incomplete ? 'incomplete' : params.baseline ? 'message_with_baseline' : 'message'),
     lien_quan: facts.benh_nen_da_khai.length ? key('conditions') : key(`${group}.explanation`),
     nen_lam: todo,
     di_kham_khi: [key(`visit.${visit}`), key(`${group}.warning`)],
@@ -487,6 +494,11 @@ async function generateStructuredConclusion(state, profile, lang = 'vi', context
       block: 'response',
       reason: error instanceof SyntaxError ? 'invalid_json' : 'provider_unavailable',
     });
+  }
+  if ((facts.trieu_chung_truoc_do || []).slice(0, 2).some((symptom) =>
+    !hasPhrase(blocks.loi_nhan, localizeConclusionText(symptom, lang)))) {
+    blocks.loi_nhan = fallbackBlocks(state, facts, lang).loi_nhan;
+    rejected.push({ block: 'loi_nhan', reason: 'baseline_context_missing' });
   }
   let completed = includeRecordedFacts(blocks, facts, lang);
   const explanationFormat = validatePresentation('lien_quan', completed.lien_quan, facts);

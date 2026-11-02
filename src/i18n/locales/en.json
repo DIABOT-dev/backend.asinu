@@ -1064,6 +1064,7 @@
   "checkin.conclusion.disclaimer": "Asinu’s advice is for reference only and does not replace medical diagnosis or treatment. Connect with an Asinu health expert for more accurate health advice.",
   "checkin.conclusion.followup": "I will check on you again in {{hours}} hours.",
   "checkin.conclusion.fallback.message": "You reported {{symptoms}}{{timeline}}. I understand these symptoms are worrying you.",
+  "checkin.conclusion.fallback.message_with_baseline": "You reported additional {{symptoms}}{{timeline}}. I understand this feels uncomfortable; earlier, you also reported {{baseline}}.",
   "checkin.conclusion.fallback.incomplete": "I have heard about {{symptoms}}, but some information is still incomplete. Let’s keep monitoring carefully.",
   "checkin.conclusion.fallback.conditions": "You reported these existing conditions: {{conditions}}. Today’s symptoms need to be considered alongside them; symptoms alone cannot establish the cause.",
   "checkin.conclusion.fallback.measure": "Measure your {{measurements}} again; record 2 details: the value and measurement time.",
