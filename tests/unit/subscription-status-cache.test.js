@@ -40,4 +40,28 @@ describe('subscription status cache', () => {
     expect(ttl).toBeGreaterThan(0);
     expect(ttl).toBeLessThanOrEqual(90);
   });
+
+  test('discards an old free 2/1 snapshot and reads the reconciled membership', async () => {
+    cacheGet.mockResolvedValue({
+      isAnTam: false,
+      protectedMemberCount: 2,
+      protectedMemberLimit: 1,
+    });
+    entitlementService.getEntitlement.mockResolvedValue({
+      isAnTam: false,
+      expiresAt: null,
+      protectedMemberCount: 1,
+      protectedMemberLimit: 1,
+    });
+    const result = await getStatus({}, 7);
+    expect(result.protectedMemberCount).toBe(1);
+    expect(entitlementService.getEntitlement).toHaveBeenCalledWith({}, 7);
+  });
+
+  test('retains a valid free 1/1 cached snapshot', async () => {
+    const cached = { isAnTam: false, protectedMemberCount: 1, protectedMemberLimit: 1 };
+    cacheGet.mockResolvedValue(cached);
+    expect(await getStatus({}, 7)).toEqual(cached);
+    expect(entitlementService.getEntitlement).not.toHaveBeenCalled();
+  });
 });

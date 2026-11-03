@@ -14,7 +14,11 @@ function serviceError(i18nKey, statusCode, code, i18nParams) {
 }
 
 async function listProtectedMembers(pool, ownerUserId, lang = 'vi') {
-  const household = await entitlementService.householdOwnedBy(pool, ownerUserId);
+  let household = await entitlementService.householdOwnedBy(pool, ownerUserId);
+  if (entitlementService.isExpiredHousehold(household)) {
+    await entitlementService.reconcileExpiredHousehold(pool, household);
+    household = await entitlementService.householdOwnedBy(pool, ownerUserId);
+  }
   const members = await pool.query(
     `SELECT m.user_id, m.added_at,
             COALESCE(u.display_name, u.full_name, u.email, u.phone_number) AS name,
@@ -25,6 +29,11 @@ async function listProtectedMembers(pool, ownerUserId, lang = 'vi') {
       ORDER BY (m.user_id = $2) DESC, m.added_at ASC`,
     [household.id, ownerUserId]
   );
+  // The period may end while the member query is in flight. Reload through
+  // the reconciliation path before combining a free limit with the old list.
+  if (entitlementService.isExpiredHousehold(household)) {
+    return listProtectedMembers(pool, ownerUserId, lang);
+  }
   const active =
     ['active', 'grace_period'].includes(household.status) &&
     (household.plan_code === 'free' ||
@@ -68,6 +77,10 @@ async function addProtectedMember(pool, ownerUserId, memberUserId, lang = 'vi') 
     throw serviceError('error.household_invalid_member', 400, 'INVALID_MEMBER');
   }
   await assertConnected(pool, ownerUserId, Number(memberUserId));
+  const priorHousehold = await entitlementService.householdProtecting(pool, Number(memberUserId));
+  if (entitlementService.isExpiredHousehold(priorHousehold)) {
+    await entitlementService.reconcileExpiredHousehold(pool, priorHousehold);
+  }
 
   const db = await pool.connect();
   try {

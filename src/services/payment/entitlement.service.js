@@ -2,11 +2,70 @@
 
 const { cacheDel } = require('../../lib/redis');
 const { planDefinition, localizedPlanName } = require('./subscription-catalog');
+const { lockPurchaseOwner } = require('./iap-revocation.service');
 
 function isActiveHousehold(row) {
   if (!row || !['active', 'grace_period'].includes(row.status)) return false;
   if (row.plan_code === 'free') return true;
   return Boolean(row.current_period_end && new Date(row.current_period_end) > new Date());
+}
+
+function isExpiredHousehold(row) {
+  if (!row || row.plan_code === 'free' || !['active', 'grace_period'].includes(row.status))
+    return false;
+  const expiry = Date.parse(row.current_period_end || '');
+  return Number.isFinite(expiry) && expiry <= Date.now();
+}
+
+async function reconcileExpiredHousehold(pool, household) {
+  if (!isExpiredHousehold(household)) return false;
+  const ownsClient = typeof pool.connect === 'function' && typeof pool.release !== 'function';
+  const db = ownsClient ? await pool.connect() : pool;
+  let downgraded = null;
+  try {
+    if (ownsClient) await db.query('BEGIN');
+    // Serialize with Store activation/refund, then re-read after acquiring the
+    // lock: a renewal may have arrived since the initial expiry lookup.
+    await lockPurchaseOwner(db, household.owner_user_id);
+    const locked = await db.query(
+      'SELECT * FROM subscription_households WHERE owner_user_id = $1 FOR UPDATE',
+      [household.owner_user_id]
+    );
+    if (isExpiredHousehold(locked.rows[0])) {
+      downgraded = await downgradeHouseholdToFree(db, household.owner_user_id);
+    }
+    if (ownsClient) await db.query('COMMIT');
+  } catch (error) {
+    if (ownsClient) await db.query('ROLLBACK');
+    throw error;
+  } finally {
+    if (ownsClient) db.release();
+  }
+  if (downgraded) {
+    await invalidateHouseholdEntitlements(pool, downgraded.id);
+  }
+  return Boolean(downgraded);
+}
+
+async function expireDueSubscriptions(pool, limit = 100) {
+  const due = await pool.query(
+    `SELECT * FROM subscription_households
+      WHERE plan_code <> 'free' AND status IN ('active', 'grace_period')
+        AND current_period_end <= NOW()
+      ORDER BY current_period_end, id LIMIT $1`,
+    [limit]
+  );
+  let expired = 0;
+  const errors = [];
+  for (const household of due.rows) {
+    try {
+      if (await reconcileExpiredHousehold(pool, household)) expired++;
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length) throw new AggregateError(errors, 'Subscription expiry reconciliation failed');
+  return { scanned: due.rows.length, expired };
 }
 
 async function ensureHousehold(pool, ownerUserId) {
@@ -102,6 +161,13 @@ function toEntitlement(household, userId) {
 async function getEntitlement(pool, userId) {
   let household = await householdProtecting(pool, userId);
   if (!household) household = await householdOwnedBy(pool, userId);
+  if (isExpiredHousehold(household)) {
+    await reconcileExpiredHousehold(pool, household);
+    // Former members now belong to their own household; never return the
+    // expired family's count or ownership from the previous snapshot.
+    household = await householdProtecting(pool, userId);
+    if (!household) household = await householdOwnedBy(pool, userId);
+  }
   return toEntitlement(household, userId);
 }
 
@@ -233,5 +299,8 @@ module.exports = {
   grantAnnualConsultationCredits,
   invalidateEntitlement,
   invalidateHouseholdEntitlements,
-  _test: { isActiveHousehold, toEntitlement },
+  isExpiredHousehold,
+  reconcileExpiredHousehold,
+  expireDueSubscriptions,
+  _test: { isActiveHousehold, isExpiredHousehold, toEntitlement },
 };

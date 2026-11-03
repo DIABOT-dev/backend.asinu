@@ -69,6 +69,9 @@ function safeCron(expression, name, handler) {
 }
 
 function startScheduler(pool) {
+  safeCron('* * * * *', 'subscription_expiry', () =>
+    require('../services/payment/entitlement.service').expireDueSubscriptions(pool)
+  );
   safeCron('*/15 * * * * *', 'v21_medication_and_coins', async () => {
     const maintenance = require('../services/v21/maintenance.service');
     await maintenance.endPausedCalls(pool);
