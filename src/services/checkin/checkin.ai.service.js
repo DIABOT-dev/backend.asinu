@@ -22,6 +22,7 @@ const { assertAiConsent } = require('../ai/ai-consent.service');
 
 const OpenAI = require('openai');
 const { t } = require('../../i18n');
+const { assessBloodPressure } = require('../../lib/blood-pressure');
 const { filterTriageResult } = require('../ai/ai-safety.service');
 const { logAiInteraction } = require('../ai/ai-logger.service');
 const logger = require('../../lib/logger');
@@ -394,9 +395,9 @@ async function getNextTriageQuestionLegacy({
   }
   if (recentBP.length > 0) {
     const latest = recentBP[0];
-    if (latest.systolic >= 180 || latest.diastolic >= 110)
+    if (assessBloodPressure(latest.systolic, latest.diastolic).repeatHigh)
       vitalAlerts.push(
-        `⚠️ HUYẾT ÁP NGUY HIỂM: ${latest.systolic}/${latest.diastolic} → severity tối thiểu HIGH, hỏi đau đầu/hoa mắt/khó thở`
+        `⚠️ CHỈ SỐ HUYẾT ÁP CẦN KIỂM TRA NGAY: ${latest.systolic}/${latest.diastolic} → severity tối thiểu HIGH. Hỏi đau ngực, khó thở, yếu liệt, thay đổi thị lực, khó nói; nếu có, hướng dẫn gọi 115 ngay. Nếu không có, đo lại sau ít nhất 1 phút và liên hệ chuyên gia y tế nếu vẫn cao. Một lần đo không xác nhận chẩn đoán hoặc tổn thương cơ quan cấp.`
       );
   }
 

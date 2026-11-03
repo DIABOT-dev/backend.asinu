@@ -7,6 +7,7 @@ const { encryptHealthField, decryptHealthRows } = require('../../security/health
  * - Process AI replies
  */
 const { t } = require('../../i18n');
+const { assessBloodPressure } = require('../../lib/blood-pressure');
 const { filterChatResponse } = require('../ai/ai-safety.service');
 const { logAiInteraction } = require('../ai/ai-logger.service');
 const logger = require('../../lib/logger');
@@ -566,18 +567,12 @@ CHUYỂN TUYẾN ĐẶC BIỆT — nếu ${honorific} nhắc đến:
         logsSummary.latest_bp
       ) {
         const bp = logsSummary.latest_bp;
-        if (bp.systolic >= 140 || bp.diastolic >= 90)
-          crossRefs.push(
-            isEn
-              ? `BP ${bp.systolic}/${bp.diastolic} exceeds target for hypertension (<140/90)`
-              : `huyết áp ${bp.systolic}/${bp.diastolic} vượt ngưỡng cho người THA (<140/90)`
-          );
-        else
-          crossRefs.push(
-            isEn
-              ? `BP ${bp.systolic}/${bp.diastolic} well controlled`
-              : `huyết áp ${bp.systolic}/${bp.diastolic} đang kiểm soát tốt`
-          );
+        const assessment = assessBloodPressure(bp.systolic, bp.diastolic, {
+          dateOfBirth: profile.date_of_birth, birthYear: profile.birth_year, age: profile.age,
+        });
+        crossRefs.push(isEn
+          ? `BP ${bp.systolic}/${bp.diastolic}: AHA/ACC 2025 adult reading category ${assessment.displayCategory || 'not assessed for this profile'}. This single reading does not confirm a diagnosis, good control, or a personalized treatment target.`
+          : `Huyết áp ${bp.systolic}/${bp.diastolic}: mã phân loại tham khảo lần đo AHA/ACC 2025 ${assessment.displayCategory || 'chưa đánh giá theo hồ sơ này'}. Diễn giải mã bằng tiếng Việt dễ hiểu; không dùng một lần đo để khẳng định chẩn đoán, kiểm soát tốt hoặc mục tiêu điều trị cá nhân.`);
       }
       if (crossRefs.length) {
         lines.push(

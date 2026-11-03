@@ -36,6 +36,7 @@ const { t } = require('../../i18n');
 const { getHonorifics } = require('../../lib/honorifics');
 const { createHash, randomUUID } = require('crypto');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
+const { assessBloodPressure, bloodPressureMetricStatus } = require('../../lib/blood-pressure');
 const { buildCheckinContext, applyIllusion } = require('../../core/checkin/illusion-layer');
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 const logger = require('../../lib/logger');
@@ -1953,14 +1954,20 @@ async function getHealthScore(pool, userId) {
 
   // 3. Latest BP (last 24h)
   const { rows: bpRows } = await pool.query(
-    `SELECT bp.systolic
+    `SELECT bp.systolic, bp.diastolic,
+            TO_CHAR(ob.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, ob.birth_year
      FROM blood_pressure_logs bp
      JOIN logs_common lc ON lc.id = bp.log_id
+     LEFT JOIN user_onboarding_profiles ob ON ob.user_id = lc.user_id
      WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '24 hours'
      ORDER BY lc.occurred_at DESC LIMIT 1`,
     [userId]
   );
   const systolic = bpRows[0]?.systolic ?? null;
+  const diastolic = bpRows[0]?.diastolic ?? null;
+  const bpProfile = { dateOfBirth: bpRows[0]?.date_of_birth, birthYear: bpRows[0]?.birth_year };
+  const bpAssessment = assessBloodPressure(systolic, diastolic, bpProfile);
+  const bpStatus = bloodPressureMetricStatus(systolic, diastolic, bpProfile);
 
   // 4. Compute level
   let level = 'ok';
@@ -1986,9 +1993,10 @@ async function getHealthScore(pool, userId) {
     level = 'danger';
     factors.push('glucose_very_low');
   }
-  if (systolic !== null && systolic > 180) {
+  if (bpStatus === 'danger') {
     level = 'danger';
-    factors.push('systolic_very_high');
+    if (Number(systolic) >= 180) factors.push('systolic_very_high');
+    if (Number(diastolic) >= 120) factors.push('diastolic_very_high');
   }
 
   // Monitor conditions (only upgrade if not already danger)
@@ -2005,9 +2013,11 @@ async function getHealthScore(pool, userId) {
       level = 'monitor';
       factors.push('glucose_high');
     }
-    if (systolic !== null && systolic >= 140 && systolic <= 180) {
+    if (bpStatus === 'monitor') {
       level = 'monitor';
-      factors.push('systolic_high');
+      if (Number(systolic) >= 120) factors.push('systolic_high');
+      if (Number(diastolic) >= 80) factors.push('diastolic_high');
+      if (bpAssessment.low) factors.push('blood_pressure_low');
     }
   }
 

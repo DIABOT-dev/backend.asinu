@@ -6,6 +6,7 @@
 const { t } = require('../../i18n');
 const { cacheGet, cacheSet } = require('../../lib/redis');
 const checkinService = require('../checkin/checkin.service');
+const { assessBloodPressure, bloodPressureMetricStatus } = require('../../lib/blood-pressure');
 
 const TREE_DASHBOARD_CACHE_TTL_SECONDS = 60;
 
@@ -31,11 +32,8 @@ function glucoseStatus(value) {
   return 'stable';
 }
 
-function bloodPressureStatus(systolic) {
-  if (systolic === null) return 'unavailable';
-  if (systolic > 180) return 'danger';
-  if (systolic >= 140) return 'monitor';
-  return 'stable';
+function bloodPressureStatus(systolic, diastolic, profile) {
+  return bloodPressureMetricStatus(systolic, diastolic, profile);
 }
 
 function metric(value, unit, recordedAt, status, extra = {}) {
@@ -54,9 +52,11 @@ async function getLatestMetrics(pool, userId) {
       [userId],
     ),
     pool.query(
-      `SELECT bp.systolic, bp.diastolic, bp.pulse, bp.unit, lc.occurred_at
+      `SELECT bp.systolic, bp.diastolic, bp.pulse, bp.unit, lc.occurred_at,
+              TO_CHAR(ob.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, ob.birth_year
        FROM blood_pressure_logs bp
        JOIN logs_common lc ON lc.id = bp.log_id
+       LEFT JOIN user_onboarding_profiles ob ON ob.user_id = lc.user_id
        WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '24 hours'
        ORDER BY lc.occurred_at DESC LIMIT 1`,
       [userId],
@@ -87,6 +87,8 @@ async function getLatestMetrics(pool, userId) {
   const glucoseValue = toFiniteNumber(glucoseRow?.value);
   const systolic = toFiniteNumber(bloodPressureRow?.systolic);
   const diastolic = toFiniteNumber(bloodPressureRow?.diastolic);
+  const bpProfile = { dateOfBirth: bloodPressureRow?.date_of_birth, birthYear: bloodPressureRow?.birth_year };
+  const bpAssessment = assessBloodPressure(systolic, diastolic, bpProfile);
   const weight = toFiniteNumber(weightRow?.weight_kg);
   const waterTotal = toFiniteNumber(waterRow?.total_ml);
 
@@ -97,8 +99,8 @@ async function getLatestMetrics(pool, userId) {
           `${systolic}/${diastolic}`,
           bloodPressureRow.unit || 'mmHg',
           bloodPressureRow.occurred_at,
-          bloodPressureStatus(systolic),
-          { systolic, diastolic, pulse: toFiniteNumber(bloodPressureRow.pulse) },
+          bloodPressureStatus(systolic, diastolic, bpProfile),
+          { systolic, diastolic, pulse: toFiniteNumber(bloodPressureRow.pulse), classification: bpAssessment.displayCategory, classificationStandard: bpAssessment.standard, classificationScope: bpAssessment.scope },
         )
       : null,
     weight: metric(weight, 'kg', weightRow?.occurred_at || null, 'available', {
@@ -195,7 +197,7 @@ async function getSupportingActivity(pool, userId) {
  */
 async function getTreeSummary(pool, userId) {
   try {
-    const cacheKey = `tree:dashboard:v2:${userId}`;
+    const cacheKey = `tree:dashboard:v3:${userId}`;
     const cached = await cacheGet(cacheKey);
     if (cached) return cached;
 

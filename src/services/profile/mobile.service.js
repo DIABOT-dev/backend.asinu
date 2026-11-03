@@ -8,6 +8,7 @@ const { cacheDel } = require('../../lib/redis');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 const { decryptHealthField } = require('../../security/health-field-encryption');
+const { assessBloodPressure } = require('../../lib/blood-pressure');
 
 const VALID_LOG_TYPES = new Set([
   'glucose',
@@ -177,7 +178,7 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
   if (logType === 'bp' && data.systolic && data.diastolic) {
     const sys = parseFloat(data.systolic);
     const dia = parseFloat(data.diastolic);
-    if (sys >= 180 || dia >= 110) {
+    if (assessBloodPressure(sys, dia).repeatHigh) {
       severity = 'critical';
       titleKey = 'push.health_alert_bp_title';
       bodyKey = 'push.health_alert_bp_body';
@@ -329,6 +330,8 @@ async function createLog(pool, userId, payload) {
     // Invalidate related caches when new health log is created
     await cacheDel(
       `tree:summary:${userId}`,
+      `tree:dashboard:v2:${userId}`,
+      `tree:dashboard:v3:${userId}`,
       `tree:history:${userId}`,
       `health:score:${userId}`,
       `missions:${userId}`
