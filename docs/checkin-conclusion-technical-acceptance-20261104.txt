@@ -76,3 +76,9 @@ Vòng lỗi cũ và replay sau sửa: /Users/ducytcg123456/Desktop/APP/preview/c
 BỔ SUNG KIỂM TRA CI
 CI cũ có 149 suite/2082 test đạt và 2 suite/11 test bỏ qua, nhưng job vẫn exit 1 do Redis ECONNREFUSED ghi log sau khi test kết thúc. CI chỉ khai Postgres, thiếu Redis mà các luồng tích hợp sử dụng.
 Đã bổ sung Redis 7 có healthcheck và REDIS_URL riêng cho job kiểm thử, không thay runtime/cache hoặc che log/lược test. Kết quả CI sau sửa và đường dẫn run được lưu tại ci-result.json trong bộ minh chứng kỹ thuật. Nhánh release chỉ kiểm thử/build, không tự deploy VPS.
+
+BỔ SUNG HẬU KIỂM TÍCH HỢP
+Sau khi có Redis, phát hiện suite checkin-call.full-flow.integration.test.js giữ kết nối cache khiến Jest không thoát. Hai suite API khác đã có teardown. Đã thêm disconnect trong finally của suite full-flow hiện có; không thêm file test mới, không sửa các assertion nghiệp vụ và không dùng forceExit.
+Dựng PostgreSQL database trống và Redis riêng, chạy migration rồi chạy toàn bộ Jest với Redis thật, không có mock chẩn đoán: 149 suite / 2082 test đạt; 2 suite / 11 test bỏ qua; exitCode=0, 23,926 giây. Database kiểm thử đã drop và Redis riêng đã dừng; không dùng/xoá database hay cache của ứng dụng hiện tại.
+Các lượt chẩn đoán có tracker tạm hoặc bị guard tên database/tìm module chặn chỉ dùng tìm nguyên nhân, không tính thành kết quả nghiệm thu; log vẫn được giữ. Lượt cuối ci-isolated-final.log và ci-isolated-final-status.json là bằng chứng bộ thật thoát sạch.
+Script theo dõi/runner tạm được xoá sau chạy; chỉ giữ thay đổi teardown của test đã có từ trước.
