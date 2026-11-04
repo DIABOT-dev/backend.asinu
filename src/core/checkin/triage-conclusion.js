@@ -25,9 +25,13 @@ const {
   measurementTimeMatches,
 } = require('./triage-conclusion-guards');
 const escapePattern = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const accentSensitiveNames = new Set(['chàm', 'cúm']);
+const phraseText = (text, phrase) => accentSensitiveNames.has(phrase)
+  ? String(text || '').normalize('NFKC').replace(/\p{Cf}/gu, '').replace(/\s+/g, ' ').trim().toLowerCase()
+  : normalize(text);
 const phrasePattern = (phrase) =>
-  new RegExp(`(?<![\\p{L}\\p{N}])${escapePattern(normalize(phrase))}(?![\\p{L}\\p{N}])`, 'giu');
-const hasPhrase = (text, phrase) => phrasePattern(phrase).test(normalize(text));
+  new RegExp(`(?<![\\p{L}\\p{N}])${escapePattern(phraseText(phrase, phrase))}(?![\\p{L}\\p{N}])`, 'giu');
+const hasPhrase = (text, phrase) => phrasePattern(phrase).test(phraseText(text, phrase));
 const short = (value, max = 240) =>
   String(value || '')
     .normalize('NFC')
@@ -42,7 +46,7 @@ const list = (value, max = 10) =>
 const DISEASES = [
   ['tiền tiểu đường', 'tiền đái tháo đường', 'prediabetes', 'pre-diabetes'],
   ['tiểu đường', 'đái tháo đường', 'diabetes'],
-  ['cao huyết áp', 'tăng huyết áp', 'huyết áp cao', 'hypertension'],
+  ['cao huyết áp', 'tăng huyết áp', 'huyết áp cao', 'hypertension', 'high blood pressure'],
   ['mỡ máu cao', 'rối loạn lipid máu', 'high cholesterol', 'dyslipidemia'],
   ['gout', 'gút'],
   ['trầm cảm', 'depression'],
@@ -67,14 +71,41 @@ const DISEASES = [
   ['sốt xuất huyết', 'dengue'],
   ['viêm gan', 'hepatitis'],
   ['bệnh mạch vành', 'coronary disease'],
+  // Common everyday labels are still disease names. A mild presentation does
+  // not authorize naming one that the person has never declared.
+  ['cảm lạnh', 'common cold'],
+  ['cúm', 'influenza', 'flu'],
+  ['covid', 'covid-19', 'covid 19'],
+  ['hen suyễn', 'hen phế quản', 'asthma'],
+  ['bệnh phổi tắc nghẽn mạn tính', 'copd'],
+  ['viêm phế quản', 'bronchitis'],
+  ['viêm xoang', 'sinusitis'],
+  ['viêm họng', 'pharyngitis'],
+  ['viêm amidan', 'tonsillitis'],
+  ['viêm đường hô hấp', 'respiratory infection'],
+  ['trào ngược dạ dày', 'trào ngược axit', 'acid reflux', 'gerd'],
+  ['viêm dạ dày ruột', 'gastroenteritis'],
+  ['hội chứng ruột kích thích', 'irritable bowel syndrome', 'ibs'],
+  ['loét dạ dày', 'peptic ulcer', 'stomach ulcer'],
+  ['ngộ độc thực phẩm', 'food poisoning'],
+  ['viêm đường tiết niệu', 'urinary tract infection', 'uti'],
+  ['sỏi thận', 'kidney stones'],
+  ['chàm', 'bệnh chàm', 'chàm da', 'eczema'],
+  ['vảy nến', 'psoriasis'],
+  ['viêm da', 'dermatitis'],
+  ['zona', 'shingles'],
+  ['đau nửa đầu', 'migraine'],
+  ['loãng xương', 'osteoporosis'],
+  ['thoái hóa khớp', 'osteoarthritis'],
+  ['rối loạn nhịp tim', 'arrhythmia'],
 ];
 // Match longer disease names first so prediabetes never authorizes diabetes.
 const diseasePatterns = DISEASES.flatMap((group) =>
-  group.map((name) => ({ group, pattern: phrasePattern(name) }))
+  group.map((name) => ({ group, name, pattern: phrasePattern(name) }))
 );
 function diseaseGroups(text) {
-  const spans = diseasePatterns.flatMap(({ group, pattern }) =>
-    [...normalize(text).matchAll(pattern)].map((match) => ({
+  const spans = diseasePatterns.flatMap(({ group, name, pattern }) =>
+    [...phraseText(text, name).matchAll(pattern)].map((match) => ({
       group,
       start: match.index,
       end: match.index + match[0].length,

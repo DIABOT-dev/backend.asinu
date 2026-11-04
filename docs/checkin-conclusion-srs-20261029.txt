@@ -1,3 +1,5 @@
+CẬP NHẬT 04/11/2026 — SAU SỬA VÀ NGHIỆM THU KỸ THUẬT: AC-1–AC-8 đạt các kiểm tra local/bộ mẫu cuối; AC-4 = 2/30 (6,67%), AC-7 P95 2508 ms. Bộ sâu 0/30; đối chiếu 62 đầu ra không còn lỗi kỹ thuật đã kiểm. AC-0 phần Founder và AC-9/P6 vẫn cần duyệt con người; chưa bật production. Xem docs/checkin-conclusion-technical-acceptance-20261104.txt. Các kết quả bên dưới là lịch sử.
+
 CẬP NHẬT 04/11/2026 — TEST SÂU: AC-3 chưa đạt; 2/30 ca gọi tên bệnh common cold chưa khai, và matcher định tính còn loại oan. Xem docs/checkin-conclusion-deep-objective-20261104.txt. Các số liệu đạt ở các vòng trước bên dưới là lịch sử, không đủ để ký đạt toàn bộ SRS.
 
 SRS: AI kết luận sau check-in, 29/10/2026

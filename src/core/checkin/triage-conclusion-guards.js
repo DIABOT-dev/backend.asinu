@@ -27,6 +27,21 @@ const TYPE_PATTERNS = [
 ];
 const typesIn = (text) =>
   TYPE_PATTERNS.filter(([, pattern]) => pattern.test(plain(text))).map(([type]) => type);
+function assertsVitalStatus(text, type) {
+  const label = type === 'huyet_ap'
+    ? '(?:huyet ap|blood pressure)'
+    : '(?:duong huyet|blood (?:sugar|glucose))';
+  const status = '(?:on dinh|binh thuong|cao|thap|tot|stable|normal|high|low|good)\\b';
+  const owner = 'cua (?:anh|chi|bac|chu|co|ban|ong|ba)';
+  // The status must predicate the named vital. An earlier "it is good to
+  // consider" must not turn a later condition label into a measured result.
+  const predicate = '(?:is|are|was|were|remains?|has been|have been|looks?|seems?|van|dang|hien tai|hien|con|rat|kha|hoi|khong|chua|hom nay|o muc) ';
+  const modifiers = '(?:(?:still|currently|consistently|very|quite|slightly|too|not|at a|at the|van|dang|hien tai|hien|con|rat|kha|hoi|khong|chua|hom nay|o muc) )*';
+  return (
+    new RegExp(`${label}(?: (?:reading|readings|level|levels))?(?: ${owner})? ${predicate}${modifiers}${status}`).test(text) ||
+    new RegExp(`${label} ${owner} ${modifiers}${status}`).test(text)
+  );
+}
 const units = () => /(\d+(?:[.,]\d+)?)(?:\s*\/\s*(\d+))?\s*(mmHg|mmol\/L|mg\/dL)/gi;
 const containsVisit = (text) =>
   /đi khám|bệnh viện|phòng khám|gặp (?:bác sĩ|chuyên gia)|đặt lịch khám|seek (?:care|help)|assessment|clinic|hospital|see (?:a |your )?(?:doctor|professional|specialist)/iu.test(
@@ -205,9 +220,7 @@ function measurementFault(value, facts) {
     for (const type of named) {
       if (
         !current.has(type) &&
-        /(?:cua (?:anh|chi|bac|chu|co|ban|ong|ba)|van|dang|hien|is|remains).{0,20}(?:on dinh|binh thuong|cao|thap|tot|stable|normal|high|low|good)/.test(
-          text
-        )
+        assertsVitalStatus(text, type)
       )
         return 'unmeasured_vital_claim';
     }
