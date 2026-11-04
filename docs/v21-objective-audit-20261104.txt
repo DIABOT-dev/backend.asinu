@@ -1,0 +1,114 @@
+KIỂM THỬ LẠI KẾT LUẬN CHECK-IN VÀ SRS V2.1 — 04/11/2026
+
+KẾT LUẬN
+- Kết luận check-in: bộ 30 ca mới đạt audit kỹ thuật; 0/30 dự phòng, P95 2472 ms, 30/30 dưới 10 giây. Có thêm 3 lượt prompt, không retry hay thay ca sau chạy. Founder/chuyên gia/P6 vẫn cần duyệt nội dung.
+- V2.1: các kiểm tra tự động hiện có và bổ sung đã qua sau sửa 5 lỗi logic. Chưa đủ ký nghiệm thu toàn bộ A/B: còn thử máy thật, 5 người dùng, bộ ảnh đơn thuốc và chốt chính sách/thể lệ/nội dung.
+- Giữ hai quyết định của người dùng: 07:00–21:00; nút 2 là Bỏ qua/SKIPPED, không gọi lại vì đã chủ động bỏ cữ. Đây là khác biệt có chủ đích với LATER/30 phút trong bản SRS gốc; không tự phục hồi LATER.
+- Giữ giờ yên lặng 22:00–06:00. Không bật V2.1/bốc thăm/mẫu thiệp cho người dùng thật trong tác vụ.
+
+ĐÃ SỬA 5 ĐIỂM TÁI HIỆN ĐƯỢC
+1. AC-A4: quyền can_receive_alerts bị thu hồi sau enqueue nhưng trước xử lý vẫn tạo thông báo mới trong inbox. Push đã có chặn riêng; lỗi tìm thấy là inbox mới, không khẳng định máy nhận được push.
+   Sửa: kiểm quyền trước tạo inbox và tại lúc gửi; message outbox kết thúc mục đã hết quyền thay vì lặp lại.
+2. AC-A4: đổi problems_only sau enqueue hoặc sau reserve chưa chặn kết quả TAKEN đang chờ.
+   Sửa: dùng chung kiểm tra tuỳ chọn hiện tại trước inbox và trước gửi push, hủy job push đã không còn được phép.
+3. EA1: attempt được xếp trong khung giờ nhưng dispatch không kiểm lại, có thể gọi native ngoài 07:00–21:00.
+   Sửa: kiểm múi giờ người bệnh ngay tại dispatch; ngoài khung chuyển sang push trong cùng attempt.
+4. EA3: check-in ưu tiên bắt đầu sau lúc xếp hàng, medication dispatcher vẫn gọi adapter native.
+   Sửa: khóa người nhận theo cùng thứ tự, kiểm cuộc ưu tiên lại khi claim; giữ một attempt trong DB, dời lease/deadline. Không tạo thêm attempt khi tick lại, chỉ gửi sau hết cooldown. Deadline không kéo dài qua cửa sổ trả lời 2 giờ.
+5. EA14: model trả readable=false nhưng có items mâu thuẫn thì normalizer đổi thành readable=true.
+   Sửa: tôn trọng từ chối rõ ràng, bỏ gợi ý đoán, chuyển nhánh thủ công; không tự lưu thuốc.
+Không sửa máy trạng thái/luật của tổng đài check-in hoặc Doctor IVR, không đổi mức khỏe/không khỏe để nhận Xu.
+
+KIỂM THỬ SAU SỬA
+- PostgreSQL database trống + Redis riêng, migration đầy đủ, toàn bộ backend: 149 suite / 2082 test đạt; 2 suite / 11 test bỏ qua theo cấu hình, không tính là đạt. Sentry 8/8.
+- V2.1 cùng bộ gift gốc: 98/98 trong TZ=UTC (thuộc full suite) và chạy riêng TZ=Asia/Ho_Chi_Minh.
+- Bổ sung: trước sửa 5 fail / 6 pass trên 11 ca; sau sửa và thêm kiểm tra cooldown/lease/cửa sổ 2 giờ/push đã reserve: 13/13 đạt.
+- Test gift gốc giữ nguyên file: SHA256 654f7c08ae95730e0e23a843c89c96e590d4a95c81fefdcfc05810ecc9c30605.
+- App: kết luận 19; màn trả lời thuốc 7; overview 7; wizard 14; tải ảnh 19; gift 82; check-in API contract 25. TypeScript và i18n đạt. Bộ Doctor IVR và check-in native/runtime đã chạy lại, không thay nghiệm thu trên máy thật.
+- Script/bài test mới tạo tạm được xoá sau chạy; test có sẵn giữ lại. Các log .harness-* chỉ lỗi dựng fixture/script, không dùng làm bằng chứng lỗi production hay kết quả đạt. edge-probes.log.before-fix là 5 lỗi thực; edge-probes.log cuối là 13 ca qua.
+
+MA TRẬN PHẦN A
+AC-A1 CHỜ THIẾT BỊ: iPhone + Android thật khóa màn hình ở 07:00/19:00, đo lệch <=1 phút. Không dùng runtime test/Simulator để đánh dấu đạt.
+AC-A2 ĐẠT TỰ ĐỘNG THEO QUYẾT ĐỊNH MỚI: TAKEN/SKIPPED/OUT_OF_MEDS/UNCONFIRMED, không quá 2 attempt; không nghe retry 15 phút, Bỏ qua không retry.
+AC-A3 ĐẠT BACKEND: check-in source med_call, gọi service gốc, có gift chờ mở, idempotent và hủy routine call. Chuỗi thao tác trên máy thật còn chờ.
+AC-A4 ĐẠT KIỂM TRA BỔ SUNG sau sửa: quyền và problems_only lúc xử lý/gửi, không lộ tên thuốc trong câu chữ. Transport đến máy con thật còn chờ.
+AC-A5 ĐẠT TÍCH HỢP: MEDICINE ghi logs_common + medication_logs, reader nhận tookMedicationToday; SUPPLEMENT không giả thành đều thuốc; push tóm tắt tránh nhắc trùng.
+AC-A6 ĐẠT HỒI QUY: test cũ tổng đài/Doctor IVR qua; V2.1 dùng bảng med_* riêng. Luồng gọi check-in gốc chỉ được dùng qua API/service có sẵn cho thao tác check-in/hủy cuộc gọi theo FR-A5.
+AC-A7 ĐẠT BACKEND/ADAPTER: MED_CALL_ENABLED false hoặc native lỗi chuyển push cùng attempt. Push actions/native playback thực phải thử máy.
+AC-A8 MỘT PHẦN: DB/outbox/lease, timeout và repeated tick/recovery có test. Backend local đã restart và sẵn sàng. Chưa kill backend giữa một cuộc native thật đang diễn ra; không ký phần đó.
+AC-A9 ĐẠT CÁC KIỂM TRA TỰ ĐỘNG EA1–EA13 hiện có và các ranh giới mới. Quyền gọi/âm thanh/màn khóa thực vẫn xem AC-A1/A8.
+AC-A10 CHỜ P6: nghe/duyệt TTS, push, lời xác nhận và các xưng hô. Không tạo biên bản duyệt giả.
+AC-A11 ĐẠT: tài khoản mới không có lịch/cữ/cuộc gọi mặc định.
+AC-A12 CHỜ THỬ NGƯỜI THẬT: 5 người, ít nhất 2 trên 55 tuổi, 3 món từ đơn in, không gõ, <90 giây. Wizard tự động không chứng minh được mốc thời gian này.
+AC-A13 ĐẠT BACKEND: lịch từ con PENDING, chỉ người bệnh đồng ý, decline/cooldown/48 giờ và nhiều cữ nguyên tử. Nhánh consent qua native thật còn chờ.
+AC-A14 CHƯA ĐỦ BỘ MẪU/DUYỆT: có lượt mới 20 ảnh bao bì (hộp/vỉ/lọ), 7 sản phẩm; chưa có đơn in/viết tay, ảnh mờ/lóa đời thực. Xem phần ảnh bên dưới. Founder chưa được coi là đã duyệt.
+AC-A15 ĐẠT CHUỖI/PAYLOAD: không tên/liều trong TTS hoặc push bố mẹ/con; danh sách/ảnh nằm ở API màn app được cấp quyền. Còn nghe/đối chiếu thiết bị thực và P6.
+
+MA TRẬN PHẦN B
+AC-B1 ĐẠT DB: đủ 42 Xu/ngày, cap 1 check-in/4 đáp án/2 log/1 mở quà; weekly 5/7 tính tuần VN, không yêu cầu liên tiếp.
+AC-B2 ĐẠT: mọi lựa chọn sức khỏe và nút thuốc nhận cùng số Xu; không thưởng theo kết quả tốt/xấu.
+AC-B3 ĐẠT: 10 bản sao sự kiện chỉ +1 lần; 5 đổi đồng thời cùng request chỉ trừ một lần; 5 request khác nhau không chi quá số dư/quota, không âm.
+AC-B4 ĐẠT FAULT INJECTION: lỗi enqueue Xu không rollback check-in/đáp án thuốc/gift. Worker và ledger giao dịch riêng.
+AC-B5 ĐẠT DB: draw tắt -> ẩn/từ chối; kỳ fixture hợp lệ -> ticket và CSV, quota 3/tháng. Không bật kỳ/bốc thăm production.
+AC-B6 CHƯA ĐỦ NGHIỆM THU: mất kết nối trước gửi -> không gửi, hoàn Xu theo ledger ngược đã có test. Chưa đo nhận thiệp thật <1 phút; giờ yên lặng hiện mâu thuẫn với cách hiểu 1 phút mọi thời điểm.
+AC-B7 ĐẠT KIỂM TRA UI/API: Xu không có đường mua/chuyển/đổi tiền/mở khóa trả phí; không hiển thị số tiền trong màn Xu/quà.
+AC-B8 ĐẠT: bộ gift gốc qua và không sửa bài test đó; giữ ràng buộc hộp cố định mỗi hộ/ngày.
+AC-B9 ĐẠT CÁC KIỂM TRA TỰ ĐỘNG EB1–EB13 hiện có; giao thiệp thật vẫn chờ như B6. Không đổi luật mất quyền/hoàn Xu hoặc xóa tài khoản hiện có.
+AC-B10 CHỜ P3/P6/FOUNDER: thể lệ trong app đã có; mẫu thiệp, hồ sơ kỳ và thể lệ/duyệt phát hành chưa tự xác nhận.
+
+PHỦ NGOẠI LỆ
+EA1 khung giờ: policy + dispatch mới. EA2 gộp <30 phút và retry gộp: DB. EA3 ưu tiên/cooldown trước và sau enqueue: DB mới.
+EA4 thiếu thiết bị tối đa 1 báo/ngày; EA5 fallback cùng attempt/audio WAV; EA6 cửa sổ 2 giờ; EA7 request_id/first answer: DB.
+EA8 sửa/xóa giữ snapshot và dừng attempt; EA9 không người thân; EA10 đã check-in bỏ câu; EA11 timezone người bệnh; EA12 hết thuốc lặp; EA13 tắt reminders: DB/policy.
+EA14 không đọc/mâu thuẫn: sửa + test. EA15 đơn một phần/viết tay: parser kiểm bỏ phần không chắc, chưa có bộ đơn thật. EA16 loại liều/công dụng/thông tin cá nhân: allowlist.
+EA17 decline 7 ngày; EA18 pending 48 giờ; EA19 audit/lưu sau/permission race; EA20 giờ ăn gợi ý; EA21 chip theo bệnh nền; EA22 push-only: có kiểm DB/policy/UI.
+EB1–EB5 duplicate/cap/xóa-nhập lại/không đủ Xu/đổi song song: DB. EB6 quota, EB7 đóng kỳ, EB8 rollback/refund: DB.
+EB9 mất Care Circle ẩn quà; EB10 expire 12 tháng + nhắc trước 7 ngày; EB11 tài khoản sở hữu; EB12 xóa; EB13 ngày VN: DB, chạy cả UTC/VN.
+Với EA6, sau 2 giờ code ghi audit late_answer_ignored, không đổi thành TAKEN/không tạo xác nhận y tế. Nếu từ log trong SRS có nghĩa là nhật ký thuốc người dùng thay vì audit, cần chốt lại; không tự đổi nghĩa trong tác vụ.
+
+ẢNH THUỐC — LƯỢT THẬT MỚI
+20 request mới tới model med-gemini hiện cấu hình clinical provider, prompt production và max_tokens=1800, nhiệt độ 0.1; ảnh công khai đã xem, hash khớp, không gửi bệnh nhân/DB/tên file/đáp án cho provider. Không retry/chuyển provider.
+19/19 ảnh có tên đọc đúng tên và số món, ảnh mặt bên không có tên được từ chối. 20/20 không trả liều hoặc tự suy giờ uống. P95 3705 ms, 18548 token.
+Bộ chấm lab cũ chỉ chấp nhận PACKAGING nên bắt oan OTHER trong phản hồi readable=false, items=[], uncertain=[] đúng yêu cầu prompt. Đã sửa đúng nhánh từ chối, vẫn chặn OTHER/readable=true. 9 test bộ chấm qua. Giữ nguyên raw và điểm cũ 19/20; chấm lại cùng 20 raw được 20/20, không gọi lại model để thay kết quả.
+Bộ mẫu chỉ 7 sản phẩm qua nhiều góc bao bì; không thể suy rộng thành đọc đúng đơn thuốc/viết tay hay ảnh người dùng chụp. Không tự duyệt y tế/Founder.
+
+GIỜ YÊN LẶNG VÀ AC-B6
+Tại 23:00 giờ VN, coin_card, med_reminder, med_result bị giữ đến 06:00: 25200 giây. Scheduler V2.1 tick 15 giây không loại bỏ việc giữ này.
+Vì vậy không hứa thiệp tới máy con trong 1 phút ban đêm. Cần Founder chốt AC-B6 chỉ áp dụng ngoài giờ yên lặng, hay cần ngoại lệ giao thiệp chủ động. Không tự bỏ giờ yên lặng hoặc cho thông báo vượt chính sách.
+
+CÁC VIỆC CÒN LẠI
+- Máy thật A1/A7/A8/A13/A15 và transport thiệp B6, không thay bằng mock hoặc Simulator.
+- 5 người thử A12; thêm bộ đơn in/viết tay/ảnh mờ cho A14, Founder chọn và duyệt kết quả.
+- Founder/P3/P6: đối tượng Free/bệnh nền, cấu hình Xu/giá/hạn dùng, mẫu thiệp, TTS/push, điều kiện kỳ bốc thăm và chính sách B6 nêu trên. Hai quyết định 07–21/Bỏ qua đã có, không hỏi lại.
+- Kết luận check-in: chấm nội dung của chuyên gia/P6 vẫn chờ; hồ sơ mẫu mới đã tạo, không giả chữ ký.
+
+LOCAL / NGUỒN / DỌN DẸP
+Không migration mới. Database kiểm thử được tạo mới, migrate đầy đủ rồi xóa; Redis test riêng đã dừng, không sửa dữ liệu tài khoản hiện tại.
+Backend local đã nạp bản sửa, /api/readyz HTTP200. Không đổi source mobile hoặc native, không bật cờ production, không deploy VPS trong tác vụ.
+Bài test/script tạm mới được xóa. Giữ báo cáo, dữ liệu giả lập, ảnh bao bì công khai và log. Các test sẵn có của dự án giữ nguyên, trừ bổ sung kiểm tra cho bộ chấm ảnh sẵn có.
+CI sau commit theo dõi riêng tại ci-result.json trong thư mục minh chứng; không tự coi test local thay thế CI.
+
+TOKEN / CREDITS MỚI
+{
+  "newConclusionRequests": 33,
+  "newPublicImageRequests": 20,
+  "newTtsRequests": 0,
+  "conclusionTokens": 41575,
+  "visionTokens": 18548,
+  "totalTokens": 60123,
+  "highestObservedCredits": 23.5976,
+  "lowestObservedCredits": 23.4162,
+  "observedBalanceRange": 0.1814,
+  "invoiceCostKnown": false,
+  "note": "Only observed provider balance headers; excludes first-call charge and may include concurrent account use. No token-to-credit conversion assumed."
+}
+
+BẰNG CHỨNG
+/Users/ducytcg123456/Desktop/APP/preview/v21-objective-audit-20261104
+- backend-full-utc.log, v21-vietnam.log, database-test-status.json: bộ DB thật sau sửa.
+- edge-probes.log.before-fix / edge-probes.log: các lỗi thực và 13 ca sau sửa.
+- quiet-hours-observation.json: độ trễ policy 23:00->06:00.
+- vision-live/: raw 20 request mới, ảnh/manifest/prompt; vision-live-rescored.json giữ cả điểm cũ và điểm chấm lại.
+- final-verification.json, usage-summary.json, các log FE/runtime.
+Kết luận check-in: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-recheck-v21-20261104
+- results.json, srs-audit.json, clinical-review.html, clinical-review-packet.json, phiếu trống chờ duyệt.

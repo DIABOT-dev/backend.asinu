@@ -90,7 +90,9 @@ jobs:
         run: node scripts/migrate.js
 
       - name: Test all suites, including PostgreSQL integration
-        run: npm test
+        run: |
+          npm test
+          node --test tools/medication-scan-lab/evaluate.test.cjs
 
       - name: Syntax check server entry
         run: npm run build

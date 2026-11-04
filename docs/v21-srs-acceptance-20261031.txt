@@ -1,3 +1,5 @@
+CẬP NHẬT 04/11/2026: Đã kiểm lại, phát hiện và sửa 5 lỗi tại dispatch/quyền thông báo/đọc ảnh; 13 kiểm tra mới và 98 V2.1 cũ qua. Bộ 20 ảnh bao bì mới không thay thế đơn in/viết tay. Native thật, thử 5 người, P6/P3/Founder và chính sách giao thiệp trong giờ yên lặng vẫn chưa đủ nghiệm thu. Xem docs/v21-objective-audit-20261104.txt. Các kết quả bên dưới là lịch sử.
+
 ASINU V2.1 — ĐỐI CHIẾU SRS TRƯỚC PHÁT HÀNH 31/10/2026
 
 Nguồn: SRS_V2_1_Nhac_thuoc_va_Xu.docx, 29/10/2026.

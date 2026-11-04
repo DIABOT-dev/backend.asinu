@@ -376,22 +376,39 @@ async function sendNative(db, user, payload) {
 }
 async function dispatchAttempts(pool) {
   const ids = (
-    await pool.query(`SELECT DISTINCT group_id FROM med_call_attempts WHERE state='QUEUED'
+    await pool.query(`SELECT DISTINCT group_id FROM med_call_attempts WHERE (state='QUEUED' AND (lease_until IS NULL OR lease_until<=NOW()))
   OR(state='SENDING' AND lease_until<NOW()) LIMIT 30`)
   ).rows;
   for (const { group_id: groupId } of ids) {
     const rows = await c.transaction(pool, async (db) => {
+      const subject = (
+        await db.query(
+          'SELECT e.patient_user_id FROM med_call_attempts a JOIN med_dose_events e ON e.id=a.dose_event_id WHERE a.group_id=$1 LIMIT 1',
+          [groupId]
+        )
+      ).rows[0];
+      if (!subject || !(await c.lockPatient(db, subject.patient_user_id, { optional: true }))) return [];
       const attempts = (
         await db.query(
           `SELECT a.*,e.patient_user_id,e.timezone,e.scheduled_at,s.time_local FROM med_call_attempts a
     JOIN med_dose_events e ON e.id=a.dose_event_id JOIN med_schedules s ON s.id=e.schedule_id
     JOIN user_notification_preferences n ON n.user_id=e.patient_user_id AND n.reminders_enabled
     WHERE a.group_id=$1 AND e.state='CALLING' AND s.active AND v21_allowed(e.patient_user_id,'medication')
-     AND(a.state='QUEUED' OR(a.state='SENDING' AND a.lease_until<NOW())) ORDER BY e.scheduled_at,a.id FOR UPDATE OF a SKIP LOCKED`,
+     AND((a.state='QUEUED' AND (a.lease_until IS NULL OR a.lease_until<=NOW())) OR(a.state='SENDING' AND a.lease_until<NOW())) ORDER BY e.scheduled_at,a.id FOR UPDATE OF a SKIP LOCKED`,
           [groupId]
         )
       ).rows;
       if (!attempts.length) return [];
+      // A higher-priority call can start after queueDue. Retain the same
+      // attempt and use its durable lease as the earliest dispatch time.
+      const busy = await busyUntil(db, subject.patient_user_id);
+      if (busy) {
+        await db.query(
+          "UPDATE med_call_attempts a SET state='QUEUED',lease_until=$2,deadline=LEAST(GREATEST(a.deadline,$2::timestamptz+INTERVAL '60 seconds'),e.scheduled_at+INTERVAL '2 hours') FROM med_dose_events e WHERE a.dose_event_id=e.id AND a.id=ANY($1::uuid[])",
+          [attempts.map((a) => a.id), busy]
+        );
+        return [];
+      }
       await db.query(
         "UPDATE med_call_attempts SET state='SENDING',lease_until=NOW()+INTERVAL '30 seconds' WHERE id=ANY($1::uuid[])",
         [attempts.map((a) => a.id)]
@@ -408,7 +425,11 @@ async function dispatchAttempts(pool) {
     if (!user) continue;
     const en = String(user.language_preference).startsWith('en');
     let sent = false;
-    if (root.channel === 'native_call' && (await c.config(pool, user.id)).nativeCall) {
+    if (
+      root.channel === 'native_call' &&
+      (await c.config(pool, user.id)).nativeCall &&
+      p.inCallWindow(new Date(), root.timezone)
+    ) {
       const expires = Math.floor(new Date(root.deadline).getTime() / 1000);
       sent = await sendNative(pool, user, {
         type: 'medication_call',

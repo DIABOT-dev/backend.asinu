@@ -24,6 +24,9 @@ function normalizeScan(raw) {
   const documentType = ['PACKAGING', 'PRESCRIPTION', 'OTHER'].includes(obj.document_type)
     ? obj.document_type
     : 'OTHER';
+  // An explicit abstention wins over contradictory guesses in items. A person
+  // can still use the manual chips, without treating guessed names as OCR.
+  if (obj.readable === false) return { readable: false, document_type: documentType, items: [] };
   const seen = new Set(),
     items = [];
   for (const original of obj.items) {

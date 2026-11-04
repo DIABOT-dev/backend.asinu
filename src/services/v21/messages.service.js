@@ -3,6 +3,7 @@ const c = require('./common');
 const {
   reserveNotification,
   deliverNotification,
+  hasCurrentRecipientPermission,
 } = require('../notification/notification-dispatch.service');
 const coins = require('./coins.service');
 function copy(kind, payload, en) {
@@ -81,6 +82,17 @@ async function processMessages(pool) {
       const connected = owner === recipient || (await c.hasConnection(pool, owner, recipient));
       if (!connected) {
         if (job.kind === 'coin_card') await coins.refund(pool, job.payload.redemptionId);
+        await pool.query('UPDATE v21_message_outbox SET completed_at=NOW() WHERE id=$1', [job.id]);
+        continue;
+      }
+      if (
+        ['med_result', 'weekly_v21'].includes(job.kind) &&
+        !(await hasCurrentRecipientPermission(pool, {
+          user_id: recipient,
+          type: job.kind,
+          data: { ...job.payload, patientId: owner },
+        }))
+      ) {
         await pool.query('UPDATE v21_message_outbox SET completed_at=NOW() WHERE id=$1', [job.id]);
         continue;
       }

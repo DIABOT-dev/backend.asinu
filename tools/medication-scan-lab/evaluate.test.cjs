@@ -11,6 +11,8 @@ test('accepts a grounded packaging name, including fenced JSON returned by provi
 test('unknown importer-only side is successful only when the model abstains', () => {
   const unknown = { expectedReadable: false, expectedNameAliases: [], expectedUniqueItems: 0 };
   assert.equal(evaluate(JSON.stringify({ readable:false,document_type:'PACKAGING',items:[],uncertain:[] }), unknown).passed, true);
+  assert.equal(evaluate(JSON.stringify({ readable:false,document_type:'OTHER',items:[],uncertain:[] }), unknown).passed, true);
+  assert.equal(evaluate(JSON.stringify({ ...sample(),document_type:'OTHER' }), truth).passed, false);
   assert.equal(evaluate(JSON.stringify(sample()), unknown).passed, false);
 });
 test('an empty product list is a safe abstention, but readable=true remains a schema error', () => {

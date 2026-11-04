@@ -18,7 +18,9 @@ function evaluate(raw, expected) {
   const itemKeys = new Set(['printed_name', 'display_name', 'kind', 'suggested_slots']);
   const items = Array.isArray(parsed?.items) ? parsed.items : [];
   const schemaValid = parsed && !Array.isArray(parsed) &&
-    typeof parsed.readable === 'boolean' && parsed.document_type === 'PACKAGING' &&
+    typeof parsed.readable === 'boolean' &&
+    (parsed.readable ? parsed.document_type === 'PACKAGING'
+      : ['PACKAGING', 'OTHER'].includes(parsed.document_type)) &&
     Array.isArray(parsed.items) && Array.isArray(parsed.uncertain) &&
     (parsed.readable ? items.length > 0 : items.length === 0) &&
     Object.keys(parsed).every(k => keys.has(k)) && items.every(item =>

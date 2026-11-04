@@ -131,6 +131,12 @@ async function reserveNotification(
   if (isHealthMetricReminderSuppressed(type)) return null;
   return withNotificationTransaction(pool, userId, async (client) => {
     if (await suppressInactivityNotification(client, userId, type, data)) return null;
+    // Do not create a new private inbox entry after family alert access or the
+    // medication result preference changed while the event was queued.
+    if (
+      ['med_result', 'weekly_v21'].includes(type) &&
+      !(await hasCurrentRecipientPermission(client, { user_id: userId, type, data }))
+    ) return null;
     if (type === INACTIVITY_NOTICE_TYPE) {
       if (!(await hasCurrentRecipientPermission(client, { user_id: userId, type, data }))) return null;
       const receipt = await client.query(
@@ -238,6 +244,13 @@ async function reserveNotification(
 
 async function hasCurrentRecipientPermission(client, notification) {
   const data = notification.data || {};
+  if (notification.type === 'med_result' && data.state === 'TAKEN' && data.patientId) {
+    const preferences = await client.query(
+      'SELECT problems_only FROM med_family_preferences WHERE patient_user_id=$1 AND caregiver_id=$2',
+      [data.patientId, notification.user_id]
+    );
+    if (preferences.rows[0]?.problems_only) return false;
+  }
   if (notification.type === 'med_reminder') {
     return (await client.query(`SELECT 1 FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id
       JOIN user_notification_preferences n ON n.user_id=e.patient_user_id AND n.reminders_enabled
@@ -532,6 +545,7 @@ async function retryPendingNotifications(pool, limit = 50) {
 module.exports = {
   withNotificationTransaction,
   notificationEventKey,
+  hasCurrentRecipientPermission,
   reserveNotification,
   deliverNotification,
   retryPendingNotifications,
