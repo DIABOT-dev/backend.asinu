@@ -72,3 +72,7 @@ Bộ 30 cuối và hồ sơ duyệt: /Users/ducytcg123456/Desktop/APP/preview/ch
 Bộ sâu: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-acceptance-release-20261104
 Hai ca gốc: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-original-release-20261104
 Vòng lỗi cũ và replay sau sửa: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-deep-objective-20261104
+
+BỔ SUNG KIỂM TRA CI
+CI cũ có 149 suite/2082 test đạt và 2 suite/11 test bỏ qua, nhưng job vẫn exit 1 do Redis ECONNREFUSED ghi log sau khi test kết thúc. CI chỉ khai Postgres, thiếu Redis mà các luồng tích hợp sử dụng.
+Đã bổ sung Redis 7 có healthcheck và REDIS_URL riêng cho job kiểm thử, không thay runtime/cache hoặc che log/lược test. Kết quả CI sau sửa và đường dẫn run được lưu tại ci-result.json trong bộ minh chứng kỹ thuật. Nhánh release chỉ kiểm thử/build, không tự deploy VPS.
