@@ -97,6 +97,21 @@ function measurementTimeMatches(text, record, asOf) {
   );
 }
 
+function withoutCalendarDates(text) {
+  // Examine complete dates before looking for bare BP ratios. Otherwise
+  // 4/11/26 is scanned starting at 11/26 and mistaken for an invented reading.
+  // This applies only to the secondary ratio scan: unit/value/time grounding
+  // continues to examine the original, unmodified text.
+  return text.replace(/(?<!\d)(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?!\d)/g,
+    (match, day, month, year) => {
+      const fullYear = year.length === 2 ? 2000 + Number(year) : Number(year);
+      const date = new Date(Date.UTC(fullYear, Number(month) - 1, Number(day)));
+      const valid = date.getUTCFullYear() === fullYear &&
+        date.getUTCMonth() === Number(month) - 1 && date.getUTCDate() === Number(day);
+      return valid ? ' '.repeat(match.length) : match;
+    });
+}
+
 function measurementFault(value, facts) {
   const records = [...facts.chi_so_24h, ...facts.chi_so_7_ngay];
   const current = new Set(facts.chi_so_24h.map((r) => r.loai));
@@ -158,7 +173,7 @@ function measurementFault(value, facts) {
         return 'measurement_time_not_exact';
       mentionedTypes = [type];
     }
-    for (const match of scope.matchAll(/\b(\d{2,3})\s*\/\s*(\d{2,3})\b/g)) {
+    for (const match of withoutCalendarDates(scope).matchAll(/\b(\d{2,3})\s*\/\s*(\d{2,3})\b/g)) {
       if (Number(match[1]) <= 31 && Number(match[2]) <= 12) continue;
       const exact = `${Number(match[1])}/${Number(match[2])}`;
       if (

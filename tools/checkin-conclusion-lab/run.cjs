@@ -7,7 +7,9 @@ const { fixture, prompts, root, sourceSha256 } = require('./prompts.cjs');
 const { evaluate } = require('./guardrails.cjs');
 const { buildReport } = require('./report.cjs');
 require('dotenv').config({ path: path.join(root, '.env'), quiet: true });
-const out = path.resolve(__dirname, '../../../..', 'preview/checkin-conclusion-20261029');
+const round = process.argv.find((arg) => arg.startsWith('--round='))?.slice(8) || 'initial';
+if (!/^[a-z0-9-]{1,24}$/.test(round)) throw new Error('Invalid round label');
+const out = path.resolve(__dirname, '../../../..', 'preview/checkin-conclusion-20261029' + (round === 'initial' ? '' : '-' + round));
 const model = 'medgemma-27b-it';
 const settings = { model, temperature: 0.2, maxTokens: 700, timeoutMs: 60000, retries: 0 };
 const digest = crypto
