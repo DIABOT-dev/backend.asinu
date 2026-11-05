@@ -171,6 +171,161 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       await tx.query('UPDATE coin_balances SET balance=$2 WHERE user_id=$1', [id, n]);
     });
   }
+  test('paused schedules can be listed and resumed while deleted schedules stay hidden and legacy reads stay active-only', async () => {
+    const id = await user(),
+      stranger = await user(),
+      i = await item(id);
+    const paused = (
+      await med.saveSchedule(db, id, id, null, {
+        time_local: '07:30',
+        item_ids: [i.id],
+        meal_anchor: 'after_breakfast',
+        note: 'Sau bữa sáng',
+        active: false,
+      })
+    ).schedule;
+    const deleted = (
+      await med.saveSchedule(db, id, id, null, { time_local: '19:00', item_ids: [i.id] })
+    ).schedule;
+    await med.remove(db, id, id, deleted.id);
+    expect((await med.overview(db, id, id)).schedules).toEqual([]);
+    const response = await request(app)
+      .get('/api/mobile/med-schedules?includePaused=true')
+      .set(auth(id));
+    expect(response.status).toBe(200);
+    expect(response.body.schedules.map((s) => s.id)).toEqual([paused.id]);
+    expect(response.body.schedules[0]).toMatchObject({
+      active: false,
+      note: 'Sau bữa sáng',
+      meal_anchor: 'after_breakfast',
+    });
+    expect(
+      (
+        await request(app)
+          .get(`/api/mobile/med-schedules?patientId=${id}&includePaused=true`)
+          .set(auth(stranger))
+      ).status
+    ).toBe(403);
+    const stored = (await db.query('SELECT note FROM med_schedules WHERE id=$1', [paused.id]))
+      .rows[0].note;
+    expect(stored).not.toContain('Sau bữa sáng');
+    await med.saveSchedule(db, id, id, paused.id, {
+      time_local: '07:30',
+      item_ids: [i.id],
+      active: true,
+      note: 'Sau bữa sáng',
+      meal_anchor: 'after_breakfast',
+    });
+    expect((await med.overview(db, id, id)).schedules.map((s) => s.id)).toEqual([paused.id]);
+  });
+  test('a caregiver resuming an approved reminder preserves consent while an unapproved reminder remains pending', async () => {
+    const id = await user(),
+      child = await user(),
+      i = await item(id);
+    await connect(id, child);
+    const approved = (
+      await med.saveSchedule(db, id, id, null, { time_local: '07:30', item_ids: [i.id] })
+    ).schedule;
+    const body = { time_local: '07:30', item_ids: [i.id], note: 'Sau ăn' };
+    await med.saveSchedule(db, child, id, approved.id, { ...body, active: false });
+    const resumed = (await med.saveSchedule(db, child, id, approved.id, { ...body, active: true }))
+      .schedule;
+    expect(resumed.consent_state).toBe('ACTIVE');
+    expect(new Date(resumed.consented_at).getTime()).toBe(
+      new Date(approved.consented_at).getTime()
+    );
+    const pending = (
+      await med.saveSchedule(db, child, id, null, { time_local: '19:00', item_ids: [i.id] })
+    ).schedule;
+    const patientPaused = (
+      await med.saveSchedule(db, id, id, pending.id, {
+        time_local: '19:00',
+        item_ids: [i.id],
+        active: false,
+      })
+    ).schedule;
+    expect(patientPaused.consent_state).toBe('PENDING');
+    const restarted = (
+      await med.saveSchedule(db, child, id, pending.id, {
+        time_local: '19:00',
+        item_ids: [i.id],
+        active: true,
+      })
+    ).schedule;
+    expect(restarted.consent_state).toBe('PENDING');
+    expect(restarted.consented_at).toBeNull();
+    expect(
+      (await db.query('SELECT state FROM med_consent_calls WHERE schedule_id=$1', [pending.id]))
+        .rows[0].state
+    ).toBe('QUEUED');
+  });
+  test('resuming still enforces four active times and current Care Circle access', async () => {
+    const id = await user(),
+      child = await user(),
+      i = await item(id);
+    await connect(id, child);
+    for (const time_local of ['07:00', '09:00', '11:00', '13:00'])
+      await med.saveSchedule(db, id, id, null, { time_local, item_ids: [i.id] });
+    const body = { time_local: '19:00', item_ids: [i.id], active: false };
+    const paused = (await med.saveSchedule(db, id, id, null, body)).schedule;
+    await expect(
+      med.saveSchedule(db, id, id, paused.id, { ...body, active: true })
+    ).rejects.toMatchObject({ code: 'MED_SCHEDULE_LIMIT' });
+    await db.query(
+      "UPDATE user_connections SET status='rejected' WHERE requester_id=$1 AND addressee_id=$2",
+      [id, child]
+    );
+    await expect(med.saveSchedule(db, child, id, paused.id, body)).rejects.toMatchObject({
+      code: 'MED_CARE_CIRCLE_REQUIRED',
+    });
+    expect(
+      (await db.query('SELECT active FROM med_schedules WHERE id=$1', [paused.id])).rows[0].active
+    ).toBe(false);
+  });
+  test('setup persists encrypted notes and rejects dosage or long notes before creating schedules', async () => {
+    const id = await user();
+    const base = {
+      items: [
+        { display_name: 'Thuốc huyết áp', kind: 'MEDICINE', source: 'CHIP', confirmed: true },
+      ],
+      meals: { breakfast: '07:00', lunch: '11:30', dinner: '18:00', bedtime: '21:30' },
+    };
+    for (const note of ['a'.repeat(61), 'Uống 2 viên', '5 mg']) {
+      const response = await request(app)
+        .post('/api/mobile/medication/setup')
+        .set(auth(id))
+        .send({
+          ...base,
+          request_id: randomUUID(),
+          slots: [{ time_local: '07:30', item_indexes: [0], note }],
+        });
+      expect(response.status).toBe(400);
+    }
+    expect((await med.overview(db, id, id)).schedules).toEqual([]);
+    const saved = await med.setup(db, id, id, {
+      ...base,
+      request_id: randomUUID(),
+      slots: [{ time_local: '07:30', item_indexes: [0], note: 'Sau bữa sáng' }],
+    });
+    expect(saved.schedules[0].note).toBe('Sau bữa sáng');
+    const stored = (
+      await db.query('SELECT note FROM med_schedules WHERE id=$1', [saved.schedules[0].id])
+    ).rows[0].note;
+    expect(stored).not.toContain('Sau bữa sáng');
+  });
+  test('a stale editor cannot restore a deleted schedule or turn it into a paused reminder', async () => {
+    const id = await user(),
+      i = await item(id);
+    const body = { time_local: '07:30', item_ids: [i.id], note: 'Sau ăn', active: true };
+    const saved = (await med.saveSchedule(db, id, id, null, body)).schedule;
+    await med.remove(db, id, id, saved.id);
+    for (const active of [true, false]) {
+      await expect(
+        med.saveSchedule(db, id, id, saved.id, { ...body, active, note: 'Ghi chú từ màn cũ' })
+      ).rejects.toMatchObject({ code: 'MED_SCHEDULE_NOT_FOUND' });
+    }
+    expect((await med.overview(db, id, id, { includePaused: true })).schedules).toEqual([]);
+  });
   test('new account has no schedules, doses or calls; APIs still require auth', async () => {
     const id = await user();
     expect((await med.overview(db, id, id)).schedules).toEqual([]);

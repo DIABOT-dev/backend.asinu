@@ -102,7 +102,9 @@ module.exports = (pool) => {
   r.get(
     '/med-schedules',
     json(async (req) => {
-      const result = await med.overview(pool, req.user.id, req.query.patientId);
+      const result = await med.overview(pool, req.user.id, req.query.patientId, {
+        includePaused: req.query.includePaused === 'true',
+      });
       result.items = result.items.map((i) => ({
         ...i,
         photoUrl: i.photo_media_id

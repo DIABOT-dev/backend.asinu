@@ -69,7 +69,7 @@ async function patients(db, actor) {
   ).rows;
   return { patients: rows };
 }
-async function overview(db, actor, patient) {
+async function overview(db, actor, patient, { includePaused = false } = {}) {
   patient = await c.patientAccess(db, actor, patient);
   await c.assertFeature(db, patient, 'medication');
   requireEncryption();
@@ -79,8 +79,11 @@ async function overview(db, actor, patient) {
     ]),
     db.query(
       `SELECT s.*,COALESCE(array_agg(si.item_id) FILTER(WHERE si.item_id IS NOT NULL),'{}') item_ids FROM med_schedules s
-   LEFT JOIN med_schedule_items si ON si.schedule_id=s.id WHERE s.patient_user_id=$1 AND s.active GROUP BY s.id ORDER BY time_local`,
-      [patient]
+   LEFT JOIN med_schedule_items si ON si.schedule_id=s.id
+   WHERE s.patient_user_id=$1 AND (s.active OR ($2 AND COALESCE(
+     (SELECT a.action FROM med_schedule_audit a WHERE a.schedule_id=s.id ORDER BY a.id DESC LIMIT 1),
+     'created') <> 'deleted')) GROUP BY s.id ORDER BY time_local`,
+      [patient, includePaused]
     ),
     db.query('SELECT * FROM user_meal_times WHERE user_id=$1', [patient]),
     db.query('SELECT medical_conditions FROM user_onboarding_profiles WHERE user_id=$1', [patient]),
@@ -200,12 +203,14 @@ async function saveSchedule(pool, actor, patient, id, body, { notify = true } = 
     const old = id
       ? (
           await db.query(
-            'SELECT * FROM med_schedules WHERE id=$1 AND patient_user_id=$2 FOR UPDATE',
+            `SELECT s.*,(SELECT a.action FROM med_schedule_audit a WHERE a.schedule_id=s.id ORDER BY a.id DESC LIMIT 1) latest_action
+             FROM med_schedules s WHERE s.id=$1 AND s.patient_user_id=$2 FOR UPDATE`,
             [id, patient]
           )
         ).rows[0]
       : null;
-    if (id && !old) throw c.error('MED_SCHEDULE_NOT_FOUND', 404);
+    if (id && (!old || old.latest_action === 'deleted'))
+      throw c.error('MED_SCHEDULE_NOT_FOUND', 404);
     if (
       Number(actor) !== patient &&
       (!old || old.consent_state !== 'ACTIVE') &&
@@ -235,12 +240,15 @@ async function saveSchedule(pool, actor, patient, id, body, { notify = true } = 
       )
     ).rows;
     if (selected.length !== x.item_ids.length) throw c.error('MED_ITEM_NOT_FOUND', 404);
+    // Pausing is never consent; pending invitations still need explicit acceptance.
     const consent =
-      Number(actor) === patient
-        ? 'ACTIVE'
-        : old?.consent_state === 'ACTIVE' && old.active
+      old && (!x.active || old.consent_state === 'PENDING')
+        ? old.consent_state
+        : Number(actor) === patient
           ? 'ACTIVE'
-          : 'PENDING';
+          : old?.consent_state === 'ACTIVE'
+            ? 'ACTIVE'
+            : 'PENDING';
     const scheduleId = id || c.randomUUID();
     const result = (
       await db.query(
@@ -418,6 +426,7 @@ async function setup(pool, actor, patient, body) {
             .object({
               time_local: p.time,
               meal_anchor: c.z.enum(p.anchors).nullable().optional(),
+              note: scheduleSchema.shape.note,
               item_indexes: c.z.array(c.z.number().int().nonnegative()).min(1).max(20),
             })
             .strict()
@@ -465,6 +474,7 @@ async function setup(pool, actor, patient, body) {
             {
               time_local: slot.time_local,
               meal_anchor: slot.meal_anchor,
+              note: slot.note,
               item_ids: slot.item_indexes.map((i) => items[i].id),
             },
             { notify: false }
