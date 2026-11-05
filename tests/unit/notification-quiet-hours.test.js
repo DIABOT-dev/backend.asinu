@@ -46,10 +46,30 @@ describe('notification quiet hours, 22:00 to 06:00', () => {
       ).not.toBeNull();
     }
   );
-  test.each(['emergency', 'alert', 'health_alert', 'caregiver_alert', 'checkin_followup_urgent'])(
+  test.each(['emergency', 'alert', 'health_alert', 'caregiver_alert'])(
     '%s retains immediate safety delivery',
     (type) => {
       expect(hold({ ...routine, type }, {}, '23:00:00')).toBeNull();
+    }
+  );
+  test.each(['checkin_followup', 'checkin_followup_urgent'])(
+    '%s waits until morning even with a legacy critical priority or configured night slot',
+    (type) => {
+      for (const time of ['01:00:00', '01:01:00', '05:59:59']) {
+        expect(
+          hold(
+            { type, priority: 'critical', created_at: at(time), data: { checkinId: '2413' } },
+            { reminders_enabled: true, morning_time: '01:01' },
+            time
+          )
+        ).toEqual(at('06:00:00'));
+      }
+      expect(hold({ type, priority: 'high' }, {}, '22:00:00')).toEqual(
+        new Date('2026-10-08T06:00:00+07:00')
+      );
+      expect(hold({ type, priority: 'high' }, {}, '06:00:00')).toBeNull();
+      for (const data of [{ requiresImmediate: true }, { alertType: 'emergency' }])
+        expect(hold({ type, priority: 'high', data }, {}, '01:01:00')).toBeNull();
     }
   );
   test.each([

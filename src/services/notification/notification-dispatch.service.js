@@ -5,6 +5,7 @@ const { capitalizeFirstLetter } = require('../../lib/text-format');
 const {
   INACTIVITY_NOTICE_TYPE,
   suppressInactivityNotification,
+  isRoutineMonitoringCheckin,
 } = require('../checkin/checkin-inactivity.policy');
 const {
   canSendNonUrgent,
@@ -301,10 +302,15 @@ async function hasCurrentRecipientPermission(client, notification) {
   if (!subjectId || String(subjectId) === String(notification.user_id)) return true;
   if (data.alertId && ['caregiver_alert', 'emergency'].includes(notification.type)) {
     const alert = await client.query(
-      'SELECT 1 FROM caregiver_alert_confirmations WHERE id = $1 AND caregiver_id = $2 AND confirmed_at IS NULL',
+      `SELECT hc.current_status, hc.flow_state, hc.triage_severity, hc.emergency_triggered
+         FROM caregiver_alert_confirmations cac
+         LEFT JOIN health_checkins hc ON hc.id = cac.checkin_id
+        WHERE cac.id = $1 AND cac.caregiver_id = $2 AND cac.confirmed_at IS NULL`,
       [data.alertId, notification.user_id]
     );
     if (!alert.rows.length) return false;
+    if (notification.type === 'caregiver_alert' && isRoutineMonitoringCheckin(alert.rows[0]))
+      return false;
   }
   const result = await client.query(
     `SELECT 1 FROM user_connections c

@@ -629,6 +629,7 @@
   "checkin.emergency_already_sent": "Your support request was sent. Waiting for a caregiver to respond.",
   "checkin.followup_high_alert": "You have not completed the alert check-in. Update your status now if you still feel unwell.",
   "checkin.followup_normal": "You have not completed the check-in. Update your current status when you can.",
+  "checkin.followup_monitoring": "You felt well at your last check-in. When convenient, let Asinu know how you are feeling now.",
   "checkin.followup_title": "Check-in update",
   "checkin.no_response_title": "No health update received",
   "checkin.no_response_body": "You reported feeling unwell but have not completed the check-in. Update your current status.",

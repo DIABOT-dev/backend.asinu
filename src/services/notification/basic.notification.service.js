@@ -28,7 +28,7 @@ const TZ = 'Asia/Ho_Chi_Minh';
 // ─── Priority map ────────────────────────────────────────────────
 const TYPE_PRIORITY = {
   emergency: 'critical',
-  checkin_followup_urgent: 'critical',
+  checkin_followup_urgent: 'high',
   health_alert: 'high',
   caregiver_alert: 'high',
   checkin_followup: 'high',
@@ -693,7 +693,8 @@ async function runBasicNotifications(pool, forceHour = null, forceMinute = null)
     results.push(await runTask('reengagement', () => runReengagement(pool, sendAndSave)));
   // Context-based alerts (severity high, trend worsening)
   results.push(await runTask('context_alerts', () => runContextAlerts(pool)));
-  // Checkin follow-ups are urgent — run independently (not subject to reminder gap)
+  // Process follow-ups independently; delivery still enforces quiet hours for
+  // patient reminders while genuine family/emergency alerts remain immediate.
   const [followUps, alertFollowUps] = await Promise.all([
     runTask('checkin_followups', () => runCheckinFollowUps(pool)),
     runTask('alert_confirmation_followups', () => runAlertConfirmationFollowUps(pool)),

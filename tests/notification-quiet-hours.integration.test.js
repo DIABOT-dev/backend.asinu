@@ -210,10 +210,36 @@ describeDatabase('quiet hours and configured night reminders (real SQL, fake pro
     expect(sendPushNotification).not.toHaveBeenCalled();
   });
   test('critical safety alert still sends at night', async () => {
-    const row = await reserve('checkin_followup_urgent', 'critical');
+    const row = await reserve('emergency', 'critical');
     expect(await deliverNotification(pool, row.notificationId)).toEqual({ ok: true });
     expect(sendPushNotification).toHaveBeenCalledTimes(1);
   });
+  test.each(['checkin_followup', 'checkin_followup_urgent'])(
+    '01:01 missed reminder %s is held, including queued legacy critical rows, and sent once at 06:00',
+    async (type) => {
+      await preferences();
+      setClock('2026-10-08T01:01:00+07:00');
+      const row = await reserve(type, 'critical', { checkinId: 'night-followup' });
+      expect(await deliverNotification(pool, row.notificationId)).toMatchObject({
+        deferred: true,
+        reason: 'quiet_hours',
+      });
+      expect(await job(row.notificationId)).toMatchObject({
+        state: 'RETRY',
+        attempts: 0,
+        next_attempt_at: new Date('2026-10-08T06:00:00+07:00'),
+      });
+      expect(sendPushNotification).not.toHaveBeenCalled();
+      setClock('2026-10-08T06:00:00+07:00');
+      await due(row.notificationId);
+      await Promise.all([
+        deliverNotification(pool, row.notificationId),
+        deliverNotification(pool, row.notificationId),
+      ]);
+      expect(sendPushNotification).toHaveBeenCalledTimes(1);
+      expect(await job(row.notificationId)).toMatchObject({ state: 'SENT', attempts: 1 });
+    }
+  );
   test('05:30 remains quiet until 06:00', async () => {
     setClock('2026-10-08T05:30:00+07:00');
     const row = await reserve();

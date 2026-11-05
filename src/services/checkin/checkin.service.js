@@ -7,7 +7,8 @@
  *   high_alert  — "Rất mệt", check lại sau 2h
  *   resolved    — Người dùng xác nhận đã ổn
  *
- * No-response escalation (smart alert via shouldAlertFamily):
+ * Routine "fine" monitoring never becomes a family alert just for missing a reply.
+ * No-response escalation for symptomatic sessions (smart alert via shouldAlertFamily):
  *   miss × 1 → push nhắc
  *   miss × 2+ → smart decision based on severity, age, time of day, history
  *     - high_severity → always alert
@@ -41,6 +42,7 @@ const { buildCheckinContext, applyIllusion } = require('../../core/checkin/illus
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 const logger = require('../../lib/logger');
 const checkinCallService = require('../checkin-call/checkin-call.service');
+const { isRoutineMonitoringCheckin } = require('./checkin-inactivity.policy');
 const console = { log: logger.debug, error: logger.error, warn: logger.warn };
 
 function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sessionDate) {
@@ -71,7 +73,7 @@ function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sess
 // ─── Priority map ────────────────────────────────────────────────
 const TYPE_PRIORITY = {
   emergency: 'critical',
-  checkin_followup_urgent: 'critical',
+  checkin_followup_urgent: 'high', // Legacy name for a repeated missed follow-up.
   health_alert: 'high',
   caregiver_alert: 'high',
   checkin_followup: 'high',
@@ -1100,6 +1102,8 @@ async function triggerEmergency(pool, userId, location) {
  * age, time of day, and severity — instead of a simple miss count check.
  */
 async function shouldAlertFamily(pool, userId, session) {
+  if (isRoutineMonitoringCheckin(session))
+    return { shouldAlert: false, reason: 'routine_monitoring' };
   // 1. Check user response history (last 7 days)
   const historyRes = await pool.query(
     `SELECT no_response_count, initial_status, triage_severity, created_at
@@ -1194,6 +1198,7 @@ async function runCheckinFollowUps(pool) {
 
   for (const session of overdue) {
     const newMissCount = session.no_response_count + 1;
+    const routineMonitoring = isRoutineMonitoringCheckin(session);
 
     if (newMissCount === 1) {
       // First miss → push + in-app nhắc
@@ -1204,8 +1209,9 @@ async function runCheckinFollowUps(pool) {
       // {{callName}}, {{CallName}}). Trước đây chỉ list 4 → template dùng
       // {{CallName}} (PascalCase) không được fill → render literal.
       const hParams = { ...h };
-      const msg =
-        session.flow_state === 'high_alert'
+      const msg = routineMonitoring
+        ? t('checkin.followup_monitoring', sLang, hParams)
+        : session.flow_state === 'high_alert'
           ? t('checkin.followup_high_alert', sLang, hParams)
           : t('checkin.followup_normal', sLang, hParams);
 
@@ -1253,9 +1259,13 @@ async function runCheckinFollowUps(pool) {
         pool,
         session.user_id,
         session.push_token,
-        'checkin_followup_urgent',
+        routineMonitoring ? 'checkin_followup' : 'checkin_followup_urgent',
         t('checkin.no_response_title', sLang2, hParams2),
-        t('checkin.no_response_body', sLang2, hParams2),
+        t(
+          routineMonitoring ? 'checkin.followup_monitoring' : 'checkin.no_response_body',
+          sLang2,
+          hParams2
+        ),
         { checkinId: String(session.id) }
       );
       sent++;
@@ -1526,6 +1536,7 @@ async function getPendingCaregiverAlerts(pool, caregiverId) {
             cac.resent_at, cac.checkin_id,
             u.display_name, u.full_name,
             hc.current_status, hc.flow_state, hc.resolved_at,
+            hc.triage_severity, hc.emergency_triggered,
             EXTRACT(EPOCH FROM (NOW() - cac.sent_at))/3600 AS hours_since_sent
      FROM caregiver_alert_confirmations cac
      JOIN users u ON u.id = cac.patient_id
@@ -1537,22 +1548,24 @@ async function getPendingCaregiverAlerts(pool, caregiverId) {
      ORDER BY cac.sent_at DESC`,
     [caregiverId, STALE_HOURS]
   );
-  return rows.map((r) => {
-    const hoursSinceSent = Number(r.hours_since_sent) || 0;
-    const sessionDone = ['resolved', 'monitoring'].includes(r.flow_state) || r.resolved_at;
-    // 'active' nếu fresh + session active. Else 'missed'.
-    const state = hoursSinceSent < ACTIVE_THRESHOLD_HOURS && !sessionDone ? 'active' : 'missed';
-    return {
-      alertId: r.alert_id,
-      alertType: r.alert_type,
-      sentAt: r.sent_at,
-      checkinId: r.checkin_id,
-      patientName: r.full_name || r.display_name || t('brain.relative_fallback'),
-      currentStatus: r.current_status,
-      flowState: r.flow_state,
-      state, // 'active' | 'missed' — FE render UI khác nhau
-    };
-  });
+  return rows
+    .filter((r) => r.alert_type === 'emergency' || !isRoutineMonitoringCheckin(r))
+    .map((r) => {
+      const hoursSinceSent = Number(r.hours_since_sent) || 0;
+      const sessionDone = ['resolved', 'monitoring'].includes(r.flow_state) || r.resolved_at;
+      // 'active' nếu fresh + session active. Else 'missed'.
+      const state = hoursSinceSent < ACTIVE_THRESHOLD_HOURS && !sessionDone ? 'active' : 'missed';
+      return {
+        alertId: r.alert_id,
+        alertType: r.alert_type,
+        sentAt: r.sent_at,
+        checkinId: r.checkin_id,
+        patientName: r.full_name || r.display_name || t('brain.relative_fallback'),
+        currentStatus: r.current_status,
+        flowState: r.flow_state,
+        state, // 'active' | 'missed' — FE render UI khác nhau
+      };
+    });
 }
 
 /**
@@ -1569,11 +1582,13 @@ async function runAlertConfirmationFollowUps(pool) {
     `SELECT cac.*, u.push_token,
             COALESCE(u.language_preference, 'vi') AS cg_lang,
             p.display_name AS patient_name, p.full_name AS patient_full_name,
+            hc.current_status, hc.flow_state, hc.triage_severity, hc.emergency_triggered,
             uc.relationship_type,
             CASE WHEN uc.requester_id = cac.patient_id THEN 'requester' ELSE 'addressee' END as patient_side
      FROM caregiver_alert_confirmations cac
      JOIN users u ON u.id = cac.caregiver_id
      JOIN users p ON p.id = cac.patient_id
+     LEFT JOIN health_checkins hc ON hc.id = cac.checkin_id
      LEFT JOIN user_connections uc ON
        (uc.requester_id = cac.patient_id AND uc.addressee_id = cac.caregiver_id)
        OR (uc.requester_id = cac.caregiver_id AND uc.addressee_id = cac.patient_id)
@@ -1584,6 +1599,8 @@ async function runAlertConfirmationFollowUps(pool) {
   );
 
   for (const alert of rows) {
+    // Also ignore false routine-monitoring alerts created by older versions.
+    if (alert.alert_type !== 'emergency' && isRoutineMonitoringCheckin(alert)) continue;
     // Skip if alertFamily already sent a caregiver_alert to this caregiver within the resend interval
     const { rows: recentNotif } = await pool.query(
       `SELECT 1 FROM notifications WHERE user_id = $1 AND type = 'caregiver_alert' AND created_at >= $2 LIMIT 1`,

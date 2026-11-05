@@ -45,6 +45,17 @@ function routineCall(episode) {
   );
 }
 
+// A person who reported feeling fine must not be treated as unwell merely
+// because they did not answer the routine evening follow-up.
+function isRoutineMonitoringCheckin(session) {
+  return (
+    session.flow_state === 'monitoring' &&
+    session.current_status === 'fine' &&
+    !session.emergency_triggered &&
+    !['high', 'urgent', 'emergency', 'critical'].includes(session.triage_severity)
+  );
+}
+
 async function suppressInactivityNotification(db, userId, type, data = {}) {
   if (type === INACTIVITY_NOTICE_TYPE) {
     if (!data.patient_id || !data.inactive_since_date) return true;
@@ -67,5 +78,6 @@ module.exports = {
   inactivityStateSql,
   getCheckinInactivity,
   routineCall,
+  isRoutineMonitoringCheckin,
   suppressInactivityNotification,
 };

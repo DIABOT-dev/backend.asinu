@@ -65,17 +65,17 @@ function isTimeCriticalNotification(notification) {
   // A routine "inactive for several days" nudge uses the caregiver_alert
   // type too; it must not inherit the emergency exception.
   if (data.reengage_patient_id || data.templateId === 'reengage_care_circle') return false;
+  // Missed follow-ups are not evidence of an emergency. Check this before
+  // priority so already-queued legacy "critical" reminders are held too.
+  if (['checkin_followup', 'checkin_followup_urgent'].includes(notification.type))
+    return data.requiresImmediate === true || data.alertType === 'emergency';
   if (
     notification.priority === 'critical' ||
     data.requiresImmediate === true ||
     data.alertType === 'emergency'
   )
     return true;
-  if (
-    ['emergency', 'alert', 'health_alert', 'caregiver_alert', 'checkin_followup_urgent'].includes(
-      notification.type
-    )
-  )
+  if (['emergency', 'alert', 'health_alert', 'caregiver_alert'].includes(notification.type))
     return true;
   if (notification.type === 'early_signal' && String(data.severity).toLowerCase() === 'urgent')
     return true;
