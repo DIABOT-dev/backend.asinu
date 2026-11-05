@@ -73,16 +73,20 @@ async function aggregateDay(db, user, date) {
     [user, date, status]
   );
 }
-async function prepare(pool) {
+async function prepare(pool, { scheduleIds = null } = {}) {
   const schedules = (
-    await pool.query(`SELECT s.*,COALESCE(tz.name,'Asia/Ho_Chi_Minh') timezone
+    await pool.query(
+      `SELECT s.*,COALESCE(tz.name,'Asia/Ho_Chi_Minh') timezone
  FROM med_schedules s JOIN users u ON u.id=s.patient_user_id AND u.deleted_at IS NULL
  LEFT JOIN user_baselines ub ON ub.user_id=u.id
  LEFT JOIN user_notification_preferences np ON np.user_id=u.id
  LEFT JOIN pg_timezone_names tz ON tz.name=COALESCE(ub.timezone,to_jsonb(u)->>'timezone','Asia/Ho_Chi_Minh')
  WHERE s.active AND s.consent_state='ACTIVE' AND v21_allowed(u.id,'medication') AND np.reminders_enabled=TRUE
+ AND ($1::uuid[] IS NULL OR s.id=ANY($1::uuid[]))
  AND (NOT EXISTS(SELECT 1 FROM med_dose_events e WHERE e.schedule_id=s.id AND e.local_date=(NOW() AT TIME ZONE COALESCE(tz.name,'Asia/Ho_Chi_Minh'))::date)
- OR EXISTS(SELECT 1 FROM med_dose_events e WHERE e.schedule_id=s.id AND e.state='SCHEDULED' AND e.attempt_count=0 AND e.scheduled_at>NOW() AND e.timezone<>COALESCE(tz.name,'Asia/Ho_Chi_Minh')))`)
+ OR EXISTS(SELECT 1 FROM med_dose_events e WHERE e.schedule_id=s.id AND e.state='SCHEDULED' AND e.attempt_count=0 AND e.scheduled_at>NOW() AND e.timezone<>COALESCE(tz.name,'Asia/Ho_Chi_Minh')))`,
+      [scheduleIds]
+    )
   ).rows;
   for (const s of schedules) {
     const timezone = p.resolveNotificationTimezone(s.timezone),
@@ -387,7 +391,8 @@ async function dispatchAttempts(pool) {
           [groupId]
         )
       ).rows[0];
-      if (!subject || !(await c.lockPatient(db, subject.patient_user_id, { optional: true }))) return [];
+      if (!subject || !(await c.lockPatient(db, subject.patient_user_id, { optional: true })))
+        return [];
       const attempts = (
         await db.query(
           `SELECT a.*,e.patient_user_id,e.timezone,e.scheduled_at,s.time_local FROM med_call_attempts a
@@ -756,6 +761,23 @@ async function checkin(pool, user, id, status) {
         null,
         { source: 'med_call' }
       );
+    // Clinical check-in sessions reset at 05:00, while medication and coin days
+    // use the calendar date. An accepted call after midnight still earns today's
+    // single CHECKIN reward. The existing trigger uses the same key later in the
+    // day, so the outbox uniqueness constraint prevents a second reward.
+    try {
+      await c.transaction(db, (tx) =>
+        tx.query(
+          `INSERT INTO coin_event_outbox(user_id,reason,ref_id,local_date)
+         SELECT $1,'CHECKIN',(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date::text,
+         (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date WHERE v21_allowed($1,'coins')
+         ON CONFLICT DO NOTHING`,
+          [user]
+        )
+      );
+    } catch (error) {
+      c.captureUnexpected(error, 'medication.checkin.coin_event');
+    }
     await db.query(
       'UPDATE med_dose_events SET checkin_id=$2,checkin_pending=FALSE,checkin_status=$3 WHERE id=$1',
       [id, session.id, status]

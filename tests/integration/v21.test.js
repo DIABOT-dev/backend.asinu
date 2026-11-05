@@ -160,10 +160,14 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     const e = (
       await db.query(
         `INSERT INTO med_dose_events(id,schedule_id,patient_user_id,local_date,scheduled_at,next_attempt_at,timezone,has_medicine)
-   VALUES($1,$2,$3,(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date,NOW()+($4*INTERVAL '1 minute'),NOW(), 'Asia/Ho_Chi_Minh',$5) RETURNING *`,
+   VALUES($1,$2,$3,(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date,NOW()+($4*INTERVAL '1 minute'),NOW(), 'Asia/Ho_Chi_Minh',$5)
+   ON CONFLICT(schedule_id,local_date) DO UPDATE SET scheduled_at=EXCLUDED.scheduled_at,next_attempt_at=EXCLUDED.next_attempt_at RETURNING *`,
         [randomUUID(), s.id, id, minutes, kind === 'MEDICINE']
       )
     ).rows[0];
+    // A saved schedule already prepares today's snapshot; customize the fixture
+    // once instead of adding duplicate dose items for its synthetic time.
+    await db.query('DELETE FROM med_dose_items WHERE dose_event_id=$1', [e.id]);
     await db.query(
       'INSERT INTO med_dose_items(dose_event_id,item_id,display_name,kind,patient_user_id) VALUES($1,$2,$3,$4,$5)',
       [e.id, i.id, med.protect(id, 'med_dose_items.display_name', i.display_name), kind, id]
@@ -717,6 +721,119 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       ).rejects.toMatchObject({ code: 'MED_SCHEDULE_NOT_FOUND' });
     }
     expect((await med.overview(db, id, id, { includePaused: true })).schedules).toEqual([]);
+  });
+  test('saving a schedule immediately creates exactly one today dose without dispatching a call', async () => {
+    const id = await user(),
+      medicine = await item(id);
+    const saved = await request(app)
+      .post('/api/mobile/med-schedules')
+      .set(auth(id))
+      .send({ time_local: '07:30', item_ids: [medicine.id] })
+      .expect(200);
+    const today = await request(app).get('/api/mobile/med-doses/today').set(auth(id)).expect(200);
+    expect(today.body.items).toHaveLength(1);
+    expect(today.body.items[0].schedule_id).toBe(saved.body.schedule.id);
+    expect(today.body.items[0].state).toBe('SCHEDULED');
+    await calls.prepare(db, { scheduleIds: [saved.body.schedule.id] });
+    expect((await med.doses(db, id, id)).items).toHaveLength(1);
+    expect((await db.query('SELECT 1 FROM med_call_attempts')).rowCount).toBe(0);
+  });
+  test('a complete setup appears in both schedules and today before the periodic scheduler runs', async () => {
+    const id = await user();
+    await request(app)
+      .post('/api/mobile/medication/setup')
+      .set(auth(id))
+      .send({
+        request_id: randomUUID(),
+        items: [
+          { display_name: 'Thuốc đã xác nhận', kind: 'MEDICINE', source: 'CHIP', confirmed: true },
+        ],
+        meals: draftSnapshot().meals,
+        slots: [
+          { time_local: '07:30', item_indexes: [0] },
+          { time_local: '19:00', item_indexes: [0] },
+        ],
+      })
+      .expect(200);
+    expect((await med.overview(db, id, id)).schedules).toHaveLength(2);
+    expect((await med.doses(db, id, id)).items.map((d) => d.time_local)).toEqual([
+      '07:30',
+      '19:00',
+    ]);
+  });
+  test('daily scheduling retains the saved schedule while preparing a separate dose for each date', async () => {
+    const id = await user(),
+      medicine = await item(id);
+    const { schedule } = await med.saveSchedule(db, id, id, null, {
+      time_local: '07:30',
+      item_ids: [medicine.id],
+    });
+    const before = (await med.doses(db, id, id)).items[0];
+    await db.query(
+      "UPDATE med_dose_events SET local_date=local_date-1,scheduled_at=scheduled_at-INTERVAL '1 day',next_attempt_at=next_attempt_at-INTERVAL '1 day' WHERE id=$1",
+      [before.id]
+    );
+    await calls.prepare(db, { scheduleIds: [schedule.id] });
+    const today = (await med.doses(db, id, id)).items;
+    expect(today).toHaveLength(1);
+    expect(today[0].id).not.toBe(before.id);
+    expect((await med.overview(db, id, id)).schedules).toHaveLength(1);
+    expect(
+      (await db.query('SELECT 1 FROM med_dose_events WHERE schedule_id=$1', [schedule.id])).rowCount
+    ).toBe(2);
+  });
+  test('pending consent or disabled reminders cannot prepare an active today dose', async () => {
+    const patient = await user(),
+      child = await user(),
+      medicine = await item(patient);
+    await connect(patient, child);
+    const { schedule } = await med.saveSchedule(db, child, patient, null, {
+      time_local: '07:30',
+      item_ids: [medicine.id],
+    });
+    expect((await med.doses(db, patient, patient)).items).toHaveLength(0);
+    await request(app)
+      .post(`/api/mobile/med-schedules/${schedule.id}/consent`)
+      .set(auth(patient))
+      .send({ accept: true })
+      .expect(200);
+    expect((await med.doses(db, patient, patient)).items).toHaveLength(1);
+    const other = await user(),
+      otherMedicine = await item(other);
+    await db.query(
+      'UPDATE user_notification_preferences SET reminders_enabled=FALSE WHERE user_id=$1',
+      [other]
+    );
+    await med.saveSchedule(db, other, other, null, {
+      time_local: '19:00',
+      item_ids: [otherMedicine.id],
+    });
+    expect((await med.doses(db, other, other)).items).toHaveLength(0);
+  });
+  test('a failed multi-slot setup rolls back newly prepared doses along with its schedules and items', async () => {
+    const id = await user(),
+      medicine = await item(id);
+    await med.saveSchedule(db, id, id, null, { time_local: '07:30', item_ids: [medicine.id] });
+    await request(app)
+      .post('/api/mobile/medication/setup')
+      .set(auth(id))
+      .send({
+        request_id: randomUUID(),
+        items: [
+          { display_name: 'Đơn chưa lưu', kind: 'MEDICINE', source: 'CHIP', confirmed: true },
+        ],
+        meals: draftSnapshot().meals,
+        slots: [
+          { time_local: '08:30', item_indexes: [0] },
+          { time_local: '07:30', item_indexes: [0] },
+        ],
+      })
+      .expect(409);
+    expect((await med.overview(db, id, id)).schedules).toHaveLength(1);
+    expect((await med.doses(db, id, id)).items).toHaveLength(1);
+    expect(
+      (await db.query('SELECT 1 FROM med_items WHERE patient_user_id=$1', [id])).rowCount
+    ).toBe(1);
   });
   test('new account has no schedules, doses or calls; APIs still require auth', async () => {
     const id = await user();
@@ -1330,6 +1447,35 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
         .rowCount
     ).toBe(1);
     expect((await coins.today(db, id)).balance).toBe(15);
+  });
+  test('a medication check-in in the previous clinical session still earns one reward for the current calendar day', async () => {
+    const id = await user(),
+      e = await dose(id);
+    await calls.answer(db, id, e.id, { button: 1, request_id: randomUUID() });
+    // Reproduce the 00:00-05:00 clinical-day offset without changing the DB clock.
+    const checkin = require('../../src/services/checkin/checkin.service');
+    const previousDay = jest.spyOn(checkin, 'startCheckin').mockImplementation(
+      async () =>
+        (
+          await db.query(
+            `INSERT INTO health_checkins(user_id,session_date,initial_status,current_status,flow_state,last_response_at,occurrence_source)
+       VALUES($1,(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date-1,'fine','fine','monitoring',NOW(),'med_call') RETURNING *`,
+            [id]
+          )
+        ).rows[0]
+    );
+    try {
+      const a = await calls.checkin(db, id, e.id, 'fine'),
+        b = await calls.checkin(db, id, e.id, 'fine');
+      expect(a.checkinId).toBe(b.checkinId);
+      expect((await coins.today(db, id)).balance).toBe(15);
+      expect(
+        (await db.query("SELECT 1 FROM coin_ledger WHERE user_id=$1 AND reason='CHECKIN'", [id]))
+          .rowCount
+      ).toBe(1);
+    } finally {
+      previousDay.mockRestore();
+    }
   });
   test('check-in call postpones medication until ten minutes after it finishes', async () => {
     const id = await user(),

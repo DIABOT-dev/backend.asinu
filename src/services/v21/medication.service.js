@@ -321,6 +321,10 @@ async function saveSchedule(pool, actor, patient, id, body, { notify = true } = 
       },
       notify
     );
+    // Materialize today's row before the save returns. Calls are still sent only
+    // by the scheduler; this targets this schedule and joins this transaction.
+    if (x.active && consent === 'ACTIVE')
+      await require('./medication-calls.service').prepare(db, { scheduleIds: [scheduleId] });
     return { schedule: { ...publicSchedule(result), item_ids: x.item_ids } };
   });
 }
@@ -387,6 +391,7 @@ async function consent(pool, patient, id, accept, { notify = true } = {}) {
       saved,
       notify
     );
+    if (accept) await require('./medication-calls.service').prepare(db, { scheduleIds: [id] });
     return { schedule: publicSchedule(saved) };
   });
 }
