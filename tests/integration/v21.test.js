@@ -42,6 +42,10 @@ const source =
   fs.readFileSync(
     path.join(__dirname, '../../db/migrations/126_medication_setup_drafts.sql'),
     'utf8'
+  ) +
+  fs.readFileSync(
+    path.join(__dirname, '../../db/migrations/127_medication_multiple_drafts.sql'),
+    'utf8'
   );
 const describeDb = process.env.CHECKIN_TEST_DATABASE_URL ? describe : describe.skip;
 describeDb('V2.1 on isolated real PostgreSQL tables', () => {
@@ -401,6 +405,80 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     ).toBe(0);
 
     expect(['A', 'B']).toContain(result.snapshot.items[0].display_name);
+  });
+  test('multiple independent drafts survive creation, edits and deleting only the selected draft', async () => {
+    const id = await user(),
+      first = randomUUID(),
+      second = randomUUID();
+    const snapshots = [draftSnapshot(), draftSnapshot()];
+    snapshots[0].items[0].display_name = 'Bản nháp trước';
+    snapshots[1].items[0].display_name = 'Đơn mới';
+    const created = await Promise.all(
+      [first, second].map((draftId, i) =>
+        request(app)
+          .put('/api/mobile/medication/draft')
+          .set(auth(id))
+          .send({ id: draftId, revision: 0, snapshot: snapshots[i] })
+      )
+    );
+    expect(created.map((r) => r.status)).toEqual([200, 200]);
+    const read = (await request(app).get('/api/mobile/medication/draft').set(auth(id))).body;
+    expect(new Set(read.drafts.map((d) => d.id))).toEqual(new Set([first, second]));
+    expect(read.draft).toEqual(read.drafts[0]);
+    const overview = (await request(app).get('/api/mobile/med-schedules').set(auth(id))).body;
+    expect(overview.drafts).toHaveLength(2);
+    for (const row of (
+      await db.query('SELECT snapshot_json FROM med_setup_drafts WHERE actor_id=$1', [id])
+    ).rows)
+      expect(row.snapshot_json).toMatch(/^asinu:enc:v1:/);
+    await request(app)
+      .delete(`/api/mobile/medication/draft/${second}?revision=1`)
+      .set(auth(id))
+      .expect(200);
+    const remaining = (await request(app).get('/api/mobile/medication/draft').set(auth(id))).body
+      .drafts;
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].id).toBe(first);
+    expect(remaining[0].snapshot).toEqual(snapshots[0]);
+    expect(
+      (await db.query('SELECT 1 FROM med_schedules WHERE patient_user_id=$1', [id])).rowCount
+    ).toBe(0);
+  });
+  test('saving a selected draft never consumes a different unfinished plan', async () => {
+    const id = await user(),
+      first = randomUUID(),
+      second = randomUUID(),
+      snapshot = draftSnapshot();
+    for (const draftId of [first, second])
+      await request(app)
+        .put('/api/mobile/medication/draft')
+        .set(auth(id))
+        .send({ id: draftId, revision: 0, snapshot })
+        .expect(200);
+    await request(app)
+      .post('/api/mobile/medication/setup')
+      .set(auth(id))
+      .send({
+        request_id: randomUUID(),
+        draft_id: second,
+        draft_revision: 1,
+        items: [
+          { display_name: 'Tên đã xác nhận', kind: 'MEDICINE', source: 'CHIP', confirmed: true },
+        ],
+        meals: snapshot.meals,
+        slots: [{ time_local: '07:30', meal_anchor: 'after_breakfast', item_indexes: [0] }],
+      })
+      .expect(200);
+    const remaining = (await request(app).get('/api/mobile/medication/draft').set(auth(id))).body
+      .drafts;
+    expect(remaining.map((d) => d.id)).toEqual([first]);
+    expect(
+      (
+        await request(app)
+          .get('/api/mobile/medication/draft')
+          .set(auth(await user()))
+      ).body.drafts
+    ).toEqual([]);
   });
   test('a prior unconfirmed scan can be recovered without AI, but never comes back after deleting its draft', async () => {
     const id = await user(),

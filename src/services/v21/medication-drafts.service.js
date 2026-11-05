@@ -85,13 +85,15 @@ async function access(db, actor, patient) {
 }
 async function read(db, actor, patient) {
   patient = await access(db, actor, patient);
-  let row = (
-    await db.query(
-      "SELECT * FROM med_setup_drafts WHERE actor_id=$1 AND patient_user_id=$2 AND state='ACTIVE'",
-      [actor, patient]
-    )
-  ).rows[0];
-  if (!row) {
+  const load = async () =>
+    (
+      await db.query(
+        "SELECT * FROM med_setup_drafts WHERE actor_id=$1 AND patient_user_id=$2 AND state='ACTIVE' ORDER BY updated_at DESC,id DESC",
+        [actor, patient]
+      )
+    ).rows;
+  let rows = await load();
+  if (!rows.length) {
     // Recover a pre-draft upload once. A delete/save tombstone prevents old
     // scans from reappearing. This never runs the model or creates med_items.
     await c.transaction(db, async (tx) => {
@@ -150,31 +152,27 @@ async function read(db, actor, patient) {
       });
       await write(tx, actor, patient, { id: job.id, revision: 0, snapshot });
     });
-    row = (
-      await db.query(
-        "SELECT * FROM med_setup_drafts WHERE actor_id=$1 AND patient_user_id=$2 AND state='ACTIVE'",
-        [actor, patient]
-      )
-    ).rows[0];
+    rows = await load();
   }
-  if (!row) return { draft: null };
-  const snapshot = snapshotSchema.parse(
-    JSON.parse(med.reveal(patient, 'med_setup_drafts.snapshot_json', row.snapshot_json))
-  );
-  const media = [
-    ...new Set(
-      [snapshot.photoMediaId, ...snapshot.items.map((x) => x.photo_media_id)].filter(Boolean)
-    ),
-  ];
-  return {
-    draft: {
+  const drafts = rows.map((row) => {
+    const snapshot = snapshotSchema.parse(
+      JSON.parse(med.reveal(patient, 'med_setup_drafts.snapshot_json', row.snapshot_json))
+    );
+    const media = [
+      ...new Set(
+        [snapshot.photoMediaId, ...snapshot.items.map((x) => x.photo_media_id)].filter(Boolean)
+      ),
+    ];
+    return {
       id: row.id,
       revision: row.revision,
       updatedAt: row.updated_at,
       snapshot,
       photos: Object.fromEntries(media.map((id) => [id, scan.mediaUrl(id, patient, actor)])),
-    },
-  };
+    };
+  });
+  // Keep the singular field for existing clients that resume the latest draft.
+  return { draft: drafts[0] || null, drafts };
 }
 async function write(pool, actor, patient, body) {
   patient = await access(pool, actor, patient);
@@ -204,16 +202,6 @@ async function write(pool, actor, patient, body) {
     if (old && (old.state !== 'ACTIVE' || old.revision !== x.revision))
       throw c.error('MED_DRAFT_CHANGED', 409);
     if (!old && x.revision !== 0) throw c.error('MED_DRAFT_CHANGED', 409);
-    if (
-      !old &&
-      (
-        await db.query(
-          "SELECT 1 FROM med_setup_drafts WHERE actor_id=$1 AND patient_user_id=$2 AND state='ACTIVE'",
-          [actor, patient]
-        )
-      ).rowCount
-    )
-      throw c.error('MED_DRAFT_CHANGED', 409);
     const media = [
       ...new Set(
         [x.snapshot.photoMediaId, ...x.snapshot.items.map((i) => i.photo_media_id)].filter(Boolean)

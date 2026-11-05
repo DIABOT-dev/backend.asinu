@@ -120,7 +120,7 @@ async function overview(db, actor, patient, { includePaused = false } = {}) {
     conditions: profile.rows[0]?.medical_conditions || [],
     self: Number(actor) === patient,
     flags: await c.config(db, patient),
-    draft: (await require('./medication-drafts.service').read(db, actor, patient)).draft,
+    ...(await require('./medication-drafts.service').read(db, actor, patient)),
   };
 }
 async function createItem(pool, actor, patient, body) {
