@@ -244,7 +244,7 @@ async function queueDue(pool) {
       if (!user) return;
       const e = (
         await db.query(
-          "SELECT e.*,s.time_local FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id WHERE e.id=$1 AND e.state='SCHEDULED' AND e.next_attempt_at<=NOW() AND s.active AND s.consent_state='ACTIVE' FOR UPDATE OF e",
+          "SELECT e.*,to_char(e.scheduled_at AT TIME ZONE e.timezone,'HH24:MI') time_local FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id WHERE e.id=$1 AND e.state='SCHEDULED' AND e.next_attempt_at<=NOW() AND s.active AND s.consent_state='ACTIVE' FOR UPDATE OF e",
           [id]
         )
       ).rows[0];
@@ -282,7 +282,7 @@ async function queueDue(pool) {
       // A merged group consumes one attempt in each constituent dose, sends once.
       const group = (
         await db.query(
-          `SELECT e.*,s.time_local FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id
+          `SELECT e.*,to_char(e.scheduled_at AT TIME ZONE e.timezone,'HH24:MI') time_local FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id
    WHERE e.patient_user_id=$1 AND e.state='SCHEDULED' AND s.active AND s.consent_state='ACTIVE' AND
     (e.id=$2 OR(e.attempt_count=0 AND $3::integer=0 AND e.scheduled_at>=$4 AND e.scheduled_at<$4::timestamptz+INTERVAL '30 minutes')
  OR($3::integer>0 AND e.attempt_count=$3 AND e.next_attempt_at<=NOW()+INTERVAL '1 second' AND e.id IN(SELECT a.dose_event_id FROM med_call_attempts a WHERE a.group_id=(SELECT group_id FROM med_call_attempts WHERE dose_event_id=$2 ORDER BY attempt_no DESC LIMIT 1))))
@@ -395,7 +395,7 @@ async function dispatchAttempts(pool) {
         return [];
       const attempts = (
         await db.query(
-          `SELECT a.*,e.patient_user_id,e.timezone,e.scheduled_at,s.time_local FROM med_call_attempts a
+          `SELECT a.*,e.patient_user_id,e.timezone,e.scheduled_at,to_char(e.scheduled_at AT TIME ZONE e.timezone,'HH24:MI') time_local FROM med_call_attempts a
     JOIN med_dose_events e ON e.id=a.dose_event_id JOIN med_schedules s ON s.id=e.schedule_id
     JOIN user_notification_preferences n ON n.user_id=e.patient_user_id AND n.reminders_enabled
     WHERE a.group_id=$1 AND e.state='CALLING' AND s.active AND v21_allowed(e.patient_user_id,'medication')
@@ -520,7 +520,7 @@ async function closeTimeouts(pool) {
       if (!a) return;
       const e = (
         await db.query(
-          'SELECT e.*,s.time_local FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id WHERE e.id=$1 FOR UPDATE OF e',
+          "SELECT e.*,to_char(e.scheduled_at AT TIME ZONE e.timezone,'HH24:MI') time_local FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id WHERE e.id=$1 FOR UPDATE OF e",
           [a.dose_event_id]
         )
       ).rows[0];
@@ -552,7 +552,7 @@ async function detail(db, user, id) {
   await c.assertFeature(db, user, 'medication');
   const event = (
     await db.query(
-      'SELECT e.*,s.time_local FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id WHERE e.id=$1 AND e.patient_user_id=$2',
+      "SELECT e.*,to_char(e.scheduled_at AT TIME ZONE e.timezone,'HH24:MI') time_local FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id WHERE e.id=$1 AND e.patient_user_id=$2",
       [id, user]
     )
   ).rows[0];
@@ -655,7 +655,7 @@ async function answer(pool, user, id, body) {
     for (const dose of ids) {
       const e = (
         await db.query(
-          'SELECT e.*,s.time_local FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id WHERE e.id=$1 AND e.patient_user_id=$2 FOR UPDATE OF e',
+          "SELECT e.*,to_char(e.scheduled_at AT TIME ZONE e.timezone,'HH24:MI') time_local FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id WHERE e.id=$1 AND e.patient_user_id=$2 FOR UPDATE OF e",
           [dose, user]
         )
       ).rows[0];

@@ -1978,6 +1978,7 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     const id = await user(),
       old = await dose(id);
     await calls.answer(db, id, old.id, { button: 1, request_id: randomUUID() });
+    const originalTime = (await calls.detail(db, id, old.id)).event.time_local;
     const future = randomUUID();
     await db.query(
       "INSERT INTO med_dose_events(id,schedule_id,patient_user_id,local_date,scheduled_at,next_attempt_at,timezone,has_medicine) VALUES($1,$2,$3,(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date+1,NOW()+INTERVAL '1 day',NOW()+INTERVAL '1 day','Asia/Ho_Chi_Minh',TRUE)",
@@ -2007,6 +2008,10 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     expect(med.reveal(id, 'med_dose_items.display_name', snapshot.display_name)).toBe(
       'Thuốc huyết áp'
     );
+    expect((await calls.detail(db, id, old.id)).event.time_local).toBe(originalTime);
+    expect((await med.doses(db, id, id)).items.find((e) => e.id === old.id).time_local).toBe(
+      originalTime
+    );
     expect(
       (
         await db.query(
@@ -2015,6 +2020,40 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
         )
       ).rowCount
     ).toBe(1);
+  });
+  test('an untouched future dose changes to the newly confirmed time without changing an already started reminder', async () => {
+    const id = await user(),
+      medicine = await item(id);
+    const { schedule } = await med.saveSchedule(db, id, id, null, {
+      time_local: '07:30',
+      item_ids: [medicine.id],
+    });
+    const old = (await med.doses(db, id, id)).items[0];
+    await db.query(
+      "UPDATE med_dose_events SET scheduled_at=NOW()+INTERVAL '1 hour',next_attempt_at=NOW()+INTERVAL '1 hour' WHERE id=$1",
+      [old.id]
+    );
+    await med.saveSchedule(db, id, id, schedule.id, {
+      time_local: '08:30',
+      item_ids: [medicine.id],
+    });
+    const revised = (await med.doses(db, id, id)).items;
+    expect(revised).toHaveLength(1);
+    expect(revised[0].id).not.toBe(old.id);
+    expect(revised[0].time_local).toBe('08:30');
+    await db.query("UPDATE med_dose_events SET state='CALLING',attempt_count=1 WHERE id=$1", [
+      revised[0].id,
+    ]);
+    await med.saveSchedule(db, id, id, schedule.id, {
+      time_local: '09:30',
+      item_ids: [medicine.id],
+    });
+    const kept = (await med.doses(db, id, id)).items;
+    expect(kept).toHaveLength(1);
+    expect(kept[0].id).toBe(revised[0].id);
+    expect(kept[0].time_local).toBe('08:30');
+    expect(kept[0].state).toBe('CALLING');
+    expect((await med.overview(db, id, id)).schedules[0].time_local).toBe('09:30');
   });
   test('SRS EB10: expiry reminder is emitted once within seven days, excludes spent lots and never expires early', async () => {
     const id = await user();

@@ -418,12 +418,15 @@ async function doses(db, actor, patient) {
   await c.assertFeature(db, patient, 'medication');
   const items = (
     await db.query(
-      `SELECT e.*,s.time_local FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id
+      `SELECT e.*,to_char(e.scheduled_at AT TIME ZONE e.timezone,'HH24:MI') time_local FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id
  WHERE e.patient_user_id=$1 AND e.local_date=(NOW() AT TIME ZONE e.timezone)::date ORDER BY e.scheduled_at`,
       [patient]
     )
   ).rows;
-  return { items: items.map((e) => ({ ...e, time_local: String(e.time_local).slice(0, 5) })) };
+  return {
+    items: items.map((e) => ({ ...e, time_local: String(e.time_local).slice(0, 5) })),
+    serverTime: new Date().toISOString(),
+  };
 }
 async function setup(pool, actor, patient, body) {
   patient = await c.patientAccess(pool, actor, patient);
