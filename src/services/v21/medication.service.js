@@ -120,6 +120,7 @@ async function overview(db, actor, patient, { includePaused = false } = {}) {
     conditions: profile.rows[0]?.medical_conditions || [],
     self: Number(actor) === patient,
     flags: await c.config(db, patient),
+    draft: (await require('./medication-drafts.service').read(db, actor, patient)).draft,
   };
 }
 async function createItem(pool, actor, patient, body) {
@@ -426,6 +427,8 @@ async function setup(pool, actor, patient, body) {
   const x = c.z
     .object({
       request_id: c.uuid,
+      draft_id: c.uuid.optional(),
+      draft_revision: c.z.number().int().positive().optional(),
       items: c.z.array(itemSchema).min(1).max(20),
       meals: mealSchema,
       slots: c.z
@@ -467,6 +470,16 @@ async function setup(pool, actor, patient, body) {
       if (old.fingerprint !== fingerprint) throw c.error('MED_REQUEST_CHANGED', 409);
       return JSON.parse(reveal(patient, 'med_setup_receipts.result_json', old.result_json));
     }
+    if (
+      x.draft_id &&
+      !(
+        await db.query(
+          "SELECT 1 FROM med_setup_drafts WHERE id=$1 AND actor_id=$2 AND patient_user_id=$3 AND revision=$4 AND state='ACTIVE' FOR UPDATE",
+          [x.draft_id, actor, patient, x.draft_revision || 0]
+        )
+      ).rowCount
+    )
+      throw c.error('MED_DRAFT_CHANGED', 409);
     await saveMeals(db, actor, patient, x.meals);
     const items = [];
     for (const row of x.items) items.push((await createItem(db, actor, patient, row)).item);
@@ -509,6 +522,11 @@ async function setup(pool, actor, patient, body) {
         protect(patient, 'med_setup_receipts.result_json', JSON.stringify(result)),
       ]
     );
+    if (x.draft_id)
+      await db.query(
+        "UPDATE med_setup_drafts SET state='SAVED',snapshot_json=NULL,revision=revision+1,updated_at=NOW() WHERE id=$1 AND actor_id=$2 AND patient_user_id=$3",
+        [x.draft_id, actor, patient]
+      );
     return result;
   });
 }

@@ -92,6 +92,21 @@ module.exports = (pool) => {
     '/medication/patients',
     json((req) => med.patients(pool, req.user.id))
   );
+  const drafts = require('../services/v21/medication-drafts.service');
+  r.get(
+    '/medication/draft',
+    json((req) => drafts.read(pool, req.user.id, req.query.patientId))
+  );
+  r.put(
+    '/medication/draft',
+    json((req) => drafts.write(pool, req.user.id, req.query.patientId, req.body))
+  );
+  r.delete(
+    '/medication/draft/:id',
+    json((req) =>
+      drafts.remove(pool, req.user.id, req.query.patientId, req.params.id, req.query.revision)
+    )
+  );
   r.post(
     '/medication/consents',
     json((req) => med.consentMany(pool, req.user.id, req.body))

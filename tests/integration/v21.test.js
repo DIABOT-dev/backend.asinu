@@ -34,10 +34,15 @@ const c = require('../../src/services/v21/common'),
 const scan = require('../../src/services/v21/medication-scan.service'),
   maintenance = require('../../src/services/v21/maintenance.service'),
   messages = require('../../src/services/v21/messages.service');
-const source = fs.readFileSync(
-  path.join(__dirname, '../../db/migrations/123_medication_and_coins.sql'),
-  'utf8'
-);
+const source =
+  fs.readFileSync(
+    path.join(__dirname, '../../db/migrations/123_medication_and_coins.sql'),
+    'utf8'
+  ) +
+  fs.readFileSync(
+    path.join(__dirname, '../../db/migrations/126_medication_setup_drafts.sql'),
+    'utf8'
+  );
 const describeDb = process.env.CHECKIN_TEST_DATABASE_URL ? describe : describe.skip;
 describeDb('V2.1 on isolated real PostgreSQL tables', () => {
   jest.setTimeout(30000);
@@ -177,6 +182,309 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       await tx.query('UPDATE coin_balances SET balance=$2 WHERE user_id=$1', [id, n]);
     });
   }
+  const draftSnapshot = () => ({
+    version: 1,
+    step: 2,
+    items: [
+      {
+        clientId: randomUUID(),
+        display_name: 'Thuốc đang kiểm tra',
+        kind: 'MEDICINE',
+        source: 'PHOTO_AI',
+        confirmed: false,
+        anchors: [],
+      },
+    ],
+    meals: { breakfast: '06:30', lunch: '11:30', dinner: '18:00', bedtime: '21:30' },
+    slots: [],
+    photoMediaId: null,
+  });
+  test('medication drafts persist encrypted without creating a medicine or a reminder, and retry once safely', async () => {
+    const id = await user(),
+      draftId = randomUUID(),
+      snapshot = draftSnapshot();
+    const first = await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(id))
+      .send({ id: draftId, revision: 0, snapshot });
+    expect(first.status).toBe(200);
+    expect(first.body.revision).toBe(1);
+    const again = await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(id))
+      .send({ id: draftId, revision: 0, snapshot });
+    expect(again.status).toBe(200);
+    expect(again.body.revision).toBe(1);
+    const read = await request(app).get('/api/mobile/medication/draft').set(auth(id));
+    expect(read.body.draft.snapshot).toEqual(snapshot);
+    const row = (
+      await db.query('SELECT snapshot_json FROM med_setup_drafts WHERE id=$1', [draftId])
+    ).rows[0];
+    expect(row.snapshot_json).toMatch(/^asinu:enc:v1:/);
+    expect(row.snapshot_json).not.toContain('Thuốc đang');
+    expect(
+      (await db.query('SELECT 1 FROM med_items WHERE patient_user_id=$1', [id])).rowCount
+    ).toBe(0);
+    expect(
+      (await db.query('SELECT 1 FROM med_schedules WHERE patient_user_id=$1', [id])).rowCount
+    ).toBe(0);
+  });
+  test('deleted drafts cannot return from a delayed writer and new drafts use a new identity', async () => {
+    const id = await user(),
+      draftId = randomUUID(),
+      snapshot = draftSnapshot();
+    await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(id))
+      .send({ id: draftId, revision: 0, snapshot })
+      .expect(200);
+    await request(app)
+      .delete(`/api/mobile/medication/draft/${draftId}?revision=1`)
+      .set(auth(id))
+      .expect(200);
+    const stale = await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(id))
+      .send({ id: draftId, revision: 1, snapshot });
+    expect(stale.status).toBe(409);
+    expect(
+      (await request(app).get('/api/mobile/medication/draft').set(auth(id))).body.draft
+    ).toBeNull();
+    expect(
+      (await db.query('SELECT snapshot_json FROM med_setup_drafts WHERE id=$1', [draftId])).rows[0]
+        .snapshot_json
+    ).toBeNull();
+    const secondId = randomUUID();
+    await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(id))
+      .send({ id: secondId, revision: 0, snapshot })
+      .expect(200);
+    await request(app)
+      .delete(`/api/mobile/medication/draft/${secondId}?revision=1`)
+      .set(auth(id))
+      .expect(200);
+    await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(id))
+      .send({ id: draftId, revision: 0, snapshot })
+      .expect(409);
+  });
+  test('draft reads and photos remain scoped to creator and patient, including revoked Care Circle access', async () => {
+    const patient = await user(),
+      actor = await user(),
+      stranger = await user();
+    await connect(patient, actor);
+    const snapshot = draftSnapshot(),
+      draftId = randomUUID();
+    await request(app)
+      .put(`/api/mobile/medication/draft?patientId=${patient}`)
+      .set(auth(actor))
+      .send({ id: draftId, revision: 0, snapshot })
+      .expect(200);
+    await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(stranger))
+      .send({ id: draftId, revision: 0, snapshot })
+      .expect(409);
+    expect(
+      (await db.query('SELECT actor_id FROM med_setup_drafts WHERE id=$1', [draftId])).rows[0]
+        .actor_id
+    ).toBe(actor);
+    expect(
+      (
+        await request(app)
+          .get(`/api/mobile/medication/draft?patientId=${patient}`)
+          .set(auth(patient))
+      ).body.draft
+    ).toBeNull();
+    await request(app)
+      .get(`/api/mobile/medication/draft?patientId=${patient}`)
+      .set(auth(stranger))
+      .expect(403);
+    await db.query(
+      "UPDATE user_connections SET status='rejected' WHERE (requester_id=$1 AND addressee_id=$2) OR(requester_id=$2 AND addressee_id=$1)",
+      [patient, actor]
+    );
+    await request(app)
+      .get(`/api/mobile/medication/draft?patientId=${patient}`)
+      .set(auth(actor))
+      .expect(403);
+    await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(stranger))
+      .send({
+        id: randomUUID(),
+        revision: 0,
+        snapshot: { ...snapshot, photoMediaId: randomUUID() },
+      })
+      .expect(403);
+  });
+  test('only a successful confirmed setup consumes its draft, atomically with the schedules', async () => {
+    const id = await user(),
+      draftId = randomUUID(),
+      snapshot = draftSnapshot();
+    await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(id))
+      .send({ id: draftId, revision: 0, snapshot })
+      .expect(200);
+    const body = {
+      request_id: randomUUID(),
+      draft_id: draftId,
+      draft_revision: 1,
+      items: [
+        { display_name: 'Thuốc đã kiểm tra', kind: 'MEDICINE', source: 'CHIP', confirmed: true },
+      ],
+      meals: snapshot.meals,
+      slots: [{ time_local: '07:00', meal_anchor: 'after_breakfast', item_indexes: [0] }],
+    };
+    await request(app)
+      .post('/api/mobile/medication/setup')
+      .set(auth(id))
+      .send({ ...body, slots: [{ ...body.slots[0], time_local: '99:99' }] })
+      .expect(400);
+    expect(
+      (await request(app).get('/api/mobile/medication/draft').set(auth(id))).body.draft.id
+    ).toBe(draftId);
+    await request(app).post('/api/mobile/medication/setup').set(auth(id)).send(body).expect(200);
+    expect(
+      (await request(app).get('/api/mobile/medication/draft').set(auth(id))).body.draft
+    ).toBeNull();
+    await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(id))
+      .send({ id: draftId, revision: 1, snapshot })
+      .expect(409);
+  });
+  test('concurrent edits to one draft reject a stale revision and keep one complete snapshot', async () => {
+    const id = await user(),
+      draftId = randomUUID(),
+      snapshot = draftSnapshot();
+    await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(id))
+      .send({ id: draftId, revision: 0, snapshot })
+      .expect(200);
+    const edits = await Promise.all(
+      ['A', 'B'].map((name) =>
+        request(app)
+          .put('/api/mobile/medication/draft')
+          .set(auth(id))
+          .send({
+            id: draftId,
+            revision: 1,
+            snapshot: { ...snapshot, items: [{ ...snapshot.items[0], display_name: name }] },
+          })
+      )
+    );
+    expect(edits.map((r) => r.status).sort()).toEqual([200, 409]);
+    const result = (await request(app).get('/api/mobile/medication/draft').set(auth(id))).body
+      .draft;
+    expect(result.revision).toBe(2);
+    await request(app)
+      .post('/api/mobile/medication/setup')
+      .set(auth(id))
+      .send({
+        request_id: randomUUID(),
+        draft_id: draftId,
+        draft_revision: 1,
+        items: [
+          { display_name: 'Tên phiên bản cũ', kind: 'MEDICINE', source: 'CHIP', confirmed: true },
+        ],
+        meals: snapshot.meals,
+        slots: [{ time_local: '07:00', meal_anchor: 'after_breakfast', item_indexes: [0] }],
+      })
+      .expect(409);
+    expect(
+      (await db.query('SELECT 1 FROM med_schedules WHERE patient_user_id=$1', [id])).rowCount
+    ).toBe(0);
+
+    expect(['A', 'B']).toContain(result.snapshot.items[0].display_name);
+  });
+  test('a prior unconfirmed scan can be recovered without AI, but never comes back after deleting its draft', async () => {
+    const id = await user(),
+      media = randomUUID(),
+      job = randomUUID();
+    await db.query(
+      "INSERT INTO med_media(id,patient_user_id,uploader_id,mime_type,payload,byte_length) VALUES($1,$2,$2,'image/png',$3,12)",
+      [media, id, med.protect(id, 'med_media.payload', 'fixture-image-base64')]
+    );
+    await db.query(
+      "INSERT INTO med_scan_jobs(id,uploader_id,patient_user_id,media_id,status,result_json,model) VALUES($1,$2,$2,$3,'DONE',$4,'med-gemini')",
+      [
+        job,
+        id,
+        media,
+        med.protect(
+          id,
+          'med_scan_jobs.result_json',
+          JSON.stringify({
+            readable: true,
+            items: [
+              {
+                printed_name: 'Tên từ lần đọc trước',
+                display_name: 'Tên từ lần đọc trước',
+                kind: 'MEDICINE',
+                suggested_slots: [],
+              },
+            ],
+          })
+        ),
+      ]
+    );
+    const recovered = await request(app).get('/api/mobile/medication/draft').set(auth(id));
+    expect(recovered.status).toBe(200);
+    expect(recovered.body.draft.id).toBe(job);
+    expect(recovered.body.draft.snapshot.items[0].confirmed).toBe(false);
+    expect(recovered.body.draft.photos[media]).toMatch(/^\/api\/mobile\/med-media\//);
+    await request(app)
+      .delete(`/api/mobile/medication/draft/${job}?revision=1`)
+      .set(auth(id))
+      .expect(200);
+    expect(
+      (await request(app).get('/api/mobile/medication/draft').set(auth(id))).body.draft
+    ).toBeNull();
+    expect(
+      (await db.query('SELECT 1 FROM med_schedules WHERE patient_user_id=$1', [id])).rowCount
+    ).toBe(0);
+  });
+  test('drafts retain incomplete clock input but never persist dosage in names or notes', async () => {
+    const id = await user(),
+      snapshot = draftSnapshot(),
+      draftId = randomUUID();
+    for (const invalid of [
+      { ...snapshot, items: [{ ...snapshot.items[0], display_name: 'Thuốc 500 mg' }] },
+      {
+        ...snapshot,
+        slots: [
+          {
+            time_local: '07:00',
+            meal_anchor: 'after_breakfast',
+            item_indexes: [0],
+            note: 'Uống 2 viên',
+          },
+        ],
+      },
+    ])
+      await request(app)
+        .put('/api/mobile/medication/draft')
+        .set(auth(id))
+        .send({ id: draftId, revision: 0, snapshot: invalid })
+        .expect(400);
+    expect(
+      (await db.query('SELECT 1 FROM med_setup_drafts WHERE actor_id=$1', [id])).rowCount
+    ).toBe(0);
+    await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(id))
+      .send({
+        id: draftId,
+        revision: 0,
+        snapshot: { ...snapshot, meals: { ...snapshot.meals, breakfast: '7:' } },
+      })
+      .expect(200);
+  });
   test('paused schedules can be listed and resumed while deleted schedules stay hidden and legacy reads stay active-only', async () => {
     const id = await user(),
       stranger = await user(),
