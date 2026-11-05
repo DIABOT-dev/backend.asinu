@@ -39,6 +39,7 @@ const handle = (work) => async (req, res) => {
 const json = (work) => handle(async (req, res) => res.json({ ok: true, ...(await work(req)) }));
 module.exports = (pool) => {
   const r = express.Router();
+  const purposeController = require('../controllers/medication-purpose.controller')(pool);
   r.use((_req, res, next) => {
     res.set('Cache-Control', 'private, no-store');
     next();
@@ -117,6 +118,17 @@ module.exports = (pool) => {
   r.post(
     '/med-items',
     json((req) => med.createItem(pool, req.user.id, req.query.patientId, req.body))
+  );
+  r.post(
+    '/med-items/lookup',
+    rateLimit({
+      windowMs: 60000,
+      max: 60,
+      keyGenerator: (req) => String(req.user.id),
+      standardHeaders: true,
+      legacyHeaders: false,
+    }),
+    handle(purposeController.lookup)
   );
   r.post(
     '/med-schedules',

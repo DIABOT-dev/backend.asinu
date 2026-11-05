@@ -19,7 +19,7 @@ try {
 // integrations and the production keyring are not passed into the fixtures.
 const child = spawn(process.execPath, [
   path.join(root, 'node_modules/jest/bin/jest.js'),
-  'tests/unit/v21-policy.test.js', 'tests/integration/v21.test.js',
+  'tests/unit/v21-policy.test.js', 'tests/unit/medication-purpose.test.js', 'tests/integration/v21.test.js',
   'tests/integration/checkin-gifts.test.js', '--runInBand',
 ], {
   cwd: root,

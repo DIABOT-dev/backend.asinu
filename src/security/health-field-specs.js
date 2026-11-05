@@ -4,7 +4,7 @@
 // their SQL types; the encrypted volume also protects them when stored.
 module.exports = [
   { table: 'med_dose_items', id: 'id', owner: 'patient_user_id', fields: ['display_name'] },
-  { table: 'med_items', id: 'id', owner: 'patient_user_id', fields: ['display_name', 'printed_name'] },
+  { table: 'med_items', id: 'id', owner: 'patient_user_id', fields: ['display_name', 'printed_name', 'tags_json'] },
   { table: 'med_schedules', id: 'id', owner: 'patient_user_id', fields: ['note'] },
   { table: 'med_media', id: 'id', owner: 'patient_user_id', fields: ['payload'] },
   { table: 'med_scan_jobs', id: 'id', owner: 'patient_user_id', fields: ['result_json'] },

@@ -1,6 +1,7 @@
 'use strict';
 const c = require('./common'),
   p = require('./medication.policy');
+const purpose = require('./medication-purpose.service');
 const {
   encryptHealthField: encrypt,
   decryptHealthField: decrypt,
@@ -25,6 +26,7 @@ const itemSchema = c.z
     source: c.z.enum(['PHOTO_AI', 'CHIP', 'VOICE']),
     photo_media_id: c.uuid.nullable().optional(),
     confirmed: c.z.literal(true),
+    tag_confirmation: purpose.confirmationSchema.optional(),
   })
   .strict();
 const scheduleSchema = c.z
@@ -44,10 +46,14 @@ const mealSchema = c.z
   .object({ breakfast: p.time, lunch: p.time, dinner: p.time, bedtime: p.time })
   .strict();
 function publicItem(row) {
+  const { tags_json, ...item } = row;
   return {
-    ...row,
+    ...item,
     display_name: reveal(row.patient_user_id, 'med_items.display_name', row.display_name),
     printed_name: reveal(row.patient_user_id, 'med_items.printed_name', row.printed_name),
+    purpose_tags: tags_json
+      ? JSON.parse(reveal(row.patient_user_id, 'med_items.tags_json', tags_json))
+      : null,
   };
 }
 function publicSchedule(row) {
@@ -121,6 +127,7 @@ async function createItem(pool, actor, patient, body) {
   await c.assertFeature(pool, patient, 'medication');
   requireEncryption();
   const x = itemSchema.parse(body);
+  const tags = purpose.confirmedTags(actor, patient, x);
   return c.transaction(pool, async (db) => {
     await c.lockPatient(db, patient);
     await c.patientAccess(db, actor, patient);
@@ -136,8 +143,8 @@ async function createItem(pool, actor, patient, body) {
       throw c.error('MED_PHOTO_NOT_FOUND', 404);
     const r = (
       await db.query(
-        `INSERT INTO med_items(id,patient_user_id,display_name,printed_name,kind,source,photo_media_id)
-  VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+        `INSERT INTO med_items(id,patient_user_id,display_name,printed_name,kind,source,photo_media_id,tags_json)
+  VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
         [
           c.randomUUID(),
           patient,
@@ -146,6 +153,7 @@ async function createItem(pool, actor, patient, body) {
           x.kind,
           x.source,
           x.photo_media_id || null,
+          tags ? protect(patient, 'med_items.tags_json', JSON.stringify(tags)) : null,
         ]
       )
     ).rows[0];

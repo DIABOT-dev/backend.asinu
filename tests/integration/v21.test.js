@@ -84,6 +84,12 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       )
     );
     await db.query('INSERT INTO gift_config SELECT * FROM public.gift_config');
+    await db.query(
+      fs.readFileSync(
+        path.join(__dirname, '../../db/migrations/125_medication_purpose_tags.sql'),
+        'utf8'
+      )
+    );
     await db.query('INSERT INTO loc_items SELECT * FROM public.loc_items');
     await db.query(`CREATE SEQUENCE IF NOT EXISTS ${schema}.gift_ticket_numbers`);
     await db.query(
@@ -378,6 +384,84 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       .rows[0].display_name;
     expect(stored).toMatch(/^asinu:enc:v1:/);
     expect((await med.overview(db, id, id)).items[0].display_name).toBe('Thuốc huyết áp');
+  });
+  test('verified purpose tags require confirmation, are encrypted, and stay within the patient access boundary', async () => {
+    const parent = await user(),
+      child = await user(),
+      stranger = await user();
+    await connect(parent, child);
+    const sourceUrl = 'https://dhgpharma.com.vn/vi/san-pham/giam-dau-ha-sot/hapacol-650-0';
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockImplementation(
+        async (url) =>
+          new Response(
+            String(url).endsWith('/sitemap.xml')
+              ? `<urlset><url><loc>${sourceUrl}</loc></url></urlset>`
+              : '<div class="field-field-display-title">Hapacol 650</div><div class="field-field-n-p-indication"><div>Chỉ định</div><p>Điều trị các triệu chứng đau. Hạ sốt.</p></div>'
+          )
+      );
+    try {
+      const lookup = await request(app)
+        .post('/api/mobile/med-items/lookup?patientId=' + parent)
+        .set(auth(child))
+        .send({ name: 'Hapacol 650', kind: 'MEDICINE' })
+        .expect(200);
+      expect(lookup.body.tags).toEqual(['fever_reduction', 'pain_relief']);
+      expect(
+        (await db.query('SELECT 1 FROM med_items WHERE patient_user_id=$1', [parent])).rowCount
+      ).toBe(0);
+      const body = {
+        display_name: 'Hapacol 650',
+        kind: 'MEDICINE',
+        source: 'CHIP',
+        confirmed: true,
+        tag_confirmation: { token: lookup.body.token, codes: ['fever_reduction'] },
+      };
+      await request(app)
+        .post('/api/mobile/med-items?patientId=' + parent)
+        .set(auth(child))
+        .send({ ...body, confirmed: false })
+        .expect(400);
+      const saved = await request(app)
+        .post('/api/mobile/med-items?patientId=' + parent)
+        .set(auth(child))
+        .send(body)
+        .expect(200);
+      expect(saved.body.item.purpose_tags.codes).toEqual(['fever_reduction']);
+      expect(saved.body.item.tags_json).toBeUndefined();
+      const stored = (
+        await db.query('SELECT tags_json FROM med_items WHERE id=$1', [saved.body.item.id])
+      ).rows[0].tags_json;
+      expect(stored).toMatch(/^asinu:enc:v1:/);
+      expect(stored).not.toContain('fever_reduction');
+      const overview = await request(app)
+        .get('/api/mobile/med-schedules?patientId=' + parent)
+        .set(auth(parent))
+        .expect(200);
+      expect(overview.body.items[0].purpose_tags.source.url).toBe(sourceUrl);
+      await request(app)
+        .post('/api/mobile/med-items/lookup?patientId=' + parent)
+        .set(auth(stranger))
+        .send({ name: 'Hapacol 650', kind: 'MEDICINE' })
+        .expect(403);
+      await request(app).post('/api/mobile/med-items').set(auth(stranger)).send(body).expect(400);
+      await request(app)
+        .post('/api/mobile/med-items?patientId=' + parent)
+        .set(auth(child))
+        .send({ ...body, display_name: 'Hapacol 650 Extra' })
+        .expect(400);
+      await request(app)
+        .post('/api/mobile/med-items?patientId=' + parent)
+        .set(auth(child))
+        .send({ ...body, tag_confirmation: { token: lookup.body.token, codes: ['diabetes'] } })
+        .expect(400);
+      expect(
+        (await db.query('SELECT 1 FROM med_items WHERE patient_user_id=$1', [parent])).rowCount
+      ).toBe(1);
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
   test('maximum four enabled daily schedules is enforced', async () => {
     const id = await user(),
