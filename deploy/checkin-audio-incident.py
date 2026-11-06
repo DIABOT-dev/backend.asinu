@@ -45,6 +45,7 @@ async function read(label, sql, params = []) {
   await client.connect();
   await client.query('SET default_transaction_read_only = on');
   await read('serverTime', 'SELECT now() AS now');
+  await read('consentStorage', "SELECT current_database() AS db, current_user AS role, has_table_privilege(current_user, 'user_ai_consents', 'INSERT,UPDATE,SELECT') AS permitted, (SELECT count(*)::int FROM user_ai_consents) AS receipts");
   await read('account', "SELECT id FROM users WHERE deleted_at IS NULL AND right(regexp_replace(coalesce(phone_number,''),'[^0-9]','','g'),9) = $1", [process.env.INCIDENT_PHONE.slice(-9)]);
   if (Array.isArray(result.account) && result.account.length === 1) {
     const userId = result.account[0].id;
@@ -85,9 +86,12 @@ snapshot = {
 logs = run(["docker", "logs", "--timestamps", "--since", "90m", "--tail", "9000", "asinu-backend"])
 snapshot["backendLogs"] = "\n".join(
     line for line in (logs.get("stdout", "") + "\n" + logs.get("stderr", "")).splitlines()
-    if re.search(r"checkin.?call|vieneu|tts|audio|error|warn|native|livekit", line, re.I)
+    if re.search(r"checkin.?call|vieneu|tts|audio|error|warn|native|livekit|consent", line, re.I)
 )[-650000:]
 snapshot["nginxAccess"] = run(["sh", "-c", "tail -n 12000 /var/log/nginx/access.log 2>/dev/null | grep -E 'checkin-call|checkin/call' | tail -n 400"])
+snapshot["proxyConfig"] = run(["docker", "exec", "asinu-public-proxy", "cat", "/etc/caddy/Caddyfile"])
+proxy_logs = run(["docker", "logs", "--timestamps", "--since", "90m", "--tail", "5000", "asinu-public-proxy"])
+snapshot["proxyLogs"] = "\n".join(line for line in (proxy_logs.get("stdout", "") + "\n" + proxy_logs.get("stderr", "")).splitlines() if re.search(r"ai-consent|checkin-call|error", line, re.I))[-200000:]
 for container in snapshot["containers"].get("stdout", "").splitlines():
     name = container.split()[0]
     if "livekit" in name.lower():
