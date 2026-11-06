@@ -45,7 +45,7 @@ async function read(label, sql, params = []) {
   await client.connect();
   await client.query('SET default_transaction_read_only = on');
   await read('serverTime', 'SELECT now() AS now');
-  await read('consentStorage', "SELECT current_database() AS db, current_user AS role, has_table_privilege(current_user, 'user_ai_consents', 'INSERT,UPDATE,SELECT') AS permitted, (SELECT count(*)::int FROM user_ai_consents) AS receipts");
+  await read('consentStorage', "SELECT current_database() AS db, current_user AS role, has_table_privilege(current_user, 'user_ai_consents', 'INSERT') AS can_insert, has_table_privilege(current_user, 'user_ai_consents', 'UPDATE') AS can_update, has_table_privilege(current_user, 'user_ai_consents', 'SELECT') AS can_select, (SELECT relrowsecurity FROM pg_class WHERE oid = 'user_ai_consents'::regclass) AS rls, (SELECT count(*)::int FROM user_ai_consents) AS receipts");
   await read('account', "SELECT id FROM users WHERE deleted_at IS NULL AND right(regexp_replace(coalesce(phone_number,''),'[^0-9]','','g'),9) = $1", [process.env.INCIDENT_PHONE.slice(-9)]);
   if (Array.isArray(result.account) && result.account.length === 1) {
     const userId = result.account[0].id;
