@@ -9,7 +9,7 @@ on:
       operation:
         description: Deploy, inspect SSH, or remove a confirmed operator IP ban
         type: choice
-        options: [deploy, ssh-diagnostics, prepare-auto-deploy, restore-operator-ssh]
+        options: [deploy, ssh-diagnostics, prepare-auto-deploy, restore-operator-ssh, checkin-audio-diagnostics]
         default: deploy
       operator_ip:
         description: Confirmed operator IPv4 address to unban (restore operation only)
@@ -38,7 +38,7 @@ permissions:
 
 jobs:
   ssh-diagnostics:
-    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'prepare-auto-deploy' || inputs.operation == 'restore-operator-ssh')
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'prepare-auto-deploy' || inputs.operation == 'restore-operator-ssh' || inputs.operation == 'checkin-audio-diagnostics')
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     environment: prod
@@ -46,7 +46,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout preparation script
-        if: inputs.operation == 'prepare-auto-deploy'
+        if: inputs.operation == 'prepare-auto-deploy' || inputs.operation == 'checkin-audio-diagnostics'
         uses: actions/checkout@v7
 
       - name: Inspect SSH and API status with the existing administration key
@@ -56,6 +56,7 @@ jobs:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           OPERATION: ${{ inputs.operation }}
           OPERATOR_IP: ${{ inputs.operator_ip }}
+          DIAGNOSTIC_PHONE: ${{ secrets.CHECKIN_DIAGNOSTIC_PHONE }}
           STACK_DIR: ${{ vars.STACK_DIR || '/opt/asinu-backend' }}
         run: |
           set -eu
@@ -73,6 +74,15 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > "$task_dir/key"
           printf '%s\n' '36.50.176.55 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMDOm8XUn1KYdgS2UTE7r4XyrFpWQKpg7Kh+ZdWOm5xL' > "$task_dir/known_hosts"
           stack_dir_b64="$(printf '%s' "$STACK_DIR" | base64 | tr -d '\n')"
+          if [ "$OPERATION" = 'checkin-audio-diagnostics' ]; then
+            phone_b64="$(printf '%s' "$DIAGNOSTIC_PHONE" | base64 | tr -d '\n')"
+            test -n "$phone_b64"
+            ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+              -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
+              "$VPS_USER@$VPS_HOST" python3 - "$phone_b64" < deploy/checkin-audio-incident.py
+            exit 0
+          fi
           if [ "$OPERATION" = 'prepare-auto-deploy' ]; then
             ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
               -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
