@@ -3,12 +3,15 @@
 const { screenRemoteCareSuitability, normalizeSpecialty } = require('./doctor-task.policy');
 const { enqueueDoctorTask } = require('./doctor-task.service');
 const { enqueueCrmEvent } = require('./crm-event.service');
+const { evaluateConsultationScreening } = require('./doctor-screening.service');
+const { t } = require('../../i18n');
 
 async function loadPatientProjection(pool, userId) {
   const { rows } = await pool.query(
     `SELECT u.id, u.full_name, u.display_name, u.language_preference,
             u.consent_accepted_at, u.consent_version,
-            u.updated_at AS profile_version, p.age AS age_group, p.gender
+            u.updated_at AS profile_version, p.age AS age_group, p.gender,
+            p.birth_year, p.medical_conditions
        FROM users u
        LEFT JOIN user_onboarding_profiles p ON p.user_id = u.id
       WHERE u.id = $1 AND u.deleted_at IS NULL`,
@@ -25,6 +28,34 @@ async function requestDoctorTask(pool, userId, input) {
   if (!screening.suitable_for_remote_care) {
     return { kind: 'REMOTE_CARE_EMERGENCY_BLOCKED', screening };
   }
+
+  if (!input.clinical_intake?.screening_answers) return { kind: 'CONSULTATION_SCREENING_REQUIRED' };
+  const assessment = evaluateConsultationScreening({
+    summary: input.summary,
+    answers: input.clinical_intake.screening_answers,
+    locale: input.clinical_intake.screening_locale || 'vi',
+  }, patient);
+  if (!assessment.suitable_for_remote_care) {
+    return { kind: 'CONSULTATION_SCREENING_REQUIRED', screening: assessment };
+  }
+  const record = assessment.recorded_answers.map(answer => `${answer.question}: ${answer.answers.join('; ')}`).join('\n');
+  const riskLabel = t(`doctor.screening.risk.${assessment.risk_level}`, input.clinical_intake.screening_locale || 'vi');
+  const summary = `${input.summary.trim()}\n\n${assessment.message}\n${record}\n${riskLabel}`;
+  if (summary.length > 5000) {
+    const error = new Error('Consultation description is too long.');
+    error.statusCode = 400;
+    error.code = 'INVALID_SCREENING_ANSWER';
+    throw error;
+  }
+  input = {
+    ...input, summary, priority: assessment.risk_level === 'high' ? 'high' : 'normal',
+    clinical_intake: { ...input.clinical_intake, ...assessment.intake },
+    screening_result: {
+      emergency: false, suitable_for_remote_care: true,
+      reason: `consultation_screened_${assessment.risk_level}`,
+      screened_at: assessment.screened_at, screening_version: assessment.screening_version,
+    },
+  };
 
   // The form contains versioned consent. Persist it before creating the task
   // so the checkbox remains meaningful across devices and CRM projections.
@@ -81,4 +112,4 @@ async function requestDoctorTask(pool, userId, input) {
   return { kind: 'CREATED', result };
 }
 
-module.exports = { requestDoctorTask };
+module.exports = { requestDoctorTask, loadPatientProjection };

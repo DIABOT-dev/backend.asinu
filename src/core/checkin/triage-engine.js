@@ -776,6 +776,7 @@ module.exports = {
   getNextStep,
   calculateConclusion,
   buildState,
+  buildQuestion,
 
   // Exposed for testing / downstream introspection
   INITIAL_STEPS,

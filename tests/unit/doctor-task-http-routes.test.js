@@ -27,6 +27,7 @@ jest.mock('../../src/middleware/upload.middleware', () => ({
   },
 }));
 jest.mock('../../src/controllers/doctor-task.controller', () => ({
+  screenDoctorConsultation: jest.fn(),
   requestDoctorTask: jest.fn(),
   submitDoctorRating: jest.fn(),
   requestDoctorPrivacy: jest.fn(),
@@ -56,6 +57,7 @@ app.use('/doctor', router);
 app.use((_error, _req, res, _next) => res.status(500).json({ ok: false, code: 'INTERNAL_ERROR' }));
 
 const routes = [
+  ['post', '/screening', 'screenDoctorConsultation'],
   ['post', '/tasks', 'requestDoctorTask'],
   ['get', '/tasks', 'listDoctorTasks'],
   ['get', '/tasks/:taskId/messages', 'listDoctorMessages'],
