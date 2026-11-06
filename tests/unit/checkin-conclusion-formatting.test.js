@@ -1,6 +1,9 @@
 'use strict';
 const {
   normalizeMeasurementSentences,
+  normalizeConditionalWarnings,
+  conditionalWarningMissingAction,
+  validatePresentation,
 } = require('../../src/core/checkin/triage-conclusion-contract');
 const {
   validateBlock,
@@ -30,6 +33,85 @@ const facts = buildConclusionFacts(
 );
 const raw =
   'Theo dõi huyết áp giúp mình hiểu rõ thay đổi. Huyết áp 128/82 mmHg lúc 13:00 ngày 29/10/26, còn lúc 12:00 ngày 29/10/26 là 130/84 mmHg.';
+test.each([
+  ['vi', 'Nếu cô thấy đau đầu tăng lên nhiều.', 'Hãy đi khám nếu cô thấy đau đầu tăng lên nhiều.'],
+  ['vi', 'Khi chú cảm thấy chóng mặt hơn', 'Hãy đi khám khi chú cảm thấy chóng mặt hơn.'],
+  [
+    'vi',
+    'Trong trường hợp cô không ăn uống được.',
+    'Hãy đi khám trong trường hợp cô không ăn uống được.',
+  ],
+  ['en', 'If your symptoms worsen.', 'Seek an assessment if your symptoms worsen.'],
+  [
+    'en',
+    'When poor sleep affects your daily life.',
+    'Seek an assessment when poor sleep affects your daily life.',
+  ],
+])('complete %s warning fragments without changing their trigger', (lang, raw, complete) => {
+  const input = Object.freeze([raw]);
+  const output = normalizeConditionalWarnings(input, lang);
+  expect(output).toEqual([complete]);
+  expect(input).toEqual([raw]);
+  expect(conditionalWarningMissingAction(raw)).toBe(true);
+  expect(conditionalWarningMissingAction(complete)).toBe(false);
+  expect(validatePresentation('di_kham_khi', [raw], { ...facts, language: lang })).toBe(
+    'conditional_warning_missing_action'
+  );
+  expect(validatePresentation('di_kham_khi', output, { ...facts, language: lang })).toBeNull();
+});
+test.each([
+  'Nếu đau ngực không hết, hãy gọi 115.',
+  'Nếu khó chịu kéo dài, chú đi khám sớm hơn nhé.',
+  'Nếu mệt hơn, hãy nghỉ ngơi.',
+  'Nếu mệt hơn thì chú hãy nghỉ ngơi.',
+  'Nếu cô lo lắng, liên hệ bác sĩ.',
+  'If chest pain persists, call 115.',
+  'When symptoms worsen, contact your doctor.',
+  'If you feel unwell, you should rest.',
+  'Please arrange an assessment today.',
+])('preserve already complete actions, including 115: %s', (text) => {
+  expect(normalizeConditionalWarnings([text])).toEqual([text]);
+  expect(conditionalWarningMissingAction(text)).toBe(false);
+});
+test('warning completion leaves malformed data for the existing block validator', () => {
+  for (const input of [null, 'Nếu mệt hơn.', undefined])
+    expect(normalizeConditionalWarnings(input)).toBe(input);
+  expect(normalizeConditionalWarnings([null, 1, ''])).toEqual([null, 1, '']);
+});
+test.each(['tu_theo_doi', 'dat_lich_kham', 'kham_trong_ngay'])(
+  'a completed conditional warning does not replace or upgrade care level %s',
+  (careLevel) => {
+    const direct =
+      careLevel === 'tu_theo_doi'
+        ? []
+        : [
+            careLevel === 'kham_trong_ngay'
+              ? 'Chú nên đi khám hôm nay.'
+              : 'Chú nên đi khám trong vài ngày tới.',
+          ];
+    const warnings = normalizeConditionalWarnings([...direct, 'Nếu chú thấy khó chịu nặng hơn.']);
+    expect(
+      validateBlock('di_kham_khi', [...warnings, 'Nếu khó thở, hãy gọi 115.'].slice(0, 3), {
+        ...facts,
+        care_level: careLevel,
+      })
+    ).toBeNull();
+    expect(warnings.at(-1)).not.toMatch(/hôm nay|ngay|115/);
+  }
+);
+test('completing an action never hides unsafe content or weakens the sentence limit', () => {
+  const warnings = normalizeConditionalWarnings([
+    'Nếu chú thấy khó chịu sau khi dùng aspirin.',
+    'Nếu khó thở, hãy gọi 115.',
+  ]);
+  expect(validateBlock('di_kham_khi', warnings, { ...facts, care_level: 'tu_theo_doi' })).toBe(
+    'drug_name_or_class'
+  );
+  const long = 'Nếu ' + 'mệt '.repeat(23).trim() + '.';
+  const output = normalizeConditionalWarnings([long]);
+  expect(output[0]).toContain('Hãy đi khám nếu');
+  expect(validatePresentation('di_kham_khi', output, facts)).toBe('sentence_too_long');
+});
 test('comparison formatting preserves every word/value while giving each record its own scope', () => {
   const formatted = normalizeMeasurementSentences(raw);
   const tokens = (text) => text.toLowerCase().match(/[\p{L}\p{N}/:]+/gu);

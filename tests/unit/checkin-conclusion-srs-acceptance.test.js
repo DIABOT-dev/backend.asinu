@@ -38,6 +38,32 @@ beforeEach(() => {
   callTextAi.mockResolvedValue({ content: JSON.stringify(candidate()), model: 'medgemma-27b-it' });
 });
 
+test('E7: a bare conditional warning becomes a complete spoken action without replacing valid blocks', async () => {
+  const warning = 'Nếu chú thấy mệt nhiều hơn hoặc khó ngủ kéo dài.';
+  callTextAi.mockResolvedValue({
+    content: JSON.stringify({
+      ...candidate(),
+      di_kham_khi: [candidate().di_kham_khi[0], warning],
+    }),
+  });
+  const input = state();
+  const originalDecision = { ...input };
+  const result = await generateConclusion(input, profile);
+  expect(result.seeDoctorWhen).toEqual([
+    candidate().di_kham_khi[0],
+    'Hãy đi khám nếu chú thấy mệt nhiều hơn hoặc khó ngủ kéo dài.',
+  ]);
+  expect(result.personalMessage).toBe(candidate().loi_nhan);
+  expect(result.todo).toEqual(candidate().nen_lam);
+  expect(result.followUpHours).toBe(input.followUpHours);
+  expect(result.recommendation).toContain(result.seeDoctorWhen[1]);
+  expect(result.speechText).toBe(
+    [result.personalMessage, ...result.seeDoctorWhen, result.closeMessage].join(' ')
+  );
+  expect(input).toEqual(originalDecision);
+  expect(logger.warn).not.toHaveBeenCalled();
+});
+
 test('FR-1: generic activities without a concrete quantity use only the activity fallback', async () => {
   callTextAi.mockResolvedValue({
     content: JSON.stringify({

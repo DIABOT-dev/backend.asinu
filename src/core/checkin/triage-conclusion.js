@@ -14,6 +14,7 @@ const {
   validatePresentation,
   compactExplanation,
   normalizeMeasurementSentences,
+  normalizeConditionalWarnings,
 } = require('./triage-conclusion-contract');
 const {
   plain: normalize,
@@ -505,6 +506,9 @@ async function generateStructuredConclusion(state, profile, lang = 'vi', context
     const candidate = JSON.parse(raw);
     if (typeof candidate?.lien_quan === 'string') {
       candidate.lien_quan = normalizeMeasurementSentences(candidate.lien_quan);
+    }
+    if (Array.isArray(candidate?.di_kham_khi)) {
+      candidate.di_kham_khi = normalizeConditionalWarnings(candidate.di_kham_khi, lang);
     }
     for (const block of BLOCKS) {
       const reason =

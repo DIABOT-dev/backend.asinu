@@ -1,6 +1,6 @@
 'use strict';
 
-const { plain } = require('./triage-conclusion-guards');
+const { plain, containsVisit } = require('./triage-conclusion-guards');
 const segmenter = new Intl.Segmenter('vi', { granularity: 'sentence' });
 const sentences = (text) =>
   [...segmenter.segment(text)].map(({ segment }) => segment.trim()).filter(Boolean);
@@ -61,6 +61,37 @@ function requiredMeasurementTypes(facts) {
   ].filter(Boolean);
 }
 
+function conditionalWarningMissingAction(text) {
+  if (!/^(?:neu|khi|trong truong hop|if|when)\b/.test(plain(text))) return false;
+  return !(
+    containsVisit(text) ||
+    /\b(?:gọi|call)\s+115\b/iu.test(text) ||
+    /(?:liên hệ|trao đổi với)\s+(?:bác sĩ|chuyên gia)|\b(?:contact|consult|speak (?:with|to))\s+(?:(?:a|your|the)\s+)?(?:doctor|health expert|healthcare professional)\b/iu.test(
+      text
+    ) ||
+    /(?:[,;:]|\bthi\b|\bthen\b)\s*(?:(?:anh|chi|bac|chu|co|ong|ba|ban|you)\s+)?(?:hay|nen|can|phai|dung|vui long|please|should|must)\b/.test(
+      plain(text)
+    )
+  );
+}
+
+function normalizeConditionalWarnings(value, lang = 'vi') {
+  if (!Array.isArray(value)) return value;
+  return value.map((text) => {
+    if (typeof text !== 'string' || !conditionalWarningMissingAction(text)) return text;
+    // Complete only a single conditional fragment. Preserve its exact trigger,
+    // numbers and urgency; all safety/care-level/length checks still run after.
+    if (sentences(text).length !== 1 || /\?\s*$/.test(text)) return text;
+    const pattern = lang === 'en' ? /^(if|when)\s+/i : /^(nếu|khi|trong trường hợp)\s+/iu;
+    const trimmed = text.trim();
+    const prefix = trimmed.match(pattern);
+    if (!prefix) return text;
+    const action = lang === 'en' ? 'Seek an assessment' : 'Hãy đi khám';
+    const completed = `${action} ${prefix[1].toLowerCase()} ${trimmed.slice(prefix[0].length)}`;
+    return /[.!]$/.test(completed) ? completed : completed + '.';
+  });
+}
+
 function validatePresentation(block, value, facts) {
   const texts = Array.isArray(value) ? value : [value];
   const languageFault = conclusionLanguageFault(value, facts);
@@ -72,6 +103,8 @@ function validatePresentation(block, value, facts) {
   if (block === 'loi_nhan' && sentences(value).length > 2) return 'message_sentence_count';
   if (block === 'lien_quan' && (sentences(value).length < 2 || sentences(value).length > 3))
     return 'explanation_sentence_count';
+  if (block === 'di_kham_khi' && texts.some(conditionalWarningMissingAction))
+    return 'conditional_warning_missing_action';
   if (block !== 'nen_lam') return null;
   // Require a usable quantity in at least one action, without inventing doses,
   // exercise intensity or medical cutoffs. A concrete symptom/time diary counts.
@@ -142,4 +175,6 @@ module.exports = {
   validatePresentation,
   compactExplanation,
   normalizeMeasurementSentences,
+  conditionalWarningMissingAction,
+  normalizeConditionalWarnings,
 };
