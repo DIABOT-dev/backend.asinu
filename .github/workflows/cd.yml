@@ -29,7 +29,7 @@ on:
         default: true
 
 concurrency:
-  group: backend-cd-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'camp' }}
+  group: backend-cd-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'prod' }}
   cancel-in-progress: false
 
 permissions:
@@ -52,6 +52,7 @@ jobs:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           OPERATION: ${{ inputs.operation }}
           OPERATOR_IP: ${{ inputs.operator_ip }}
+          STACK_DIR: ${{ vars.STACK_DIR || '/opt/asinu-backend' }}
         run: |
           set -eu
           test "$VPS_HOST" = '36.50.176.55'
@@ -67,10 +68,11 @@ jobs:
           umask 077
           printf '%s\n' "$VPS_SSH_KEY" > "$task_dir/key"
           printf '%s\n' '36.50.176.55 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMDOm8XUn1KYdgS2UTE7r4XyrFpWQKpg7Kh+ZdWOm5xL' > "$task_dir/known_hosts"
+          stack_dir_b64="$(printf '%s' "$STACK_DIR" | base64 | tr -d '\n')"
           ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
             -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
-            "$VPS_USER@$VPS_HOST" sh -s -- "$OPERATION" "$OPERATOR_IP" <<'REMOTE'
+            "$VPS_USER@$VPS_HOST" sh -s -- "$OPERATION" "$OPERATOR_IP" "$stack_dir_b64" <<'REMOTE'
           if [ "$1" = 'restore-operator-ssh' ]; then
             fail2ban-client set sshd unbanip "$2"
           fi
@@ -79,6 +81,13 @@ jobs:
           ss -lnt 'sport = :22'
           fail2ban-client status sshd 2>/dev/null || true
           docker ps --format '{{.Names}} {{.Status}}'
+          docker inspect asinu-backend --format 'Image={{.Config.Image}} ComposeDir={{index .Config.Labels "com.docker.compose.project.working_dir"}}'
+          stack_dir="$(printf '%s' "$3" | base64 -d)"
+          test -d "$stack_dir"
+          for name in .env .env.migrations; do
+            test -f "$stack_dir/$name"
+            printf 'Deployment file present: %s/%s\n' "$stack_dir" "$name"
+          done
           curl -fsS --max-time 5 http://127.0.0.1:3300/api/healthz
           REMOTE
 
@@ -157,10 +166,10 @@ jobs:
     if: >-
       needs.package.result == 'success' &&
       ((github.event_name == 'workflow_dispatch' && inputs.deploy) ||
-      (github.event_name == 'workflow_run' && vars.AUTO_DEPLOY_CAMP == 'true'))
+      (github.event_name == 'workflow_run' && vars.AUTO_DEPLOY_PROD == 'true'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'camp' }}
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'prod' }}
     env:
       STACK_DIR: ${{ vars.STACK_DIR || '/opt/asinu-backend' }}
       BASE_URL: ${{ vars.BASE_URL }}
@@ -254,6 +263,6 @@ jobs:
         run: |
           {
             echo "### Backend deployment"
-            echo "- Environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'camp' }}"
+            echo "- Environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'prod' }}"
             echo "- Image: ${{ needs.package.outputs.image }}"
           } >> "$GITHUB_STEP_SUMMARY"
