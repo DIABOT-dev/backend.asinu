@@ -88,6 +88,22 @@ jobs:
           docker inspect asinu-backend --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}'
           printf 'Active deployment configuration files:\n'
           find "$active_dir" -maxdepth 2 -type f \( -name '*env*' -o -name '*.yml' -o -name '*.yaml' \) -printf '%P\n'
+          python3 - "$active_dir" <<'PY'
+          import json, pathlib, sys
+          directories = {pathlib.Path(sys.argv[1]), pathlib.Path('/root/asinu-security-20261015')}
+          for directory in directories:
+              for file in sorted(directory.glob('*.json')):
+                  try:
+                      config = json.loads(file.read_text())
+                  except (ValueError, OSError):
+                      continue
+                  if not isinstance(config, dict) or not isinstance(config.get('services'), dict):
+                      continue
+                  for name, service in config['services'].items():
+                      environment = service.get('environment', {})
+                      keys = sorted(environment) if isinstance(environment, dict) else [str(item).split('=', 1)[0] for item in environment]
+                      print('Compose service:', str(file), name, 'environment keys:', ','.join(keys))
+          PY
           for name in .env .env.migrations; do
             if [ -f "$active_dir/$name" ]; then
               printf 'Active stack file present: %s/%s\n' "$active_dir" "$name"
