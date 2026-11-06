@@ -1,5 +1,28 @@
 # Deploy Backend lên VPS
 
+## Tự động triển khai từ GitHub
+
+`Backend CD` triển khai vào môi trường `prod` sau khi `Backend CI` thành công
+cho một lần push lên `main`, khi repository variable `AUTO_DEPLOY_PROD=true`.
+Workflow dùng đúng SHA đã được CI kiểm tra, build image trên GitHub Actions,
+đẩy lên GHCR rồi cập nhật VPS qua SSH.
+
+- Repository secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`.
+- Environment `prod` variables: `STACK_DIR`, `HOST_PORT`, `BASE_URL`.
+- Với stack production dạng JSON, `STACK_DIR` là thư mục Compose đang chạy,
+  chứa `runtime.compose.json` và `migration.compose.json`. Workflow giữ nguyên
+  môi trường, mounts và project, chỉ ghi thêm file override image.
+- Có thể chạy thủ công `operation=prepare-auto-deploy` một lần để tạo file
+  migration riêng và thử kết nối database bằng truy vấn chỉ đọc. Thông tin đăng
+  nhập được lấy và giữ trên VPS, không đưa vào Git hoặc log Actions.
+- Với stack Compose YAML thông thường, cần `.env` và `.env.migrations` trên VPS.
+- Workflow chạy migration, cập nhật container, kiểm tra health và phục hồi image
+  trước đó nếu kiểm tra health nội bộ thất bại. Database migration không được tự hoàn tác.
+- Muốn tắt triển khai tự động, đặt `AUTO_DEPLOY_PROD=false`.
+
+Push lên nhánh `release/**` chỉ chạy CI. Có thể chọn `prod` hoặc `camp` khi chạy
+`Backend CD` thủ công. Luồng backend này không gọi EAS hay build app Android/iOS.
+
 ## Tổng quan kiến trúc
 
 | Thành phần | Container | Port | Note |

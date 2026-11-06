@@ -59,6 +59,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ffmpeg
 
+      - name: Deployment configuration regressions
+        run: python3 -m unittest discover -s deploy -p 'test_auto_deploy.py'
+
       - name: Lint
         run: npm run lint
 

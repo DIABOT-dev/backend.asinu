@@ -9,7 +9,7 @@ on:
       operation:
         description: Deploy, inspect SSH, or remove a confirmed operator IP ban
         type: choice
-        options: [deploy, ssh-diagnostics, restore-operator-ssh]
+        options: [deploy, ssh-diagnostics, prepare-auto-deploy, restore-operator-ssh]
         default: deploy
       operator_ip:
         description: Confirmed operator IPv4 address to unban (restore operation only)
@@ -29,7 +29,7 @@ on:
         default: true
 
 concurrency:
-  group: backend-cd-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'camp' }}
+  group: backend-cd-${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'prod' }}
   cancel-in-progress: false
 
 permissions:
@@ -38,13 +38,17 @@ permissions:
 
 jobs:
   ssh-diagnostics:
-    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'restore-operator-ssh')
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'prepare-auto-deploy' || inputs.operation == 'restore-operator-ssh')
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     environment: prod
     permissions:
       contents: read
     steps:
+      - name: Checkout preparation script
+        if: inputs.operation == 'prepare-auto-deploy'
+        uses: actions/checkout@v7
+
       - name: Inspect SSH and API status with the existing administration key
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -52,6 +56,7 @@ jobs:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           OPERATION: ${{ inputs.operation }}
           OPERATOR_IP: ${{ inputs.operator_ip }}
+          STACK_DIR: ${{ vars.STACK_DIR || '/opt/asinu-backend' }}
         run: |
           set -eu
           test "$VPS_HOST" = '36.50.176.55'
@@ -60,17 +65,26 @@ jobs:
           if [ "$OPERATION" = 'restore-operator-ssh' ]; then
             python3 -c 'import ipaddress, os; ipaddress.IPv4Address(os.environ["OPERATOR_IP"])'
           else
-            OPERATOR_IP=''
+            OPERATOR_IP='-'
           fi
           task_dir="$(mktemp -d)"
           trap 'rm -rf "$task_dir"' EXIT
           umask 077
           printf '%s\n' "$VPS_SSH_KEY" > "$task_dir/key"
           printf '%s\n' '36.50.176.55 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMDOm8XUn1KYdgS2UTE7r4XyrFpWQKpg7Kh+ZdWOm5xL' > "$task_dir/known_hosts"
+          stack_dir_b64="$(printf '%s' "$STACK_DIR" | base64 | tr -d '\n')"
+          if [ "$OPERATION" = 'prepare-auto-deploy' ]; then
+            ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+              -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
+              "$VPS_USER@$VPS_HOST" python3 - "$stack_dir_b64" < deploy/prepare-auto-deploy.py
+            exit 0
+          fi
           ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
             -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
-            "$VPS_USER@$VPS_HOST" sh -s -- "$OPERATION" "$OPERATOR_IP" <<'REMOTE'
+            "$VPS_USER@$VPS_HOST" sh -s -- "$OPERATION" "$OPERATOR_IP" "$stack_dir_b64" <<'REMOTE'
+          set -eu
           if [ "$1" = 'restore-operator-ssh' ]; then
             fail2ban-client set sshd unbanip "$2"
           fi
@@ -79,7 +93,27 @@ jobs:
           ss -lnt 'sport = :22'
           fail2ban-client status sshd 2>/dev/null || true
           docker ps --format '{{.Names}} {{.Status}}'
+          docker inspect asinu-backend --format 'Image={{.Config.Image}} ComposeDir={{index .Config.Labels "com.docker.compose.project.working_dir"}}'
+          active_dir="$(docker inspect asinu-backend --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}')"
+          docker inspect asinu-backend --format 'ComposeFiles={{index .Config.Labels "com.docker.compose.project.config_files"}}'
+          docker inspect asinu-backend --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}'
+          stack_dir="$(printf '%s' "$3" | base64 -d)"
+          test -d "$stack_dir"
+          ready=1
+          required_files='.env .env.migrations'
+          if [ -f "$stack_dir/runtime.compose.json" ]; then
+            required_files='runtime.compose.json migration.compose.json'
+          fi
+          for name in $required_files; do
+            if [ -f "$stack_dir/$name" ]; then
+              printf 'Deployment file present: %s/%s\n' "$stack_dir" "$name"
+            else
+              printf 'Deployment file missing: %s/%s\n' "$stack_dir" "$name"
+              ready=0
+            fi
+          done
           curl -fsS --max-time 5 http://127.0.0.1:3300/api/healthz
+          test "$ready" -eq 1
           REMOTE
 
   package:
@@ -157,10 +191,10 @@ jobs:
     if: >-
       needs.package.result == 'success' &&
       ((github.event_name == 'workflow_dispatch' && inputs.deploy) ||
-      (github.event_name == 'workflow_run' && vars.AUTO_DEPLOY_CAMP == 'true'))
+      (github.event_name == 'workflow_run' && vars.AUTO_DEPLOY_PROD == 'true'))
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'camp' }}
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'prod' }}
     env:
       STACK_DIR: ${{ vars.STACK_DIR || '/opt/asinu-backend' }}
       BASE_URL: ${{ vars.BASE_URL }}
@@ -213,20 +247,42 @@ jobs:
           script: |
             set -eu
             cd "$STACK_DIR"
-            test -f .env
-            test -f .env.migrations
             docker network inspect asinu_net >/dev/null 2>&1 || docker network create asinu_net
             printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
 
             previous_image="$(docker inspect --format '{{.Config.Image}}' asinu-backend 2>/dev/null || true)"
             export ASINU_BACKEND_IMAGE HOST_PORT
-            export COMPOSE_FILE=docker-compose.yml
-            if grep -q '^KEY_MANAGEMENT_PROVIDER=openbao$' .env; then
-              export COMPOSE_FILE=docker-compose.yml:docker-compose.openbao.yml
+            write_image_overrides() {
+              python3 - <<'PY'
+            import json, os
+            for service, filename in [('asinu-backend', '.auto-backend-image.json'), ('asinu-migrate', '.auto-migration-image.json')]:
+                with open(filename, 'w') as output:
+                    json.dump({'services': {service: {'image': os.environ['ASINU_BACKEND_IMAGE']}}}, output)
+            PY
+            }
+            if [ -f runtime.compose.json ]; then
+              test -f migration.compose.json
+              project="$(docker inspect asinu-backend --format '{{index .Config.Labels "com.docker.compose.project"}}')"
+              test -n "$project"
+              write_image_overrides
+              compose_backend() { docker compose -p "$project" -f runtime.compose.json -f .auto-backend-image.json "$@"; }
+              compose_migration() { docker compose -p "$project" -f migration.compose.json -f .auto-migration-image.json "$@"; }
+            else
+              test -f .env
+              test -f .env.migrations
+              export COMPOSE_FILE=docker-compose.yml
+              if grep -q '^KEY_MANAGEMENT_PROVIDER=openbao$' .env; then
+                export COMPOSE_FILE=docker-compose.yml:docker-compose.openbao.yml
+              fi
+              compose_backend() { docker compose "$@"; }
+              compose_migration() { docker compose --profile migration "$@"; }
             fi
-            docker compose --profile migration pull
-            docker compose --profile migration run --rm --no-deps asinu-migrate
-            docker compose up -d --remove-orphans asinu-backend
+            compose_backend config --quiet
+            compose_migration config --quiet
+            compose_backend pull asinu-backend
+            compose_migration pull asinu-migrate
+            compose_migration run --rm --no-deps asinu-migrate
+            compose_backend up -d --no-deps --no-build asinu-backend
 
             healthy=0
             for _ in $(seq 1 45); do
@@ -238,10 +294,13 @@ jobs:
             done
 
             if [ "$healthy" -ne 1 ]; then
-              docker compose logs --tail=150 asinu-backend
+              compose_backend logs --tail=150 asinu-backend
               if [ -n "$previous_image" ]; then
                 export ASINU_BACKEND_IMAGE="$previous_image"
-                docker compose up -d --remove-orphans asinu-backend
+                if [ -f runtime.compose.json ]; then
+                  write_image_overrides
+                fi
+                compose_backend up -d --no-deps --no-build asinu-backend
               fi
               exit 1
             fi
@@ -254,6 +313,6 @@ jobs:
         run: |
           {
             echo "### Backend deployment"
-            echo "- Environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'camp' }}"
+            echo "- Environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'prod' }}"
             echo "- Image: ${{ needs.package.outputs.image }}"
           } >> "$GITHUB_STEP_SUMMARY"
