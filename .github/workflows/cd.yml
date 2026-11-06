@@ -61,7 +61,7 @@ jobs:
           if [ "$OPERATION" = 'restore-operator-ssh' ]; then
             python3 -c 'import ipaddress, os; ipaddress.IPv4Address(os.environ["OPERATOR_IP"])'
           else
-            OPERATOR_IP=''
+            OPERATOR_IP='-'
           fi
           task_dir="$(mktemp -d)"
           trap 'rm -rf "$task_dir"' EXIT
@@ -73,6 +73,7 @@ jobs:
             -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
             -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
             "$VPS_USER@$VPS_HOST" sh -s -- "$OPERATION" "$OPERATOR_IP" "$stack_dir_b64" <<'REMOTE'
+          set -eu
           if [ "$1" = 'restore-operator-ssh' ]; then
             fail2ban-client set sshd unbanip "$2"
           fi
@@ -82,6 +83,14 @@ jobs:
           fail2ban-client status sshd 2>/dev/null || true
           docker ps --format '{{.Names}} {{.Status}}'
           docker inspect asinu-backend --format 'Image={{.Config.Image}} ComposeDir={{index .Config.Labels "com.docker.compose.project.working_dir"}}'
+          active_dir="$(docker inspect asinu-backend --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}')"
+          for name in .env .env.migrations; do
+            if [ -f "$active_dir/$name" ]; then
+              printf 'Active stack file present: %s/%s\n' "$active_dir" "$name"
+            else
+              printf 'Active stack file missing: %s/%s\n' "$active_dir" "$name"
+            fi
+          done
           stack_dir="$(printf '%s' "$3" | base64 -d)"
           test -d "$stack_dir"
           for name in .env .env.migrations; do
