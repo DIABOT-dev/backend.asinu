@@ -35,6 +35,7 @@ const result = { audioConfig: {
   timeoutMs: process.env.VIENEU_TIMEOUT_MS || null,
   format: process.env.CHECKIN_CALL_AUDIO_FORMAT || null,
   revision: process.env.CHECKIN_CALL_AUDIO_REVISION || null,
+  consentEnforced: process.env.AI_CONSENT_ENFORCEMENT || null,
 }};
 async function read(label, sql, params = []) {
   try { result[label] = (await client.query(sql, params)).rows; }
@@ -44,9 +45,18 @@ async function read(label, sql, params = []) {
   await client.connect();
   await client.query('SET default_transaction_read_only = on');
   await read('serverTime', 'SELECT now() AS now');
-  await read('account', "SELECT id FROM users WHERE deleted_at IS NULL AND (right(regexp_replace(coalesce(phone,''),'[^0-9]','','g'),9) = $1 OR right(regexp_replace(coalesce(phone_number,''),'[^0-9]','','g'),9) = $1)", [process.env.INCIDENT_PHONE.slice(-9)]);
+  await read('account', "SELECT id FROM users WHERE deleted_at IS NULL AND right(regexp_replace(coalesce(phone_number,''),'[^0-9]','','g'),9) = $1", [process.env.INCIDENT_PHONE.slice(-9)]);
   if (Array.isArray(result.account) && result.account.length === 1) {
     const userId = result.account[0].id;
+    await read('aiConsent', 'SELECT version, providers, granted_at, revoked_at FROM user_ai_consents WHERE user_id = $1', [userId]);
+    try {
+      const consent = require('./src/services/ai/ai-consent.service');
+      result.mayProcessAi = await consent.mayProcessAi(client, userId);
+      try { await consent.assertAiConsent(); result.unscopedConsentCheck = 'allowed'; }
+      catch (error) { result.unscopedConsentCheck = error.code || error.message; }
+      try { await consent.withAiUser(client, userId, () => consent.assertAiConsent()); result.scopedConsentCheck = 'allowed'; }
+      catch (error) { result.scopedConsentCheck = error.code || error.message; }
+    } catch (error) { result.consentCheckError = error.message; }
     await read('settings', 'SELECT * FROM checkin_call_settings WHERE user_id = $1', [userId]);
     await read('voicePreferences', 'SELECT preferences, updated_at FROM checkin_call_voice_preferences WHERE user_id = $1', [userId]);
     await read('episodes', "SELECT id, state, trigger_source, severity, created_at, updated_at, scheduled_at, next_action_at, resolved_at, exhausted_at, config->>'test_mode' AS test_mode FROM checkin_call_episodes WHERE user_id = $1 ORDER BY created_at DESC LIMIT 6", [userId]);
