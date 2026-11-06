@@ -9,6 +9,7 @@
  */
 
 const { t } = require('../../i18n');
+const { assessBloodPressure } = require('../../lib/blood-pressure');
 const { cacheGet, cacheSet } = require('../../lib/redis');
 const { sendAndSave } = require('../notification/basic.notification.service');
 
@@ -100,10 +101,12 @@ async function checkGlucoseAlerts(pool, userId) {
 async function checkBloodPressureAlerts(pool, userId) {
   try {
     const result = await pool.query(
-      `SELECT * FROM user_logs 
-       WHERE user_id = $1 AND type = 'blood-pressure'
-       AND created_at >= NOW() - INTERVAL '24 hours'  
-       ORDER BY created_at DESC
+      `SELECT ul.*, TO_CHAR(ob.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, ob.birth_year
+       FROM user_logs ul
+       LEFT JOIN user_onboarding_profiles ob ON ob.user_id = ul.user_id
+       WHERE ul.user_id = $1 AND ul.type = 'blood-pressure'
+       AND ul.created_at >= NOW() - INTERVAL '24 hours'
+       ORDER BY ul.created_at DESC
        LIMIT 3`,
       [userId]
     );
@@ -115,9 +118,10 @@ async function checkBloodPressureAlerts(pool, userId) {
     const latestLog = bpLogs[0];
     const systolic = latestLog.systolic;
     const diastolic = latestLog.diastolic;
+    const assessment = assessBloodPressure(systolic, diastolic, { dateOfBirth: latestLog.date_of_birth, birthYear: latestLog.birth_year });
 
     // Huyết áp cao
-    if (systolic >= 180 || diastolic >= 110) {
+    if (assessment.repeatHigh) {
       return {
         type: 'high_blood_pressure',
         severity: 'high',
@@ -128,9 +132,10 @@ async function checkBloodPressureAlerts(pool, userId) {
         diastolic,
       };
     }
+    if (!assessment.valid) return null;
 
     // Huyết áp thấp
-    if (systolic < 90 || diastolic < 60) {
+    if (assessment.low && assessment.displayCategory === 'low') {
       return {
         type: 'low_blood_pressure',
         severity: 'medium',

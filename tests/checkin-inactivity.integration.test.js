@@ -43,6 +43,12 @@ const { sendPushNotification } = require('../src/services/notification/push.noti
 const { sendFcmNotification } = require('../src/services/notification/fcm.notification.service');
 const { sendVoipNotification } = require('../src/services/notification/apns.voip.service');
 const calls = require('../src/services/checkin-call/checkin-call.service');
+const {
+  checkinDateVN,
+  runCheckinFollowUps,
+  getPendingCaregiverAlerts,
+  runAlertConfirmationFollowUps,
+} = require('../src/services/checkin/checkin.service');
 
 const describeDatabase = process.env.CHECKIN_TEST_DATABASE_URL ? describe : describe.skip;
 const today = "(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date";
@@ -50,6 +56,7 @@ const tables = [
   'users',
   'user_connections',
   'health_checkins',
+  'caregiver_alert_confirmations',
   'notifications',
   'notification_push_outbox',
   'user_notification_preferences',
@@ -166,6 +173,102 @@ describeDatabase('Care Circle weekly check-in pause (isolated schema, mocked del
       },
     };
   }
+
+  async function overdueSession({
+    status = 'fine',
+    severity = null,
+    emergency = false,
+    misses = 1,
+  } = {}) {
+    const result = await pool.query(
+      `UPDATE health_checkins SET session_date=$2, initial_status=$3, current_status=$3,
+        flow_state=$4, triage_severity=$5, emergency_triggered=$6, no_response_count=$7,
+        next_checkin_at=NOW()-INTERVAL '1 minute', resolved_at=NULL, family_alerted=false
+       WHERE user_id=$1 RETURNING *`,
+      [
+        patient,
+        checkinDateVN(),
+        status,
+        status === 'fine' ? 'monitoring' : 'high_alert',
+        severity,
+        emergency,
+        misses,
+      ]
+    );
+    return result.rows[0];
+  }
+
+  test.each([0, 1, 2, 3])(
+    'feeling fine with %i missed reminders stays routine and never alerts family',
+    async (misses) => {
+      const session = await overdueSession({ misses });
+      expect(await runCheckinFollowUps(pool)).toMatchObject({ total: 1, escalated: 0 });
+      const messages = await pool.query('SELECT user_id,type,priority,message FROM notifications');
+      expect(messages.rows).toEqual([
+        expect.objectContaining({
+          user_id: patient,
+          type: 'checkin_followup',
+          priority: 'high',
+          message: expect.stringContaining('Lần check-in trước bạn thấy khỏe'),
+        }),
+      ]);
+      expect(messages.rows[0].message).not.toMatch(/báo không khỏe|chưa hoàn tất/);
+      expect((await pool.query('SELECT * FROM caregiver_alert_confirmations')).rowCount).toBe(0);
+      const saved = (
+        await pool.query(
+          'SELECT family_alerted,no_response_count FROM health_checkins WHERE id=$1',
+          [session.id]
+        )
+      ).rows[0];
+      expect(saved).toEqual({ family_alerted: false, no_response_count: misses + 1 });
+    }
+  );
+
+  test.each([
+    { status: 'very_tired', severity: 'high' },
+    { status: 'fine', severity: 'high' },
+    { status: 'fine', emergency: true },
+  ])('preserves genuine safety escalation: %j', async (state) => {
+    await overdueSession(state);
+    expect(await runCheckinFollowUps(pool)).toMatchObject({ total: 1, escalated: 1 });
+    expect((await pool.query('SELECT * FROM caregiver_alert_confirmations')).rowCount).toBe(1);
+  });
+
+  test.each(['caregiver_alert', 'emergency'])(
+    'legacy %s for a fine monitoring session is filtered only when it is not an emergency',
+    async (type) => {
+      const session = await overdueSession();
+      const receipt = (
+        await pool.query(
+          `INSERT INTO caregiver_alert_confirmations (checkin_id,patient_id,caregiver_id,alert_type,sent_at)
+       VALUES ($1,$2,$3,$4,NOW()-INTERVAL '40 minutes') RETURNING id`,
+          [session.id, patient, relative, type]
+        )
+      ).rows[0];
+      const queued = await reserveNotification(pool, {
+        userId: relative,
+        type,
+        title: 'Old alert',
+        body: 'Old alert',
+        priority: 'high',
+        data: {
+          alertId: String(receipt.id),
+          patientId: String(patient),
+          checkinId: String(session.id),
+        },
+      });
+      expect((await deliverNotification(pool, queued.notificationId)).ok).toBe(
+        type === 'emergency'
+      );
+      expect(await getPendingCaregiverAlerts(pool, relative)).toHaveLength(
+        type === 'emergency' ? 1 : 0
+      );
+      await pool.query('DELETE FROM notifications');
+      sendPushNotification.mockClear();
+      await runAlertConfirmationFollowUps(pool);
+      expect(sendPushNotification).toHaveBeenCalledTimes(type === 'emergency' ? 1 : 0);
+    }
+  );
 
   async function episode({
     severity = 'NONE',

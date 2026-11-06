@@ -26,7 +26,9 @@ const {
 } = require('../services/integrations/doctor-messaging.service');
 const {
   requestDoctorTask: createDoctorTask,
+  loadPatientProjection,
 } = require('../services/integrations/doctor-task-request.service');
+const { screeningRequestSchema, evaluateConsultationScreening } = require('../services/integrations/doctor-screening.service');
 const {
   listPatientConversation,
   sendPatientConversationMessage,
@@ -35,6 +37,14 @@ const {
 } = require('../services/integrations/doctor-patient-conversation.service');
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const screenDoctorConsultation = async (pool, req, res) => {
+  const parsed = screeningRequestSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+  const patient = await loadPatientProjection(pool, req.user.id);
+  if (!patient) return res.status(404).json({ ok: false, error: t('error.patient_not_found', getLang(req)) });
+  return res.json({ ok: true, data: evaluateConsultationScreening(parsed.data, patient) });
+};
 
 const requestDoctorTask = async (pool, req, res) => {
   const parsed = doctorTaskRequestSchema.safeParse(req.body);
@@ -60,6 +70,12 @@ const requestDoctorTask = async (pool, req, res) => {
       error: t('doctor.remote_care_emergency_blocked', getLang(req)),
       code: 'REMOTE_CARE_EMERGENCY_BLOCKED',
       data: outcome.screening,
+    });
+  }
+  if (outcome.kind === 'CONSULTATION_SCREENING_REQUIRED') {
+    return res.status(422).json({
+      ok: false, error: t('doctor.screening.required', getLang(req)),
+      code: outcome.kind, data: outcome.screening,
     });
   }
   return res.status(202).json({ ok: true, data: outcome.result });
@@ -350,6 +366,7 @@ const createDoctorMessageAction = async (pool, req, res) => {
 };
 
 module.exports = {
+  screenDoctorConsultation,
   requestDoctorTask,
   submitDoctorRating,
   requestDoctorPrivacy,

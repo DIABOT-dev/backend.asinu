@@ -39,8 +39,9 @@ async function publish(pool, periodId, ticketNumbers) {
       await db.query(
         `INSERT INTO gift_draw_result_outbox (draw_period,ticket_no,recipient_id)
         SELECT $1::bigint,$2::text,owner_user_id FROM subscription_households WHERE id=$3
-        UNION SELECT $1::bigint,$2::text,user_id FROM gift_events WHERE id=$4 ON CONFLICT DO NOTHING`,
-        [periodId, ticket.ticket_no, ticket.household_id, ticket.gift_event_id]
+        UNION SELECT $1::bigint,$2::text,user_id FROM gift_events WHERE id=$4
+        UNION SELECT $1::bigint,$2::text,$5::integer WHERE $5::integer IS NOT NULL ON CONFLICT DO NOTHING`,
+        [periodId, ticket.ticket_no, ticket.household_id, ticket.gift_event_id, ticket.user_id || null]
       );
     }
     await db.query('COMMIT');

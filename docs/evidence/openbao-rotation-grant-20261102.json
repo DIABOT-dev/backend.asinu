@@ -1,0 +1,77 @@
+{
+  "completedAt": "2026-11-02T05:06:41.396733+00:00",
+  "ownerAuthorized": true,
+  "permissionGranted": true,
+  "rootTokensRevoked": true,
+  "recoveryEndpointStatus": 405,
+  "maintenanceSeconds": 8.754,
+  "readinessFailuresObserved": 0,
+  "beforePolicySha256": "b7616ef3bfdeaa9c1514c61ee301c771b1ddf1c1d6c64cf80b3e12975515cbcb",
+  "afterPolicySha256": "55d1b44ec4ca86b54a0a719c94be24ce59d4649a4989a82fa2667df67b6c2d53",
+  "grantSha256": "ff076f87b2331d7695d7977ae53f584e554bdeadf52f64768ea93eb9d255ce66",
+  "keyMetadata": {
+    "asinu-health": {
+      "latest_version": 1,
+      "auto_rotate_period": 0,
+      "min_decryption_version": 1,
+      "min_encryption_version": 0,
+      "exportable": false,
+      "allow_plaintext_backup": false,
+      "deletion_allowed": false
+    },
+    "asinu-doctor": {
+      "latest_version": 1,
+      "auto_rotate_period": 0,
+      "min_decryption_version": 1,
+      "min_encryption_version": 0,
+      "exportable": false,
+      "allow_plaintext_backup": false,
+      "deletion_allowed": false
+    },
+    "asinu-crm": {
+      "latest_version": 1,
+      "auto_rotate_period": 0,
+      "min_decryption_version": 1,
+      "min_encryption_version": 0,
+      "exportable": false,
+      "allow_plaintext_backup": false,
+      "deletion_allowed": false
+    },
+    "asinu-crm-volume": {
+      "latest_version": 1,
+      "auto_rotate_period": 0,
+      "min_decryption_version": 1,
+      "min_encryption_version": 0,
+      "exportable": false,
+      "allow_plaintext_backup": false,
+      "deletion_allowed": false
+    }
+  },
+  "originalConfigurationRestored": true,
+  "temporaryConfigRemoved": true,
+  "safetyTimerDisarmed": true,
+  "ciphertextVerification": [
+    {
+      "system": "app",
+      "readOnly": true,
+      "ciphertextValues": 46,
+      "authenticated": 46,
+      "decryptErrors": 0
+    },
+    {
+      "system": "doctor",
+      "readOnly": true,
+      "ciphertextValues": 4,
+      "authenticated": 4,
+      "decryptErrors": 0
+    },
+    {
+      "system": "crm",
+      "readOnly": true,
+      "ciphertextValues": 72,
+      "authenticated": 72,
+      "decryptErrors": 0
+    }
+  ],
+  "automaticRotationIntervalSelected": false
+}

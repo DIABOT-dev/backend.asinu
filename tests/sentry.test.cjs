@@ -46,7 +46,7 @@ test('real Sentry SDK transport: strict privacy, HTTP capture, background tags a
   process.env.SENTRY_DSN = 'not-a-valid-dsn';
   assert.equal(monitor.initSentry(), false);
   process.env.SENTRY_DSN = fakeDsn;
-  process.env.SENTRY_RELEASE = 'test-release';
+  process.env.SENTRY_RELEASE = 'asinu-doctor-1234567890abcdef1234567890abcdef12345678';
   const envelopes = [];
   assert.equal(
     monitor.initSentry('asinu-backend', () => ({
@@ -97,6 +97,7 @@ test('real Sentry SDK transport: strict privacy, HTTP capture, background tags a
         assert.equal(envelopes.length, 1);
         assertPrivate(envelopes[0]);
         const event = envelopes[0][1][0][1];
+        assert.equal(event.release, 'asinu-doctor-1234567890abcdef1234567890abcdef12345678');
         assert.equal(event.tags.service, 'asinu-backend');
         assert.equal(event.tags.job, 'synthetic_worker');
         assert.equal(event.tags.error_code, 'ECONNREFUSED');

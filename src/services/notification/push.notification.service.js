@@ -64,6 +64,7 @@ async function sendPushNotification(expoPushTokens, title, body, data = {}) {
     // Expo Push Service expects categoryId. The app registers the matching
     // categoryIdentifier locally; using the server-side field here is what
     // makes interactive actions appear on a remote push.
+    ...(data?.type === 'med_reminder' && { categoryId: 'MEDICATION_DOSE' }),
     ...(isCaregiverAlert && { categoryId: 'health_alert' }),
     ...(notifType === 'doctor_message' && {
       categoryId: 'doctor_message',

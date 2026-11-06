@@ -1,0 +1,103 @@
+{
+  "generated_at": "2026-10-30",
+  "source": "Existing configured Asinu TTS adapter; fixed non-personal phrases only",
+  "human_review": "pending",
+  "recordings": [
+    {
+      "filename": "vi-prompt.wav",
+      "language": "vi",
+      "phase": "prompt",
+      "text": "Đến giờ uống thuốc rồi ạ. Bác bấm một nếu đã uống, hai nếu bỏ qua cữ này, ba nếu hết thuốc.",
+      "bytes": 499244,
+      "sha256": "d9d59c40ad09a4a600ac4b3b0c912251ec6a524aa816a85ace7c031c9fd55dfc"
+    },
+    {
+      "filename": "vi-taken.wav",
+      "language": "vi",
+      "phase": "taken",
+      "text": "Asinu đã ghi nhận bác xác nhận uống cữ thuốc này ạ.",
+      "bytes": 279404,
+      "sha256": "42267ed73cb151bf9fd1de2f239f96f823282bcdc0992c89d5d7c8075ae53537"
+    },
+    {
+      "filename": "vi-skipped.wav",
+      "language": "vi",
+      "phase": "skipped",
+      "text": "Asinu đã ghi nhận bác bỏ qua cữ thuốc này ạ.",
+      "bytes": 250604,
+      "sha256": "2f2355bc01aa94aae2cc5d65e8b5894254d342d80f8dbf1cca0948946d694192"
+    },
+    {
+      "filename": "vi-out.wav",
+      "language": "vi",
+      "phase": "out",
+      "text": "Asinu đã ghi nhận bác báo hết thuốc ạ.",
+      "bytes": 185324,
+      "sha256": "bbe5e3df74b227df18b1b233811770a6dedb4c0032ec9474700c8b56390c09eb"
+    },
+    {
+      "filename": "vi-checkin.wav",
+      "language": "vi",
+      "phase": "checkin",
+      "text": "Hôm nay bác thấy trong người thế nào? Bấm một nếu khỏe, hai nếu hơi mệt, ba nếu không khỏe.",
+      "bytes": 451244,
+      "sha256": "0affb4ee0726186b1a4cbcd8aad4759276ba5465bacf5707f5496d42df7f0e60"
+    },
+    {
+      "filename": "vi-consent.wav",
+      "language": "vi",
+      "phase": "consent",
+      "text": "Người thân vừa cài lịch nhắc thuốc cho bác. Bác bấm một để đồng ý, hai nếu không muốn nhận.",
+      "bytes": 457964,
+      "sha256": "96f1fe012e7b7ffdf153f6af72470d1a2f23c7700c22ae2a07c6ee9b45d578de"
+    },
+    {
+      "filename": "en-prompt.wav",
+      "language": "en",
+      "phase": "prompt",
+      "text": "It is time for your medication. Press one if taken, two to skip this dose, or three if you have run out.",
+      "bytes": 694124,
+      "sha256": "a00ed67c6dbd51fa2d0f9c1bd2c33c3a9074e4a2811d56ade36428bc353be3cc"
+    },
+    {
+      "filename": "en-taken.wav",
+      "language": "en",
+      "phase": "taken",
+      "text": "Asinu has recorded your confirmation for this dose.",
+      "bytes": 344684,
+      "sha256": "b4ee953e79b78e01306aa4c71ec43e9d4d4d6f728396fdd79dac1a3f9ff14b57"
+    },
+    {
+      "filename": "en-skipped.wav",
+      "language": "en",
+      "phase": "skipped",
+      "text": "Asinu has recorded that you skipped this dose.",
+      "bytes": 320684,
+      "sha256": "b00a55c8be2a571170ad05c4190577fb0ecc99d09a4d43c0e806cf43dd41d8e3"
+    },
+    {
+      "filename": "en-out.wav",
+      "language": "en",
+      "phase": "out",
+      "text": "Asinu has recorded that you have run out of medication.",
+      "bytes": 339884,
+      "sha256": "33ef5712fdba370bff3fd91ab0dead8ea565c91d36233667ad83f2a7a38b11c6"
+    },
+    {
+      "filename": "en-checkin.wav",
+      "language": "en",
+      "phase": "checkin",
+      "text": "How are you feeling today? Press one if well, two if a little tired, or three if unwell.",
+      "bytes": 542444,
+      "sha256": "d3bb9577e355c24bf9515fef35ebc338c95d7e487961a592c52680f51035f8d7"
+    },
+    {
+      "filename": "en-consent.wav",
+      "language": "en",
+      "phase": "consent",
+      "text": "Your family has set up medication reminders for you. Press one to accept or two to decline.",
+      "bytes": 672044,
+      "sha256": "c52384eaaa90e35820a48979eace6ec0f37f334da7a9ba56c420c2f975ebff27"
+    }
+  ]
+}

@@ -7,6 +7,8 @@ const { t } = require('../../i18n');
 const { cacheDel } = require('../../lib/redis');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
+const { decryptHealthField } = require('../../security/health-field-encryption');
+const { assessBloodPressure } = require('../../lib/blood-pressure');
 
 const VALID_LOG_TYPES = new Set([
   'glucose',
@@ -176,7 +178,7 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
   if (logType === 'bp' && data.systolic && data.diastolic) {
     const sys = parseFloat(data.systolic);
     const dia = parseFloat(data.diastolic);
-    if (sys >= 180 || dia >= 110) {
+    if (assessBloodPressure(sys, dia).repeatHigh) {
       severity = 'critical';
       titleKey = 'push.health_alert_bp_title';
       bodyKey = 'push.health_alert_bp_body';
@@ -328,6 +330,8 @@ async function createLog(pool, userId, payload) {
     // Invalidate related caches when new health log is created
     await cacheDel(
       `tree:summary:${userId}`,
+      `tree:dashboard:v2:${userId}`,
+      `tree:dashboard:v3:${userId}`,
       `tree:history:${userId}`,
       `health:score:${userId}`,
       `missions:${userId}`
@@ -391,7 +395,7 @@ async function getRecentLogs(pool, userId, options = {}) {
 
             if (detailResult.rows.length > 0) {
               detail.columns.forEach((col) => {
-                detailData[col] = detailResult.rows[0][col];
+                detailData[col] = col === 'med_name' ? decryptHealthField(userId, 'medication_logs.med_name', detailResult.rows[0][col]) : detailResult.rows[0][col];
               });
             }
           }
@@ -423,7 +427,7 @@ async function getRecentLogs(pool, userId, options = {}) {
     const logs = result.rows.map((row) => {
       const detailData = {};
       for (const col of detail.columns) {
-        detailData[col] = row[col];
+        detailData[col] = col === 'med_name' ? decryptHealthField(userId, 'medication_logs.med_name', row[col]) : row[col];
         delete row[col];
       }
       return { ...row, detail: detailData };
@@ -473,7 +477,7 @@ async function getTodayLogs(pool, userId, options = {}) {
 
             if (detailResult.rows.length > 0) {
               detail.columns.forEach((col) => {
-                detailData[col] = detailResult.rows[0][col];
+                detailData[col] = col === 'med_name' ? decryptHealthField(userId, 'medication_logs.med_name', detailResult.rows[0][col]) : detailResult.rows[0][col];
               });
             }
           }
@@ -510,7 +514,7 @@ async function getTodayLogs(pool, userId, options = {}) {
     const logs = result.rows.map((row) => {
       const detailData = {};
       for (const col of detail.columns) {
-        detailData[col] = row[col];
+        detailData[col] = col === 'med_name' ? decryptHealthField(userId, 'medication_logs.med_name', row[col]) : row[col];
         delete row[col];
       }
       return { ...row, detail: detailData };

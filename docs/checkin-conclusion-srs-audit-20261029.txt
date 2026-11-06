@@ -1,0 +1,172 @@
+Asinu - Đối chiếu SRS AI kết luận sau check-in - 29/10/2026
+Nguồn: /Users/ducytcg123456/Downloads/SRS_AI_ket_luan_checkin.docx
+SHA-256 DOCX: 135389a761a360a4217aa69c96eaa782fa222a7fac309841ee3f76451e1febd0
+
+KẾT LUẬN: CHƯA ĐỦ ĐIỀU KIỆN NGHIỆM THU/BẬT THẬT.
+AC-4: 12/30 = 40% phải thay ít nhất một khối, yêu cầu dưới 10%.
+AC-5: link chuyên gia chỉ mở khi cờ tính năng bật; store/staging hiện đang bị ẩn.
+AC-9: chưa có duyệt chuyên môn 30 kết luận và P6 duyệt disclaimer.
+
+Các lỗi tái hiện và sửa trong vòng này:
+- Bổ sung kiểm tra việc làm có lượng cụ thể và nhắc đo đúng chỉ số cho bệnh nền.
+- Giữ khối giải thích trong 2–3 câu/25 chữ sau ghép dữ kiện; không cắt bỏ số đo.
+- Chặn emoji, quá số câu, gọi nhầm người bệnh là Asinu.
+- Sửa câu dự phòng tiếng Anh với alias khó ngủ và diễn biến nặng hơn.
+- Log số khối dự phòng sau bước hoàn thiện, không bỏ sót lỗi bố cục khi đo AC-4.
+
+Bằng chứng:
+- 29 test SRS mới; baseline ban đầu có 8/24 ca thất bại trước khi sửa.
+- Lượt cuối 1.628 test backend/123 suite đạt; 206 test/17 suite bỏ qua.
+- 16 test UI; 79 hộp quà; 23 thực hành; âm thanh 131+28+19; contract 25.
+- Cả 2 ca gốc gọi model mới và chụp component thực ở 360/430px, chữ 130%.
+- 30 ca mới gọi thật P95 2402 ms, 30/30 dưới 10 giây. Ban đầu 14/30 ca dùng dự phòng.
+- Replay offline cùng raw response bằng bộ lọc cuối: 12/30 ca dùng dự phòng; 0 lỗi đầu ra theo bộ kiểm tra tự động.
+- Thử chỉ dẫn system trên 3 ca riêng không giải quyết đủ lỗi, có ca gọi người bệnh là Asinu; KHÔNG đưa vào runtime.
+- Bộ luật mức độ và toàn bộ emergency templates/bản dịch giữ nguyên so với HEAD.
+
+Lưu ý về kết quả trước: các báo cáo 0/30 cần dự phòng trước đây chỉ kiểm các điều kiện
+khi đó; chưa kiểm đủ con số hành động/số câu theo SRS. Không dùng số 0/30 đó để
+kết luận toàn bộ SRS đã đạt. Giữ báo cáo cũ làm bằng chứng lịch sử, không ghi đè.
+
+Đối chiếu từng mã:
+FR-1: ĐẠT CÁC KIỂM TRA
+6 khối đúng thứ tự; số câu/25 chữ; 2–3 việc; một mốc followUpHours; bỏ khối tư vấn lặp.
+Bằng chứng: 29 test SRS; 16 test UI; srs-audit.json; ui-layout-checks.json
+Giới hạn: Hiểu có con số là ít nhất một việc định lượng hữu ích; không ép bịa số lượng nước, cường độ vận động hoặc ngưỡng y tế.
+
+FR-2: ĐẠT CÁC KIỂM TRA
+Truyền healthContext hiện có, tách 24h/7 ngày, thuốc chưa ghi là chưa biết; không truy vấn thêm trong generator.
+Bằng chứng: checkin-structured-conclusion.test.js; checkin-conclusion-http.test.js; kiểm tra source getRecentHealthContext.
+Giới hạn: Chỉ số có tối đa 5 bản ghi mỗi loại theo query đã có; không hứa kiểm hết lịch sử ngoài cửa sổ này.
+
+FR-3: ĐẠT CÁC KIỂM TRA
+JSON 4 trường; 700 token/10s; loading Việt/Anh; giữ các trường cũ.
+Bằng chứng: 29 test SRS; FR-3 trong 16 kiểm tra UI.
+Giới hạn: Không tự retry hoặc đổi provider để che timeout; chưa cài binary App Store cũ để thử trực tiếp.
+
+FR-4: CÓ ĐIỀU KIỆN
+Disclaimer cố định đúng nguyên văn, nền xám, dưới khối 4, không bị bộ lọc AI chặn.
+Bằng chứng: UI và backend kiểm exact disclaimer; ảnh mới 4 kích thước/cỡ chữ.
+Giới hạn: Link chỉ bấm được khi cờ tính năng chuyên gia bật. Xem AC-5.
+
+§5: CHƯA ỔN ĐỊNH Ở MODEL
+Prompt P2 đã chọn; kiểm tra con số hành động, câu ngắn, không emoji, không tự gọi người bệnh là Asinu.
+Bằng chứng: results.json; srs-audit.json; thí nghiệm system 3 ca lưu riêng.
+Giới hạn: Model còn bỏ yêu cầu; lớp sau lọc đúng nhưng AC-4 không đạt. Không đưa thí nghiệm system vào runtime.
+
+§6: ĐẠT PHẦN TỰ ĐỘNG HÓA
+Lọc theo khối; trùng giá trị/đơn vị/ngày/giờ; đúng care_level; log chỉ lý do và khối; dự phòng 7 nhóm.
+Bằng chứng: checkin-conclusion-edge-cases.test.js; checkin-structured-conclusion.test.js; 2.160 biến thể số/ngày/giờ.
+Giới hạn: Từ điển/regex hữu hạn, không chứng minh được mọi kết luận đều đúng chuyên môn.
+
+E1: ĐẠT CÁC KIỂM TRA
+Không bệnh nền: giải thích sinh hoạt, không thêm bệnh mới.
+Bằng chứng: 30 ca: biến thể 0 ở đủ 7 nhóm; kiểm tra lời cuối sau lọc.
+Giới hạn: Phê duyệt giải thích chuyên môn còn ở AC-9.
+
+E2: ĐẠT CÁC KIỂM TRA
+Không có số đo 24h thì không trích số cũ; nhắc đo đúng chỉ số khi có tăng huyết áp/tiểu đường.
+Bằng chứng: Test mới 3 tổ hợp bệnh nền; test số cũ; 30 ca replay.
+Giới hạn: Chỉ nhắc đo, không tự đưa mục tiêu chỉ số hoặc tần suất điều trị.
+
+E3: ĐẠT CÁC KIỂM TRA
+Timeout/JSON sai dùng dự phòng, vẫn giữ disclaimer và lịch hỏi lại, có log.
+Bằng chứng: 29 test SRS; malformed/timeout trong test structured-conclusion.
+Giới hạn: Timeout được mô phỏng trong test, không cố gây timeout bằng hàng loạt lượt trả phí.
+
+E4: ĐẠT CÁC KIỂM TRA
+Chỉ thay khối bị loại, giữ các khối khác; dữ kiện server ghép có giới hạn câu.
+Bằng chứng: Test FR-1 generic activities giữ nguyên các khối khác; test unsafe block.
+Giới hạn: Nếu việc ghép dữ kiện làm khối 2 vượt giới hạn, chỉ khối 2 được thay và ghi log.
+
+E5: ĐẠT CÁC KIỂM TRA
+Tất cả 11 emergency templates không gọi AI, không có disclaimer mới.
+Bằng chứng: 29 test SRS: lặp toàn bộ EMERGENCY_CONCLUSIONS; rule-integrity.json.
+Giới hạn: Không thực hiện cuộc gọi khẩn thật trong kiểm thử.
+
+E6: ĐẠT CÁC KIỂM TRA
+Chưa hỏi kỹ phải nói rõ, không tự khẳng định không có dấu hiệu nguy hiểm.
+Bằng chứng: incomplete-assessment trong 30 ca; test unsafe absence.
+Giới hạn: Cần chuyên môn đọc câu dự phòng chưa hỏi kỹ.
+
+E7: ĐẠT HỢP ĐỒNG ĐỌC
+Chỉ đọc 1+4+6, không quá 1.600 ký tự; không đọc lặp khi render.
+Bằng chứng: Backend speechText; actual DoneScreen hook tests; 131+28+19 hồi quy âm thanh.
+Giới hạn: Không thử giọng trên thiết bị vật lý hoặc gọi tổng đài thật; tổng đài thuộc ngoài phạm vi sửa của SRS.
+
+E8: ĐẠT PHẦN ĐÃ TEST
+Prompt/bố cục/disclaimer tiếng Anh; sửa alias khó ngủ và diễn biến khi fallback.
+Bằng chứng: Test E8 mới 2 diễn biến; actual English sample; ui-en.png.
+Giới hạn: Thông tin tự nhập không có bản dịch được giữ nguyên, chưa có bộ dịch offline cho mọi tên bệnh/triệu chứng tự do.
+
+E9: ĐẠT HỢP ĐỒNG API
+summary=1+2, recommendation=3+4, không mất trường khi lưu/gửi lại.
+Bằng chứng: 29 test SRS, 6 test HTTP/persistence và test app cũ fallback.
+Giới hạn: Chưa cài và chạy bản App Store cũ trên thiết bị thật.
+
+E10: ĐẠT PHẦN HỒ SƠ
+Xưng hô lấy hồ sơ người bệnh; metadata người thân không ghi đè.
+Bằng chứng: Test người bệnh nữ 81 tuổi và người thân nam 31 tuổi.
+Giới hạn: Kiểm tra dữ liệu/prompt/fallback; chưa chạy E2E một luồng check-in hộ trên thiết bị.
+
+AC-0: CÓ LỰA CHỌN P2
+Có hồ sơ 5 prompt × 3 kết quả và Founder đã đồng ý P2 trong hội thoại.
+Bằng chứng: preview/checkin-conclusion-20261029; hội thoại chấp nhận hướng P2.
+Giới hạn: Không tự điền điểm 1–5 hay chữ ký duyệt; phiếu điểm vẫn trống.
+
+AC-1: ĐẠT CÁC KIỂM TRA
+Cả 2 ca gốc SRS gọi model mới, đủ 6 khối; lời AI không có chẩn đoán/cấp cứu; lịch đúng server.
+Bằng chứng: original-srs-cases.json; ui-insomnia.png; ui-five-symptoms-large.png.
+Giới hạn: Kết quả tuổi 52 dùng xưng hô chú/cháu theo quy tắc hiện có, không đổi module xưng hô toàn hệ thống.
+
+AC-2: ĐẠT CÁC KIỂM TRA
+Đúng bệnh nền, số đo và giờ; không tạo số hiện tại từ bản ghi cũ.
+Bằng chứng: srs-audit.json: 0 lỗi đầu ra cuối trong 30 ca; test dữ liệu ghép.
+Giới hạn: Chỉ xác nhận dữ kiện và mẫu kiểm tra, không xác nhận diễn giải lâm sàng.
+
+AC-3: ĐẠT SAU LỌC TRÊN MẪU
+0/30 đầu ra cuối vi phạm bộ kiểm tra tên bệnh/thuốc/liều/care_level trên dữ liệu mẫu.
+Bằng chứng: srs-audit.json; raw response và lý do thay khối vẫn được giữ lại.
+Giới hạn: Raw model có lỗi và đã bị chặn. Không khẳng định 0 lỗi trên mọi tình huống thực tế.
+
+AC-4: CHƯA ĐẠT
+Yêu cầu dưới 10%; gọi thật ban đầu 14/30 ca dùng dự phòng; replay bộ lọc cuối 12/30 = 40%.
+Bằng chứng: results.json lưu log thực; srs-audit.json lưu replay đúng thời điểm gốc.
+Giới hạn: Không gọi thêm model khi replay, không bỏ kiểm tra số liệu/thuốc/care_level để làm đẹp tỉ lệ.
+
+AC-5: CHƯA ĐẠT TRÊN STORE/STAGING
+Disclaimer hiện đúng trong mẫu, link mở luồng tư vấn ở dev.
+Bằng chứng: 16 test UI xác minh route /doctor-consultation và cờ disabled; appEnv.ts.
+Giới hạn: Cờ hiện tại cố ý ẩn chuyên gia ngoài dev. Giữ nguyên yêu cầu ẩn trước đây, không tự bật lại.
+
+AC-6: ĐẠT LƯỢT CUỐI / CÒN GIỚI HẠN
+Nguồn calculateConclusion/emergency giữ nguyên; suite cấu hình hiện có đạt ở lượt cuối.
+Bằng chứng: rule-integrity.json; backend 1628 test đạt; 123 suite đạt.
+Giới hạn: 206 test/17 suite bỏ qua; các file bị loại bởi config chưa chạy. Có test Care Circle từng trả 401 ngắt quãng; chưa xác định nguyên nhân, không tuyên bố đã sửa production.
+
+AC-7: ĐẠT TRÊN MẪU
+30/30 dưới 10 giây; P95 đo thật 2402 ms.
+Bằng chứng: results.json: elapsedMs của 30 lượt thật.
+Giới hạn: Không tính tốc độ replay offline hoặc thời gian tải TTS thành độ trễ gọi model.
+
+AC-8: ĐẠT HỢP ĐỒNG API
+Các trường cũ vẫn đọc được, khối mới không làm vỡ client cũ.
+Bằng chứng: Các test E9 và contract 25 request; no migration.
+Giới hạn: Còn kiểm thử binary cũ trên thiết bị thật trước phát hành.
+
+AC-9: CHỜ DUYỆT CHUYÊN MÔN
+Cần người có chuyên môn y tế duyệt 30 mẫu và P6 duyệt disclaimer.
+Bằng chứng: clinical-review.csv để trống; report không tự phê duyệt.
+Giới hạn: Đây là điều kiện trước khi bật cho người dùng thật, không thể thay bằng test máy.
+
+Giới hạn chung:
+Test HTTP dùng route/controller/engine/service thật nhưng mock DB/provider/tác động ngoài.
+Ảnh là React Native Web với component thật, chưa thay kiểm thử native iOS/Android và binary App Store cũ.
+Dữ liệu tự nhập chưa có bản dịch vẫn giữ nguyên; bộ lọc hữu hạn không phải kiểm chứng y khoa.
+Care Circle có lỗi test 401 ngắt quãng ở lượt đầu; lượt cuối đạt, chưa có nguyên nhân hoặc sửa production.
+Không reset tài khoản, không thêm migration, không gọi người dùng thật, chưa deploy VPS.
+Credits sau 38 lượt giả lập của vòng này: 22.2228; chênh lệch số dư 0.2388.
+
+Báo cáo: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-srs-acceptance/index.html
+Dữ liệu đối chiếu: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-srs-acceptance/srs-matrix.json
+Chi tiết 30 kết luận: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-srs-acceptance/srs-audit.json

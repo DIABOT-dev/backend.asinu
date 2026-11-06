@@ -1,0 +1,43 @@
+Asinu - Kiểm thử sâu kết luận sau check-in - 29/10/2026
+Đã sửa và restart local. Chưa deploy VPS. Chờ chuyên môn duyệt theo AC-9.
+
+Backend: 1599 đạt, 206 bỏ qua; 122 suite đạt, 17 bỏ qua.
+14 kết luận/UI; 79 hộp quà; 23 thực hành; âm thanh 131+28+19; API contract 25; cờ chuyên gia 14; phòng thử SRS 36.
+TypeScript, i18n và kiểm tra nguồn bộ luật: đạt. Lint backend/test UI mới sạch; FE liên quan còn cảnh báo style/hook, không có lỗi.
+33 lượt model thật với dữ liệu giả lập; 30 ca nghiệm thu P95 2086 ms, 30/30 dưới 10s.
+Replay qua bộ lọc cuối: 0/30 cần khối dự phòng. Token tổng 59061 không phải số credits.
+2160 biến thể số/ngày/giờ được kiểm tra offline, nằm trong 1 test Jest, không cộng vào 1599 và không phát sinh lượt AI.
+
+Ràng buộc số đo với đúng bản ghi
+Tái hiện số đúng nhưng năm 1926/2126, đổi chéo giờ đo, nhầm huyết áp với đường huyết và mượn số bản ghi loại khác để nói ổn định. Đã đối chiếu theo từng câu: loại, giá trị, đơn vị, ngày và giờ; hôm nay/hôm qua tính theo giờ server tại Việt Nam. Có 2.160 biến thể số/ngày/giờ kiểm tra offline.
+
+Giữ mức độ từ bộ luật
+Chặn phủ định lời hẹn khám bắt buộc, tự đổi hẹn khám thành khám ngay hôm nay, gọi 115 vô điều kiện và mượn điều kiện của câu khác. Đồng thời giữ lại câu cảnh báo có điều kiện phù hợp đã bị bộ lọc loại oan.
+
+Không suy diễn thuốc, người thân và hẹn hỏi lại
+Bổ sung chặn ngừng uống/dùng thuốc, tự nhận đã báo người thân và tự đổi giờ hẹn; không suy ra quên thuốc khi chưa ghi nhận.
+
+Tên bệnh tự nhập không làm hỏng kết luận
+Escape ký tự regex trong tên bệnh; phân biệt cụm tên bệnh dài/ngắn, gồm tiền tiểu đường với tiểu đường. Ca có dấu ngoặc không còn gây lỗi.
+
+Gửi lại sau lỗi DB phải lưu thật
+Tái hiện HTTP 500 ở bước ghi hoàn tất rồi gửi lại: bản cũ trả kết quả cache dù DB chưa hoàn tất. Thêm trạng thái hoàn tất bền vững trong JSON hiện có; lần thử lại dùng lại kết luận đã tạo và hoàn thành lưu, không gọi AI thêm. Kiểm tra cả tái khám khi còn mốc hoàn tất cũ.
+
+Đọc kết quả mới trên màn vẫn đang mở
+Đổi cờ đã đọc sang định danh gồm phiên, ngôn ngữ, nội dung và lượt nghe lại. Kết quả mới tự đọc; render cùng kết quả không đọc lặp. Kiểm tra JSX thực với hook có trạng thái.
+
+Giảm loại oan các câu đúng
+Đợt gọi model thật phát hiện các cách viết đúng: giờ/ngày đứng trước dấu phẩy rồi mới tới số đo; hôm nay + giờ đo chính xác; tức ngực kèm dấu hiệu nặng trong câu điều kiện. Đã sửa parser và replay đúng 30 raw response ở thời điểm đánh giá gốc, không gọi thêm provider.
+
+Giới hạn:
+HTTP tests use real Express/controller/engine/orchestration; database, provider and external effects are mocked, and test authentication is injected. This does not prove PostgreSQL/network/JWT integrations end to end.
+Live provider evaluation uses fixed synthetic cases only; final parser was checked by replaying the original raw responses. No real user medical data was sent for this evaluation.
+UI tests render the actual component with React Native Web or a JSX/hook harness. These do not replace tests on physical iOS/Android devices.
+206 skipped backend tests and files excluded by existing Jest configuration were not validated by this run.
+Dictionaries/regex are finite. Clinical correctness remains subject to qualified review of the 30 conclusions and P6 disclaimer approval (AC-9).
+No new database migration. New durable completion marker uses the existing triage_state JSON column.
+
+Bằng chứng: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-deep-recheck/index.html
+Local health: {"app_api": 200, "metro": 200, "metro_tunnel": 200}
+
+Chưa reset dữ liệu tài khoản. Không thêm migration. Chưa commit/push trong vòng kiểm thử này.

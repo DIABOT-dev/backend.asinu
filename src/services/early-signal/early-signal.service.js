@@ -3,6 +3,7 @@ const { attendance } = require('./attendance');
 
 const crypto = require('crypto');
 const { t } = require('../../i18n');
+const { assessBloodPressure } = require('../../lib/blood-pressure');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const entitlementService = require('../payment/entitlement.service');
 const checkinCallService = require('../checkin-call/checkin-call.service');
@@ -264,7 +265,7 @@ async function inputSnapshot(pool, userId) {
       attendance: attendance(row),
     })),
     symptoms: symptoms.rows,
-    vitals: vitals.rows,
+    vitals: require('../../security/health-field-encryption').decryptHealthRows(userId, 'medication_logs', ['med_name'], vitals.rows),
     profile: profile.rows[0] || null,
   };
 }
@@ -336,7 +337,7 @@ function analyse(snapshot, lang = 'vi') {
     const glucose = Number(row.glucose_value);
     const systolic = Number(row.systolic);
     const diastolic = Number(row.diastolic);
-    return (glucose && (glucose < 54 || glucose > 300)) || systolic >= 180 || diastolic >= 120;
+    return (glucose && (glucose < 54 || glucose > 300)) || assessBloodPressure(systolic, diastolic).repeatHigh;
   });
   const symptomCounts7d = countRecentSymptoms(snapshot, 7);
   const symptomCounts30d = countRecentSymptoms(snapshot, 30);

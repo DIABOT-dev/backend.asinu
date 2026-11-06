@@ -10,6 +10,7 @@ const {
 } = require('../middleware/upload.middleware');
 const {
   requestDoctorTask,
+  screenDoctorConsultation,
   submitDoctorRating,
   requestDoctorPrivacy,
   recommendDoctor,
@@ -29,6 +30,7 @@ const {
 
 function doctorTaskRoutes(pool) {
   const router = express.Router();
+  router.post('/screening', requireAuth, bindController(screenDoctorConsultation, pool));
   router.post('/tasks', requireAuth, bindController(requestDoctorTask, pool));
   router.get('/tasks', requireAuth, bindController(listDoctorTasks, pool));
   router.get('/tasks/:taskId/messages', requireAuth, bindController(listDoctorMessages, pool));

@@ -74,6 +74,7 @@ app.use(
     },
   })
 );
+app.use(require('./src/security/json-budget').limitJsonComplexity);
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- OPS HEALTH CHECK ---
@@ -153,15 +154,27 @@ const pool = createPool({
 });
 // Auth middleware checks the persisted token version on this application's DB.
 app.locals.authPool = pool;
+app.get('/api/readyz', async (_req, res) => {
+  try {
+    if (!require('./src/security/openbao-keyring.cjs').keyringReady()) throw new Error('Encryption keys unavailable');
+    await pool.query('SELECT 1');
+    await getRedis().ping();
+    res.status(200).json({ status: 'ok' });
+  } catch {
+    res.status(503).json({ status: 'unavailable' });
+  }
+});
 
 app.use('/api/auth', authLimiter, authRoutes(pool));
 app.use('/api/mobile/auth/login', authLimiter);
 app.use('/api/mobile', mobileRoutes(pool));
 app.use('/api/mobile/gift', checkinGiftRoutes(pool));
+app.use('/api/mobile', require('./src/routes/v21.routes')(pool));
 app.get('/draw-results/:id',require('./src/services/checkin-gifts/draw.service').publicPage(pool));
 app.use('/api/mobile/checkin-call', checkinCallRoutes(pool));
 app.use('/api/internal/checkin-call', checkinCallOpsRoutes(pool));
 app.use('/api/internal/gifts', checkinGiftOpsRoutes(pool));
+app.use('/api/internal', require('./src/routes/v21.ops.routes')(pool));
 app.use('/api/missions', missionsRoutes(pool));
 app.use('/api/care-pulse', carePulseRoutes(pool));
 app.use('/api/care-circle', careCircleRoutes(pool));

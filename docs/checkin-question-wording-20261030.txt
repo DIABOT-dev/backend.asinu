@@ -1,0 +1,86 @@
+RÀ SOÁT CÂU CHỮ THEO SRS – 30/10/2026
+
+Đã đọc lại SRS_AI_ket_luan_checkin.docx; SHA256 135389a761a360a4217aa69c96eaa782fa222a7fac309841ee3f76451e1febd0.
+Mục tiêu: câu hỏi có đủ đối tượng/ngữ cảnh, xưng hô rõ, tiếng Việt tự nhiên; danh sách dùng dấu phẩy và một chữ “và” trước mục cuối.
+Chuỗi bước hỏi, đáp án chuẩn, quyết định sàng lọc và mẫu cấp cứu giữ nguyên.
+Đã rà thêm câu hỏi làm rõ, hỏi lại, trường hợp tinh thần/giấc ngủ và câu dự phòng thiếu thông tin.
+App hiển thị “Asinu đang phân tích…” sau khi gửi lựa chọn, trong lúc đợi API.
+Nhãn hiển thị không đưa “(nghi suy tim)” ra cho người dùng; giá trị đáp án gửi API và ghi nhận ở server giữ nguyên.
+
+Câu hỏi hiện tại:
+checkin.triage.question.symptoms_with_location
+Về những khó chịu liên quan đến {{locations}}, {{honorific}} đang gặp triệu chứng nào dưới đây?
+
+checkin.triage.question.symptoms_general
+{{CallName}}, hôm nay {{honorific}} thấy khó chịu như thế nào?
+
+checkin.triage.question.symptoms_mental
+Về tinh thần và giấc ngủ, {{honorific}} đang gặp những biểu hiện nào dưới đây?
+
+checkin.triage.question.associated
+Ngoài tình trạng {{symptom}} vừa kể, {{honorific}} còn gặp biểu hiện nào dưới đây không?
+
+checkin.triage.question.onset
+Tình trạng {{symptoms}} của {{honorific}} bắt đầu từ khi nào?
+
+checkin.triage.question.progression
+So với lúc mới bị, tình trạng {{symptoms}} của {{honorific}} đang đỡ hơn, vẫn vậy hay nặng hơn?
+
+checkin.triage.question.red_flags
+Để hiểu rõ hơn tình trạng {{symptoms}} của {{honorific}}, {{honorific}} có gặp thêm dấu hiệu nào dưới đây không?
+
+checkin.triage.question.cause_abdomen
+{{Honorific}} có ăn gì lạ, đồ cay hoặc uống thuốc lúc đói không?
+
+checkin.triage.question.cause_head
+{{Honorific}} có nhớ gần đây ngủ ít, quên thuốc hoặc làm việc căng thẳng không?
+
+checkin.triage.question.cause_musculoskeletal
+{{Honorific}} có nhớ gần đây vận động nặng, ngồi sai tư thế hoặc bê vác gì không?
+
+checkin.triage.question.cause_dizziness
+{{Honorific}} có nhớ gần đây bỏ ăn, đứng dậy nhanh hoặc quên thuốc không?
+
+checkin.triage.question.cause_default
+{{Honorific}} có nhớ gần đây có gì bất thường không?
+
+checkin.triage.question.action
+Để cải thiện tình trạng đang gặp, {{honorific}} đã nghỉ ngơi hoặc dùng thuốc theo đơn chưa?
+
+checkin.triage.question.followup_status
+Trong lần check-in trước, {{honorific}} có chia sẻ về {{previous}}. Hiện giờ, tình trạng của {{honorific}} đang đỡ hơn, vẫn vậy hay nặng hơn?
+
+checkin.triage.question.followup_detail
+Ngoài những khó chịu đã chia sẻ, {{honorific}} có gặp thêm biểu hiện nào mới không?
+
+checkin.triage.question.default
+{{Honorific}} có thể cho {{selfRef}} biết rõ hơn về những khó chịu đang gặp không?
+
+checkin.triage.question.new_symptom_detail
+{{Honorific}} nói rõ giúp {{selfRef}} triệu chứng mới đó là gì nhé?
+
+checkin.triage.question.fallback_progression
+So với lúc mới bị, tình trạng của {{honorific}} đang đỡ hơn, vẫn vậy hay nặng hơn?
+
+checkin.triage.question.fallback_red_flags
+Để hiểu rõ hơn tình trạng đang gặp, {{honorific}} có thêm dấu hiệu nào dưới đây không?
+
+checkin.triage.question.fallback_onset
+{{Honorific}} bắt đầu thấy những khó chịu này từ khi nào?
+
+checkin.triage.question.clarify
+{{SelfRef}} chưa hiểu rõ phần {{honorific}} vừa chia sẻ. {{Honorific}} chọn câu phù hợp hoặc nói rõ hơn một chút nhé.
+
+Kiểm chứng phiên bản kết luận:
+Đã replay offline 30 câu trả lời giả lập của retest-2-fix: 0 lỗi theo bộ kiểm tra, không gọi thêm AI. Độ trễ và credits trong bản sao là số đo cũ, không phải số đo mới ngày 30/10.
+Gói duyệt cập nhật có nguồn: APP/preview/checkin-conclusion-implementation-20261029-question-copy-20261030/clinical-review.html.
+Chuyên môn/P6 vẫn pending. Các gói duyệt cũ là lịch sử và không khớp hash nguyên file sau sửa câu chữ.
+Bộ mẫu/phiếu mới không phải biên bản đã phê duyệt. Không phát sinh migration mới.
+
+Kết quả test bản commit được ghi trong git commit message và /tmp/asinu-question-copy-20261030.
+
+Kiểm tra đúng snapshot sẽ commit (tách khỏi các sửa tư vấn/IVR còn dở):
+- Backend: 1.642 test / 124 suite đạt; 206 test / 17 suite bỏ qua theo cấu hình.
+- App: 19 kiểm tra kết quả, 79 hộp quà, 23 thực hành; tư vấn/route, âm thanh, trạng thái, bảo mật cache, API contract, TypeScript và i18n đạt.
+- Snapshot không phụ thuộc các sửa tư vấn/IVR chưa commit; số 1.665 trong báo cáo trước là kiểm tra toàn working tree lúc đó.
+- Kiểm tra secrets trên các file stage: không có giá trị key/secret thực tế từ cấu hình local.

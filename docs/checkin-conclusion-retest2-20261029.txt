@@ -1,0 +1,32 @@
+Asinu - Kiểm thử độc lập lần tiếp theo - 29/10/2026
+
+Những lỗi và thay đổi sau kiểm thử:
+1. Ca model giả lập tiếng Anh vẫn lọt qua khi app yêu cầu tiếng Việt. Đã bổ sung chiều kiểm tra này và ca trộn một hành động tiếng Anh; nhãn bệnh nền gốc không làm sai kết luận ngôn ngữ.
+2. Vòng đầu thực tế 3/30 dùng dự phòng = 10%, CHƯA ĐẠT AC-4. Một ca bị chặn đúng vì suy diễn triệu chứng từ việc thiếu log thuốc; một câu chỉ xác nhận thiếu thông tin bị nhận nhầm là hướng dẫn thuốc; một ca giải thích vượt 3 câu vì hai số đo.
+3. Prompt giờ dành một câu giải thích và các câu số đo nguyên giá trị/đơn vị/mốc đo; ưu tiên số mới và bản ghi trước cùng loại. Không sửa/xóa lịch sử và không đổi query hoặc bộ luật mức độ.
+4. Chỉ cho qua hai mẫu câu xác nhận thiếu thông tin thuốc được neo nguyên câu, và chỉ khi nguồn thật sự chưa có bản ghi. Không cho câu này che chỉ dẫn thuốc, lời suy diễn, hoặc phủ nhận bản ghi đã có.
+5. Một test HTTP QR từng nhận 400 thay vì 401 từ mock xác thực. Chạy riêng/quan sát lại đạt; chưa xác định chắc nguyên nhân 400 ban đầu. Đã cô lập server loopback và HTTP client không pooling của fixture; giữ nguyên mọi assert xác thực/quyền sở hữu. Không đổi code QR/xác thực production.
+
+Kiểm chứng sau sửa:
+- Toàn bộ suite backend theo cấu hình: 1.665 test / 126 suite đạt; 206 test / 17 suite bỏ qua, không tính là đã kiểm.
+- 238 kiểm tra scoring follow-up cũ đạt; 12 hồi quy ngôn ngữ, 13 định dạng/grounding, 29 SRS và 12 kiểm hồ sơ duyệt nằm trong bộ backend trên.
+- QR HTTP suite lặp riêng thêm 10 vòng đều đạt. Giữ log cả lượt lỗi ngắt quãng ban đầu.
+- Frontend: 19 test kết quả, 79 hộp quà, 23 thực hành, 25 request check-in khớp API; tư vấn/hội thoại, âm thanh, trạng thái, quyền, cache tài khoản, API và cầu nối native đều đạt.
+- TypeScript, i18n, lint các file sửa và git diff --check đạt.
+- Vòng gọi thật cuối retest-2-fix: 0/30 dùng dự phòng, 30/30 dưới 10s, P95 2253ms. Không retry hoặc chuyển provider.
+- Hai vòng hiện tại tổng 66 lượt gọi thật gồm 2 x (3 prompt + 30 ca), đều là fixture giả lập. Giữ vòng đầu chưa đạt, không xóa kết quả.
+- Audit production: 0 lỗi đầu ra. Bộ kiểm tra độc lập không import validator production cũng không phát hiện lỗi trên 30 mẫu về bố cục, số đo/mốc giờ, disclaimer, thuốc/liều, xưng hô và trường tương thích/TTS. Đây là kiểm tra kỹ thuật, không phải duyệt y tế.
+- Hash source trước/sau vòng cuối trùng nhau. calculateConclusion và mẫu cấp cứu trùng HEAD.
+- Sáu giao diện thực qua React Native Web, Việt/Anh, sáng/tối, 320–390px, chữ 100/130/200%: không tràn, link/đóng hoạt động, không lỗi JS. API/router/TTS là giả lập; chưa kiểm binary/thiết bị thật.
+- Đã nạp bản sửa vào backend local, health HTTP 200; Metro 8081/8082 vẫn chạy. Không reset tài khoản, không migration mới, chưa deploy VPS.
+
+Nghiệm thu còn lại:
+- AC-9 vẫn chờ người có chuyên môn đọc 30 mẫu và P6 duyệt disclaimer Việt/Anh.
+- Hồ sơ hiện tại để trống mọi quyết định. Lệnh kiểm từ chối hồ sơ pending và source/packet cũ; không tự ghi phê duyệt.
+- Bundle mới: 71281299ab59261e3c0c86f79404f568648674fdb13364bfb68c984106f2ca6f
+- Tool không xác minh danh tính/bằng cấp và chưa gắn vào CI/deploy hoặc runtime.
+
+Credits header cuối: 21.0872. Vòng cuối 33 lượt giảm 0.1351; hai vòng giảm 0.2768 so với lần ghi nhận 21.3640. Số dư làm tròn và có thể bao gồm dùng đồng thời trên tài khoản.
+Log: /tmp/asinu-srs-retest-20261029-2
+Báo cáo + ảnh + mẫu: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-retest-2-fix/index.html
+Phiếu AC-9 mới: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-retest-2-fix/clinical-review.html

@@ -1,0 +1,124 @@
+BÁO CÁO TRIỂN KHAI SRS – AI KẾT LUẬN SAU CHECK-IN
+
+Ngày báo cáo: 29/10/2026. Căn cứ: SRS_AI_ket_luan_checkin.docx và lượt kiểm thử cuối retest-2-fix. Trạng thái: phần chức năng đã có code và đạt các kiểm tra local được nêu dưới đây; chưa hoàn tất nghiệm thu chuyên môn và phát hành.
+
+Hai việc cần duyệt theo AC-9 vẫn còn nguyên: chuyên gia có chuyên môn y tế duyệt nội dung 30 kết luận mẫu; P6 duyệt disclaimer. Founder đã đồng ý hướng P2 trong trao đổi. Các việc chưa kiểm thực tế hoặc chưa phát hành được liệt kê riêng, không tính là đã làm xong.
+
+1. Phạm vi đã triển khai
+
+Hai phần được sửa là backend.asinu và màn kết quả check-in trong app Asinu. Mục tiêu là thay kết luận ngắn bằng lời nhắn, giải thích và việc làm cụ thể, sử dụng dữ kiện người dùng đã cung cấp.
+Giữ nguyên mã nguồn calculateConclusion và các mẫu EMERGENCY_CONCLUSIONS; không thay chuỗi câu hỏi Triage V2. Kết luận của nút “Tôi ổn”, nghiệp vụ tổng đài và chat AI không thuộc phần viết lại này.
+Không phát sinh bảng/cột hoặc migration mới cho SRS này. Dữ liệu kết luận được lưu bằng cơ chế hoàn tất check-in hiện có.
+
+2. Các yêu cầu chức năng đã làm
+
+
+Bước 0 / AC-0 | Đã thử 5 prompt P1–P5, mỗi prompt 3 lần, lưu 15 kết quả, độ trễ, token, lý do bị lọc và ảnh mô phỏng. Founder đã đồng ý hướng P2 và các điều chỉnh an toàn trong trao đổi. | Đã có lựa chọn hướng. Bảng chấm điểm 1–5 chưa được Founder điền; không tự chấm thay.
+
+FR-1 – Sáu khối kết quả | Lời nhắn → Giải thích → Hôm nay nên làm → Khi nào cần đi khám → Disclaimer → Hẹn hỏi lại. Bỏ thông báo khám bị lặp; nút chuyên gia chỉ hiện theo needsDoctor; một mốc followUpHours. | Xong code; đạt kiểm tra tự động và layout mô phỏng.
+
+FR-2 – Dữ liệu cho AI | Truyền xưng hô, tuổi/giới, bệnh nền, triệu chứng, thời điểm/diễn biến, dấu hiệu nguy hiểm, care_level, số đo, thông tin bản ghi thuốc và lịch sử check-in hiện có. | Xong. Không thêm truy vấn trong bộ tạo kết luận.
+
+FR-3 – JSON/API/chờ kết quả | AI trả 4 trường nội dung; API thêm các trường kết luận mới, vẫn giữ summary và recommendation. Cấu hình medgemma-27b-it, temperature 0.2, 700 token, timeout 10 giây; không tự retry/chuyển provider. Có trạng thái “Asinu đang xem lại…”. | Xong code và kiểm tra hợp đồng API; chưa thay cho thử app Store cũ trên thiết bị thật.
+
+FR-4 – Disclaimer và tư vấn | Disclaimer cố định từ server, đúng nguyên văn SRS, khối nền xám dưới phần cảnh báo; liên kết mở luồng tư vấn chuyên gia. Cờ tư vấn độc lập với cờ IVR cũ, được kiểm trong cấu hình dev/staging/prod. | Xong phần kỹ thuật. Nội dung disclaimer vẫn chờ P6 duyệt; chưa kiểm bằng binary phát hành mới.
+
+3. Prompt, số đo, bộ lọc và lưu kết quả
+
+Prompt hướng đến lời nhắn tự nhiên theo xưng hô/hồ sơ người dùng; có giới hạn số câu, độ dài câu và nội dung theo từng khối. Hướng P2 đã được rút gọn và chỉnh trong các vòng kiểm thử, không giữ nguyên từng chữ của ví dụ ban đầu.
+Số cũ chỉ được trích khi có số đo trong 24 giờ cùng loại. Chỉ so sánh bản ghi cùng loại; kiểm giá trị, đơn vị, ngày và giờ. Không có dữ liệu thì không tự nhận xét “ổn định/cao/thấp”.
+Để phần giải thích giữ trong 2–3 câu, prompt dành một câu cho giải thích/liên hệ và các câu số đo nguyên giá trị, đơn vị, mốc đo. Ưu tiên số mới nhất và bản ghi trước cùng loại khi còn chỗ; không xóa lịch sử hoặc làm mất dữ liệu nguồn.
+Bệnh nền và số đo mới từ server được bổ sung khi AI bỏ sót. Với tăng huyết áp/tiểu đường, có nhắc đo lại đúng loại chỉ số. Phần hành động có 2–3 việc, trong đó có ít nhất một việc định lượng hữu ích; không tự đặt liều thuốc, lượng nước hay cường độ vận động.
+Đã bổ sung chặn tên bệnh chưa khai theo từ điển, thuốc/liều, thay đổi điều trị, lệch care_level, số đo sai, lịch hỏi lại do AI tự bịa và thông báo người thân chưa thực hiện. Cho qua các cách nói hợp lệ, gồm xác nhận thiếu thông tin thuốc khi nguồn thực sự chưa có bản ghi; không cho phép suy ra đã quên uống thuốc.
+Có bộ câu dự phòng theo 7 nhóm triệu chứng. Khi một khối bị loại, chỉ thay khối đó và ghi conclusion_rejected với tên khối/lý do, không ghi nội dung sức khỏe vào log này. Đã xử lý AI timeout, JSON hỏng và sai ngôn ngữ.
+Đã kiểm và sửa lưu hoàn tất: retry sau lỗi ghi DB không được báo thành công trước khi lưu xong; gửi đồng thời không tạo lại nhiều kết luận; phiên của tài khoản khác không được ghi đè. Đây là kiểm tra HTTP với DB/provider giả lập, chưa là nghiệm thu PostgreSQL/JWT production.
+Các bộ lọc là kiểm tra hữu hạn bằng quy tắc/từ điển; kết quả đạt trên bộ mẫu không chứng minh mọi câu trả lời tương lai đều đúng. Phần này vẫn cần chuyên gia duyệt theo AC-9.
+
+4. Các luồng ngoại lệ E1–E10
+
+
+E1 | Không có bệnh nền: dùng giải thích về các yếu tố sinh hoạt thường gặp, không thêm tên bệnh mới. | Chất lượng/độ phù hợp y tế chờ chuyên gia duyệt.
+
+E2 | Không có số đo trong 24 giờ: không lấy số cũ làm số hiện tại; nhắc đo lại khi có bệnh nền phù hợp. | Không tự đặt mục tiêu chỉ số điều trị.
+
+E3 | Timeout/JSON hỏng: trả nội dung dự phòng theo nhóm, vẫn có disclaimer và mốc hỏi lại. | Chưa mô phỏng toàn bộ sự cố hạ tầng production.
+
+E4 | Một khối không đạt: thay riêng khối đó, giữ các khối hợp lệ. | Đã có hồi quy tự động.
+
+E5 | Cấp cứu: giữ mẫu/luồng cũ, không gọi AI tạo kết luận mới, không hiện disclaimer của màn thường. | Chưa gọi cấp cứu hay tổng đài thật trong thử nghiệm này.
+
+E6 | Chưa hỏi đủ: lời nhắn nói rõ thiếu thông tin, không tự khẳng định không có dấu hiệu nguy hiểm. | Đã có hồi quy tự động.
+
+E7 | speechText và màn kết quả app đọc khối 1 + 4 + 6, không đọc khối giải thích/disclaimer; giữ giới hạn TTS. | Chưa nghiệm thu âm thanh trên thiết bị thật hoặc cuộc gọi IVR thật. Không ghi tổng đài đã được kiểm thực địa.
+
+E8 | Có prompt, nội dung dự phòng và disclaimer tiếng Anh. Đã thêm kiểm tra trộn/sai ngôn ngữ cả hai chiều Việt–Anh. | Tên bệnh tùy chỉnh có thể giữ nhãn gốc; bộ kiểm tra ngôn ngữ không phải bộ phân loại mọi ngôn ngữ.
+
+E9 | API giữ summary = lời nhắn + giải thích; recommendation = hành động + cảnh báo; app mới vẫn xử lý dữ liệu cũ. | Cần thử bản app Store cũ trên thiết bị thật.
+
+E10 | Người thân check-in hộ: lấy xưng hô từ hồ sơ người cần được tư vấn. | Đã có test tự động; cần thêm kiểm thử sử dụng thật trong đợt QA thiết bị.
+
+5. Đối chiếu AC-0 đến AC-9
+
+
+AC-0 | Có hồ sơ 15 lượt thử và Founder đồng ý hướng P2; phiếu điểm 1–5 vẫn trống. | Đã chốt hướng; hồ sơ chấm điểm chưa hoàn thiện.
+
+AC-1 | Hai ca gốc SRS có test hồi quy và mẫu gọi thật/ảnh lưu từ các vòng trước. Bộ 30 mới cuối là các ca tổng hợp đủ 7 nhóm. | Đã kiểm các hành vi; chưa khẳng định đã gọi lại riêng hai ca gốc sau lần chỉnh prompt cuối.
+
+AC-2 | Kiểm tra bệnh nền, số đo/mốc đo và không biến số cũ thành số hiện tại; lượt cuối không phát hiện lỗi theo các phép kiểm. | Đạt trên bộ kiểm tra; chưa thay duyệt diễn giải y tế.
+
+AC-3 | Không phát hiện vi phạm tên bệnh/thuốc/liều/care_level trong 30 đầu ra cuối theo các bộ kiểm tra. | Đạt trên 30 mẫu, không phải bảo đảm tuyệt đối mọi tình huống.
+
+AC-4 | Vòng cuối: 0/30 ca dùng dự phòng, dưới 10%. Vòng trước 3/30 = 10% được lưu là chưa đạt. | Đạt trên lượt kiểm thử cuối.
+
+AC-5 | Disclaimer đúng nguyên văn; liên kết và đường vào tư vấn chuyên gia đạt kiểm tra code, navigator và component. | Đạt kiểm tra kỹ thuật; nội dung chờ P6, chưa thử binary mới trên máy thật.
+
+AC-6 | calculateConclusion và mẫu cấp cứu trùng HEAD; 1.665 test backend/126 suite đạt; 238 kiểm tra follow-up đạt. | Đạt phạm vi đã chạy; 206 test/17 suite bỏ qua và các script legacy phụ thuộc DB chưa được tính là đã kiểm.
+
+AC-7 | 30/30 ca trả trong 10 giây; P95 2.253 ms (khoảng 2,25 giây). | Đạt trên lượt gọi mẫu; chưa phải độ trễ toàn luồng ở production.
+
+AC-8 | Giữ trường API cũ và có kiểm tra tương thích/hợp đồng API. | Xong phần kỹ thuật; còn QA binary cũ trên thiết bị thật.
+
+AC-9 | Chuyên gia chưa duyệt 30 mẫu, P6 chưa duyệt disclaimer; cả 30 quyết định trong phiếu đang pending. | CHƯA ĐẠT. Chưa đủ điều kiện xác nhận nghiệm thu phát hành.
+
+6. Phần nào còn cần duyệt và ai duyệt
+
+
+Chuyên gia có chuyên môn y tế – AC-9 | Đọc đủ 30 mẫu của bản hiện tại: lời nhắn, liên hệ bệnh nền, hành động, dấu hiệu cần đi khám; rà độ dễ hiểu và các con số. Xem kèm bộ câu dự phòng 7 nhóm trong phụ lục, vì vòng cuối không rơi vào dự phòng. | Kết luận từng mẫu: đồng ý hoặc yêu cầu sửa; họ tên, chuyên môn, ngày duyệt và ghi chú. Bộ câu dự phòng cần được ghi nhận trong biên bản/ghi chú; phiếu hiện tại chưa có ô phê duyệt riêng cho toàn bộ bộ câu dự phòng.
+
+P6 – AC-9 / FR-4 | Đọc nguyên văn disclaimer Việt và bản tiếng Anh; quyết định chấp nhận hay yêu cầu sửa câu chữ. | Ghi họ tên/ngày và quyết định. Hiện cả hai bản chưa được phê duyệt.
+
+Founder – hồ sơ AC-0 | Hướng P2 đã được đồng ý trong trao đổi. Phiếu 1–5 cho 4 tiêu chí hiểu mình/có thông tin/an toàn/dễ đọc chưa được điền. | Nếu cần hồ sơ nghiệm thu theo đúng biểu mẫu SRS, bổ sung điểm/nhận xét do Founder tự ghi. Không tự coi lựa chọn hướng đã đồng ý là chưa được phép code; không chấm hoặc ký thay.
+
+7. Những việc kỹ thuật còn lại trước phát hành
+
+QA thiết bị thật: iOS và Android, cỡ chữ lớn, dark mode, đọc/dừng/đọc lại, rời màn khi đang tải âm thanh, mở tư vấn từ disclaimer/CTA và thứ tự kết quả → đóng → trang chủ → quà.
+QA tương thích: kiểm bản app cũ đang phát hành với backend mới; kiểm đường đọc qua cuộc gọi thực nếu đưa E7 vào nghiệm thu tổng đài. Gọi lại riêng hai ca gốc bằng bản prompt cuối trong đợt nghiệm thu.
+Sau khi có nội dung đã duyệt, kiểm phiên bản/hồ sơ khớp nhau, rồi đóng gói commit, push, deploy, build và smoke test môi trường phát hành. Trong các lượt công việc hiện tại, bản SRS này mới được chạy local, chưa commit/push/deploy lên VPS hoặc ra Store.
+Công cụ duyệt hiện có là một lệnh kiểm hồ sơ: đối chiếu phiên bản/source, đủ 30 quyết định và P6. Chưa gắn lệnh này vào CI, deploy hay runtime; không được mô tả là hệ thống tự khóa phát hành khi thiếu duyệt.
+Nếu sửa nội dung hoặc mã nguồn đã được gắn với bộ mẫu, cần cập nhật bộ mẫu/hồ sơ tương ứng; không dùng biên bản của bản cũ để xác nhận cho bản mới. Không có migration mới cần chạy cho riêng SRS này.
+
+8. Bằng chứng và giới hạn kiểm chứng
+
+Backend: 1.665 test đạt, 206 test bỏ qua; 126 suite đạt, 17 suite bỏ qua. Ngoài ra có 238 kiểm tra scoring follow-up. Các số này không cộng lặp để tạo tổng test mới.
+App: 19 hồi quy màn kết quả, 79 hồi quy hộp quà, 23 thực hành; kiểm tra âm thanh, trạng thái, tư vấn, quyền, cache tài khoản, API, TypeScript và i18n đạt. Sáu layout qua React Native Web ở 320–390px, chữ 100/130/200%, sáng/tối và Việt/Anh không tràn ngang; API/router/TTS được giả lập.
+Vòng model cuối có 3 lượt prompt và 30 ca nghiệm thu, dùng dữ liệu giả lập. Bộ kiểm tra độc lập không import validator production cũng không phát hiện lỗi kỹ thuật trên 30 đầu ra. Source trước/sau lượt gọi trùng nhau; kết quả không phải chứng nhận chuyên môn.
+Một lượt toàn bộ test có lỗi HTTP QR ngắt quãng 400/401. Chưa xác định chắc nguyên nhân ban đầu; sau cô lập server/client trong fixture, suite đầy đủ và 10 lượt QR riêng đều đạt. Không thay code QR/xác thực production để làm test qua.
+Báo cáo này chỉ đọc lại mã nguồn/hồ sơ đã có; không gọi thêm model trả phí, không tạo ca thật, không reset tài khoản và không phát sinh kiểm thử/triển khai production mới.
+Đã kiểm lại gói duyệt tại lúc lập báo cáo: source khớp, 30 mẫu chưa có quyết định và P6 chưa duyệt. Bundle SHA-256: 71281299ab59261e3c0c86f79404f568648674fdb13364bfb68c984106f2ca6f
+
+9. Tài liệu kèm theo
+
+SRS gốc: /Users/ducytcg123456/Downloads/SRS_AI_ket_luan_checkin.docx
+Bước 0 – 5 prompt × 3 lượt và phiếu Founder: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-20261029/index.html
+Bằng chứng bản cuối, kết luận mẫu và ảnh: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-retest-2-fix/index.html
+Phiếu duyệt chuyên môn/P6 bản hiện tại: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-retest-2-fix/clinical-review.html
+Biên bản JSON hiện tại: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-retest-2-fix/clinical-approval-template.json
+Phụ lục câu dự phòng chưa duyệt: phu-luc-cau-du-phong-cho-chuyen-gia-duyet.txt
+Mã nguồn chính: backend.asinu/src/core/checkin/triage-conclusion*.js; src/services/checkin/checkin.triage.v2.js; src/services/checkin/checkin.service.js. App: asinu/app/checkin/index.tsx và asinu/src/features/checkin/CheckinConclusion.tsx.
+
+10. Nguyên văn disclaimer đang chờ P6 duyệt
+
+Lời khuyên của Asinu chỉ để tham khảo, không thay thế chẩn đoán và điều trị của bác sĩ. Kết nối với chuyên gia sức khoẻ của Asinu để nhận tư vấn sức khoẻ chính xác hơn.
+Asinu’s advice is for reference only and does not replace medical diagnosis or treatment. Connect with an Asinu health expert for more accurate health advice.
+
+Trạng thái cuối: CHƯA PHÊ DUYỆT CHUYÊN MÔN / CHƯA PHÁT HÀNH BẢN SRS NÀY.

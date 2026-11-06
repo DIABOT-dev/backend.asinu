@@ -48,7 +48,9 @@ const imageUpload = multer({
     const extOk = ALLOWED_IMAGE_EXTENSIONS.test(file.originalname);
     const mimeOk = ALLOWED_IMAGE_MIMETYPES.has(file.mimetype);
     if (extOk && mimeOk) return cb(null, true);
-    return cb(new Error('Only JPEG, PNG, and WebP images are supported'), false);
+    return cb(Object.assign(new Error('Only JPEG, PNG, and WebP images are supported'), {
+      code: 'IMAGE_TYPE_UNSUPPORTED',
+    }), false);
   },
 });
 
@@ -142,10 +144,10 @@ function verifyAudioMagicBytes(req, res, next) {
 function verifyImageMagicBytes(req, res, next) {
   const file = req.file;
   if (!file || !file.buffer) {
-    return res.status(400).json({ ok: false, error: t('error.no_image_uploaded', getLang(req)) });
+    return res.status(400).json({ ok: false, code: 'IMAGE_REQUIRED', error: t('error.no_image_uploaded', getLang(req)) });
   }
   if (!isImageBuffer(file.buffer)) {
-    return res.status(400).json({ ok: false, error: t('error.invalid_image_file', getLang(req)) });
+    return res.status(400).json({ ok: false, code: 'IMAGE_INVALID', error: t('error.invalid_image_file', getLang(req)) });
   }
   return next();
 }
@@ -154,7 +156,12 @@ function verifyImageMagicBytes(req, res, next) {
 function handleUpload(uploadMiddleware) {
   return (req, res, next) => {
     uploadMiddleware(req, res, (err) => {
-      if (err) return res.status(400).json({ ok: false, error: err.message });
+      if (err) return res.status(400).json({
+        ok: false,
+        ...(err.code === 'LIMIT_FILE_SIZE' ? { code: 'UPLOAD_FILE_TOO_LARGE' }
+          : err.code === 'IMAGE_TYPE_UNSUPPORTED' ? { code: err.code } : {}),
+        error: err.message,
+      });
       next();
     });
   };

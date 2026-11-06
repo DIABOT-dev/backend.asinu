@@ -15,7 +15,7 @@ import tempfile
 import urllib.request
 
 
-def operate(action, private_directory, identity):
+def operate(action, private_directory, identity, ssh_user='asinu-ops', ssh_key=None):
     context = ssl.create_default_context(cafile=private_directory / 'ca.crt')
     context.minimum_version = ssl.TLSVersion.TLSv1_3
     context.load_cert_chain(private_directory / 'operator.crt',
@@ -26,10 +26,12 @@ def operate(action, private_directory, identity):
         with socket.socket() as listener:
             listener.bind(('127.0.0.1', 0))
             port = listener.getsockname()[1]
-        host = 'root@103.173.227.247'
+        host = ssh_user + '@103.173.227.247'
+        key = Path(ssh_key) if ssh_key else Path.home() / '.ssh/asinu_ops_ed25519'
         subprocess.run(['ssh', '-M', '-S', control, '-fNT',
             '-o', 'StrictHostKeyChecking=yes', '-o', 'ExitOnForwardFailure=yes',
             '-o', 'IdentitiesOnly=yes',
+            '-i', str(key),
             '-o', 'ConnectTimeout=15', '-o', 'ControlPersist=no',
             '-L', f'127.0.0.1:{port}:127.0.0.1:8200', host], check=True)
         try:
@@ -66,8 +68,11 @@ if __name__ == '__main__':
         default=Path.home() / '.config/asinu-security/openbao-20261028')
     parser.add_argument('--identity', type=Path,
         default=Path.home() / '.config/asinu-security/openbao-recovery.identity')
+    parser.add_argument('--ssh-user', default='asinu-ops')
+    parser.add_argument('--ssh-key', type=Path,
+        default=Path.home() / '.ssh/asinu_ops_ed25519')
     args = parser.parse_args()
     try:
-        print(json.dumps(operate(args.action, args.private_directory, args.identity)))
+        print(json.dumps(operate(args.action, args.private_directory, args.identity, args.ssh_user, args.ssh_key)))
     except Exception:
         raise SystemExit('OpenBao operation failed. Check SSH, certificates, and the local recovery files; no secret was printed.')

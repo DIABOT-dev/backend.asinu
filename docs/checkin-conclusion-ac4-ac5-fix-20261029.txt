@@ -1,0 +1,45 @@
+Asinu - Sửa AC-4 / AC-5 và chuẩn bị AC-9 - 29/10/2026
+
+AC-4: ĐẠT trên bộ 30 ca gọi thật cuối: 2/30 = 6,67%, yêu cầu dưới 10%.
+AC-5: ĐẠT về code/luồng ở dev/staging/prod. Chưa deploy VPS hoặc build binary store.
+AC-9: CHỜ chuyên môn và P6 phê duyệt thật; không tự ghi là đã đạt.
+
+Đã sửa:
+- Tách chỉ dẫn ngắn và dữ kiện, vẫn dùng MedGemma 27B, 0.2 / 700 token / 10s, không retry/fallback provider.
+- Nhiệm vụ nhật ký có con số và nhắc đo đúng chỉ số được nêu rõ theo hồ sơ; không đưa thời điểm đánh giá nội bộ vào lời AI.
+- Số cũ 7 ngày chỉ đưa vào model khi có số 24h cùng loại để so; không xóa lịch sử hoặc đổi query hiện có.
+- Chuẩn hóa dấu câu và viết hoa đầu câu cho hai số đo có mốc rõ, giữ từng giá trị/đơn vị/ngày/giờ. Sai số/ngày/giờ hoặc thiếu mốc vẫn bị chặn.
+- Phân biệt đúng câu chỉ xác nhận chưa có thông tin thuốc với lệnh dùng thuốc; không cho câu này che chỉ dẫn hay suy diễn dùng thuốc.
+- Tách cờ tư vấn khỏi IVR: disclaimer/CTA, navigator, tải danh sách, hội thoại và thông báo dùng cờ tư vấn. Cờ IVR cũ giữ nguyên.
+- Một agent rà UI theo yêu cầu: 6 khối ở trong thẻ kết quả cũ, palette khớp thẻ trắng cả khi dark mode, giữ body20/nút56. Root sửa thêm màu mũi tên trên header sáng, không đổi mặc định ở màn khác.
+
+Kiểm chứng:
+- 1.651 backend test / 125 suite đạt; 206 test / 17 suite bỏ qua.
+- 29 test SRS, 11 định dạng/grounding, 12 cổng duyệt chuyên môn; 2.160 biến thể số đo nằm trong một test riêng.
+- 19 kiểm tra kết quả, 14 cờ/route, 79 hộp quà, âm thanh 131+28+19, state/permission/privacy và tư vấn/hội thoại đạt.
+- TypeScript và i18n đạt. Lint không có error; các file lớn còn warning style/hook, không tính là sạch warning.
+- 30/30 lượt thật trong 10s, P95 2632ms; 0 lỗi đầu ra theo bộ kiểm tra sau lọc, không phải chứng nhận lâm sàng.
+- 3 ảnh toàn khung thật qua React Native Web: 390px sáng, 390px dark, 360px chữ130%; không tràn, link/đóng hoạt động. API/TTS/router dùng spies, chưa thay thiết bị thật.
+
+Các vòng cải tiến (không chọn lọc giấu kết quả):
+ac4-ac5-fix: 7/30 ca dùng dự phòng, P95 2596ms.
+ac4-ac5-final: 3/30 ca dùng dự phòng, P95 2359ms.
+ac4-ac5-accept: 3/30 ca dùng dự phòng, P95 2463ms.
+ac4-ac5-release: 2/30 ca dùng dự phòng, P95 2632ms.
+
+AC-9 và cách dùng:
+1. Người có chuyên môn mở clinical-review.html, đọc dữ kiện/30 kết luận và chọn từng kết quả.
+2. Điền họ tên/chuyên môn; P6 đọc và đồng ý disclaimer Việt/Anh.
+3. Xuất biên bản JSON. Không có nút duyệt tất cả và không có chức năng AI tự phê duyệt.
+4. Chạy lệnh kiểm dưới đây với file người duyệt đã hoàn thành. Template hiện tại cố ý thất bại.
+   npm run check:checkin-conclusion-approval -- --packet=/Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-ac4-ac5-release/clinical-review-packet.json --approval=<biên-bản-do-người-duyệt-hoàn-thành.json>
+5. Biên bản phải trùng bundle/output và source. Thay source/mẫu sẽ làm bản cũ không còn khớp. Công ty phải xác minh người duyệt và bằng cấp; tool không làm việc đó.
+
+Bundle: 74036a41d35cdea6033a476c31bc305a8e37c9bf2bdcb37d83485d38432d78d0
+Phiếu: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-ac4-ac5-release/clinical-review.html
+Báo cáo: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-ac4-ac5-release/index.html
+Ma trận: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-ac4-ac5-release/srs-matrix.json
+
+Credits sau benchmark cuối: 21.6444; quan sát giảm 0.138 cho 33 lượt. Header làm tròn và dùng chung tài khoản.
+Không reset tài khoản hoặc tạo/gửi ca thật. Không thêm migration. Chưa commit/push/deploy trong vòng này.
+Đã nạp bản sửa vào backend local: /api/healthz HTTP 200; Metro 8081/8082 vẫn chạy.

@@ -1,0 +1,76 @@
+Encryption operations and acceptance status, 2026-11-02
+
+Protection scope
+Production PostgreSQL data and both Redis data directories reside on LUKS2.
+Selected text/JSON fields also use application AES-256-GCM: see
+src/security/health-field-specs.js. IVR uses authenticated envelopes in
+doctor_ivr_*.*_enc columns. Numeric measurements, many SQL filter columns and
+other JSON fields are not all encrypted at application level. LUKS protects
+stored blocks, not a compromised running process/root or an authorized DB read.
+Do not claim end-to-end encryption or application encryption of every column.
+
+OpenBao and readiness
+OpenBao remains a single Shamir node, threshold 3 of 5, on VPS 103. Its storage
+is outside the CRM LUKS volume, so the volume does not contain its own unlock
+service. Applications keep keys in memory for at most 300 seconds after the
+last successful refresh. Readiness checks must fail after those keys expire;
+liveness stays separate so a health checker does not erase a useful cache by
+restarting the application during a key-service outage.
+
+The independent operations timer checks seal status, readiness and backup
+freshness once a minute, reporting technical incident codes to the existing
+Sentry project. Never attach application payloads, customer identifiers,
+credentials, keys or unseal shares. Confirm notification routing in Sentry;
+an accepted ingest response alone does not prove a human received a message.
+
+Backups
+Main/Doctor/OpenBao keep their existing daily encrypted jobs. CRM adds an
+hourly age-encrypted custom PostgreSQL backup, with at least two copies and
+14-day retention. Shared configuration archives are now streamed through age.
+Private age identities stay off VPS. Legacy clear files may be retired only
+after the encrypted replacement is copied off-host, decrypted there and its
+digest matches. Deleting a file is not proof of erasing cloud snapshots or SSD
+blocks; obtain those lifecycle details from the VPS provider.
+
+Recovery objectives
+Engineering targets with successful jobs are a backup age under 26 hours for
+main/Doctor/OpenBao and under 2 hours for CRM. These are monitoring thresholds,
+not a contractual RPO/RTO. The owner must approve business recovery objectives.
+Record measured restore time from the actual rehearsal. Off-host backup transfer
+and separate recovery material are necessary for loss of an entire VPS.
+
+Cold-boot acceptance procedure (maintenance window required)
+1. Confirm fresh encrypted DB backups, OpenBao snapshot, key bundles, LUKS
+   headers and certificates; validate an isolated restore before stopping a VPS.
+2. Confirm an authorized operator can access offline recovery and can unseal
+   through scripts/openbao-operator.py with asinu-ops SSH key authentication.
+3. Reboot VPS 103 first. OpenBao is expected to remain sealed with Shamir.
+   Confirm the alert, unseal manually, then verify storage guard, CRM/n8n data
+   mounts, DB/Redis, API/worker and read-only business checks.
+4. With OpenBao healthy, reboot VPS 36; verify mount identity before DB/API
+   startup, key readiness, encrypted reads and the supervised check-in workflow.
+5. Record timestamps, downtime, failures and recovery actions. Do not mark the
+   whole-VPS reboot criterion passed after a service-only restart or mock test.
+
+Outstanding owner/admin decisions
+Independent KMS/HSM identity is required for a defensible auto-unseal design.
+Three independent voting nodes are needed for Raft to tolerate one node loss;
+two voters on two VPS do not provide that availability. Do not store a quorum
+of Shamir shares on either server as an auto-unseal workaround.
+Assign share holders and perform a controlled rekey after custody is agreed;
+splitting copies of an existing combined recovery bundle does not revoke prior
+copies. On 2026-11-02 the owner approved one-time quorum administrator recovery.
+The operator now can set auto_rotate_period only for asinu-health, asinu-doctor,
+asinu-crm and asinu-crm-volume. It cannot change other key parameters, grant
+policies or change authentication roles. All four rotation periods remain zero
+until a rotation interval is selected. Recovery was closed, the original service
+configuration restored and both temporary root tokens revoked after the grant.
+See openbao-rotation-permission-20261102.txt. Never persist a root token.
+CRM off-server copy
+The dedicated asinu-crm-backup-pull timer copies only age ciphertext to the
+second VPS. The private SSH identity is generated there, has no root shell or
+sudo on the source, and cannot request arbitrary files. Host keys are pinned.
+The age decryption identity remains off both VPS. The source completion time is
+preserved so retrying an old file cannot reset the freshness alarm. Integrity
+checks cover the entire transferred ciphertext; operator decryption/restore
+validation is a separate recovery drill.

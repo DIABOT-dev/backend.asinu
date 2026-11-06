@@ -1,0 +1,81 @@
+Rotation permission change prepared on 2026-11-02
+
+Deployment completed on 2026-11-02, owner-authorized recovery
+The reviewed grant is active in the production operator ACL. Existing rules were
+preserved. Only auto_rotate_period can be written on the four exact key config
+paths; ACL/auth administration, key export and data decryption remain denied.
+The complete maintenance sequence took 8.754 seconds. Readiness probes for all
+three backends stayed at HTTP 200 in the observed samples. No application
+containers were restarted. Read-only authentication of all 122 existing tracked
+ciphertext values passed after the change (46 Asinu, 4 Doctor, 72 CRM).
+
+Both the recovered root token and a separate non-renewable root token limited to
+300 seconds were revoked and their subsequent lookup attempts returned 403.
+The listener temporarily accepted recovery only on loopback with original mTLS.
+The original configuration SHA-256 was restored exactly; the legacy recovery
+endpoint again returned 405. The 90-second emergency restoration timer was
+disarmed and the temporary listener config removed. A fresh post-change Raft
+snapshot was encrypted, copied off both VPS and authenticated with age.
+
+This deployment grants permission; it does not select a rotation interval.
+All four keys remain at version 1 with auto_rotate_period=0. Source grant:
+deploy/openbao/operator-rotation-policy.hcl. Sanitized acceptance evidence:
+docs/evidence/openbao-rotation-grant-20261102.json.
+
+Production state before approval
+The offline operator can already POST to rotate all four Transit keys. It cannot
+update key configuration, edit ACLs, change certificate roles or initiate the
+authenticated generate-root workflow. All four keys remain at version 1 with
+auto_rotate_period=0. No production ACL or key version changed during preparation.
+
+Requested grant
+Append deploy/openbao/operator-rotation-policy.hcl to the existing operator ACL.
+Preserve the existing ACL verbatim and retain its protected rollback copy. The
+new exact paths permit only auto_rotate_period for asinu-health, asinu-doctor,
+asinu-crm and asinu-crm-volume. Additional parameters, including exportable,
+allow_plaintext_backup, deletion_allowed, min_decryption_version and
+min_encryption_version, are excluded. Application roles receive no new rights.
+Permission to set a schedule does not itself choose or enable a rotation period.
+
+Validation already performed
+An OpenBao 2.7.2 development instance ran in a separate Linux network namespace,
+using in-memory synthetic data and a temporary private log. Four schedule writes
+succeeded; every unsafe parameter and unrelated key schedule was rejected with
+403. Existing manual rotation remained available. ACL/auth administration stayed
+forbidden. The disposable instance and temporary log were removed.
+scripts/test-openbao-rotation-policy.py reproduces this test under unshare --net.
+Never start the test against production or supply production key material.
+
+Before production, a separate persistent Raft rehearsal also verified the full
+3-of-5 recovery, root-token revocation, ACL grant and restart with recovery closed.
+The temporary disable_unauthed_generate_root_endpoints=false setting belongs
+inside the listener block, not at the top level of the server configuration.
+
+Application procedure with an existing authorized administrator
+1. Check the administrator's effective permission to read/update the operator ACL.
+2. Read and save the current operator ACL in a private local backup directory.
+3. Append the reviewed HCL grant without replacing unrelated existing rules.
+4. Write the updated ACL using the authenticated admin API.
+5. Log in again as the operator. Check update capability on the four config
+   paths, and check that policy/auth administration and key export stay denied.
+6. Verify application readiness, key metadata and encrypted reads. Take a fresh
+   encrypted OpenBao snapshot. Record the ACL digest and observed capabilities.
+7. Roll back to the saved ACL if verification fails. Revoke a task-specific
+   temporary administrator token immediately after finishing.
+
+Administrator recovery is a separate approved action
+The original bootstrap root token has been revoked. Existing operator credentials
+cannot authorize their own elevation. OpenBao 2.7.2 requires authentication for
+sys/generate-root-token; legacy unauthenticated generation is disabled by default.
+No storage tampering, copied root token or fallback credential is part of this
+change. If the owner selects quorum recovery, first agree its maintenance plan:
+use offline 3-of-5 recovery in memory, keep private recovery material off both
+VPS, narrowly bound the temporary recovery endpoint with existing mTLS/network
+controls, restore the original security setting, and revoke the resulting root
+token after this single ACL change. That route requires service restarts and
+explicit approval before altering the recovery setting.
+
+References
+https://openbao.org/docs/concepts/policies/
+https://openbao.org/docs/commands/operator/generate-root/
+https://openbao.org/community/deprecation/unauthed-generate-root/

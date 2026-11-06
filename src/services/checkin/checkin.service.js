@@ -7,7 +7,8 @@
  *   high_alert  — "Rất mệt", check lại sau 2h
  *   resolved    — Người dùng xác nhận đã ổn
  *
- * No-response escalation (smart alert via shouldAlertFamily):
+ * Routine "fine" monitoring never becomes a family alert just for missing a reply.
+ * No-response escalation for symptomatic sessions (smart alert via shouldAlertFamily):
  *   miss × 1 → push nhắc
  *   miss × 2+ → smart decision based on severity, age, time of day, history
  *     - high_severity → always alert
@@ -36,10 +37,12 @@ const { t } = require('../../i18n');
 const { getHonorifics } = require('../../lib/honorifics');
 const { createHash, randomUUID } = require('crypto');
 const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
+const { assessBloodPressure, bloodPressureMetricStatus } = require('../../lib/blood-pressure');
 const { buildCheckinContext, applyIllusion } = require('../../core/checkin/illusion-layer');
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 const logger = require('../../lib/logger');
 const checkinCallService = require('../checkin-call/checkin-call.service');
+const { isRoutineMonitoringCheckin } = require('./checkin-inactivity.policy');
 const console = { log: logger.debug, error: logger.error, warn: logger.warn };
 
 function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sessionDate) {
@@ -70,7 +73,7 @@ function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sess
 // ─── Priority map ────────────────────────────────────────────────
 const TYPE_PRIORITY = {
   emergency: 'critical',
-  checkin_followup_urgent: 'critical',
+  checkin_followup_urgent: 'high', // Legacy name for a repeated missed follow-up.
   health_alert: 'high',
   caregiver_alert: 'high',
   checkin_followup: 'high',
@@ -593,13 +596,17 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
 
   const persistedState = session.triage_state || {};
   const cached = persistedState.completed;
-  if (
-    cached &&
-    cached.fingerprint ===
-      triageFingerprint(previousAnswers, requestLang || persistedState.lang || 'vi')
-  )
-    return cached.result;
-  if (cached)
+  const cachedMatches =
+    cached?.fingerprint ===
+    triageFingerprint(previousAnswers, requestLang || persistedState.lang || 'vi');
+  const cachedResult =
+    cachedMatches && cached.result?.isDone ? structuredClone(cached.result) : null;
+  // The first CAS reserves an answer; it does not prove that completion and
+  // next_checkin_at were committed. Recover the saved answer after a failed
+  // completion write, without calling AI again or reporting a false success.
+  if (cachedResult && cached.finalized !== false && session.triage_completed_at)
+    return cachedResult;
+  if (cached && !cachedMatches)
     throw Object.assign(new Error('Check-in is complete; start a new follow-up'), {
       code: 'TRIAGE_CHANGED',
       statusCode: 409,
@@ -625,27 +632,29 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
     ? persistedState.baseline_answers || session.triage_messages || []
     : [];
 
-  const result = await getNextTriageQuestion({
-    status: isFollowUpPhase
-      ? session.current_status || session.initial_status
-      : session.initial_status,
-    phase: isFollowUpPhase ? 'followup' : 'initial',
-    lang: selectedLang,
-    profile,
-    healthContext,
-    previousAnswers,
-    previousSessionSummary: session.triage_summary || null,
-    previousTriageMessages: prevTriageMessages,
-    previousSeverity:
-      persistedState.previous_severity || (isFollowUpPhase ? session.triage_severity : null),
-    forceConclusion: previousAnswers.length >= 8,
-    bodyLocation: session.body_location || null,
-    bodyLocations:
-      session.body_locations || (session.body_location ? [session.body_location] : null),
-    bodyLocationOther: session.body_location_other || null,
-    pool,
-    userId,
-  });
+  const result =
+    cachedResult ||
+    (await getNextTriageQuestion({
+      status: isFollowUpPhase
+        ? session.current_status || session.initial_status
+        : session.initial_status,
+      phase: isFollowUpPhase ? 'followup' : 'initial',
+      lang: selectedLang,
+      profile,
+      healthContext,
+      previousAnswers,
+      previousSessionSummary: session.triage_summary || null,
+      previousTriageMessages: prevTriageMessages,
+      previousSeverity:
+        persistedState.previous_severity || (isFollowUpPhase ? session.triage_severity : null),
+      forceConclusion: previousAnswers.length >= 8,
+      bodyLocation: session.body_location || null,
+      bodyLocations:
+        session.body_locations || (session.body_location ? [session.body_location] : null),
+      bodyLocationOther: session.body_location_other || null,
+      pool,
+      userId,
+    }));
 
   // ── Illusion Layer: enhance response with continuity/empathy/progress ──
   try {
@@ -703,7 +712,13 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
     previous_severity:
       persistedState.previous_severity || (isFollowUp ? session.triage_severity : null),
     ...(result.isDone
-      ? { completed: { fingerprint: triageFingerprint(previousAnswers, selectedLang), result } }
+      ? {
+          completed: {
+            fingerprint: triageFingerprint(previousAnswers, selectedLang),
+            result,
+            finalized: false,
+          },
+        }
       : {}),
   };
   // Reject a stale concurrent response instead of overwriting a newer answer.
@@ -724,7 +739,10 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
       [checkinId, userId]
     );
     const completed = latest.rows[0]?.triage_state?.completed;
-    if (completed?.fingerprint === triageFingerprint(previousAnswers, selectedLang))
+    if (
+      completed?.fingerprint === triageFingerprint(previousAnswers, selectedLang) &&
+      completed.finalized !== false
+    )
       return completed.result;
     throw Object.assign(new Error('Check-in changed; reload the latest conversation'), {
       code: 'TRIAGE_CHANGED',
@@ -820,6 +838,7 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
     // Invalidate health score cache so home screen updates immediately
     await cacheDel(`health:score:${userId}`);
     nextState.completed.result = result;
+    nextState.completed.finalized = true;
     await pool.query(
       `UPDATE health_checkins SET triage_state = $1::jsonb
        WHERE id=$2 AND triage_state->>'revision' = $3`,
@@ -1083,6 +1102,8 @@ async function triggerEmergency(pool, userId, location) {
  * age, time of day, and severity — instead of a simple miss count check.
  */
 async function shouldAlertFamily(pool, userId, session) {
+  if (isRoutineMonitoringCheckin(session))
+    return { shouldAlert: false, reason: 'routine_monitoring' };
   // 1. Check user response history (last 7 days)
   const historyRes = await pool.query(
     `SELECT no_response_count, initial_status, triage_severity, created_at
@@ -1177,6 +1198,7 @@ async function runCheckinFollowUps(pool) {
 
   for (const session of overdue) {
     const newMissCount = session.no_response_count + 1;
+    const routineMonitoring = isRoutineMonitoringCheckin(session);
 
     if (newMissCount === 1) {
       // First miss → push + in-app nhắc
@@ -1187,8 +1209,9 @@ async function runCheckinFollowUps(pool) {
       // {{callName}}, {{CallName}}). Trước đây chỉ list 4 → template dùng
       // {{CallName}} (PascalCase) không được fill → render literal.
       const hParams = { ...h };
-      const msg =
-        session.flow_state === 'high_alert'
+      const msg = routineMonitoring
+        ? t('checkin.followup_monitoring', sLang, hParams)
+        : session.flow_state === 'high_alert'
           ? t('checkin.followup_high_alert', sLang, hParams)
           : t('checkin.followup_normal', sLang, hParams);
 
@@ -1236,9 +1259,13 @@ async function runCheckinFollowUps(pool) {
         pool,
         session.user_id,
         session.push_token,
-        'checkin_followup_urgent',
+        routineMonitoring ? 'checkin_followup' : 'checkin_followup_urgent',
         t('checkin.no_response_title', sLang2, hParams2),
-        t('checkin.no_response_body', sLang2, hParams2),
+        t(
+          routineMonitoring ? 'checkin.followup_monitoring' : 'checkin.no_response_body',
+          sLang2,
+          hParams2
+        ),
         { checkinId: String(session.id) }
       );
       sent++;
@@ -1509,6 +1536,7 @@ async function getPendingCaregiverAlerts(pool, caregiverId) {
             cac.resent_at, cac.checkin_id,
             u.display_name, u.full_name,
             hc.current_status, hc.flow_state, hc.resolved_at,
+            hc.triage_severity, hc.emergency_triggered,
             EXTRACT(EPOCH FROM (NOW() - cac.sent_at))/3600 AS hours_since_sent
      FROM caregiver_alert_confirmations cac
      JOIN users u ON u.id = cac.patient_id
@@ -1520,22 +1548,24 @@ async function getPendingCaregiverAlerts(pool, caregiverId) {
      ORDER BY cac.sent_at DESC`,
     [caregiverId, STALE_HOURS]
   );
-  return rows.map((r) => {
-    const hoursSinceSent = Number(r.hours_since_sent) || 0;
-    const sessionDone = ['resolved', 'monitoring'].includes(r.flow_state) || r.resolved_at;
-    // 'active' nếu fresh + session active. Else 'missed'.
-    const state = hoursSinceSent < ACTIVE_THRESHOLD_HOURS && !sessionDone ? 'active' : 'missed';
-    return {
-      alertId: r.alert_id,
-      alertType: r.alert_type,
-      sentAt: r.sent_at,
-      checkinId: r.checkin_id,
-      patientName: r.full_name || r.display_name || t('brain.relative_fallback'),
-      currentStatus: r.current_status,
-      flowState: r.flow_state,
-      state, // 'active' | 'missed' — FE render UI khác nhau
-    };
-  });
+  return rows
+    .filter((r) => r.alert_type === 'emergency' || !isRoutineMonitoringCheckin(r))
+    .map((r) => {
+      const hoursSinceSent = Number(r.hours_since_sent) || 0;
+      const sessionDone = ['resolved', 'monitoring'].includes(r.flow_state) || r.resolved_at;
+      // 'active' nếu fresh + session active. Else 'missed'.
+      const state = hoursSinceSent < ACTIVE_THRESHOLD_HOURS && !sessionDone ? 'active' : 'missed';
+      return {
+        alertId: r.alert_id,
+        alertType: r.alert_type,
+        sentAt: r.sent_at,
+        checkinId: r.checkin_id,
+        patientName: r.full_name || r.display_name || t('brain.relative_fallback'),
+        currentStatus: r.current_status,
+        flowState: r.flow_state,
+        state, // 'active' | 'missed' — FE render UI khác nhau
+      };
+    });
 }
 
 /**
@@ -1552,11 +1582,13 @@ async function runAlertConfirmationFollowUps(pool) {
     `SELECT cac.*, u.push_token,
             COALESCE(u.language_preference, 'vi') AS cg_lang,
             p.display_name AS patient_name, p.full_name AS patient_full_name,
+            hc.current_status, hc.flow_state, hc.triage_severity, hc.emergency_triggered,
             uc.relationship_type,
             CASE WHEN uc.requester_id = cac.patient_id THEN 'requester' ELSE 'addressee' END as patient_side
      FROM caregiver_alert_confirmations cac
      JOIN users u ON u.id = cac.caregiver_id
      JOIN users p ON p.id = cac.patient_id
+     LEFT JOIN health_checkins hc ON hc.id = cac.checkin_id
      LEFT JOIN user_connections uc ON
        (uc.requester_id = cac.patient_id AND uc.addressee_id = cac.caregiver_id)
        OR (uc.requester_id = cac.caregiver_id AND uc.addressee_id = cac.patient_id)
@@ -1567,6 +1599,8 @@ async function runAlertConfirmationFollowUps(pool) {
   );
 
   for (const alert of rows) {
+    // Also ignore false routine-monitoring alerts created by older versions.
+    if (alert.alert_type !== 'emergency' && isRoutineMonitoringCheckin(alert)) continue;
     // Skip if alertFamily already sent a caregiver_alert to this caregiver within the resend interval
     const { rows: recentNotif } = await pool.query(
       `SELECT 1 FROM notifications WHERE user_id = $1 AND type = 'caregiver_alert' AND created_at >= $2 LIMIT 1`,
@@ -1937,14 +1971,20 @@ async function getHealthScore(pool, userId) {
 
   // 3. Latest BP (last 24h)
   const { rows: bpRows } = await pool.query(
-    `SELECT bp.systolic
+    `SELECT bp.systolic, bp.diastolic,
+            TO_CHAR(ob.date_of_birth, 'YYYY-MM-DD') AS date_of_birth, ob.birth_year
      FROM blood_pressure_logs bp
      JOIN logs_common lc ON lc.id = bp.log_id
+     LEFT JOIN user_onboarding_profiles ob ON ob.user_id = lc.user_id
      WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '24 hours'
      ORDER BY lc.occurred_at DESC LIMIT 1`,
     [userId]
   );
   const systolic = bpRows[0]?.systolic ?? null;
+  const diastolic = bpRows[0]?.diastolic ?? null;
+  const bpProfile = { dateOfBirth: bpRows[0]?.date_of_birth, birthYear: bpRows[0]?.birth_year };
+  const bpAssessment = assessBloodPressure(systolic, diastolic, bpProfile);
+  const bpStatus = bloodPressureMetricStatus(systolic, diastolic, bpProfile);
 
   // 4. Compute level
   let level = 'ok';
@@ -1970,9 +2010,10 @@ async function getHealthScore(pool, userId) {
     level = 'danger';
     factors.push('glucose_very_low');
   }
-  if (systolic !== null && systolic > 180) {
+  if (bpStatus === 'danger') {
     level = 'danger';
-    factors.push('systolic_very_high');
+    if (Number(systolic) >= 180) factors.push('systolic_very_high');
+    if (Number(diastolic) >= 120) factors.push('diastolic_very_high');
   }
 
   // Monitor conditions (only upgrade if not already danger)
@@ -1989,9 +2030,11 @@ async function getHealthScore(pool, userId) {
       level = 'monitor';
       factors.push('glucose_high');
     }
-    if (systolic !== null && systolic >= 140 && systolic <= 180) {
+    if (bpStatus === 'monitor') {
       level = 'monitor';
-      factors.push('systolic_high');
+      if (Number(systolic) >= 120) factors.push('systolic_high');
+      if (Number(diastolic) >= 80) factors.push('diastolic_high');
+      if (bpAssessment.low) factors.push('blood_pressure_low');
     }
   }
 

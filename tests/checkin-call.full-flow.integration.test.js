@@ -170,6 +170,9 @@ describeDatabase('check-in call six-account full flow', () => {
       expect(finalResult[0].rows[0].count).toBe(baseline.users);
       expect(finalResult[1].rows[0].count).toBe(baseline.episodes);
     } finally {
+      // startCheckin uses the shared cache; close its socket/retry timer even
+      // when SQL fixture cleanup fails, so the completed suite can terminate.
+      require('../src/lib/redis').getRedis().disconnect();
       await pool.end();
     }
   });

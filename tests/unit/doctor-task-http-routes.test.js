@@ -27,6 +27,7 @@ jest.mock('../../src/middleware/upload.middleware', () => ({
   },
 }));
 jest.mock('../../src/controllers/doctor-task.controller', () => ({
+  screenDoctorConsultation: jest.fn(),
   requestDoctorTask: jest.fn(),
   submitDoctorRating: jest.fn(),
   requestDoctorPrivacy: jest.fn(),
@@ -56,6 +57,7 @@ app.use('/doctor', router);
 app.use((_error, _req, res, _next) => res.status(500).json({ ok: false, code: 'INTERNAL_ERROR' }));
 
 const routes = [
+  ['post', '/screening', 'screenDoctorConsultation'],
   ['post', '/tasks', 'requestDoctorTask'],
   ['get', '/tasks', 'listDoctorTasks'],
   ['get', '/tasks/:taskId/messages', 'listDoctorMessages'],
@@ -76,8 +78,13 @@ const routes = [
 
 beforeEach(() => {
   jest.clearAllMocks();
+  requireAuth.mockReset().mockImplementation((req, _res, next) => {
+    req.user = { id: 42 };
+    req.middlewareOrder = ['auth'];
+    next();
+  });
   for (const [name, handler] of Object.entries(controller)) {
-    handler.mockImplementation((_pool, req, res) =>
+    handler.mockReset().mockImplementation((_pool, req, res) =>
       res.json({ handler: name, userId: req.user.id, middlewareOrder: req.middlewareOrder })
     );
   }

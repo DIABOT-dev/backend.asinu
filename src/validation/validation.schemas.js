@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { BP_LIMITS, bloodPressureNumber } = require('../lib/blood-pressure');
 const { t } = require('../i18n');
 const { careCircleInvitationRoleSchema, careCircleRelationshipSchema } = require('./care-circle-family.schemas');
 
@@ -35,7 +36,7 @@ const passwordSchema = z
 const chatRequestSchema = z.object({
   message: z.string().min(1).max(2000),
   client_ts: z.number(),
-  context: z.record(z.any()).optional(),
+  context: z.record(z.string(), z.any()).optional(),
 });
 
 const onboardingIssueItemSchema = z
@@ -138,8 +139,8 @@ const logBaseSchema = z.object({
   occurred_at: z.string().min(1),
   source: z.string().optional(),
   note: z.string().optional().nullable(),
-  metadata: z.record(z.any()).optional(),
-  data: z.record(z.any()),
+  metadata: z.record(z.string(), z.any()).optional(),
+  data: z.record(z.string(), z.any()),
 });
 
 const numberField = (min, max) =>
@@ -164,11 +165,11 @@ const glucoseSchema = z.object({
 });
 
 const bpSchema = z.object({
-  systolic: numberField(50, 250),
-  diastolic: numberField(30, 150),
-  pulse: numberFieldOptional(30, 220),
-  unit: z.string().optional(),
-});
+  systolic: z.preprocess(bloodPressureNumber, z.number().min(BP_LIMITS.systolicMin).max(BP_LIMITS.systolicMax)),
+  diastolic: z.preprocess(bloodPressureNumber, z.number().min(BP_LIMITS.diastolicMin).max(BP_LIMITS.diastolicMax)),
+  pulse: z.preprocess(value => value === undefined || value === null || (typeof value === 'string' && !value.trim()) ? undefined : bloodPressureNumber(value), z.number().min(BP_LIMITS.pulseMin).max(BP_LIMITS.pulseMax).optional()),
+  unit: z.preprocess(value => typeof value === 'string' && value.trim().toLowerCase() === 'mmhg' ? 'mmHg' : value, z.literal('mmHg').optional()),
+}).refine(value => value.systolic > value.diastolic, { path: ['diastolic'], message: 'Systolic pressure must be greater than diastolic pressure' });
 
 const weightSchema = z.object({
   weight_kg: numberField(10, 400),

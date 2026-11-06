@@ -82,6 +82,13 @@ function buildPayload(data = {}, action = 'INCOMING_CALL') {
     aps: { 'content-available': 1 },
     type: data.callType === 'doctor_ivr' ? 'doctor_ivr_call' : 'checkin_call',
     ...(data.callType === 'doctor_ivr' ? { callType: 'doctor_ivr' } : {}),
+    ...(data.callType === 'medication' ? {
+      type: 'medication_call', callType: 'medication', medCall: true,
+      medDoseId: data.medDoseId || '', medConsentId: data.medConsentId || '',
+      callUUID: data.callUUID || data.attemptId, ringDeadline: data.ringDeadline || '',
+      declineCapability: data.declineCapability || '', statusCapability: data.statusCapability || '',
+      nativeDeclineToken: data.nativeDeclineToken || '', nativeDeclinePath: data.nativeDeclinePath || '',
+    } : {}),
     checkinCall: true,
     action,
     episodeId: data.episodeId || '',

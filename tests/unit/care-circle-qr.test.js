@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const http = require('http');
 const express = require('express');
 const request = require('supertest');
 
@@ -127,14 +128,25 @@ test('authenticated QR endpoints ignore supplied owner ids and preserve opaque r
   // requests/suites when the next fixture happens to reuse the same port.
   app.use((_req, res, next) => { res.setHeader('Connection', 'close'); next(); });
   app.use(express.json()); app.use('/circle', routes(pool));
-  expect((await request(app).post('/circle/qr-token')).status).toBe(401);
-  expect(pool.query).not.toHaveBeenCalled();
-  const response = await request(app).post('/circle/qr-token').set('Authorization', 'test-session').send({ owner_user_id: 99 });
-  expect(response.status).toBe(201);
-  expect(response.body).toEqual({ ok: true, token: stored, value: `asinu-lite://care-circle/scan?token=${stored}` });
-  expect(pool.query.mock.calls[0][1][0]).toBe(7);
-  const preview = await request(app).post('/circle/qr-token/preview').set('Authorization', 'test-session').send({ token: stored });
-  expect(preview.body).toEqual({ ok: true, preview: { name: 'Parent', avatarUrl: null } });
-  const invalid = await request(app).post('/circle/qr-token/preview').set('Authorization', 'test-session').send({ token: 'bad' });
-  expect(invalid.status).toBe(400);
+  // Own one listener and one non-pooling client for the complete HTTP fixture,
+  // rather than creating/closing a new ephemeral server for every assertion.
+  const server = http.createServer(app);
+  const httpAgent = new http.Agent({ keepAlive: false });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  try {
+    expect((await request(server).post('/circle/qr-token').agent(httpAgent)).status).toBe(401);
+    expect(pool.query).not.toHaveBeenCalled();
+    const response = await request(server).post('/circle/qr-token').agent(httpAgent).set('Authorization', 'test-session').send({ owner_user_id: 99 });
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({ ok: true, token: stored, value: `asinu-lite://care-circle/scan?token=${stored}` });
+    expect(pool.query.mock.calls[0][1][0]).toBe(7);
+    const preview = await request(server).post('/circle/qr-token/preview').agent(httpAgent).set('Authorization', 'test-session').send({ token: stored });
+    expect(preview.body).toEqual({ ok: true, preview: { name: 'Parent', avatarUrl: null } });
+    const invalid = await request(server).post('/circle/qr-token/preview').agent(httpAgent).set('Authorization', 'test-session').send({ token: 'bad' });
+    expect(invalid.status).toBe(400);
+  } finally {
+    httpAgent.destroy();
+    server.closeAllConnections();
+    await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
 });

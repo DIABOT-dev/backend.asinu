@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { z } = require('zod');
+const { screeningAnswerSchema } = require('./doctor-screening.service');
 
 const EMPTY_CLINICAL_SUPPORT = Object.freeze({
   policy_version: crypto
@@ -28,6 +29,8 @@ const doctorTaskRequestSchema = z
         progression: z.enum(['improving', 'stable', 'worsening']),
         severity: z.enum(['mild', 'moderate', 'severe']),
         emergency_confirmation: z.literal(true),
+        screening_answers: z.array(screeningAnswerSchema).max(5).optional(),
+        screening_locale: z.enum(['vi', 'en']).optional(),
       })
       .strict(),
     consent_version: z.string().trim().min(1).max(80),
@@ -288,7 +291,7 @@ const doctorAiAssistSchema = doctorMessageQuerySchema
                 version: z.string().trim().min(1).max(80),
                 rule_type: z.enum(['observation_threshold', 'symptom_duration']),
                 severity: z.enum(['soon', 'urgent', 'emergency']),
-                config: z.record(z.unknown()),
+                config: z.record(z.string(), z.unknown()),
                 patient_message: z.string().trim().min(1).max(1000),
                 expert_message: z.string().trim().min(1).max(1000),
                 source_document_id: z.string().uuid(),
@@ -391,8 +394,15 @@ const buildDoctorTaskEnvelope = ({ user, input }) => {
         status: 'accepted',
         version: input.consent_version,
       },
-      legal_screening: screenRemoteCareSuitability(input),
-      clinical_intake: input.clinical_intake,
+      legal_screening: input.screening_result || screenRemoteCareSuitability(input),
+      // Keep the signed Doctor contract stable. The full, server-rendered
+      // screening record travels in summary and is persisted in the outbox.
+      clinical_intake: {
+        symptom_onset: input.clinical_intake.symptom_onset,
+        progression: input.clinical_intake.progression,
+        severity: input.clinical_intake.severity,
+        emergency_confirmation: input.clinical_intake.emergency_confirmation,
+      },
     },
   };
 };

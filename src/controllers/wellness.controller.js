@@ -20,7 +20,7 @@ const activitySchema = z.object({
     'QUESTION_ANSWERED',
     'QUESTION_SKIPPED',
   ]),
-  activity_data: z.record(z.any()).optional().default({}),
+  activity_data: z.record(z.string(), z.any()).optional().default({}),
   session_id: z.string().optional(),
   occurred_at: z.string().datetime().optional(),
 });
@@ -29,7 +29,7 @@ const _sendAlertSchema = z.object({
   alert_type: z.enum(['INFO', 'WARNING', 'URGENT', 'EMERGENCY']),
   title: z.string().min(1),
   message: z.string().min(1),
-  context_data: z.record(z.any()).optional(),
+  context_data: z.record(z.string(), z.any()).optional(),
 });
 
 // =====================================================

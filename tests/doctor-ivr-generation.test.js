@@ -79,11 +79,7 @@ test('question generation retains the age, conditions and medication supplied by
       .concat(fixedFinal('Bác')),
   };
   callTextAi.mockResolvedValue({ content: JSON.stringify(content) });
-  const pool = {
-    query: jest.fn(async (sql) => ({
-      rows: sql.includes('SELECT id FROM users') ? [{ id: 1 }] : [],
-    })),
-  };
+  const pool = poolFixture();
   await doctorOperation(pool, {
     tenant_id: 'clinic-demo',
     task_id: 'generation-test',
@@ -134,11 +130,7 @@ test('repairs a schema-valid but ambiguous single-choice question before returni
   callTextAi
     .mockResolvedValueOnce({ content: JSON.stringify(invalid) })
     .mockResolvedValueOnce({ content: JSON.stringify(valid) });
-  const pool = {
-    query: jest.fn(async (sql) => ({
-      rows: sql.includes('SELECT id FROM users') ? [{ id: 1 }] : [],
-    })),
-  };
+  const pool = poolFixture();
   const result = await doctorOperation(pool, {
     tenant_id: 'clinic-demo',
     task_id: 'quality-generation',
@@ -188,11 +180,7 @@ test('does not ask onset again when the patient already gave a concrete duration
   callTextAi
     .mockResolvedValueOnce({ content: JSON.stringify(invalid) })
     .mockResolvedValueOnce({ content: JSON.stringify(valid) });
-  const pool = {
-    query: jest.fn(async (sql) => ({
-      rows: sql.includes('SELECT id FROM users') ? [{ id: 1 }] : [],
-    })),
-  };
+  const pool = poolFixture();
   const result = await doctorOperation(pool, {
     tenant_id: 'clinic-demo',
     task_id: 'known-onset',
@@ -229,11 +217,18 @@ const failedDraft = () => ({
     },
   ],
 });
-const poolFixture = () => ({
-  query: jest.fn(async (sql) => ({
-    rows: sql.includes('SELECT id FROM users') ? [{ id: 1 }] : [],
-  })),
-});
+const poolFixture = ({ supplement = false } = {}) => {
+  const query = jest.fn(async (sql) => ({
+    rows: sql.includes('SELECT id FROM users')
+      ? [{ id: 1 }]
+      : sql.includes('MAX(version)')
+        ? [{ n: 1 }]
+        : supplement && sql.includes('SELECT is_supplement,status')
+          ? [{ is_supplement: false, status: 'reported' }]
+          : [],
+  }));
+  return { query, connect: jest.fn(async () => ({ query, release: jest.fn() })) };
+};
 const generate = (pool, data = {}) =>
   doctorOperation(pool, {
     tenant_id: 'clinic-demo',
@@ -382,7 +377,7 @@ test('repairs a one-question supplement without adding unrelated questions', asy
       replacements: [{ index: 0, text: 'Bác có uống trà buổi chiều không?' }],
     }),
   });
-  const { content } = await generate(poolFixture(), { supplement: true });
+  const { content } = await generate(poolFixture({ supplement: true }), { supplement: true });
   expect(content.questions).toHaveLength(2);
   expect(content.questions.at(-1).id).toBe('q_final');
 });
@@ -405,4 +400,86 @@ test('repairs multiple compound questions by index while preserving the order, c
   expect(content.questions[1].text).toBe(draft.questions[1].text);
   expect(content.questions[2].text).toBe('Bác có uống trà buổi chiều không?');
   expect(content.questions[2].options[0]).toMatchObject({ label: 'Có', suggested_red_flag: true });
+});
+
+test('automatically persists an encrypted AI draft and restores it without another provider call', async () => {
+  const draft = failedDraft();
+  draft.questions[2].text = 'Bác có uống trà buổi chiều không?';
+  callTextAi.mockResolvedValue({ content: JSON.stringify(draft) });
+  const pool = poolFixture();
+  const generated = await generate(pool);
+  expect(generated.question_set_id).toEqual(expect.any(String));
+  expect(generated.version).toBe(1);
+  const inserts = pool.query.mock.calls.filter(([sql]) =>
+    sql.startsWith('INSERT INTO doctor_ivr_question_sets(')
+  );
+  expect(inserts).toHaveLength(1);
+  const values = inserts[0][1];
+  expect(values.slice(1, 7)).toEqual(['clinic-demo', 'compound-generation', 1, 1, 'draft', 'ai']);
+  expect(values[7]).not.toContain(generated.content.title);
+  expect(
+    pool.query.mock.calls.some(([sql]) => sql.startsWith('INSERT INTO doctor_ivr_sessions('))
+  ).toBe(false);
+  const fallback = pool.query.getMockImplementation();
+  pool.query.mockImplementation(async (sql, args) => {
+    if (sql.startsWith('SELECT * FROM doctor_ivr_question_sets'))
+      return {
+        rows: [
+          {
+            id: values[0],
+            version: values[4],
+            status: values[5],
+            source: values[6],
+            content_enc: values[7],
+          },
+        ],
+      };
+    return fallback(sql, args);
+  });
+  const restored = await doctorOperation(pool, {
+    tenant_id: 'clinic-demo',
+    task_id: 'compound-generation',
+    app_user_id: '1',
+    doctor_id: 'doctor-test',
+    operation: 'list',
+  });
+  expect(restored.question_sets[0]).toMatchObject({
+    id: generated.question_set_id,
+    source: 'ai',
+    status: 'draft',
+    content: generated.content,
+  });
+  expect(callTextAi).toHaveBeenCalledTimes(1);
+});
+
+test('draft persistence failures do not spend more AI calls or report a successful generation', async () => {
+  const draft = failedDraft();
+  draft.questions[2].text = 'Bác có uống trà buổi chiều không?';
+  callTextAi.mockResolvedValue({ content: JSON.stringify(draft) });
+  const pool = poolFixture();
+  const fallback = pool.query.getMockImplementation();
+  pool.query.mockImplementation(async (sql, args) => {
+    if (sql.startsWith('INSERT INTO doctor_ivr_question_sets('))
+      throw new Error('draft storage unavailable');
+    return fallback(sql, args);
+  });
+  await expect(generate(pool)).rejects.toThrow('draft storage unavailable');
+  expect(callTextAi).toHaveBeenCalledTimes(1);
+  expect(pool.query.mock.calls.some(([sql]) => sql === 'ROLLBACK')).toBe(true);
+});
+
+test('a task closed during generation cannot save a draft or trigger another provider call', async () => {
+  const draft = failedDraft();
+  draft.questions[2].text = 'Bác có uống trà buổi chiều không?';
+  callTextAi.mockResolvedValue({ content: JSON.stringify(draft) });
+  const ownedTask = require('../src/services/integrations/doctor-messaging.service').loadOwnedTask;
+  ownedTask
+    .mockResolvedValueOnce({ lifecycle_status: 'in_progress' })
+    .mockResolvedValueOnce({ lifecycle_status: 'completed' });
+  const pool = poolFixture();
+  await expect(generate(pool)).rejects.toMatchObject({ code: 'IVR_TASK_CLOSED' });
+  expect(callTextAi).toHaveBeenCalledTimes(1);
+  expect(
+    pool.query.mock.calls.some(([sql]) => sql.startsWith('INSERT INTO doctor_ivr_question_sets('))
+  ).toBe(false);
 });

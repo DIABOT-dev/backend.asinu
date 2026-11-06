@@ -1,0 +1,34 @@
+Asinu - Kiểm tra lại SRS kết luận check-in - 29/10/2026
+
+Phát hiện thêm và đã sửa:
+- Chọn tiếng Anh vẫn có thể nhận lời model tiếng Việt hoặc trộn ngôn ngữ.
+- Prompt nhắc rõ ngôn ngữ ở đầu/cuối; kiểm tra riêng từng khối và thay bằng câu dự phòng đúng ngôn ngữ nếu model không tuân thủ.
+- Dịch tên bệnh nền đã biết trong câu ghép server; giữ nhãn bệnh tùy chỉnh khi chưa có bản dịch, không để nhãn đó che văn xuôi sai ngôn ngữ.
+- Thêm 9 test hồi quy cho tiếng Anh, khối trộn ngôn ngữ, bệnh nền và tương thích tiếng Việt.
+- Giữ bộ luật mức độ và mẫu cấp cứu nguyên nguồn; không thay calculateConclusion.
+
+Kết quả sau sửa:
+- Backend: 1.660 test / 126 suite đạt; 206 test / 17 suite bỏ qua theo cấu hình, không tính là đã kiểm.
+- Chấm điểm theo dõi cũ: 238 kiểm tra đạt; parser 19/19.
+- App: 19 test kết quả, 79 hộp quà, 23 thực hành, 25 request check-in khớp API, 14 cờ/route; tư vấn/hội thoại, âm thanh, trạng thái, quyền, bảo mật cache và API toàn app đạt.
+- TypeScript, i18n, lint backend các file sửa và git diff --check đạt.
+- 30 ca gọi model mới sau sửa: 1/30 dùng dự phòng = 3,33%; AC-4 đạt. Lý do duy nhất: explanation_sentence_count ở respiratory-3, chỉ thay khối đó.
+- 30/30 trong 10 giây, P95 2742 ms; 0 lỗi đầu ra theo bộ kiểm tra sau lọc. Kết quả này không phải duyệt lâm sàng.
+- 6 layout thật qua React Native Web: Việt/Anh, sáng/tối, 320–390px, chữ 100/130/200%; không tràn ngang, không lỗi JS, link và nút đóng hoạt động. API/router/TTS được giả lập; chưa chạy binary trên thiết bị thật.
+- Backend local đã nạp bản sửa, health HTTP 200; Metro 8081/8082 đang chạy. Không reset tài khoản, không thêm migration, chưa deploy VPS.
+
+Ghi nhận vòng chưa đạt:
+- retest-20261029-1: AC-4 1/30, nhưng đọc trực tiếp phát hiện ca en trả tiếng Việt. Không dùng báo cáo máy ở vòng đó để kết luận đạt E8; đã ghi manual-review-correction.json.
+- retest-lang-fix: bộ 30 ca mới sau sửa mới là kết quả nghiệm thu kỹ thuật hiện tại.
+- Tổng hai vòng là 66 lượt trả phí, đều fixture giả lập, không đọc dữ liệu sức khỏe người dùng.
+
+AC-9 vẫn chưa hoàn tất:
+- Người có chuyên môn đọc 30 mẫu mới, P6 duyệt disclaimer Việt/Anh tại clinical-review.html.
+- Tất cả quyết định đang pending; lệnh kiểm từ chối hồ sơ chưa duyệt. Packet cũ bị nhận diện là source đã đổi sau sửa.
+- Bundle mới: a86f64f80ec88c07b9a332943b50abe0dc81bc5d83f94a15bb8e4d7d5606dc27
+- Xác minh danh tính/bằng cấp thuộc đơn vị vận hành; phần mềm không làm việc đó.
+
+Credits quan sát cuối: 21.3640. Vòng cuối 33 lượt (3 prompt + 30 ca) giảm 0.1418 theo header tài khoản; số dư làm tròn và có thể gồm sử dụng đồng thời.
+Log kiểm tra: /tmp/asinu-srs-retest-20261029-1
+Báo cáo + ảnh + kết luận mẫu: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-retest-lang-fix/index.html
+Phiếu duyệt AC-9 bản mới: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-retest-lang-fix/clinical-review.html

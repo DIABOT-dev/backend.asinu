@@ -1,0 +1,84 @@
+NGHIỆM THU KỸ THUẬT SRS AI KẾT LUẬN SAU CHECK-IN — 04/11/2026
+
+KẾT LUẬN
+AC-1 đến AC-8 đạt các kiểm tra kỹ thuật trên bộ mẫu và môi trường local ở lượt cuối.
+Chưa ký nghiệm thu toàn bộ SRS hoặc bật cho người dùng thật: AC-0 có hồ sơ thử prompt lịch sử và hướng P2 đã được người dùng đồng ý; không tự điền điểm/chữ ký Founder cho bản prompt sửa. AC-9 và P6 chờ người có chuyên môn duyệt.
+Chỉ dùng dữ liệu giả lập. Không sửa database người dùng, không gửi thông báo/cuộc gọi.
+
+SỬA PRODUCTION
+- Mở rộng từ điển bệnh gồm common cold/cảm lạnh và các tên bệnh thông dụng, đối chiếu bệnh đã khai theo nhóm đồng nghĩa. Chặn cả cách gọi bệnh như một nguyên nhân thường gặp nếu chưa khai.
+- Giữ dấu với tên ngắn dễ lẫn: chàm không đồng nghĩa với chậm, cúm không đồng nghĩa với cụm. Chặn chàm/cúm thật; vẫn cho phép ăn chậm và đặt hẹn.
+- Kiểm tra định tính chỉ số theo đúng chủ ngữ huyết áp/đường huyết và vị ngữ trạng thái. It is good to consider không còn bị hiểu là huyết áp good. Những câu is very high, has been normal, đang ở mức cao, hơi thấp khi chưa có số đo vẫn bị chặn.
+- Prompt chỉ cho gọi tên bệnh đã khai, không ép triệu chứng liên hệ với bệnh nền, không khẳng định có hoặc không có quan hệ khi chưa đủ dữ liệu.
+- Tách giải thích ngắn, nhắc bệnh nền và câu chưa đủ căn cứ thành các câu riêng khi không có số đo mới; giữ giới hạn 25 chữ/câu và bộ lọc cấm. Không bỏ qua kiểm tra để giảm dự phòng.
+- Giữ nguyên calculateConclusion, toàn bộ triage-engine.js và triage-ai-layer.js, needsDoctor/needsFamilyAlert/followUpHours và luồng cấp cứu. Không đổi disclaimer cố định hoặc cờ phát hành.
+
+MA TRẬN TIÊU CHÍ
+AC-0: Đã có bài 5 prompt x 3 lần và hồ sơ lịch sử; người dùng đã đồng ý hướng P2. Điểm/chốt nội dung cuối của Founder thuộc bước duyệt con người, không tự ghi thay. Không merge main hoặc mở cho người thật trong tác vụ.
+AC-1: Hai ca gốc Ngủ ko ngon giấc và mệt/khó ngủ/ăn kém/đau nhức/buồn + mỡ máu cao chạy thật, đủ 6 khối, không cấp cứu/chẩn đoán trong lời AI, một mốc hẹn. Một khối giải thích ca ngủ dùng dự phòng vì model dùng cụm bị cấm; không che giấu trường hợp này.
+AC-2: Bộ kiểm tra xác nhận nhắc bệnh nền đã khai; giá trị/đơn vị/giờ đo thật trong 24h, so sánh lịch sử cùng loại. Không có 24h thì không trích số cũ, không bịa ổn định/cao/thấp. Các mối liên hệ y khoa và độ hữu ích vẫn để chuyên gia đọc mẫu.
+AC-3: 0 đầu ra vi phạm tên bệnh mới, thuốc/liều hoặc mức đi khám trong 30 ca nghiệm thu; đối chiếu mở rộng 62 đầu ra cũng không còn lỗi theo tiêu chí kỹ thuật đã định nghĩa. Từ điển và regex hữu hạn, không phải chứng minh an toàn cho mọi đầu vào.
+AC-4: Bộ nghiệm thu 2/30 = 6,67%, dưới 10%; cả hai do HTTP429 từ nhà cung cấp, không retry/loại mẫu. Bộ sâu 0/30. Hai ca gốc 1/2 dùng một khối dự phòng, được báo riêng; không trộn để làm đẹp tỷ lệ bộ 30.
+AC-5: Disclaimer nguyên văn FR-4 ở 100% trong 62 kết luận không cấp cứu. 19 test frontend kiểm thứ tự sáu khối, nền riêng, không có nút đóng, bấm liên kết mở flow chuyên gia và nút riêng theo needsDoctor. Nhánh cấp cứu không hiển thị disclaimer.
+AC-6: Hai file luật/luồng cấp cứu có SHA256 trùng trước sửa. Toàn bộ backend: 132 suite / 1824 test đạt; 19 suite / 269 test bỏ qua theo cấu hình cũ, không tính là đạt. Sentry 8/8; phòng thử 36/36.
+AC-7: Bộ nghiệm thu P95 2508 ms (2,508 giây), 30/30 dưới 10 giây; bộ sâu P95 2576 ms, 30/30 dưới 10 giây. Hai ca gốc tối đa 3376 ms. Đo thời gian tạo kết luận backend, chưa đo mạng/thiết bị thực ngoài local.
+AC-8: Summary = khối 1 + 2, recommendation = khối 3 + 4; đúng trong 62 đầu ra. App nhận dữ liệu cũ/thiếu/sai theo giao diện legacy; 25 request contract và bộ test kết luận đạt.
+AC-9/P6: CHỜ DUYỆT. Đã tạo clinical-review.html, packet có hash nguồn/đầu ra và mẫu duyệt trống cho đúng 30 ca cuối. Kiểm tra mẫu trống trả recordComplete=false và P6_APPROVAL_MISSING đúng thiết kế. Không có chữ ký/đánh giá y tế giả.
+
+NGOẠI LỆ VÀ APP
+- E1–E4: không bệnh nền, không số đo mới, timeout/HTTP429/JSON sai và lỗi riêng khối có dự phòng theo nhóm; khối hợp lệ giữ lại.
+- E5: nhánh cấp cứu dùng nội dung cũ và không gọi AI; được kiểm bằng các test đã có, không chỉnh luật.
+- E6: trường assessmentIncomplete phải nói thiếu thông tin, không tự khẳng định không có dấu hiệu nguy hiểm.
+- E7: speechText chỉ 1 + 4 + 6, không đọc explanation/disclaimer; giữ giới hạn TTS.
+- E8/E10: Việt/Anh và xưng hô theo hồ sơ người bệnh, kể cả người thân check-in hộ, có kiểm thử.
+- Frontend: kết luận 19; contract 25; audio 131; màn cuộc gọi 28; hoàn tất 19; quà 82; practice 35 kiểm tra đạt. TypeScript và i18n vi/en đạt.
+- Chưa thực hiện thao tác/chụp màn native thật trong lượt này. Các xác nhận UI trên là kiểm tra component/runtime, không thay cho kiểm tra thiết bị.
+
+CÁC VÒNG SỬA ĐƯỢC GIỮ LẠI
+R1: bộ chính 1/30 dự phòng; bộ sâu 3/30 = 10%, chưa đạt do nhầm chậm/chàm và một mảng cảnh báo sai cấu trúc.
+R2: sau sửa đối chiếu có dấu, bộ chính 3/30 = 10%, chưa đạt vì câu dài/cụm bị cấm; bộ sâu 0/30.
+R3 cuối: bộ chính 2/30 do provider HTTP429, bộ sâu 0/30; đạt ngưỡng. Không chạy lại từng ca lỗi để thay mẫu.
+Sau gọi thật, mở rộng ngữ pháp định tính chỉ số; replay toàn bộ 62 đầu ra bằng source cuối, không đầu ra nào thay đổi. Thời gian phản hồi là số đo thật của cùng bản prompt; replay không được tính thành lượt MedGemma hay số đo độ trễ mới.
+42 hồi quy tạm đã qua, gồm lỗi cũ và các cách diễn đạt trạng thái thật. Replay 30 raw của lượt lỗi cũ xác nhận common cold bị thay bằng khối dự phòng, good to consider không bị loại oan.
+Bộ chấm độc lập không import validator production: 62/62 đạt. Bản checker đầu có 5 cờ sai vì bắt có thể làm như có thể là; đã giữ file gốc, sửa ranh giới cụm từ và kiểm lại, không sửa đầu ra.
+
+PHẦN ĐỂ NGƯỜI DUYỆT
+- Founder: đánh giá hiểu mình/có thông tin/dễ đọc và chốt bản prompt cuối; hồ sơ bước 0 giữ nguyên lịch sử.
+- Chuyên gia: tính đúng/đủ của giải thích bệnh nền, việc nên làm, dấu hiệu cần khám và các con số; không coi tỉ lệ dự phòng thấp là bằng chứng lâm sàng.
+- Một số khối giải thích còn thiên về nhắc bệnh nền hoặc lời khuyên chung; nội dung và mức hữu ích cần được người duyệt nhận xét trong bộ mẫu.
+- P6: nguyên văn disclaimer Việt/Anh. Cờ phát hành không đổi, không bật kết luận mới cho người dùng thật trước duyệt.
+
+LOCAL / DEPLOY / FILE TẠM
+Backend local đã restart đúng entry có keyring, /api/readyz HTTP200. Không có migration; không cần build lại app vì không đổi mobile.
+Không deploy VPS trong tác vụ kiểm thử này. Không merge main.
+Script test tạm được xoá sau chạy theo yêu cầu; không thêm test file vào source. Giữ log, raw JSON giả lập, dữ liệu kiểm tra và báo cáo để truy vết.
+
+TOKEN / CREDITS
+{
+  "requestsAcrossAllFixRounds": 193,
+  "tokensAcrossAllFixRounds": 230038,
+  "totalCostKnown": false,
+  "note": "No pre-first-call balance; account balance differences can include other concurrent use. 2 HTTP429 failures were retained, not retried.",
+  "highestObservedBalance": 24.3974,
+  "lowestObservedBalance": 23.6018,
+  "observedBalanceRange": 0.7956,
+  "balanceOrderingNote": "Separate suites ran concurrently; report observed extrema rather than treating file order as call order. This range excludes the first request cost and may include concurrent account use."
+}
+Không quy đổi token thành credits bằng giả định; chênh lệch tài khoản có thể có sử dụng đồng thời.
+
+BẰNG CHỨNG
+/Users/ducytcg123456/Desktop/APP/preview/checkin-srs-technical-acceptance-20261104
+Bộ 30 cuối và hồ sơ duyệt: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-ac-release-20261104
+Bộ sâu: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-acceptance-release-20261104
+Hai ca gốc: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-original-release-20261104
+Vòng lỗi cũ và replay sau sửa: /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-deep-objective-20261104
+
+BỔ SUNG KIỂM TRA CI
+CI cũ có 149 suite/2082 test đạt và 2 suite/11 test bỏ qua, nhưng job vẫn exit 1 do Redis ECONNREFUSED ghi log sau khi test kết thúc. CI chỉ khai Postgres, thiếu Redis mà các luồng tích hợp sử dụng.
+Đã bổ sung Redis 7 có healthcheck và REDIS_URL riêng cho job kiểm thử, không thay runtime/cache hoặc che log/lược test. Kết quả CI sau sửa và đường dẫn run được lưu tại ci-result.json trong bộ minh chứng kỹ thuật. Nhánh release chỉ kiểm thử/build, không tự deploy VPS.
+
+BỔ SUNG HẬU KIỂM TÍCH HỢP
+Sau khi có Redis, phát hiện suite checkin-call.full-flow.integration.test.js giữ kết nối cache khiến Jest không thoát. Hai suite API khác đã có teardown. Đã thêm disconnect trong finally của suite full-flow hiện có; không thêm file test mới, không sửa các assertion nghiệp vụ và không dùng forceExit.
+Dựng PostgreSQL database trống và Redis riêng, chạy migration rồi chạy toàn bộ Jest với Redis thật, không có mock chẩn đoán: 149 suite / 2082 test đạt; 2 suite / 11 test bỏ qua; exitCode=0, 23,926 giây. Database kiểm thử đã drop và Redis riêng đã dừng; không dùng/xoá database hay cache của ứng dụng hiện tại.
+Các lượt chẩn đoán có tracker tạm hoặc bị guard tên database/tìm module chặn chỉ dùng tìm nguyên nhân, không tính thành kết quả nghiệm thu; log vẫn được giữ. Lượt cuối ci-isolated-final.log và ci-isolated-final-status.json là bằng chứng bộ thật thoát sạch.
+Script theo dõi/runner tạm được xoá sau chạy; chỉ giữ thay đổi teardown của test đã có từ trước.

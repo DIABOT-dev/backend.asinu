@@ -1,3 +1,4 @@
+async function isV21MedicationUser(db,userId) { try { return !!(await db.query("SELECT v21_allowed($1,'medication') enabled",[userId])).rows[0]?.enabled; } catch(e) { if(e.code==='42883'||e.code==='42P01')return false;throw e; } }
 /**
  * Basic Notification Service — rule-based notifications with HH:MM support
  *
@@ -27,7 +28,7 @@ const TZ = 'Asia/Ho_Chi_Minh';
 // ─── Priority map ────────────────────────────────────────────────
 const TYPE_PRIORITY = {
   emergency: 'critical',
-  checkin_followup_urgent: 'critical',
+  checkin_followup_urgent: 'high',
   health_alert: 'high',
   caregiver_alert: 'high',
   checkin_followup: 'high',
@@ -294,7 +295,7 @@ async function runMorningSummary(pool, hour, minute, explicitOnly = false) {
         : '';
       tasks.push(t('notification.task.blood_pressure', lang, { last }));
     }
-    if (hasDailyMedication(user.daily_medication) && user.no_medication_today) {
+    if (!await isV21MedicationUser(pool, user.id) && hasDailyMedication(user.daily_medication) && user.no_medication_today) {
       tasks.push(t('notification.task.medication', lang));
     }
     if (user.no_log_today && tasks.length === 0) {
@@ -332,7 +333,7 @@ async function runMorningSummary(pool, hour, minute, explicitOnly = false) {
     const missingTypes = [];
     if (conditions.hasDiabetes && user.no_glucose_today) missingTypes.push('glucose');
     if (conditions.hasHypertension && user.no_bp_today) missingTypes.push('blood_pressure');
-    if (hasDailyMedication(user.daily_medication) && user.no_medication_today)
+    if (!await isV21MedicationUser(pool, user.id) && hasDailyMedication(user.daily_medication) && user.no_medication_today)
       missingTypes.push('medication');
 
     if (
@@ -449,7 +450,7 @@ async function runEveningSummary(pool, hour, minute, explicitOnly = false) {
     const lang = user.lang === 'en' ? 'en' : 'vi';
 
     const tasks = [];
-    if (hasDailyMedication(user.daily_medication) && user.no_medication_today) {
+    if (!await isV21MedicationUser(pool, user.id) && hasDailyMedication(user.daily_medication) && user.no_medication_today) {
       tasks.push(t('notification.task.evening_medication', lang));
     }
     if (user.no_evening_log) {
@@ -479,7 +480,7 @@ async function runEveningSummary(pool, hour, minute, explicitOnly = false) {
     }
 
     const missingTypes = [];
-    if (hasDailyMedication(user.daily_medication) && user.no_medication_today)
+    if (!await isV21MedicationUser(pool, user.id) && hasDailyMedication(user.daily_medication) && user.no_medication_today)
       missingTypes.push('medication');
     if (user.no_evening_log) missingTypes.push('log');
 
@@ -692,7 +693,8 @@ async function runBasicNotifications(pool, forceHour = null, forceMinute = null)
     results.push(await runTask('reengagement', () => runReengagement(pool, sendAndSave)));
   // Context-based alerts (severity high, trend worsening)
   results.push(await runTask('context_alerts', () => runContextAlerts(pool)));
-  // Checkin follow-ups are urgent — run independently (not subject to reminder gap)
+  // Process follow-ups independently; delivery still enforces quiet hours for
+  // patient reminders while genuine family/emergency alerts remain immediate.
   const [followUps, alertFollowUps] = await Promise.all([
     runTask('checkin_followups', () => runCheckinFollowUps(pool)),
     runTask('alert_confirmation_followups', () => runAlertConfirmationFollowUps(pool)),

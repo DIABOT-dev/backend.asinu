@@ -2,7 +2,7 @@ name: Backend CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'release/**']
   pull_request:
     branches: [main]
 
@@ -18,6 +18,15 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
       postgres:
         image: postgres:14
         env:
@@ -34,6 +43,7 @@ jobs:
     env:
       NODE_ENV: test
       LOG_LEVEL: error
+      REDIS_URL: redis://127.0.0.1:6379
       DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci_security_test
       CHECKIN_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci_security_test
       CHECKIN_PERSONALIZATION_TEST_DATABASE_URL: postgresql://asinu:asinu_test@127.0.0.1:5432/asinu_security_test_ci_security_test
@@ -48,7 +58,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '20.18.1'
+          node-version: '24'
           cache: npm
 
       - name: Install dependencies
@@ -57,7 +67,12 @@ jobs:
       - name: Install call audio encoder
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ffmpeg
+          sudo apt-get install -y --no-install-recommends ffmpeg age
+
+      - name: Operations monitor and encrypted-retirement regressions
+        run: |
+          python3 -m unittest discover -s deploy/openbao -p 'test_*.py'
+          python3 tests/security-crm-receiver.py
 
       - name: Deployment configuration regressions
         run: python3 -m unittest discover -s deploy -p 'test_auto_deploy.py'
@@ -78,7 +93,9 @@ jobs:
         run: node scripts/migrate.js
 
       - name: Test all suites, including PostgreSQL integration
-        run: npm test
+        run: |
+          npm test
+          node --test tools/medication-scan-lab/evaluate.test.cjs
 
       - name: Syntax check server entry
         run: npm run build

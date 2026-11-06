@@ -16,7 +16,7 @@ describe('check-in follow-up time references', () => {
     );
 
     expect(result.question.toLowerCase()).toMatch(/lần (?:check-in )?trước/);
-    expect(result.question).toContain('Bây giờ');
+    expect(result.question).toMatch(/(?:Bây|Hiện) giờ/);
     expect(result.question.toLowerCase()).not.toContain('hôm qua');
   });
 });

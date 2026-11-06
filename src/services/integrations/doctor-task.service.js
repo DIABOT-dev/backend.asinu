@@ -54,8 +54,16 @@ const stableJson = (value) => {
 };
 
 const comparableTaskEnvelope = (envelope) => {
-  const { occurred_at: _occurredAt, ...stableEnvelope } = envelope;
-  return stableJson(stableEnvelope);
+  const { occurred_at: _occurredAt, payload, ...stableEnvelope } = envelope;
+  const { screened_at: _screenedAt, ...legalScreening } = payload.legal_screening || {};
+  const { profile_version: _profileVersion, ...patientRef } = payload.patient_ref || {};
+  // These server timestamps can advance on an unchanged retry, including
+  // users.updated_at after consent is recorded. Compare the consultation data
+  // without replacing the original envelope already queued for delivery.
+  return stableJson({
+    ...stableEnvelope,
+    payload: { ...payload, legal_screening: legalScreening, patient_ref: patientRef },
+  });
 };
 
 const idempotencyConflict = (message) => {

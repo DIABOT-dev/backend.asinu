@@ -4,7 +4,13 @@ const express = require('express');
 const request = require('supertest');
 jest.mock('../../src/middleware/auth.middleware', () => ({
   requireAuth: (req, res, next) => {
-    if (!req.headers['x-test-user']) return res.status(401).json({ ok: false });
+    if (!req.headers['x-test-user'])
+      return res
+        .status(401)
+        .json({
+          ok: false,
+          testAuth: { method: req.method, path: req.path, headerNames: Object.keys(req.headers) },
+        });
     req.user = { id: Number(req.headers['x-test-user']) };
     next();
   },
@@ -85,14 +91,11 @@ test.each([
   { can_view_logs: 1 },
   { can_view_logs: true, owner_id: 8 },
 ])('invalid grant body %j cannot change permissions', async (body) => {
-  expect(
-    (
-      await request(app)
-        .put(`/circle/connections/${connectionId}/health-access`)
-        .set('x-test-user', '7')
-        .send(body)
-    ).status
-  ).toBe(400);
+  const result = await request(app)
+    .put(`/circle/connections/${connectionId}/health-access`)
+    .set('x-test-user', '7')
+    .send(body);
+  expect({ status: result.status, body: result.body }).toMatchObject({ status: 400 });
   expect(circle.updateHealthAccess).not.toHaveBeenCalled();
 });
 test('grant changes use the session owner, never an owner supplied by a client', async () => {
@@ -101,7 +104,7 @@ test('grant changes use the session owner, never an owner supplied by a client',
     .put(`/circle/connections/${connectionId}/health-access`)
     .set('x-test-user', '7')
     .send({ can_view_logs: true });
-  expect(result.status).toBe(200);
+  expect({ status: result.status, body: result.body }).toMatchObject({ status: 200 });
   expect(circle.updateHealthAccess).toHaveBeenCalledWith(pool, connectionId, 7, true, 'vi');
 });
 test('disabled Care Circle never loads member health', async () => {

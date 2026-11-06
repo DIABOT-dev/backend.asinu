@@ -1,0 +1,81 @@
+BÁO CÁO SỬA LỖI VÀ TEST LẠI SRS KẾT LUẬN CHECK-IN — 04/11/2026
+
+KẾT QUẢ KỸ THUẬT CỦA VÒNG MỚI: ĐẠT BỘ 30 CA GIẢ LẬP.
+AC-0/AC-9: không tự thay Founder, người có chuyên môn hay P6 duyệt.
+
+ĐÃ SỬA
+1. Chỉ loại các ngày lịch đầy đủ và hợp lệ ra khỏi bước dò tỷ số huyết áp không có đơn vị. Vì vậy 4/11/26 không còn tạo số đo giả 11/26.
+   Bước kiểm tra giá trị, đơn vị, ngày, giờ trên nội dung gốc vẫn chạy nguyên; số đo sai, số đo cũ khi 24h chưa đo và thiếu đơn vị vẫn bị chặn.
+2. System/prompt tiếng Anh yêu cầu dùng health expert/seek an assessment; không còn đưa cụm tiếng Việt chuyên gia vào hướng dẫn referral của tiếng Anh.
+   Bộ lọc sai ngôn ngữ giữ nguyên; không sửa/che kết quả sai bằng thay chữ sau khi model trả về.
+3. Giữ nguyên calculateConclusion, EMERGENCY_CONCLUSIONS, followUpHours và quy tắc cần chuyên gia/người thân.
+
+KIỂM TRA TRƯỚC VÀ SAU
+- Test tái hiện trước sửa: 4 lỗi có chủ đích, xác nhận đúng lỗi ngày và hướng dẫn ngôn ngữ.
+- Sau sửa: 158 kiểm tra chuyên biệt đạt, gồm số đo sai, đơn vị sai, mốc thời gian sai, ngày một chữ số và tiếng Anh lẫn tiếng Việt.
+- Toàn bộ backend khi còn test tạm: 133 suite đạt; 1844 test đạt; 19 suite/269 test bỏ qua theo cấu hình. Không coi test bỏ qua là đạt.
+- Theo yêu cầu người dùng, đã xoá file test ngày mới tạo và phần test ngôn ngữ bổ sung sau khi chạy xong. Test gốc của dự án vẫn giữ.
+- Frontend: 19 kiểm tra kết luận, contract 25 request, TypeScript, i18n vi/en đạt; chưa đổi UI hoặc luồng cấp cứu.
+
+MEDGEMMA THẬT — KHÔNG DÙNG DỮ LIỆU NGƯỜI DÙNG
+Model medgemma-27b-it, temperature 0.2, maxTokens 700, timeout 10000 ms, maxRetries 0.
+3 lượt prompt P2 đã tích hợp đều qua bộ lọc; sau đó 30 ca đủ 7 nhóm, bệnh nền/số đo mới-cũ, thiếu thông tin và tiếng Anh.
+{
+  "count": 30,
+  "fallbackCases": 0,
+  "fallbackBlocks": 0,
+  "p95Ms": 2248,
+  "within10s": 30,
+  "totalTokens": 37839
+}
+Audit replay độc lập tại thời điểm đánh giá gốc:
+{
+  "cases": 30,
+  "finalOutputIssues": 0,
+  "casesWithFinalOutputIssues": 0,
+  "casesUsingFallback": 0,
+  "fallbackRate": 0,
+  "ac4Pass": true,
+  "p95Ms": 2248,
+  "within10s": 30
+}
+- AC-4: từ 15/30 = 50% trước sửa xuống 0/30 = 0% ở lượt gọi mới, đạt yêu cầu <10%.
+- AC-7: P95 2248 ms (2,248 giây), 30/30 phản hồi trong 10 giây.
+- 0 vấn đề đầu ra còn lại theo các kiểm tra kỹ thuật đã định nghĩa. Không diễn giải thành chứng nhận an toàn lâm sàng.
+- Ca english-relative-checkin không còn dùng dự phòng trong lượt mới.
+
+DISLCAIMER / TƯƠNG THÍCH / TTS
+Bộ kiểm tra xác nhận disclaimer đúng key cố định; một lịch followUpHours; summary/recommendation cho app cũ; lời đọc chỉ gồm khối 1+4+6.
+UI disclaimer và liên kết chuyên gia đạt bộ kiểm tra tự động. Chưa kiểm trên thiết bị native thật trong lượt này.
+
+NGƯỜI DUYỆT
+Đã tạo clinical-review.html và clinical-review-packet.json cho 30 kết luận mới.
+Phiếu clinical-approval-template.json để trống. Kiểm tra mẫu trống trả recordComplete=false, gồm P6_APPROVAL_MISSING.
+Chưa có xác nhận người có chuyên môn/P6 cho vòng này; không tự ghi đã duyệt và không bật/triển khai production trong tác vụ này.
+Founder đã đồng ý hướng P2 trong hội thoại trước; bài thử nguyên văn P1-P5 của vòng trước là lịch sử, không thay bằng điểm Founder tự điền.
+
+TOKEN / CREDITS
+33 lượt thật: 37839 token.
+{
+  "source": "x-dr7-credit-remaining response header",
+  "before": 24.7922,
+  "after": 24.6569,
+  "observedAccountDebit": 0.1353,
+  "note": "Account balance differences can include concurrent requests. Token-based estimates and observed account debits are separate; neither reveals an independently audited invoice."
+}
+Số dư trước lấy từ lần quan sát header trước đó; chênh lệch tài khoản có thể gồm sử dụng đồng thời. Không quy đổi token thành credits theo giả định.
+
+ÁP DỤNG LOCAL
+Backend local đã nạp code mới và /api/readyz trả HTTP 200 sau restart; không có migration mới.
+
+BẰNG CHỨNG VÀ HỒ SƠ DUYỆT
+/Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-srs-fix-20261104
+- results.json: raw response và kết quả 33 lượt.
+- srs-audit.json: 30 đầu ra, từng lý do kiểm tra và hash source.
+- clinical-review.html: 30 mẫu cho người có chuyên môn đọc.
+- clinical-review-packet.json: hash bundle và mã phiên bản.
+- Các log trước/sau fix được giữ như bằng chứng báo cáo.
+Vòng thất bại trước sửa giữ nguyên tại /Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-implementation-20261029-srs-20261104.
+
+DỌN FILE TEST
+Không giữ file test mới hoặc script tạm của đợt này trong source. Chỉ giữ sửa production, chỉnh harness sẵn có và báo cáo/hồ sơ duyệt.

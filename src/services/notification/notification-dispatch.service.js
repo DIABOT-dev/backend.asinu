@@ -5,6 +5,7 @@ const { capitalizeFirstLetter } = require('../../lib/text-format');
 const {
   INACTIVITY_NOTICE_TYPE,
   suppressInactivityNotification,
+  isRoutineMonitoringCheckin,
 } = require('../checkin/checkin-inactivity.policy');
 const {
   canSendNonUrgent,
@@ -131,6 +132,12 @@ async function reserveNotification(
   if (isHealthMetricReminderSuppressed(type)) return null;
   return withNotificationTransaction(pool, userId, async (client) => {
     if (await suppressInactivityNotification(client, userId, type, data)) return null;
+    // Do not create a new private inbox entry after family alert access or the
+    // medication result preference changed while the event was queued.
+    if (
+      ['med_result', 'weekly_v21'].includes(type) &&
+      !(await hasCurrentRecipientPermission(client, { user_id: userId, type, data }))
+    ) return null;
     if (type === INACTIVITY_NOTICE_TYPE) {
       if (!(await hasCurrentRecipientPermission(client, { user_id: userId, type, data }))) return null;
       const receipt = await client.query(
@@ -238,6 +245,30 @@ async function reserveNotification(
 
 async function hasCurrentRecipientPermission(client, notification) {
   const data = notification.data || {};
+  if (notification.type === 'coin_card')
+    return require('../v21/greeting-cards.service').canDeliver(client, notification);
+  if (notification.type === 'med_result' && data.state === 'TAKEN' && data.patientId) {
+    const preferences = await client.query(
+      'SELECT problems_only FROM med_family_preferences WHERE patient_user_id=$1 AND caregiver_id=$2',
+      [data.patientId, notification.user_id]
+    );
+    if (preferences.rows[0]?.problems_only) return false;
+  }
+  if (notification.type === 'med_reminder') {
+    return (await client.query(`SELECT 1 FROM med_dose_events e JOIN med_schedules s ON s.id=e.schedule_id
+      JOIN user_notification_preferences n ON n.user_id=e.patient_user_id AND n.reminders_enabled
+      WHERE e.id=$1 AND e.patient_user_id=$2 AND e.state='CALLING' AND s.active
+        AND v21_allowed(e.patient_user_id,'medication') AND e.scheduled_at>NOW()-INTERVAL '2 hours'`,
+      [data.medDoseId, notification.user_id])).rows.length > 0;
+  }
+  if (['coin_card','med_schedule_changed','med_consent_pending','weekly_v21'].includes(notification.type)
+      && data.patientId && String(data.patientId) !== String(notification.user_id)) {
+    if (notification.type === 'weekly_v21') {
+      // Continue through the normal alert permission check below.
+    } else {
+      return require('../v21/common').hasConnection(client, data.patientId, notification.user_id);
+    }
+  }
   if (data.topic?.kind === 'medical_condition') {
     const profile = await client.query(
       'SELECT medical_conditions FROM user_onboarding_profiles WHERE user_id = $1',
@@ -273,10 +304,15 @@ async function hasCurrentRecipientPermission(client, notification) {
   if (!subjectId || String(subjectId) === String(notification.user_id)) return true;
   if (data.alertId && ['caregiver_alert', 'emergency'].includes(notification.type)) {
     const alert = await client.query(
-      'SELECT 1 FROM caregiver_alert_confirmations WHERE id = $1 AND caregiver_id = $2 AND confirmed_at IS NULL',
+      `SELECT hc.current_status, hc.flow_state, hc.triage_severity, hc.emergency_triggered
+         FROM caregiver_alert_confirmations cac
+         LEFT JOIN health_checkins hc ON hc.id = cac.checkin_id
+        WHERE cac.id = $1 AND cac.caregiver_id = $2 AND cac.confirmed_at IS NULL`,
       [data.alertId, notification.user_id]
     );
     if (!alert.rows.length) return false;
+    if (notification.type === 'caregiver_alert' && isRoutineMonitoringCheckin(alert.rows[0]))
+      return false;
   }
   const result = await client.query(
     `SELECT 1 FROM user_connections c
@@ -517,6 +553,7 @@ async function retryPendingNotifications(pool, limit = 50) {
 module.exports = {
   withNotificationTransaction,
   notificationEventKey,
+  hasCurrentRecipientPermission,
   reserveNotification,
   deliverNotification,
   retryPendingNotifications,

@@ -1,0 +1,97 @@
+ASINU V2.1 — NHẮC THUỐC VÀ XU
+Bàn giao triển khai ngày 30/10/2026
+
+1. Quyết định đã áp dụng
+- Cuộc gọi nhắc thuốc 07:00–21:00 theo múi giờ hồ sơ người nhận.
+- Nút 2 là Bỏ qua (SKIPPED): ghi nhận uống không đều, không gọi lại.
+- Không nghe: gọi lại sau 15 phút, tối đa 2 attempt/cữ.
+- Không đọc/liên kết liều lượng. Chỉ tên, loại và giờ do người dùng xác nhận.
+- Giá trị xu/quà dùng mức đề xuất SRS, có API nội bộ chỉnh; không tự bật toàn hệ thống.
+
+2. Đã viết
+Backend + migration 123_medication_and_coins.sql và 124_medication_receipt_audit_id.sql:
+- Lịch, thuốc/thực phẩm bổ sung, ảnh riêng tư, scan job, consent, snapshot cữ,
+  attempts, receipts, audit, outbox; tất cả trường chứa tên/ảnh/ghi chú/kết quả
+  nhận diện được mã hoá theo cơ chế health-field hiện có.
+- Chỉ chủ tài khoản trả lời/đồng ý; người thân đã kết nối có thể tạo lịch PENDING.
+  Người nhận duyệt rõ danh sách giờ đang chờ. Một lần tạo nhiều giờ có một lời
+  mời, một cuộc gọi xin đồng ý; không gọi nối tiếp từng giờ.
+- OCR qua nhà cung cấp lâm sàng hiện tại, med-gemini; bắt buộc đồng ý AI, xác nhận
+  từng mục, bỏ trường liều/công dụng, tên dài yêu cầu sửa; không tự kê lịch từ tên.
+- Lịch tối đa 4 giờ/ngày, gộp cữ gần nhau, 2 giờ nhận trả lời muộn, first answer
+  wins; bổ sung không tính vào chứng cứ đã uống thuốc/tuân thủ thuốc.
+- Ghi log medication, nối check-in gốc với source med_call, hộp quà chờ mở;
+  không sửa máy trạng thái hay schema checkin_call_*.
+- Thiết bị mới khai báo medCall gắn hash token; native tắt/không hỗ trợ/lỗi thì
+  push thường trong cùng attempt. Nhắc bị tắt thì không phát cữ.
+- Ledger xu append-only, balance khoá transaction, FIFO lot, hạn 12 tháng,
+  nhắc trước 7 ngày, hoàn xu giữ hạn của từng lot, cap mặc định 42/ngày + thưởng tuần.
+- Quà chỉ thiệp cố định đã duyệt và phiếu kỳ bốc thăm hợp lệ đang mở. Không có mua
+  xu, chuyển xu, quà hiện vật, giảm giá IAP hoặc thêm lượt hộp quà.
+- Quyền Care Circle kiểm lại khi gửi thiệp; mất quyền thì hoàn xu.
+- Phiếu đổi xu đi cùng draw_tickets, CSV và kết quả kỳ quay hiện có.
+- Cron durable dựa trên DB, hàng đợi có receipt/lease, Sentry cho lỗi ngoài dự kiến.
+
+App:
+- Thẻ Việc hôm nay + số xu + từng nhiệm vụ; hiệu ứng xu sau thao tác được server
+  chấp nhận; kho quà, xác nhận, thiếu xu, lịch sử và thể lệ.
+- Tạo lịch 4 bước: ảnh/nhập/đọc tên → kiểm từng mục → giờ ăn/ngủ → duyệt giờ.
+- Chọn người nhận, lịch chờ/đang chạy/từ chối, sửa/xoá, tổng kết tuần,
+  tuỳ chọn chỉ báo khi cần hỗ trợ có toast sau lưu thành công.
+- Xin đồng ý nhiều giờ trong một màn; 3 nút Đã uống/Bỏ qua/Hết thuốc; xem tên/ảnh
+  trong app, không đưa tên thuốc vào âm thanh hoặc push.
+- Đường native iOS/Android, cold-start/foreground, Android push thường 3 nút.
+  Check-in/Doctor IVR được ưu tiên trước nhắc thuốc.
+- 12 bản ghi dự phòng VI/EN tạo bằng adapter giọng Asinu hiện có; manifest chứa
+  câu chữ + SHA256 để bàn giao duyệt P6. Không dùng giọng hệ thống thay thế.
+
+3. Cấu hình và local
+- Migration 123–124 đã áp dụng ở local; API port 3300 đã restart đúng runtime.
+- Tài khoản local 0338617203 (id 2) là pilot duy nhất: medication/coins/scan bật,
+  native_call_enabled=false. Không xoá dữ liệu hay tự tạo lịch cho tài khoản.
+- Local bật health-field encryption, key directory riêng có quyền 0700, ngoài repo.
+  Production dùng cấu hình key-management hiện có; không sao chép khoá local lên VPS.
+- Các cờ mặc định khi migrate mới đều false, greeting_templates chưa được duyệt
+  đều inactive. lucky_draw_enabled không được bật bởi phần V2.1.
+- Có thể test giao diện bằng development build hiện có sau reload. Native medCall
+  cần cài development build mới chứa bridge/native handlers mới.
+- Chưa deploy VPS trong lượt triển khai này.
+
+API nội bộ (x-cron-secret, chỉ server/admin; không đưa secret vào app):
+ GET/PUT /api/internal/config
+ GET/PUT /api/internal/coins/rules
+ GET /api/internal/rewards
+ PUT /api/internal/rewards/:code
+ PUT /api/internal/greeting-templates/:code (approved_by chỉ điền sau duyệt thật)
+Native cần cả MED_CALL_ENABLED=true trong runtime và native_call_enabled=true
+trong config, kèm capability của đúng token thiết bị mới.
+Tắt rollout bằng config; giữ dữ liệu/ledger để đối soát, không chạy DROP để rollback.
+
+4. Kiểm chứng và giới hạn nghiệm thu
+- Chạy npm run test:v21 tại backend: 79 test trên schema PostgreSQL local cô lập.
+- Backend Jest đầy đủ và test PostgreSQL cô lập: xem báo cáo HTML và log kèm theo.
+- Test hộp quà gốc giữ nguyên; có kiểm native, TypeScript, i18n, API contracts.
+- Android test là Robolectric/compile; iOS build là Simulator, không phải máy thật.
+- Ảnh giao diện là render source React Native qua web với dữ liệu giả lập,
+  không phải ảnh chụp bản cài trên điện thoại.
+- Bài ảnh: 20 ảnh bao bì thật, 7 sản phẩm, không có đơn in/viết tay, không có ảnh
+  mờ/lóa. Hai vòng 40 request. Vòng 2: 19 ảnh đọc được đúng tên, 1 ảnh từ chối
+  đúng; strict schema 18/20 trước chuẩn hoá. Không dùng kết quả để tự kê thuốc.
+- TTS đã tạo 12 bản cố định trong lượt này qua dịch vụ giọng hiện có; chưa đo
+  phí thực tế của tài khoản TTS. Thí nghiệm ảnh trước đó có báo cáo usage riêng.
+
+Còn phải xác nhận trước rollout rộng:
+- AC-A1: iPhone/Android thật khoá màn hình, 07:00 và 19:00, độ lệch <=1 phút.
+- AC-A4/A7/A8/A9/A13/A15: chứng minh push/CallKit/Telecom thật, kill/restart,
+  token hỏng, ưu tiên cuộc gọi, xoá lịch khi đang reo, ảnh ký hạn ngắn, native consent.
+  Native có kiểm tra trạng thái bằng capability chỉ đọc, có hạn 3 phút, không
+  lưu JWT; dừng cuộc gọi đã huỷ và chặn redirect sang host khác. Mạng/nền/kill
+  vẫn cần kiểm trên máy thật để xác nhận thời gian dừng thực tế.
+- AC-A10: P6 duyệt câu TTS và thông báo; nghe bản ghi thực tế, không chỉ đọc chữ.
+- AC-A12: 5 người (ít nhất 2 trên 55 tuổi), 3 món/1 đơn in, không gõ, dưới 90 giây.
+- AC-A14: Founder duyệt bài ảnh; cần mở rộng đơn in/viết tay và ảnh khó trước khi
+  xem chất lượng OCR là đủ cho mọi tình huống của SRS.
+- AC-B6: xác nhận thiệp tới thiết bị con trong 1 phút trên môi trường thật.
+- AC-B10: P3 duyệt mẫu thiệp; P6/thể lệ/đăng ký kỳ bốc thăm. Chưa tự duyệt hay bật.
+- Founder chốt các mức xu, giá quà, hạn 12 tháng và phạm vi rollout từ đề xuất SRS.
+Không ghi nhận các mục này là nghiệm thu hoàn tất bằng test tự động.

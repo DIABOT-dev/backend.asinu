@@ -307,11 +307,11 @@ test('conclusion ignores invented model history and uses the exact follow-up tim
   const result = await generateConclusion(state, profile);
   expect(result.summary).toContain('Tiêu chảy');
   expect(result.summary).not.toMatch(/đi kèm|chưa có biện pháp/);
-  expect(result.closeMessage).toContain('3 tiếng');
+  expect(result.closeMessage).toMatch(/3 (?:tiếng|giờ)/);
   expect(result.closeMessage).not.toContain('đã thông báo');
   const request = callTextAi.mock.calls[0][0];
-  expect(request.prompt).toContain('"actions_reported":null');
-  expect(request).toMatchObject({ timeoutMs: 5000, maxRetries: 0 });
+  expect(request.prompt).toContain('"viec_da_ke":[]');
+  expect(request).toMatchObject({ timeoutMs: 10000, maxTokens: 700, maxRetries: 0 });
 });
 
 test('unavailable AI still returns a grounded conclusion with the existing severity', async () => {
@@ -328,7 +328,7 @@ test('unavailable AI still returns a grounded conclusion with the existing sever
   );
   expect(result.summary).toContain('nặng hơn');
   expect(result.recommendation).toContain('đi khám');
-  expect(result.closeMessage).toContain('1 tiếng');
+  expect(result.closeMessage).toMatch(/1 (?:tiếng|giờ)/);
 });
 
 test('an AI emergency has personalized text without claiming a delivered family alert', async () => {

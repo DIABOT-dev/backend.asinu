@@ -1,0 +1,77 @@
+KIỂM TRA KHÁCH QUAN LẠI KẾT LUẬN CHECK-IN — 04/11/2026
+
+KẾT LUẬN
+AC-4 và AC-7 tiếp tục đạt trên bộ mẫu mới. Chưa đủ cơ sở gọi toàn bộ chất lượng giải thích y tế/độ hữu ích là đạt nghiệm thu.
+Không sửa prompt/bộ lọc/luật production, không đổi dữ liệu hoặc tiêu chí sau khi thấy kết quả, không gọi lại để chọn kết quả đẹp.
+
+THIẾT KẾ VÒNG NÀY
+30 ca giả lập: 15 tiếng Việt, 15 tiếng Anh; 7 nhóm triệu chứng; tuổi 29/35/56/72/84; cách kể, số đo và bối cảnh khác bộ cũ.
+Có số đo chỉ cũ, dưới 24 giờ, trên 24 giờ, bản ghi tương lai phải bỏ qua, so sánh 7 ngày, mg/dL, hai chỉ số cùng lúc, thiếu thông tin và check-in hộ.
+Dữ liệu và tiêu chí được ghi ra trước khi gọi model: frozen-inputs.json và frozen-criteria.json; có hash để đối chiếu.
+Bộ chấm riêng không import validateBlock, validatePresentation hay bộ lọc production. Dùng dữ liệu ca gốc để đối chiếu số đo và trường trả về.
+Vẫn quan sát log conclusion_rejected của production để đo tỷ lệ dự phòng đúng theo AC-4.
+
+KẾT QUẢ GỌI THẬT — GIỮ NGUYÊN TẤT CẢ 30 KẾT QUẢ
+{
+  "count": 30,
+  "englishCases": 15,
+  "vietnameseCases": 15,
+  "fallbackCases": 1,
+  "fallbackBlocks": 1,
+  "independentIssueCases": 2,
+  "independentIssues": 2,
+  "p95Ms": 2118,
+  "within10s": 30,
+  "totalTokens": 41401,
+  "sourceUnchanged": true,
+  "inputUnchanged": true,
+  "criteriaUnchanged": true
+}
+- AC-4: 1/30 = 3,33%, dưới 10%: đạt trên lượt này.
+- AC-7: P95 2118 ms (2,118 giây), 30/30 trong 10 giây: đạt trên lượt này.
+- Một ca english-incomplete-relative dùng dự phòng ở khối loi_nhan do model viết sai số câu. Các khối khác được giữ.
+- Không lặp lại để cố đưa số ca dự phòng về 0.
+- Source, đầu vào và tiêu chí có hash trùng trước/sau; không đọc/ghi dữ liệu sức khoẻ người thật.
+
+HAI CỜ SAI CỦA BỘ CHẤM RIÊNG
+Bộ chấm báo head-heldout-1 và respiratory-heldout-1 lệch mức đi khám.
+Đọc nguyên câu cho thấy Seek an assessment if ... vẫn là câu có điều kiện; chữ if đặt phía sau.
+Đây là lỗi nhận dạng của checker thử nghiệm, không phải bằng chứng AI tự nâng mức đi khám.
+Không thay kết quả gốc hay chạy lại checker để giấu hai cờ; xem review-notes.json để đọc cả câu và lý do đối chiếu.
+Sau đối chiếu này không còn cờ kỹ thuật chưa giải thích trong phạm vi các phép kiểm đã định nghĩa.
+
+CÁC ĐIỂM CHẤT LƯỢNG VẪN CẦN XỬ LÝ/DUYỆT
+1. other-heldout-1: model viết High cholesterol can sometimes be linked to skin dryness.
+2. musculoskeletal-heldout-1: model viết High cholesterol can sometimes be linked to general body discomfort.
+Hai liên hệ này không có bằng chứng hỗ trợ trong dữ liệu ca thử; không tự chấm là giải thích y tế đúng.
+NHS và AHA mô tả cholesterol cao thường không có triệu chứng, được xác định qua xét nghiệm máu. Nguồn này không xác nhận hai liên hệ model nêu.
+Đây là nhận xét cần chuyển người có chuyên môn kiểm tra, không phải chứng nhận y khoa của AI.
+3. respiratory-heldout-1: chỉ nói cholesterol cao là bệnh dài hạn cần theo dõi; chưa giải thích rõ nghẹt mũi/ho khan người dùng kể.
+4. original-insomnia-wording: mở đầu phần giải thích bằng Giấc ngủ rất quan trọng cho sức khỏe; đúng giọng phổ thông nhưng ít thông tin mới.
+Bộ lọc máy vẫn cho những câu này đi qua. Vì vậy không suy từ 0 lỗi regex sang đạt mục tiêu Asinu hiểu mình hoặc an toàn y khoa toàn diện.
+
+KIỂM TRA HỒI QUY
+179 kiểm tra backend liên quan kết luận đạt, 8 suite; 19 kiểm tra frontend kết luận đạt.
+Đây là lượt kiểm tra mới tập trung vào kết luận; không trình bày số test toàn repo của lượt trước thành số test chạy lại lần này.
+Không kiểm native device hoặc VPS production trong lượt này. Không sửa code tính năng, không restart hay bật production.
+
+TOKEN/CREDITS
+{
+  "calls": 30,
+  "totalTokens": 41401,
+  "firstObservedBalanceAfterFirstCall": 24.6529,
+  "lastObservedBalance": 24.5122,
+  "accountDebitExcludingFirstCall": 0.1407,
+  "totalChargeKnown": false,
+  "note": "No pre-first-call balance requested. Header differences can include concurrent account use."
+}
+
+HỒ SƠ
+/Users/ducytcg123456/Desktop/APP/preview/checkin-conclusion-objective-20261104
+results.json: raw model, đầu ra cuối, lý do dự phòng và cờ checker.
+frozen-inputs.json, frozen-criteria.json: bộ mẫu và tiêu chí trước chạy.
+review-notes.json: hai cờ sai của checker và các nhận xét chất lượng kèm nguyên văn.
+usage-summary.json, checker-metadata.json: token/credits, thông tin và giới hạn bộ chấm.
+Script test tạm được xoá sau khi lưu báo cáo theo yêu cầu; không thêm file test vào source.
+
+AC-9/P6 vẫn cần người thật duyệt. Không điền điểm Founder hay quyết định chuyên môn thay người duyệt.

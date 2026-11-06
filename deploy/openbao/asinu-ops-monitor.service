@@ -1,0 +1,16 @@
+[Unit]
+Description=Asinu key service, readiness and backup monitor
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/asinu-openbao/health-monitor.py --config /etc/asinu/operations-monitor.json
+UMask=0077
+TimeoutStartSec=110
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/asinu-ops-monitor
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

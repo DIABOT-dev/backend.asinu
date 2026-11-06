@@ -17,7 +17,10 @@ async function getStatus(pool, userId) {
   const cached = await cacheGet(cacheKey);
   // An entitlement must stop at the Store period end even if Redis still
   // holds an older paid snapshot (sandbox periods can be very short).
-  if (cached && (!cached.isAnTam || Date.parse(cached.expiresAt || '') > Date.now())) {
+  const validCount = cached && Number.isInteger(cached.protectedMemberCount) &&
+    Number.isInteger(cached.protectedMemberLimit) && cached.protectedMemberCount >= 0 &&
+    cached.protectedMemberCount <= cached.protectedMemberLimit;
+  if (cached && validCount && (!cached.isAnTam || Date.parse(cached.expiresAt || '') > Date.now())) {
     return cached;
   }
   const status = await entitlementService.getEntitlement(pool, userId);

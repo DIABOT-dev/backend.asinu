@@ -218,12 +218,12 @@ const loadPatientProfile = async (pool, req) => {
       [appUserId]
     ),
     pool.query(
-      `SELECT DISTINCT ON (LOWER(logs.med_name)) logs.med_name, logs.dose_text,
+      `SELECT logs.med_name, logs.dose_text,
               logs.frequency_text, common.occurred_at
          FROM logs_common common
          JOIN medication_logs logs ON logs.log_id = common.id
         WHERE common.user_id = $1
-        ORDER BY LOWER(logs.med_name), common.occurred_at DESC LIMIT 50`,
+        ORDER BY common.occurred_at DESC LIMIT 150`,
       [appUserId]
     ),
     pool.query(
@@ -248,7 +248,9 @@ const loadPatientProfile = async (pool, req) => {
     medical_conditions: Array.isArray(patient.medical_conditions) ? patient.medical_conditions : [],
     chronic_symptoms: Array.isArray(patient.chronic_symptoms) ? patient.chronic_symptoms : [],
     allergies,
-    medications: medications.rows,
+    medications: [...new Map(require('../../security/health-field-encryption')
+      .decryptHealthRows(appUserId, 'medication_logs', ['med_name'], medications.rows)
+      .reverse().map(row => [String(row.med_name).toLocaleLowerCase('vi'), row])).values()].slice(-50).reverse(),
     recent_symptoms: symptoms.rows,
     vitals: {
       blood_pressure: bloodPressure.rows.reverse(),
