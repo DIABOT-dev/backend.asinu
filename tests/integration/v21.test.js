@@ -19,8 +19,14 @@ jest.mock('../../src/lib/redis', () => ({
   cacheDel: jest.fn(async () => {}),
 }));
 jest.mock('../../src/services/notification/push.notification.service', () => ({
-  sendPushNotification: jest.fn(async () => [{ status: 'ok' }]),
+  sendPushNotification: jest.fn(async () => ({ ok: true })),
 }));
+jest.mock('../../src/services/notification/notification-quiet-hours.policy', () => {
+  const actual = jest.requireActual(
+    '../../src/services/notification/notification-quiet-hours.policy'
+  );
+  return { ...actual, getQuietHoursHoldUntil: jest.fn(actual.getQuietHoursHoldUntil) };
+});
 jest.mock('../../src/services/notification/fcm.notification.service', () => ({
   sendFcmNotification: jest.fn(async () => ({ ok: true })),
 }));
@@ -34,6 +40,13 @@ const c = require('../../src/services/v21/common'),
 const scan = require('../../src/services/v21/medication-scan.service'),
   maintenance = require('../../src/services/v21/maintenance.service'),
   messages = require('../../src/services/v21/messages.service');
+const greetingCards = require('../../src/services/v21/greeting-cards.service');
+const notificationDelivery = require('../../src/services/notification/notification-dispatch.service');
+const quietHours = require('../../src/services/notification/notification-quiet-hours.policy');
+const actualQuietHours = jest.requireActual(
+  '../../src/services/notification/notification-quiet-hours.policy'
+);
+const pushProvider = require('../../src/services/notification/push.notification.service');
 const source =
   fs.readFileSync(
     path.join(__dirname, '../../db/migrations/123_medication_and_coins.sql'),
@@ -190,6 +203,198 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       await tx.query('UPDATE coin_balances SET balance=$2 WHERE user_id=$1', [id, n]);
     });
   }
+  async function cardFixture() {
+    const sender = await user(),
+      recipient = await user();
+    await connect(sender, recipient);
+    await seedCoins(sender, 100);
+    await db.query(
+      "UPDATE greeting_templates SET active=TRUE,approved_by='synthetic-test-only',approved_at=NOW() WHERE code='MISS_YOU'"
+    );
+    const input = {
+      request_id: randomUUID(),
+      payload: { recipientId: recipient, templateCode: 'MISS_YOU' },
+    };
+    const result = await coins.redeem(db, sender, 'GREETING_CARD', input);
+    return { sender, recipient, input, id: result.redemption.id };
+  }
+  const forceCardJobDue = () =>
+    db.query(
+      "UPDATE v21_message_outbox SET next_at=NOW()-INTERVAL '1 second' WHERE kind='coin_card'"
+    );
+  const cardState = async (id) =>
+    (await db.query('SELECT status FROM reward_redemptions WHERE id=$1', [id])).rows[0].status;
+  const setQuietClock = (time) =>
+    quietHours.getQuietHoursHoldUntil.mockImplementation((n, p, tz) =>
+      actualQuietHours.getQuietHoursHoldUntil(n, p, tz, new Date(time))
+    );
+
+  test('card waiting overnight does not consume failure attempts or refund; morning retry sends once', async () => {
+    setQuietClock('2026-11-06T01:00:00+07:00');
+    try {
+      const card = await cardFixture();
+      pushProvider.sendPushNotification.mockClear();
+      for (let i = 0; i < 8; i++) {
+        await forceCardJobDue();
+        await messages.processMessages(db);
+      }
+      expect(await cardState(card.id)).toBe('PENDING');
+      expect((await coins.today(db, card.sender)).balance).toBe(50);
+      expect(pushProvider.sendPushNotification).not.toHaveBeenCalled();
+      const job = (await db.query("SELECT * FROM v21_message_outbox WHERE kind='coin_card'"))
+        .rows[0];
+      expect(job.attempts).toBe(0);
+      // Only the quiet-hours clock is replaced. PostgreSQL keeps its real
+      // clock, so the durable job must never be rescheduled into the past.
+      expect(job.next_at.getTime()).toBeGreaterThanOrEqual(
+        new Date('2026-11-06T06:00:00+07:00').getTime()
+      );
+      setQuietClock('2026-11-06T06:00:00+07:00');
+      await db.query(
+        "UPDATE notification_push_outbox SET next_attempt_at=NOW()-INTERVAL '1 second'"
+      );
+      await notificationDelivery.deliverNotification(db, job.notification_id);
+      await forceCardJobDue();
+      await messages.processMessages(db);
+      expect(await cardState(card.id)).toBe('DELIVERED');
+      expect(pushProvider.sendPushNotification).toHaveBeenCalledTimes(1);
+      expect((await coins.today(db, card.sender)).balance).toBe(50);
+    } finally {
+      quietHours.getQuietHoursHoldUntil.mockImplementation(actualQuietHours.getQuietHoursHoldUntil);
+    }
+  });
+
+  test('real exhausted provider attempts refund once and cancel the card push', async () => {
+    setQuietClock('2026-11-06T12:00:00+07:00');
+    pushProvider.sendPushNotification.mockResolvedValue({ ok: false });
+    try {
+      const card = await cardFixture();
+      for (let i = 0; i < 5; i++) {
+        await db.query(
+          "UPDATE notification_push_outbox SET next_attempt_at=NOW()-INTERVAL '1 second'"
+        );
+        await forceCardJobDue();
+        await messages.processMessages(db);
+      }
+      expect(await cardState(card.id)).toBe('REFUNDED');
+      expect((await coins.today(db, card.sender)).balance).toBe(100);
+      expect(
+        (
+          await db.query(
+            "SELECT o.state FROM notification_push_outbox o JOIN notifications n ON n.id=o.notification_id WHERE n.type='coin_card' AND n.data->>'redemptionId'=$1",
+            [card.id]
+          )
+        ).rows
+      ).toEqual([{ state: 'CANCELLED' }]);
+      await coins.refund(db, card.id);
+      expect((await coins.today(db, card.sender)).balance).toBe(100);
+    } finally {
+      pushProvider.sendPushNotification.mockResolvedValue({ ok: true });
+      quietHours.getQuietHoursHoldUntil.mockImplementation(actualQuietHours.getQuietHoursHoldUntil);
+    }
+  });
+
+  test('a legacy queued push for an already refunded card cannot deliver', async () => {
+    setQuietClock('2026-11-06T01:00:00+07:00');
+    try {
+      const card = await cardFixture();
+      await messages.processMessages(db);
+      await coins.refund(db, card.id);
+      const job = (
+        await db.query("SELECT notification_id FROM v21_message_outbox WHERE kind='coin_card'")
+      ).rows[0];
+      await db.query(
+        "UPDATE notification_push_outbox SET state='RETRY',next_attempt_at=NOW()-INTERVAL '1 second'"
+      );
+      pushProvider.sendPushNotification.mockClear();
+      setQuietClock('2026-11-06T06:00:00+07:00');
+      expect(
+        (await notificationDelivery.deliverNotification(db, job.notification_id)).skipped
+      ).toBe(true);
+      expect(pushProvider.sendPushNotification).not.toHaveBeenCalled();
+      expect(await cardState(card.id)).toBe('REFUNDED');
+    } finally {
+      quietHours.getQuietHoursHoldUntil.mockImplementation(actualQuietHours.getQuietHoursHoldUntil);
+    }
+  });
+
+  test('refund waits for a live delivery lease and never refunds a sent card', async () => {
+    setQuietClock('2026-11-06T01:00:00+07:00');
+    try {
+      const card = await cardFixture();
+      await messages.processMessages(db);
+      await db.query(
+        "UPDATE notification_push_outbox SET state='INFLIGHT',lease_until=NOW()+INTERVAL '1 minute'"
+      );
+      expect(await coins.refund(db, card.id)).toEqual({ deferred: true });
+      expect(await cardState(card.id)).toBe('PENDING');
+      expect((await coins.today(db, card.sender)).balance).toBe(50);
+      await db.query("UPDATE notification_push_outbox SET state='SENT',lease_until=NULL");
+      expect(await coins.refund(db, card.id)).toEqual({ delivered: true });
+      expect(await cardState(card.id)).toBe('DELIVERED');
+      expect((await coins.today(db, card.sender)).balance).toBe(50);
+    } finally {
+      quietHours.getQuietHoursHoldUntil.mockImplementation(actualQuietHours.getQuietHoursHoldUntil);
+    }
+  });
+
+  test('greeting content is snapshotted, retried idempotently, and only sender/connected recipient can open it', async () => {
+    const card = await cardFixture();
+    const original = (await greetingCards.read(db, card.sender, card.id)).card.template;
+    await db.query(
+      "UPDATE greeting_templates SET body='New template content' WHERE code='MISS_YOU'"
+    );
+    expect((await coins.redeem(db, card.sender, 'GREETING_CARD', card.input)).redemption.id).toBe(
+      card.id
+    );
+    expect((await greetingCards.read(db, card.sender, card.id)).card.template).toEqual(original);
+    const outsider = await user();
+    await expect(greetingCards.read(db, outsider, card.id)).rejects.toMatchObject({
+      statusCode: 404,
+    });
+    await greetingCards.open(db, card.sender, card.id);
+    expect(await cardState(card.id)).toBe('PENDING');
+    // Receiving a family card must work even outside the sender's coin rollout.
+    await db.query('UPDATE v21_config SET rollout_user_ids=$1', [[card.sender]]);
+    const response = await request(app)
+      .post(`/api/mobile/rewards/cards/${card.id}/open`)
+      .set(auth(card.recipient))
+      .send({})
+      .expect(200);
+    expect(response.body.card.template).toEqual(original);
+    expect(await cardState(card.id)).toBe('DELIVERED');
+    await coins.refund(db, card.id);
+    expect((await coins.today(db, card.sender)).balance).toBe(50);
+    await db.query("UPDATE user_connections SET status='rejected'");
+    await expect(greetingCards.read(db, card.recipient, card.id)).rejects.toMatchObject({
+      statusCode: 404,
+    });
+  });
+
+  test('delegated greeting collection enables only unapproved defaults and exposes preview copy', async () => {
+    await db.query(
+      "UPDATE greeting_templates SET body='Editor content',approved_by='fixture-editor',approved_at=NOW() WHERE code='BIRTHDAY'"
+    );
+    await db.query(
+      fs.readFileSync(
+        path.join(__dirname, '../../db/migrations/128_greeting_card_collection.sql'),
+        'utf8'
+      )
+    );
+    const rows = (await db.query('SELECT * FROM greeting_templates ORDER BY code')).rows;
+    expect(rows.find((t) => t.code === 'BIRTHDAY').body).toBe('Editor content');
+    expect(rows.find((t) => t.code === 'BIRTHDAY').active).toBe(false);
+    expect(
+      rows
+        .filter((t) => t.active)
+        .map((t) => t.code)
+        .sort()
+    ).toEqual(['MISS_YOU', 'NEW_YEAR']);
+    const card = await cardFixture();
+    expect(
+      (await coins.catalog(db, card.sender)).templates.every((t) => Boolean(t.body && t.body_en))
+    ).toBe(true);
+  });
   const draftSnapshot = () => ({
     version: 1,
     step: 2,

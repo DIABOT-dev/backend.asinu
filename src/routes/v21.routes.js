@@ -80,6 +80,15 @@ module.exports = (pool) => {
     '/rewards',
     json((req) => coins.catalog(pool, req.user.id))
   );
+  const greetingCards = require('../services/v21/greeting-cards.service');
+  r.get(
+    '/rewards/cards/:id',
+    json((req) => greetingCards.read(pool, req.user.id, req.params.id))
+  );
+  r.post(
+    '/rewards/cards/:id/open',
+    json((req) => greetingCards.open(pool, req.user.id, req.params.id))
+  );
   r.post(
     '/rewards/:code/redeem',
     json((req) => coins.redeem(pool, req.user.id, req.params.code, req.body))

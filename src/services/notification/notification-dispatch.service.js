@@ -245,6 +245,8 @@ async function reserveNotification(
 
 async function hasCurrentRecipientPermission(client, notification) {
   const data = notification.data || {};
+  if (notification.type === 'coin_card')
+    return require('../v21/greeting-cards.service').canDeliver(client, notification);
   if (notification.type === 'med_result' && data.state === 'TAKEN' && data.patientId) {
     const preferences = await client.query(
       'SELECT problems_only FROM med_family_preferences WHERE patient_user_id=$1 AND caregiver_id=$2',

@@ -1,6 +1,7 @@
 'use strict';
 const c = require('./common');
 const entitlement = require('../payment/entitlement.service');
+const greetingCards = require('./greeting-cards.service');
 
 async function addCredit(db, user, reason, ref, amount, date, expires) {
   const saved = (
@@ -142,7 +143,7 @@ async function history(pool, user, before) {
   return {
     items: (
       await pool.query(
-        'SELECT l.*,r.status reward_status,t.ticket_no FROM coin_ledger l LEFT JOIN reward_redemptions r ON r.ledger_id=l.id LEFT JOIN draw_tickets t ON t.redemption_id=r.id WHERE l.user_id=$1 AND ($2::bigint IS NULL OR l.id<$2) ORDER BY l.id DESC LIMIT 30',
+        'SELECT l.*,r.status reward_status,r.catalog_code,t.ticket_no FROM coin_ledger l LEFT JOIN reward_redemptions r ON r.ledger_id=l.id LEFT JOIN draw_tickets t ON t.redemption_id=r.id WHERE l.user_id=$1 AND ($2::bigint IS NULL OR l.id<$2) ORDER BY l.id DESC LIMIT 30',
         [user, cursor]
       )
     ).rows,
@@ -158,7 +159,7 @@ async function catalog(db, user) {
   ).rowCount;
   const templates = (
     await db.query(
-      'SELECT code,title,title_en FROM greeting_templates WHERE active AND approved_at IS NOT NULL ORDER BY code'
+      'SELECT code,title,title_en,body,body_en FROM greeting_templates WHERE active AND approved_at IS NOT NULL ORDER BY code'
     )
   ).rows;
   const draw = (
@@ -195,6 +196,11 @@ const redemptionSchema = c.z
       .default({}),
   })
   .strict();
+function requestPayload(payload) {
+  const input = { ...payload };
+  delete input.card;
+  return input;
+}
 async function redeem(pool, user, code, body) {
   const input = redemptionSchema.parse(body);
   await c.assertFeature(pool, user, 'coins');
@@ -208,7 +214,7 @@ async function redeem(pool, user, code, body) {
     if (old) {
       if (
         old.catalog_code !== code ||
-        !require('node:util').isDeepStrictEqual(old.payload, input.payload)
+        !require('node:util').isDeepStrictEqual(requestPayload(old.payload), input.payload)
       )
         throw c.error('COIN_REQUEST_CHANGED', 409);
       return { redemption: old };
@@ -225,7 +231,7 @@ async function redeem(pool, user, code, body) {
     if (raced) {
       if (
         raced.catalog_code !== code ||
-        !require('node:util').isDeepStrictEqual(raced.payload, input.payload)
+        !require('node:util').isDeepStrictEqual(requestPayload(raced.payload), input.payload)
       )
         throw c.error('COIN_REQUEST_CHANGED', 409);
       return { redemption: raced };
@@ -234,7 +240,7 @@ async function redeem(pool, user, code, body) {
       await db.query('SELECT * FROM reward_catalog WHERE code=$1 AND active FOR SHARE', [code])
     ).rows[0];
     if (!item) throw c.error('COIN_REWARD_UNAVAILABLE', 404);
-    let period, household;
+    let period, household, template;
     if (code === 'GREETING_CARD') {
       if (
         !input.payload.recipientId ||
@@ -242,15 +248,13 @@ async function redeem(pool, user, code, body) {
         !(await c.hasConnection(db, user, input.payload.recipientId))
       )
         throw c.error('COIN_RECIPIENT_UNAVAILABLE', 409);
-      if (
-        !(
-          await db.query(
-            'SELECT 1 FROM greeting_templates WHERE code=$1 AND active AND approved_at IS NOT NULL',
-            [input.payload.templateCode]
-          )
-        ).rowCount
-      )
-        throw c.error('COIN_TEMPLATE_UNAVAILABLE', 409);
+      template = (
+        await db.query(
+          'SELECT code,title,title_en,body,body_en FROM greeting_templates WHERE code=$1 AND active AND approved_at IS NOT NULL FOR SHARE',
+          [input.payload.templateCode]
+        )
+      ).rows[0];
+      if (!template) throw c.error('COIN_TEMPLATE_UNAVAILABLE', 409);
     } else if (code === 'DRAW_TICKET') {
       const flag = (
         await db.query('SELECT lucky_draw_enabled FROM gift_config WHERE id=1 FOR SHARE')
@@ -285,7 +289,17 @@ async function redeem(pool, user, code, body) {
     await db.query(
       `INSERT INTO reward_redemptions(id,user_id,catalog_code,cost,request_id,payload,status)
    VALUES($1,$2,$3,$4,$5,$6,'PENDING')`,
-      [id, user, code, item.cost, input.request_id, JSON.stringify(input.payload)]
+      [
+        id,
+        user,
+        code,
+        item.cost,
+        input.request_id,
+        JSON.stringify({
+          ...input.payload,
+          ...(template ? { card: greetingCards.snapshot(template) } : {}),
+        }),
+      ]
     );
     const ledger = (
       await db.query(
@@ -353,6 +367,25 @@ async function refund(pool, id) {
     const r = (await db.query('SELECT * FROM reward_redemptions WHERE id=$1 FOR UPDATE', [id]))
       .rows[0];
     if (!r || r.status !== 'PENDING') return;
+    // Serialize refunds with the durable delivery claim. A live send must
+    // finish before deciding whether the card failed; a SENT card is paid.
+    const deliveries = (
+      await db.query(
+        `SELECT o.notification_id,o.state,o.lease_until>NOW() active_lease
+       FROM notification_push_outbox o JOIN notifications n ON n.id=o.notification_id
+       WHERE n.type='coin_card' AND n.data->>'redemptionId'=$1 FOR UPDATE OF o`,
+        [id]
+      )
+    ).rows;
+    if (deliveries.some((delivery) => delivery.state === 'SENT')) {
+      await db.query(
+        "UPDATE reward_redemptions SET status='DELIVERED',delivered_at=COALESCE(delivered_at,NOW()) WHERE id=$1",
+        [id]
+      );
+      return { delivered: true };
+    }
+    if (deliveries.some((delivery) => delivery.state === 'INFLIGHT' && delivery.active_lease))
+      return { deferred: true };
     const allocations = (
       await db.query(
         'SELECT a.*,l.expires_at FROM coin_redemption_allocations a JOIN coin_lots l ON l.ledger_id=a.lot_id WHERE a.redemption_id=$1',
@@ -370,6 +403,12 @@ async function refund(pool, id) {
         lot.expires_at
       );
     await db.query("UPDATE reward_redemptions SET status='REFUNDED' WHERE id=$1", [id]);
+    await db.query(
+      `UPDATE notification_push_outbox o SET state='CANCELLED',lease_until=NULL,updated_at=NOW()
+       FROM notifications n WHERE n.id=o.notification_id AND n.type='coin_card'
+        AND n.data->>'redemptionId'=$1 AND o.state<>'SENT'`,
+      [id]
+    );
     await expireLocked(db, r.user_id);
     await c.message(db, {
       key: 'coin.refund:' + id,

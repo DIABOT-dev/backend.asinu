@@ -6,6 +6,49 @@ const {
   hasCurrentRecipientPermission,
 } = require('../notification/notification-dispatch.service');
 const coins = require('./coins.service');
+
+async function refundCard(pool, job) {
+  const result = await coins.refund(pool, job.payload.redemptionId);
+  if (result?.deferred) {
+    await pool.query(
+      "UPDATE v21_message_outbox SET next_at=NOW()+INTERVAL '15 seconds' WHERE id=$1",
+      [job.id]
+    );
+    return false;
+  }
+  await pool.query('UPDATE v21_message_outbox SET completed_at=NOW() WHERE id=$1', [job.id]);
+  return true;
+}
+
+async function settleCardDelivery(pool, job, notificationId) {
+  const delivery = (
+    await pool.query(
+      'SELECT state,attempts,next_attempt_at,lease_until,expires_at<=NOW() expired FROM notification_push_outbox WHERE notification_id=$1',
+      [notificationId]
+    )
+  ).rows[0];
+  if (delivery?.state === 'SENT') {
+    await pool.query(
+      "UPDATE reward_redemptions SET status='DELIVERED',delivered_at=COALESCE(delivered_at,NOW()) WHERE id=$1 AND status='PENDING'",
+      [job.payload.redemptionId]
+    );
+    return true;
+  }
+  if (delivery && !delivery.expired && ['PENDING', 'RETRY', 'INFLIGHT'].includes(delivery.state)) {
+    // The push outbox owns actual send attempts. Waiting for quiet hours,
+    // another worker or the provider backoff is not a failed card delivery.
+    const nextAt = delivery.state === 'INFLIGHT' ? delivery.lease_until : delivery.next_attempt_at;
+    await pool.query(
+      `UPDATE v21_message_outbox SET notification_id=$2,attempts=$3,
+        next_at=GREATEST(NOW()+INTERVAL '15 seconds',$4::timestamptz) WHERE id=$1`,
+      [job.id, notificationId, delivery.attempts, nextAt]
+    );
+    return false;
+  }
+  if (delivery?.expired || ['FAILED', 'CANCELLED'].includes(delivery?.state))
+    return refundCard(pool, job);
+  throw c.error('V21_MESSAGE_RETRY', 503);
+}
 function copy(kind, payload, en) {
   const title = en ? 'Asinu' : 'Asinu';
   const texts = {
@@ -81,7 +124,10 @@ async function processMessages(pool) {
         recipient = Number(job.recipient_id);
       const connected = owner === recipient || (await c.hasConnection(pool, owner, recipient));
       if (!connected) {
-        if (job.kind === 'coin_card') await coins.refund(pool, job.payload.redemptionId);
+        if (job.kind === 'coin_card') {
+          await refundCard(pool, job);
+          continue;
+        }
         await pool.query('UPDATE v21_message_outbox SET completed_at=NOW() WHERE id=$1', [job.id]);
         continue;
       }
@@ -107,28 +153,27 @@ async function processMessages(pool) {
       let text = copy(job.kind, job.payload, en);
       if (job.kind === 'coin_card') {
         const redemption = (
-          await pool.query('SELECT status FROM reward_redemptions WHERE id=$1 AND user_id=$2', [
-            job.payload.redemptionId,
-            owner,
-          ])
+          await pool.query(
+            'SELECT status,payload FROM reward_redemptions WHERE id=$1 AND user_id=$2',
+            [job.payload.redemptionId, owner]
+          )
         ).rows[0];
-        if (!redemption || redemption.status === 'REFUNDED') {
+        if (!redemption || ['REFUNDED', 'DELIVERED'].includes(redemption.status)) {
           await pool.query('UPDATE v21_message_outbox SET completed_at=NOW() WHERE id=$1', [
             job.id,
           ]);
           continue;
         }
-        const template = (
-          await pool.query(
-            'SELECT * FROM greeting_templates WHERE code=$1 AND active AND approved_at IS NOT NULL',
-            [job.payload.templateCode]
-          )
-        ).rows[0];
+        const template =
+          redemption.payload.card ||
+          (
+            await pool.query(
+              'SELECT * FROM greeting_templates WHERE code=$1 AND active AND approved_at IS NOT NULL',
+              [job.payload.templateCode]
+            )
+          ).rows[0];
         if (!template) {
-          await coins.refund(pool, job.payload.redemptionId);
-          await pool.query('UPDATE v21_message_outbox SET completed_at=NOW() WHERE id=$1', [
-            job.id,
-          ]);
+          await refundCard(pool, job);
           continue;
         }
         text = {
@@ -138,13 +183,15 @@ async function processMessages(pool) {
       }
       if (!text.body) throw c.error('V21_MESSAGE_UNKNOWN', 503);
       const screen =
-        job.kind === 'coin_card' || job.kind.startsWith('coin_')
-          ? '/coins'
-          : job.payload.checkinId
-            ? `/checkin?checkin_id=${job.payload.checkinId}`
-            : job.payload.scheduleId
-              ? `/medication/consent?schedule=${job.payload.scheduleId}`
-              : '/medication';
+        job.kind === 'coin_card'
+          ? `/coins/card/${job.payload.redemptionId}`
+          : job.kind.startsWith('coin_')
+            ? '/coins'
+            : job.payload.checkinId
+              ? `/checkin?checkin_id=${job.payload.checkinId}`
+              : job.payload.scheduleId
+                ? `/medication/consent?schedule=${job.payload.scheduleId}`
+                : '/medication';
       const saved = await reserveNotification(pool, {
         userId: recipient,
         type: job.kind,
@@ -154,18 +201,15 @@ async function processMessages(pool) {
         cooldownMinutes: 10080,
       });
       if (!saved) throw c.error('V21_MESSAGE_RETRY', 503);
-      const sent = await deliverNotification(pool, saved.notificationId);
+      await pool.query('UPDATE v21_message_outbox SET notification_id=$2 WHERE id=$1', [
+        job.id,
+        saved.notificationId,
+      ]);
+      await deliverNotification(pool, saved.notificationId);
       if (job.kind === 'coin_card') {
         if (!(await c.hasConnection(pool, owner, recipient))) {
-          await coins.refund(pool, job.payload.redemptionId);
-        } else if (sent.ok)
-          await pool.query(
-            "UPDATE reward_redemptions SET status='DELIVERED',delivered_at=NOW() WHERE id=$1 AND status='PENDING'",
-            [job.payload.redemptionId]
-          );
-        else if (job.attempts >= 5) {
-          await coins.refund(pool, job.payload.redemptionId);
-        } else throw c.error('V21_MESSAGE_RETRY', 503);
+          if (!(await refundCard(pool, job))) continue;
+        } else if (!(await settleCardDelivery(pool, job, saved.notificationId))) continue;
       }
       await pool.query(
         'UPDATE v21_message_outbox SET completed_at=NOW(),notification_id=$2 WHERE id=$1',
@@ -173,8 +217,7 @@ async function processMessages(pool) {
       );
     } catch {
       if (job.attempts >= 5 && job.kind === 'coin_card') {
-        await coins.refund(pool, job.payload.redemptionId);
-        await pool.query('UPDATE v21_message_outbox SET completed_at=NOW() WHERE id=$1', [job.id]);
+        await refundCard(pool, job);
       }
     }
   }
