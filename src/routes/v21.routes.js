@@ -40,6 +40,7 @@ const json = (work) => handle(async (req, res) => res.json({ ok: true, ...(await
 module.exports = (pool) => {
   const r = express.Router();
   const purposeController = require('../controllers/medication-purpose.controller')(pool);
+  const scheduleController = require('../controllers/medication-schedule.controller')(pool);
   r.use((_req, res, next) => {
     res.set('Cache-Control', 'private, no-store');
     next();
@@ -142,6 +143,7 @@ module.exports = (pool) => {
     '/med-schedules/:id',
     json((req) => med.saveSchedule(pool, req.user.id, req.query.patientId, req.params.id, req.body))
   );
+  r.post('/med-schedules/:id/move-item', handle(scheduleController.moveItem));
   r.delete(
     '/med-schedules/:id',
     json((req) => med.remove(pool, req.user.id, req.query.patientId, req.params.id))

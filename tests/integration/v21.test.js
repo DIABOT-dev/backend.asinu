@@ -505,11 +505,8 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
         .actor_id
     ).toBe(actor);
     expect(
-      (
-        await request(app)
-          .get(`/api/mobile/med-schedules?patientId=${patient}`)
-          .set(auth(patient))
-      ).body.draft
+      (await request(app).get(`/api/mobile/med-schedules?patientId=${patient}`).set(auth(patient)))
+        .body.draft
     ).toBeNull();
     await request(app)
       .get(`/api/mobile/med-schedules?patientId=${patient}`)
@@ -557,9 +554,9 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       .set(auth(id))
       .send({ ...body, slots: [{ ...body.slots[0], time_local: '99:99' }] })
       .expect(400);
-    expect(
-      (await request(app).get('/api/mobile/med-schedules').set(auth(id))).body.draft.id
-    ).toBe(draftId);
+    expect((await request(app).get('/api/mobile/med-schedules').set(auth(id))).body.draft.id).toBe(
+      draftId
+    );
     await request(app).post('/api/mobile/medication/setup').set(auth(id)).send(body).expect(200);
     expect(
       (await request(app).get('/api/mobile/med-schedules').set(auth(id))).body.draft
@@ -592,8 +589,7 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       )
     );
     expect(edits.map((r) => r.status).sort()).toEqual([200, 409]);
-    const result = (await request(app).get('/api/mobile/med-schedules').set(auth(id))).body
-      .draft;
+    const result = (await request(app).get('/api/mobile/med-schedules').set(auth(id))).body.draft;
     expect(result.revision).toBe(2);
     await request(app)
       .post('/api/mobile/medication/setup')
@@ -932,7 +928,14 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     const saved = await request(app)
       .post('/api/mobile/medication/setup')
       .set(auth(id))
-      .send(setupPayload({ display_name: 'Thuốc đã xác nhận', kind: 'MEDICINE', source: 'CHIP', confirmed: true }))
+      .send(
+        setupPayload({
+          display_name: 'Thuốc đã xác nhận',
+          kind: 'MEDICINE',
+          source: 'CHIP',
+          confirmed: true,
+        })
+      )
       .expect(200);
     const today = await request(app).get('/api/mobile/med-doses/today').set(auth(id)).expect(200);
     expect(today.body.items).toHaveLength(1);
@@ -1087,7 +1090,9 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     await request(app)
       .post('/api/mobile/medication/setup?patientId=' + parent)
       .set(auth(stranger))
-      .send(setupPayload({ display_name: 'Private', kind: 'MEDICINE', source: 'CHIP', confirmed: true }))
+      .send(
+        setupPayload({ display_name: 'Private', kind: 'MEDICINE', source: 'CHIP', confirmed: true })
+      )
       .expect(403);
   });
   test('schedule and item names are encrypted, but owner API returns readable names', async () => {
@@ -1142,12 +1147,16 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
         .send(setupPayload(body))
         .expect(200);
       expect(saved.body.schedules).toHaveLength(1);
-      const savedItem = (await request(app).get('/api/mobile/med-schedules?patientId=' + parent).set(auth(parent)).expect(200)).body.items[0];
+      const savedItem = (
+        await request(app)
+          .get('/api/mobile/med-schedules?patientId=' + parent)
+          .set(auth(parent))
+          .expect(200)
+      ).body.items[0];
       expect(savedItem.purpose_tags.codes).toEqual(['fever_reduction']);
       expect(savedItem.tags_json).toBeUndefined();
-      const stored = (
-        await db.query('SELECT tags_json FROM med_items WHERE id=$1', [savedItem.id])
-      ).rows[0].tags_json;
+      const stored = (await db.query('SELECT tags_json FROM med_items WHERE id=$1', [savedItem.id]))
+        .rows[0].tags_json;
       expect(stored).toMatch(/^asinu:enc:v1:/);
       expect(stored).not.toContain('fever_reduction');
       const overview = await request(app)
@@ -1160,7 +1169,11 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
         .set(auth(stranger))
         .send({ name: 'Hapacol 650', kind: 'MEDICINE' })
         .expect(403);
-      await request(app).post('/api/mobile/medication/setup').set(auth(stranger)).send(setupPayload(body)).expect(400);
+      await request(app)
+        .post('/api/mobile/medication/setup')
+        .set(auth(stranger))
+        .send(setupPayload(body))
+        .expect(400);
       await request(app)
         .post('/api/mobile/medication/setup?patientId=' + parent)
         .set(auth(child))
@@ -1169,7 +1182,12 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       await request(app)
         .post('/api/mobile/medication/setup?patientId=' + parent)
         .set(auth(child))
-        .send(setupPayload({ ...body, tag_confirmation: { token: lookup.body.token, codes: ['diabetes'] } }))
+        .send(
+          setupPayload({
+            ...body,
+            tag_confirmation: { token: lookup.body.token, codes: ['diabetes'] },
+          })
+        )
         .expect(400);
       expect(
         (await db.query('SELECT 1 FROM med_items WHERE patient_user_id=$1', [parent])).rowCount
@@ -1392,6 +1410,226 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     );
     await expect(scan.readMedia(db, media, token)).rejects.toMatchObject({ statusCode: 403 });
   });
+  test('dose-first setup reuses medicines across times and adds to an existing time without duplicate rows', async () => {
+    const id = await user(),
+      a = await item(id),
+      b = await item(id);
+    const first = (
+      await med.saveSchedule(db, id, id, null, {
+        time_local: '07:00',
+        item_ids: [a.id],
+        note: 'Ghi chú cũ',
+      })
+    ).schedule;
+    const body = {
+      request_id: randomUUID(),
+      merge_existing: true,
+      items: [{ id: b.id }],
+      meals: draftSnapshot().meals,
+      slots: [
+        { time_local: '07:00', item_indexes: [0] },
+        { time_local: '19:00', item_indexes: [0] },
+      ],
+    };
+    const response = await request(app)
+      .post('/api/mobile/medication/setup')
+      .set(auth(id))
+      .send(body)
+      .expect(200);
+    expect(response.body.schedules[0].id).toBe(first.id);
+    expect(response.body.schedules[0].note).toBe('Ghi chú cũ');
+    const overview = await med.overview(db, id, id);
+    expect(overview.items).toHaveLength(2);
+    expect(overview.schedules).toHaveLength(2);
+    expect(new Set(overview.schedules[0].item_ids)).toEqual(new Set([a.id, b.id]));
+    expect(overview.schedules[1].item_ids).toEqual([b.id]);
+    await request(app).post('/api/mobile/medication/setup').set(auth(id)).send(body).expect(200);
+    expect((await med.overview(db, id, id)).schedules).toHaveLength(2);
+  });
+  test('adding medicine to one of four existing times is allowed, while a fifth time and foreign medicine roll back', async () => {
+    const id = await user(),
+      a = await item(id),
+      stranger = await user(),
+      foreign = await item(stranger);
+    for (const time_local of ['07:00', '11:00', '15:00', '19:00'])
+      await med.saveSchedule(db, id, id, null, { time_local, item_ids: [a.id] });
+    const base = {
+      merge_existing: true,
+      items: [{ display_name: 'Thuốc mới', kind: 'MEDICINE', source: 'CHIP', confirmed: true }],
+      meals: draftSnapshot().meals,
+    };
+    await med.setup(db, id, id, {
+      ...base,
+      request_id: randomUUID(),
+      slots: [{ time_local: '07:00', item_indexes: [0] }],
+    });
+    const before = await med.overview(db, id, id);
+    await expect(
+      med.setup(db, id, id, {
+        ...base,
+        request_id: randomUUID(),
+        slots: [{ time_local: '21:00', item_indexes: [0] }],
+      })
+    ).rejects.toMatchObject({ code: 'MED_SCHEDULE_LIMIT' });
+    await expect(
+      med.setup(db, id, id, {
+        ...base,
+        request_id: randomUUID(),
+        items: [...base.items, { id: foreign.id }],
+        slots: [{ time_local: '07:00', item_indexes: [0, 1] }],
+      })
+    ).rejects.toMatchObject({ code: 'MED_ITEM_NOT_FOUND' });
+    expect((await med.overview(db, id, id)).items).toHaveLength(before.items.length);
+    expect((await med.overview(db, id, id)).schedules).toHaveLength(4);
+  });
+  test('moving one medicine merges into the target, keeps other memberships and replays the same request once', async () => {
+    const id = await user(),
+      a = await item(id),
+      b = await item(id),
+      extra = await item(id);
+    const source = (
+      await med.saveSchedule(db, id, id, null, { time_local: '07:00', item_ids: [a.id, b.id] })
+    ).schedule;
+    const target = (
+      await med.saveSchedule(db, id, id, null, { time_local: '19:00', item_ids: [extra.id] })
+    ).schedule;
+    const body = { item_id: a.id, time_local: '19:00', request_id: randomUUID() };
+    const url = '/api/mobile/med-schedules/' + source.id + '/move-item';
+    const responses = await Promise.all([
+      request(app).post(url).set(auth(id)).send(body),
+      request(app).post(url).set(auth(id)).send(body),
+    ]);
+    expect(responses.map((row) => row.status)).toEqual([200, 200]);
+    expect(responses[0].body.targetScheduleId).toBe(target.id);
+    const overview = await med.overview(db, id, id);
+    expect(overview.schedules.find((row) => row.id === source.id).item_ids).toEqual([b.id]);
+    expect(new Set(overview.schedules.find((row) => row.id === target.id).item_ids)).toEqual(
+      new Set([a.id, extra.id])
+    );
+    expect(overview.items).toHaveLength(3);
+    expect(
+      (await db.query('SELECT 1 FROM med_setup_receipts WHERE request_id=$1', [body.request_id]))
+        .rowCount
+    ).toBe(1);
+    await request(app)
+      .post(url)
+      .set(auth(id))
+      .send({ ...body, time_local: '18:00' })
+      .expect(409);
+    await request(app)
+      .post(url + '?patientId=' + id)
+      .set(auth(await user()))
+      .send({ ...body, request_id: randomUUID() })
+      .expect(403);
+  });
+  test('moving the last medicine replaces its group at the four-time cap; a failed split leaves every group unchanged', async () => {
+    const id = await user(),
+      a = await item(id),
+      b = await item(id);
+    const source = (
+      await med.saveSchedule(db, id, id, null, { time_local: '07:00', item_ids: [a.id] })
+    ).schedule;
+    for (const time_local of ['11:00', '15:00', '19:00'])
+      await med.saveSchedule(db, id, id, null, { time_local, item_ids: [b.id] });
+    await med.moveItem(db, id, id, source.id, {
+      item_id: a.id,
+      time_local: '08:00',
+      request_id: randomUUID(),
+    });
+    const moved = await med.overview(db, id, id);
+    expect(moved.schedules).toHaveLength(4);
+    const group = moved.schedules.find((row) => row.time_local === '08:00');
+    await med.saveSchedule(db, id, id, group.id, { time_local: '08:00', item_ids: [a.id, b.id] });
+    await expect(
+      med.moveItem(db, id, id, group.id, {
+        item_id: a.id,
+        time_local: '09:00',
+        request_id: randomUUID(),
+      })
+    ).rejects.toMatchObject({ code: 'MED_SCHEDULE_LIMIT' });
+    expect(
+      (await med.overview(db, id, id)).schedules.find((row) => row.id === group.id).item_ids.sort()
+    ).toEqual([a.id, b.id].sort());
+    expect((await med.overview(db, id, id)).schedules).toHaveLength(4);
+  });
+  test('a family member moving medicine to a new group still requires patient consent', async () => {
+    const patient = await user(),
+      child = await user(),
+      medicine = await item(patient);
+    await connect(patient, child);
+    const source = (
+      await med.saveSchedule(db, patient, patient, null, {
+        time_local: '07:00',
+        item_ids: [medicine.id],
+      })
+    ).schedule;
+    const result = await med.moveItem(db, child, patient, source.id, {
+      item_id: medicine.id,
+      time_local: '19:00',
+      request_id: randomUUID(),
+    });
+    const target = (await med.overview(db, child, patient)).schedules.find(
+      (row) => row.id === result.targetScheduleId
+    );
+    expect(target.consent_state).toBe('PENDING');
+    expect(
+      (await db.query('SELECT 1 FROM med_consent_calls WHERE schedule_id=$1', [target.id])).rowCount
+    ).toBe(1);
+    expect(
+      (await db.query('SELECT 1 FROM med_dose_events WHERE schedule_id=$1', [target.id])).rowCount
+    ).toBe(0);
+  });
+  test('moving medicine never rewrites a taken dose or its encrypted medicine snapshot', async () => {
+    const patient = await user(),
+      event = await dose(patient);
+    await calls.answer(db, patient, event.id, { button: 1, request_id: randomUUID() });
+    const before = (
+      await db.query('SELECT item_id,display_name FROM med_dose_items WHERE dose_event_id=$1', [
+        event.id,
+      ])
+    ).rows;
+    await med.moveItem(db, patient, patient, event.schedule_id, {
+      item_id: before[0].item_id,
+      time_local: '19:00',
+      request_id: randomUUID(),
+    });
+    expect(
+      (await db.query('SELECT state FROM med_dose_events WHERE id=$1', [event.id])).rows[0].state
+    ).toBe('TAKEN');
+    expect(
+      (
+        await db.query('SELECT item_id,display_name FROM med_dose_items WHERE dose_event_id=$1', [
+          event.id,
+        ])
+      ).rows
+    ).toEqual(before);
+  });
+  test('dose-first drafts save chosen empty time groups before any medicine and keep existing item identifiers', async () => {
+    const id = await user(),
+      a = await item(id),
+      snapshot = draftSnapshot();
+    snapshot.setupFlow = 'dose_first';
+    snapshot.step = 1;
+    snapshot.items = [];
+    snapshot.slots = [{ time_local: '07:00', meal_anchor: null, item_indexes: [] }];
+    const draftId = randomUUID();
+    await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(id))
+      .send({ id: draftId, revision: 0, snapshot })
+      .expect(200);
+    snapshot.items = [{ ...draftSnapshot().items[0], existingItemId: a.id }];
+    snapshot.slots[0].item_indexes = [0];
+    snapshot.step = 3;
+    await request(app)
+      .put('/api/mobile/medication/draft')
+      .set(auth(id))
+      .send({ id: draftId, revision: 1, snapshot })
+      .expect(200);
+    const read = (await request(app).get('/api/mobile/med-schedules').set(auth(id))).body;
+    expect(read.draft.snapshot).toEqual(snapshot);
+    expect(read.schedules).toHaveLength(0);
+  });
   test('atomic setup replays once and rolls back every new item on schedule failure', async () => {
     const id = await user(),
       body = {
@@ -1570,7 +1808,13 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       "UPDATE user_connections SET status='rejected' WHERE requester_id=$1 AND addressee_id=$2",
       [id, child]
     );
-    await messages.processMessages(db);
+    // Earlier medication fixtures also enqueue real notifications; the worker
+    // deliberately processes only 30 jobs at a time. Drain bounded batches until
+    // this card is reached, without bypassing delivery or refund logic.
+    for (let batch = 0; batch < 5; batch++) {
+      await messages.processMessages(db);
+      if ((await coins.today(db, id)).balance === 80) break;
+    }
     expect((await coins.today(db, id)).balance).toBe(80);
     expect(
       (await coins.history(db, id)).items.find((x) => x.reason === 'REDEEM').reward_status
