@@ -123,6 +123,69 @@ function harness({ condition } = {}) {
   };
 }
 const generations = () => callTextAi.mock.calls.filter(([options]) => options.maxTokens === 700);
+
+test('HTTP detailed interview persists beyond eight answers and replays without another generation', async () => {
+  const h = harness();
+  h.session.body_locations = ['head', 'limbs'];
+  h.session.body_location_other = 'Đầu: Trán; Tay chân: Cổ tay phải';
+  const submitted = [];
+  let final;
+  for (let index = 0; index < 40; index++) {
+    const response = await h.submit({
+      checkin_id: 912,
+      previous_answers: submitted,
+      assessment_version: 2,
+    });
+    expect(response.status).toBe(200);
+    const r = response.body;
+    if (r.isDone) {
+      final = r;
+      break;
+    }
+    expect(r.questionProgress.total).toBeGreaterThanOrEqual(r.questionProgress.current);
+    const answer =
+      r.step === 'symptoms'
+        ? 'Đau đầu, Đau khớp'
+        : r.step === 'red_flags' || r.step.endsWith('_associated')
+          ? 'Không có'
+          : r.options[0];
+    submitted.push({ step: r.step, question: r.question, answer });
+    if (submitted.length === 9) expect(r.isDone).toBe(false);
+  }
+  expect(final?.isDone).toBe(true);
+  expect(submitted.length).toBeGreaterThan(20);
+  expect(h.session.triage_state.assessment_version).toBe(2);
+  const count = generations().length;
+  const replay = await h.submit({
+    checkin_id: 912,
+    previous_answers: submitted,
+    assessment_version: 2,
+  });
+  expect(replay.status).toBe(200);
+  expect(replay.body).toEqual(final);
+  expect(generations()).toHaveLength(count);
+});
+
+test('detailed API still rejects unknown field IDs and requests over its bounded limit', async () => {
+  const h = harness();
+  const invalid = await h.submit({
+    checkin_id: 912,
+    assessment_version: 2,
+    previous_answers: [{ step: 'detail_head_hacked', question: 'Vị trí?', answer: 'abc' }],
+  });
+  expect(invalid.status).toBe(400);
+  const oversized = await h.submit({
+    checkin_id: 912,
+    assessment_version: 2,
+    previous_answers: Array.from({ length: 129 }, () => ({
+      step: 'detail_head_severity',
+      question: 'Mức đau?',
+      answer: 'Nhẹ',
+    })),
+  });
+  expect(oversized.status).toBe(400);
+  expect(callTextAi).not.toHaveBeenCalled();
+});
 beforeEach(() => {
   jest.clearAllMocks();
   callTextAi.mockImplementation(async (options) => ({

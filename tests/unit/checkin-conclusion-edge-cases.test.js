@@ -116,6 +116,42 @@ test.each([
     'nonspecific_emergency_condition'
   );
 });
+test('independent statements about current relief and earlier activities are not a historical-resolution claim', () => {
+  expect(
+    validateBlock(
+      'narrative',
+      'Anh đã đỡ đau khi nghỉ ngơi.\n\nAnh nên ghi lại các hoạt động trước đó.',
+      pair(),
+      { skipCareLevel: true }
+    )
+  ).toBeNull();
+  expect(
+    validateBlock(
+      'narrative',
+      'You have improved with rest.\n\nRecord the activities from your previous check-in.',
+      pair(),
+      { skipCareLevel: true }
+    )
+  ).toBeNull();
+});
+test('an adjacent sentence referring to a past symptom still cannot declare it resolved', () => {
+  expect(
+    validateBlock(
+      'narrative',
+      'Anh từng đau chân trong lần check-in trước. Những triệu chứng này đã ổn định.',
+      pair(),
+      { skipCareLevel: true }
+    )
+  ).toBe('unconfirmed_prior_symptom_resolution');
+  expect(
+    validateBlock(
+      'narrative',
+      'You reported pain at your previous check-in. Those symptoms have resolved.',
+      pair(),
+      { skipCareLevel: true }
+    )
+  ).toBe('unconfirmed_prior_symptom_resolution');
+});
 test('past symptoms cannot be declared resolved just because they were not mentioned today', () => {
   expect(
     validateBlock(

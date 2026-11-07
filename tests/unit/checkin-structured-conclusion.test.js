@@ -53,11 +53,78 @@ beforeEach(() => {
   });
 });
 
+test('narrative does not fall back when unrelated paragraphs mention current relief and earlier activities', async () => {
+  callTextAi.mockResolvedValue({
+    content:
+      'Chú đang đau đầu từ hôm qua. Cháu hiểu chú đang khó chịu.\n\nChú đã đỡ đau khi nghỉ ngơi.\n\nChú nên ghi lại các hoạt động trước đó.\n\n- Chú nên đi khám trong vài ngày tới.',
+  });
+  const result = await generateConclusion(
+    {
+      ...state(),
+      allSymptoms: ['đau đầu'],
+      currentSymptoms: ['đau đầu'],
+      actionsFound: ['nghỉ ngơi'],
+    },
+    profile,
+    'vi',
+    null,
+    {},
+    { conclusionFormat: 'narrative' }
+  );
+  expect(result.conclusionSource).toBe('ai');
+  expect(result.narrative).toContain('đã đỡ đau khi nghỉ ngơi');
+  expect(result.narrative).toContain('các hoạt động trước đó');
+});
+
+test('a detailed conclusion keeps the explanation but removes a model request to answer the assessment again', async () => {
+  callTextAi.mockResolvedValue({
+    content:
+      'Chú kể đau đầu từ hôm qua và vẫn như cũ. Cháu hiểu chú đang khó chịu.\n\nChú có thể cho cháu biết mức độ đau của chú thế nào không?\n\n- Chú nên đi khám trong vài ngày tới.',
+  });
+  const input = {
+    ...state(),
+    allSymptoms: ['đau đầu'],
+    currentSymptoms: ['đau đầu'],
+    regionDetails: [
+      {
+        region: 'head',
+        label: 'Đầu',
+        symptoms: ['đau đầu'],
+        answers: { severity: 'Vừa', onset: 'từ hôm qua' },
+      },
+    ],
+    detailedAssessmentComplete: true,
+    detailedAssessmentVersion: 2,
+  };
+  const result = await generateConclusion(
+    input,
+    profile,
+    'vi',
+    null,
+    {},
+    { conclusionFormat: 'narrative' }
+  );
+  expect(result.narrative).toContain('Cháu hiểu chú đang khó chịu.');
+  expect(result.narrative).not.toContain('cho cháu biết');
+  expect(result.conclusionPromptVersion).toBe('v3-narrative-deep-details');
+  expect(logger.warn).toHaveBeenCalledWith('conclusion_rejected', {
+    block: 'narrative',
+    reason: 'repeated_assessment_question',
+    scope: 'sentence',
+  });
+});
+
 test('head and limbs keep separate symptom groups and their exact positions reach the conclusion facts', async () => {
   const notes = 'Đầu: Trán; Tay chân: Cổ tay phải';
-  const input = { status: 'tired', phase: 'initial', profile, bodyLocations: ['head','limbs'], bodyLocationOther: notes };
+  const input = {
+    status: 'tired',
+    phase: 'initial',
+    profile,
+    bodyLocations: ['head', 'limbs'],
+    bodyLocationOther: notes,
+  };
   const question = await getNextTriageQuestion({ ...input, previousAnswers: [] });
-  expect(question.optionsGrouped.map(group => group.key)).toEqual(['head','limbs']);
+  expect(question.optionsGrouped.map((group) => group.key)).toEqual(['head', 'limbs']);
   expect(question.question.toLowerCase()).toContain('đầu và tay chân');
   expect(callTextAi).not.toHaveBeenCalled();
   const previousAnswers = [
@@ -67,10 +134,15 @@ test('head and limbs keep separate symptom groups and their exact positions reac
     { step: 'red_flags', answer: 'Không có' },
   ];
   const precise = getNextStep({ ...input, previousAnswers }).state;
-  const old = getNextStep({ ...input, bodyLocations: null, bodyLocationOther: null, previousAnswers }).state;
+  const old = getNextStep({
+    ...input,
+    bodyLocations: null,
+    bodyLocationOther: null,
+    previousAnswers,
+  }).state;
   expect(calculateConclusion(precise, 'tired')).toEqual(calculateConclusion(old, 'tired'));
   const facts = buildConclusionFacts(precise, profile);
-  expect(facts.vung_kho_chiu).toEqual(['head','limbs']);
+  expect(facts.vung_kho_chiu).toEqual(['head', 'limbs']);
   expect(facts.vi_tri_kho_chiu).toBe(notes);
   const prompt = buildNarrativePrompt(facts);
   expect(prompt).toContain(notes);
@@ -79,7 +151,14 @@ test('head and limbs keep separate symptom groups and their exact positions reac
 
 test('a long position description remains in facts without making the next question exceed the API question limit', async () => {
   const notes = 'Đầu: Trán; Tay chân: Cổ tay phải; ' + 'Mô tả thêm vị trí. '.repeat(70);
-  const input = { status: 'tired', phase: 'initial', profile, bodyLocations: ['head','limbs'], bodyLocationOther: notes, previousAnswers: [] };
+  const input = {
+    status: 'tired',
+    phase: 'initial',
+    profile,
+    bodyLocations: ['head', 'limbs'],
+    bodyLocationOther: notes,
+    previousAnswers: [],
+  };
   const question = await getNextTriageQuestion(input);
   expect(question.question.length).toBeLessThanOrEqual(500);
   const facts = buildConclusionFacts(getNextStep(input).state, profile);

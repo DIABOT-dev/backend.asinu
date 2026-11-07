@@ -19,6 +19,7 @@ const TRIAGE_STEPS = new Set([
   'followup_status',
   'followup_detail',
 ]);
+const { isDetailedStep, MAX_DETAILED_ANSWERS } = require('../core/checkin/triage-detail-questions');
 
 async function startCheckinHandler(pool, req, res) {
   const {
@@ -137,12 +138,15 @@ async function followUpHandler(pool, req, res) {
 }
 
 async function triageHandler(pool, req, res) {
-  const { checkin_id, previous_answers = [], conclusion_format } = req.body;
+  const { checkin_id, previous_answers = [], conclusion_format, assessment_version } = req.body;
   if (!checkin_id)
     return res.status(400).json({ ok: false, error: t('error.missing_checkin_id', getLang(req)) });
   const validAnswers =
     Array.isArray(previous_answers) &&
-    previous_answers.length <= 8 &&
+    previous_answers.length <=
+      (assessment_version === 2 || previous_answers.some((item) => isDetailedStep(item?.step))
+        ? MAX_DETAILED_ANSWERS
+        : 8) &&
     previous_answers.every(
       (item) =>
         item &&
@@ -150,7 +154,8 @@ async function triageHandler(pool, req, res) {
         item.question.trim().length > 0 &&
         item.question.length <= 500 &&
         (item.step === undefined ||
-          (typeof item.step === 'string' && TRIAGE_STEPS.has(item.step))) &&
+          (typeof item.step === 'string' &&
+            (TRIAGE_STEPS.has(item.step) || isDetailedStep(item.step)))) &&
         ((typeof item.answer === 'string' && item.answer.length <= 2000) ||
           (Array.isArray(item.answer) &&
             item.answer.length <= 20 &&
@@ -158,6 +163,7 @@ async function triageHandler(pool, req, res) {
     );
   if (
     !validAnswers ||
+    (assessment_version !== undefined && assessment_version !== 2) ||
     (conclusion_format !== undefined && !['structured', 'narrative'].includes(conclusion_format))
   ) {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
@@ -169,7 +175,7 @@ async function triageHandler(pool, req, res) {
       checkin_id,
       previous_answers,
       getLang(req),
-      { conclusionFormat: conclusion_format }
+      { conclusionFormat: conclusion_format, assessmentVersion: assessment_version }
     );
     return res.json({ ok: true, ...result });
   } catch (err) {

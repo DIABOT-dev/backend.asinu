@@ -8,6 +8,13 @@ const { detectEmergency } = require('../src/services/checkin/emergency-detector'
 const { getNextTriageQuestion } = require('../src/services/checkin/checkin.triage.v2');
 const { EMERGENCY_CONCLUSIONS, isSafeConclusion } = require('../src/core/checkin/triage-ai-layer');
 const { t } = require('../src/i18n');
+const {
+  getDetailedNextStep,
+  detailedQuestionsEnabled,
+  MAX_DETAILED_ANSWERS,
+} = require('../src/core/checkin/triage-detail-questions');
+const { normalizeAnswers } = require('../src/core/checkin/triage-facts');
+const { buildConclusionFacts } = require('../src/core/checkin/triage-conclusion');
 
 const initialInput = (previousAnswers, profile = {}, healthContext = {}) => ({
   status: 'specific_concern',
@@ -15,6 +22,207 @@ const initialInput = (previousAnswers, profile = {}, healthContext = {}) => ({
   profile,
   healthContext,
   previousAnswers,
+});
+
+describe('per-area check-in interview', () => {
+  test('long location notes stay in facts while the next question fits the API limit', () => {
+    const result = getDetailedNextStep({
+      status: 'tired',
+      phase: 'initial',
+      lang: 'vi',
+      profile: { age: 35, medical_conditions: ['Tiểu đường'] },
+      bodyLocations: ['head'],
+      bodyLocationOther: 'Đầu: ' + 'vị trí đã khai '.repeat(90),
+      previousAnswers: [
+        { step: 'symptoms', answer: 'đau đầu' },
+        { step: 'red_flags', answer: 'Không có' },
+      ],
+    });
+    expect(result.step).toBe('detail_head_onset');
+    expect(result.question.length).toBeLessThanOrEqual(500);
+    expect(result.state.regionDetails[0].position.length).toBeGreaterThan(1000);
+  });
+  const input = {
+    status: 'tired',
+    phase: 'initial',
+    lang: 'vi',
+    profile: { age: 35, gender: 'Nam', medical_conditions: [] },
+    bodyLocations: ['head', 'limbs'],
+    bodyLocationOther: 'Đầu: Trán; Tay chân: Cổ tay phải',
+  };
+  const select = (r) => {
+    if (r.step === 'symptoms') return 'Đau đầu, Đau khớp';
+    if (r.step === 'red_flags') return 'Không có';
+    if (r.step === 'detail_history') return t('checkin.detail.option.no_conditions', 'vi');
+    const field = r.step.replace(/^detail_(?:head|limbs)_/, '');
+    return (
+      {
+        onset: 'Từ hôm qua',
+        progression: 'Vẫn như cũ',
+        severity: 'Vừa',
+        impact: t('checkin.detail.option.impact_some', 'vi'),
+        character: t('checkin.detail.option.dull', 'vi'),
+        pattern: t('checkin.detail.option.constant', 'vi'),
+        radiation: t('checkin.detail.option.stays_here', 'vi'),
+        associated: 'Không có',
+      }[field] || r.options[0]
+    );
+  };
+  const walk = (choose = select, overrides = {}) => {
+    const answers = [],
+      questions = [];
+    for (let index = 0; index <= MAX_DETAILED_ANSWERS; index++) {
+      const response = getDetailedNextStep({
+        ...input,
+        ...overrides,
+        previousAnswers: normalizeAnswers(answers),
+      });
+      if (response.action === 'conclude') return { result: response, questions, answers };
+      expect(response.question).toBeTruthy();
+      expect(response.question.length).toBeLessThanOrEqual(500);
+      expect(response.question).not.toMatch(/\{\{|checkin\.detail\./);
+      questions.push(response);
+      answers.push({ step: response.step, question: response.question, answer: choose(response) });
+    }
+    throw new Error('Interview exceeded its bounded answer limit');
+  };
+  test('screens danger first, uses known history, finishes each area and never stops at eight answers', () => {
+    const run = walk();
+    const steps = run.questions.map((r) => r.step);
+    expect(steps.slice(0, 3)).toEqual(['symptoms', 'red_flags', 'detail_history']);
+    expect(run.answers).toHaveLength(25);
+    expect(new Set(steps).size).toBe(steps.length);
+    expect(steps.indexOf('detail_head_actions')).toBeLessThan(steps.indexOf('detail_limbs_onset'));
+    expect(steps).not.toContain('detail_head_episode_duration');
+    expect(steps).not.toContain('detail_head_radiation_location');
+    expect(run.result.state.detailedAssessmentComplete).toBe(true);
+    expect(run.result.state.regionDetails[0].position).toBe('Trán');
+    expect(run.result.state.regionDetails[1].position).toBe('Cổ tay phải');
+    expect(run.questions.every((r) => r.questionProgress.current <= r.questionProgress.total)).toBe(
+      true
+    );
+  });
+  test('keeps separate onset, severity and impact instead of overwriting the other area', () => {
+    const run = walk((r) =>
+      r.step === 'detail_limbs_onset'
+        ? 'Từ sáng'
+        : r.step === 'detail_limbs_severity'
+          ? 'Nhẹ'
+          : r.step === 'detail_limbs_impact'
+            ? t('checkin.detail.option.impact_none', 'vi')
+            : select(r)
+    );
+    const facts = buildConclusionFacts(run.result.state, input.profile);
+    expect(facts.chi_tiet_tung_vung.map((area) => area.answers.onset)).toEqual([
+      'từ hôm qua',
+      'từ sáng',
+    ]);
+    expect(facts.chi_tiet_tung_vung.map((area) => area.answers.severity)).toEqual(['Vừa', 'Nhẹ']);
+    expect(facts.chi_tiet_tung_vung[1].answers.impact).toBe(
+      t('checkin.detail.option.impact_none', 'vi')
+    );
+    expect(facts.tinh_trang_khai_bao_benh_nen).toBe('none_reported');
+    expect(facts.benh_nen_da_khai).toEqual([]);
+  });
+  test('asks duration only for episodes and asks the destination only when pain spreads', () => {
+    const run = walk((r) =>
+      r.step === 'detail_head_pattern'
+        ? t('checkin.detail.option.episodes', 'vi')
+        : r.step === 'detail_limbs_radiation'
+          ? t('checkin.detail.option.spreads', 'vi')
+          : r.step === 'detail_limbs_radiation_location'
+            ? 'Lan đến bàn tay phải'
+            : select(r)
+    );
+    const steps = run.questions.map((r) => r.step);
+    expect(steps).toContain('detail_head_episode_duration');
+    expect(steps).not.toContain('detail_limbs_episode_duration');
+    expect(steps).toContain('detail_limbs_radiation_location');
+    expect(steps).not.toContain('detail_head_radiation_location');
+  });
+  test('accepts optional uncertainty once and concludes explicitly incomplete if timing is unknown', () => {
+    const run = walk((r) =>
+      r.step.startsWith('detail_') && r.step !== 'detail_history' ? 'Không rõ' : select(r)
+    );
+    expect(new Set(run.answers.map((a) => a.step)).size).toBe(run.answers.length);
+    expect(run.result.state.assessmentIncomplete).toBe(true);
+    expect(run.result.state.regionDetails[0].answers.severity).toBe('không rõ');
+  });
+  test('does not call a non-pain complaint pain or ask pain character and radiation', () => {
+    const run = walk((r) => (r.step === 'symptoms' ? 'Chóng mặt' : select(r)), {
+      bodyLocations: ['head'],
+    });
+    expect(run.questions.find((r) => r.step === 'detail_head_severity').question).toContain(
+      'mức khó chịu'
+    );
+    expect(run.questions.map((r) => r.step)).not.toContain('detail_head_character');
+    expect(run.questions.map((r) => r.step)).not.toContain('detail_head_radiation');
+  });
+  test('does not re-ask a single-area onset already supplied with its symptom', () => {
+    const run = walk((r) => (r.step === 'symptoms' ? 'đau đầu từ hôm qua' : select(r)), {
+      bodyLocations: ['head'],
+    });
+    expect(run.questions.map((r) => r.step)).not.toContain('detail_head_onset');
+    expect(run.result.state.regionDetails[0].answers.onset).toBeTruthy();
+  });
+  test('reuses existing profile conditions without asking again and retains newly declared conditions', () => {
+    const known = walk(select, {
+      profile: { ...input.profile, medical_conditions: ['Tiểu đường'] },
+    });
+    expect(known.questions.map((r) => r.step)).not.toContain('detail_history');
+    const fresh = walk((r) => (r.step === 'detail_history' ? 'Tiểu đường' : select(r)));
+    expect(buildConclusionFacts(fresh.result.state, input.profile).benh_nen_da_khai).toEqual([
+      'Tiểu đường',
+    ]);
+  });
+  test('one uncertain area stays incomplete without overwriting the other area or restarting questions', () => {
+    const run = walk((r) =>
+      r.step === 'detail_head_onset' || r.step === 'detail_history' ? 'Không rõ' : select(r)
+    );
+    expect(run.result.state.assessmentIncomplete).toBe(true);
+    expect(run.result.state.regionDetails[0].answers.onset).toBe('không rõ');
+    expect(run.result.state.regionDetails[1].answers.onset).toBe('từ hôm qua');
+    expect(run.result.state.historyAssessment).toBe('unknown');
+    expect(new Set(run.answers.map((a) => a.step)).size).toBe(run.answers.length);
+  });
+  test('positive danger signals conclude before the detailed interview', () => {
+    const result = getDetailedNextStep({
+      ...input,
+      previousAnswers: [
+        { step: 'symptoms', answer: 'đau đầu' },
+        { step: 'red_flags', answer: 'yếu hoặc tê nửa người' },
+      ],
+    });
+    expect(result.action).toBe('conclude');
+    expect(result.conclusion.hasRedFlag).toBe(true);
+    expect(result.state.detailedAssessmentComplete).toBe(false);
+  });
+  test('leaves routine follow-up and legacy callers on their original sequence', () => {
+    expect(detailedQuestionsEnabled({}, { NODE_ENV: 'test' })).toBeFalsy();
+    expect(
+      detailedQuestionsEnabled({ assessmentVersion: 2 }, { NODE_ENV: 'production' })
+    ).toBeFalsy();
+    const followup = { ...input, phase: 'followup', previousAnswers: [] };
+    expect(getDetailedNextStep(followup).step).toBe(getNextStep(followup).step);
+  });
+  test('English choices are localized while stable field IDs preserve independent facts', () => {
+    const run = walk(
+      (r) =>
+        r.step === 'symptoms'
+          ? 'Headache, Joint pain'
+          : r.step === 'red_flags'
+            ? 'None'
+            : r.step === 'detail_history'
+              ? 'No diagnosed conditions'
+              : r.options[0],
+      { lang: 'en' }
+    );
+    expect(run.questions.find((r) => r.step === 'detail_head_severity').question).toContain('pain');
+    expect(run.result.state.regionDetails[0].answers.severity).toBe('Nhẹ');
+    expect(
+      buildConclusionFacts(run.result.state, input.profile, {}, 'en').benh_nen_da_khai
+    ).toEqual([]);
+  });
 });
 
 describe('check-in triage V2 flow', () => {

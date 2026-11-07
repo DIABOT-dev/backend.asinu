@@ -128,6 +128,16 @@ function sanitizeNarrative(raw, facts) {
         validateBlock('narrative', sentence, facts, { skipCareLevel: true }) ||
         unsupportedInterpretation(sentence) ||
         conclusionLanguageFault(sentence, facts);
+      if (
+        !reason &&
+        facts.chi_tiet_tung_vung?.length &&
+        !headingNames.has(text) &&
+        (/\?/.test(sentence) ||
+          /(?:hãy|có thể|vui lòng).{0,15}cho.{0,12}(?:biết|thêm thông tin)|(?:can|could) you (?:tell|share)/iu.test(
+            sentence
+          ))
+      )
+        reason = 'repeated_assessment_question';
       // Keep the patient's actual care level; remove a contradictory direct
       // referral instead of letting the model change the decision.
       if (!reason && containsVisit(sentence)) {
@@ -321,7 +331,9 @@ async function generateNarrativeConclusion(state, profile, lang = 'vi', context 
     summary: narrative,
     recommendation: [...fallback.nen_lam, ...fallback.di_kham_khi].join('\n'),
     speechText: narrativeSpeech(narrative, legacy.closeMessage, legacy.aiNotice, facts, lang),
-    conclusionPromptVersion: 'v3-narrative-deep',
+    conclusionPromptVersion: facts.chi_tiet_tung_vung?.length
+      ? 'v3-narrative-deep-details'
+      : 'v3-narrative-deep',
     conclusionRenderVersion: 3,
     conclusionSource: source,
   };

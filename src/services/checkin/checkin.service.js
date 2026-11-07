@@ -577,7 +577,7 @@ async function processTriageStep(
   requestLang = null,
   options = {}
 ) {
-  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}:${options.conclusionFormat || 'structured'}`;
+  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}:${options.conclusionFormat || 'structured'}:${options.assessmentVersion || 'legacy'}`;
   if (triageRequests.has(key)) return triageRequests.get(key);
   const pending = processTriageStepOnce(
     pool,
@@ -666,12 +666,21 @@ async function processTriageStepOnce(
       profile,
       healthContext,
       conclusionFormat: options.conclusionFormat,
+      assessmentVersion: options.assessmentVersion || persistedState.assessment_version,
       previousAnswers,
       previousSessionSummary: session.triage_summary || null,
       previousTriageMessages: prevTriageMessages,
       previousSeverity:
         persistedState.previous_severity || (isFollowUpPhase ? session.triage_severity : null),
-      forceConclusion: previousAnswers.length >= 8,
+      forceConclusion:
+        previousAnswers.length >=
+        (options.assessmentVersion === 2 ||
+        persistedState.assessment_version === 2 ||
+        previousAnswers.some((item) =>
+          require('../../core/checkin/triage-detail-questions').isDetailedStep(item.step)
+        )
+          ? require('../../core/checkin/triage-detail-questions').MAX_DETAILED_ANSWERS
+          : 8),
       bodyLocation: session.body_location || null,
       bodyLocations:
         session.body_locations || (session.body_location ? [session.body_location] : null),
@@ -713,7 +722,7 @@ async function processTriageStepOnce(
             type: 'single_choice',
           },
           currentStep: previousAnswers.length,
-          totalSteps: isFollowUp ? 2 : 4,
+          totalSteps: result.questionProgress?.total || (isFollowUp ? 2 : 4),
         },
         { greeting: null },
         illusionCtx,
@@ -729,6 +738,9 @@ async function processTriageStepOnce(
   }
 
   const nextState = {
+    ...(options.assessmentVersion === 2 || persistedState.assessment_version === 2
+      ? { assessment_version: 2 }
+      : {}),
     phase: isFollowUp ? 'followup' : 'initial',
     revision: randomUUID(),
     lang: selectedLang,

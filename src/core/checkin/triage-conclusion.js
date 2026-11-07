@@ -220,13 +220,22 @@ function buildConclusionFacts(state, profile, context = {}, lang = 'vi', now = n
     tuoi: getUserAge(profile),
     gioi: short(profile.gender, 20),
     benh_nen_da_khai: list(
-      conditionsOf(profile.medical_conditions).length
-        ? conditionsOf(profile.medical_conditions)
-        : conditionsOf(context.medical_conditions)
+      state.detailedAssessmentVersion === 2 && state.conditions?.length
+        ? state.conditions
+        : conditionsOf(profile.medical_conditions).length
+          ? conditionsOf(profile.medical_conditions)
+          : conditionsOf(context.medical_conditions)
     ),
     trieu_chung: list(
       state.newSymptoms && state.currentSymptoms?.length ? state.currentSymptoms : state.allSymptoms
     ),
+    ...(state.regionDetails?.length
+      ? {
+          chi_tiet_tung_vung: state.regionDetails,
+          khai_bao_chi_tiet_da_hoan_tat: Boolean(state.detailedAssessmentComplete),
+          tinh_trang_khai_bao_benh_nen: state.historyAssessment,
+        }
+      : {}),
     ...(Array.isArray(state.bodyLocations) && state.bodyLocations.length
       ? { vung_kho_chiu: state.bodyLocations }
       : {}),

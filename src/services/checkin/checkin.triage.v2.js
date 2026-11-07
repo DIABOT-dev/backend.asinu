@@ -24,6 +24,11 @@ const { t } = require('../../i18n');
 const { normalizeLang } = require('../../core/checkin/triage-i18n');
 const { getHonorifics } = require('../../lib/honorifics');
 const {
+  getDetailedNextStep,
+  detailedQuestionsEnabled,
+  isDetailedStep,
+} = require('../../core/checkin/triage-detail-questions');
+const {
   normalizeProfile,
   normalizeAnswers,
   conditionsOf,
@@ -120,6 +125,7 @@ async function getNextTriageQuestion(input) {
     profile = {},
     healthContext = {},
     conclusionFormat = 'structured',
+    assessmentVersion,
     previousAnswers = [],
     previousSessionSummary = null,
     previousTriageMessages = [],
@@ -178,7 +184,7 @@ async function getNextTriageQuestion(input) {
         inferLegacyStep(entry.question, index, ['symptoms', 'onset', 'progression', 'red_flags']),
     }))
   );
-  const engineResult = getNextStep({
+  const engineInput = {
     status,
     phase,
     profile: normalizedProfile,
@@ -191,7 +197,17 @@ async function getNextTriageQuestion(input) {
     bodyLocations,
     bodyLocationOther,
     lang,
-  });
+  };
+  const engineResult = detailedQuestionsEnabled({ assessmentVersion, previousAnswers })
+    ? getDetailedNextStep(engineInput)
+    : getNextStep({
+        ...engineInput,
+        previousAnswers: normalizedAnswers.filter((answer) => !isDetailedStep(answer.step)),
+      });
+  const assessmentProfile =
+    engineResult.state.detailedAssessmentVersion === 2
+      ? { ...normalizedProfile, medical_conditions: engineResult.state.conditions }
+      : normalizedProfile;
 
   // 1. Extract all symptom texts from previous answers for emergency scanning.
   const allSymptomTexts = answersWithSteps
@@ -202,9 +218,9 @@ async function getNextTriageQuestion(input) {
     .filter(Boolean);
 
   // 2. Emergency check — pure keyword matching, instant, zero-cost.
-  const emergency = detectEmergency(allSymptomTexts, normalizedProfile);
+  const emergency = detectEmergency(allSymptomTexts, assessmentProfile);
   if (emergency.isEmergency) {
-    return formatEmergencyResult(emergency, normalizedProfile, lang);
+    return formatEmergencyResult(emergency, assessmentProfile, lang);
   }
 
   // 2b. AI safety classifier. Re-evaluate the first symptom on each request;
@@ -217,7 +233,7 @@ async function getNextTriageQuestion(input) {
   if (symptomText) {
     if (symptomText && symptomText.length >= 2) {
       try {
-        const safety = await classifySymptomSeverity(symptomText, normalizedProfile);
+        const safety = await classifySymptomSeverity(symptomText, assessmentProfile);
         if (safety.severity === 'emergency') {
           // Bypass triage, conclude ngay với severity='emergency' (giữ nguyên,
           // không downgrade về 'high' như trước — emergency là level cao nhất
@@ -295,7 +311,7 @@ async function getNextTriageQuestion(input) {
 
     const aiConclusion = await generateConclusion(
       conclusionInput,
-      normalizedProfile,
+      assessmentProfile,
       lang,
       null,
       normalizedHC,
@@ -351,18 +367,20 @@ async function getNextTriageQuestion(input) {
   }
 
   // 6. Format the question via the AI layer (template, no GPT).
-  const formatted = formatQuestion(
-    {
-      ...engineResult,
-      previousSessionSummary,
-      bodyLocation,
-      bodyLocations,
-      bodyLocationOther,
-    },
-    normalizedProfile,
-    normalizedAnswers,
-    lang
-  );
+  const formatted = engineResult.detailedQuestion
+    ? engineResult
+    : formatQuestion(
+        {
+          ...engineResult,
+          previousSessionSummary,
+          bodyLocation,
+          bodyLocations,
+          bodyLocationOther,
+        },
+        normalizedProfile,
+        normalizedAnswers,
+        lang
+      );
 
   return {
     isDone: false,
@@ -372,6 +390,13 @@ async function getNextTriageQuestion(input) {
     optionsGrouped: engineResult.optionsGrouped || null, // pass T2-grouped symptoms cho FE render section
     multiSelect: formatted.multiSelect,
     allowFreeText: formatted.allowFreeText,
+    ...(engineResult.questionProgress
+      ? {
+          questionProgress: engineResult.questionProgress,
+          questionGroup: engineResult.questionGroup,
+          exclusiveOptions: engineResult.exclusiveOptions || [],
+        }
+      : {}),
   };
 }
 

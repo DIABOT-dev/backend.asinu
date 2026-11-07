@@ -91,19 +91,27 @@ function emergencyFault(value) {
 }
 
 function priorSymptomResolutionFault(value) {
-  const text = plain(value);
   // A historical mention or an absent complaint today does not confirm that
   // a particular earlier symptom improved. No such confirmation is supplied
   // in the conclusion contract; a general "fine" check-in is not one either.
   const historical =
-    /lan (?:check-in |checkin )?truoc|cac lan check-in|truoc do|trieu chung cu|previous (?:check-ins?|symptoms)|earlier symptoms/.test(
-      text
-    );
+    /lan (?:check-in |checkin )?truoc|cac lan check-in|truoc do|trieu chung cu|previous (?:check-ins?|symptoms)|earlier symptoms/;
   const resolution =
-    /(?:da |co ve |seems? |appears? |have |has )+(?:da )?(?:on dinh|do|het|khoi|cai thien|stable|resolved|improved)|khong con|no longer/.test(
-      text
-    );
-  return historical && resolution ? 'unconfirmed_prior_symptom_resolution' : null;
+    /(?:da |co ve |seems? |appears? |have |has )+(?:da )?(?:on dinh|do|het|khoi|cai thien|stable|resolved|improved)|khong con|no longer/;
+  const refersBack =
+    /\b(?:(?:nhung|cac) )?(?:trieu chung|bieu hien|con dau|tinh trang) (?:nay|do|cu)\b|\b(?:they|these symptoms|those symptoms|this pain|this discomfort)\b/;
+  let previousHistorical = false;
+  // Never join unrelated paragraphs into a claim. Preserve cross-sentence
+  // checks when an explicit pronoun refers back to a historical complaint.
+  for (const statement of statements(value)) {
+    const text = plain(statement);
+    const past = historical.test(text);
+    const reference = refersBack.test(text);
+    if (resolution.test(text) && (past || (previousHistorical && reference)))
+      return 'unconfirmed_prior_symptom_resolution';
+    previousHistorical = past || (previousHistorical && reference);
+  }
+  return null;
 }
 
 function measurementTimeMatches(text, record, asOf) {
