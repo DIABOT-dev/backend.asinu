@@ -173,12 +173,7 @@ describeDatabase('check-in HTTP API contract', () => {
       .expect(200);
     expect(todayBefore.body).toMatchObject({ ok: true, session: null });
 
-    const locations = await request(app)
-      .get('/api/mobile/checkin/locations')
-      .set(auth(patientToken))
-      .expect(200);
-    expect(locations.body.ok).toBe(true);
-    expect(locations.body.locations).toHaveLength(7);
+    await request(app).get('/api/mobile/checkin/locations').set(auth(patientToken)).expect(404);
 
     const started = await request(app)
       .post('/api/mobile/checkin/start')

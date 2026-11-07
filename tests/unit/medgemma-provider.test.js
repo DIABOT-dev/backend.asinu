@@ -34,7 +34,7 @@ describe('medgemma provider', () => {
       ok: true,
       json: async () => ({
         model: 'medgemma-27b-text-it',
-        choices: [{ message: { content: '   hello world   ' } }],
+        choices: [{ message: { content: '   hello world   ' }, finish_reason: 'stop' }],
         usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
       }),
     });
@@ -42,6 +42,7 @@ describe('medgemma provider', () => {
     expect(r.reply).toBe('hello world');
     expect(r.provider).toBe('medgemma');
     expect(r.meta.tokens_used.total).toBe(15);
+    expect(r.meta.finish_reason).toBe('stop');
   });
 
   test('callMedGemma sends a Dr7-compatible body by default', async () => {

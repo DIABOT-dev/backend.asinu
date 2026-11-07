@@ -81,10 +81,6 @@ module.exports = (pool) => {
     json((req) => coins.catalog(pool, req.user.id))
   );
   const greetingCards = require('../services/v21/greeting-cards.service');
-  r.get(
-    '/rewards/cards/:id',
-    json((req) => greetingCards.read(pool, req.user.id, req.params.id))
-  );
   r.post(
     '/rewards/cards/:id/open',
     json((req) => greetingCards.open(pool, req.user.id, req.params.id))
@@ -97,15 +93,7 @@ module.exports = (pool) => {
     '/medication/weekly-report',
     json((req) => med.weekly(pool, req.user.id, req.query.patientId))
   );
-  r.get(
-    '/medication/patients',
-    json((req) => med.patients(pool, req.user.id))
-  );
   const drafts = require('../services/v21/medication-drafts.service');
-  r.get(
-    '/medication/draft',
-    json((req) => drafts.read(pool, req.user.id, req.query.patientId))
-  );
   r.put(
     '/medication/draft',
     json((req) => drafts.write(pool, req.user.id, req.query.patientId, req.body))
@@ -140,10 +128,6 @@ module.exports = (pool) => {
     })
   );
   r.post(
-    '/med-items',
-    json((req) => med.createItem(pool, req.user.id, req.query.patientId, req.body))
-  );
-  r.post(
     '/med-items/lookup',
     rateLimit({
       windowMs: 60000,
@@ -153,10 +137,6 @@ module.exports = (pool) => {
       legacyHeaders: false,
     }),
     handle(purposeController.lookup)
-  );
-  r.post(
-    '/med-schedules',
-    json((req) => med.saveSchedule(pool, req.user.id, req.query.patientId, null, req.body))
   );
   r.put(
     '/med-schedules/:id',
@@ -169,10 +149,6 @@ module.exports = (pool) => {
   r.post(
     '/med-schedules/:id/consent',
     json((req) => med.consent(pool, req.user.id, req.params.id, req.body?.accept))
-  );
-  r.put(
-    '/meal-times',
-    json((req) => med.saveMeals(pool, req.user.id, req.query.patientId, req.body))
   );
   r.get(
     '/med-doses/today',

@@ -76,16 +76,23 @@ function formatQuestion(engineResult, profile, _previousAnswers = [], lang = 'vi
         : `${locLabels[0]} và ${locLabels[1]}`;
   else if (locLabels.length >= 3)
     locPhrase = `${locLabels.slice(0, -1).join(', ')}${resolvedLang === 'en' ? ', and ' : ' và '}${locLabels[locLabels.length - 1]}`;
-  if (locOther) locPhrase = locPhrase ? `${locPhrase}, ${locOther}` : locOther;
+  const detailedRegions = locKeys.some((key) =>
+    locOther.startsWith(`${locationLabels[key]?.label}:`)
+  );
+  if (locOther && !detailedRegions) {
+    const briefOther = locOther.length > 160 ? locOther.slice(0, 157) + '...' : locOther;
+    locPhrase = locPhrase ? `${locPhrase}, ${briefOther}` : briefOther;
+  }
 
   switch (step) {
     case 'symptoms':
       // T3 question — aware T2 location nếu có. Nếu không có location (FE cũ) →
       // dùng template chung như cũ.
       if (locPhrase) {
-        const locationQuestion = locKeys.length === 1 && locKeys[0] === 'mental' && !locOther
-          ? 'symptoms_mental'
-          : 'symptoms_with_location';
+        const locationQuestion =
+          locKeys.length === 1 && locKeys[0] === 'mental' && !locOther
+            ? 'symptoms_mental'
+            : 'symptoms_with_location';
         question = t(`checkin.triage.question.${locationQuestion}`, resolvedLang, {
           CallName,
           selfRef,
@@ -150,14 +157,13 @@ function formatQuestion(engineResult, profile, _previousAnswers = [], lang = 'vi
       const previousPhrase =
         formatSymptomList(
           engineResult.previousSymptoms ||
-          (facts.allSymptoms.length
-            ? facts.allSymptoms
-            : engineResult.previousSessionSummary
-              ? [engineResult.previousSessionSummary]
-              : []),
+            (facts.allSymptoms.length
+              ? facts.allSymptoms
+              : engineResult.previousSessionSummary
+                ? [engineResult.previousSessionSummary]
+                : []),
           resolvedLang
-        ) ||
-        t('checkin.triage.previous_unknown', resolvedLang);
+        ) || t('checkin.triage.previous_unknown', resolvedLang);
       const prev =
         previousPhrase.length <= 160
           ? previousPhrase
@@ -249,7 +255,14 @@ const EMERGENCY_CONCLUSIONS = {
 
 // ─── Conclusion Generator ────────────────────────────────────────────────────
 
-async function generateConclusion(state, profile, lang = 'vi', _pool = null, healthContext = {}) {
+async function generateConclusion(
+  state,
+  profile,
+  lang = 'vi',
+  _pool = null,
+  healthContext = {},
+  options = {}
+) {
   const resolvedLang = normalizeLang(lang);
   const h = getHonorifics({ ...profile, lang: resolvedLang });
 
@@ -260,10 +273,22 @@ async function generateConclusion(state, profile, lang = 'vi', _pool = null, hea
       recommendation: t(tpl.recommendation, resolvedLang, h),
       closeMessage: t(tpl.closeMessage, resolvedLang, h),
       isEmergency: true,
+      aiNotice: t('checkin.conclusion.ai_notice', resolvedLang),
     };
   }
 
-  if (!structuredConclusionEnabled()) return legacyConclusion(state, h, resolvedLang);
+  if (!structuredConclusionEnabled())
+    return {
+      ...legacyConclusion(state, h, resolvedLang),
+      aiNotice: t('checkin.conclusion.ai_notice', resolvedLang),
+    };
+  if (options.conclusionFormat === 'narrative')
+    return require('./triage-conclusion-narrative').generateNarrativeConclusion(
+      state,
+      profile,
+      resolvedLang,
+      healthContext
+    );
   return generateStructuredConclusion(state, profile, resolvedLang, healthContext);
 }
 

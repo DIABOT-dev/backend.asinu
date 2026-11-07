@@ -133,7 +133,7 @@ test('Vietnamese presentation remains valid and English generation carries an ex
   const facts = buildConclusionFacts(state, profile, {}, 'en');
   expect(facts.language).toBe('en');
   expect(buildConclusionPrompt(facts, 'en')).toContain(
-    'Translate Vietnamese source facts into English'
+    'OUTPUT LANGUAGE: ENGLISH. Write every prose value in English.'
   );
   expect(
     conclusionLanguageFault('Cháu hiểu chú đang khó ngủ.', { ...facts, language: 'vi' })

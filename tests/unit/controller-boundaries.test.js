@@ -51,7 +51,6 @@ test('extracted routes only wire controllers and middleware', () => {
     'checkin-call.ops.routes.js',
     'checkin-gifts.routes.js',
     'checkin-gifts.ops.routes.js',
-    'voice.routes.js',
     'household.routes.js',
     'early-signal.routes.js',
     'doctor-task.routes.js',

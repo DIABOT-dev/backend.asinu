@@ -569,10 +569,24 @@ function triageFingerprint(answers, lang) {
   return createHash('sha256').update(JSON.stringify({ answers, lang })).digest('hex');
 }
 
-async function processTriageStep(pool, userId, checkinId, previousAnswers, requestLang = null) {
-  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}`;
+async function processTriageStep(
+  pool,
+  userId,
+  checkinId,
+  previousAnswers,
+  requestLang = null,
+  options = {}
+) {
+  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}:${options.conclusionFormat || 'structured'}`;
   if (triageRequests.has(key)) return triageRequests.get(key);
-  const pending = processTriageStepOnce(pool, userId, checkinId, previousAnswers, requestLang);
+  const pending = processTriageStepOnce(
+    pool,
+    userId,
+    checkinId,
+    previousAnswers,
+    requestLang,
+    options
+  );
   triageRequests.set(key, pending);
   try {
     return await pending;
@@ -581,7 +595,14 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers, reque
   }
 }
 
-async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, requestLang = null) {
+async function processTriageStepOnce(
+  pool,
+  userId,
+  checkinId,
+  previousAnswers,
+  requestLang = null,
+  options = {}
+) {
   const { rows } = await pool.query(
     `SELECT * FROM health_checkins WHERE id = $1 AND user_id = $2`,
     [checkinId, userId]
@@ -605,7 +626,9 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
   // next_checkin_at were committed. Recover the saved answer after a failed
   // completion write, without calling AI again or reporting a false success.
   if (cachedResult && cached.finalized !== false && session.triage_completed_at)
-    return cachedResult;
+    return options.conclusionFormat === 'narrative'
+      ? require('../../core/checkin/triage-conclusion-narrative').adaptSavedConclusion(cachedResult)
+      : cachedResult;
   if (cached && !cachedMatches)
     throw Object.assign(new Error('Check-in is complete; start a new follow-up'), {
       code: 'TRIAGE_CHANGED',
@@ -642,6 +665,7 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
       lang: selectedLang,
       profile,
       healthContext,
+      conclusionFormat: options.conclusionFormat,
       previousAnswers,
       previousSessionSummary: session.triage_summary || null,
       previousTriageMessages: prevTriageMessages,

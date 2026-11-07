@@ -27,7 +27,10 @@ const candidate = () => ({
   loi_nhan: 'Vài ngày nay chú khó ngủ, tình trạng vẫn như cũ. Cháu hiểu chú đang mệt nhé.',
   lien_quan:
     'Ngủ kém thường ảnh hưởng tới cảm giác mệt. Theo dõi nếp sinh hoạt giúp mình hiểu rõ những thay đổi.',
-  nen_lam: ['Giữ giờ ngủ và thức dậy đều đặn.', 'Ghi 2 mốc giờ: lúc đi ngủ và lúc thức dậy.'],
+  nen_lam: [
+    'Giữ giờ ngủ và thức dậy đều đặn.',
+    'Ghi 2 mốc giờ: lúc khó chịu xuất hiện và lúc thay đổi.',
+  ],
   di_kham_khi: [
     'Chú nên đi khám trong vài ngày tới.',
     'Nếu khó ngủ ảnh hưởng nhiều tới sinh hoạt, chú đi khám sớm hơn.',
@@ -58,13 +61,15 @@ test('E7: a bare conditional warning becomes a complete spoken action without re
   expect(result.followUpHours).toBe(input.followUpHours);
   expect(result.recommendation).toContain(result.seeDoctorWhen[1]);
   expect(result.speechText).toBe(
-    [result.personalMessage, ...result.seeDoctorWhen, result.closeMessage].join(' ')
+    [result.personalMessage, ...result.seeDoctorWhen, result.closeMessage, result.aiNotice].join(
+      ' '
+    )
   );
   expect(input).toEqual(originalDecision);
   expect(logger.warn).not.toHaveBeenCalled();
 });
 
-test('FR-1: generic activities without a concrete quantity use only the activity fallback', async () => {
+test('V3: server adds the required diary without replacing useful non-medication activities', async () => {
   callTextAi.mockResolvedValue({
     content: JSON.stringify({
       ...candidate(),
@@ -76,10 +81,12 @@ test('FR-1: generic activities without a concrete quantity use only the activity
   expect(result.personalMessage).toBe(candidate().loi_nhan);
   expect(result.explanation).toBe(candidate().lien_quan);
   expect(result.seeDoctorWhen).toEqual(candidate().di_kham_khi);
-  expect(logger.warn).toHaveBeenCalledWith('conclusion_rejected', {
-    block: 'nen_lam',
-    reason: 'missing_quantified_action',
-  });
+  expect(result.todo).toEqual([
+    'Nghỉ ngơi thêm.',
+    'Sinh hoạt điều độ nhé.',
+    candidate().nen_lam[1],
+  ]);
+  expect(logger.warn).not.toHaveBeenCalled();
 });
 
 test.each([
@@ -101,7 +108,7 @@ test.each([
   }
 );
 
-test('FR-1 / AC-2: completing two current readings and conditions still fits 2–3 short sentences', async () => {
+test('V3: factual completion preserves the full explanation and adds accurate current readings', async () => {
   const raw = {
     ...candidate(),
     lien_quan:
@@ -123,15 +130,16 @@ test('FR-1 / AC-2: completing two current readings and conditions still fits 2�
   expect(result.explanation).toMatch(/Tiểu đường/i);
   expect(result.explanation).toContain('128/82');
   expect(result.explanation).toContain('6.4');
-  expect(sentences(result.explanation).length).toBeGreaterThanOrEqual(2);
-  expect(sentences(result.explanation).length).toBeLessThanOrEqual(3);
-  for (const sentence of sentences(result.explanation))
-    expect(sentence.split(/\s+/).length).toBeLessThanOrEqual(25);
+  expect(result.explanation).toContain(raw.lien_quan);
+  expect(result.conclusionSource).toBe('ai');
+  expect(logger.warn).not.toHaveBeenCalled();
 });
 
 test.each([
-  ['loi_nhan', 'Chú thấy khó ngủ. Cháu hiểu chú đang mệt. Mình cùng theo dõi nhé.'],
-  ['lien_quan', 'Giấc ngủ ảnh hưởng đến sinh hoạt.'],
+  [
+    'loi_nhan',
+    'Chú thấy khó ngủ. Cháu hiểu chú đang mệt. Mình cùng theo dõi nhé. Chú có thể ghi lại cảm giác.',
+  ],
   ['loi_nhan', 'Cháu hiểu chú đang mệt và khó ngủ nhé ❤️.'],
   ['loi_nhan', 'Chú Asinu thấy khó ngủ. Cháu hiểu chú đang mệt nhé.'],
 ])('FR-1 / §5: block %s must follow its sentence and no-emoji constraints', async (block, text) => {
@@ -154,7 +162,9 @@ test.each(['vi', 'en'])(
     expect(result.summary).toBe(`${result.personalMessage} ${result.explanation}`);
     expect(result.recommendation).toBe([...result.todo, ...result.seeDoctorWhen].join('\n'));
     expect(result.speechText).toBe(
-      [result.personalMessage, ...result.seeDoctorWhen, result.closeMessage].join(' ')
+      [result.personalMessage, ...result.seeDoctorWhen, result.closeMessage, result.aiNotice].join(
+        ' '
+      )
     );
     expect(result.speechText.length).toBeLessThanOrEqual(1600);
     expect(result.closeMessage).toMatch(lang === 'vi' ? /3 giờ/ : /3 hours/);
@@ -185,6 +195,9 @@ test.each(Object.keys(EMERGENCY_CONCLUSIONS))(
     expect(result.isEmergency).toBe(true);
     expect(result.disclaimer).toBeUndefined();
     expect(result.conclusionVersion).toBeUndefined();
+    expect(result.aiNotice).toBe(
+      require('../../src/i18n/locales/vi.json')['checkin.conclusion.ai_notice']
+    );
   }
 );
 

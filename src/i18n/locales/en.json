@@ -1063,6 +1063,7 @@
   "notification.doctor_ivr_call_title": "Dr. {{doctorName}} needs more information",
   "notification.doctor_ivr_call_body": "Listen to the questions and choose your answers.",
   "checkin.conclusion.disclaimer": "Asinu’s advice is for reference only and does not replace medical diagnosis or treatment. Connect with an Asinu health expert for more accurate health advice.",
+  "checkin.conclusion.ai_notice": "Asinu is AI and can make mistakes. This content provides medical knowledge only and does not replace a doctor's examination, treatment or prescriptions.",
   "checkin.conclusion.followup": "I will check on you again in {{hours}} hours.",
   "checkin.conclusion.fallback.message": "You reported {{symptoms}}{{timeline}}. I understand these symptoms are worrying you.",
   "checkin.conclusion.fallback.message_with_baseline": "You reported additional {{symptoms}}{{timeline}}. I understand this feels uncomfortable; earlier, you also reported {{baseline}}.",

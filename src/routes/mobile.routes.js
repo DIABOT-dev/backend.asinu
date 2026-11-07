@@ -12,7 +12,7 @@ const {
   verifyAudioMagicBytes,
   verifyImageMagicBytes,
 } = require('../middleware/upload.middleware');
-const { loginByEmail, logoutHandler } = require('../controllers/auth.controller');
+const { logoutHandler } = require('../controllers/auth.controller');
 const {
   createMobileLog,
   getRecentLogs,
@@ -30,13 +30,8 @@ const {
 } = require('../controllers/chat.controller');
 const {
   getMissionsHandler,
-  getMissionHistoryHandler,
-  getMissionStatsHandler,
 } = require('../controllers/missions.controller');
 const {
-  upsertOnboardingProfile,
-  onboardingNext,
-  onboardingComplete,
   onboardingCompleteV2,
 } = require('../controllers/onboarding.controller');
 const {
@@ -53,7 +48,6 @@ const {
 const { getTreeSummary, getTreeHistory } = require('../controllers/tree.controller');
 const {
   startCheckinHandler,
-  getLocationsHandler,
   followUpHandler,
   triageHandler,
   todayCheckinHandler,
@@ -64,8 +58,6 @@ const {
   resetTodayHandler,
   simulateTimePassHandler,
   healthScoreHandler,
-  engagementPatternHandler,
-  engagementOptimalTimeHandler,
 } = require('../controllers/checkin.controller');
 const {
   getCaregiverLogs,
@@ -88,7 +80,6 @@ function mobileRoutes(pool) {
   // Logs
   router.post('/logs', requireAuth, bindController(createMobileLog, pool));
   router.get('/logs', requireAuth, bindController(getRecentLogs, pool));
-  router.get('/logs/recent', requireAuth, bindController(getRecentLogs, pool));
   router.get('/logs/today', requireAuth, bindController(getTodayLogs, pool));
 
   // Caregiver view patient logs (requires can_view_logs permission)
@@ -99,7 +90,18 @@ function mobileRoutes(pool) {
     bindController(getCaregiverCheckins, pool)
   );
 
-  // Chat — gated by chatbot feature flag + daily/monthly limits (MVP audit #1)
+  // Dictating a check-in is independent of opening a chatbot conversation.
+  // Keep the same authenticated, consented upload validation and usage accounting.
+  router.post(
+    '/checkin/transcribe',
+    requireAuth,
+    requireAiConsent(pool),
+    handleUpload(audioUpload.single('audio')),
+    verifyAudioMagicBytes,
+    bindController(transcribeAudio, pool)
+  );
+
+  // Chat — retains its operational chatbot kill switch.
   router.post(
     '/chat/transcribe',
     requireAuth,
@@ -125,17 +127,6 @@ function mobileRoutes(pool) {
 
   // Missions
   router.get('/missions', requireAuth, bindController(getMissionsHandler, pool));
-  router.get('/missions/history', requireAuth, bindController(getMissionHistoryHandler, pool));
-  router.get('/missions/stats', requireAuth, bindController(getMissionStatsHandler, pool));
-
-  // Onboarding — legacy form
-  router.post('/onboarding', requireAuth, bindController(upsertOnboardingProfile, pool));
-
-  // Onboarding — AI-driven: lấy câu hỏi tiếp theo
-  router.post('/onboarding/next', requireAuth, requireAiConsent(pool), bindController(onboardingNext, pool));
-
-  // Onboarding — AI-driven: lưu profile khi AI báo done
-  router.post('/onboarding/complete', requireAuth, bindController(onboardingComplete, pool));
 
   // Onboarding — V2 fixed 5-page wizard
   router.post('/onboarding/complete-v2', requireAuth, bindController(onboardingCompleteV2, pool));
@@ -161,7 +152,6 @@ function mobileRoutes(pool) {
 
   // Health Check-in
   router.get('/checkin/today', requireAuth, bindController(todayCheckinHandler, pool));
-  router.get('/checkin/locations', requireAuth, bindController(getLocationsHandler, pool));
   router.post('/checkin/start', requireAuth, bindController(startCheckinHandler, pool));
   router.post('/checkin/followup', requireAuth, bindController(followUpHandler, pool));
   router.post('/checkin/triage', requireAuth, bindController(triageHandler, pool));
@@ -192,12 +182,6 @@ function mobileRoutes(pool) {
 
   // Engagement patterns
   router.post('/engagement/screen-view', requireAuth, bindController(trackScreenViewHandler, pool));
-  router.get('/engagement/pattern', requireAuth, bindController(engagementPatternHandler, pool));
-  router.get(
-    '/engagement/optimal-time',
-    requireAuth,
-    bindController(engagementOptimalTimeHandler, pool)
-  );
 
   // Care Circle Dashboard — caregiver views member's health summary
   router.get(
@@ -214,7 +198,6 @@ function mobileRoutes(pool) {
   router.get('/flags', requireAuth, bindController(featureFlagsHandler, pool));
 
   // Auth shortcuts
-  router.post('/auth/login', bindController(loginByEmail, pool));
   router.post('/auth/logout', requireAuth, bindController(logoutHandler, pool));
 
   return router;

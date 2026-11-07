@@ -28,23 +28,25 @@ const TYPE_PATTERNS = [
 const typesIn = (text) =>
   TYPE_PATTERNS.filter(([, pattern]) => pattern.test(plain(text))).map(([type]) => type);
 function assertsVitalStatus(text, type) {
-  const label = type === 'huyet_ap'
-    ? '(?:huyet ap|blood pressure)'
-    : '(?:duong huyet|blood (?:sugar|glucose))';
+  const label =
+    type === 'huyet_ap' ? '(?:huyet ap|blood pressure)' : '(?:duong huyet|blood (?:sugar|glucose))';
   const status = '(?:on dinh|binh thuong|cao|thap|tot|stable|normal|high|low|good)\\b';
   const owner = 'cua (?:anh|chi|bac|chu|co|ban|ong|ba)';
   // The status must predicate the named vital. An earlier "it is good to
   // consider" must not turn a later condition label into a measured result.
-  const predicate = '(?:is|are|was|were|remains?|has been|have been|looks?|seems?|van|dang|hien tai|hien|con|rat|kha|hoi|khong|chua|hom nay|o muc) ';
-  const modifiers = '(?:(?:still|currently|consistently|very|quite|slightly|too|not|at a|at the|van|dang|hien tai|hien|con|rat|kha|hoi|khong|chua|hom nay|o muc) )*';
+  const predicate =
+    '(?:is|are|was|were|remains?|has been|have been|looks?|seems?|van|dang|hien tai|hien|con|rat|kha|hoi|khong|chua|hom nay|o muc) ';
+  const modifiers =
+    '(?:(?:still|currently|consistently|very|quite|slightly|too|not|at a|at the|van|dang|hien tai|hien|con|rat|kha|hoi|khong|chua|hom nay|o muc) )*';
   return (
-    new RegExp(`${label}(?: (?:reading|readings|level|levels))?(?: ${owner})? ${predicate}${modifiers}${status}`).test(text) ||
-    new RegExp(`${label} ${owner} ${modifiers}${status}`).test(text)
+    new RegExp(
+      `${label}(?: (?:reading|readings|level|levels))?(?: ${owner})? ${predicate}${modifiers}${status}`
+    ).test(text) || new RegExp(`${label} ${owner} ${modifiers}${status}`).test(text)
   );
 }
 const units = () => /(\d+(?:[.,]\d+)?)(?:\s*\/\s*(\d+))?\s*(mmHg|mmol\/L|mg\/dL)/gi;
 const containsVisit = (text) =>
-  /đi khám|bệnh viện|phòng khám|gặp (?:bác sĩ|chuyên gia)|đặt lịch khám|seek (?:care|help)|assessment|clinic|hospital|see (?:a |your )?(?:doctor|professional|specialist)/iu.test(
+  /đi khám|thăm khám|bệnh viện|phòng khám|gặp (?:bác sĩ|chuyên gia)|đặt lịch khám|seek (?:care|help)|assessment|clinic|hospital|(?:see|meet|consult|contact|speak (?:with|to)|talk (?:with|to))\s+(?:(?:a|your|the)\s+)?(?:doctor|professional|specialist|health expert|healthcare professional)\b/iu.test(
     text
   );
 const conditional = (text) => /\b(?:neu|khi|if|when|trong truong hop)\b/.test(plain(text));
@@ -70,6 +72,12 @@ function emergencyFault(value) {
     const text = plain(statement);
     const call = text.search(/goi\s*115|call\s*115/);
     const before = text.slice(0, call);
+    if (
+      /bat ky (?:dau hieu|trieu chung)|any (?:other )?(?:abnormal |unusual )?(?:symptom|sign)/.test(
+        before
+      )
+    )
+      return 'nonspecific_emergency_condition';
     // A condition in a different item/sentence cannot qualify this instruction.
     if (!conditional(statement) && !/[:：]/.test(before)) return 'unconditional_emergency';
     if (
@@ -80,6 +88,22 @@ function emergencyFault(value) {
       return 'nonsevere_emergency_condition';
   }
   return null;
+}
+
+function priorSymptomResolutionFault(value) {
+  const text = plain(value);
+  // A historical mention or an absent complaint today does not confirm that
+  // a particular earlier symptom improved. No such confirmation is supplied
+  // in the conclusion contract; a general "fine" check-in is not one either.
+  const historical =
+    /lan (?:check-in |checkin )?truoc|cac lan check-in|truoc do|trieu chung cu|previous (?:check-ins?|symptoms)|earlier symptoms/.test(
+      text
+    );
+  const resolution =
+    /(?:da |co ve |seems? |appears? |have |has )+(?:da )?(?:on dinh|do|het|khoi|cai thien|stable|resolved|improved)|khong con|no longer/.test(
+      text
+    );
+  return historical && resolution ? 'unconfirmed_prior_symptom_resolution' : null;
 }
 
 function measurementTimeMatches(text, record, asOf) {
@@ -117,14 +141,18 @@ function withoutCalendarDates(text) {
   // 4/11/26 is scanned starting at 11/26 and mistaken for an invented reading.
   // This applies only to the secondary ratio scan: unit/value/time grounding
   // continues to examine the original, unmodified text.
-  return text.replace(/(?<!\d)(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?!\d)/g,
+  return text.replace(
+    /(?<!\d)(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?!\d)/g,
     (match, day, month, year) => {
       const fullYear = year.length === 2 ? 2000 + Number(year) : Number(year);
       const date = new Date(Date.UTC(fullYear, Number(month) - 1, Number(day)));
-      const valid = date.getUTCFullYear() === fullYear &&
-        date.getUTCMonth() === Number(month) - 1 && date.getUTCDate() === Number(day);
+      const valid =
+        date.getUTCFullYear() === fullYear &&
+        date.getUTCMonth() === Number(month) - 1 &&
+        date.getUTCDate() === Number(day);
       return valid ? ' '.repeat(match.length) : match;
-    });
+    }
+  );
 }
 
 function measurementFault(value, facts) {
@@ -202,7 +230,9 @@ function measurementFault(value, facts) {
       /so voi (?:lan|hom) truoc|compared (?:with|to)|(?:van|still|remains|is).{0,12}(?:on dinh|stable)/.test(
         text
       ) ||
-      (named.length && /on dinh|stable/.test(text));
+      ((named.length ||
+        /(?:cac |nhung )?chi so (?:nay|hien tai)|these (?:readings|numbers|values)/.test(text)) &&
+        /on dinh|stable/.test(text));
     const preventive =
       /(?:viec |de |can |nen |hay )?(?:giu|duy tri|kiem soat).{0,35}on dinh|(?:maintain|keep).{0,35}stable/.test(
         text
@@ -218,11 +248,7 @@ function measurementFault(value, facts) {
         return 'insufficient_comparison_data';
     }
     for (const type of named) {
-      if (
-        !current.has(type) &&
-        assertsVitalStatus(text, type)
-      )
-        return 'unmeasured_vital_claim';
+      if (!current.has(type) && assertsVitalStatus(text, type)) return 'unmeasured_vital_claim';
     }
     if (mentionedTypes.length) previousTypes = mentionedTypes;
   }
@@ -235,6 +261,7 @@ module.exports = {
   containsVisit,
   visitFault,
   emergencyFault,
+  priorSymptomResolutionFault,
   measurementFault,
   measurementTimeMatches,
 };

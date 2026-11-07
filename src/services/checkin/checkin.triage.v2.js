@@ -119,6 +119,7 @@ async function getNextTriageQuestion(input) {
     lang = 'vi',
     profile = {},
     healthContext = {},
+    conclusionFormat = 'structured',
     previousAnswers = [],
     previousSessionSummary = null,
     previousTriageMessages = [],
@@ -297,7 +298,8 @@ async function getNextTriageQuestion(input) {
       normalizedProfile,
       lang,
       null,
-      normalizedHC
+      normalizedHC,
+      { conclusionFormat }
     );
 
     return {

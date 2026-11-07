@@ -87,6 +87,7 @@ async function callTextAi({
       usage: res.meta?.tokens_used || { prompt: 0, completion: 0, total: 0 },
       provider: 'medgemma',
       model: res.meta?.model || 'medgemma',
+      finishReason: res.meta?.finish_reason || null,
       credits_remaining: res.meta?.credits_remaining || null,
     };
   }

@@ -25,21 +25,30 @@ const facts = (context = {}, override = {}) =>
   buildConclusionFacts({ ...state, ...override }, profile, context, 'vi', now);
 const pair = () => facts({ recentBP: [bp(128, 82, 6), bp(130, 84, 5)], tookMedicationToday: true });
 
-test.each(['vi', 'en'])('follow-up conclusion preserves previous symptoms without assigning them the new onset (%s)', async (lang) => {
-  callTextAi.mockRejectedValueOnce(new Error('synthetic provider unavailable'));
-  const result = await generateStructuredConclusion({
-    ...state,
-    allSymptoms: ['tiêu chảy', 'đau đầu'],
-    currentSymptoms: ['đau đầu'],
-    baselineSymptoms: ['tiêu chảy'],
-    newSymptoms: true,
-    onset: 'Từ sáng',
-    progression: 'same',
-  }, profile, lang);
-  expect(result.personalMessage.toLowerCase()).toContain(lang === 'vi' ? 'tiêu chảy' : 'diarrhea');
-  expect(result.personalMessage.toLowerCase()).toContain(lang === 'vi' ? 'đau đầu' : 'headache');
-  expect(result.personalMessage.toLowerCase()).toContain(lang === 'vi' ? 'trước đó' : 'earlier');
-});
+test.each(['vi', 'en'])(
+  'follow-up conclusion preserves previous symptoms without assigning them the new onset (%s)',
+  async (lang) => {
+    callTextAi.mockRejectedValueOnce(new Error('synthetic provider unavailable'));
+    const result = await generateStructuredConclusion(
+      {
+        ...state,
+        allSymptoms: ['tiêu chảy', 'đau đầu'],
+        currentSymptoms: ['đau đầu'],
+        baselineSymptoms: ['tiêu chảy'],
+        newSymptoms: true,
+        onset: 'Từ sáng',
+        progression: 'same',
+      },
+      profile,
+      lang
+    );
+    expect(result.personalMessage.toLowerCase()).toContain(
+      lang === 'vi' ? 'tiêu chảy' : 'diarrhea'
+    );
+    expect(result.personalMessage.toLowerCase()).toContain(lang === 'vi' ? 'đau đầu' : 'headache');
+    expect(result.personalMessage.toLowerCase()).toContain(lang === 'vi' ? 'trước đó' : 'earlier');
+  }
+);
 
 test('measurement year must match the actual century', () => {
   expect(
@@ -97,6 +106,27 @@ test('a mild sleep complaint is not a condition to call 115', () => {
       pair()
     )
   ).toBeTruthy();
+});
+test.each([
+  'Nếu khó thở hoặc có bất kỳ dấu hiệu bất thường nào khác, hãy gọi 115.',
+  'Nếu đau ngực dữ dội hoặc bất kỳ triệu chứng nào khác, hãy gọi 115.',
+  'If you have chest pain or any other unusual symptom, call 115.',
+])('a severe example cannot make a catch-all emergency trigger valid: %s', (text) => {
+  expect(validateBlock('di_kham_khi', ['Chú nên đi khám trong vài ngày tới.', text], pair())).toBe(
+    'nonspecific_emergency_condition'
+  );
+});
+test('past symptoms cannot be declared resolved just because they were not mentioned today', () => {
+  expect(
+    validateBlock(
+      'loi_nhan',
+      'Bạn từng đau chân trong lần check-in trước, nhưng triệu chứng đã ổn định rồi.',
+      pair()
+    )
+  ).toBe('unconfirmed_prior_symptom_resolution');
+  expect(
+    validateBlock('loi_nhan', 'Bạn từng nhắc đau chân trong lần check-in trước.', pair())
+  ).toBeNull();
 });
 test.each([
   'Chú ngừng uống thuốc đã kê.',

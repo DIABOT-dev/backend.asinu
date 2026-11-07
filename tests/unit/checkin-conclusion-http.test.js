@@ -38,7 +38,7 @@ const { callTextAi } = require('../../src/services/ai/ai.service');
 const candidate = {
   loi_nhan: 'Chú khó ngủ từ hôm qua và đang đỡ hơn. Cháu mong chú sớm dễ chịu nhé.',
   lien_quan: 'Giấc ngủ và sinh hoạt đều đặn cũng cần được quan tâm.',
-  nen_lam: ['Giữ giờ thức dậy đều đặn.', 'Ghi 2 điều: giấc ngủ và mức độ khó chịu.'],
+  nen_lam: ['Giữ giờ thức dậy đều đặn.', 'Ghi 2 mốc giờ: lúc khó chịu xuất hiện và lúc thay đổi.'],
   di_kham_khi: [
     'Nếu khó ngủ ảnh hưởng nhiều tới sinh hoạt, chú nên đi khám.',
     'Nếu mất ngủ kéo dài, chú nên đi khám sớm hơn.',
@@ -166,6 +166,53 @@ test('HTTP response and stored replay preserve six blocks and legacy fields', as
   expect(
     h.pool.query.mock.calls.filter(([sql]) => sql.includes('triage_completed_at  = NOW()'))
   ).toHaveLength(1);
+});
+
+test('narrative format travels through the real HTTP handler, generation, storage and replay', async () => {
+  const h = harness();
+  callTextAi.mockImplementation(async (options) => ({
+    content:
+      options.maxTokens === 200
+        ? JSON.stringify({ severity: 'mild', needsDoctor: false, needsFamilyAlert: false })
+        : 'Chú đang khó ngủ từ hôm qua, cháu hiểu chú đang mệt nhé.\n\nNếp sinh hoạt đều đặn giúp mình theo dõi những thay đổi.\n\n- Chú thử giữ giờ đi ngủ đều đặn.\n- Nếu khó ngủ kéo dài, chú hãy đi khám.',
+    model: 'medgemma-27b-it',
+  }));
+  const body = { checkin_id: 912, previous_answers: answers, conclusion_format: 'narrative' };
+  const response = await h.submit(body);
+  expect(response.status).toBe(200);
+  expect(response.body).toMatchObject({
+    conclusionFormat: 'narrative',
+    conclusionSource: 'ai',
+    severity: 'low',
+    needsDoctor: false,
+    followUpHours: 6,
+  });
+  expect(response.body.narrative).toContain('Chú đang khó ngủ từ hôm qua');
+  const calls = callTextAi.mock.calls.length;
+  const replay = await h.submit(body);
+  expect(replay.body).toEqual(response.body);
+  expect(callTextAi.mock.calls.length).toBe(calls);
+});
+
+test('a completed old result opens as a narrative without generating again or changing saved clinical data', async () => {
+  const h = harness();
+  await h.submit();
+  const before = JSON.stringify(h.session);
+  const calls = callTextAi.mock.calls.length;
+  const response = await h.submit({
+    checkin_id: 912,
+    previous_answers: answers,
+    conclusion_format: 'narrative',
+  });
+  expect(response.status).toBe(200);
+  expect(response.body.conclusionFormat).toBe('narrative');
+  expect(response.body.narrative).toContain(candidate.loi_nhan);
+  expect(callTextAi.mock.calls.length).toBe(calls);
+  expect(JSON.stringify(h.session)).toBe(before);
+  expect(
+    (await h.submit({ checkin_id: 912, previous_answers: answers, conclusion_format: 'anything' }))
+      .status
+  ).toBe(400);
 });
 test('concurrent HTTP submissions share one conclusion and one completion', async () => {
   const h = harness();

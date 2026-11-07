@@ -124,6 +124,7 @@ async function callMedGemma({
     provider: 'medgemma',
     meta: {
       model: data.model || model,
+      finish_reason: data.choices?.[0]?.finish_reason || null,
       credits_remaining: response.headers?.get?.('x-dr7-credit-remaining') || null,
       tokens_used: {
         prompt: usage.prompt_tokens,

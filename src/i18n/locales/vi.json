@@ -1063,6 +1063,7 @@
   "notification.doctor_ivr_call_title": "Bác sĩ {{doctorName}} cần hỏi thêm",
   "notification.doctor_ivr_call_body": "Nghe câu hỏi và chọn câu trả lời.",
   "checkin.conclusion.disclaimer": "Lời khuyên của Asinu chỉ để tham khảo, không thay thế chẩn đoán và điều trị của bác sĩ. Kết nối với chuyên gia sức khoẻ của Asinu để nhận tư vấn sức khoẻ chính xác hơn.",
+  "checkin.conclusion.ai_notice": "Asinu là Ai và có thể sai, nội dung chỉ là cung cấp kiến thức y tế không thay thế bác sĩ khám chữa bệnh và kê khai thuốc",
   "checkin.conclusion.followup": "{{SelfRef}} sẽ hỏi lại {{honorific}} sau {{hours}} giờ nhé.",
   "checkin.conclusion.fallback.message": "{{Honorific}} kể {{symptoms}}{{timeline}}. {{SelfRef}} hiểu những khó chịu này đang làm {{honorific}} bận tâm.",
   "checkin.conclusion.fallback.message_with_baseline": "{{Honorific}} kể thêm {{symptoms}}{{timeline}}. {{SelfRef}} hiểu {{honorific}} đang khó chịu; trước đó {{honorific}} cũng đã kể {{baseline}}.",

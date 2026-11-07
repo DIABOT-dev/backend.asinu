@@ -63,7 +63,7 @@ async function startCheckinHandler(pool, req, res) {
   // body_location_other: optional free-text, sanitize length
   let other = null;
   if (bodyLocationOther && typeof bodyLocationOther === 'string') {
-    other = bodyLocationOther.trim().slice(0, 200);
+    other = bodyLocationOther.trim().slice(0, 2000);
     if (!other) other = null;
   }
 
@@ -82,8 +82,14 @@ async function startCheckinHandler(pool, req, res) {
     let gift = null;
     try {
       const gifts = require('../services/checkin-gifts/gift.service');
-      gift = await gifts.publicGift(pool, await gifts.safeAssign(pool, req.user.id, session), getLang(req));
-    } catch { /* Rewards never block the accepted health response. */ }
+      gift = await gifts.publicGift(
+        pool,
+        await gifts.safeAssign(pool, req.user.id, session),
+        getLang(req)
+      );
+    } catch {
+      /* Rewards never block the accepted health response. */
+    }
     return res.json({ ok: true, session, gift });
   } catch (err) {
     return res
@@ -131,7 +137,7 @@ async function followUpHandler(pool, req, res) {
 }
 
 async function triageHandler(pool, req, res) {
-  const { checkin_id, previous_answers = [] } = req.body;
+  const { checkin_id, previous_answers = [], conclusion_format } = req.body;
   if (!checkin_id)
     return res.status(400).json({ ok: false, error: t('error.missing_checkin_id', getLang(req)) });
   const validAnswers =
@@ -150,7 +156,10 @@ async function triageHandler(pool, req, res) {
             item.answer.length <= 20 &&
             item.answer.every((answer) => typeof answer === 'string' && answer.length <= 500)))
     );
-  if (!validAnswers) {
+  if (
+    !validAnswers ||
+    (conclusion_format !== undefined && !['structured', 'narrative'].includes(conclusion_format))
+  ) {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
   }
   try {
@@ -159,7 +168,8 @@ async function triageHandler(pool, req, res) {
       req.user.id,
       checkin_id,
       previous_answers,
-      getLang(req)
+      getLang(req),
+      { conclusionFormat: conclusion_format }
     );
     return res.json({ ok: true, ...result });
   } catch (err) {
