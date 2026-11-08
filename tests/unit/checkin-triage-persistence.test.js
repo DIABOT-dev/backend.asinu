@@ -185,3 +185,18 @@ test('a follow-up started during completion cannot receive the older summary', a
   expect(session.triage_summary).toBeUndefined();
   expect(session.triage_state.revision).toBe('followup-started');
 });
+
+test.each(['initial', 'followup'])('phase identity remains stable while CAS revisions advance (%s)', async phase => {
+  const { pool, session } = poolFor();
+  session.occurrence_started_at = new Date('2026-11-08T01:00:00Z');
+  session.triage_state = { phase, revision: 'opening-write' };
+  getNextTriageQuestion.mockResolvedValue({ isDone: false, question: 'Example question', step: 'onset', options: ['Today', 'Yesterday'] });
+  const ids = [], revisions = [];
+  for (let i = 0; i < 3; i++) {
+    await processTriageStep(pool, 7, 12, Array.from({ length: i }, () => ({ step: 'symptoms', question: 'Symptoms?', answer: 'Example symptom' })), 'vi');
+    ids.push(session.triage_state.phase_id); revisions.push(session.triage_state.revision);
+  }
+  expect(new Set(ids).size).toBe(1);
+  expect(ids[0]).toBe(phase === 'initial' ? 'initial:2026-11-08T01:00:00.000Z' : 'opening-write');
+  expect(new Set(revisions).size).toBe(3);
+});

@@ -448,6 +448,7 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
       checkinId,
       JSON.stringify({
         phase: 'followup',
+        phase_id: randomUUID(),
         revision: randomUUID(),
         baseline_answers: Array.from(
           new Map(
@@ -743,6 +744,12 @@ async function processTriageStepOnce(
       ? { assessment_version: 2 }
       : {}),
     phase: isFollowUp ? 'followup' : 'initial',
+    // A phase survives question writes; revision remains a per-write CAS token.
+    // Existing follow-ups adopt their current token once, then keep phase_id.
+    phase_id: persistedState.phase_id || (isFollowUp
+      ? persistedState.revision || randomUUID()
+      : `initial:${session.occurrence_started_at || session.created_at
+        ? new Date(session.occurrence_started_at || session.created_at).toISOString() : checkinId}`),
     revision: randomUUID(),
     lang: selectedLang,
     baseline_answers: prevTriageMessages,
