@@ -655,6 +655,11 @@ async function processTriageStepOnce(
     ? persistedState.baseline_answers || session.triage_messages || []
     : [];
 
+  const detailedAssessment = options.assessmentVersion === 2 ||
+    persistedState.assessment_version === 2 ||
+    previousAnswers.some((item) =>
+      require('../../core/checkin/triage-detail-questions').isDetailedStep(item.step)
+    );
   const result =
     cachedResult ||
     (await getNextTriageQuestion({
@@ -672,15 +677,10 @@ async function processTriageStepOnce(
       previousTriageMessages: prevTriageMessages,
       previousSeverity:
         persistedState.previous_severity || (isFollowUpPhase ? session.triage_severity : null),
-      forceConclusion:
-        previousAnswers.length >=
-        (options.assessmentVersion === 2 ||
-        persistedState.assessment_version === 2 ||
-        previousAnswers.some((item) =>
-          require('../../core/checkin/triage-detail-questions').isDetailedStep(item.step)
-        )
-          ? require('../../core/checkin/triage-detail-questions').MAX_DETAILED_ANSWERS
-          : 8),
+      // The detailed interview ends when its applicable questions are answered,
+      // never because the request contains a particular number of answers.
+      // The controller's payload bound remains a request-size safeguard.
+      forceConclusion: !detailedAssessment && previousAnswers.length >= 8,
       bodyLocation: session.body_location || null,
       bodyLocations:
         session.body_locations || (session.body_location ? [session.body_location] : null),

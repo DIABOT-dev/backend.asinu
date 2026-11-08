@@ -82,6 +82,22 @@ beforeEach(() => {
   buildCheckinContext.mockResolvedValue({});
 });
 
+test.each(['requested', 'persisted', 'inferred'])('detailed assessment never forces a conclusion from answer count (%s)', async source => {
+  const { pool, session } = poolFor();
+  const answers = Array.from({ length: 128 }, () => ({ step: 'symptoms', question: 'Triệu chứng?', answer: 'Đau đầu' }));
+  if (source === 'persisted') session.triage_state = { assessment_version: 2 };
+  if (source === 'inferred') answers[127] = { step: 'detail_head_onset', question: 'Từ khi nào?', answer: 'Từ sáng' };
+  await processTriageStep(pool, 7, 12, answers, 'vi', source === 'requested' ? { assessmentVersion: 2 } : {});
+  expect(getNextTriageQuestion).toHaveBeenCalledWith(expect.objectContaining({ forceConclusion: false }));
+});
+
+test('legacy installed clients keep their existing completion behavior', async () => {
+  const { pool } = poolFor();
+  const answers = Array.from({ length: 8 }, () => ({ step: 'symptoms', question: 'Triệu chứng?', answer: 'Đau đầu' }));
+  await processTriageStep(pool, 7, 12, answers, 'vi');
+  expect(getNextTriageQuestion).toHaveBeenCalledWith(expect.objectContaining({ forceConclusion: true }));
+});
+
 test('a persisted completed result is replayed without another AI call or completion side effects', async () => {
   const { pool } = poolFor();
   const answers = [{ step: 'symptoms', question: 'Triệu chứng?', answer: 'Đau đầu' }];
