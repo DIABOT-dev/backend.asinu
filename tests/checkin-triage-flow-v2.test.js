@@ -140,6 +140,58 @@ describe('per-area check-in interview', () => {
     expect(steps).toContain('detail_limbs_radiation_location');
     expect(steps).not.toContain('detail_head_radiation_location');
   });
+  test.each(['vi', 'en'])('every detailed question offers real choices, including where pain spreads (%s)', lang => {
+    const run = walk(r => {
+      if (r.step.endsWith('_radiation')) return t('checkin.detail.option.spreads', lang);
+      if (r.step.endsWith('_pattern')) return t('checkin.detail.option.episodes', lang);
+      if (r.step.endsWith('_radiation_location')) {
+        const hand = t('checkin.detail.option.radiates_hand', lang);
+        return r.options.includes(hand) ? hand : r.options[0];
+      }
+      return select(r);
+    }, { lang });
+    for (const question of run.questions) {
+      expect(question.options.length).toBeGreaterThan(1);
+      expect(new Set(question.options).size).toBe(question.options.length);
+      expect(question.options.every(option => typeof option === 'string' && option.trim())).toBe(true);
+      expect(question.question.trim().split(/\s+/).length).toBeLessThanOrEqual(25);
+    }
+    const where = run.questions.find(r => r.step === 'detail_limbs_radiation_location');
+    expect(where.options).toContain(t('checkin.detail.option.radiates_hand', lang));
+    expect(where.allowFreeText).toBe(true);
+    expect(run.result.state.regionDetails.find(r => r.region === 'limbs').answers.radiation_location)
+      .toBe(t('checkin.detail.option.radiates_hand', 'vi'));
+  });
+  test.each(['vi', 'en'].flatMap(lang => ['head', 'chest', 'abdomen', 'limbs', 'skin', 'whole_body', 'mental'].map(region => [lang, region])))(
+    'all available questions have readable text and usable choices (%s/%s)', (lang, region) => {
+      const symptoms = require('../src/services/checkin/body-location').getSymptomsForLocation(region, lang);
+      const run = walk(r => {
+        if (r.step === 'symptoms') return symptoms[0];
+        if (r.step === 'red_flags') return 'Không có';
+        if (r.step.endsWith('_pattern')) return t('checkin.detail.option.episodes', lang);
+        if (r.step.endsWith('_radiation')) return t('checkin.detail.option.spreads', lang);
+        return r.options[0];
+      }, { lang, bodyLocations: [region], bodyLocationOther: '' });
+      expect(run.answers.length).toBeLessThanOrEqual(MAX_DETAILED_ANSWERS);
+      expect(new Set(run.answers.map(a => a.step)).size).toBe(run.answers.length);
+      for (const q of run.questions) {
+        expect(q.options.length).toBeGreaterThan(1);
+        expect(new Set(q.options).size).toBe(q.options.length);
+        expect(q.options.every(option => typeof option === 'string' && option.trim().length)).toBe(true);
+        expect(q.question).not.toMatch(/undefined|\{\{|checkin\.detail\./);
+        if (q.step.startsWith('detail_')) expect(q.question.split(/\s+/).length).toBeLessThanOrEqual(25);
+      }
+    });
+  test('the question stays readable when the recorded position is long or repeated', () => {
+    const rawPosition = 'Vai / cánh tay phải / vai cánh tay phải';
+    const run = walk(select, { bodyLocationOther: `Tay chân: ${rawPosition}` });
+    const associated = run.questions.find(r => r.step === 'detail_limbs_associated');
+    expect(associated.question).toBe('Bạn có thêm dấu hiệu nào dưới đây không?');
+    expect(associated.question).not.toContain('(');
+    expect(associated.question).not.toContain('ngoài điều đã kể');
+    expect(associated.questionGroup.label).toBe('Tay chân');
+    expect(run.result.state.regionDetails.find(r => r.region === 'limbs').position).toBe(rawPosition);
+  });
   test('accepts optional uncertainty once and concludes explicitly incomplete if timing is unknown', () => {
     const run = walk((r) =>
       r.step.startsWith('detail_') && r.step !== 'detail_history' ? 'Không rõ' : select(r)
@@ -152,9 +204,7 @@ describe('per-area check-in interview', () => {
     const run = walk((r) => (r.step === 'symptoms' ? 'Chóng mặt' : select(r)), {
       bodyLocations: ['head'],
     });
-    expect(run.questions.find((r) => r.step === 'detail_head_severity').question).toContain(
-      'mức khó chịu'
-    );
+    expect(run.questions.find((r) => r.step === 'detail_head_severity').question).toBe(t('checkin.detail.question.discomfort', 'vi'));
     expect(run.questions.map((r) => r.step)).not.toContain('detail_head_character');
     expect(run.questions.map((r) => r.step)).not.toContain('detail_head_radiation');
   });

@@ -117,6 +117,12 @@ function configuredChoices(field, group) {
       return ['under_minute', 'few_minutes', 'several_minutes', 'long_episode', 'unknown'];
     case 'radiation':
       return ['stays_here', 'spreads', 'unknown'];
+    case 'radiation_location':
+      return ({
+        head: ['radiates_neck_nape', 'radiates_face_eyes', 'radiates_shoulder_arm', 'radiates_back'],
+        chest: ['radiates_shoulder_arm', 'radiates_neck_jaw', 'radiates_back', 'radiates_upper_abdomen'],
+        abdomen: ['radiates_back', 'radiates_shoulder_arm', 'radiates_groin', 'radiates_chest'],
+      }[group.region] || ['radiates_neck_shoulder', 'radiates_back', 'radiates_hand', 'radiates_leg_foot']).concat('unknown');
     case 'aggravating':
       return [
         'movement',
@@ -149,8 +155,6 @@ function configuredChoices(field, group) {
   }
 }
 function regionalQuestion(field, group, lang) {
-  const displayPosition =
-    group.position?.length > 160 ? group.position.slice(0, 157) + '...' : group.position;
   let options;
   if (field === 'onset')
     options = ['vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua', 'vài ngày nay'].map((value) =>
@@ -172,8 +176,7 @@ function regionalQuestion(field, group, lang) {
     step: detailStep(group.region, field),
     question: t(
       key(`question.${field === 'severity' && !painReported(group) ? 'discomfort' : field}`),
-      lang,
-      { region: displayPosition ? `${group.label} (${displayPosition})` : group.label }
+      lang
     ),
     options,
     multiSelect: ['character', 'aggravating', 'relieving', 'associated', 'actions'].includes(field),
@@ -207,6 +210,17 @@ function canonicalDetailAnswer(value) {
     'occasional',
     'stays_here',
     'spreads',
+    'radiates_neck_nape',
+    'radiates_face_eyes',
+    'radiates_shoulder_arm',
+    'radiates_back',
+    'radiates_neck_jaw',
+    'radiates_upper_abdomen',
+    'radiates_groin',
+    'radiates_chest',
+    'radiates_neck_shoulder',
+    'radiates_hand',
+    'radiates_leg_foot',
     'under_minute',
     'few_minutes',
     'several_minutes',
@@ -258,6 +272,8 @@ function canonicalDetailAnswer(value) {
     'heart_condition',
   ];
   const translate = (item) => {
+    // Keep the meaning of answers submitted by clients with the old labels.
+    if (textOf(item).toLowerCase() === 'about 1–5 minutes') return 'Khoảng 1–5 phút';
     const match = keys.find(
       (choice) => t(key(`option.${choice}`), 'en').toLowerCase() === textOf(item).toLowerCase()
     );
