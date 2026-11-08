@@ -436,6 +436,7 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
        no_response_count = 0,
        resolved_at      = $4,
        triage_state     = $6::jsonb,
+       triage_messages  = CASE WHEN $1 = 'fine' THEN triage_messages ELSE '[]'::jsonb END,
        updated_at       = NOW()
      WHERE id = $5
      RETURNING *`,

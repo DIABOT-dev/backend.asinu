@@ -470,6 +470,21 @@ describeDatabase('check-in HTTP API contract', () => {
     expect(first.body.summary).not.toMatch(/đi kèm|chưa.*xử lý/);
   });
 
+  test('reopening a detailed check-in restores persisted answers and the identical next question', async () => {
+    const account = await conversationAccount();
+    const triage = answers => request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({ checkin_id: account.checkinId, previous_answers: answers, assessment_version: 2 });
+    const first = await triage([]).expect(200);
+    const answers = [{ step: first.body.step, question: first.body.question, answer: 'Tiêu chảy' }];
+    const next = await triage(answers).expect(200);
+    const reopened = await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200);
+    expect(reopened.body.session.id).toBe(account.checkinId);
+    expect(reopened.body.session.triage_messages).toEqual(answers);
+    expect(reopened.body.session.triage_completed_at).toBeNull();
+    const resumed = await triage(reopened.body.session.triage_messages).expect(200);
+    expect(resumed.body).toMatchObject({ step: next.body.step, question: next.body.question, options: next.body.options });
+  });
+
   test('follow-up retains symptoms and allows a required third safety question', async () => {
     const account = await conversationAccount(70, ['cao huyết áp']);
     await account.triage(account.initialAnswers).expect(200);
@@ -478,6 +493,10 @@ describeDatabase('check-in HTTP API contract', () => {
       .set(account.headers)
       .send({ checkin_id: account.checkinId, status: 'tired' })
       .expect(200);
+    const reopened = await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200);
+    expect(reopened.body.session.triage_messages).toEqual([]);
+    expect(reopened.body.session.triage_state.phase).toBe('followup');
+    expect(reopened.body.session.triage_state.baseline_answers).toEqual(account.initialAnswers);
     const answers = [
       account.entry('followup_status', 'Vẫn như cũ'),
       account.entry('followup_detail', 'Không có triệu chứng mới'),
