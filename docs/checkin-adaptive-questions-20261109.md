@@ -83,11 +83,17 @@ Bằng chứng test mới: toàn bộ 136 suite local có 2.047 test qua (344 te
 
 Phát lại thuần logic trên snapshot local (không ghi database, không phát thông báo) cho thấy các red flag lấy nhầm từ lời dặn đã mất, nhưng mức urgent còn tồn tại theo quy tắc hai lần “Rất mệt” trong 7 ngày. Quy tắc phân tầng này cần được người phụ trách sản phẩm/chuyên môn rà lại riêng; bản sửa không tự thay ngưỡng.
 
+### Luồng kết luận được người dùng xác nhận
+
+Người dùng đã xác nhận phải giữ màn “Asinu đang tạo kết luận” trong lúc chuẩn bị cả nội dung và giọng đọc. Chỉ khi nội dung cùng audio tương ứng sẵn sàng mới mở phần kết luận và đọc cho người dùng nghe. Không mở màn kết luận trước rồi mới bắt đầu tải audio tại màn đó. Đề xuất trước đây về việc hiện chữ trước, tải audio sau không đúng yêu cầu này và đã được rút lại.
+
+Cơ chế chờ audio hiện có được giữ nguyên. Việc cần xử lý là cuộc gọi/self-notification chen vào khi đang chuẩn bị kết luận; nhánh cảnh báo người thân vẫn hoạt động theo mức độ. Nhánh dự phòng khi audio lỗi hoặc timeout là xử lý ngoại lệ, không phải luồng tải bình thường.
+
 ### Khoảng trống nghiệm thu trải nghiệm còn lại
 
 Rà soát độc lập chỉ ra các test qua chưa đủ để coi toàn bộ luồng đã mượt:
 
-- Kết luận văn bản vẫn bị chặn chờ audio, có timeout 40 giây. Cần tách thời điểm đọc được kết luận khỏi thời điểm giọng đọc sẵn sàng.
+- Cần nghiệm thu sự đồng bộ giữa màn chuẩn bị, nội dung và audio theo luồng đã xác nhận ở trên, cùng các tình huống âm thanh lỗi/chậm. Việc chờ audio trước khi mở kết luận là yêu cầu sản phẩm, không được coi là lỗi trải nghiệm để tự bỏ.
 - Hai phần trăm loading là ước tính theo thời gian. Câu nền trả nhanh, câu bổ sung có thể qua sinh/duyệt/sinh lại; hiện chưa thể hiện nhất quán các giai đoạn đó.
 - Câu chọn một tự gửi, câu nhiều lựa chọn cần Tiếp tục; frontend còn suy đoán chế độ chọn từ câu chữ. Tổng số câu có thể tăng khi mở nhánh mới.
 - Cơ chế khôi phục giữ các câu đã gửi và yêu cầu đang chờ đồng bộ. Chưa lưu phần đang gõ/tick trong câu hiện tại trước khi bấm gửi.
