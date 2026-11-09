@@ -38,7 +38,7 @@ const blockedRoles = ['bac-si', 'Bác sĩ', 'Family Specialist', 'y-ta', 'duoc-s
   'tu-van-tam-ly', 'Custom professional', { id: 'than-nhan' }];
 let app;
 
-beforeEach(() => {
+beforeEach(async () => {
   jest.clearAllMocks();
   pool.query.mockReset();
   for (const operation of Object.values(circle)) {
@@ -48,6 +48,16 @@ beforeEach(() => {
   app.use(express.json());
   app.use('/circle', routes(pool));
   app.use((_error, _req, res, _next) => res.status(500).json({ ok: false }));
+  // Supertest connects to IPv4. Bind that interface explicitly and keep the
+  // fixture server alive until this test ends, even on a busy developer Mac.
+  const expressApp = app;
+  app = await new Promise(resolve => {
+    const server = expressApp.listen(0, '127.0.0.1', () => resolve(server));
+  });
+});
+
+afterEach(async () => {
+  if (app?.close) await new Promise((resolve, reject) => app.close(error => error ? reject(error) : resolve()));
 });
 
 describe.each(endpoints)('%s %s', (method, endpoint, body, operation) => {

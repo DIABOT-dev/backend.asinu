@@ -25,7 +25,13 @@ const symptomListFormatters = {
 function formatSymptomList(values, lang) {
   const labels = (values || [])
     .slice(0, 3)
-    .map((value) => localizeOption(value, lang).trim().toLowerCase())
+    .map((value) => {
+      const label = localizeOption(value, lang).trim().toLowerCase();
+      // Keep the patient's sentence intact in clinical facts. A first-person
+      // sentence cannot be pasted into the noun slot of a template question.
+      return /^(?:(?:tôi|mình|em|cháu|bác|ông|bà|anh|chị)\s|i(?:['’]m|\s)|my\s)/iu.test(label)
+        ? t('checkin.triage.symptom_generic', lang) : label;
+    })
     .filter(Boolean);
   return symptomListFormatters[lang].format(labels);
 }

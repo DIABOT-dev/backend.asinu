@@ -30,12 +30,15 @@
 
 ## Kiểm tra
 
-- Backend: lần chạy cuối 136 suite qua, 2.002 test qua; 338 test bỏ qua theo cấu hình suite.
-- HTTP với database: 40 test qua; có cả các vùng cơ thể, tiếng Việt/Anh, tiếp tục phiên, câu hỏi sinh mới, provider lỗi và kết luận được lưu.
-- App: TypeScript qua; hợp đồng API qua; 86 kiểm tra hành vi check-in, 6 kiểm tra thứ tự layout/bàn phím, 71 kiểm tra hướng dẫn và 8 kiểm tra trạng thái chuẩn bị câu hỏi qua. Bộ hiển thị kết luận cũng qua.
+- Backend: 136 suite, 2.026 test qua; 339 test được bỏ qua theo cấu hình suite. Các suite database cần cờ riêng và được chạy tách ở local.
+- HTTP với database: 41 test qua; có cả các vùng cơ thể, tiếng Việt/Anh, tiếp tục phiên, hai request mở lại đồng thời, câu hỏi sinh mới, provider lỗi, kết luận được lưu và chặn ID câu hỏi từ phiên trước khi bắt đầu hỏi lại.
+- App: TypeScript qua; hợp đồng API qua; 87 kiểm tra hành vi check-in, 6 kiểm tra thứ tự layout/bàn phím, 71 kiểm tra hướng dẫn và 8 kiểm tra trạng thái chuẩn bị câu hỏi qua. Bộ hiển thị kết luận 47 kiểm tra cũng qua.
 - i18n backend/app qua. ESLint không có lỗi; backend còn một cảnh báo có sẵn ở `src/services/v21/audio.service.js`.
 - Ba ca giả lập được gọi thật tới DR7: nhận câu hỏi bổ sung phù hợp; bỏ các câu trùng với phần nền; duyệt lại hoặc chuyển trả lời mở khi nội dung không đạt. Đây là kiểm tra kỹ thuật với dữ liệu giả, không phải nghiệm thu lâm sàng.
-- Một số lần chạy trước gặp 401 trong fixture HTTP và một 404 ở suite QR không liên quan phần sửa. Các vòng HTTP chạy riêng tiếp theo và lần chạy toàn bộ cuối đã qua; chưa xác định nguyên nhân các lỗi không ổn định này, không thay logic xác thực để bỏ qua kiểm tra.
+- Test lại đã bắt và sửa: bí danh “Không chắc chắn” bị hiện trùng “Không rõ”; kiểu dữ liệu đáp án không phải chuỗi; khoảng số chứa `null` sai chỗ; đơn vị `mg/dL` bị nhầm với liều thuốc; câu hỏi ghép nguyên câu xưng “tôi”; xác nhận có đau sau đó nhưng thiếu nhánh hỏi đau; tiêu đề vùng bị lấy từ câu nền kế tiếp; lựa chọn nhiều bị mất đáp án đã chọn khi bấm “Khác”; kết luận nói thiếu tiền sử dù đã khai.
+- Một số lần chạy trước gặp 401/404 không ổn định trong HTTP fixture. Đã chuyển fixture sang server giữ suốt bài test, bind IPv4 đúng địa chỉ Supertest kết nối. Suite QR chạy lại 15 lượt đều qua; toàn bộ suite chạy sau đó cũng qua. Đây là thay đổi cách dựng test, không bỏ qua kiểm tra quyền hoặc sửa logic xác thực để làm test qua.
+- Phiên HTTP trên backend local đang chạy, dùng DR7 thật: hoàn thành 19 câu (3 câu AI có lựa chọn, 1 câu trả lời mở và các câu nền). Kiểm tra đã ghi nhận nhánh đau xuất hiện thêm, câu hỏi không lặp nguyên văn, giữ tiến độ khi mở lại, gửi hai request đồng thời, lưu kết luận và trả lại cùng kết luận khi retry. Dữ liệu tài khoản thử được dọn sau bài test. Kết luận có nguồn `ai`, nhắc lại đúng các thông tin bổ sung và không còn nói thiếu tiền sử đã khai.
+- GitHub Actions cho bản nền `84709a9` đã qua test PostgreSQL, migration và build Docker: https://github.com/DIABOT-dev/backend.asinu/actions/runs/42552513249. Cần xem run tương ứng commit mới nhất khi triển khai.
 
 ## Giới hạn nghiệm thu
 

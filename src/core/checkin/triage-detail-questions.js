@@ -311,6 +311,19 @@ function getDetailedNextStep(input) {
   )
     return initial;
   const groups = groupsFor(state, lang);
+  for (const group of groups) {
+    const associated = answers.find(item => item.step === detailStep(group.region, 'associated'))?.answer;
+    const pain = affirmativeParts(associated).filter(part => painReported({ symptoms: [part] }));
+    group.symptoms = [...new Set([...group.symptoms, ...pain])];
+  }
+  // Newly reported pain must open the corresponding detail fields. Only use a
+  // region established by the server; never infer one from an AI question.
+  for (const extra of input.supplementalAnswers || []) {
+    const group = groups.find(item => item.region === extra.region);
+    if (!group) continue;
+    const pain = affirmativeParts(extra.answer).filter(part => painReported({ symptoms: [part] }));
+    group.symptoms = [...new Set([...group.symptoms, ...pain])];
+  }
   const details = groups.map((group) => ({
     region: group.region,
     label: group.label,

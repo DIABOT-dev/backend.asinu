@@ -9,6 +9,7 @@ const {
 const { t } = require('../../i18n');
 const { isUnknown, isNone, textOf, complaintsOf } = require('../../core/checkin/triage-facts');
 const { MAX_DETAILED_ANSWERS } = require('../../core/checkin/triage-detail-questions');
+const { BODY_LOCATIONS } = require('./body-location');
 
 const FIELD = 'health_checkins.adaptive_state';
 const isAdaptiveStep = (step) => typeof step === 'string' && /^adaptive_[a-f0-9]{32}$/.test(step);
@@ -44,7 +45,7 @@ const topicOf = (text) =>
     ['actions', /đã (?:thử|làm)|what.*tried/iu],
   ].find(([, expression]) => expression.test(text))?.[0];
 const unsafe = (text) =>
-  /(?:uống|dùng|tăng|giảm|ngừng|đổi|take|start|stop|increase|decrease)\s+(?:thuốc|liều|\d|medication|medicine|dose)|\b(?:mg|mcg|ml\/kg)\b|bạn (?:bị|mắc bệnh)|you (?:have|suffer from) (?:a |an )?(?:disease|cancer)|(?:bỏ qua|ignore).*(?:hướng dẫn|instructions)/iu.test(
+  /(?:uống|dùng|tăng|giảm|ngừng|đổi|take|start|stop|increase|decrease)\s+(?:thuốc|liều|\d|medication|medicine|dose)|\b(?:mcg|ml\/kg)\b|\bmg\b(?!\s*\/\s*dL\b)|bạn (?:bị|mắc bệnh)|you (?:have|suffer from) (?:a |an )?(?:disease|cancer)|(?:bỏ qua|ignore).*(?:hướng dẫn|instructions)/iu.test(
     text
   );
 const frequencyChoice = (text) =>
@@ -113,6 +114,14 @@ function validatePlan(content, source, previousQuestions = [], lang = 'vi', pend
   const seen = new Set(previousQuestions.map((q) => normalized(q.question)));
   const result = [];
   for (const item of parsed.questions) {
+    if (
+      !item ||
+      typeof item.question !== 'string' ||
+      typeof item.grounding_quote !== 'string' ||
+      !Array.isArray(item.options) ||
+      item.options.some((option) => typeof option !== 'string')
+    )
+      return null;
     const question = clean(item?.question);
     const quote = clean(item?.grounding_quote);
     if (
@@ -147,6 +156,7 @@ function validatePlan(content, source, previousQuestions = [], lang = 'vi', pend
         (label) =>
           !isUnknown(label) &&
           !isNone(label) &&
+          !/^(?:khác|other)(?:\s*[,–-]\s*.*)?$/iu.test(label) &&
           !Object.values(universal(lang)).some((v) => normalized(v) === normalized(label))
       );
     if (labels.length < 2 || labels.length > 4) return null;
@@ -181,6 +191,8 @@ function validatePlan(content, source, previousQuestions = [], lang = 'vi', pend
     ) {
       if (!Array.isArray(item.ranges) || item.ranges.length !== labels.length) return null;
       const ranges = item.ranges;
+      if (ranges.some((range) => !range || typeof range !== 'object' || Array.isArray(range)))
+        return null;
       if (ranges[0].min !== null || ranges.at(-1).max !== null) return null;
       for (let i = 0; i < ranges.length; i++) {
         const range = ranges[i];
@@ -193,6 +205,8 @@ function validatePlan(content, source, previousQuestions = [], lang = 'vi', pend
           ) ||
           (range.min !== null && !Number.isFinite(range.min)) ||
           (range.max !== null && !Number.isFinite(range.max)) ||
+          (i > 0 && !Number.isFinite(range.min)) ||
+          (i < ranges.length - 1 && !Number.isFinite(range.max)) ||
           (range.min !== null && range.max !== null && range.min >= range.max) ||
           (i && (range.min !== ranges[i - 1].max || range.unit !== ranges[0].unit))
         )
@@ -366,7 +380,8 @@ async function resolveAdaptiveQuestion({
   // This is the HTTP payload safety bound, not a clinical early-stop rule.
   const remainingTemplate =
     base.pendingTemplateFields?.length ?? (base.action === 'conclude' ? 0 : 10);
-  const capacity = MAX_DETAILED_ANSWERS - answers.length - remainingTemplate - 16;
+  const conditionalReserve = Math.max(16, 4 * (base.state?.regionDetails?.length || 0));
+  const capacity = MAX_DETAILED_ANSWERS - answers.length - remainingTemplate - conditionalReserve;
   if (capacity <= 0) {
     next.sources
       .filter((s) => s.status === 'pending')
@@ -440,12 +455,26 @@ async function resolveAdaptiveQuestion({
               },
             ]
           : plan;
+      const regions = [
+        ...new Set(
+          present.map(({ ref }) => {
+            const fromStep = BODY_LOCATIONS.find((region) =>
+              ref.step.startsWith(`detail_${region}_`)
+            );
+            const inherited = next.questions.find((question) => question.step === ref.step)?.region;
+            const selected = base.state?.bodyLocations || [];
+            const region = fromStep || inherited || (selected.length === 1 ? selected[0] : null);
+            return region && selected.includes(region) ? region : null;
+          })
+        ),
+      ];
       for (const q of generated.slice(0, capacity))
         next.questions.push({
           ...q,
           step: `adaptive_${randomUUID().replaceAll('-', '')}`,
           source: present.map((s) => s.ref.id),
           lang,
+          ...(regions.length === 1 && regions[0] ? { region: regions[0] } : {}),
         });
       pending = next.questions.find((q) => !answers.some((a) => a.step === q.step));
     }
@@ -473,7 +502,14 @@ function adaptiveFacts(state, answers) {
   return state.questions.flatMap((q) => {
     const answer = answers.find((a) => a.step === q.step);
     return answer
-      ? [{ question: q.question, answer: textOf(answer.answer), origin: q.origin }]
+      ? [
+          {
+            question: q.question,
+            answer: textOf(answer.answer),
+            origin: q.origin,
+            ...(q.region ? { region: q.region } : {}),
+          },
+        ]
       : [];
   });
 }

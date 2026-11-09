@@ -181,6 +181,7 @@ async function getNextTriageQuestion(input) {
     return { step, answer: a.answer, question: a.question };
   });
   const normalizedAnswers = normalizeAnswers(answersWithSteps);
+  const extraAnswers = adaptiveFacts(adaptiveState, answersWithSteps);
   const baselineAnswers = normalizeAnswers(
     previousTriageMessages.map((entry, index) => ({
       ...entry,
@@ -195,6 +196,7 @@ async function getNextTriageQuestion(input) {
     profile: normalizedProfile,
     healthContext: normalizedHC,
     previousAnswers: normalizedAnswers.filter(answer => !isAdaptiveStep(answer.step)),
+    supplementalAnswers: extraAnswers,
     baselineAnswers,
     previousSeverity,
     forceConclusion,
@@ -234,7 +236,6 @@ async function getNextTriageQuestion(input) {
   // Backup cho các emergency NGOÀI keyword list (long tail symptoms).
   // Cost: 1 GPT call ~150 tokens, cache theo symptom.
   let safetyHint = null;
-  const extraAnswers = adaptiveFacts(adaptiveState, answersWithSteps);
   const symptomText = [engineResult.state.currentSymptoms.join(', '), ...extraAnswers
     .filter(a => !isUnknown(a.answer) && affirmativeParts(a.answer).length)
     .map(a => a.answer)].filter(Boolean).join('; ');
@@ -289,9 +290,12 @@ async function getNextTriageQuestion(input) {
     adaptive = resolved.state;
     if (resolved.question) {
       const current = previousAnswers.length + 1;
+      const region = adaptive.questions.find(q => q.step === resolved.question.step)?.region;
+      const groups = engineResult.state.regionDetails || [];
+      const group = groups.find(item => item.region === region);
       const result = { ...resolved.question, _adaptiveState: adaptive,
         questionProgress: { current, total: Math.max(current, (engineResult.questionProgress?.total || current) + adaptive.questions.length) },
-        questionGroup: engineResult.questionGroup || null };
+        questionGroup: group ? { key: group.region, label: group.label, index: groups.indexOf(group) + 1, total: groups.length } : null };
       adaptive.lastQuestion = { ...resolved.question, origin: adaptive.questions.find(q => q.step === resolved.question.step)?.origin };
       return result;
     }

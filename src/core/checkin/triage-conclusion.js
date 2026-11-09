@@ -295,6 +295,10 @@ function validateBlock(block, value, facts, { skipCareLevel = false } = {}) {
   if ([...text].some((char) => char.charCodeAt(0) <= 8) || /\p{Cf}/u.test(text))
     return 'invalid_text';
   const plain = normalize(text);
+  if ((['none_reported', 'profile', 'answered'].includes(facts.tinh_trang_khai_bao_benh_nen) ||
+    facts.benh_nen_da_khai?.length) &&
+    /(?:chua|khong).{0,12}(?:co|duoc cung cap|nhan duoc).{0,12}(?:thong tin|biet).{0,40}(?:benh nen|tien su)|(?:missing|not (?:provided|reported)|no information).{0,45}(?:medical history|underlying conditions?|medical conditions?)/u.test(plain))
+    return 'recorded_history_claimed_missing';
   const hard = hardConclusionFault(text);
   if (hard) return hard[0];
   const knownGroups = new Set(facts.benh_nen_da_khai.flatMap(diseaseGroups));
@@ -399,6 +403,7 @@ function validateBlock(block, value, facts, { skipCareLevel = false } = {}) {
 
 const sentenceSegmenter = new Intl.Segmenter('vi', { granularity: 'sentence' });
 const repairableContentFaults = new Set([
+  'recorded_history_claimed_missing',
   'treatment_change',
   'medication_instruction',
   'unconfirmed_prescription',

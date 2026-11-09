@@ -131,10 +131,15 @@ describeDatabase('check-in HTTP API contract', () => {
       "INSERT INTO checkin_call_audio (audio_key, text_hash, mime_type, audio_data) VALUES ('vi:user_prompt',$1,'audio/mpeg',$2) ON CONFLICT (audio_key) DO UPDATE SET text_hash = EXCLUDED.text_hash, mime_type = EXCLUDED.mime_type, audio_data = EXCLUDED.audio_data",
       [hash, Buffer.from('checkin-api-integration-audio')]
     );
+    const expressApp = app;
+    app = await new Promise(resolve => {
+      const server = expressApp.listen(0, '127.0.0.1', () => resolve(server));
+    });
   });
 
   afterAll(async () => {
     global.fetch = originalFetch;
+    if (app?.close) await new Promise((resolve, reject) => app.close(error => error ? reject(error) : resolve()));
     if (audioBackup) {
       await pool.query(
         'INSERT INTO checkin_call_audio (audio_key, text_version, text_hash, mime_type, audio_data, created_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (audio_key) DO UPDATE SET text_version = EXCLUDED.text_version, text_hash = EXCLUDED.text_hash, mime_type = EXCLUDED.mime_type, audio_data = EXCLUDED.audio_data, created_at = EXCLUDED.created_at',
@@ -605,8 +610,11 @@ describeDatabase('check-in HTTP API contract', () => {
     const checkpoint = await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200);
     expect(checkpoint.body.session.triage_state.adaptive_enabled).toBe(true);
     expect(checkpoint.body.session.triage_state).not.toHaveProperty('adaptive_payload');
-    const resumed = (await triage(checkpoint.body.session.triage_messages).expect(200)).body;
-    expect(resumed.step).toBe(response.step); expect(resumed.options).toEqual(response.options); expect(adaptiveCalls).toBe(2);
+    const resumes = await Promise.all([triage(checkpoint.body.session.triage_messages).expect(200), triage(checkpoint.body.session.triage_messages).expect(200)]);
+    for (const {body: resumed} of resumes) {
+      expect(resumed.step).toBe(response.step); expect(resumed.options).toEqual(response.options);
+    }
+    expect(adaptiveCalls).toBe(2);
     answers.push({ step: response.step, question: response.question, answer: 'Tiếng ve' });
     for (let i = 0; i < 128; i++) {
       response = (await triage(answers).expect(200)).body;
@@ -643,6 +651,32 @@ describeDatabase('check-in HTTP API contract', () => {
     expect(next.step).not.toBe(open.step); expect(adaptiveCalls).toBe(1);
     adaptiveProviderFail = false;
   });
+
+  test('adaptive question IDs from a completed phase cannot be reused after starting a follow-up', async () => {
+    adaptiveCalls = 0; adaptiveProviderFail = false;
+    adaptivePlan = [{ question: 'Âm thanh anh/chị nghe giống loại nào?', grounding_quote: 'tiếng ù',
+      options: ['Tiếng ve', 'Tiếng rít'], multi_select: false }];
+    const account = await conversationAccount();
+    const triage = list => request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({ checkin_id: account.checkinId, previous_answers: list, assessment_version: 2, adaptive_questions: true });
+    const answers = []; let result;
+    for (let i = 0; i < 128; i++) {
+      result = (await triage(answers).expect(200)).body;
+      if (result.isDone) break;
+      const answer = result.step === 'symptoms' ? 'Tôi nghe tiếng ù trong tai trái'
+        : result.step === 'red_flags' || result.step.endsWith('_associated') ? 'Không có' : result.options[0];
+      answers.push({ step: result.step, question: result.question, answer });
+    }
+    expect(result.isDone).toBe(true); expect(answers.some(answer => answer.step.startsWith('adaptive_'))).toBe(true);
+    const before = (await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200)).body.session;
+    await request(app).post('/api/mobile/checkin/followup').set(account.headers)
+      .send({ checkin_id: account.checkinId, status: 'tired' }).expect(200);
+    const phase = (await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200)).body.session;
+    expect(phase.triage_state.phase_id).not.toBe(before.triage_state.phase_id);
+    expect(phase.triage_messages).toEqual([]);
+    expect((await triage(answers).expect(409)).body.code).toBe('TRIAGE_CHANGED');
+    expect((await triage([]).expect(200)).body.step).toBe('followup_status');
+  }, 30000);
 
   test('follow-up retains symptoms and allows a required third safety question', async () => {
     const account = await conversationAccount(70, ['cao huyết áp']);

@@ -15,6 +15,8 @@ const { callTextAi } = require('../../src/services/ai/ai.service');
 const { generateConclusion } = require('../../src/core/checkin/triage-ai-layer');
 const { getNextTriageQuestion } = require('../../src/services/checkin/checkin.triage.v2');
 const { buildConclusionFacts } = require('../../src/core/checkin/triage-conclusion');
+const { validateBlock } = require('../../src/core/checkin/triage-conclusion');
+const { getDetailedNextStep } = require('../../src/core/checkin/triage-detail-questions');
 const { t } = require('../../src/i18n');
 const {
   validatePlan,
@@ -68,7 +70,7 @@ test('known choices, combined labels and labels containing commas do not invoke 
   expect((await resolve(initial(), [{ ...answers()[0], answer: 'Mệt mỏi' }])).question).toBeNull();
   expect(callTextAi).not.toHaveBeenCalled();
 });
-test.each(['Không rõ', 'Không có'])(
+test.each(['Không rõ', 'Không có', 'Không chắc chắn', 'Uncertain'])(
   'uncertainty or none is not an invitation to an AI loop (%s)',
   async (value) => {
     expect((await resolve(initial(), [{ ...answers()[0], answer: value }])).question).toBeNull();
@@ -443,6 +445,224 @@ test('enabling the new flow while resuming an old unknown complaint preserves th
     { step: 'red_flags', question: 'Nguy hiểm?', answer: 'Không có' },
   ]);
   expect(result.question.question).toBe(item().question);
+});
+
+test.each([null, 3, {}, ['nested']])(
+  'non-string choices are rejected without coercion (%j)',
+  (value) => {
+    expect(
+      validatePlan(JSON.stringify({ questions: [{ ...item(), options: ['Normal', value] }] }), text)
+    ).toBeNull();
+  }
+);
+test.each([
+  [null, null],
+  [
+    { min: null, max: null, unit: 'phút' },
+    { min: null, max: null, unit: 'phút' },
+  ],
+  [
+    { min: null, max: 5, unit: 'phút' },
+    { min: null, max: null, unit: 'phút' },
+  ],
+  [
+    { min: null, max: 5, unit: 'phút' },
+    { min: 5, max: null, unit: 'giờ' },
+  ],
+])('malformed intervals never throw or produce null-valued labels (%j)', (...ranges) => {
+  const plan = JSON.stringify({
+    questions: [{ ...item(), options: ['Dưới 5 phút', 'Từ 5 phút'], ranges }],
+  });
+  expect(validatePlan(plan, text)).toBeNull();
+});
+test('glucose units mg/dL are valid measurements, while drug doses remain forbidden', () => {
+  const plan = JSON.stringify({
+    questions: [
+      {
+        ...item(),
+        question: 'Chỉ số đường huyết anh/chị đo là bao nhiêu?',
+        grounding_quote: 'đường huyết',
+        options: ['Dưới 70 mg/dL', 'Từ 70 mg/dL'],
+        ranges: [
+          { min: null, max: 70, unit: 'mg/dL' },
+          { min: 70, max: null, unit: 'mg/dL' },
+        ],
+      },
+    ],
+  });
+  expect(validatePlan(plan, 'Tôi đã đo đường huyết')[0].options).toEqual([
+    'Dưới 70 mg/dL',
+    'Từ 70 mg/dL trở lên',
+  ]);
+});
+test('uncertainty synonyms collapse to a single UI choice', async () => {
+  callTextAi.mockImplementation(
+    accept([{ ...item(), options: [...item().options, 'Không chắc chắn'] }])
+  );
+  const result = await resolve();
+  expect(result.question.options).toEqual([
+    ...item().options,
+    'Không rõ',
+    'Khác, nhập hoặc nói câu trả lời',
+  ]);
+});
+test('multiple custom answers are collected together without assigning an ambiguous region', async () => {
+  const queued = await resolve(initial(), answers(), { base: { step: 'red_flags' } });
+  queued.state.lastQuestion = { step: 'detail_head_character', options: ['Đau nhói', 'Đau âm ỉ'] };
+  const list = [
+    ...answers(),
+    { step: 'red_flags', question: 'Safety?', answer: 'Không có' },
+    { step: 'detail_head_character', question: 'Kiểu khó chịu?', answer: 'Râm ran ở vùng trán' },
+  ];
+  const result = await resolve(queued.state, list, {
+    base: { action: 'conclude', state: { bodyLocations: ['head', 'limbs'] } },
+  });
+  const prompt = JSON.parse(callTextAi.mock.calls[0][0].prompt);
+  expect(prompt.SOURCE).toContain(text);
+  expect(prompt.SOURCE).toContain('Râm ran ở vùng trán');
+  expect(result.state.questions[0].source).toHaveLength(2);
+  expect(result.state.questions[0].region).toBeUndefined();
+});
+test.each([
+  [['head'], 'head'],
+  [['head', 'limbs'], undefined],
+])('new questions only inherit an unambiguous server region (%j)', async (regions, expected) => {
+  const result = await resolve(initial(), answers(), {
+    base: { ...base, state: { bodyLocations: regions } },
+  });
+  expect(result.state.questions[0].region).toBe(expected);
+});
+test.each([
+  ['head', 'Có kèm đau tai', 'detail_head_character'],
+  ['head', 'Không kèm đau tai', 'detail_head_pattern'],
+  [undefined, 'Có kèm đau tai', 'detail_head_pattern'],
+  ['limbs', 'Có kèm đau tay', 'detail_head_pattern'],
+])(
+  'newly confirmed pain opens detail fields only for its actual region (%s/%s)',
+  (region, answer, next) => {
+    const previousAnswers = [
+      ['symptoms', 'Ù tai'],
+      ['red_flags', 'Không có'],
+      ['detail_history', 'Không có bệnh nền đã được xác nhận'],
+      ['detail_head_onset', 'Từ hôm qua'],
+      ['detail_head_progression', 'Vẫn như cũ'],
+      ['detail_head_severity', 'Nhẹ'],
+      ['detail_head_impact', 'Vẫn sinh hoạt bình thường'],
+    ].map(([step, answer]) => ({ step, answer }));
+    const result = getDetailedNextStep({
+      status: 'tired',
+      phase: 'initial',
+      lang: 'vi',
+      profile: { age: 35 },
+      bodyLocations: ['head'],
+      previousAnswers,
+      supplementalAnswers: [{ region, answer }],
+    });
+    expect(result.step).toBe(next);
+  }
+);
+test('template questions do not embed a first-person patient sentence as a symptom noun', () => {
+  const { formatQuestion } = jest.requireActual('../../src/core/checkin/triage-ai-layer');
+  const state = { allSymptoms: [text], onset: null };
+  const result = formatQuestion(
+    { step: 'red_flags', state, options: ['Không có'] },
+    { age: 35, gender: 'Nữ' }
+  );
+  expect(result.question).not.toContain('tôi nghe');
+  expect(state.allSymptoms).toEqual([text]);
+});
+test('an adaptive question retains its source region while the template is moving to the next region', async () => {
+  const previousAnswers = [
+    ['symptoms', 'Đau đầu, Đau khớp'],
+    ['red_flags', 'Không có'],
+    ['detail_history', 'Không có bệnh nền đã được xác nhận'],
+    ['detail_head_onset', 'Từ hôm qua'],
+    ['detail_head_progression', 'Vẫn như cũ'],
+    ['detail_head_severity', 'Nhẹ'],
+    ['detail_head_impact', 'Vẫn sinh hoạt bình thường'],
+    ['detail_head_character', 'Đau âm ỉ'],
+    ['detail_head_pattern', 'Liên tục'],
+    ['detail_head_radiation', 'Chỉ ở chỗ đã chọn'],
+    ['detail_head_aggravating', 'Chưa thấy yếu tố làm tăng'],
+    ['detail_head_relieving', 'Chưa thử cách nào'],
+    ['detail_head_associated', 'Không có'],
+    ['detail_head_actions', 'Chưa làm gì'],
+  ].map(([step, answer]) => ({ step, answer, question: step }));
+  const result = await getNextTriageQuestion({
+    status: 'tired',
+    phase: 'initial',
+    assessmentVersion: 2,
+    adaptiveEnabled: true,
+    bodyLocations: ['head', 'limbs'],
+    profile: { age: 35 },
+    previousAnswers,
+    adaptiveState: {
+      version: 1,
+      sources: [{ status: 'generated' }],
+      questions: [
+        {
+          step: 'adaptive_' + 'a'.repeat(32),
+          region: 'head',
+          lang: 'vi',
+          question: item().question,
+          options: item().options,
+          origin: 'ai',
+          multiSelect: false,
+        },
+      ],
+    },
+  });
+  expect(result.questionGroup).toMatchObject({ key: 'head', index: 1, total: 2 });
+});
+test.each([
+  ['Có thêm đau tai', 'detail_head_character'],
+  ['Không kèm đau tai', 'detail_head_pattern'],
+])(
+  'new pain from a template associated answer also opens its detail fields (%s)',
+  (answer, next) => {
+    const previousAnswers = [
+      ['symptoms', 'Ù tai'],
+      ['red_flags', 'Không có'],
+      ['detail_history', 'Không có bệnh nền đã được xác nhận'],
+      ['detail_head_onset', 'Từ hôm qua'],
+      ['detail_head_progression', 'Vẫn như cũ'],
+      ['detail_head_severity', 'Nhẹ'],
+      ['detail_head_impact', 'Vẫn sinh hoạt bình thường'],
+      ['detail_head_associated', answer],
+    ].map(([step, answer]) => ({ step, answer }));
+    expect(
+      getDetailedNextStep({
+        status: 'tired',
+        phase: 'initial',
+        lang: 'vi',
+        profile: { age: 35 },
+        bodyLocations: ['head'],
+        previousAnswers,
+      }).step
+    ).toBe(next);
+  }
+);
+test('a recorded negative medical history cannot be described as never supplied', () => {
+  const facts = buildConclusionFacts(
+    {
+      allSymptoms: ['Ù tai'],
+      historyAssessment: 'none_reported',
+      regionDetails: [{ region: 'head', answers: {} }],
+    },
+    { age: 35 },
+    {},
+    'vi'
+  );
+  expect(
+    validateBlock('narrative', 'Chúng ta chưa có thông tin về các bệnh nền khác của chị.', facts, {
+      skipCareLevel: true,
+    })
+  ).toBe('recorded_history_claimed_missing');
+  expect(
+    validateBlock('narrative', 'Chị đã khai chưa có bệnh nền được xác nhận.', facts, {
+      skipCareLevel: true,
+    })
+  ).toBeNull();
 });
 
 test('adaptive metadata is encrypted with the patient key and cannot be read as another patient', async () => {
