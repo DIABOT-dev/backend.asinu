@@ -25,6 +25,12 @@ jest.mock('../../src/services/early-signal/early-signal.service', () => ({
   evaluateAfterNewHealthData: jest.fn().mockResolvedValue(null),
 }));
 jest.mock('../../src/services/checkin-call/checkin-call.service', () => ({}));
+jest.mock('../../src/core/notification/notification.orchestrator', () => ({
+  dispatch: jest.fn(),
+}));
+jest.mock('../../src/services/notification/notification-dispatch.service', () => ({
+  deliverNotification: jest.fn(),
+}));
 
 const { processTriageStep } = require('../../src/services/checkin/checkin.service');
 const { getNextTriageQuestion } = require('../../src/services/checkin/checkin.ai.service');
@@ -99,15 +105,33 @@ test('legacy installed clients keep their existing completion behavior', async (
 });
 
 test('a persisted completed result is replayed without another AI call or completion side effects', async () => {
+  const earlySignal = require('../../src/services/early-signal/early-signal.service');
+  earlySignal.evaluateAfterNewHealthData.mockClear();
   const { pool } = poolFor();
   const answers = [{ step: 'symptoms', question: 'Triệu chứng?', answer: 'Đau đầu' }];
   const first = await processTriageStep(pool, 7, 12, answers, 'vi');
   const replay = await processTriageStep(pool, 7, 12, answers, 'vi');
   expect(replay).toEqual(first);
   expect(getNextTriageQuestion).toHaveBeenCalledTimes(1);
+  expect(earlySignal.evaluateAfterNewHealthData).toHaveBeenCalledTimes(1);
+  expect(earlySignal.evaluateAfterNewHealthData).toHaveBeenCalledWith(
+    pool, 7, expect.stringMatching(/^checkin:12:/), { patientPresent: true }
+  );
   expect(
     pool.query.mock.calls.filter(([sql]) => sql.includes('triage_completed_at  = NOW()'))
   ).toHaveLength(1);
+});
+
+test('an active patient receives doctor guidance in the result without a duplicate self-push', async () => {
+  const { pool } = poolFor();
+  const notifications = require('../../src/core/notification/notification.orchestrator');
+  notifications.dispatch.mockClear();
+  getNextTriageQuestion.mockResolvedValueOnce({ ...completed, severity: 'medium', needsDoctor: true });
+  const result = await processTriageStep(pool, 7, 12, [
+    { step: 'symptoms', question: 'Triệu chứng?', answer: 'Đau đầu' },
+  ], 'vi');
+  expect(result).toMatchObject({ isDone: true, needsDoctor: true });
+  expect(notifications.dispatch).not.toHaveBeenCalled();
 });
 
 test('two simultaneous identical submissions share the pending response', async () => {

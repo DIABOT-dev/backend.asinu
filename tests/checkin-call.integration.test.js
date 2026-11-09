@@ -41,6 +41,68 @@ describeDatabase('check-in call PostgreSQL integration', () => {
     }
   });
 
+  async function earlySignalFixture(withFamily) {
+    const created = [];
+    for (let index = 0; index < (withFamily ? 2 : 1); index++) {
+      const inserted = await pool.query(
+        'INSERT INTO users(phone_number,display_name,push_token) VALUES($1,$2,$3) RETURNING id',
+        [`qa-present-${require('crypto').randomUUID().slice(0, 16)}`, 'Synthetic presence test', `ExponentPushToken[qa-present-${index}]`]
+      );
+      created.push(inserted.rows[0].id);
+      users.push(inserted.rows[0].id);
+    }
+    const [patientId, familyId] = created;
+    await activateAnTam(patientId);
+    if (familyId) await pool.query(
+      "INSERT INTO user_connections(requester_id,addressee_id,status,permissions,accepted_at) VALUES($1,$2,'accepted',$3::jsonb,now())",
+      [patientId, familyId, JSON.stringify({ can_receive_alerts: true, can_ack_escalation: true })]
+    );
+    const assessment = await pool.query(
+      `INSERT INTO early_signal_assessments(user_id,requested_by,trigger_type,window_start,window_end,input_snapshot,severity,is_red_flag,summary,disclaimer,output_snapshot,audit_hash)
+       VALUES($1,$1,'worsened',CURRENT_DATE,CURRENT_DATE,'{}','urgent',true,'Synthetic test','Synthetic test','{}','synthetic-test') RETURNING id`,
+      [patientId]
+    );
+    return { patientId, familyId, assessmentId: assessment.rows[0].id };
+  }
+
+  test('early signal during an active check-in contacts family without calling the patient', async () => {
+    const f = await earlySignalFixture(true);
+    const first = await service.startEarlySignalEpisode(pool, f.patientId, f.assessmentId, { patientPresent: true });
+    expect(first.state).toBe('URGENT_BROADCAST');
+    expect(await service.getActive(pool, f.patientId)).toBeNull();
+    expect(await service.getActive(pool, f.familyId)).toMatchObject({ id: first.id, target_role: 'FAMILY' });
+    const second = await service.startEarlySignalEpisode(pool, f.patientId, f.assessmentId, { patientPresent: true });
+    expect(second.id).toBe(first.id);
+    expect(second.urgent_until).toEqual(first.urgent_until);
+    const attempts = await pool.query('SELECT target_user_id,target_role FROM checkin_call_attempts WHERE episode_id=$1', [first.id]);
+    expect(attempts.rows).toEqual([{ target_user_id: f.familyId, target_role: 'FAMILY' }]);
+    const deliveries = await pool.query('SELECT target_user_id FROM checkin_call_deliveries WHERE episode_id=$1', [first.id]);
+    expect(deliveries.rows).toEqual([{ target_user_id: f.familyId }]);
+  });
+
+  test('early signal with a present patient and no family creates no incoming notification', async () => {
+    const f = await earlySignalFixture(false);
+    const episode = await service.startEarlySignalEpisode(pool, f.patientId, f.assessmentId, { patientPresent: true });
+    expect(episode.state).toBe('EXHAUSTED_URGENT');
+    expect((await pool.query('SELECT id FROM checkin_call_attempts WHERE episode_id=$1', [episode.id])).rowCount).toBe(0);
+    expect((await pool.query('SELECT id FROM checkin_call_deliveries WHERE episode_id=$1', [episode.id])).rowCount).toBe(0);
+  });
+
+  test('early signal background contact stops its patient call when the patient checks in', async () => {
+    const f = await earlySignalFixture(true);
+    const first = await service.startEarlySignalEpisode(pool, f.patientId, f.assessmentId);
+    const original = await service.getActive(pool, f.patientId);
+    expect(original).toMatchObject({ id: first.id, target_role: 'USER' });
+    const updated = await service.startEarlySignalEpisode(pool, f.patientId, f.assessmentId, { patientPresent: true });
+    expect(updated).toMatchObject({ id: first.id, state: 'URGENT_BROADCAST', severity: 'URGENT' });
+    expect(await service.getActive(pool, f.patientId)).toBeNull();
+    expect(await service.getActive(pool, f.familyId)).toMatchObject({ id: first.id, target_role: 'FAMILY' });
+    const cancelled = await pool.query('SELECT state FROM checkin_call_attempts WHERE id=$1', [original.attempt_id]);
+    expect(cancelled.rows[0].state).toBe('CANCELLED');
+    const queued = await pool.query('SELECT state FROM checkin_call_deliveries WHERE attempt_id=$1', [original.attempt_id]);
+    expect(queued.rows.every(row => row.state === 'CANCELLED')).toBe(true);
+  });
+
   test('overdue → user call → MILD first family → seen → confirmation', async () => {
     const seed = String(Date.now());
     for (let i = 0; i < 3; i += 1) {

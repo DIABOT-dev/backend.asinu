@@ -29,7 +29,8 @@ async function startCheckin(pool, userId, status, locations, other, options) {
       userId,
       `checkin-start:${session.id}:${status}:${eventTimestamp(
         session.occurrence_started_at || session.updated_at
-      )}`
+      )}`,
+      { patientPresent: true }
     )
     .catch((err) => console.warn('[EarlySignal] check-in start evaluation failed:', err.message));
   return session;
@@ -45,7 +46,8 @@ async function recordFollowUp(pool, userId, checkinId, status) {
     .evaluateAfterNewHealthData(
       pool,
       userId,
-      `checkin-followup:${session.id}:${status}:${eventTimestamp(session.updated_at)}`
+      `checkin-followup:${session.id}:${status}:${eventTimestamp(session.updated_at)}`,
+      { patientPresent: true }
     )
     .catch((err) => console.warn('[EarlySignal] follow-up evaluation failed:', err.message));
   return { session, alreadyResolved: false };

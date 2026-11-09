@@ -1146,22 +1146,49 @@ async function createDailyEpisodes(pool) {
   return result.rowCount;
 }
 
-async function startEarlySignalEpisode(pool, userId, assessmentId) {
+async function notifyFamilyForPresentPatient(db, episode, assessmentId) {
+  const cancelled = await db.query(
+    "UPDATE checkin_call_attempts SET state = 'CANCELLED', ended_at = COALESCE(ended_at, now()) WHERE episode_id = $1 AND target_role = 'USER' AND state IN ('RINGING','CONNECTED','PUSH_WAIT','WAITING_CONFIRMATION') RETURNING id",
+    [episode.id]
+  );
+  await db.query(
+    "UPDATE checkin_call_deliveries SET state = 'CANCELLED', updated_at = now() WHERE episode_id = $1 AND target_user_id = $2 AND state IN ('PENDING','SENDING')",
+    [episode.id, episode.user_id]
+  );
+  await event(db, episode.id, 'EARLY_SIGNAL_PATIENT_PRESENT', episode.user_id, null, {
+    assessmentId,
+  });
+  // Existing family calls/acknowledgements keep their current round and deadline.
+  if (['CONTACT_USER', 'TRIAGE_USER'].includes(episode.state)) {
+    await broadcastUrgent(db, episode);
+  }
+  const current = await db.query('SELECT * FROM checkin_call_episodes WHERE id = $1', [episode.id]);
+  return { episode: current.rows[0], cancelled: cancelled.rows.map(row => row.id) };
+}
+
+async function startEarlySignalEpisode(pool, userId, assessmentId, options = {}) {
   const entitlement = await entitlementService.getEntitlement(pool, userId);
   if (!entitlement.callCenterEnabled) return null;
 
   const db = await pool.connect();
+  const remoteEnds = [];
   try {
     await db.query('BEGIN');
     await db.query('SELECT pg_advisory_xact_lock($1::bigint)', [userId]);
     const activeUrgent = await db.query(
-      "SELECT * FROM checkin_call_episodes WHERE user_id = $1 AND severity = 'URGENT' AND state IN ('CONTACT_USER','TRIAGE_USER','URGENT_BROADCAST','URGENT_ACKNOWLEDGED') ORDER BY created_at DESC LIMIT 1",
+      "SELECT * FROM checkin_call_episodes WHERE user_id = $1 AND severity = 'URGENT' AND state IN ('CONTACT_USER','TRIAGE_USER','URGENT_BROADCAST','URGENT_ACKNOWLEDGED') ORDER BY created_at DESC LIMIT 1 FOR UPDATE",
       [userId]
     );
     if (activeUrgent.rows.length) {
       await event(db, activeUrgent.rows[0].id, 'EARLY_SIGNAL_ATTACHED', null, null, {
         assessmentId,
       });
+      if (options.patientPresent === true) {
+        const present = await notifyFamilyForPresentPatient(db, activeUrgent.rows[0], assessmentId);
+        await db.query('COMMIT');
+        remoteEnds.push(...present.cancelled.map(attemptId => ({ episodeId: present.episode.id, attemptId })));
+        return present.episode;
+      }
       await db.query('COMMIT');
       return activeUrgent.rows[0];
     }
@@ -1192,6 +1219,14 @@ async function startEarlySignalEpisode(pool, userId, assessmentId) {
       return existing.rows[0] || null;
     }
     const episode = inserted.rows[0];
+    if (options.patientPresent === true) {
+      // An authenticated check-in response already confirms the patient is
+      // present. Show their result in that flow; contact eligible family
+      // directly instead of interrupting the result with another USER call.
+      const present = await notifyFamilyForPresentPatient(db, episode, assessmentId);
+      await db.query('COMMIT');
+      return present.episode;
+    }
     const attempt = await createAttempt(db, episode, userId, 'USER');
     await db.query(
       'UPDATE checkin_call_episodes SET next_action_at = $2, updated_at = now() WHERE id = $1',
@@ -1207,6 +1242,9 @@ async function startEarlySignalEpisode(pool, userId, assessmentId) {
     throw error;
   } finally {
     db.release();
+    for (const ended of remoteEnds) {
+      await endRemoteCalls(pool, ended.episodeId, null, ended.attemptId);
+    }
   }
 }
 

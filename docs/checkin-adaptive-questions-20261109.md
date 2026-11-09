@@ -30,7 +30,7 @@
 
 ## Kiểm tra
 
-- Backend: 136 suite, 2.032 test qua; 341 test được bỏ qua theo cấu hình suite. Các suite database cần cờ riêng và được chạy tách ở local.
+- Backend: 136 suite, 2.047 test qua; 344 test được bỏ qua theo cấu hình suite. Các suite database cần cờ riêng và được chạy tách ở local.
 - HTTP với database: 43 test qua; có cả các vùng cơ thể, tiếng Việt/Anh, tiếp tục phiên, hai request mở lại đồng thời, câu hỏi sinh mới, provider lỗi, kết luận được lưu và chặn ID câu hỏi từ phiên trước khi bắt đầu hỏi lại.
 - App: TypeScript qua; hợp đồng API qua; 93 kiểm tra hành vi check-in, 21 kiểm tra lưu/khôi phục nháp, 6 kiểm tra thứ tự layout/bàn phím, 71 kiểm tra hướng dẫn và 8 kiểm tra trạng thái chuẩn bị câu hỏi qua. Bộ hiển thị kết luận 47 kiểm tra cũng qua.
 - i18n backend/app qua. ESLint ở các file thay đổi không có lỗi; app vẫn có cảnh báo style/hook ở màn check-in và các file liên quan. Chưa xử lý toàn bộ cảnh báo trong lần sửa này.
@@ -65,3 +65,32 @@ Dùng bản Debug build từ source hiện tại, Metro local, iOS 26.5 trên Si
 - Đã có bằng chứng thao tác native trên iOS Simulator như bảng trên. Chưa nghiệm thu micro/nhận dạng giọng nói trên máy iOS/Android thật; chưa có bài UI Android cho lần sửa này. Test thứ tự sự kiện layout/bàn phím tự động còn có adapter mô phỏng.
 - Duyệt bằng model và validator giảm lỗi, không chứng minh mọi câu hỏi y tế đều chính xác. Cần người phụ trách chuyên môn xem mẫu và thử với người dùng trước khi kết luận chất lượng sử dụng.
 - Bản này được kiểm tra và áp dụng ở local; chưa triển khai thay đổi này lên VPS.
+
+
+## Rà soát cuộc gọi/notification chen vào kết luận
+
+Đã xác nhận trên log local một lượt `EARLY_SIGNAL` mức `URGENT` được tạo ngay sau khi ghi kết quả check-in. Phần câu hỏi check-in dùng chung hạ tầng cuộc gọi để liên hệ lại chính người vừa trả lời, trong khi màn kết luận đang chờ audio. Đây là lỗi phối hợp trải nghiệm, không phải người dùng chủ động gọi tổng đài.
+
+Các bản sửa lần này:
+
+- Bộ dò Tín hiệu sớm chỉ dùng câu trả lời và nhật ký triệu chứng đã khai báo, có lọc phủ định; không quét toàn bộ câu hỏi, lựa chọn chưa chọn hay lời dặn trong kết luận. Giữ cờ cấp cứu rõ ràng từ check-in và mức critical từ phiên có kịch bản.
+- Server đánh dấu `patientPresent` khi người dùng vừa bắt đầu/trả lời/hoàn tất check-in. Tín hiệu sớm còn xử lý liên hệ người thân phù hợp, nhưng không tạo thêm cuộc gọi/notification cuộc gọi tới chính người đang check-in.
+- Nếu một cuộc gọi tới người đó đã được xếp trước khi họ quay lại check-in, hủy lượt gọi và delivery của chính họ; giữ nhánh hỗ trợ người thân, không đặt lại thời hạn hay gọi trùng người thân khi retry.
+- Không có người thân phù hợp thì không dùng cuộc gọi lại bản thân làm phương án thay thế. Đánh giá vẫn được lưu trong Tín hiệu sớm.
+- Hướng dẫn đi khám đã có trong kết luận API không phát thêm self-push ngay trước khi app nhận kết quả. Các nhánh báo người thân và xử lý cấp cứu vẫn được giữ.
+
+Bằng chứng test mới: toàn bộ 136 suite local có 2.047 test qua (344 test bỏ qua theo cấu hình); 43 test HTTP/database và 3 ca PostgreSQL về định tuyến khi người dùng đang có mặt qua khi chạy riêng. Các ca dùng lời dặn có điều kiện và đáp án phủ định đã tái hiện báo nhầm trước khi sửa; sau sửa chỉ triệu chứng đã khai báo/cờ cấp cứu mới tạo red flag. Test với PostgreSQL kiểm tra liên hệ người thân trực tiếp, không tạo incoming delivery tới người vừa check-in, không có người thân, hủy cuộc gọi của chính người dùng khi họ quay lại, và retry không tạo thêm cuộc gọi người thân. Chỉ dùng tài khoản giả và dọn dữ liệu sau test. Không thay đổi dữ liệu cảnh báo cũ của người dùng.
+
+Phát lại thuần logic trên snapshot local (không ghi database, không phát thông báo) cho thấy các red flag lấy nhầm từ lời dặn đã mất, nhưng mức urgent còn tồn tại theo quy tắc hai lần “Rất mệt” trong 7 ngày. Quy tắc phân tầng này cần được người phụ trách sản phẩm/chuyên môn rà lại riêng; bản sửa không tự thay ngưỡng.
+
+### Khoảng trống nghiệm thu trải nghiệm còn lại
+
+Rà soát độc lập chỉ ra các test qua chưa đủ để coi toàn bộ luồng đã mượt:
+
+- Kết luận văn bản vẫn bị chặn chờ audio, có timeout 40 giây. Cần tách thời điểm đọc được kết luận khỏi thời điểm giọng đọc sẵn sàng.
+- Hai phần trăm loading là ước tính theo thời gian. Câu nền trả nhanh, câu bổ sung có thể qua sinh/duyệt/sinh lại; hiện chưa thể hiện nhất quán các giai đoạn đó.
+- Câu chọn một tự gửi, câu nhiều lựa chọn cần Tiếp tục; frontend còn suy đoán chế độ chọn từ câu chữ. Tổng số câu có thể tăng khi mở nhánh mới.
+- Cơ chế khôi phục giữ các câu đã gửi và yêu cầu đang chờ đồng bộ. Chưa lưu phần đang gõ/tick trong câu hiện tại trước khi bấm gửi.
+- HTTP suite hiện mock tác vụ Tín hiệu sớm để tách kiểm thử. Vì thế nó không chứng minh được toàn bộ chuỗi câu hỏi → kết luận/audio → cảnh báo/notification cùng hoạt động trên thiết bị. Cần nghiệm thu hành trình này với các module bật đồng thời, kể cả lúc thoát app/mất mạng.
+
+Các vấn đề trên là khoảng trống thiết kế/triển khai và cách nghiệm thu, không phải bằng chứng rằng chỉ thêm một agent mới sẽ giải quyết được. Thay đổi lần này áp dụng ở local; chưa deploy VPS.

@@ -59,7 +59,8 @@ function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sess
       earlySignalService.evaluateAfterNewHealthData(
         pool,
         userId,
-        `checkin:${checkinId}:${fingerprint}`
+        `checkin:${checkinId}:${fingerprint}`,
+        { patientPresent: true }
       )
     )
     .catch((error) =>
@@ -900,7 +901,7 @@ async function processTriageStepOnce(
     }
 
     // #2: System reacts to AI findings
-    await reactToTriageResult(pool, userId, checkinId, result);
+    await reactToTriageResult(pool, userId, checkinId, result, { patientPresent: true });
 
     // #3: Extract and save symptoms for AI memory
     evaluateEarlySignalAfterSymptoms(
@@ -931,9 +932,9 @@ async function processTriageStepOnce(
  * After triage completes, adjust session state and notifications based on severity.
  * - high   → flow_state='high_alert', next check-in in 1h
  * - medium → ensure follow-up in 3-4h
- * - needsDoctor → high-priority notification to user
+ * - needsDoctor → notification only outside the patient's active result flow
  */
-async function reactToTriageResult(pool, userId, checkinId, result) {
+async function reactToTriageResult(pool, userId, checkinId, result, options = {}) {
   const severity = result.severity || 'low';
 
   try {
@@ -963,8 +964,9 @@ async function reactToTriageResult(pool, userId, checkinId, result) {
     }
     // For 'low' severity — no additional state changes needed
 
-    // If AI recommends seeing a doctor, send high-priority notification
-    if (result.needsDoctor) {
+    // The active patient receives this guidance in the same API result. A
+    // self-push here arrives before the result/audio UI and interrupts it.
+    if (result.needsDoctor && options.patientPresent !== true) {
       // Get user lang
       const { rows: langRows } = await pool.query(
         `SELECT push_token, COALESCE(language_preference,'vi') AS lang FROM users WHERE id=$1`,

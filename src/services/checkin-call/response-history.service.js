@@ -70,7 +70,8 @@ async function refreshEarlySignals(pool, episode) {
     await require('../early-signal/early-signal.service').evaluateAfterNewHealthData(
       pool,
       episode.user_id,
-      `checkin-call:${episode.id}`
+      `checkin-call:${episode.id}`,
+      { patientPresent: true }
     );
   } catch (error) {
     // The check-in is already committed. An assessment failure must not make

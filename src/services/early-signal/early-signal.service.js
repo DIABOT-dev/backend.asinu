@@ -4,6 +4,7 @@ const { attendance } = require('./attendance');
 const crypto = require('crypto');
 const { t } = require('../../i18n');
 const { assessBloodPressure } = require('../../lib/blood-pressure');
+const { affirmativeParts } = require('../../core/checkin/triage-facts');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const entitlementService = require('../payment/entitlement.service');
 const checkinCallService = require('../checkin-call/checkin-call.service');
@@ -310,6 +311,24 @@ function isRecent(value, days) {
   return date.getTime() >= Date.now() - days * 24 * 60 * 60 * 1000;
 }
 
+function reportedSymptomParts(value) {
+  const values = Array.isArray(value) ? value : [value];
+  return values.filter(item => typeof item === 'string').flatMap(item =>
+    item.split(/(?<=[.!?])\s+|\n+/u).flatMap(sentence => {
+      // Keep a reported symptom before a conditional clause, but do not turn
+      // a hypothetical question/advice into a current symptom.
+      const conditional = sentence.search(/(?:^|[\s,;])(?:nếu|if|in case)(?=\s|$)/iu);
+      const statement = conditional >= 0 ? sentence.slice(0, conditional) : sentence;
+      return affirmativeParts(statement);
+    })
+  );
+}
+
+function reportedAnswers(entries) {
+  if (!Array.isArray(entries)) return [];
+  return entries.flatMap(entry => reportedSymptomParts(entry?.answer));
+}
+
 function analyse(snapshot, lang = 'vi') {
   const resolvedLang = normalizeLang(lang);
   const today = dateKey(new Date());
@@ -318,11 +337,13 @@ function analyse(snapshot, lang = 'vi') {
     (row) => dateKey(row.completed_at || row.created_at) === today
   );
   const recentSymptoms = snapshot.symptoms.filter((row) => dateKey(row.occurred_date) === today);
-  const combinedText = JSON.stringify({
-    checkins: recentCheckins,
-    scripted_checkins: recentScriptedCheckins,
-    symptoms: recentSymptoms,
-  }).toLowerCase();
+  // Only patient answers and symptom logs are evidence. Whole records also
+  // contain unselected choices, questions and "if ..." safety instructions.
+  const combinedText = [
+    ...recentCheckins.flatMap(row => reportedAnswers(row.triage_messages)),
+    ...recentScriptedCheckins.flatMap(row => reportedAnswers(row.answers)),
+    ...recentSymptoms.flatMap(row => reportedSymptomParts(row.symptom_name)),
+  ].join('\n').toLowerCase();
   const urgentSigns = [
     ...new Set(RED_FLAGS.filter(([needle]) => combinedText.includes(needle)).map(([, key]) => key)),
   ];
@@ -613,7 +634,9 @@ async function evaluate(pool, userId, options = {}) {
     output.severity === 'urgent' &&
     (output.is_red_flag || triggerType !== 'new_log');
   if (shouldStartCall) {
-    const episode = await checkinCallService.startEarlySignalEpisode(pool, userId, assessment.id);
+    const episode = await checkinCallService.startEarlySignalEpisode(pool, userId, assessment.id, {
+      patientPresent: options.patientPresent === true,
+    });
     if (episode) {
       await pool.query('UPDATE early_signal_assessments SET call_episode_id = $2 WHERE id = $1', [
         assessment.id,
@@ -638,13 +661,14 @@ async function latest(pool, userId, actorUserId, lang = 'vi') {
   return localizeAssessment(result.rows[0] || null, lang);
 }
 
-async function evaluateAfterNewHealthData(pool, userId, triggerRef) {
+async function evaluateAfterNewHealthData(pool, userId, triggerRef, options = {}) {
   const entitlement = await entitlementService.getEntitlement(pool, userId);
   if (!entitlement.automaticEarlySignals) return null;
   return evaluate(pool, userId, {
     requestedBy: userId,
     triggerType: 'new_log',
     triggerRef,
+    patientPresent: options.patientPresent === true,
   });
 }
 
