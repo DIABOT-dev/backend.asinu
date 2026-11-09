@@ -124,6 +124,83 @@ describe('per-area check-in interview', () => {
     expect(facts.tinh_trang_khai_bao_benh_nen).toBe('none_reported');
     expect(facts.benh_nen_da_khai).toEqual([]);
   });
+  test.each(['vi', 'en'])(
+    'questions identify the current area instead of repeating an unscoped prompt (%s)',
+    (lang) => {
+      const run = walk(select, { lang });
+      const head = run.questions.find((r) => r.step === 'detail_head_onset');
+      const limbs = run.questions.find((r) => r.step === 'detail_limbs_onset');
+      expect(head.question).not.toBe(limbs.question);
+      expect(head.question.toLowerCase()).toContain(head.questionGroup.label.toLowerCase());
+      expect(limbs.question.toLowerCase()).toContain(limbs.questionGroup.label.toLowerCase());
+      for (const question of run.questions.filter((r) => r.questionGroup)) {
+        expect(question.question.toLowerCase()).toContain(
+          question.questionGroup.label.toLowerCase()
+        );
+        expect(question.question).not.toMatch(/\{\{|^[^?]+:\s/);
+      }
+      // Reopening at an arbitrary boundary uses the saved step IDs, even though
+      // earlier clients recorded the old question wording.
+      const saved = run.answers.slice(
+        0,
+        run.answers.findIndex((a) => a.step === 'detail_limbs_onset')
+      );
+      const resumed = getDetailedNextStep({
+        ...input,
+        lang,
+        previousAnswers: normalizeAnswers(saved),
+      });
+      expect(resumed.step).toBe('detail_limbs_onset');
+      expect(resumed.question).toBe(limbs.question);
+      expect(run.questions.filter((r) => r.step === 'detail_head_onset')).toHaveLength(1);
+      expect(run.questions.filter((r) => r.step === 'detail_limbs_onset')).toHaveLength(1);
+    }
+  );
+  test.each(['vi', 'en'])(
+    'relief answers state the outcome and still allow no relief or no attempt (%s)',
+    (lang) => {
+      const run = walk(select, { lang });
+      const relief = run.questions.find((r) => r.step === 'detail_head_relieving');
+      expect(relief.question).toMatch(lang === 'vi' ? /đã thử.*thấy thế nào/ : /tried.*feel/);
+      for (const choice of ['rest_helps', 'less_movement_helps', 'quiet_place_helps']) {
+        const label = t(`checkin.detail.option.${choice}`, lang);
+        expect(relief.options).toContain(label);
+        expect(label).toMatch(lang === 'vi' ? /thấy đỡ/ : /feel better/);
+      }
+      for (const choice of ['nothing_helps', 'not_tried', 'unknown']) {
+        const label = t(`checkin.detail.option.${choice}`, lang);
+        expect(relief.options).toContain(label);
+        expect(relief.exclusiveOptions).toContain(label);
+      }
+      const actions = run.questions.find((r) => r.step === 'detail_head_actions');
+      expect(actions.options).toContain(t('checkin.detail.option.rest', lang));
+      expect(actions.options).not.toContain(t('checkin.detail.option.rest_helps', lang));
+    }
+  );
+  test.each([
+    [23, 'Nam', 'bạn'],
+    [30, 'Nam', 'anh'],
+    [30, 'Nữ', 'chị'],
+    [50, 'Nam', 'chú'],
+    [50, 'Nữ', 'cô'],
+    [65, 'Nữ', 'bác'],
+    [80, 'Nam', 'ông'],
+    [80, 'Nữ', 'bà'],
+  ])(
+    'detailed questions use the shared age/gender honorific without repeating a name (%s, %s)',
+    (age, gender, honorific) => {
+      const run = walk(select, {
+        profile: { age, gender, full_name: 'Trần Văn Hùng', medical_conditions: [] },
+      });
+      const questions = run.questions.filter((q) => q.detailedQuestion);
+      expect(questions.some((q) => q.question.toLowerCase().includes(honorific))).toBe(true);
+      for (const question of questions) {
+        expect(question.question).not.toContain('Hùng');
+        expect(question.question).not.toContain('{{');
+        if (honorific !== 'bạn') expect(question.question.toLowerCase()).not.toMatch(/\bbạn\b/u);
+      }
+    }
+  );
   test('asks duration only for episodes and asks the destination only when pain spreads', () => {
     const run = walk((r) =>
       r.step === 'detail_head_pattern'
@@ -140,63 +217,96 @@ describe('per-area check-in interview', () => {
     expect(steps).toContain('detail_limbs_radiation_location');
     expect(steps).not.toContain('detail_head_radiation_location');
   });
-  test.each(['vi', 'en'])('every detailed question offers real choices, including where pain spreads (%s)', lang => {
-    const run = walk(r => {
-      if (r.step.endsWith('_radiation')) return t('checkin.detail.option.spreads', lang);
-      if (r.step.endsWith('_pattern')) return t('checkin.detail.option.episodes', lang);
-      if (r.step.endsWith('_radiation_location')) {
-        const hand = t('checkin.detail.option.radiates_hand', lang);
-        return r.options.includes(hand) ? hand : r.options[0];
+  test.each(['vi', 'en'])(
+    'every detailed question offers real choices, including where pain spreads (%s)',
+    (lang) => {
+      const run = walk(
+        (r) => {
+          if (r.step.endsWith('_radiation')) return t('checkin.detail.option.spreads', lang);
+          if (r.step.endsWith('_pattern')) return t('checkin.detail.option.episodes', lang);
+          if (r.step.endsWith('_radiation_location')) {
+            const hand = t('checkin.detail.option.radiates_hand', lang);
+            return r.options.includes(hand) ? hand : r.options[0];
+          }
+          return select(r);
+        },
+        { lang }
+      );
+      for (const question of run.questions) {
+        expect(question.options.length).toBeGreaterThan(1);
+        expect(new Set(question.options).size).toBe(question.options.length);
+        expect(
+          question.options.every((option) => typeof option === 'string' && option.trim())
+        ).toBe(true);
+        expect(question.question.trim().split(/\s+/).length).toBeLessThanOrEqual(25);
       }
-      return select(r);
-    }, { lang });
-    for (const question of run.questions) {
-      expect(question.options.length).toBeGreaterThan(1);
-      expect(new Set(question.options).size).toBe(question.options.length);
-      expect(question.options.every(option => typeof option === 'string' && option.trim())).toBe(true);
-      expect(question.question.trim().split(/\s+/).length).toBeLessThanOrEqual(25);
+      const where = run.questions.find((r) => r.step === 'detail_limbs_radiation_location');
+      expect(where.options).toContain(t('checkin.detail.option.radiates_hand', lang));
+      expect(where.allowFreeText).toBe(true);
+      expect(
+        run.result.state.regionDetails.find((r) => r.region === 'limbs').answers.radiation_location
+      ).toBe(t('checkin.detail.option.radiates_hand', 'vi'));
     }
-    const where = run.questions.find(r => r.step === 'detail_limbs_radiation_location');
-    expect(where.options).toContain(t('checkin.detail.option.radiates_hand', lang));
-    expect(where.allowFreeText).toBe(true);
-    expect(run.result.state.regionDetails.find(r => r.region === 'limbs').answers.radiation_location)
-      .toBe(t('checkin.detail.option.radiates_hand', 'vi'));
-  });
-  test.each(['vi', 'en'].flatMap(lang => ['head', 'chest', 'abdomen', 'limbs', 'skin', 'whole_body', 'mental'].map(region => [lang, region])))(
-    'all available questions have readable text and usable choices (%s/%s)', (lang, region) => {
-      const symptoms = require('../src/services/checkin/body-location').getSymptomsForLocation(region, lang);
-      const run = walk(r => {
+  );
+  test.each(
+    ['vi', 'en'].flatMap((lang) =>
+      ['head', 'chest', 'abdomen', 'limbs', 'skin', 'whole_body', 'mental'].map((region) => [
+        lang,
+        region,
+      ])
+    )
+  )('all available questions have readable text and usable choices (%s/%s)', (lang, region) => {
+    const symptoms = require('../src/services/checkin/body-location').getSymptomsForLocation(
+      region,
+      lang
+    );
+    const run = walk(
+      (r) => {
         if (r.step === 'symptoms') return symptoms[0];
         if (r.step === 'red_flags') return 'Không có';
         if (r.step.endsWith('_pattern')) return t('checkin.detail.option.episodes', lang);
         if (r.step.endsWith('_radiation')) return t('checkin.detail.option.spreads', lang);
         return r.options[0];
-      }, { lang, bodyLocations: [region], bodyLocationOther: '' });
-      expect(run.answers.length).toBeLessThanOrEqual(MAX_DETAILED_ANSWERS);
-      expect(new Set(run.answers.map(a => a.step)).size).toBe(run.answers.length);
-      for (const q of run.questions) {
-        expect(q.options.length).toBeGreaterThan(1);
-        expect(new Set(q.options).size).toBe(q.options.length);
-        expect(q.options.every(option => typeof option === 'string' && option.trim().length)).toBe(true);
-        expect(q.question).not.toMatch(/undefined|\{\{|checkin\.detail\./);
-        if (q.step.startsWith('detail_')) expect(q.question.split(/\s+/).length).toBeLessThanOrEqual(25);
-      }
-    });
+      },
+      { lang, bodyLocations: [region], bodyLocationOther: '' }
+    );
+    expect(run.answers.length).toBeLessThanOrEqual(MAX_DETAILED_ANSWERS);
+    expect(new Set(run.answers.map((a) => a.step)).size).toBe(run.answers.length);
+    for (const q of run.questions) {
+      expect(q.options.length).toBeGreaterThan(1);
+      expect(new Set(q.options).size).toBe(q.options.length);
+      expect(q.options.every((option) => typeof option === 'string' && option.trim().length)).toBe(
+        true
+      );
+      expect(q.question).not.toMatch(/undefined|\{\{|checkin\.detail\./);
+      if (q.step.startsWith('detail_'))
+        expect(q.question.split(/\s+/).length).toBeLessThanOrEqual(25);
+    }
+  });
   test('free descriptions of episodes and spreading pain still ask the applicable follow-up fields', () => {
-    const run = walk(r => r.step === 'detail_limbs_pattern' ? 'Thỉnh thoảng mới bị từng cơn'
-      : r.step === 'detail_limbs_radiation' ? 'Có lan xuống bàn tay' : select(r));
-    expect(run.questions.map(q => q.step)).toContain('detail_limbs_episode_duration');
-    expect(run.questions.map(q => q.step)).toContain('detail_limbs_radiation_location');
+    const run = walk((r) =>
+      r.step === 'detail_limbs_pattern'
+        ? 'Thỉnh thoảng mới bị từng cơn'
+        : r.step === 'detail_limbs_radiation'
+          ? 'Có lan xuống bàn tay'
+          : select(r)
+    );
+    expect(run.questions.map((q) => q.step)).toContain('detail_limbs_episode_duration');
+    expect(run.questions.map((q) => q.step)).toContain('detail_limbs_radiation_location');
   });
   test('the question stays readable when the recorded position is long or repeated', () => {
     const rawPosition = 'Vai / cánh tay phải / vai cánh tay phải';
     const run = walk(select, { bodyLocationOther: `Tay chân: ${rawPosition}` });
-    const associated = run.questions.find(r => r.step === 'detail_limbs_associated');
-    expect(associated.question).toBe('Bạn có thêm dấu hiệu nào dưới đây không?');
+    const associated = run.questions.find((r) => r.step === 'detail_limbs_associated');
+    expect(associated.question).toBe(
+      'Ngoài khó chịu ở tay chân, anh có thêm biểu hiện nào dưới đây không?'
+    );
     expect(associated.question).not.toContain('(');
     expect(associated.question).not.toContain('ngoài điều đã kể');
     expect(associated.questionGroup.label).toBe('Tay chân');
-    expect(run.result.state.regionDetails.find(r => r.region === 'limbs').position).toBe(rawPosition);
+    expect(run.result.state.regionDetails.find((r) => r.region === 'limbs').position).toBe(
+      rawPosition
+    );
   });
   test('accepts optional uncertainty once and concludes explicitly incomplete if timing is unknown', () => {
     const run = walk((r) =>
@@ -210,7 +320,13 @@ describe('per-area check-in interview', () => {
     const run = walk((r) => (r.step === 'symptoms' ? 'Chóng mặt' : select(r)), {
       bodyLocations: ['head'],
     });
-    expect(run.questions.find((r) => r.step === 'detail_head_severity').question).toBe(t('checkin.detail.question.discomfort', 'vi'));
+    expect(run.questions.find((r) => r.step === 'detail_head_severity').question).toBe(
+      t('checkin.detail.question.area_discomfort', 'vi', {
+        area: 'đầu',
+        honorific: 'anh',
+        Honorific: 'Anh',
+      })
+    );
     expect(run.questions.map((r) => r.step)).not.toContain('detail_head_character');
     expect(run.questions.map((r) => r.step)).not.toContain('detail_head_radiation');
   });

@@ -1,6 +1,7 @@
 'use strict';
 
 const { t } = require('../../i18n');
+const { getHonorifics } = require('../../lib/honorifics');
 const { getNextStep, buildQuestion, calculateConclusion } = require('./triage-engine');
 const { normalizeLang, localizeOption } = require('./triage-i18n');
 const {
@@ -118,11 +119,28 @@ function configuredChoices(field, group) {
     case 'radiation':
       return ['stays_here', 'spreads', 'unknown'];
     case 'radiation_location':
-      return ({
-        head: ['radiates_neck_nape', 'radiates_face_eyes', 'radiates_shoulder_arm', 'radiates_back'],
-        chest: ['radiates_shoulder_arm', 'radiates_neck_jaw', 'radiates_back', 'radiates_upper_abdomen'],
-        abdomen: ['radiates_back', 'radiates_shoulder_arm', 'radiates_groin', 'radiates_chest'],
-      }[group.region] || ['radiates_neck_shoulder', 'radiates_back', 'radiates_hand', 'radiates_leg_foot']).concat('unknown');
+      return (
+        {
+          head: [
+            'radiates_neck_nape',
+            'radiates_face_eyes',
+            'radiates_shoulder_arm',
+            'radiates_back',
+          ],
+          chest: [
+            'radiates_shoulder_arm',
+            'radiates_neck_jaw',
+            'radiates_back',
+            'radiates_upper_abdomen',
+          ],
+          abdomen: ['radiates_back', 'radiates_shoulder_arm', 'radiates_groin', 'radiates_chest'],
+        }[group.region] || [
+          'radiates_neck_shoulder',
+          'radiates_back',
+          'radiates_hand',
+          'radiates_leg_foot',
+        ]
+      ).concat('unknown');
     case 'aggravating':
       return [
         'movement',
@@ -134,7 +152,14 @@ function configuredChoices(field, group) {
         'unknown',
       ];
     case 'relieving':
-      return ['rest', 'less_movement', 'quiet_place', 'nothing_helps', 'not_tried', 'unknown'];
+      return [
+        'rest_helps',
+        'less_movement_helps',
+        'quiet_place_helps',
+        'nothing_helps',
+        'not_tried',
+        'unknown',
+      ];
     case 'actions':
       return ['rest', 'less_movement', 'recorded_reading', 'no_action', 'unknown'];
     case 'associated':
@@ -154,7 +179,7 @@ function configuredChoices(field, group) {
       return [];
   }
 }
-function regionalQuestion(field, group, lang) {
+function regionalQuestion(field, group, lang, profile = {}) {
   let options;
   if (field === 'onset') options = buildQuestion('onset', {}, lang).options;
   else if (field === 'progression')
@@ -168,13 +193,15 @@ function regionalQuestion(field, group, lang) {
     );
   const unknown = t(key('option.unknown'), lang);
   if (!options.includes(unknown)) options.push(unknown);
+  const questionField = field === 'severity' && !painReported(group) ? 'discomfort' : field;
+  const hasPhysicalArea = ['head', 'chest', 'abdomen', 'limbs', 'skin'].includes(group.region);
   return {
     action: 'ask',
     step: detailStep(group.region, field),
-    question: t(
-      key(`question.${field === 'severity' && !painReported(group) ? 'discomfort' : field}`),
-      lang
-    ),
+    question: t(key(`question.${hasPhysicalArea ? 'area_' : ''}${questionField}`), lang, {
+      ...getHonorifics({ ...profile, lang }),
+      area: group.label.toLowerCase(),
+    }),
     options,
     multiSelect: ['character', 'aggravating', 'relieving', 'associated', 'actions'].includes(field),
     allowFreeText: true,
@@ -233,6 +260,9 @@ function canonicalDetailAnswer(value) {
     'rest',
     'less_movement',
     'quiet_place',
+    'rest_helps',
+    'less_movement_helps',
+    'quiet_place_helps',
     'nothing_helps',
     'not_tried',
     'recorded_reading',
@@ -312,16 +342,20 @@ function getDetailedNextStep(input) {
     return initial;
   const groups = groupsFor(state, lang);
   for (const group of groups) {
-    const associated = answers.find(item => item.step === detailStep(group.region, 'associated'))?.answer;
-    const pain = affirmativeParts(associated).filter(part => painReported({ symptoms: [part] }));
+    const associated = answers.find(
+      (item) => item.step === detailStep(group.region, 'associated')
+    )?.answer;
+    const pain = affirmativeParts(associated).filter((part) => painReported({ symptoms: [part] }));
     group.symptoms = [...new Set([...group.symptoms, ...pain])];
   }
   // Newly reported pain must open the corresponding detail fields. Only use a
   // region established by the server; never infer one from an AI question.
   for (const extra of input.supplementalAnswers || []) {
-    const group = groups.find(item => item.region === extra.region);
+    const group = groups.find((item) => item.region === extra.region);
     if (!group) continue;
-    const pain = affirmativeParts(extra.answer).filter(part => painReported({ symptoms: [part] }));
+    const pain = affirmativeParts(extra.answer).filter((part) =>
+      painReported({ symptoms: [part] })
+    );
     group.symptoms = [...new Set([...group.symptoms, ...pain])];
   }
   const details = groups.map((group) => ({
@@ -416,13 +450,21 @@ function getDetailedNextStep(input) {
         )
           return false;
         if (field === 'episode_duration')
-          return ['episodes', 'occasional'].some(
-            (choice) => detail?.answers.pattern === t(key(`option.${choice}`), 'vi')
-          ) || /từng (?:đợt|cơn|lúc)|thỉnh thoảng|cứ .{1,40}(?:lại|một lần)|comes and goes|episode|intermittent/iu
-            .test(affirmativeParts(detail?.answers.pattern).join(' '));
+          return (
+            ['episodes', 'occasional'].some(
+              (choice) => detail?.answers.pattern === t(key(`option.${choice}`), 'vi')
+            ) ||
+            /từng (?:đợt|cơn|lúc)|thỉnh thoảng|cứ .{1,40}(?:lại|một lần)|comes and goes|episode|intermittent/iu.test(
+              affirmativeParts(detail?.answers.pattern).join(' ')
+            )
+          );
         if (field === 'radiation_location')
-          return detail?.answers.radiation === t(key('option.spreads'), 'vi') ||
-            /(?:^|\s)lan(?:\s|$)|radiat|spread/iu.test(affirmativeParts(detail?.answers.radiation).join(' '));
+          return (
+            detail?.answers.radiation === t(key('option.spreads'), 'vi') ||
+            /(?:^|\s)lan(?:\s|$)|radiat|spread/iu.test(
+              affirmativeParts(detail?.answers.radiation).join(' ')
+            )
+          );
         return true;
       }).map((field) => ({ step: detailStep(group.region, field), group, field }))
     ),
@@ -463,12 +505,12 @@ function getDetailedNextStep(input) {
     return completed;
   }
   let question;
-  if (next.group) question = regionalQuestion(next.field, next.group, lang);
+  if (next.group) question = regionalQuestion(next.field, next.group, lang, input.profile);
   else if (next.step === 'detail_history')
     question = {
       action: 'ask',
       step: next.step,
-      question: t(key('question.history'), lang),
+      question: t(key('question.history'), lang, getHonorifics({ ...input.profile, lang })),
       options: [
         'no_conditions',
         'diabetes',
@@ -500,10 +542,18 @@ function getDetailedNextStep(input) {
     };
   return {
     ...question,
-    pendingTemplateFields: plan.filter(item => !observed.has(item.step)).map(item => item.field || item.step),
-    pendingTemplateQuestions: plan.filter(item => !observed.has(item.step)).map(item =>
-      item.group ? regionalQuestion(item.field, item.group, lang).question :
-        item.step === 'detail_history' ? t(key('question.history'), lang) : item.step),
+    pendingTemplateFields: plan
+      .filter((item) => !observed.has(item.step))
+      .map((item) => item.field || item.step),
+    pendingTemplateQuestions: plan
+      .filter((item) => !observed.has(item.step))
+      .map((item) =>
+        item.group
+          ? regionalQuestion(item.field, item.group, lang, input.profile).question
+          : item.step === 'detail_history'
+            ? t(key('question.history'), lang, getHonorifics({ ...input.profile, lang }))
+            : item.step
+      ),
     state: projected.state,
     detailedQuestion: Boolean(next.group || next.step === 'detail_history'),
     questionProgress: {
