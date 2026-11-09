@@ -27,6 +27,7 @@ if name=='docker' and args[0]=='inspect':
 if name=='systemctl':
     if args[0]=='start' and os.environ['TEST_FAILURE']=='backup':sys.exit(1)
     if args[0]=='show':print('success')
+if name=='docker' and args[0]=='compose' and 'run' in args:sys.stdin.read()
 if name=='docker' and args[0]=='exec' and os.environ['TEST_FAILURE']=='schema':sys.exit(1)
 if name=='seq':print(1)
 '''
@@ -44,7 +45,7 @@ if name=='seq':print(1)
             else:
                 (root / '.env').write_text('KEY_MANAGEMENT_PROVIDER=openbao\nPRIVATE_FIXTURE=never-log-this-value\n')
                 (root / '.env.migrations').write_text('PRIVATE_FIXTURE=never-log-this-value\n')
-            result = subprocess.run(['bash', str(SCRIPT)], cwd=root, env={
+            result = subprocess.run(['bash', '-se'], input=SCRIPT.read_text(), cwd=root, env={
                 **os.environ, 'PATH': str(commands) + os.pathsep + os.environ['PATH'],
                 'STACK_DIR': str(root), 'ASINU_BACKEND_IMAGE': 'new-image:verified',
                 'GHCR_USER': 'fixture', 'GHCR_TOKEN': 'fixture-token', 'HOST_PORT': '3300',

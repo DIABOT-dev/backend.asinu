@@ -52,7 +52,7 @@ fi
 "${migration_compose[@]}" config --quiet
 "${runtime_compose[@]}" pull asinu-backend
 "${migration_compose[@]}" pull asinu-migrate
-"${migration_compose[@]}" run --rm --no-deps asinu-migrate
+"${migration_compose[@]}" run --rm --no-deps asinu-migrate </dev/null
 "${runtime_compose[@]}" up -d --no-deps asinu-backend
 healthy=0
 for _ in $(seq 1 45); do

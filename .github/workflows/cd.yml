@@ -80,7 +80,7 @@ jobs:
           fail2ban-client status sshd 2>/dev/null || true
           docker ps --format '{{.Names}} {{.Status}}'
           docker inspect asinu-backend --format 'Image={{.Config.Image}} ComposeDir={{index .Config.Labels "com.docker.compose.project.working_dir"}}'
-          docker exec asinu-backend node -e 'const keys=["CHECKIN_DETAILED_QUESTIONS_ENABLED","CHECKIN_ADAPTIVE_QUESTIONS_ENABLED","CHECKIN_CONCLUSION_V2_ENABLED","AI_PROVIDER_CLINICAL","KEY_MANAGEMENT_PROVIDER"];console.log(JSON.stringify({runtime_features:Object.fromEntries(keys.map(key=>[key,process.env[key]??null]))})));'
+          docker inspect asinu-backend --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^(CHECKIN_DETAILED_QUESTIONS_ENABLED|CHECKIN_ADAPTIVE_QUESTIONS_ENABLED|CHECKIN_CONCLUSION_V2_ENABLED|CHECKIN_STRUCTURED_CONCLUSION_ENABLED|AI_PROVIDER_CLINICAL|KEY_MANAGEMENT_PROVIDER)=' || true
           curl -fsS --max-time 5 http://127.0.0.1:3300/api/healthz
           REMOTE
 
@@ -236,6 +236,9 @@ jobs:
             printf 'export DEPLOY_ENV=%q\n' "$DEPLOY_ENV"
             cat deploy/rollout-backend.sh
           } | ssh "${ssh_args[@]}" "$target" bash -se
+          deployed_image="$(ssh "${ssh_args[@]}" "$target" docker inspect asinu-backend --format '{{.Config.Image}}')"
+          test "$deployed_image" = "$ASINU_BACKEND_IMAGE"
+          printf 'Production container revision verified: %s\n' "$deployed_image"
 
       - name: Verify public endpoint
         if: env.BASE_URL != ''
