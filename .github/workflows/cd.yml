@@ -9,7 +9,7 @@ on:
       operation:
         description: Deploy, inspect SSH, or remove a confirmed operator IP ban
         type: choice
-        options: [deploy, ssh-diagnostics, restore-operator-ssh]
+        options: [deploy, ssh-diagnostics, notification-audit, restore-operator-ssh]
         default: deploy
       operator_ip:
         description: Confirmed operator IPv4 address to unban (restore operation only)
@@ -38,13 +38,16 @@ permissions:
 
 jobs:
   ssh-diagnostics:
-    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'restore-operator-ssh')
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'notification-audit' || inputs.operation == 'restore-operator-ssh')
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     environment: prod
     permissions:
       contents: read
     steps:
+      - name: Checkout read-only audit
+        if: inputs.operation == 'notification-audit'
+        uses: actions/checkout@v7
       - name: Inspect SSH and API status with the existing administration key
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -83,6 +86,12 @@ jobs:
           docker inspect asinu-backend --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^(CHECKIN_DETAILED_QUESTIONS_ENABLED|CHECKIN_ADAPTIVE_QUESTIONS_ENABLED|CHECKIN_CONCLUSION_V2_ENABLED|CHECKIN_STRUCTURED_CONCLUSION_ENABLED|AI_PROVIDER_CLINICAL|KEY_MANAGEMENT_PROVIDER)=' || true
           curl -fsS --max-time 5 http://127.0.0.1:3300/api/healthz
           REMOTE
+          if [ "$OPERATION" = 'notification-audit' ]; then
+            ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+              -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
+              "$VPS_USER@$VPS_HOST" 'docker exec -i asinu-backend node' < deploy/notification-audit.cjs
+          fi
 
   package:
     if: >-
