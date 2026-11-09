@@ -79,6 +79,7 @@ jobs:
           ss -lnt 'sport = :22'
           fail2ban-client status sshd 2>/dev/null || true
           docker ps --format '{{.Names}} {{.Status}}'
+          docker inspect asinu-backend --format 'Image={{.Config.Image}} ComposeDir={{index .Config.Labels "com.docker.compose.project.working_dir"}}'
           curl -fsS --max-time 5 http://127.0.0.1:3300/api/healthz
           REMOTE
 
@@ -187,89 +188,53 @@ jobs:
         with:
           ref: ${{ needs.package.outputs.sha }}
 
-      - name: Copy Compose file to VPS
-        uses: appleboy/scp-action@v1.0.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: deploy/docker-compose.yml,deploy/docker-compose.openbao.yml
-          target: ${{ env.STACK_DIR }}
-          strip_components: 1
-
-      - name: Deploy and verify
-        uses: appleboy/ssh-action@v1.2.5
+      - name: Deploy and verify with OpenSSH
         env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           ASINU_BACKEND_IMAGE: ${{ needs.package.outputs.image }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN || secrets.GITHUB_TOKEN }}
-          STACK_DIR: ${{ env.STACK_DIR }}
-          HOST_PORT: ${{ env.HOST_PORT }}
           DEPLOY_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'camp' }}
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          envs: ASINU_BACKEND_IMAGE,GHCR_USER,GHCR_TOKEN,STACK_DIR,HOST_PORT,DEPLOY_ENV
-          script: |
-            set -eu
-            cd "$STACK_DIR"
-            test -f .env
-            test -f .env.migrations
-            docker network inspect asinu_net >/dev/null 2>&1 || docker network create asinu_net
-            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-
-            previous_image="$(docker inspect --format '{{.Config.Image}}' asinu-backend 2>/dev/null || true)"
-            mkdir -p .deploy-history
-            release_stamp="$(date -u +%Y%m%dT%H%M%SZ)"
-            printf 'previous_image=%s\ntarget_image=%s\n' "$previous_image" "$ASINU_BACKEND_IMAGE" > ".deploy-history/${release_stamp}.images"
-            if [ "$DEPLOY_ENV" = 'prod' ]; then
-              systemctl start asinu-encrypted-backup.service
-              test "$(systemctl show asinu-encrypted-backup.service -p Result --value)" = 'success'
-              echo 'Encrypted production backup completed before migration.'
-            fi
-            export ASINU_BACKEND_IMAGE HOST_PORT
-            export COMPOSE_FILE=docker-compose.yml
-            if grep -q '^KEY_MANAGEMENT_PROVIDER=openbao$' .env; then
-              export COMPOSE_FILE=docker-compose.yml:docker-compose.openbao.yml
-            fi
-            docker compose --profile migration pull
-            docker compose --profile migration run --rm --no-deps asinu-migrate
-            docker compose up -d --remove-orphans asinu-backend
-
-            healthy=0
-            for _ in $(seq 1 45); do
-              if curl -fsS "http://127.0.0.1:${HOST_PORT}/api/readyz" >/dev/null; then
-                healthy=1
-                break
-              fi
-              sleep 2
-            done
-
-            if [ "$healthy" -eq 1 ]; then
-              if ! docker exec asinu-backend node -e '
-                const { createPool } = require("./src/lib/db");
-                const pool = createPool({ connectionString: process.env.DATABASE_URL, max: 1 });
-                (async () => {
-                  try {
-                    const { rows } = await pool.query("SELECT to_regclass($1) IS NOT NULL AS present, has_table_privilege(current_user,$1,$2) AS can_read, has_table_privilege(current_user,$1,$3) AS can_insert", ["public.health_checkin_cancellations", "SELECT", "INSERT"]);
-                    console.log(JSON.stringify({ cancellation_schema: rows[0] }));
-                    if (!rows[0].present || !rows[0].can_read || !rows[0].can_insert) throw new Error("Cancellation schema is not ready");
-                  } finally { await pool.end(); }
-                })().catch(() => { console.error("Cancellation schema verification failed"); process.exitCode = 1; });
-              '; then
-                healthy=0
-              fi
-            fi
-
-            if [ "$healthy" -ne 1 ]; then
-              docker compose logs --tail=150 asinu-backend
-              if [ -n "$previous_image" ]; then
-                export ASINU_BACKEND_IMAGE="$previous_image"
-                docker compose up -d --remove-orphans asinu-backend
-              fi
-              exit 1
-            fi
+        run: |
+          set -euo pipefail
+          test "$VPS_HOST" = '36.50.176.55'
+          [[ "$STACK_DIR" =~ ^/[a-zA-Z0-9_./-]+$ ]]
+          [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$HOST_PORT" =~ ^[0-9]+$ ]]
+          umask 077
+          task_dir="$(mktemp -d)"
+          trap 'rm -rf "$task_dir"' EXIT
+          printf '%s\n' "$VPS_SSH_KEY" > "$task_dir/key"
+          printf '%s\n' '36.50.176.55 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMDOm8XUn1KYdgS2UTE7r4XyrFpWQKpg7Kh+ZdWOm5xL' > "$task_dir/known_hosts"
+          ssh_args=(-i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519
+            -o "UserKnownHostsFile=$task_dir/known_hosts" -o ConnectTimeout=15)
+          target="${VPS_USER}@${VPS_HOST}"
+          ssh "${ssh_args[@]}" "$target" bash -se -- "$STACK_DIR" <<'REMOTE'
+          umask 077
+          mkdir -p "$1/.deploy-history"
+          cd "$1"
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          for name in docker-compose.yml docker-compose.openbao.yml runtime.compose.json migration.compose.json; do
+            if [ -f "$name" ]; then cp -p "$name" ".deploy-history/pre-${stamp}-${name}"; fi
+          done
+          REMOTE
+          ssh "${ssh_args[@]}" "$target" "mkdir -p '$STACK_DIR/.deploy-tools'"
+          tar -C deploy -cf - prepare-auto-deploy.py |
+            ssh "${ssh_args[@]}" "$target" "tar --no-same-owner -xf - -C '$STACK_DIR/.deploy-tools'"
+          tar -C deploy -cf - docker-compose.yml docker-compose.openbao.yml |
+            ssh "${ssh_args[@]}" "$target" "tar --no-same-owner -xf - -C '$STACK_DIR'"
+          {
+            printf 'export ASINU_BACKEND_IMAGE=%q\n' "$ASINU_BACKEND_IMAGE"
+            printf 'export GHCR_USER=%q\n' "$GHCR_USER"
+            printf 'export GHCR_TOKEN=%q\n' "$GHCR_TOKEN"
+            printf 'export STACK_DIR=%q\n' "$STACK_DIR"
+            printf 'export HOST_PORT=%q\n' "$HOST_PORT"
+            printf 'export DEPLOY_ENV=%q\n' "$DEPLOY_ENV"
+            cat deploy/rollout-backend.sh
+          } | ssh "${ssh_args[@]}" "$target" bash -se
 
       - name: Verify public endpoint
         if: env.BASE_URL != ''

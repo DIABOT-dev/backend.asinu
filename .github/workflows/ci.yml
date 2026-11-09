@@ -72,6 +72,9 @@ jobs:
       - name: Operations monitor and encrypted-retirement regressions
         run: |
           python3 -m unittest discover -s deploy/openbao -p 'test_*.py'
+          python3 deploy/test_auto_deploy.py
+          python3 deploy/test_rollout_backend.py
+          bash -n deploy/rollout-backend.sh
           python3 tests/security-crm-receiver.py
 
       - name: Lint
