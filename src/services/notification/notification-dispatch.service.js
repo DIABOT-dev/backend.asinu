@@ -16,6 +16,7 @@ const {
 } = require('./notification.policy');
 const { sendPushNotification } = require('./push.notification.service');
 const logger = require('../../lib/logger');
+const { isStaleCheckinReminder } = require('./checkin-reminder.policy');
 const { buildNotificationTopics } = require('./notification-topic.service');
 const {
   SCHEDULED_REMINDER_TYPES,
@@ -132,6 +133,7 @@ async function reserveNotification(
   if (isHealthMetricReminderSuppressed(type)) return null;
   return withNotificationTransaction(pool, userId, async (client) => {
     if (await suppressInactivityNotification(client, userId, type, data)) return null;
+    if (await isStaleCheckinReminder(client, { user_id: userId, type, data })) return null;
     // Do not create a new private inbox entry after family alert access or the
     // medication result preference changed while the event was queued.
     if (
@@ -364,6 +366,19 @@ async function deliverNotification(pool, notificationId) {
     if (!claimed) {
       await client.query('COMMIT');
       return { ok: false, skipped: true };
+    }
+    if (await isStaleCheckinReminder(client, claimed)) {
+      await client.query(
+        `UPDATE notification_push_outbox SET state='CANCELLED',lease_until=NULL,
+          updated_at=NOW() WHERE notification_id=$1`,
+        [notificationId]
+      );
+      await client.query(
+        `UPDATE notifications SET is_read=true,read_at=COALESCE(read_at,NOW()) WHERE id=$1`,
+        [notificationId]
+      );
+      await client.query('COMMIT');
+      return { ok: false, skipped: true, reason: 'checkin_already_updated' };
     }
     if (await suppressInactivityNotification(client, claimed.user_id, claimed.type, claimed.data)) {
       await client.query(

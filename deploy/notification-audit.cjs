@@ -3,6 +3,15 @@
 // Read-only production diagnostics. Never print recipients, device tokens,
 // notification text or payloads. Counts are candidates, not delivery receipts.
 const queries = {
+  followup_completion_mismatch: `SELECT n.type,count(*)::int notices,
+    count(*) FILTER(WHERE hc.triage_completed_at <= n.created_at)::int completed_before_notice,
+    count(*) FILTER(WHERE hc.triage_completed_at <= n.created_at
+      AND strpos(n.message,'chưa hoàn tất check-in')>0)::int incomplete_wording_after_completed,
+    count(*) FILTER(WHERE hc.last_response_at > n.created_at)::int later_patient_response
+    FROM notifications n JOIN health_checkins hc ON hc.id::text=n.data->>'checkinId'
+      AND hc.user_id=n.user_id
+    WHERE n.created_at>=NOW()-INTERVAL '7 days'
+      AND n.type IN ('checkin_followup','checkin_followup_urgent') GROUP BY n.type`,
   volume_7d: `SELECT n.type, count(*)::int inbox_rows,
     count(*) FILTER(WHERE o.state='SENT')::int accepted_pushes,
     count(*) FILTER(WHERE o.attempts>1)::int retried_pushes,

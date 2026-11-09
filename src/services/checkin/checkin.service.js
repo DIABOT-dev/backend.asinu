@@ -806,13 +806,17 @@ async function processTriageStepOnce(
   // Reject a stale concurrent response instead of overwriting a newer answer.
   const saved = await pool.query(
     `UPDATE health_checkins SET triage_messages = $1::jsonb,
-       triage_state = $3::jsonb, updated_at = NOW()
+       triage_state = $3::jsonb,
+       last_response_at = CASE WHEN $5 THEN NOW() ELSE last_response_at END,
+       no_response_count = CASE WHEN $5 THEN 0 ELSE no_response_count END,
+       updated_at = NOW()
      WHERE id = $2 AND triage_state = $4::jsonb RETURNING id`,
     [
       JSON.stringify(previousAnswers),
       checkinId,
       JSON.stringify(nextState),
       JSON.stringify(persistedState),
+      previousAnswers.length > storedAnswers.length,
     ]
   );
   if (!saved.rows.length) {
@@ -845,6 +849,8 @@ async function processTriageStepOnce(
          triage_severity      = $2,
          triage_messages      = $3::jsonb,
          triage_completed_at  = NOW(),
+         last_response_at     = NOW(),
+         no_response_count    = 0,
          triage_state         = jsonb_set(triage_state, '{completed,committed}', 'true'::jsonb),
          next_checkin_at      = $4,
          emergency_triggered  = COALESCE($6, emergency_triggered),
@@ -1258,6 +1264,7 @@ async function shouldAlertFamily(pool, userId, session) {
  * Send follow-up push or escalate to family alert.
  */
 async function runCheckinFollowUps(pool) {
+  const { followUpCopyKeys, followUpSnapshot, isStaleCheckinReminder } = require('../notification/checkin-reminder.policy');
   const now = new Date();
 
   // Atomically claim overdue sessions by pushing next_checkin_at forward,
@@ -1272,7 +1279,7 @@ async function runCheckinFollowUps(pool) {
        AND health_checkins.resolved_at IS NULL
        AND health_checkins.session_date = $2
        AND health_checkins.flow_state != 'resolved'
-     RETURNING health_checkins.*, u.push_token, u.display_name, u.full_name,
+     RETURNING health_checkins.*, health_checkins.last_response_at::text AS reminder_response_version, u.push_token, u.display_name, u.full_name,
                COALESCE(u.language_preference,'vi') as lang,
                (SELECT uop.risk_score FROM user_onboarding_profiles uop WHERE uop.user_id = u.id) as risk_score,
                (SELECT uop.birth_year FROM user_onboarding_profiles uop WHERE uop.user_id = u.id) as birth_year,
@@ -1286,6 +1293,11 @@ async function runCheckinFollowUps(pool) {
   for (const session of overdue) {
     const newMissCount = session.no_response_count + 1;
     const routineMonitoring = isRoutineMonitoringCheckin(session);
+    const copy = followUpCopyKeys(session, newMissCount);
+    const reminderData = followUpSnapshot(session);
+    if (await isStaleCheckinReminder(pool, {
+      type: 'checkin_followup', user_id: session.user_id, data: reminderData,
+    })) continue;
 
     if (newMissCount === 1) {
       // First miss → push + in-app nhắc
@@ -1296,28 +1308,26 @@ async function runCheckinFollowUps(pool) {
       // {{callName}}, {{CallName}}). Trước đây chỉ list 4 → template dùng
       // {{CallName}} (PascalCase) không được fill → render literal.
       const hParams = { ...h };
-      const msg = routineMonitoring
-        ? t('checkin.followup_monitoring', sLang, hParams)
-        : session.flow_state === 'high_alert'
-          ? t('checkin.followup_high_alert', sLang, hParams)
-          : t('checkin.followup_normal', sLang, hParams);
+      const msg = t(copy.body, sLang, hParams);
 
       await sendCheckinNotification(
         pool,
         session.user_id,
         session.push_token,
         'checkin_followup',
-        t('checkin.followup_title', sLang, hParams),
+        t(copy.title, sLang, hParams),
         msg,
-        { checkinId: String(session.id) }
+        reminderData
       );
       sent++;
 
       // Schedule next check — same interval as before
       const nextAt = session.flow_state === 'high_alert' ? hoursFromNow(2) : hoursFromNow(4);
       await pool.query(
-        `UPDATE health_checkins SET no_response_count=$1, next_checkin_at=$2, updated_at=NOW() WHERE id=$3`,
-        [newMissCount, nextAt, session.id]
+        `UPDATE health_checkins SET no_response_count=$1, next_checkin_at=$2, updated_at=NOW()
+         WHERE id=$3 AND last_response_at IS NOT DISTINCT FROM $4
+           AND triage_state=$5::jsonb`,
+        [newMissCount, nextAt, session.id, session.reminder_response_version ?? session.last_response_at, JSON.stringify(session.triage_state || {})]
       );
     } else {
       // 2+ misses: use smart alert logic to decide whether to alert family
@@ -1347,13 +1357,9 @@ async function runCheckinFollowUps(pool) {
         session.user_id,
         session.push_token,
         routineMonitoring ? 'checkin_followup' : 'checkin_followup_urgent',
-        t('checkin.no_response_title', sLang2, hParams2),
-        t(
-          routineMonitoring ? 'checkin.followup_monitoring' : 'checkin.no_response_body',
-          sLang2,
-          hParams2
-        ),
-        { checkinId: String(session.id) }
+        t(copy.title, sLang2, hParams2),
+        t(copy.body, sLang2, hParams2),
+        reminderData
       );
       sent++;
 
@@ -1362,16 +1368,18 @@ async function runCheckinFollowUps(pool) {
         await pool.query(
           `UPDATE health_checkins SET no_response_count=$1, family_alerted=$2,
              family_alerted_at=CASE WHEN $2 THEN NOW() ELSE family_alerted_at END,
-             resolved_at=NOW(), updated_at=NOW() WHERE id=$3`,
-          [newMissCount, doAlert, session.id]
+             resolved_at=NOW(), updated_at=NOW() WHERE id=$3
+               AND last_response_at IS NOT DISTINCT FROM $4 AND triage_state=$5::jsonb`,
+          [newMissCount, doAlert, session.id, session.reminder_response_version ?? session.last_response_at, JSON.stringify(session.triage_state || {})]
         );
       } else {
         const nextAt = session.flow_state === 'high_alert' ? hoursFromNow(2) : hoursFromNow(4);
         await pool.query(
           `UPDATE health_checkins SET no_response_count=$1, family_alerted=$2,
              family_alerted_at=CASE WHEN $2 THEN NOW() ELSE family_alerted_at END,
-             next_checkin_at=$3, updated_at=NOW() WHERE id=$4`,
-          [newMissCount, doAlert, nextAt, session.id]
+             next_checkin_at=$3, updated_at=NOW() WHERE id=$4
+               AND last_response_at IS NOT DISTINCT FROM $5 AND triage_state=$6::jsonb`,
+          [newMissCount, doAlert, nextAt, session.id, session.reminder_response_version ?? session.last_response_at, JSON.stringify(session.triage_state || {})]
         );
       }
     }
