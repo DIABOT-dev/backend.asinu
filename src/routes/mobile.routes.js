@@ -48,6 +48,7 @@ const {
 const { getTreeSummary, getTreeHistory } = require('../controllers/tree.controller');
 const {
   startCheckinHandler,
+  cancelCheckinHandler,
   followUpHandler,
   triageHandler,
   todayCheckinHandler,
@@ -153,6 +154,7 @@ function mobileRoutes(pool) {
   // Health Check-in
   router.get('/checkin/today', requireAuth, bindController(todayCheckinHandler, pool));
   router.post('/checkin/start', requireAuth, bindController(startCheckinHandler, pool));
+  router.post('/checkin/cancel', requireAuth, bindController(cancelCheckinHandler, pool));
   router.post('/checkin/followup', requireAuth, bindController(followUpHandler, pool));
   router.post('/checkin/triage', requireAuth, bindController(triageHandler, pool));
   router.post('/checkin/emergency', requireAuth, bindController(emergencyHandler, pool));

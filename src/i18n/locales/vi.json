@@ -1142,6 +1142,7 @@
   "doctor.screening.risk.high": "Mức cần chú ý: cần đánh giá sớm",
   "doctor.screening.risk.emergency": "Mức cần chú ý: khẩn cấp",
   "checkin.detail.general": "Khó chịu khác",
+  "checkin.cancel.changed": "Lượt check-in đã thay đổi hoặc hoàn tất. Vui lòng mở lại để xem trạng thái mới nhất.",
   "checkin.detail.question.onset": "{{Honorific}} bắt đầu thấy khó chịu từ khi nào?",
   "checkin.detail.question.progression": "So với lúc mới bị, {{honorific}} thấy đỡ hơn hay nặng hơn?",
   "checkin.detail.question.severity": "Hiện tại {{honorific}} đau ở mức nào?",

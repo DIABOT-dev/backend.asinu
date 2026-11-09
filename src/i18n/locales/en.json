@@ -1142,6 +1142,7 @@
   "doctor.screening.risk.high": "Concern level: prompt assessment",
   "doctor.screening.risk.emergency": "Concern level: emergency",
   "checkin.detail.general": "Other discomfort",
+  "checkin.cancel.changed": "This check-in has changed or finished. Please reopen it to see the latest status.",
   "checkin.detail.question.onset": "When did you start feeling discomfort?",
   "checkin.detail.question.progression": "Is it getting better, staying the same or getting worse?",
   "checkin.detail.question.severity": "How strong is the pain now?",

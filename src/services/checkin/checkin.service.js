@@ -43,6 +43,7 @@ const { buildCheckinContext, applyIllusion } = require('../../core/checkin/illus
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 const logger = require('../../lib/logger');
 const checkinCallService = require('../checkin-call/checkin-call.service');
+const { createCancelCheckpoint, publicCheckinSession } = require('./checkin-cancellation.service');
 const { isRoutineMonitoringCheckin } = require('./checkin-inactivity.policy');
 const console = { log: logger.debug, error: logger.error, warn: logger.warn };
 
@@ -223,8 +224,7 @@ async function getTodayCheckin(pool, userId, requestLang = null) {
   ]);
 
   const stored = sessionRes.rows[0] || null;
-  const session = stored ? { ...stored, triage_state: { ...stored.triage_state } } : null;
-  if (session?.triage_state) delete session.triage_state.adaptive_payload;
+  const session = publicCheckinSession(stored);
   const lang = requestLang || profileRes.rows[0]?.lang || 'vi';
   const continuityMessage = buildContinuityMessage(yesterdaySession, lang);
 
@@ -280,6 +280,7 @@ async function startCheckin(
   const date = checkinDateVN();
 
   let restartExisting = false;
+  let cancelCheckpoint = null;
   if (restart) {
     const { rows: existingRows } = await pool.query(
       `SELECT * FROM health_checkins WHERE user_id = $1 AND session_date = $2`,
@@ -289,6 +290,7 @@ async function startCheckin(
     // An active emergency must be resolved through its follow-up flow. A new
     // instant check-in must never silently erase an outstanding high alert.
     if (existing && existing.flow_state !== 'high_alert') {
+      cancelCheckpoint = createCancelCheckpoint(existing);
       await archiveCheckinOccurrence(pool, existing);
       restartExisting = true;
     }
@@ -333,7 +335,7 @@ async function startCheckin(
        triage_summary      = CASE WHEN $9 THEN NULL ELSE health_checkins.triage_summary END,
        triage_severity     = CASE WHEN $9 THEN NULL ELSE health_checkins.triage_severity END,
        triage_completed_at = CASE WHEN $9 THEN NULL ELSE health_checkins.triage_completed_at END,
-       triage_state        = CASE WHEN $9 THEN '{}'::jsonb ELSE health_checkins.triage_state END,
+       triage_state        = CASE WHEN $9 THEN $11::jsonb ELSE health_checkins.triage_state END,
        family_alerted      = CASE WHEN $9 THEN FALSE ELSE health_checkins.family_alerted END,
        family_alerted_at   = CASE WHEN $9 THEN NULL ELSE health_checkins.family_alerted_at END,
        emergency_triggered = CASE WHEN $9 THEN FALSE ELSE health_checkins.emergency_triggered END,
@@ -356,6 +358,7 @@ async function startCheckin(
       bodyLocationOther,
       restartExisting,
       source,
+      JSON.stringify(cancelCheckpoint ? { cancel_checkpoint: cancelCheckpoint } : {}),
     ]
   );
 
@@ -463,6 +466,7 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
           ).values()
         ),
         previous_severity: session.triage_severity || null,
+        cancel_checkpoint: createCancelCheckpoint(session),
       }),
     ]
   );
@@ -769,6 +773,7 @@ async function processTriageStepOnce(
   }
 
   const nextState = {
+    ...(persistedState.cancel_checkpoint ? { cancel_checkpoint: persistedState.cancel_checkpoint } : {}),
     ...(options.assessmentVersion === 2 || persistedState.assessment_version === 2
       ? { assessment_version: 2 }
       : {}),
@@ -840,6 +845,7 @@ async function processTriageStepOnce(
          triage_severity      = $2,
          triage_messages      = $3::jsonb,
          triage_completed_at  = NOW(),
+         triage_state         = jsonb_set(triage_state, '{completed,committed}', 'true'::jsonb),
          next_checkin_at      = $4,
          emergency_triggered  = COALESCE($6, emergency_triggered),
          flow_state           = CASE WHEN $6 = TRUE THEN 'high_alert' ELSE flow_state END,
@@ -860,6 +866,9 @@ async function processTriageStepOnce(
         code: 'TRIAGE_CHANGED',
         statusCode: 409,
       });
+    // Cancellation and this update compete on the same row lock. Once the
+    // conclusion is committed, its notifications must finish without rollback.
+    nextState.completed.committed = true;
     await rebuildPatientHealthTimeline(pool, userId).catch((error) =>
       console.warn('[Triage] Timeline refresh unavailable:', error.message)
     );

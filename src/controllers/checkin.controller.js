@@ -1,5 +1,6 @@
 const checkinService = require('../services/checkin/checkin.service');
 const checkinApiService = require('../services/checkin/checkin-api.service');
+const cancellationService = require('../services/checkin/checkin-cancellation.service');
 const engagementService = require('../services/profile/engagement.service');
 const { t, getLang } = require('../i18n');
 const {
@@ -139,13 +140,22 @@ async function followUpHandler(pool, req, res) {
 }
 
 async function triageHandler(pool, req, res) {
-  const { checkin_id, previous_answers = [], conclusion_format, assessment_version, adaptive_questions, phase_id } = req.body;
+  const {
+    checkin_id,
+    previous_answers = [],
+    conclusion_format,
+    assessment_version,
+    adaptive_questions,
+    phase_id,
+  } = req.body;
   if (!checkin_id)
     return res.status(400).json({ ok: false, error: t('error.missing_checkin_id', getLang(req)) });
   const validAnswers =
     Array.isArray(previous_answers) &&
     previous_answers.length <=
-      (adaptive_questions === true || assessment_version === 2 || previous_answers.some((item) => isDetailedStep(item?.step) || isAdaptiveStep(item?.step))
+      (adaptive_questions === true ||
+      assessment_version === 2 ||
+      previous_answers.some((item) => isDetailedStep(item?.step) || isAdaptiveStep(item?.step))
         ? MAX_DETAILED_ANSWERS
         : 8) &&
     previous_answers.every(
@@ -156,7 +166,9 @@ async function triageHandler(pool, req, res) {
         item.question.length <= 500 &&
         (item.step === undefined ||
           (typeof item.step === 'string' &&
-            (TRIAGE_STEPS.has(item.step) || isDetailedStep(item.step) || isAdaptiveStep(item.step)))) &&
+            (TRIAGE_STEPS.has(item.step) ||
+              isDetailedStep(item.step) ||
+              isAdaptiveStep(item.step)))) &&
         ((typeof item.answer === 'string' && item.answer.length <= 2000) ||
           (Array.isArray(item.answer) &&
             item.answer.length <= 20 &&
@@ -164,7 +176,8 @@ async function triageHandler(pool, req, res) {
     );
   if (
     !validAnswers ||
-    (phase_id !== undefined && (typeof phase_id !== 'string' || !phase_id.trim() || phase_id.length > 160)) ||
+    (phase_id !== undefined &&
+      (typeof phase_id !== 'string' || !phase_id.trim() || phase_id.length > 160)) ||
     (adaptive_questions !== undefined && typeof adaptive_questions !== 'boolean') ||
     (assessment_version !== undefined && assessment_version !== 2) ||
     (conclusion_format !== undefined && !['structured', 'narrative'].includes(conclusion_format))
@@ -178,7 +191,12 @@ async function triageHandler(pool, req, res) {
       checkin_id,
       previous_answers,
       getLang(req),
-      { conclusionFormat: conclusion_format, assessmentVersion: assessment_version, adaptiveQuestions: adaptive_questions, phaseId: phase_id }
+      {
+        conclusionFormat: conclusion_format,
+        assessmentVersion: assessment_version,
+        adaptiveQuestions: adaptive_questions,
+        phaseId: phase_id,
+      }
     );
     return res.json({ ok: true, ...result });
   } catch (err) {
@@ -194,6 +212,34 @@ async function triageHandler(pool, req, res) {
     return res
       .status(500)
       .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+  }
+}
+
+async function cancelCheckinHandler(pool, req, res) {
+  const { checkin_id, phase_id } = req.body;
+  if (
+    !/^[1-9]\d*$/.test(String(checkin_id)) ||
+    typeof phase_id !== 'string' ||
+    !phase_id.trim() ||
+    phase_id.length > 160
+  ) {
+    return res
+      .status(400)
+      .json({ ok: false, code: 'INVALID_INPUT', error: t('error.invalid_payload', getLang(req)) });
+  }
+  try {
+    const result = await cancellationService.cancelCheckin(pool, req.user.id, checkin_id, phase_id);
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    const code = error.code;
+    const known = ['SESSION_NOT_FOUND', 'TRIAGE_CHANGED', 'CHECKIN_ALREADY_COMPLETED'].includes(
+      code
+    );
+    return res.status(known ? error.statusCode : 500).json({
+      ok: false,
+      code: known ? code : 'INTERNAL_ERROR',
+      error: t(known ? 'checkin.cancel.changed' : 'error.server', getLang(req)),
+    });
   }
 }
 
@@ -385,6 +431,7 @@ async function engagementOptimalTimeHandler(pool, req, res) {
 }
 
 module.exports = {
+  cancelCheckinHandler,
   startCheckinHandler,
   getLocationsHandler,
   followUpHandler,
