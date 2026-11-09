@@ -878,7 +878,7 @@
   "checkin.triage.question.associated": "Ngoài tình trạng {{symptom}} vừa kể, {{honorific}} còn gặp biểu hiện nào dưới đây không?",
   "checkin.triage.question.onset": "Tình trạng {{symptoms}} của {{honorific}} bắt đầu từ khi nào?",
   "checkin.triage.question.progression": "So với lúc mới bị, tình trạng {{symptoms}} của {{honorific}} đang đỡ hơn, vẫn vậy hay nặng hơn?",
-  "checkin.triage.question.red_flags": "Để hiểu rõ hơn tình trạng {{symptoms}} của {{honorific}}, {{honorific}} có gặp thêm dấu hiệu nào dưới đây không?",
+  "checkin.triage.question.red_flags": "Ngoài những khó chịu vừa kể, {{honorific}} có dấu hiệu nào dưới đây không?",
   "checkin.triage.question.cause_abdomen": "{{Honorific}} có ăn gì lạ, đồ cay hoặc uống thuốc lúc đói không?",
   "checkin.triage.question.cause_head": "{{Honorific}} có nhớ gần đây ngủ ít, quên thuốc hoặc làm việc căng thẳng không?",
   "checkin.triage.question.cause_musculoskeletal": "{{Honorific}} có nhớ gần đây vận động nặng, ngồi sai tư thế hoặc bê vác gì không?",

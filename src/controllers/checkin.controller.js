@@ -139,7 +139,7 @@ async function followUpHandler(pool, req, res) {
 }
 
 async function triageHandler(pool, req, res) {
-  const { checkin_id, previous_answers = [], conclusion_format, assessment_version, adaptive_questions } = req.body;
+  const { checkin_id, previous_answers = [], conclusion_format, assessment_version, adaptive_questions, phase_id } = req.body;
   if (!checkin_id)
     return res.status(400).json({ ok: false, error: t('error.missing_checkin_id', getLang(req)) });
   const validAnswers =
@@ -164,6 +164,7 @@ async function triageHandler(pool, req, res) {
     );
   if (
     !validAnswers ||
+    (phase_id !== undefined && (typeof phase_id !== 'string' || !phase_id.trim() || phase_id.length > 160)) ||
     (adaptive_questions !== undefined && typeof adaptive_questions !== 'boolean') ||
     (assessment_version !== undefined && assessment_version !== 2) ||
     (conclusion_format !== undefined && !['structured', 'narrative'].includes(conclusion_format))
@@ -177,7 +178,7 @@ async function triageHandler(pool, req, res) {
       checkin_id,
       previous_answers,
       getLang(req),
-      { conclusionFormat: conclusion_format, assessmentVersion: assessment_version, adaptiveQuestions: adaptive_questions }
+      { conclusionFormat: conclusion_format, assessmentVersion: assessment_version, adaptiveQuestions: adaptive_questions, phaseId: phase_id }
     );
     return res.json({ ok: true, ...result });
   } catch (err) {

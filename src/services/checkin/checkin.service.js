@@ -582,7 +582,7 @@ async function processTriageStep(
   requestLang = null,
   options = {}
 ) {
-  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}:${options.conclusionFormat || 'structured'}:${options.assessmentVersion || 'legacy'}:${options.adaptiveQuestions === true ? 'adaptive' : 'fixed'}`;
+  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}:${options.conclusionFormat || 'structured'}:${options.assessmentVersion || 'legacy'}:${options.adaptiveQuestions === true ? 'adaptive' : 'fixed'}:${options.phaseId || 'unscoped'}`;
   if (triageRequests.has(key)) return triageRequests.get(key);
   const pending = processTriageStepOnce(
     pool,
@@ -621,6 +621,22 @@ async function processTriageStepOnce(
   const session = rows[0];
 
   const persistedState = session.triage_state || {};
+  const currentPhaseId = persistedState.phase_id || (persistedState.phase === 'followup'
+    ? persistedState.revision
+    : `initial:${session.occurrence_started_at || session.created_at
+      ? new Date(session.occurrence_started_at || session.created_at).toISOString() : checkinId}`);
+  const storedAnswers = Array.isArray(session.triage_messages) ? session.triage_messages : [];
+  if ((options.phaseId && options.phaseId !== currentPhaseId) ||
+    storedAnswers.length > previousAnswers.length || storedAnswers.some((saved, index) => {
+      const received = previousAnswers[index];
+      return !received || saved.question !== received.question ||
+        JSON.stringify(saved.answer) !== JSON.stringify(received.answer) ||
+        (saved.step && saved.step !== received.step);
+    })) {
+    throw Object.assign(new Error('Check-in changed; reload the latest conversation'), {
+      code: 'TRIAGE_CHANGED', statusCode: 409,
+    });
+  }
   const adaptiveState = readAdaptiveState(userId, persistedState.adaptive_payload);
   validateAdaptiveAnswers(adaptiveState, previousAnswers);
   const adaptiveEnabled = !['false', '0'].includes(process.env.CHECKIN_ADAPTIVE_QUESTIONS_ENABLED) &&

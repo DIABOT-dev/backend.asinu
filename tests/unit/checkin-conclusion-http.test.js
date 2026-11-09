@@ -330,6 +330,9 @@ test('failed follow-up completion cannot use the earlier completion timestamp as
     baseline_answers: answers,
     previous_severity: 'low',
   };
+  // Match followUpCheckin: the previous phase remains in baseline_answers;
+  // the active phase starts with an empty answer list.
+  h.session.triage_messages = [];
   const previous = h.session.triage_summary;
   callTextAi.mockImplementation(async (options) => ({
     content: JSON.stringify(

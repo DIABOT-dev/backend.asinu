@@ -170,6 +170,41 @@ test('a stale earlier submission cannot reopen a completed conversation', async 
   expect(session.triage_severity).toBe('low');
   expect(getNextTriageQuestion).toHaveBeenCalledTimes(1);
 });
+test('an old tab cannot roll an unfinished interview back after newer answers are saved', async () => {
+  const { pool, session } = poolFor();
+  getNextTriageQuestion.mockResolvedValue({ isDone: false, step: 'progression', question: 'Diễn biến?', options: ['Vẫn vậy'] });
+  const first = { step: 'symptoms', question: 'Biểu hiện?', answer: 'Đau đầu' };
+  const second = { step: 'onset', question: 'Bắt đầu?', answer: 'Từ hôm qua' };
+  await processTriageStep(pool, 7, 12, [first, second], 'vi');
+  await expect(processTriageStep(pool, 7, 12, [first], 'vi')).rejects.toMatchObject({ code: 'TRIAGE_CHANGED', statusCode: 409 });
+  expect(session.triage_messages).toEqual([first, second]);
+  expect(getNextTriageQuestion).toHaveBeenCalledTimes(1);
+});
+test('a stale edited prefix cannot silently replace facts already saved by another device', async () => {
+  const { pool, session } = poolFor();
+  getNextTriageQuestion.mockResolvedValue({ isDone: false, step: 'onset', question: 'Bắt đầu?', options: ['Hôm nay'] });
+  const answer = { step: 'symptoms', question: 'Biểu hiện?', answer: 'Đau đầu' };
+  await processTriageStep(pool, 7, 12, [answer], 'vi');
+  await expect(processTriageStep(pool, 7, 12, [{ ...answer, answer: 'Đau bụng' }], 'vi')).rejects.toMatchObject({ code: 'TRIAGE_CHANGED' });
+  expect(session.triage_messages).toEqual([answer]);
+});
+test('a delayed request from an earlier phase cannot start answering the new phase', async () => {
+  const { pool, session } = poolFor();
+  session.triage_state = { phase: 'followup', phase_id: 'new-followup-phase', revision: 'new-revision' };
+  await expect(processTriageStep(pool, 7, 12, [], 'vi', { phaseId: 'old-initial-phase' })).rejects.toMatchObject({ code: 'TRIAGE_CHANGED' });
+  expect(session.triage_messages).toEqual([]);
+  expect(getNextTriageQuestion).not.toHaveBeenCalled();
+});
+test('simultaneous requests for different phases cannot share an in-flight result', async () => {
+  const { pool, session } = poolFor();
+  session.triage_state = { phase: 'followup', phase_id: 'new-phase', revision: 'new-revision' };
+  getNextTriageQuestion.mockResolvedValue({ isDone:false,step:'followup_status',question:'Hiện giờ?',options:['Vẫn vậy'] });
+  const valid = processTriageStep(pool,7,12,[],'vi',{phaseId:'new-phase'});
+  const stale = processTriageStep(pool,7,12,[],'vi',{phaseId:'old-phase'});
+  await expect(stale).rejects.toMatchObject({code:'TRIAGE_CHANGED'});
+  await expect(valid).resolves.toMatchObject({step:'followup_status'});
+  expect(getNextTriageQuestion).toHaveBeenCalledTimes(1);
+});
 
 test('a follow-up started during completion cannot receive the older summary', async () => {
   const { pool, session } = poolFor();

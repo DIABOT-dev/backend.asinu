@@ -30,18 +30,38 @@
 
 ## Kiểm tra
 
-- Backend: 136 suite, 2.026 test qua; 339 test được bỏ qua theo cấu hình suite. Các suite database cần cờ riêng và được chạy tách ở local.
-- HTTP với database: 41 test qua; có cả các vùng cơ thể, tiếng Việt/Anh, tiếp tục phiên, hai request mở lại đồng thời, câu hỏi sinh mới, provider lỗi, kết luận được lưu và chặn ID câu hỏi từ phiên trước khi bắt đầu hỏi lại.
-- App: TypeScript qua; hợp đồng API qua; 87 kiểm tra hành vi check-in, 6 kiểm tra thứ tự layout/bàn phím, 71 kiểm tra hướng dẫn và 8 kiểm tra trạng thái chuẩn bị câu hỏi qua. Bộ hiển thị kết luận 47 kiểm tra cũng qua.
-- i18n backend/app qua. ESLint không có lỗi; backend còn một cảnh báo có sẵn ở `src/services/v21/audio.service.js`.
+- Backend: 136 suite, 2.032 test qua; 341 test được bỏ qua theo cấu hình suite. Các suite database cần cờ riêng và được chạy tách ở local.
+- HTTP với database: 43 test qua; có cả các vùng cơ thể, tiếng Việt/Anh, tiếp tục phiên, hai request mở lại đồng thời, câu hỏi sinh mới, provider lỗi, kết luận được lưu và chặn ID câu hỏi từ phiên trước khi bắt đầu hỏi lại.
+- App: TypeScript qua; hợp đồng API qua; 93 kiểm tra hành vi check-in, 21 kiểm tra lưu/khôi phục nháp, 6 kiểm tra thứ tự layout/bàn phím, 71 kiểm tra hướng dẫn và 8 kiểm tra trạng thái chuẩn bị câu hỏi qua. Bộ hiển thị kết luận 47 kiểm tra cũng qua.
+- i18n backend/app qua. ESLint ở các file thay đổi không có lỗi; app vẫn có cảnh báo style/hook ở màn check-in và các file liên quan. Chưa xử lý toàn bộ cảnh báo trong lần sửa này.
 - Ba ca giả lập được gọi thật tới DR7: nhận câu hỏi bổ sung phù hợp; bỏ các câu trùng với phần nền; duyệt lại hoặc chuyển trả lời mở khi nội dung không đạt. Đây là kiểm tra kỹ thuật với dữ liệu giả, không phải nghiệm thu lâm sàng.
 - Test lại đã bắt và sửa: bí danh “Không chắc chắn” bị hiện trùng “Không rõ”; kiểu dữ liệu đáp án không phải chuỗi; khoảng số chứa `null` sai chỗ; đơn vị `mg/dL` bị nhầm với liều thuốc; câu hỏi ghép nguyên câu xưng “tôi”; xác nhận có đau sau đó nhưng thiếu nhánh hỏi đau; tiêu đề vùng bị lấy từ câu nền kế tiếp; lựa chọn nhiều bị mất đáp án đã chọn khi bấm “Khác”; kết luận nói thiếu tiền sử dù đã khai.
 - Một số lần chạy trước gặp 401/404 không ổn định trong HTTP fixture. Đã chuyển fixture sang server giữ suốt bài test, bind IPv4 đúng địa chỉ Supertest kết nối. Suite QR chạy lại 15 lượt đều qua; toàn bộ suite chạy sau đó cũng qua. Đây là thay đổi cách dựng test, không bỏ qua kiểm tra quyền hoặc sửa logic xác thực để làm test qua.
 - Phiên HTTP trên backend local đang chạy, dùng DR7 thật: hoàn thành 19 câu (3 câu AI có lựa chọn, 1 câu trả lời mở và các câu nền). Kiểm tra đã ghi nhận nhánh đau xuất hiện thêm, câu hỏi không lặp nguyên văn, giữ tiến độ khi mở lại, gửi hai request đồng thời, lưu kết luận và trả lại cùng kết luận khi retry. Dữ liệu tài khoản thử được dọn sau bài test. Kết luận có nguồn `ai`, nhắc lại đúng các thông tin bổ sung và không còn nói thiếu tiền sử đã khai.
-- GitHub Actions cho bản nền `84709a9` đã qua test PostgreSQL, migration và build Docker: https://github.com/DIABOT-dev/backend.asinu/actions/runs/42552513249. Cần xem run tương ứng commit mới nhất khi triển khai.
+- Chạy lại phiên HTTP với DR7 thật sau khi bổ sung bảo vệ tiến độ: 19 câu trong khoảng 29 giây cho dữ liệu giả, có 3 câu AI sinh kèm lựa chọn và 1 câu trả lời mở sau kiểm tra chất lượng. Kết luận có `conclusionSource=ai`, nhắc đúng thông tin tai trái; request có `phase_id`, yêu cầu cũ bị trả 409, mở lại/gửi trùng không thay đổi câu đang hỏi. Tài khoản thử được xóa sau phiên. Đây không phải số đo độ trễ trên thiết bị người dùng.
+- Lần test tiếp bắt được hai nhóm lỗi tiến độ: request cũ ghi lùi lịch sử chưa hoàn tất; phản hồi cũ xóa nháp mới cùng phiên hoặc khác lần hỏi bổ sung. Backend hiện chỉ chấp nhận lịch sử đã lưu hoặc phần nối tiếp có cùng tiền tố; app reload tiến độ khi nhận `TRIAGE_CHANGED`. Khóa nháp tách theo lần hỏi, thao tác xóa kiểm tra đúng bộ đáp án đã được xác nhận và chạy tuần tự với thao tác lưu. Có kiểm thử dữ liệu nháp phiên bản cũ.
+- App xử lý riêng trường hợp tải lại tiến độ thất bại: không mở các nút trả lời của câu cũ. Nhánh retry mất mạng vẫn gửi lại nguyên yêu cầu đang chờ.
+- Qua thử giao diện native đã rút gọn câu kiểm tra dấu hiệu nguy hiểm; không ghép cả câu nhập tự do vào vị trí danh từ trong mẫu câu. Thông tin gốc vẫn được giữ trong dữ liệu tổng hợp; bài test HTTP kiểm lại đáp án cảnh báo theo triệu chứng nền.
+- GitHub Actions của lần trước (`08fc9b6`) đã qua: https://github.com/DIABOT-dev/backend.asinu/actions/runs/42554725093. Lần sửa này phải xem run tương ứng commit mới nhất.
+
+## Thử giao diện native iOS ở local
+
+Dùng bản Debug build từ source hiện tại, Metro local, iOS 26.5 trên Simulator iPhone 17 Pro riêng tên `Asinu Checkin QA 20261109`. Dùng tài khoản giả đã khai xong hồ sơ; không sửa tài khoản người dùng thật.
+
+| Thao tác | Kết quả đã quan sát/kiểm tra |
+| --- | --- |
+| Đăng nhập và mở Không ổn → Hơi mệt | Mở đúng luồng thật, không dùng màn preview |
+| Chọn Đầu + Ngực, sau đó Trán + Giữa ngực | Mỗi vùng có câu vị trí riêng; câu tiếp theo nằm trong phần nhìn thấy |
+| Chọn Đau đầu trong câu nhiều lựa chọn | Giữ phần câu hỏi trong màn hình, không nhảy xuống cuối |
+| Nhập thêm câu tự do | Bàn phím iOS xuất hiện, nội dung nhập hiển thị và giữ cùng đáp án đã chọn |
+| Gửi câu trả lời rồi sang câu kế | Màn hình về đầu; bàn phím đã đóng, số câu đã trả lời tăng đúng một |
+| Tắt/mở lại app rồi mở đường dẫn check-in | Tiếp tục câu đang hỏi; lịch sử giữ cả đáp án chọn và nội dung nhập |
+| Kiểm database và dọn tài khoản giả | Chỉ một câu trả lời được lưu; đã xóa tài khoản cùng dữ liệu phát sinh |
+
+Ảnh và kết quả XCTest lưu ở `/tmp/asinu-checkin-ui-20261109/`: `positions.xcresult`, `keyboard-point.xcresult`, `next-top.xcresult`, `resume-history.xcresult`. Bài keyboard ban đầu dừng vì bộ chọn XCTest tìm nút Tiếp tục dưới dạng StaticText, trong khi native xuất phần tử Other; phần nhập và bàn phím đã có ảnh, thao tác gửi/chuyển câu được kiểm tiếp bằng selector đúng ở bài `next-top`. Không ghi nhận cả bài keyboard đó là pass. Không phải toàn bộ phiên 19 câu đã được thao tác qua UI native; phiên hoàn chỉnh được thử riêng qua HTTP.
 
 ## Giới hạn nghiệm thu
 
-- Chưa có máy thật kết nối để xác nhận cảm giác cuộn, bàn phím và thao tác đọc/nói trên iOS/Android. Test thứ tự sự kiện native dùng adapter mô phỏng.
+- Đã có bằng chứng thao tác native trên iOS Simulator như bảng trên. Chưa nghiệm thu micro/nhận dạng giọng nói trên máy iOS/Android thật; chưa có bài UI Android cho lần sửa này. Test thứ tự sự kiện layout/bàn phím tự động còn có adapter mô phỏng.
 - Duyệt bằng model và validator giảm lỗi, không chứng minh mọi câu hỏi y tế đều chính xác. Cần người phụ trách chuyên môn xem mẫu và thử với người dùng trước khi kết luận chất lượng sử dụng.
 - Bản này được kiểm tra và áp dụng ở local; chưa triển khai thay đổi này lên VPS.

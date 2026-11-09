@@ -510,6 +510,36 @@ describeDatabase('check-in HTTP API contract', () => {
     const afterResume = await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200);
     expect(afterResume.body.session.triage_state.phase_id).toBe(phaseId);
   });
+  test('a delayed old screen cannot shorten or rewrite an unfinished HTTP interview', async () => {
+    const account = await conversationAccount();
+    const triage = answers => request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({checkin_id:account.checkinId,previous_answers:answers,assessment_version:2});
+    const first=(await triage([]).expect(200)).body;
+    const answers=[{step:first.step,question:first.question,answer:'Tiêu chảy'}];
+    const safety=(await triage(answers).expect(200)).body;
+    answers.push({step:safety.step,question:safety.question,answer:'Không có'});
+    await triage(answers).expect(200);
+    const before=(await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200)).body.session;
+    await triage(answers.slice(0,1)).expect(409);
+    await triage([{...answers[0],answer:'Đau đầu'},answers[1]]).expect(409);
+    const after=(await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200)).body.session;
+    expect(after.triage_messages).toEqual(answers);
+    expect(after.triage_state).toEqual(before.triage_state);
+    await triage(answers).expect(200);
+  });
+  test('phase identity prevents a delayed initial request from entering a new follow-up', async () => {
+    const account=await conversationAccount();
+    await account.triage(account.initialAnswers).expect(200);
+    const old=(await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200)).body.session.triage_state.phase_id;
+    await request(app).post('/api/mobile/checkin/followup').set(account.headers)
+      .send({checkin_id:account.checkinId,status:'tired'}).expect(200);
+    const latest=(await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200)).body.session;
+    const post=phase_id=>request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({checkin_id:account.checkinId,previous_answers:[],phase_id});
+    for(const invalid of [null,7,'','x'.repeat(161)]) await post(invalid).expect(400);
+    await post(old).expect(409);
+    expect((await post(latest.triage_state.phase_id).expect(200)).body.step).toBe('followup_status');
+  });
 
   test.each([
     ...['vi', 'en'].flatMap(lang => ['head', 'chest', 'abdomen', 'limbs', 'skin', 'whole_body', 'mental'].map(region => {
@@ -697,7 +727,10 @@ describeDatabase('check-in HTTP API contract', () => {
     ];
     const question = await account.triage(answers).expect(200);
     expect(question.body).toMatchObject({ isDone: false, step: 'red_flags' });
-    expect(question.body.question.toLowerCase()).toContain('tiêu chảy');
+    expect(question.body.question).toMatch(/dấu hiệu nào dưới đây/);
+    // The prompt stays short; the baseline symptom must still select the
+    // appropriate safety answers and remain in the resulting conclusion.
+    expect(question.body.options.some(option => /tiêu chảy có máu/i.test(option))).toBe(true);
     const conclusion = await account
       .triage([...answers, account.entry('red_flags', 'Không có')])
       .expect(200);

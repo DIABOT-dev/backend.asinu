@@ -878,7 +878,7 @@
   "checkin.triage.question.associated": "Besides {{symptom}}, do you have any of the symptoms below?",
   "checkin.triage.question.onset": "When did you first notice {{symptoms}}?",
   "checkin.triage.question.progression": "Thinking about {{symptoms}}, do you feel better, about the same, or worse than when this started?",
-  "checkin.triage.question.red_flags": "To better understand what you are experiencing with {{symptoms}}, have you noticed any of the signs below?",
+  "checkin.triage.question.red_flags": "Along with what you have described, do you have any of the signs below?",
   "checkin.triage.question.cause_abdomen": "Did you recently eat unfamiliar or spicy food, or take prescribed medicine on an empty stomach? 🤔",
   "checkin.triage.question.cause_head": "Have you recently slept less, missed prescribed medicine, or been under stress? 🤔",
   "checkin.triage.question.cause_musculoskeletal": "Have you recently exercised heavily, sat in an awkward position, or lifted anything heavy? 🤔",
