@@ -90,9 +90,10 @@ describe('per-area check-in interview', () => {
     const run = walk();
     const steps = run.questions.map((r) => r.step);
     expect(steps.slice(0, 3)).toEqual(['symptoms', 'red_flags', 'detail_history']);
-    expect(run.answers).toHaveLength(25);
+    expect(run.answers).toHaveLength(24);
     expect(new Set(steps).size).toBe(steps.length);
-    expect(steps.indexOf('detail_head_actions')).toBeLessThan(steps.indexOf('detail_limbs_onset'));
+    expect(steps.filter((step) => step.endsWith('_actions'))).toEqual(['detail_general_actions']);
+    expect(steps.at(-1)).toBe('detail_general_actions');
     expect(steps).not.toContain('detail_head_episode_duration');
     expect(steps).not.toContain('detail_head_radiation_location');
     expect(run.result.state.detailedAssessmentComplete).toBe(true);
@@ -172,8 +173,9 @@ describe('per-area check-in interview', () => {
         expect(relief.options).toContain(label);
         expect(relief.exclusiveOptions).toContain(label);
       }
-      const actions = run.questions.find((r) => r.step === 'detail_head_actions');
-      expect(actions.options).toContain(t('checkin.detail.option.rest', lang));
+      const actions = run.questions.find((r) => r.step === 'detail_general_actions');
+      expect(actions.options).toContain(t('checkin.detail.option.recorded_reading', lang));
+      expect(actions.options).toContain(t('checkin.detail.option.family_help', lang));
       expect(actions.options).not.toContain(t('checkin.detail.option.rest_helps', lang));
     }
   );
@@ -299,7 +301,7 @@ describe('per-area check-in interview', () => {
     const run = walk(select, { bodyLocationOther: `Tay chân: ${rawPosition}` });
     const associated = run.questions.find((r) => r.step === 'detail_limbs_associated');
     expect(associated.question).toBe(
-      'Ngoài khó chịu ở tay chân, anh có thêm biểu hiện nào dưới đây không?'
+      'Ngoài khó chịu ở tay chân, anh còn gặp tình trạng nào dưới đây không?'
     );
     expect(associated.question).not.toContain('(');
     expect(associated.question).not.toContain('ngoài điều đã kể');

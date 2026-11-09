@@ -30,7 +30,7 @@ const {
 
 const text = 'Tôi nghe tiếng ù trong tai trái';
 const item = () => ({
-  question: 'Âm thanh anh/chị nghe giống loại nào?',
+  question: 'Âm thanh đang nghe giống loại nào?',
   grounding_quote: 'tiếng ù',
   multi_select: false,
   options: ['Tiếng ve', 'Tiếng rít'],
@@ -118,7 +118,7 @@ test('two generated questions are consumed in order, then the template interview
       item(),
       {
         ...item(),
-        question: 'Âm thanh có theo nhịp tim của anh/chị không?',
+        question: 'Âm thanh có theo nhịp tim của bạn không?',
         options: ['Theo nhịp tim', 'Không theo nhịp tim'],
       },
     ])
@@ -308,6 +308,49 @@ test('MedGemma generation uses the larger reviewer on the same clinical provider
     strictProvider: true,
   });
 });
+
+test.each([
+  [56, 'Nam', 'chú', 'Chú'],
+  [56, 'Nữ', 'cô', 'Cô'],
+  [65, 'Nữ', 'bác', 'Bác'],
+])(
+  'the generation and reviewer share age/gender addressing (%s, %s)',
+  async (age, gender, honorific, title) => {
+    callTextAi.mockImplementation(
+      accept([{ ...item(), question: `${title} thấy âm thanh giống loại nào?` }])
+    );
+    const result = await resolve(initial(), answers(), {
+      profile: { age, gender, full_name: 'Tên thử nghiệm' },
+    });
+    expect(result.question.question.startsWith(title)).toBe(true);
+    for (const [request] of callTextAi.mock.calls) {
+      expect(JSON.parse(request.prompt).CONTEXT.addressing).toEqual({ honorific, selfRef: 'cháu' });
+      expect(request.strictProvider).toBe(true);
+    }
+  }
+);
+
+test('inappropriate Bạn or slash addressing is rejected and the open fallback keeps the right honorific', async () => {
+  callTextAi.mockImplementation(
+    accept([{ ...item(), question: 'Bạn thấy âm thanh giống loại nào?' }])
+  );
+  const result = await resolve(initial(), answers(), { profile: { age: 56, gender: 'Nam' } });
+  expect(result.question.question).toMatch(/^Chú /u);
+  expect(result.question.options).toEqual([]);
+  expect(result.state.sources[0].status).toBe('fallback');
+  expect(
+    validatePlan(
+      JSON.stringify({
+        questions: [{ ...item(), question: 'Anh/chị thấy âm thanh giống loại nào?' }],
+      }),
+      text,
+      [],
+      'vi',
+      [],
+      { honorific: 'chú' }
+    )
+  ).toBeNull();
+});
 test('legacy mapping and the check-in safety classifier are also locked to Dr7/MedGemma', async () => {
   const layer = jest.requireActual('../../src/core/checkin/triage-ai-layer');
   callTextAi.mockResolvedValue({
@@ -480,7 +523,7 @@ test('glucose units mg/dL are valid measurements, while drug doses remain forbid
     questions: [
       {
         ...item(),
-        question: 'Chỉ số đường huyết anh/chị đo là bao nhiêu?',
+        question: 'Chỉ số đường huyết bạn đo là bao nhiêu?',
         grounding_quote: 'đường huyết',
         options: ['Dưới 70 mg/dL', 'Từ 70 mg/dL'],
         ranges: [

@@ -521,15 +521,13 @@ function buildQuestion(step, state, lang = 'vi') {
     }
 
     case 'cause': {
-      const causes = resolvedLang === 'en' ? [] : mapping ? mapping.causes : [];
-      const displayCauses = causes.slice(0, 6);
-      const unknown = t('checkin.triage.option.unknown', resolvedLang);
-      if (displayCauses.length && !displayCauses.includes(unknown)) {
-        displayCauses.push(unknown);
-      }
+      // Ask about observed circumstances, never ask a patient to guess a
+      // diagnosis from the clinical mapping's list of possible causes.
+      const displayCauses = ['recent_sleep_less', 'recent_irregular_meals', 'recent_stress', 'recent_heavy_activity', 'no_recent_change', 'unknown']
+        .map((choice) => t(`checkin.triage.option.${choice}`, resolvedLang));
       return {
         question: 'Bạn nghĩ nguyên nhân có thể là gì?',
-        options: displayCauses.length ? displayCauses : [unknown],
+        options: displayCauses,
         multiSelect: true,
         allowFreeText: true,
       };

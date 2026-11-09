@@ -275,6 +275,7 @@ function buildConclusionFacts(state, profile, context = {}, lang = 'vi', now = n
     })),
     trieu_chung_lap_lai: short(context.symptomFrequencyContext, 1000) || null,
     viec_da_ke: list(state.actionsFound),
+    ...(state.careActionsAnswer ? { cham_soc_bo_sung_da_khai: short(state.careActionsAnswer, 600) } : {}),
   };
 }
 

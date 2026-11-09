@@ -107,7 +107,13 @@ const key = (name) => `checkin.detail.${name}`;
 function configuredChoices(field, group) {
   switch (field) {
     case 'severity':
-      return ['mild', 'moderate', 'severe', 'unknown'];
+      return [
+        'mild',
+        'moderate',
+        'severe',
+        painReported(group) ? 'no_pain_now' : 'no_discomfort_now',
+        'unknown',
+      ];
     case 'impact':
       return ['impact_none', 'impact_some', 'impact_much', 'unknown'];
     case 'character':
@@ -142,6 +148,12 @@ function configuredChoices(field, group) {
         ]
       ).concat('unknown');
     case 'aggravating':
+      if (group.region === 'mental')
+        return ['stress', 'short_sleep_context', 'social_pressure', 'no_trigger', 'unknown'];
+      if (group.region === 'skin')
+        return ['heat_sweat', 'rubbing', 'skin_contact', 'no_trigger', 'unknown'];
+      if (['whole_body', 'general'].includes(group.region))
+        return ['activity', 'short_sleep_context', 'stress', 'no_trigger', 'unknown'];
       return [
         'movement',
         'activity',
@@ -152,6 +164,17 @@ function configuredChoices(field, group) {
         'unknown',
       ];
     case 'relieving':
+      if (group.region === 'mental')
+        return [
+          'rest_helps',
+          'quiet_place_helps',
+          'talking_helps',
+          'nothing_helps',
+          'not_tried',
+          'unknown',
+        ];
+      if (group.region === 'skin')
+        return ['less_rubbing_helps', 'cool_place_helps', 'nothing_helps', 'not_tried', 'unknown'];
       return [
         'rest_helps',
         'less_movement_helps',
@@ -161,7 +184,14 @@ function configuredChoices(field, group) {
         'unknown',
       ];
     case 'actions':
-      return ['rest', 'less_movement', 'recorded_reading', 'no_action', 'unknown'];
+      return [
+        'recorded_reading',
+        'family_help',
+        'clinical_contact',
+        'seen_clinician',
+        'no_extra_action',
+        'unknown',
+      ];
     case 'associated':
       return (
         {
@@ -200,10 +230,17 @@ function regionalQuestion(field, group, lang, profile = {}) {
     step: detailStep(group.region, field),
     question: t(key(`question.${hasPhysicalArea ? 'area_' : ''}${questionField}`), lang, {
       ...getHonorifics({ ...profile, lang }),
-      area: group.label.toLowerCase(),
+      area: lang === 'vi' && group.region === 'skin' ? 'vùng da này' : group.label.toLowerCase(),
     }),
     options,
-    multiSelect: ['character', 'aggravating', 'relieving', 'associated', 'actions'].includes(field),
+    multiSelect: [
+      'character',
+      'radiation_location',
+      'aggravating',
+      'relieving',
+      'associated',
+      'actions',
+    ].includes(field),
     allowFreeText: true,
     exclusiveOptions: [
       'unknown',
@@ -212,6 +249,7 @@ function regionalQuestion(field, group, lang, profile = {}) {
       'nothing_helps',
       'not_tried',
       'no_action',
+      'no_extra_action',
     ].map((choice) => t(key(`option.${choice}`), lang)),
   };
 }
@@ -221,6 +259,8 @@ function canonicalDetailAnswer(value) {
     'mild',
     'moderate',
     'severe',
+    'no_pain_now',
+    'no_discomfort_now',
     'impact_none',
     'impact_some',
     'impact_much',
@@ -256,6 +296,14 @@ function canonicalDetailAnswer(value) {
     'after_meal',
     'empty_stomach',
     'stress',
+    'short_sleep_context',
+    'social_pressure',
+    'heat_sweat',
+    'rubbing',
+    'skin_contact',
+    'talking_helps',
+    'less_rubbing_helps',
+    'cool_place_helps',
     'no_trigger',
     'rest',
     'less_movement',
@@ -267,6 +315,10 @@ function canonicalDetailAnswer(value) {
     'not_tried',
     'recorded_reading',
     'no_action',
+    'family_help',
+    'clinical_contact',
+    'seen_clinician',
+    'no_extra_action',
     'nausea',
     'dizziness',
     'fever',
@@ -393,6 +445,14 @@ function getDetailedNextStep(input) {
     if (detail.answers.actions && !isUnknown(detail.answers.actions))
       core.push({ step: 'action', answer: detail.answers.actions });
   }
+  const careActions = answers.find((item) => item.step === detailStep('general', 'actions'));
+  const careActionsAnswer = careActions ? canonicalDetailAnswer(careActions.answer) : null;
+  if (
+    careActions &&
+    !isUnknown(careActions.answer) &&
+    careActionsAnswer !== t(key('option.no_extra_action'), 'vi')
+  )
+    core.push({ step: 'action', answer: careActionsAnswer });
   const knownOnsets = details
     .map((detail) => detail.answers.onset)
     .filter((value) => value && !isUnknown(value));
@@ -418,6 +478,7 @@ function getDetailedNextStep(input) {
     });
   const projected = getNextStep({ ...clinicalInput, previousAnswers: core });
   projected.state.regionDetails = details;
+  projected.state.careActionsAnswer = careActionsAnswer;
   projected.state.detailedAssessmentVersion = 2;
   projected.state.conditions = conditions;
   projected.state.hasConditions = conditions.length > 0;
@@ -437,6 +498,9 @@ function getDetailedNextStep(input) {
     ...(!profileConditions.length ? [{ step: 'detail_history' }] : []),
     ...groups.flatMap((group) =>
       FIELDS.filter((field) => {
+        // Self-care/contact with family or clinicians is asked once for the
+        // interview. Repeating it after every area collects the same answer.
+        if (field === 'actions') return false;
         if (
           !painReported(group) &&
           ['character', 'radiation', 'radiation_location'].includes(field)
@@ -468,6 +532,15 @@ function getDetailedNextStep(input) {
         return true;
       }).map((field) => ({ step: detailStep(group.region, field), group, field }))
     ),
+    ...(!answers.some((item) => parseDetailStep(item.step)?.field === 'actions') || careActions
+      ? [
+          {
+            step: detailStep('general', 'actions'),
+            group: { region: 'general', label: t(key('general'), lang) },
+            field: 'actions',
+          },
+        ]
+      : []),
   ];
   const observed = new Set(answers.map((item) => item.step));
   const pending = plan.find((item) => !observed.has(item.step));
@@ -488,6 +561,7 @@ function getDetailedNextStep(input) {
       ),
     });
     completed.state.regionDetails = details;
+    completed.state.careActionsAnswer = projected.state.careActionsAnswer;
     completed.state.historyAssessment = projected.state.historyAssessment;
     completed.state.detailedAssessmentComplete = !pending;
     completed.state.detailedAssessmentVersion = 2;
@@ -561,14 +635,15 @@ function getDetailedNextStep(input) {
       total: Math.max(answers.length + 1, plan.length + answers.length - observed.size),
     },
     symptoms: state.currentSymptoms.length ? state.currentSymptoms : state.allSymptoms,
-    questionGroup: next.group
-      ? {
-          key: next.group.region,
-          label: next.group.label,
-          index: groups.indexOf(next.group) + 1,
-          total: groups.length,
-        }
-      : null,
+    questionGroup:
+      next.group && groups.includes(next.group)
+        ? {
+            key: next.group.region,
+            label: next.group.label,
+            index: groups.indexOf(next.group) + 1,
+            total: groups.length,
+          }
+        : null,
   };
 }
 

@@ -29,11 +29,14 @@ function formatSymptomList(values, lang) {
       const label = localizeOption(value, lang).trim().toLowerCase();
       // Keep the patient's sentence intact in clinical facts. A first-person
       // sentence cannot be pasted into the noun slot of a template question.
-      return /^(?:(?:tôi|mình|em|cháu|bác|ông|bà|anh|chị)\s|i(?:['’]m|\s)|my\s)/iu.test(label)
-        ? t('checkin.triage.symptom_generic', lang) : label;
+      return label.length > 80 ||
+        /[;.!?]|(?:asinu|đã ghi nhận|cần theo dõi|recommend)/iu.test(label) ||
+        /^(?:(?:tôi|mình|em|cháu|bác|ông|bà|anh|chị)\s|i(?:['’]m|\s)|my\s)/iu.test(label)
+        ? t('checkin.triage.symptom_generic', lang)
+        : label;
     })
     .filter(Boolean);
-  return symptomListFormatters[lang].format(labels);
+  return symptomListFormatters[lang].format([...new Set(labels)]);
 }
 
 // ─── Question Templates (có dấu tiếng Việt) ─────────────────────────────────
@@ -67,11 +70,15 @@ function formatQuestion(engineResult, profile, _previousAnswers = [], lang = 'vi
   // Lấy bodyLocations từ engineResult để inject vào greeting (T2 → T3 awareness).
   // Map enum key → label tiếng Việt.
   const locationLabels = LOCATION_LABELS[resolvedLang] || LOCATION_LABELS.vi;
-  const locKeys = Array.isArray(engineResult.bodyLocations) ? engineResult.bodyLocations : [];
+  const locKeys = Array.isArray(engineResult.bodyLocations)
+    ? engineResult.bodyLocations
+    : Array.isArray(facts.bodyLocations)
+      ? facts.bodyLocations
+      : [];
   const locLabels = locKeys
     .map((key) => locationLabels[key]?.label?.toLowerCase() || key)
     .filter(Boolean);
-  const locOther = (engineResult.bodyLocationOther || '').trim();
+  const locOther = (engineResult.bodyLocationOther || facts.bodyLocationOther || '').trim();
   // Build location phrase: "đầu" / "đầu, ngực" / "đầu, ngực, bụng" + " và '<other>'"
   let locPhrase = '';
   if (locLabels.length === 1) locPhrase = locLabels[0];
@@ -82,13 +89,8 @@ function formatQuestion(engineResult, profile, _previousAnswers = [], lang = 'vi
         : `${locLabels[0]} và ${locLabels[1]}`;
   else if (locLabels.length >= 3)
     locPhrase = `${locLabels.slice(0, -1).join(', ')}${resolvedLang === 'en' ? ', and ' : ' và '}${locLabels[locLabels.length - 1]}`;
-  const detailedRegions = locKeys.some((key) =>
-    locOther.startsWith(`${locationLabels[key]?.label}:`)
-  );
-  if (locOther && !detailedRegions) {
-    const briefOther = locOther.length > 160 ? locOther.slice(0, 157) + '...' : locOther;
-    locPhrase = locPhrase ? `${locPhrase}, ${briefOther}` : briefOther;
-  }
+  // Exact positions/free speech belong to the clinical facts, not to the
+  // grammar of a question. Never paste a patient's sentence into a noun slot.
 
   switch (step) {
     case 'symptoms':
@@ -98,7 +100,9 @@ function formatQuestion(engineResult, profile, _previousAnswers = [], lang = 'vi
         const locationQuestion =
           locKeys.length === 1 && locKeys[0] === 'mental' && !locOther
             ? 'symptoms_mental'
-            : 'symptoms_with_location';
+            : locKeys.some((key) => ['mental', 'whole_body'].includes(key))
+              ? 'symptoms_selected'
+              : 'symptoms_with_location';
         question = t(`checkin.triage.question.${locationQuestion}`, resolvedLang, {
           CallName,
           selfRef,
@@ -118,11 +122,11 @@ function formatQuestion(engineResult, profile, _previousAnswers = [], lang = 'vi
 
     case 'associated': {
       const sym = engineResult.primarySymptom
-        ? localizeOption(engineResult.primarySymptom, resolvedLang)
+        ? formatSymptomList([engineResult.primarySymptom], resolvedLang)
         : t('checkin.triage.symptom_unknown', resolvedLang);
       question = t('checkin.triage.question.associated', resolvedLang, {
+        ...params,
         symptom: sym,
-        honorific,
       });
       break;
     }
@@ -142,21 +146,21 @@ function formatQuestion(engineResult, profile, _previousAnswers = [], lang = 'vi
     case 'cause': {
       const sym = engineResult.primarySymptom || '';
       if (sym.includes('đau bụng') || sym.includes('bụng')) {
-        question = t('checkin.triage.question.cause_abdomen', resolvedLang, { Honorific });
+        question = t('checkin.triage.question.cause_abdomen', resolvedLang, params);
       } else if (sym.includes('đau đầu') || sym.includes('đầu')) {
-        question = t('checkin.triage.question.cause_head', resolvedLang, { Honorific });
+        question = t('checkin.triage.question.cause_head', resolvedLang, params);
       } else if (sym.includes('đau vai') || sym.includes('đau lưng') || sym.includes('khớp')) {
-        question = t('checkin.triage.question.cause_musculoskeletal', resolvedLang, { Honorific });
+        question = t('checkin.triage.question.cause_musculoskeletal', resolvedLang, params);
       } else if (sym.includes('chóng mặt')) {
-        question = t('checkin.triage.question.cause_dizziness', resolvedLang, { Honorific });
+        question = t('checkin.triage.question.cause_dizziness', resolvedLang, params);
       } else {
-        question = t('checkin.triage.question.cause_default', resolvedLang, { Honorific });
+        question = t('checkin.triage.question.cause_default', resolvedLang, params);
       }
       break;
     }
 
     case 'action':
-      question = t('checkin.triage.question.action', resolvedLang, { Honorific });
+      question = t('checkin.triage.question.action', resolvedLang, params);
       break;
 
     case 'followup_status': {
@@ -174,11 +178,19 @@ function formatQuestion(engineResult, profile, _previousAnswers = [], lang = 'vi
         previousPhrase.length <= 160
           ? previousPhrase
           : t('checkin.triage.previous_unknown', resolvedLang);
-      question = t('checkin.triage.question.followup_status', resolvedLang, {
-        CallName,
-        honorific,
-        previous: prev,
-      });
+      const general = [
+        t('checkin.triage.previous_unknown', resolvedLang),
+        t('checkin.triage.symptom_generic', resolvedLang),
+      ].includes(prev);
+      question = t(
+        `checkin.triage.question.${general ? 'followup_status_general' : 'followup_status'}`,
+        resolvedLang,
+        {
+          CallName,
+          honorific,
+          previous: prev,
+        }
+      );
       break;
     }
 
