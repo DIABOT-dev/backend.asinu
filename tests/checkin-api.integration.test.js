@@ -617,7 +617,7 @@ describeDatabase('check-in HTTP API contract', () => {
 
   test.each([false, true])('adaptive questions survive interruption and feed the personal conclusion (detailed=%s)', async detailed => {
     adaptiveCalls = 0; adaptiveProviderFail = false;
-    adaptivePlan = [{ question: 'Âm thanh anh/chị nghe giống loại nào?', grounding_quote: 'tiếng ù',
+    adaptivePlan = [{ question: 'Âm thanh đang nghe giống loại nào?', grounding_quote: 'tiếng ù',
       options: ['Tiếng ve', 'Tiếng rít'], multi_select: false }];
     const account = await conversationAccount();
     const triage = answers => request(app).post('/api/mobile/checkin/triage').set(account.headers)
@@ -684,7 +684,7 @@ describeDatabase('check-in HTTP API contract', () => {
 
   test('adaptive question IDs from a completed phase cannot be reused after starting a follow-up', async () => {
     adaptiveCalls = 0; adaptiveProviderFail = false;
-    adaptivePlan = [{ question: 'Âm thanh anh/chị nghe giống loại nào?', grounding_quote: 'tiếng ù',
+    adaptivePlan = [{ question: 'Âm thanh đang nghe giống loại nào?', grounding_quote: 'tiếng ù',
       options: ['Tiếng ve', 'Tiếng rít'], multi_select: false }];
     const account = await conversationAccount();
     const triage = list => request(app).post('/api/mobile/checkin/triage').set(account.headers)
