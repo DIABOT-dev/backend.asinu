@@ -169,7 +169,7 @@ const FOLLOWUP_STEPS = [
 
 // ─── Hardcoded option sets (Vietnamese) ─────────────────────────────────────
 
-const ONSET_OPTIONS = ['vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua', 'vài ngày nay'];
+const ONSET_OPTIONS = ['under_hour', 'under_day', 'under_three_days', 'under_week', 'week_or_more'];
 
 const PROGRESSION_OPTIONS = [
   'đang đỡ dần', // better
@@ -479,7 +479,7 @@ function buildQuestion(step, state, lang = 'vi') {
     case 'onset':
       return {
         question: 'Triệu chứng này bắt đầu từ khi nào?',
-        options: localizeOptions(ONSET_OPTIONS, resolvedLang),
+        options: ONSET_OPTIONS.map(key => t(`checkin.triage.option.onset_${key}`, resolvedLang)),
         multiSelect: false,
         allowFreeText: true,
       };

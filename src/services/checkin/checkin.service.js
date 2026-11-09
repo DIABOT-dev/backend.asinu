@@ -20,6 +20,7 @@
  */
 
 const { deliverNotification } = require('../notification/notification-dispatch.service');
+const { readAdaptiveState, protectAdaptiveState, validateAdaptiveAnswers } = require('./adaptive-question.service');
 const { getPatientRoleForCaregiver } = require('../../lib/relation');
 const {
   getNextTriageQuestion,
@@ -220,7 +221,9 @@ async function getTodayCheckin(pool, userId, requestLang = null) {
     getYesterdaySession(pool, userId),
   ]);
 
-  const session = sessionRes.rows[0] || null;
+  const stored = sessionRes.rows[0] || null;
+  const session = stored ? { ...stored, triage_state: { ...stored.triage_state } } : null;
+  if (session?.triage_state) delete session.triage_state.adaptive_payload;
   const lang = requestLang || profileRes.rows[0]?.lang || 'vi';
   const continuityMessage = buildContinuityMessage(yesterdaySession, lang);
 
@@ -579,7 +582,7 @@ async function processTriageStep(
   requestLang = null,
   options = {}
 ) {
-  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}:${options.conclusionFormat || 'structured'}:${options.assessmentVersion || 'legacy'}`;
+  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}:${options.conclusionFormat || 'structured'}:${options.assessmentVersion || 'legacy'}:${options.adaptiveQuestions === true ? 'adaptive' : 'fixed'}`;
   if (triageRequests.has(key)) return triageRequests.get(key);
   const pending = processTriageStepOnce(
     pool,
@@ -618,6 +621,10 @@ async function processTriageStepOnce(
   const session = rows[0];
 
   const persistedState = session.triage_state || {};
+  const adaptiveState = readAdaptiveState(userId, persistedState.adaptive_payload);
+  validateAdaptiveAnswers(adaptiveState, previousAnswers);
+  const adaptiveEnabled = !['false', '0'].includes(process.env.CHECKIN_ADAPTIVE_QUESTIONS_ENABLED) &&
+    (options.adaptiveQuestions === true || persistedState.adaptive_enabled === true);
   const cached = persistedState.completed;
   const cachedMatches =
     cached?.fingerprint ===
@@ -679,10 +686,12 @@ async function processTriageStepOnce(
       previousTriageMessages: prevTriageMessages,
       previousSeverity:
         persistedState.previous_severity || (isFollowUpPhase ? session.triage_severity : null),
+      adaptiveEnabled,
+      adaptiveState,
       // The detailed interview ends when its applicable questions are answered,
       // never because the request contains a particular number of answers.
       // The controller's payload bound remains a request-size safeguard.
-      forceConclusion: !detailedAssessment && previousAnswers.length >= 8,
+      forceConclusion: !detailedAssessment && !adaptiveEnabled && previousAnswers.length >= 8,
       bodyLocation: session.body_location || null,
       bodyLocations:
         session.body_locations || (session.body_location ? [session.body_location] : null),
@@ -690,6 +699,9 @@ async function processTriageStepOnce(
       pool,
       userId,
     }));
+
+  const nextAdaptive = result._adaptiveState || adaptiveState;
+  delete result._adaptiveState;
 
   // ── Illusion Layer: enhance response with continuity/empathy/progress ──
   try {
@@ -751,6 +763,10 @@ async function processTriageStepOnce(
       : `initial:${session.occurrence_started_at || session.created_at
         ? new Date(session.occurrence_started_at || session.created_at).toISOString() : checkinId}`),
     revision: randomUUID(),
+    ...(adaptiveEnabled || persistedState.adaptive_enabled ? {
+      adaptive_enabled: true,
+      adaptive_payload: protectAdaptiveState(userId, nextAdaptive),
+    } : {}),
     lang: selectedLang,
     baseline_answers: prevTriageMessages,
     previous_severity:

@@ -346,6 +346,8 @@ CHỈ JSON.`;
 
   try {
     const response = await callTextAi({
+      provider: 'medgemma',
+      strictProvider: true,
       prompt,
       maxTokens: 1024,
       temperature: 0.2,
@@ -438,6 +440,8 @@ CHỈ JSON.`;
 
   try {
     const response = await callTextAi({
+      provider: 'medgemma',
+      strictProvider: true,
       prompt,
       maxTokens: 200,
       temperature: 0.1,

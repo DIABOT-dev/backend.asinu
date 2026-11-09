@@ -182,6 +182,12 @@ describe('per-area check-in interview', () => {
         if (q.step.startsWith('detail_')) expect(q.question.split(/\s+/).length).toBeLessThanOrEqual(25);
       }
     });
+  test('free descriptions of episodes and spreading pain still ask the applicable follow-up fields', () => {
+    const run = walk(r => r.step === 'detail_limbs_pattern' ? 'Thỉnh thoảng mới bị từng cơn'
+      : r.step === 'detail_limbs_radiation' ? 'Có lan xuống bàn tay' : select(r));
+    expect(run.questions.map(q => q.step)).toContain('detail_limbs_episode_duration');
+    expect(run.questions.map(q => q.step)).toContain('detail_limbs_radiation_location');
+  });
   test('the question stays readable when the recorded position is long or repeated', () => {
     const rawPosition = 'Vai / cánh tay phải / vai cánh tay phải';
     const run = walk(select, { bodyLocationOther: `Tay chân: ${rawPosition}` });
@@ -394,7 +400,7 @@ describe('check-in triage V2 flow', () => {
       previousAnswers: [{ step: 'symptoms', question: first.question, answer: 'Headache' }],
     });
     expect(next.question).toMatch(/when|start/i);
-    expect(next.options).toContain('Since this morning');
+    expect(next.options).toContain('1 to under 24 hours ago');
   });
 
   test('blocks diagnosis and medication instructions in generated conclusions', () => {

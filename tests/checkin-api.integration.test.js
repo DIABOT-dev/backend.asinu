@@ -20,6 +20,9 @@ describeDatabase('check-in HTTP API contract', () => {
   let checkinCallService;
   let sendVoipNotification;
   let audioBackup;
+  let adaptivePlan = [];
+  let adaptiveProviderFail = false;
+  let adaptiveCalls = 0;
 
   const auth = (token) => ({ Authorization: `Bearer ${token}`, 'Accept-Language': 'vi' });
 
@@ -62,6 +65,17 @@ describeDatabase('check-in HTTP API contract', () => {
       ...jest.requireActual('../src/services/early-signal/early-signal.service'),
       evaluateAfterNewHealthData: jest.fn(async () => null),
     }));
+    jest.doMock('../src/services/ai/ai.service', () => {
+      const actual = jest.requireActual('../src/services/ai/ai.service');
+      return { ...actual, callTextAi: async options => {
+        if (options.system?.startsWith('You create follow-up') || options.system?.startsWith('You review a health')) {
+          adaptiveCalls++;
+          if (adaptiveProviderFail) throw new Error('Synthetic provider unavailable');
+          return { content: JSON.stringify(options.system.startsWith('You review') ? { valid: true } : { questions: adaptivePlan }) };
+        }
+        return actual.callTextAi(options);
+      } };
+    });
     const mobileRoutes = require('../src/routes/mobile.routes');
     const checkinCallRoutes = require('../src/routes/checkin-call.routes');
     checkinCallService = require('../src/services/checkin-call/checkin-call.service');
@@ -564,6 +578,70 @@ describeDatabase('check-in HTTP API contract', () => {
     const after = await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200);
     expect(after.body.session.triage_messages).toEqual(before.body.session.triage_messages);
     expect(after.body.session.triage_state).toEqual(before.body.session.triage_state);
+  });
+
+  test.each([false, true])('adaptive questions survive interruption and feed the personal conclusion (detailed=%s)', async detailed => {
+    adaptiveCalls = 0; adaptiveProviderFail = false;
+    adaptivePlan = [{ question: 'Âm thanh anh/chị nghe giống loại nào?', grounding_quote: 'tiếng ù',
+      options: ['Tiếng ve', 'Tiếng rít'], multi_select: false }];
+    const account = await conversationAccount();
+    const triage = answers => request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({ checkin_id: account.checkinId, previous_answers: answers, adaptive_questions: true,
+        ...(detailed ? { assessment_version: 2 } : {}) });
+    const answers = []; let response;
+    for (let i = 0; i < 15; i++) {
+      response = (await triage(answers).expect(200)).body;
+      if (response.step?.startsWith('adaptive_')) break;
+      expect(adaptiveCalls).toBe(0);
+      const answer = response.step === 'symptoms' ? 'Tôi nghe tiếng ù trong tai trái'
+        : response.step === 'red_flags' ? 'Không có' : response.step === 'progression' ? 'Vẫn như cũ' : response.options[0];
+      answers.push({ step: response.step, question: response.question, answer });
+    }
+    expect(response.step).toMatch(/^adaptive_[a-f0-9]{32}$/);
+    expect(answers.some(a => a.step === 'red_flags')).toBe(true);
+    expect(adaptiveCalls).toBe(2);
+    expect(response.options).toEqual(['Tiếng ve', 'Tiếng rít', 'Không rõ', 'Khác, nhập hoặc nói câu trả lời']);
+    expect(response).not.toHaveProperty('_adaptiveState');
+    const checkpoint = await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200);
+    expect(checkpoint.body.session.triage_state.adaptive_enabled).toBe(true);
+    expect(checkpoint.body.session.triage_state).not.toHaveProperty('adaptive_payload');
+    const resumed = (await triage(checkpoint.body.session.triage_messages).expect(200)).body;
+    expect(resumed.step).toBe(response.step); expect(resumed.options).toEqual(response.options); expect(adaptiveCalls).toBe(2);
+    answers.push({ step: response.step, question: response.question, answer: 'Tiếng ve' });
+    for (let i = 0; i < 128; i++) {
+      response = (await triage(answers).expect(200)).body;
+      if (response.isDone) break;
+      expect(response.step).not.toMatch(/^adaptive_/);
+      const answer = response.step === 'red_flags' ? 'Không có' : response.options[0];
+      answers.push({ step: response.step, question: response.question, answer });
+    }
+    expect(response.isDone).toBe(true); expect(adaptiveCalls).toBe(2);
+    const completed = await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200);
+    expect(completed.body.session.triage_messages).toEqual(answers);
+    expect(completed.body.session.triage_completed_at).toBeTruthy();
+    const raw = await pool.query('SELECT triage_state FROM health_checkins WHERE id=$1', [account.checkinId]);
+    const { readAdaptiveState } = require('../src/services/checkin/adaptive-question.service');
+    const stored = readAdaptiveState(account.userId, raw.rows[0].triage_state.adaptive_payload);
+    expect(stored.questions).toHaveLength(1);
+    expect(raw.rows[0].triage_state.completed.result).not.toHaveProperty('_adaptiveState');
+  }, 30000);
+
+  test('AI failure offers an open answer, resumes it unchanged and can skip without a loop', async () => {
+    adaptiveCalls = 0; adaptiveProviderFail = true;
+    const account = await conversationAccount();
+    const triage = answers => request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({ checkin_id: account.checkinId, previous_answers: answers, assessment_version: 2, adaptive_questions: true });
+    const first = (await triage([]).expect(200)).body;
+    const answers = [{ step: first.step, question: first.question, answer: 'Tôi nghe tiếng ù trong tai trái' }];
+    const safety = (await triage(answers).expect(200)).body;
+    answers.push({ step: safety.step, question: safety.question, answer: 'Không có' });
+    const open = (await triage(answers).expect(200)).body;
+    expect(open).toMatchObject({ options: [], allowFreeText: true, skipAnswerLabel: 'Không có gì thêm' });
+    expect((await triage(answers).expect(200)).body.step).toBe(open.step); expect(adaptiveCalls).toBe(1);
+    answers.push({ step: open.step, question: open.question, answer: open.skipAnswerLabel });
+    const next = (await triage(answers).expect(200)).body;
+    expect(next.step).not.toBe(open.step); expect(adaptiveCalls).toBe(1);
+    adaptiveProviderFail = false;
   });
 
   test('follow-up retains symptoms and allows a required third safety question', async () => {

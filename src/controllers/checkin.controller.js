@@ -20,6 +20,7 @@ const TRIAGE_STEPS = new Set([
   'followup_detail',
 ]);
 const { isDetailedStep, MAX_DETAILED_ANSWERS } = require('../core/checkin/triage-detail-questions');
+const { isAdaptiveStep } = require('../services/checkin/adaptive-question.service');
 
 async function startCheckinHandler(pool, req, res) {
   const {
@@ -138,13 +139,13 @@ async function followUpHandler(pool, req, res) {
 }
 
 async function triageHandler(pool, req, res) {
-  const { checkin_id, previous_answers = [], conclusion_format, assessment_version } = req.body;
+  const { checkin_id, previous_answers = [], conclusion_format, assessment_version, adaptive_questions } = req.body;
   if (!checkin_id)
     return res.status(400).json({ ok: false, error: t('error.missing_checkin_id', getLang(req)) });
   const validAnswers =
     Array.isArray(previous_answers) &&
     previous_answers.length <=
-      (assessment_version === 2 || previous_answers.some((item) => isDetailedStep(item?.step))
+      (adaptive_questions === true || assessment_version === 2 || previous_answers.some((item) => isDetailedStep(item?.step) || isAdaptiveStep(item?.step))
         ? MAX_DETAILED_ANSWERS
         : 8) &&
     previous_answers.every(
@@ -155,7 +156,7 @@ async function triageHandler(pool, req, res) {
         item.question.length <= 500 &&
         (item.step === undefined ||
           (typeof item.step === 'string' &&
-            (TRIAGE_STEPS.has(item.step) || isDetailedStep(item.step)))) &&
+            (TRIAGE_STEPS.has(item.step) || isDetailedStep(item.step) || isAdaptiveStep(item.step)))) &&
         ((typeof item.answer === 'string' && item.answer.length <= 2000) ||
           (Array.isArray(item.answer) &&
             item.answer.length <= 20 &&
@@ -163,6 +164,7 @@ async function triageHandler(pool, req, res) {
     );
   if (
     !validAnswers ||
+    (adaptive_questions !== undefined && typeof adaptive_questions !== 'boolean') ||
     (assessment_version !== undefined && assessment_version !== 2) ||
     (conclusion_format !== undefined && !['structured', 'narrative'].includes(conclusion_format))
   ) {
@@ -175,7 +177,7 @@ async function triageHandler(pool, req, res) {
       checkin_id,
       previous_answers,
       getLang(req),
-      { conclusionFormat: conclusion_format, assessmentVersion: assessment_version }
+      { conclusionFormat: conclusion_format, assessmentVersion: assessment_version, adaptiveQuestions: adaptive_questions }
     );
     return res.json({ ok: true, ...result });
   } catch (err) {

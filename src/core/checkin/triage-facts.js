@@ -17,7 +17,7 @@ const isUnknown = (value) =>
     lower(value)
   );
 const isNone = (value) =>
-  /^(?:không(?: có)?(?: gì)?|không có triệu chứng mới|không có dấu hiệu nào|none|no(?: new symptoms)?|nothing)$/.test(
+  /^(?:không(?: có)?(?: gì)?|không có gì thêm|không có triệu chứng mới|không có dấu hiệu nào|none|no(?: new symptoms)?|nothing|nothing else to add)$/.test(
     lower(value)
   );
 

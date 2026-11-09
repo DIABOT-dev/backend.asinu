@@ -257,6 +257,7 @@ function buildConclusionFacts(state, profile, context = {}, lang = 'vi', now = n
     dau_hieu_nguy_hiem_da_hoi: Boolean(state.completedSteps?.has('red_flags')),
     dau_hieu_nguy_hiem_gap: list(state.redFlagsFound),
     assessment_incomplete: Boolean(state.assessmentIncomplete),
+    ...(state.adaptiveAnswers?.length ? { khai_bao_bo_sung: state.adaptiveAnswers } : {}),
     care_level: !state.needsDoctor
       ? 'tu_theo_doi'
       : state.severity === 'high'

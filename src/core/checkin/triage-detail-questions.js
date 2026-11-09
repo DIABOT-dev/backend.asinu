@@ -156,10 +156,7 @@ function configuredChoices(field, group) {
 }
 function regionalQuestion(field, group, lang) {
   let options;
-  if (field === 'onset')
-    options = ['vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua', 'vài ngày nay'].map((value) =>
-      localizeOption(value, lang)
-    );
+  if (field === 'onset') options = buildQuestion('onset', {}, lang).options;
   else if (field === 'progression')
     options = ['đang đỡ dần', 'vẫn như cũ', 'có vẻ nặng hơn'].map((value) =>
       localizeOption(value, lang)
@@ -408,9 +405,11 @@ function getDetailedNextStep(input) {
         if (field === 'episode_duration')
           return ['episodes', 'occasional'].some(
             (choice) => detail?.answers.pattern === t(key(`option.${choice}`), 'vi')
-          );
+          ) || /từng (?:đợt|cơn|lúc)|thỉnh thoảng|cứ .{1,40}(?:lại|một lần)|comes and goes|episode|intermittent/iu
+            .test(affirmativeParts(detail?.answers.pattern).join(' '));
         if (field === 'radiation_location')
-          return detail?.answers.radiation === t(key('option.spreads'), 'vi');
+          return detail?.answers.radiation === t(key('option.spreads'), 'vi') ||
+            /(?:^|\s)lan(?:\s|$)|radiat|spread/iu.test(affirmativeParts(detail?.answers.radiation).join(' '));
         return true;
       }).map((field) => ({ step: detailStep(group.region, field), group, field }))
     ),
@@ -488,6 +487,10 @@ function getDetailedNextStep(input) {
     };
   return {
     ...question,
+    pendingTemplateFields: plan.filter(item => !observed.has(item.step)).map(item => item.field || item.step),
+    pendingTemplateQuestions: plan.filter(item => !observed.has(item.step)).map(item =>
+      item.group ? regionalQuestion(item.field, item.group, lang).question :
+        item.step === 'detail_history' ? t(key('question.history'), lang) : item.step),
     state: projected.state,
     detailedQuestion: Boolean(next.group || next.step === 'detail_history'),
     questionProgress: {

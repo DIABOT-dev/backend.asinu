@@ -1,4 +1,12 @@
 'use strict';
+
+function adaptiveGuidance(facts, lang) {
+  if (!facts.khai_bao_bo_sung?.length) return '';
+  return lang === 'en'
+    ? "Use khai_bao_bo_sung as the person's recorded answers to additional questions. Explain them together with their profile, exact positions, readings and previous check-ins. Do not invent missing facts or claim certainty when assessment_incomplete is true."
+    : 'Dùng khai_bao_bo_sung là các câu trả lời bổ sung đã ghi nhận. Giải thích cùng hồ sơ, vị trí cụ thể, số đo và lần check-in trước của người này. Không bịa dữ liệu còn thiếu hoặc khẳng định chắc chắn khi assessment_incomplete là true.';
+}
+
 const { requiredMeasurementTypes } = require('./triage-conclusion-contract');
 
 function buildConclusionSystem(facts, lang = 'vi') {
@@ -62,6 +70,7 @@ function buildConclusionPrompt(facts, lang = 'vi') {
     return `${outputLanguage}
 Write a warm, valuable check-in conclusion from these facts. Sound like a person who cares, not a form.
 FACTS=${JSON.stringify(promptFacts)}
+${adaptiveGuidance(facts, lang)}
 Return 4 fields:
 - loi_nhan: 2-3 sentences. Name, in human words, what ${goi} is going through, and show you understand. If the facts show an earlier check-in or a repeating symptom, nod to it.
 - lien_quan: the most useful, honest explanation you can give. When it fits, gently connect their symptoms with a reported condition or a reading, as a possibility. If you cite a reading, keep the number/unit/time exactly as supplied.
@@ -72,6 +81,7 @@ Return {"loi_nhan":"...","lien_quan":"...","nen_lam":["..."],"di_kham_khi":["...
   return `${outputLanguage}
 Viết lời kết luận check-in ấm áp, có giá trị từ dữ liệu này. Nghe như người thật sự quan tâm, không phải biểu mẫu.
 FACTS=${JSON.stringify(promptFacts)}
+${adaptiveGuidance(facts, lang)}
 Trả về 4 trường:
 - loi_nhan: 2-3 câu. Gọi tên bằng lời người thường điều ${goi} đang trải qua, cho thấy mình hiểu. Nếu dữ liệu có lần check-in trước hoặc triệu chứng lặp lại thì nhắc tới.
 - lien_quan: lời giải thích hữu ích và trung thực nhất bạn đưa ra được. Khi hợp, hãy nhẹ nhàng nối triệu chứng với bệnh nền đã khai hoặc một số đo, ở dạng khả năng. Nếu nhắc số đo thì giữ nguyên con số/đơn vị/giờ như đã cho.
@@ -121,12 +131,14 @@ function buildNarrativePrompt(facts, lang = 'vi') {
     ? `Read this check-in and give a detailed, personal explanation that someone without medical training can understand. The questions are complete; give the conclusion, not a new question-and-answer session. Help them understand the symptoms they reported together, what deserves attention and why, and what these facts can and cannot establish. Explain a connection with a reported condition only when it is relevant; do not attach every symptom to an existing condition. Mention what is still unknown and useful observations they can record for a health expert.
 Offer practical things they can do today without medication, explain why each may help, and make clear what changes warrant seeking help according to the supplied care decision. Useful depth matters: develop the explanation instead of only repeating the symptoms, listing conditions, or saying to see an expert. Keep a warm, ordinary voice, readable paragraphs, and "- " bullet points. Choose your own order and any helpful short headings; no fixed sections or word count. A single reading does not establish that a condition is stable. Keep medication history in perspective; missing records do not explain symptoms or establish a treatment problem.
 FACTS=${JSON.stringify(promptFacts)}
+${adaptiveGuidance(facts, lang)}
 ${locationGuidance}
 ${detailGuidance}
 The care decision is already set: ${care} A missing medication record does not mean a missed dose. An old symptom is not resolved just because it was not mentioned today. Only a specific severe future warning sign can conditionally mention calling 115. The server adds the AI notice and follow-up time, so leave those out.`
     : `Đọc khai báo check-in này rồi giải thích kỹ, mạch lạc cho người không rành y tế. Đã hỏi xong; hãy chốt lời nhắn, không mở thêm cuộc hỏi đáp. Giúp họ hiểu các biểu hiện vừa kể khi đặt cạnh nhau, điều gì đáng lưu ý và vì sao, thông tin hiện có cho biết được gì và chưa đủ để biết gì. Chỉ liên hệ bệnh nền khi thực sự phù hợp, không gắn mọi khó chịu với bệnh nền. Nói rõ điều còn chưa biết và những thay đổi họ có thể ghi lại để chuyên gia đánh giá tốt hơn.
 Gợi ý việc thực tế có thể làm hôm nay mà không dùng thuốc, giải thích vì sao mỗi việc có ích và cần quan sát điều gì; nêu khi nào nên tìm hỗ trợ theo mức chăm sóc đã cho. Dành phần chính cho lời giải thích hữu ích, không chỉ nhắc lại triệu chứng, kể tên bệnh nền rồi khuyên đi khám. Giữ giọng ấm áp, lời đời thường, chia đoạn dễ đọc và dùng gạch đầu dòng "- ". Tự chọn thứ tự, tiêu đề ngắn nếu thấy cần; không có mẫu mục hay số từ bắt buộc. Một lần đo không chứng minh bệnh đã ổn định. Không lấy việc thiếu bản ghi thuốc làm nguyên nhân của triệu chứng hoặc suy thành có vấn đề điều trị.
 FACTS=${JSON.stringify(promptFacts)}
+${adaptiveGuidance(facts, lang)}
 ${locationGuidance}
 ${detailGuidance}
 Mức chăm sóc đã được quyết định: ${care} Chưa có bản ghi uống thuốc không có nghĩa là đã bỏ thuốc. Triệu chứng cũ không tự được coi là đã hết chỉ vì hôm nay không nhắc đến. Chỉ dấu hiệu nặng cụ thể trong tương lai mới được nhắc gọi 115 có điều kiện. Server tự thêm lưu ý AI và giờ hỏi lại, nên không viết hai phần đó.`;
