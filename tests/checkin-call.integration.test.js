@@ -105,21 +105,23 @@ describeDatabase('check-in call PostgreSQL integration', () => {
 
   test('overdue → user call → MILD first family → seen → confirmation', async () => {
     const seed = String(Date.now());
+    const group = [];
     for (let i = 0; i < 3; i += 1) {
       const created = await pool.query(
         'INSERT INTO users (phone_number, display_name, push_token) VALUES ($1,$2,$3) RETURNING id',
         ['testcall' + seed + i, 'Checkin test ' + i, 'ExponentPushToken[test-' + i + ']']
       );
       users.push(created.rows[0].id);
+      group.push(created.rows[0].id);
     }
-    for (const familyId of users.slice(1)) {
+    for (const familyId of group.slice(1)) {
       await pool.query(
         "INSERT INTO user_connections (requester_id, addressee_id, status, permissions, accepted_at) VALUES ($1,$2,'accepted',$3::jsonb,now())",
-        [users[0], familyId, JSON.stringify({ can_receive_alerts: true, can_ack_escalation: true })]
+        [group[0], familyId, JSON.stringify({ can_receive_alerts: true, can_ack_escalation: true })]
       );
     }
-    await activateAnTam(users[0]);
-    await service.saveSettings(pool, users[0], {
+    await activateAnTam(group[0]);
+    await service.saveSettings(pool, group[0], {
       enabled: true,
       checkin_time: '00:00',
       grace_hours: 2,
@@ -127,15 +129,15 @@ describeDatabase('check-in call PostgreSQL integration', () => {
     expect(await service.createDailyEpisodes(pool)).toBeGreaterThanOrEqual(1);
     await pool.query(
       "UPDATE checkin_call_episodes SET next_action_at = now() - interval '1 second' WHERE user_id = $1",
-      [users[0]]
+      [group[0]]
     );
     await service.tick(pool);
-    const userCall = await service.getActive(pool, users[0]);
+    const userCall = await service.getActive(pool, group[0]);
     expect(userCall.target_role).toBe('USER');
-    const triage = await service.startTriage(pool, userCall.id, users[0], 'vi');
+    const triage = await service.startTriage(pool, userCall.id, group[0], 'vi');
     expect(triage.episode.state).toBe('TRIAGE_USER');
     expect(triage.triage.locations.length).toBeGreaterThan(0);
-    const result = await service.completeTriage(pool, userCall.id, users[0], {
+    const result = await service.completeTriage(pool, userCall.id, group[0], {
       body_location: 'head',
       symptom: 'dizziness',
       intensity: 'MILD',
@@ -146,7 +148,7 @@ describeDatabase('check-in call PostgreSQL integration', () => {
       symptom: 'dizziness',
       intensity: 'MILD',
     });
-    const familyCalls = await Promise.all(users.slice(1).map((id) => service.getActive(pool, id)));
+    const familyCalls = await Promise.all(group.slice(1).map((id) => service.getActive(pool, id)));
     expect(familyCalls.filter(Boolean)).toHaveLength(1);
     const contactedIndex = familyCalls.findIndex(Boolean) + 1;
     const familyOne = familyCalls[contactedIndex - 1];
@@ -161,18 +163,18 @@ describeDatabase('check-in call PostgreSQL integration', () => {
       [familyOne.attempt_id]
     );
     expect(fallback.rows[0]).toMatchObject({ state: 'PUSH_WAIT', fallback_count: 1 });
-    await service.seen(pool, familyOne.attempt_id, users[contactedIndex]);
-    expect((await service.getEpisode(pool, userCall.id, users[0])).state).toBe(
+    await service.seen(pool, familyOne.attempt_id, group[contactedIndex]);
+    expect((await service.getEpisode(pool, userCall.id, group[0])).state).toBe(
       'MILD_FAMILY_ESCALATION'
     );
     const confirmed = await service.confirmFamily(
       pool,
       userCall.id,
-      users[contactedIndex],
+      group[contactedIndex],
       'ACCEPT_AND_CHECK'
     );
     expect(confirmed.state).toBe('RESOLVED');
-    expect(await service.getActive(pool, users[contactedIndex])).toBeNull();
+    expect(await service.getActive(pool, group[contactedIndex])).toBeNull();
   });
 
   test('URGENT calls all family and first pickup cancels the others', async () => {
