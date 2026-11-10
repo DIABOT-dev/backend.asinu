@@ -1,7 +1,7 @@
 'use strict';
 
 // Authorized operations lookup. Read-only; omit tokens, answers and conclusion
-// text. Inspect interview metadata only for the explicitly requested phone.
+// text. Inspect interview metadata for the requested phone and latest matched login.
 const normalizeName = (value) =>
   String(value || '')
     .normalize('NFD')
@@ -84,7 +84,7 @@ async function audit(client, input) {
       latest_login: latestLogin,
       interviews: [],
     };
-    for (const user of users.filter((user) => user.phone_match)) {
+    for (const user of users.filter((user) => user.phone_match || user.id === latestLogin?.id)) {
       const sessions = (
         await client.query(
           `SELECT id,session_date,triage_state,triage_messages,
