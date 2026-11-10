@@ -576,7 +576,10 @@ async function getRecentHealthContext(pool, userId) {
  */
 const triageRequests = new Map();
 function triageFingerprint(answers, lang) {
-  return createHash('sha256').update(JSON.stringify({ answers, lang })).digest('hex');
+  // JSONB changes object key order on a database round trip. Compare the
+  // interview fields in a fixed order so resuming cannot invalidate a result.
+  const canonicalAnswers = answers.map(({ step, question, answer }) => ({ step, question, answer }));
+  return createHash('sha256').update(JSON.stringify({ answers: canonicalAnswers, lang })).digest('hex');
 }
 
 async function processTriageStep(
@@ -666,7 +669,14 @@ async function processTriageStepOnce(
   const cached = persistedState.completed;
   const cachedMatches =
     cached?.fingerprint ===
-    triageFingerprint(previousAnswers, requestLang || persistedState.lang || 'vi');
+    triageFingerprint(previousAnswers, requestLang || persistedState.lang || 'vi') ||
+    // Older releases hashed the client's object order. The prefix checks above
+    // already establish that every persisted interview field is identical;
+    // requiring the same length and language also excludes extra new answers.
+    (cached?.fingerprint_version === undefined &&
+      cached?.result?.isDone === true &&
+      previousAnswers.length === storedAnswers.length &&
+      (requestLang || persistedState.lang || 'vi') === (persistedState.lang || 'vi'));
   const cachedResult =
     cachedMatches && cached.result?.isDone ? structuredClone(cached.result) : null;
   // The first CAS reserves an answer; it does not prove that completion and
@@ -813,6 +823,7 @@ async function processTriageStepOnce(
     ...(result.isDone
       ? {
           completed: {
+            fingerprint_version: 2,
             fingerprint: triageFingerprint(previousAnswers, selectedLang),
             result,
             finalized: false,

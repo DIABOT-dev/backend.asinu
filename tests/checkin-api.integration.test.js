@@ -504,6 +504,26 @@ describeDatabase('check-in HTTP API contract', () => {
     expect((await pool.query('SELECT no_response_count FROM health_checkins WHERE id=$1',[account.checkinId])).rows[0].no_response_count).toBe(2);
   });
 
+  test.each([false,true])('completed HTTP replay survives a JSONB database round trip (legacy fingerprint: %s)', async legacy => {
+    const account=await conversationAccount();
+    const first=await account.triage(account.initialAnswers).expect(200);
+    if (legacy) {
+      const legacyAnswers=account.initialAnswers.map(a=>({question:a.question,answer:a.answer,step:a.step}));
+      const fingerprint=createHash('sha256').update(JSON.stringify({answers:legacyAnswers,lang:'vi'})).digest('hex');
+      await pool.query(`UPDATE health_checkins SET triage_state=jsonb_set(
+        triage_state #- '{completed,fingerprint_version}', '{completed,fingerprint}',to_jsonb($2::text))
+        WHERE id=$1`,[account.checkinId,fingerprint]);
+    }
+    const before=(await pool.query('SELECT triage_state,triage_messages,updated_at FROM health_checkins WHERE id=$1',[account.checkinId])).rows[0];
+    const today=await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200);
+    const restored=today.body.session;
+    const replay=await request(app).post('/api/mobile/checkin/triage').set(account.headers).send({
+      checkin_id:account.checkinId,previous_answers:restored.triage_messages,phase_id:restored.triage_state.phase_id,
+    }).expect(200);
+    expect(replay.body).toEqual(first.body);
+    expect((await pool.query('SELECT triage_state,triage_messages,updated_at FROM health_checkins WHERE id=$1',[account.checkinId])).rows[0]).toEqual(before);
+  });
+
   test('a completed conclusion records the latest response and clears old missed reminders', async () => {
     const account=await conversationAccount();
     await pool.query("UPDATE health_checkins SET no_response_count=3,last_response_at=NOW()-INTERVAL '4 hours' WHERE id=$1",[account.checkinId]);

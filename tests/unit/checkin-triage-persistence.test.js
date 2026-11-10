@@ -122,6 +122,50 @@ test('a persisted completed result is replayed without another AI call or comple
   ).toHaveLength(1);
 });
 
+test('replaying JSONB answers with reordered object keys returns the saved conclusion', async () => {
+  const { pool, session } = poolFor();
+  const answers = [{ step: 'symptoms', question: 'Triệu chứng?', answer: 'Đau đầu' }];
+  const first = await processTriageStep(pool, 7, 12, answers, 'vi');
+  const fromDatabase = answers.map(a => ({ step: a.step, answer: a.answer, question: a.question }));
+  session.triage_messages = fromDatabase;
+  pool.query.mockClear();
+  await expect(processTriageStep(pool, 7, 12, fromDatabase, 'vi')).resolves.toEqual(first);
+  expect(getNextTriageQuestion).toHaveBeenCalledTimes(1);
+  expect(pool.query.mock.calls.every(([sql]) => sql.startsWith('SELECT'))).toBe(true);
+});
+
+test('a conclusion created before canonical fingerprints can be replayed after a database round trip', async () => {
+  const { createHash } = require('node:crypto');
+  const { pool, session } = poolFor();
+  const answers = [{ question: 'Triệu chứng?', answer: 'Đau đầu', step: 'symptoms' }];
+  session.triage_messages = answers.map(a => ({ step: a.step, answer: a.answer, question: a.question }));
+  session.triage_completed_at = new Date();
+  session.triage_state = { phase: 'initial', lang: 'vi', completed: {
+    fingerprint: createHash('sha256').update(JSON.stringify({ answers, lang: 'vi' })).digest('hex'),
+    result: { ...completed }, finalized: true,
+  } };
+  await expect(processTriageStep(pool, 7, 12, session.triage_messages, 'vi')).resolves.toEqual(completed);
+  expect(getNextTriageQuestion).not.toHaveBeenCalled();
+  expect(pool.query.mock.calls.every(([sql]) => sql.startsWith('SELECT'))).toBe(true);
+  for (const changed of [[], [...answers, { step: 'onset', question: 'Từ khi nào?', answer: 'Hôm nay' }],
+    [{ ...answers[0], answer: 'Đau bụng' }]]) {
+    await expect(processTriageStep(pool, 7, 12, changed, 'vi')).rejects.toMatchObject({code:'TRIAGE_CHANGED'});
+  }
+  await expect(processTriageStep(pool, 7, 12, answers, 'en')).rejects.toMatchObject({code:'TRIAGE_CHANGED'});
+});
+
+test('simultaneous semantically identical answers share one conclusion despite different object key orders', async () => {
+  const { pool } = poolFor();
+  let release;
+  getNextTriageQuestion.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  const first = processTriageStep(pool, 7, 12, [{ step:'symptoms', question:'Triệu chứng?', answer:'Đau đầu' }], 'vi');
+  const second = processTriageStep(pool, 7, 12, [{ answer:'Đau đầu', question:'Triệu chứng?', step:'symptoms' }], 'vi');
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  release({ ...completed });
+  await expect(Promise.all([first, second])).resolves.toEqual([completed, completed]);
+  expect(getNextTriageQuestion).toHaveBeenCalledTimes(1);
+});
+
 test('an active patient receives doctor guidance in the result without a duplicate self-push', async () => {
   const { pool } = poolFor();
   const notifications = require('../../src/core/notification/notification.orchestrator');
