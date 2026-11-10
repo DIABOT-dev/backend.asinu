@@ -16,6 +16,7 @@ on:
             notification-audit,
             checkin-audit,
             enable-checkin-conclusion,
+            checkin-audio-probe,
             restore-operator-ssh,
           ]
         default: deploy
@@ -52,7 +53,7 @@ permissions:
 
 jobs:
   ssh-diagnostics:
-    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'enable-checkin-conclusion' || inputs.operation == 'restore-operator-ssh')
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'enable-checkin-conclusion' || inputs.operation == 'checkin-audio-probe' || inputs.operation == 'restore-operator-ssh')
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     environment: prod
@@ -60,7 +61,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout read-only audit
-        if: inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'enable-checkin-conclusion'
+        if: inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'enable-checkin-conclusion' || inputs.operation == 'checkin-audio-probe'
         uses: actions/checkout@v7
       - name: Inspect SSH and API status with the existing administration key
         env:
@@ -121,6 +122,12 @@ jobs:
               -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
               -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
               "$VPS_USER@$VPS_HOST" "docker exec -i asinu-backend node - '$lookup64'" < deploy/checkin-preview-audit.cjs
+          fi
+          if [ "$OPERATION" = 'checkin-audio-probe' ]; then
+            ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+              -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
+              "$VPS_USER@$VPS_HOST" 'docker exec -i asinu-backend node' < deploy/checkin-full-audio-probe.cjs
           fi
           if [ "$OPERATION" = 'enable-checkin-conclusion' ]; then
             for phase in preflight release verify; do
