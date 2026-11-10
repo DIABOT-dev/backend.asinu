@@ -1,0 +1,37 @@
+{
+  "checked_at": "2026-11-10T06:49:00.504Z",
+  "http_endpoints": 277,
+  "dev_only": 3,
+  "static_route_coverage": {
+    "matched": 277,
+    "total": 277
+  },
+  "official_postman_v21_schema": {
+    "collections_validated": 2,
+    "failures": 0
+  },
+  "local_postman_runtime": {
+    "requests": 14,
+    "assertions": 42,
+    "failures": 0,
+    "local_production_token_and_id_isolation": true
+  },
+  "environment_folders": [
+    {
+      "name": "Local API",
+      "requests": 277,
+      "feature_groups": 27
+    },
+    {
+      "name": "Production API",
+      "requests": 277,
+      "feature_groups": 27
+    }
+  ],
+  "total_requests": 554,
+  "feature_groups_per_environment": 27,
+  "generated_json_files_validated": 5,
+  "credential_templates_checked": 54,
+  "retired_asinu_brain_requests": 0,
+  "scope_note": "Static schema, route coverage, script syntax and synthetic local runtime checks only. No authenticated or mutating production requests were sent. The local runtime uses synthetic responses; it does not validate backend business behavior. Postman Desktop was not re-imported after this refresh."
+}
