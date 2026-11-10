@@ -173,7 +173,9 @@ test('free narrative prompt asks for everyday paragraphs and bullets without the
   expect(prompt).toContain('gạch đầu dòng');
   expect(prompt).not.toMatch(/loi_nhan|lien_quan|nen_lam|di_kham_khi|Return 4 fields/);
   expect(prompt).not.toContain('Ghi 2 mốc giờ');
-  expect(system).toContain('giải thích sâu');
+  expect(system).toContain('Giải thích ngắn gọn');
+  expect(prompt).toContain('450–500 tiếng');
+  expect(prompt).not.toContain('Dành phần chính cho lời giải thích');
   expect(prompt).toContain('vì sao mỗi việc có ích');
 });
 
@@ -216,7 +218,7 @@ test.each(['vi', 'en'])(
     expect(result.disclaimer).toBe(t('checkin.conclusion.disclaimer', lang));
     expect(JSON.stringify(input)).toBe(before);
     expect(callTextAi.mock.calls[0][0].system).not.toContain('Return only JSON');
-    expect(callTextAi.mock.calls[0][0]).toMatchObject({ maxTokens: 1800, timeoutMs: 60000 });
+    expect(callTextAi.mock.calls[0][0]).toMatchObject({ maxTokens: 1100, timeoutMs: 60000 });
   }
 );
 

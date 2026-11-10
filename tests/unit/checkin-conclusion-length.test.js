@@ -65,7 +65,7 @@ test.each(['vi', 'en'])(
     expect(callTextAi.mock.calls[0][0]).toMatchObject({
       provider: 'medgemma',
       strictProvider: true,
-      maxTokens: 1800,
+      maxTokens: 1100,
       maxRetries: 0,
     });
     expect(callTextAi.mock.calls[0][0].system).toContain('2000–2500');
