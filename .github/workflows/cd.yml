@@ -9,8 +9,25 @@ on:
       operation:
         description: Deploy, inspect SSH, or remove a confirmed operator IP ban
         type: choice
-        options: [deploy, ssh-diagnostics, prepare-auto-deploy, restore-operator-ssh]
+        options:
+          [
+            deploy,
+            ssh-diagnostics,
+            prepare-auto-deploy,
+            notification-audit,
+            checkin-audit,
+            enable-checkin-conclusion,
+            checkin-audio-probe,
+            checkin-audio-only-probe,
+            restore-operator-ssh,
+          ]
         default: deploy
+      lookup_name:
+        description: Name to find during a read-only check-in audit
+        required: false
+      lookup_phone:
+        description: Phone to inspect during a read-only check-in audit
+        required: false
       operator_ip:
         description: Confirmed operator IPv4 address to unban (restore operation only)
         required: false
@@ -38,17 +55,16 @@ permissions:
 
 jobs:
   ssh-diagnostics:
-    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'prepare-auto-deploy' || inputs.operation == 'restore-operator-ssh')
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'prepare-auto-deploy' || inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'enable-checkin-conclusion' || (inputs.operation == 'checkin-audio-probe' || inputs.operation == 'checkin-audio-only-probe') || inputs.operation == 'restore-operator-ssh')
     runs-on: ubuntu-24.04
-    timeout-minutes: 3
+    timeout-minutes: 6
     environment: prod
     permissions:
       contents: read
     steps:
-      - name: Checkout preparation script
-        if: inputs.operation == 'prepare-auto-deploy'
+      - name: Checkout read-only audit
+        if: inputs.operation == 'prepare-auto-deploy' || inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'enable-checkin-conclusion' || (inputs.operation == 'checkin-audio-probe' || inputs.operation == 'checkin-audio-only-probe')
         uses: actions/checkout@v7
-
       - name: Inspect SSH and API status with the existing administration key
         env:
           VPS_HOST: ${{ secrets.VPS_HOST }}
@@ -57,6 +73,8 @@ jobs:
           OPERATION: ${{ inputs.operation }}
           OPERATOR_IP: ${{ inputs.operator_ip }}
           STACK_DIR: ${{ vars.STACK_DIR || '/opt/asinu-backend' }}
+          LOOKUP_NAME: ${{ inputs.lookup_name }}
+          LOOKUP_PHONE: ${{ inputs.lookup_phone }}
         run: |
           set -eu
           test "$VPS_HOST" = '36.50.176.55'
@@ -112,9 +130,58 @@ jobs:
               ready=0
             fi
           done
+          docker inspect asinu-backend --format '{{range .Config.Env}}{{println .}}{{end}}' | grep -E '^(CHECKIN_DETAILED_QUESTIONS_ENABLED|CHECKIN_ADAPTIVE_QUESTIONS_ENABLED|CHECKIN_CONCLUSION_V2_ENABLED|CHECKIN_STRUCTURED_CONCLUSION_ENABLED|AI_PROVIDER_CLINICAL|KEY_MANAGEMENT_PROVIDER)=' || true
+          docker exec asinu-backend node -e '
+            const probe = require("node:child_process").spawnSync("ffmpeg", ["-version"], {encoding:"utf8"});
+            console.log(JSON.stringify({audio_runtime:{ffmpeg_present:probe.status===0,
+              ffmpeg_version:probe.status===0 ? probe.stdout.split("\n")[0] : null,
+              audio_format:process.env.CHECKIN_CALL_AUDIO_FORMAT || null,
+              vieneu_timeout_ms:process.env.VIENEU_TIMEOUT_MS || null}}));
+          '
           curl -fsS --max-time 5 http://127.0.0.1:3300/api/healthz
           test "$ready" -eq 1
           REMOTE
+          if [ "$OPERATION" = 'notification-audit' ]; then
+            ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+              -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
+              "$VPS_USER@$VPS_HOST" 'docker exec -i asinu-backend node' < deploy/notification-audit.cjs
+          fi
+          if [ "$OPERATION" = 'checkin-audit' ]; then
+            lookup64="$(node -e 'process.stdout.write(Buffer.from(JSON.stringify({name:process.env.LOOKUP_NAME,phone:process.env.LOOKUP_PHONE})).toString("base64"))')"
+            ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+              -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
+              "$VPS_USER@$VPS_HOST" "docker exec -i asinu-backend node - '$lookup64'" < deploy/checkin-preview-audit.cjs
+          fi
+          if [ "$OPERATION" = 'checkin-audio-probe' ] || [ "$OPERATION" = 'checkin-audio-only-probe' ]; then
+            if [ "$OPERATION" = 'checkin-audio-probe' ]; then
+              ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+              -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
+                "$VPS_USER@$VPS_HOST" 'docker exec -i asinu-backend node' < deploy/checkin-conclusion-probe.cjs
+            fi
+            ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+              -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
+              "$VPS_USER@$VPS_HOST" 'docker exec -i asinu-backend node' < deploy/checkin-full-audio-probe.cjs
+          fi
+          if [ "$OPERATION" = 'enable-checkin-conclusion' ]; then
+            for phase in preflight release verify; do
+              if [ "$phase" = 'release' ]; then
+                remote_command='python3 -'
+                script='deploy/enable-checkin-conclusion.py'
+              else
+                remote_command='docker exec -i asinu-backend node -'
+                if [ "$phase" = 'preflight' ]; then remote_command="$remote_command --preflight"; fi
+                script='deploy/checkin-conclusion-probe.cjs'
+              fi
+              ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+                -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+                -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
+                "$VPS_USER@$VPS_HOST" "$remote_command" < "$script"
+            done
+          fi
 
   package:
     if: >-
@@ -221,93 +288,60 @@ jobs:
         with:
           ref: ${{ needs.package.outputs.sha }}
 
-      - name: Copy Compose file to VPS
-        uses: appleboy/scp-action@v1.0.0
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: deploy/docker-compose.yml,deploy/docker-compose.openbao.yml
-          target: ${{ env.STACK_DIR }}
-          strip_components: 1
-
-      - name: Deploy and verify
-        uses: appleboy/ssh-action@v1.2.5
+      - name: Deploy and verify with OpenSSH
         env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           ASINU_BACKEND_IMAGE: ${{ needs.package.outputs.image }}
           GHCR_USER: ${{ github.actor }}
           GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN || secrets.GITHUB_TOKEN }}
-          STACK_DIR: ${{ env.STACK_DIR }}
-          HOST_PORT: ${{ env.HOST_PORT }}
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          envs: ASINU_BACKEND_IMAGE,GHCR_USER,GHCR_TOKEN,STACK_DIR,HOST_PORT
-          script: |
-            set -eu
-            cd "$STACK_DIR"
-            docker network inspect asinu_net >/dev/null 2>&1 || docker network create asinu_net
-            printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-
-            previous_image="$(docker inspect --format '{{.Config.Image}}' asinu-backend 2>/dev/null || true)"
-            export ASINU_BACKEND_IMAGE HOST_PORT
-            write_image_overrides() {
-              python3 - <<'PY'
-            import json, os
-            for service, filename in [('asinu-backend', '.auto-backend-image.json'), ('asinu-migrate', '.auto-migration-image.json')]:
-                with open(filename, 'w') as output:
-                    json.dump({'services': {service: {'image': os.environ['ASINU_BACKEND_IMAGE']}}}, output)
-            PY
-            }
-            if [ -f runtime.compose.json ]; then
-              test -f migration.compose.json
-              project="$(docker inspect asinu-backend --format '{{index .Config.Labels "com.docker.compose.project"}}')"
-              test -n "$project"
-              write_image_overrides
-              compose_backend() { docker compose -p "$project" -f runtime.compose.json -f .auto-backend-image.json "$@"; }
-              compose_migration() { docker compose -p "$project" -f migration.compose.json -f .auto-migration-image.json "$@"; }
-            else
-              test -f .env
-              test -f .env.migrations
-              export COMPOSE_FILE=docker-compose.yml
-              if grep -q '^KEY_MANAGEMENT_PROVIDER=openbao$' .env; then
-                export COMPOSE_FILE=docker-compose.yml:docker-compose.openbao.yml
-              fi
-              compose_backend() { docker compose "$@"; }
-              compose_migration() { docker compose --profile migration "$@"; }
-            fi
-            compose_backend config --quiet
-            compose_migration config --quiet
-            compose_backend pull asinu-backend
-            compose_migration pull asinu-migrate
-            compose_migration run --rm --no-deps asinu-migrate
-            compose_backend up -d --no-deps --no-build asinu-backend
-
-            healthy=0
-            for _ in $(seq 1 45); do
-              if curl -fsS "http://127.0.0.1:${HOST_PORT}/api/healthz" >/dev/null; then
-                healthy=1
-                break
-              fi
-              sleep 2
-            done
-
-            if [ "$healthy" -ne 1 ]; then
-              compose_backend logs --tail=150 asinu-backend
-              if [ -n "$previous_image" ]; then
-                export ASINU_BACKEND_IMAGE="$previous_image"
-                if [ -f runtime.compose.json ]; then
-                  write_image_overrides
-                fi
-                compose_backend up -d --no-deps --no-build asinu-backend
-              fi
-              exit 1
-            fi
+          DEPLOY_ENV: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || 'prod' }}
+        run: |
+          set -euo pipefail
+          test "$VPS_HOST" = '36.50.176.55'
+          [[ "$STACK_DIR" =~ ^/[a-zA-Z0-9_./-]+$ ]]
+          [[ "$VPS_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$HOST_PORT" =~ ^[0-9]+$ ]]
+          umask 077
+          task_dir="$(mktemp -d)"
+          trap 'rm -rf "$task_dir"' EXIT
+          printf '%s\n' "$VPS_SSH_KEY" > "$task_dir/key"
+          printf '%s\n' '36.50.176.55 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMDOm8XUn1KYdgS2UTE7r4XyrFpWQKpg7Kh+ZdWOm5xL' > "$task_dir/known_hosts"
+          ssh_args=(-i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519
+            -o "UserKnownHostsFile=$task_dir/known_hosts" -o ConnectTimeout=15)
+          target="${VPS_USER}@${VPS_HOST}"
+          ssh "${ssh_args[@]}" "$target" bash -se -- "$STACK_DIR" <<'REMOTE'
+          umask 077
+          mkdir -p "$1/.deploy-history"
+          cd "$1"
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          for name in docker-compose.yml docker-compose.openbao.yml runtime.compose.json migration.compose.json; do
+            if [ -f "$name" ]; then cp -p "$name" ".deploy-history/pre-${stamp}-${name}"; fi
+          done
+          REMOTE
+          ssh "${ssh_args[@]}" "$target" "mkdir -p '$STACK_DIR/.deploy-tools'"
+          tar -C deploy -cf - prepare-auto-deploy.py |
+            ssh "${ssh_args[@]}" "$target" "tar --no-same-owner -xf - -C '$STACK_DIR/.deploy-tools'"
+          tar -C deploy -cf - docker-compose.yml docker-compose.openbao.yml |
+            ssh "${ssh_args[@]}" "$target" "tar --no-same-owner -xf - -C '$STACK_DIR'"
+          {
+            printf 'export ASINU_BACKEND_IMAGE=%q\n' "$ASINU_BACKEND_IMAGE"
+            printf 'export GHCR_USER=%q\n' "$GHCR_USER"
+            printf 'export GHCR_TOKEN=%q\n' "$GHCR_TOKEN"
+            printf 'export STACK_DIR=%q\n' "$STACK_DIR"
+            printf 'export HOST_PORT=%q\n' "$HOST_PORT"
+            printf 'export DEPLOY_ENV=%q\n' "$DEPLOY_ENV"
+            cat deploy/rollout-backend.sh
+          } | ssh "${ssh_args[@]}" "$target" bash -se
+          deployed_image="$(ssh "${ssh_args[@]}" "$target" docker inspect asinu-backend --format '{{.Config.Image}}')"
+          test "$deployed_image" = "$ASINU_BACKEND_IMAGE"
+          printf 'Production container revision verified: %s\n' "$deployed_image"
 
       - name: Verify public endpoint
         if: env.BASE_URL != ''
-        run: curl --fail --silent --show-error --retry 5 --retry-delay 2 "${BASE_URL%/}/api/healthz" >/dev/null
+        run: curl --fail --silent --show-error --retry 5 --retry-delay 2 "${BASE_URL%/}/api/readyz" >/dev/null
 
       - name: Deployment summary
         run: |

@@ -169,7 +169,7 @@ const FOLLOWUP_STEPS = [
 
 // ─── Hardcoded option sets (Vietnamese) ─────────────────────────────────────
 
-const ONSET_OPTIONS = ['vừa mới', 'vài giờ trước', 'từ sáng', 'từ hôm qua', 'vài ngày nay'];
+const ONSET_OPTIONS = ['under_hour', 'under_day', 'under_three_days', 'under_week', 'week_or_more'];
 
 const PROGRESSION_OPTIONS = [
   'đang đỡ dần', // better
@@ -479,7 +479,7 @@ function buildQuestion(step, state, lang = 'vi') {
     case 'onset':
       return {
         question: 'Triệu chứng này bắt đầu từ khi nào?',
-        options: localizeOptions(ONSET_OPTIONS, resolvedLang),
+        options: ONSET_OPTIONS.map(key => t(`checkin.triage.option.onset_${key}`, resolvedLang)),
         multiSelect: false,
         allowFreeText: true,
       };
@@ -521,15 +521,13 @@ function buildQuestion(step, state, lang = 'vi') {
     }
 
     case 'cause': {
-      const causes = resolvedLang === 'en' ? [] : mapping ? mapping.causes : [];
-      const displayCauses = causes.slice(0, 6);
-      const unknown = t('checkin.triage.option.unknown', resolvedLang);
-      if (displayCauses.length && !displayCauses.includes(unknown)) {
-        displayCauses.push(unknown);
-      }
+      // Ask about observed circumstances, never ask a patient to guess a
+      // diagnosis from the clinical mapping's list of possible causes.
+      const displayCauses = ['recent_sleep_less', 'recent_irregular_meals', 'recent_stress', 'recent_heavy_activity', 'no_recent_change', 'unknown']
+        .map((choice) => t(`checkin.triage.option.${choice}`, resolvedLang));
       return {
         question: 'Bạn nghĩ nguyên nhân có thể là gì?',
-        options: displayCauses.length ? displayCauses : [unknown],
+        options: displayCauses,
         multiSelect: true,
         allowFreeText: true,
       };

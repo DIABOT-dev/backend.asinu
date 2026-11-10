@@ -284,7 +284,7 @@ async function answerScriptFlow(pool, userId, { session_id, question_id, answer 
       // Mark session as completed with emergency
       await markEmergency(pool, session_id);
       earlySignalService
-        .evaluateAfterNewHealthData(pool, userId, `script-checkin:${session_id}:emergency`)
+        .evaluateAfterNewHealthData(pool, userId, `script-checkin:${session_id}:emergency`, { patientPresent: true })
         .catch((err) =>
           console.warn('[EarlySignal] script emergency evaluation failed:', err.message)
         );
@@ -454,7 +454,8 @@ async function answerScriptFlow(pool, userId, { session_id, question_id, answer 
           earlySignalService.evaluateAfterNewHealthData(
             pool,
             userId,
-            `script-checkin:${session_id}:completed`
+            `script-checkin:${session_id}:completed`,
+            { patientPresent: true }
           )
         )
         .catch((err) => console.warn('[EarlySignal] script evaluation failed:', err.message));

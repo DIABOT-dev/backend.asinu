@@ -86,6 +86,21 @@ test('long free-text symptoms cannot make the next question exceed the API input
   expect(result.state.allSymptoms[0]).toContain('rất khó chịu');
 });
 
+test.each(['vi', 'en'])('the %s safety question stays readable with a chosen symptom and a free sentence', lang => {
+  const freeText = lang === 'vi'
+    ? 'Dau dau am i sau khi thuc khuya'
+    : 'My headache comes after staying up late';
+  const answers = [answer('symptoms', `Đau đầu, ${freeText}`)];
+  const state = buildState(answers, profile);
+  const originalFacts = JSON.stringify(state.allSymptoms);
+  const result = formatQuestion({ step: 'red_flags', state, options: ['None'] }, profile, answers, lang);
+  expect(result.question.split(/\s+/).length).toBeLessThanOrEqual(25);
+  expect(result.question).not.toContain(freeText);
+  expect(result.question).not.toMatch(/undefined|\{\{/);
+  expect(result.options).toEqual(['None']);
+  expect(JSON.stringify(state.allSymptoms)).toBe(originalFacts);
+});
+
 test('a second unknown complaint ends with explicit uncertainty and care navigation', async () => {
   const result = await getNextTriageQuestion(
     initial([answer('symptoms', 'Không rõ'), answer('symptoms', 'Không biết')])

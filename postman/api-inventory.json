@@ -1,0 +1,6043 @@
+{
+  "total": 277,
+  "groups": {
+    "00. Server health & public pages": 5,
+    "01. Authentication": 16,
+    "03. Health logs, missions & score": 7,
+    "07. Care Circle": 17,
+    "05. Health check-in & scripts": 15,
+    "04. AI chat & consent": 11,
+    "02. Profile, onboarding & guidance": 15,
+    "90. Development only": 3,
+    "12. Check-in gifts": 6,
+    "13. Medication, coins & rewards": 32,
+    "06. Check-in calls": 23,
+    "81. Internal check-in call operations": 3,
+    "82. Internal gift operations": 7,
+    "83. Internal medication & coin operations": 7,
+    "08. Care Pulse": 2,
+    "09. Wellness": 10,
+    "80. Internal health operations": 29,
+    "10. Health feed": 8,
+    "14. Patient consultations": 15,
+    "16. Doctor integration (HMAC)": 9,
+    "15. Doctor IVR": 12,
+    "20. Notifications": 10,
+    "17. Payments": 4,
+    "18. Subscriptions & household": 4,
+    "11. Early signals": 2,
+    "21. Voice health logs": 1,
+    "19. In-app purchases": 4
+  },
+  "endpoints": [
+    {
+      "method": "GET",
+      "path": "/api/healthz",
+      "group": "system",
+      "auth": "none",
+      "source": "server.js:79",
+      "handlers": [
+        "server.js:79"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/healthz",
+      "group": "system",
+      "auth": "none",
+      "source": "server.js:89",
+      "handlers": [
+        "server.js:89"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/healthz/detailed",
+      "group": "system",
+      "auth": "health-token",
+      "source": "server.js:94",
+      "handlers": [
+        "server.js:94"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "x-health-token"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/readyz",
+      "group": "system",
+      "auth": "none",
+      "source": "server.js:154",
+      "handlers": [
+        "server.js:154"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/draw-results/:id",
+      "group": "system",
+      "auth": "none",
+      "source": "server.js:170",
+      "handlers": [],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/email/register",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:28",
+      "handlers": [
+        "src/controllers/auth.controller.js:50"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": [
+          "registerSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/email/login",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:29",
+      "handlers": [
+        "src/controllers/auth.controller.js:87"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": [
+          "loginSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/google",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:30",
+      "handlers": [
+        "src/controllers/auth.controller.js:165"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/apple",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:31",
+      "handlers": [
+        "src/controllers/auth.controller.js:169"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/zalo",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:32",
+      "handlers": [
+        "src/controllers/auth.controller.js:173"
+      ],
+      "fields": {
+        "body": [
+          "code",
+          "code_verifier"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/zalo/initiate",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:33",
+      "handlers": [
+        "src/controllers/auth.controller.js:400"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "code_challenge"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/zalo/callback",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:34",
+      "handlers": [
+        "src/controllers/auth.controller.js:215"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "code"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/facebook/initiate",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:35",
+      "handlers": [
+        "src/controllers/auth.controller.js:424"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "code_challenge"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/facebook/callback",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:36",
+      "handlers": [
+        "src/controllers/auth.controller.js:262"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "code"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/facebook/token",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:37",
+      "handlers": [
+        "src/controllers/auth.controller.js:511"
+      ],
+      "fields": {
+        "body": [
+          "access_token",
+          "id_token"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/google/initiate",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:38",
+      "handlers": [
+        "src/controllers/auth.controller.js:370"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "code_challenge"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/google/callback",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:39",
+      "handlers": [
+        "src/controllers/auth.controller.js:451"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "code"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/oauth/exchange",
+      "group": "auth",
+      "auth": "none",
+      "source": "src/routes/auth.routes.js:40",
+      "handlers": [
+        "src/controllers/auth.controller.js:495"
+      ],
+      "fields": {
+        "body": [
+          "code",
+          "code_verifier"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/me",
+      "group": "auth",
+      "auth": "bearer",
+      "source": "src/routes/auth.routes.js:42",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/auth.controller.js:308"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/verify",
+      "group": "auth",
+      "auth": "bearer",
+      "source": "src/routes/auth.routes.js:43",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/auth.controller.js:344"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/auth/users/search",
+      "group": "auth",
+      "auth": "bearer",
+      "source": "src/routes/auth.routes.js:45",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/auth.controller.js:329"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "q"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/logs",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:82",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/mobile.controller.js:25"
+      ],
+      "fields": {
+        "body": [
+          "user_id"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/logs",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:83",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/mobile.controller.js:66"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "type",
+          "limit",
+          "all"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/logs/today",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:84",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/mobile.controller.js:52"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "type"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/caregiver/logs/:patientId",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:87",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:290"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/caregiver/checkins/:patientId",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:88",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:315"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin/transcribe",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:96",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/middleware/upload.middleware.js:127",
+        "src/controllers/chat.controller.js:85"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [
+        "audio"
+      ],
+      "aiConsent": true,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/chat/transcribe",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:106",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/middleware/upload.middleware.js:127",
+        "src/controllers/chat.controller.js:85"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [
+        "audio"
+      ],
+      "aiConsent": true,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/ai-consent",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:116",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/ai-consent.controller.js:5"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/mobile/ai-consent",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:117",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/ai-consent.controller.js:10"
+      ],
+      "fields": {
+        "body": [
+          "version",
+          "granted"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/mobile/ai-consent",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:118",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/ai-consent.controller.js:17"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/chat",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:119",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/chat.controller.js:21"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "chatRequestSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": true,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/chat/history",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:120",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/chat.controller.js:62"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/chat/feedback",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:123",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/chat.controller.js:126"
+      ],
+      "fields": {
+        "body": [
+          "messageId",
+          "messageText",
+          "feedbackType"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/chat/notes",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:124",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/chat.controller.js:162"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "page",
+          "limit"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/chat/feedbacks",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:125",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/chat.controller.js:202"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/chat/noted-ids",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:126",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/chat.controller.js:217"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/mobile/chat/notes/:id",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:127",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/chat.controller.js:189"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/missions",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:130",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/missions.controller.js:12"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "user_id"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/onboarding/complete-v2",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:133",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/onboarding.controller.js:77"
+      ],
+      "fields": {
+        "body": [
+          "phone",
+          "chronic_symptoms",
+          "medical_conditions"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/guidance",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:136",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/guidance.controller.js:6"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/mobile/guidance",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:137",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/guidance.controller.js:11"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/guidance/replay",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:138",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/guidance.controller.js:19"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/profile/basic",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:139",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/profile.controller.js:211"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/profile",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:140",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/profile.controller.js:48"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/mobile/profile",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:141",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/profile.controller.js:63"
+      ],
+      "fields": {
+        "body": [
+          "name",
+          "phone",
+          "dateOfBirth",
+          "gender",
+          "heightCm",
+          "weightKg",
+          "bloodType",
+          "chronicDiseases",
+          "language"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/profile/avatar",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:142",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/middleware/upload.middleware.js:144",
+        "src/controllers/profile.controller.js:98"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [
+        "avatar"
+      ],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/mobile/profile",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:149",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/profile.controller.js:142"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/auth/change-password",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:150",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/profile.controller.js:11"
+      ],
+      "fields": {
+        "body": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/profile/push-token",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:151",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/profile.controller.js:156"
+      ],
+      "fields": {
+        "body": [
+          "push_token",
+          "fcm_token",
+          "voip_token",
+          "voip_environment",
+          "clear_voip_token",
+          "clear_push_tokens"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/mobile/profile/push-token",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:152",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/profile.controller.js:203"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin/today",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:155",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/checkin.controller.js:246"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin/start",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:156",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/checkin.controller.js:26"
+      ],
+      "fields": {
+        "body": [
+          "status",
+          "body_locations",
+          "body_location_other",
+          "restart",
+          "source",
+          "body_location"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin/cancel",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:157",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/checkin.controller.js:218"
+      ],
+      "fields": {
+        "body": [
+          "checkin_id",
+          "phase_id"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin/followup",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:158",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/checkin.controller.js:117"
+      ],
+      "fields": {
+        "body": [
+          "checkin_id",
+          "status"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin/triage",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:159",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/checkin.controller.js:142"
+      ],
+      "fields": {
+        "body": [
+          "checkin_id",
+          "previous_answers",
+          "conclusion_format",
+          "assessment_version",
+          "adaptive_questions",
+          "phase_id"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin/emergency",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:160",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/checkin.controller.js:261"
+      ],
+      "fields": {
+        "body": [
+          "location"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin/pending-alerts",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:161",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/checkin.controller.js:289"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin/confirm-alert",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:162",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/checkin.controller.js:300"
+      ],
+      "fields": {
+        "body": [
+          "alert_id",
+          "action"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin/report",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:163",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/checkin.controller.js:349"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "period",
+          "month"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin/reset-today",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:166",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/checkin.controller.js:338"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin/simulate-time",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:167",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/checkin.controller.js:319"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/test-notification",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:172",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/notification.controller.js:27"
+      ],
+      "fields": {
+        "body": [
+          "type"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin/script",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:176",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/script-checkin.controller.js:18"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin/script/start",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:177",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/script-checkin.controller.js:44"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin/script/answer",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:178",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/script-checkin.controller.js:54"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin/script/session",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:179",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/script-checkin.controller.js:69"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin/script/clusters",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:180",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/script-checkin.controller.js:106"
+      ],
+      "fields": {
+        "body": [
+          "symptoms"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/health-score",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:183",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/checkin.controller.js:392"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/engagement/screen-view",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:186",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/engagement.controller.js:10"
+      ],
+      "fields": {
+        "body": [
+          "screen_name",
+          "feature_code"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/care-circle/member/:memberId/health-summary",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:189",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:340"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/tree",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:196",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/tree.controller.js:9"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/tree/history",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:197",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/tree.controller.js:23"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/flags",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:200",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/profile.controller.js:222"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/auth/logout",
+      "group": "mobile",
+      "auth": "bearer",
+      "source": "src/routes/mobile.routes.js:203",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/auth.controller.js:562"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/gift/today",
+      "group": "checkin-gifts",
+      "auth": "bearer",
+      "source": "src/routes/checkin-gifts.routes.js:13",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:32"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/gift/open",
+      "group": "checkin-gifts",
+      "auth": "bearer",
+      "source": "src/routes/checkin-gifts.routes.js:14",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:33"
+      ],
+      "fields": {
+        "body": [
+          "gift_id",
+          "box"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/gift/history",
+      "group": "checkin-gifts",
+      "auth": "bearer",
+      "source": "src/routes/checkin-gifts.routes.js:15",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:36"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "before"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/gift/draw/:id/rules",
+      "group": "checkin-gifts",
+      "auth": "bearer",
+      "source": "src/routes/checkin-gifts.routes.js:16",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:37"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/gift/draw/:id/results",
+      "group": "checkin-gifts",
+      "auth": "bearer",
+      "source": "src/routes/checkin-gifts.routes.js:17",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:38"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/gift/:id",
+      "group": "checkin-gifts",
+      "auth": "bearer",
+      "source": "src/routes/checkin-gifts.routes.js:18",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:31"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/med-media/:id",
+      "group": "v21",
+      "auth": "none",
+      "source": "src/routes/v21.routes.js:49",
+      "handlers": [
+        "src/routes/v21.routes.js:51"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "token"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/med-native/:id/decline",
+      "group": "v21",
+      "auth": "none",
+      "source": "src/routes/v21.routes.js:56",
+      "handlers": [
+        "src/routes/v21.routes.js:58"
+      ],
+      "fields": {
+        "body": [
+          "capability",
+          "token"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/med-native/:id/status",
+      "group": "v21",
+      "auth": "none",
+      "source": "src/routes/v21.routes.js:60",
+      "handlers": [
+        "src/routes/v21.routes.js:62"
+      ],
+      "fields": {
+        "body": [
+          "capability"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/v21/config",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:65",
+      "handlers": [
+        "src/routes/v21.routes.js:67"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/coins/today",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:72",
+      "handlers": [
+        "src/routes/v21.routes.js:74"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/coins/history",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:76",
+      "handlers": [
+        "src/routes/v21.routes.js:78"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "before"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/rewards",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:80",
+      "handlers": [
+        "src/routes/v21.routes.js:82"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/rewards/cards/:id/open",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:85",
+      "handlers": [
+        "src/routes/v21.routes.js:87"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/rewards/:code/redeem",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:89",
+      "handlers": [
+        "src/routes/v21.routes.js:91"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/medication/weekly-report",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:93",
+      "handlers": [
+        "src/routes/v21.routes.js:95"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/mobile/medication/draft",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:98",
+      "handlers": [
+        "src/routes/v21.routes.js:100"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/mobile/medication/draft/:id",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:102",
+      "handlers": [
+        "src/routes/v21.routes.js:104"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId",
+          "revision"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/medication/consents",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:108",
+      "handlers": [
+        "src/routes/v21.routes.js:110"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/medication/setup",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:112",
+      "handlers": [
+        "src/routes/v21.routes.js:114"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/med-schedules",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:116",
+      "handlers": [
+        "src/routes/v21.routes.js:118"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId",
+          "includePaused"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/med-items/lookup",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:131",
+      "handlers": [
+        "src/controllers/medication-purpose.controller.js:4"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/mobile/med-schedules/:id",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:142",
+      "handlers": [
+        "src/routes/v21.routes.js:144"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/med-schedules/:id/move-item",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:146",
+      "handlers": [
+        "src/controllers/medication-schedule.controller.js:4"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/mobile/med-schedules/:id",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:147",
+      "handlers": [
+        "src/routes/v21.routes.js:149"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/med-schedules/:id/consent",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:151",
+      "handlers": [
+        "src/routes/v21.routes.js:153"
+      ],
+      "fields": {
+        "body": [
+          "accept"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/med-doses/today",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:155",
+      "handlers": [
+        "src/routes/v21.routes.js:157"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/med-doses/:id",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:159",
+      "handlers": [
+        "src/routes/v21.routes.js:161"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/med-doses/:id/answer",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:172",
+      "handlers": [
+        "src/routes/v21.routes.js:174"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/med-doses/:id/checkin",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:176",
+      "handlers": [
+        "src/routes/v21.routes.js:178"
+      ],
+      "fields": {
+        "body": [
+          "status"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/med-call-attempts/:id/end",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:180",
+      "handlers": [
+        "src/routes/v21.routes.js:182"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/med-call-attempts/:id/accept",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:184",
+      "handlers": [
+        "src/routes/v21.routes.js:186"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/medication/device",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:188",
+      "handlers": [
+        "src/routes/v21.routes.js:190"
+      ],
+      "fields": {
+        "body": [
+          "platform",
+          "token",
+          "supported"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/mobile/medication/family-preferences",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:200",
+      "handlers": [
+        "src/routes/v21.routes.js:202"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/med-items/scan",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:211",
+      "handlers": [
+        "src/middleware/upload.middleware.js:144",
+        "src/routes/v21.routes.js:217"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [
+        "image"
+      ],
+      "aiConsent": true,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/med-items/transcribe",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:219",
+      "handlers": [
+        "src/middleware/upload.middleware.js:127",
+        "src/routes/v21.routes.js:225"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "patientId"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [
+        "audio"
+      ],
+      "aiConsent": true,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/med-doses/:id/audio",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:241",
+      "handlers": [
+        "src/routes/v21.routes.js:243"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "phase"
+        ],
+        "headers": [
+          "accept-language"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/med-schedules/:id/audio",
+      "group": "v21",
+      "auth": "bearer",
+      "source": "src/routes/v21.routes.js:254",
+      "handlers": [
+        "src/routes/v21.routes.js:256"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "accept-language"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin-call/native/attempts/:id/decline",
+      "group": "checkin-call",
+      "auth": "none",
+      "source": "src/routes/checkin-call.routes.js:13",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:79"
+      ],
+      "fields": {
+        "body": [
+          "capability"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin-call/settings",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:16",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:114"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/mobile/checkin-call/settings",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:17",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:124"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin-call/voice-preferences",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:18",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:83"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/mobile/checkin-call/voice-preferences",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:19",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:88"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin-call/attempts/:id/user-notice",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:20",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:95"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin-call/attempts/:id/user-audio/:key",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:21",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:102"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin-call/active",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:22",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:130"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin-call/test-call",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:23",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:133"
+      ],
+      "fields": {
+        "body": [
+          "single_device",
+          "local_simulation"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin-call/episodes/:id",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:24",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:142"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin-call/audio-config",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:25",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:69"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin-call/audio/:key",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:26",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:151"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin-call/audio/conclusion",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:27",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:156"
+      ],
+      "fields": {
+        "body": [
+          "text"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin-call/attempts/:id",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:28",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:161"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin-call/attempts/:id/family-audio",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:29",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:170"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin-call/episodes/:id/answer",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:30",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:175"
+      ],
+      "fields": {
+        "body": [
+          "choice",
+          "issue_category"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin-call/episodes/:id/triage/start",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:31",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:185"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin-call/episodes/:id/triage/complete",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:32",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:193"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin-call/episodes/:id/family-confirm",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:33",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:202"
+      ],
+      "fields": {
+        "body": [
+          "action"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin-call/attempts/:id/seen",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:34",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:211"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin-call/attempts/:id/accept",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:35",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:214"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/mobile/checkin-call/attempts/:id/decline",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:36",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:121"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/mobile/checkin-call/attempts/:id/token",
+      "group": "checkin-call",
+      "auth": "bearer",
+      "source": "src/routes/checkin-call.routes.js:37",
+      "handlers": [
+        "src/controllers/checkin-call.controller.js:217"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/internal/checkin-call/metrics",
+      "group": "checkin-call.ops",
+      "auth": "cron",
+      "source": "src/routes/checkin-call.ops.routes.js:10",
+      "handlers": [
+        "src/controllers/checkin-call-ops.controller.js:7"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/internal/checkin-call/exhausted",
+      "group": "checkin-call.ops",
+      "auth": "cron",
+      "source": "src/routes/checkin-call.ops.routes.js:11",
+      "handlers": [
+        "src/controllers/checkin-call-ops.controller.js:16"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "limit"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/internal/checkin-call/episodes/:id/timeline",
+      "group": "checkin-call.ops",
+      "auth": "cron",
+      "source": "src/routes/checkin-call.ops.routes.js:12",
+      "handlers": [
+        "src/controllers/checkin-call-ops.controller.js:25"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/internal/gifts/config",
+      "group": "checkin-gifts.ops",
+      "auth": "cron",
+      "source": "src/routes/checkin-gifts.ops.routes.js:9",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:39"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/internal/gifts/config",
+      "group": "checkin-gifts.ops",
+      "auth": "cron",
+      "source": "src/routes/checkin-gifts.ops.routes.js:10",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:40"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/internal/gifts/loc-items",
+      "group": "checkin-gifts.ops",
+      "auth": "cron",
+      "source": "src/routes/checkin-gifts.ops.routes.js:11",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:41"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/internal/gifts/loc-items/:code",
+      "group": "checkin-gifts.ops",
+      "auth": "cron",
+      "source": "src/routes/checkin-gifts.ops.routes.js:12",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:42"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/internal/gifts/draws/:code",
+      "group": "checkin-gifts.ops",
+      "auth": "cron",
+      "source": "src/routes/checkin-gifts.ops.routes.js:13",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:43"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/internal/gifts/draws/:id/tickets.csv",
+      "group": "checkin-gifts.ops",
+      "auth": "cron",
+      "source": "src/routes/checkin-gifts.ops.routes.js:14",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:45"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/internal/gifts/draws/:id/results",
+      "group": "checkin-gifts.ops",
+      "auth": "cron",
+      "source": "src/routes/checkin-gifts.ops.routes.js:15",
+      "handlers": [
+        "src/controllers/checkin-gifts.controller.js:44"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/internal/config",
+      "group": "v21.ops",
+      "auth": "cron",
+      "source": "src/routes/v21.ops.routes.js:25",
+      "handlers": [
+        "src/routes/v21.ops.routes.js:27"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/internal/config",
+      "group": "v21.ops",
+      "auth": "cron",
+      "source": "src/routes/v21.ops.routes.js:29",
+      "handlers": [
+        "src/routes/v21.ops.routes.js:31"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/internal/coins/rules",
+      "group": "v21.ops",
+      "auth": "cron",
+      "source": "src/routes/v21.ops.routes.js:33",
+      "handlers": [
+        "src/routes/v21.ops.routes.js:35"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/internal/coins/rules",
+      "group": "v21.ops",
+      "auth": "cron",
+      "source": "src/routes/v21.ops.routes.js:37",
+      "handlers": [
+        "src/routes/v21.ops.routes.js:39"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/internal/rewards",
+      "group": "v21.ops",
+      "auth": "cron",
+      "source": "src/routes/v21.ops.routes.js:41",
+      "handlers": [
+        "src/routes/v21.ops.routes.js:43"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/internal/rewards/:code",
+      "group": "v21.ops",
+      "auth": "cron",
+      "source": "src/routes/v21.ops.routes.js:45",
+      "handlers": [
+        "src/routes/v21.ops.routes.js:47"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/internal/greeting-templates/:code",
+      "group": "v21.ops",
+      "auth": "cron",
+      "source": "src/routes/v21.ops.routes.js:49",
+      "handlers": [
+        "src/routes/v21.ops.routes.js:51"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/care-pulse/events",
+      "group": "carePulse",
+      "auth": "bearer",
+      "source": "src/routes/carePulse.routes.js:12",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/carePulse.controller.js:18"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "carePulseEventSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/care-pulse/state",
+      "group": "carePulse",
+      "auth": "bearer",
+      "source": "src/routes/carePulse.routes.js:13",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/carePulse.controller.js:54"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/care-circle/invitations",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:29",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:54"
+      ],
+      "fields": {
+        "body": [
+          "user_id"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "careCircleInvitationSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/care-circle/qr-token",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:30",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:77"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/care-circle/qr-token/preview",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:31",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:87"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "careCircleQrTokenSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/care-circle/qr-token/invitations",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:32",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:108"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "careCircleQrInvitationSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/care-circle/invitations",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:33",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:138"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "direction"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/care-circle/invitations/:id/accept",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:34",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:154"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/care-circle/invitations/:id/reject",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:35",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:171"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/care-circle/invitations/:id",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:36",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:188"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/care-circle/connections",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:37",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:205"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/care-circle/connections/:id",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:38",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:240"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "careCircleConnectionUpdateSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/care-circle/connections/:id/permissions",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:39",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:267"
+      ],
+      "fields": {
+        "body": [
+          "permissions"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/care-circle/connections/:id/health-access",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:40",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:359"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "healthAccessSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/care-circle/member/:memberId/health-calendar",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:41",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:368"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "month"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/care-circle/connections/:id",
+      "group": "careCircle",
+      "auth": "bearer",
+      "source": "src/routes/careCircle.routes.js:42",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/careCircle.controller.js:219"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/wellness/activity",
+      "group": "wellness",
+      "auth": "bearer",
+      "source": "src/routes/wellness.routes.js:35",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/wellness.controller.js:39"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "activitySchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/wellness/state",
+      "group": "wellness",
+      "auth": "bearer",
+      "source": "src/routes/wellness.routes.js:42",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/wellness.controller.js:73"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/wellness/calculate",
+      "group": "wellness",
+      "auth": "bearer",
+      "source": "src/routes/wellness.routes.js:49",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/wellness.controller.js:99"
+      ],
+      "fields": {
+        "body": [
+          "checkAlert"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/wellness/history",
+      "group": "wellness",
+      "auth": "bearer",
+      "source": "src/routes/wellness.routes.js:56",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/wellness.controller.js:123"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "days"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/wellness/summary",
+      "group": "wellness",
+      "auth": "bearer",
+      "source": "src/routes/wellness.routes.js:63",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/wellness.controller.js:146"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "days"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/wellness/should-prompt",
+      "group": "wellness",
+      "auth": "bearer",
+      "source": "src/routes/wellness.routes.js:70",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/wellness.controller.js:185"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/wellness/alerts",
+      "group": "wellness",
+      "auth": "bearer",
+      "source": "src/routes/wellness.routes.js:77",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/wellness.controller.js:203"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "status",
+          "limit"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/wellness/help-request",
+      "group": "wellness",
+      "auth": "bearer",
+      "source": "src/routes/wellness.routes.js:84",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/wellness.controller.js:287"
+      ],
+      "fields": {
+        "body": [
+          "message"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/wellness/caregiver/alerts",
+      "group": "wellness",
+      "auth": "bearer",
+      "source": "src/routes/wellness.routes.js:95",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/wellness.controller.js:233"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "unreadOnly",
+          "limit"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/wellness/alerts/:id/ack",
+      "group": "wellness",
+      "auth": "bearer",
+      "source": "src/routes/wellness.routes.js:101",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/wellness.controller.js:264"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health/monitor/daily",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:33",
+      "handlers": [
+        "src/middleware/cron-auth.js:7",
+        "src/controllers/health.controller.js:86"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "x-cron-secret"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health/alert-care-circle",
+      "group": "health",
+      "auth": "bearer",
+      "source": "src/routes/health.routes.js:34",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/health.controller.js:17"
+      ],
+      "fields": {
+        "body": [
+          "alertData"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health/monitor/user/:userId",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:35",
+      "handlers": [
+        "src/middleware/cron-auth.js:7",
+        "src/controllers/health.controller.js:106"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "x-cron-secret"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/lifecycle",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:40",
+      "handlers": [
+        "src/routes/health.routes.js:42"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/lifecycle/:userId",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:44",
+      "handlers": [
+        "src/routes/health.routes.js:46"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health/lifecycle/update-all",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:54",
+      "handlers": [
+        "src/routes/health.routes.js:56"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/lifecycle/check-script/:userId",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:58",
+      "handlers": [
+        "src/routes/health.routes.js:60"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health/ai/route",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:69",
+      "handlers": [
+        "src/routes/health.routes.js:71"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/ai/route-stats",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:73",
+      "handlers": [
+        "src/routes/health.routes.js:75"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health/ai/route-triage",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:77",
+      "handlers": [
+        "src/routes/health.routes.js:79"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/ai/cache-stats",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:81",
+      "handlers": [
+        "src/routes/health.routes.js:83"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health/ai/cache-test",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:85",
+      "handlers": [
+        "src/routes/health.routes.js:87"
+      ],
+      "fields": {
+        "body": [
+          "messages",
+          "model"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/ai/stream-test",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:94",
+      "handlers": [
+        "src/routes/health.routes.js:96"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/ai/distillation-stats",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:104",
+      "handlers": [
+        "src/routes/health.routes.js:106"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health/ai/distillation-collect",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:110",
+      "handlers": [
+        "src/routes/health.routes.js:112"
+      ],
+      "fields": {
+        "body": [
+          "taskType",
+          "input",
+          "output"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/ai/few-shot/:taskType",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:118",
+      "handlers": [
+        "src/routes/health.routes.js:120"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/cache/global",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:126",
+      "handlers": [
+        "src/routes/health.routes.js:128"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/cache/user/:userId",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:130",
+      "handlers": [
+        "src/routes/health.routes.js:132"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/cache/top-reused",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:140",
+      "handlers": [
+        "src/routes/health.routes.js:142"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "limit"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health/cache/reuse",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:149",
+      "handlers": [
+        "src/routes/health.routes.js:151"
+      ],
+      "fields": {
+        "body": [
+          "userId",
+          "clusterKey"
+        ],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health/rnd-cycle/run",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:157",
+      "handlers": [
+        "src/routes/health.routes.js:159"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/rnd-cycle/last",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:161",
+      "handlers": [
+        "src/routes/health.routes.js:163"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/reengagement-preview/:userId",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:166",
+      "handlers": [
+        "src/routes/health.routes.js:168"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health/reengagement/run",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:176",
+      "handlers": [
+        "src/routes/health.routes.js:178"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/escalation-level/:days",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:180",
+      "handlers": [
+        "src/routes/health.routes.js:182"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/illusion-preview/:userId",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:189",
+      "handlers": [
+        "src/routes/health.routes.js:191"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/notif-preview/:userId/:triggerType",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:199",
+      "handlers": [
+        "src/routes/health.routes.js:201"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/notif-context/:userId",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:216",
+      "handlers": [
+        "src/routes/health.routes.js:218"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health/notif-alerts/:userId",
+      "group": "health",
+      "auth": "cron",
+      "source": "src/routes/health.routes.js:224",
+      "handlers": [
+        "src/routes/health.routes.js:226"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health-feed/feed",
+      "group": "healthFeed",
+      "auth": "bearer",
+      "source": "src/routes/healthFeed.routes.js:13",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/routes/healthFeed.routes.js:16"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health-feed/feed/:id/read",
+      "group": "healthFeed",
+      "auth": "bearer",
+      "source": "src/routes/healthFeed.routes.js:18",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/routes/healthFeed.routes.js:21"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health-feed/feed/:id/dismiss",
+      "group": "healthFeed",
+      "auth": "bearer",
+      "source": "src/routes/healthFeed.routes.js:23",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/routes/healthFeed.routes.js:26"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health-feed/content/:id",
+      "group": "healthFeed",
+      "auth": "bearer",
+      "source": "src/routes/healthFeed.routes.js:28",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/routes/healthFeed.routes.js:31"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health-feed/content/:id/save",
+      "group": "healthFeed",
+      "auth": "bearer",
+      "source": "src/routes/healthFeed.routes.js:33",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/routes/healthFeed.routes.js:36"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health-feed/content/:id/unsave",
+      "group": "healthFeed",
+      "auth": "bearer",
+      "source": "src/routes/healthFeed.routes.js:38",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/routes/healthFeed.routes.js:41"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/health-feed/saved",
+      "group": "healthFeed",
+      "auth": "bearer",
+      "source": "src/routes/healthFeed.routes.js:43",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/routes/healthFeed.routes.js:46"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/health-feed/event",
+      "group": "healthFeed",
+      "auth": "bearer",
+      "source": "src/routes/healthFeed.routes.js:48",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/routes/healthFeed.routes.js:51"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/screening",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:31",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:41"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "screeningRequestSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/tasks",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:32",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:49"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "doctorTaskRequestSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/doctor/tasks",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:33",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:199"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "tenant_id"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/doctor/tasks/:taskId/messages",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:34",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:211"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "tenant_id"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/tasks/:taskId/messages",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:35",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:236"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "patientMessageRequestSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/tasks/:taskId/messages/action",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:36",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:334"
+      ],
+      "fields": {
+        "body": [
+          "tenant_id"
+        ],
+        "query": [
+          "tenant_id"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/tasks/:taskId/attachments",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:41",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/middleware/upload.middleware.js:144",
+        "src/controllers/doctor-task.controller.js:261"
+      ],
+      "fields": {
+        "body": [
+          "tenant_id"
+        ],
+        "query": [
+          "tenant_id"
+        ],
+        "headers": [
+          "authorization",
+          "x-client-message-id"
+        ],
+        "schemas": []
+      },
+      "upload": [
+        "file"
+      ],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/tasks/:taskId/voice",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:48",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/middleware/upload.middleware.js:127",
+        "src/controllers/doctor-task.controller.js:295"
+      ],
+      "fields": {
+        "body": [
+          "tenant_id",
+          "duration_ms"
+        ],
+        "query": [
+          "tenant_id"
+        ],
+        "headers": [
+          "authorization",
+          "x-client-message-id"
+        ],
+        "schemas": []
+      },
+      "upload": [
+        "file"
+      ],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/tasks/:taskId/rating",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:55",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:84"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "patientRatingRequestSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/privacy",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:56",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:103"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "privacyRequestSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/doctor/privacy",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:57",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:117"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "tenant_id"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/specialists",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:58",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:151"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "doctorDirectoryRequestSchema"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/doctor/specialty-options",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:59",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:165"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/doctor/specialists/:doctorId/reviews",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:64",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:168"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "limit"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/clinics",
+      "group": "doctor-task",
+      "auth": "bearer",
+      "source": "src/routes/doctor-task.routes.js:69",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-task.controller.js:196"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/profile",
+      "group": "doctor-profile",
+      "auth": "doctor-hmac",
+      "source": "src/routes/doctor-profile.routes.js:8",
+      "handlers": [
+        "src/controllers/doctor-profile.controller.js:9"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/patient-files",
+      "group": "doctor-profile",
+      "auth": "doctor-hmac",
+      "source": "src/routes/doctor-profile.routes.js:9",
+      "handlers": [
+        "src/controllers/doctor-profile.controller.js:14"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/lifecycle",
+      "group": "doctor-profile",
+      "auth": "doctor-hmac",
+      "source": "src/routes/doctor-profile.routes.js:10",
+      "handlers": [
+        "src/controllers/doctor-profile.controller.js:19"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/messages/query",
+      "group": "doctor-profile",
+      "auth": "doctor-hmac",
+      "source": "src/routes/doctor-profile.routes.js:11",
+      "handlers": [
+        "src/middleware/doctor-signature.middleware.js:3",
+        "src/services/integrations/doctor-messaging.service.js:914"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/messages/send",
+      "group": "doctor-profile",
+      "auth": "doctor-hmac",
+      "source": "src/routes/doctor-profile.routes.js:16",
+      "handlers": [
+        "src/middleware/doctor-signature.middleware.js:3",
+        "src/services/integrations/doctor-messaging.service.js:927"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/messages/action",
+      "group": "doctor-profile",
+      "auth": "doctor-hmac",
+      "source": "src/routes/doctor-profile.routes.js:21",
+      "handlers": [
+        "src/middleware/doctor-signature.middleware.js:3",
+        "src/services/integrations/doctor-task.policy.js:184",
+        "src/services/integrations/doctor-messaging.service.js:1090"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/messages/voice",
+      "group": "doctor-profile",
+      "auth": "doctor-hmac",
+      "source": "src/routes/doctor-profile.routes.js:26",
+      "handlers": [
+        "src/middleware/doctor-signature.middleware.js:3",
+        "src/services/integrations/doctor-messaging.service.js:1006"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/ai-assist",
+      "group": "doctor-profile",
+      "auth": "doctor-hmac",
+      "source": "src/routes/doctor-profile.routes.js:31",
+      "handlers": [
+        "src/middleware/doctor-signature.middleware.js:3",
+        "src/services/integrations/doctor-profile-request.service.js:50"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/ai-context-version",
+      "group": "doctor-profile",
+      "auth": "doctor-hmac",
+      "source": "src/routes/doctor-profile.routes.js:36",
+      "handlers": [
+        "src/middleware/doctor-signature.middleware.js:3",
+        "src/services/integrations/doctor-profile-request.service.js:55"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/ivr/doctor",
+      "group": "doctor-ivr",
+      "auth": "doctor-hmac",
+      "source": "src/routes/doctor-ivr.routes.js:18",
+      "handlers": [
+        "src/middleware/doctor-signature.middleware.js:3",
+        "src/controllers/doctor-ivr.controller.js:52"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": [
+          "z\n        .object({\n          tenant_id: z.string().min(1).max(120),\n          task_id: z.string().min(1).max(160),\n          app_user_id: z.string().regex(/^[1-9]\\d*$/),\n          doctor_id: z.string().uuid(),\n          doctor_name: z.string().min(1).max(160),\n          specialty: z.string().max(160).optional(),\n          operation: z.enum(['list', 'generate', 'save', 'approve', 'template', 'cancel', 'reply']),\n          data: z.record(z.string(), z.unknown()).default({}),\n        })\n        .strict()"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/ivr/admin",
+      "group": "doctor-ivr",
+      "auth": "doctor-hmac",
+      "source": "src/routes/doctor-ivr.routes.js:24",
+      "handlers": [
+        "src/middleware/doctor-signature.middleware.js:3",
+        "src/controllers/doctor-ivr.controller.js:72"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": [
+          "z\n        .object({\n          tenant_id: z.string().min(1).max(120),\n          admin_id: z.string().uuid(),\n          operation: z.enum(['get', 'save', 'templates', 'template_save', 'template_delete']),\n          data: z.record(z.string(), z.unknown()).default({}),\n        })\n        .strict()"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/doctor/ivr/config",
+      "group": "doctor-ivr",
+      "auth": "bearer",
+      "source": "src/routes/doctor-ivr.routes.js:25",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-ivr.controller.js:45"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/ivr/calls/device",
+      "group": "doctor-ivr",
+      "auth": "bearer",
+      "source": "src/routes/doctor-ivr.routes.js:26",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-ivr.controller.js:84"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "z\n        .object({\n          supported: z.boolean(),\n          platform: z.enum(['ios', 'android']),\n          token: z.string().min(1).max(4096).nullable().optional(),\n        })\n        .strict()"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/ivr/calls/:id/action",
+      "group": "doctor-ivr",
+      "auth": "bearer",
+      "source": "src/routes/doctor-ivr.routes.js:27",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-ivr.controller.js:95"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "z\n        .object({ action: z.enum(['accept', 'decline', 'end']) })\n        .strict()"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/ivr/native/calls/:id/decline",
+      "group": "doctor-ivr",
+      "auth": "none",
+      "source": "src/routes/doctor-ivr.routes.js:28",
+      "handlers": [
+        "src/controllers/doctor-ivr.controller.js:102"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": [
+          "z\n        .object({ capability: z.string().max(160) })\n        .strict()"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/doctor/ivr/sessions",
+      "group": "doctor-ivr",
+      "auth": "bearer",
+      "source": "src/routes/doctor-ivr.routes.js:33",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-ivr.controller.js:112"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/doctor/ivr/sessions/:id",
+      "group": "doctor-ivr",
+      "auth": "bearer",
+      "source": "src/routes/doctor-ivr.routes.js:34",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-ivr.controller.js:118"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/ivr/sessions/:id/action",
+      "group": "doctor-ivr",
+      "auth": "bearer",
+      "source": "src/routes/doctor-ivr.routes.js:35",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-ivr.controller.js:121"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": [
+          "patientInput"
+        ]
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/doctor/ivr/sessions/:id/voice",
+      "group": "doctor-ivr",
+      "auth": "bearer",
+      "source": "src/routes/doctor-ivr.routes.js:36",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/middleware/upload.middleware.js:127",
+        "src/controllers/doctor-ivr.controller.js:132"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [
+        "file"
+      ],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/doctor/ivr/sessions/:id/audio/:questionId",
+      "group": "doctor-ivr",
+      "auth": "bearer",
+      "source": "src/routes/doctor-ivr.routes.js:43",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/doctor-ivr.controller.js:144"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/doctor/ivr/media/:id",
+      "group": "doctor-ivr",
+      "auth": "none",
+      "source": "src/routes/doctor-ivr.routes.js:44",
+      "handlers": [
+        "src/controllers/doctor-ivr.controller.js:155"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "expires",
+          "signature",
+          "actor"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications",
+      "group": "notifications",
+      "auth": "bearer",
+      "source": "src/routes/notifications.routes.js:21",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/notification.controller.js:84"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "page",
+          "limit"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/notifications",
+      "group": "notifications",
+      "auth": "bearer",
+      "source": "src/routes/notifications.routes.js:22",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/notification.controller.js:105"
+      ],
+      "fields": {
+        "body": [
+          "type",
+          "title",
+          "message",
+          "data"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/notifications",
+      "group": "notifications",
+      "auth": "bearer",
+      "source": "src/routes/notifications.routes.js:23",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/notification.controller.js:383"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/notifications/mark-all-read",
+      "group": "notifications",
+      "auth": "bearer",
+      "source": "src/routes/notifications.routes.js:24",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/notification.controller.js:180"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/notifications/:id/read",
+      "group": "notifications",
+      "auth": "bearer",
+      "source": "src/routes/notifications.routes.js:25",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/notification.controller.js:149"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/notifications/:id",
+      "group": "notifications",
+      "auth": "bearer",
+      "source": "src/routes/notifications.routes.js:26",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/notification.controller.js:357"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/notifications/preferences",
+      "group": "notifications",
+      "auth": "bearer",
+      "source": "src/routes/notifications.routes.js:27",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/notification.controller.js:198"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "PUT",
+      "path": "/api/notifications/preferences",
+      "group": "notifications",
+      "auth": "bearer",
+      "source": "src/routes/notifications.routes.js:28",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/notification.controller.js:213"
+      ],
+      "fields": {
+        "body": [
+          "morning_hour",
+          "evening_hour",
+          "water_hour",
+          "reminders_enabled",
+          "health_feed_enabled",
+          "morning_time",
+          "afternoon_time",
+          "evening_time"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/notifications/engagement/run",
+      "group": "notifications",
+      "auth": "cron",
+      "source": "src/routes/notifications.routes.js:29",
+      "handlers": [
+        "src/middleware/cron-auth.js:7",
+        "src/controllers/notification.controller.js:291"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "x-cron-secret"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/notifications/basic/run",
+      "group": "notifications",
+      "auth": "cron",
+      "source": "src/routes/notifications.routes.js:30",
+      "handlers": [
+        "src/middleware/cron-auth.js:7",
+        "src/controllers/notification.controller.js:320"
+      ],
+      "fields": {
+        "body": [
+          "hour",
+          "minute"
+        ],
+        "query": [],
+        "headers": [
+          "x-cron-secret"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/payments/qr",
+      "group": "payment",
+      "auth": "bearer",
+      "source": "src/routes/payment.routes.js:14",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/payment.controller.js:13"
+      ],
+      "fields": {
+        "body": [
+          "amount"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/payments/webhook",
+      "group": "payment",
+      "auth": "none",
+      "source": "src/routes/payment.routes.js:15",
+      "handlers": [
+        "src/controllers/payment.controller.js:35"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/payments/balance",
+      "group": "payment",
+      "auth": "bearer",
+      "source": "src/routes/payment.routes.js:16",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/payment.controller.js:48"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/payments/history",
+      "group": "payment",
+      "auth": "bearer",
+      "source": "src/routes/payment.routes.js:17",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/payment.controller.js:61"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "page",
+          "limit"
+        ],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/subscriptions/status",
+      "group": "subscription",
+      "auth": "bearer",
+      "source": "src/routes/subscription.routes.js:9",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/subscription.controller.js:7"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/subscription-household",
+      "group": "household",
+      "auth": "bearer",
+      "source": "src/routes/household.routes.js:16",
+      "handlers": [
+        "src/controllers/household.controller.js:18"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/subscription-household/members",
+      "group": "household",
+      "auth": "bearer",
+      "source": "src/routes/household.routes.js:17",
+      "handlers": [
+        "src/controllers/household.controller.js:26"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/subscription-household/members/:userId",
+      "group": "household",
+      "auth": "bearer",
+      "source": "src/routes/household.routes.js:18",
+      "handlers": [
+        "src/controllers/household.controller.js:35"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/early-signals/evaluate",
+      "group": "early-signal",
+      "auth": "bearer",
+      "source": "src/routes/early-signal.routes.js:12",
+      "handlers": [
+        "src/controllers/early-signal.controller.js:16"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/early-signals/latest",
+      "group": "early-signal",
+      "auth": "bearer",
+      "source": "src/routes/early-signal.routes.js:13",
+      "handlers": [
+        "src/controllers/early-signal.controller.js:25"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/logs/voice-parse",
+      "group": "logs",
+      "auth": "bearer",
+      "source": "src/routes/logs.routes.js:21",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/middleware/upload.middleware.js:127",
+        "src/controllers/logs.controller.js:16"
+      ],
+      "fields": {
+        "body": [
+          "log_type"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [
+        "audio"
+      ],
+      "aiConsent": true,
+      "devOnly": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/iap/products",
+      "group": "iap",
+      "auth": "none",
+      "source": "src/routes/iap.routes.js:46",
+      "handlers": [
+        "src/controllers/iap.controller.js:74"
+      ],
+      "fields": {
+        "body": [],
+        "query": [
+          "platform"
+        ],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/iap/verify",
+      "group": "iap",
+      "auth": "bearer",
+      "source": "src/routes/iap.routes.js:50",
+      "handlers": [
+        "src/middleware/auth.middleware.js:11",
+        "src/controllers/iap.controller.js:33"
+      ],
+      "fields": {
+        "body": [
+          "platform"
+        ],
+        "query": [],
+        "headers": [
+          "authorization"
+        ],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/iap/apple-notifications",
+      "group": "iap",
+      "auth": "none",
+      "source": "src/routes/iap.routes.js:54",
+      "handlers": [
+        "src/controllers/iap.controller.js:93"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/iap/google-notifications",
+      "group": "iap",
+      "auth": "google-pubsub",
+      "source": "src/routes/iap.routes.js:55",
+      "handlers": [
+        "src/middleware/google-pubsub-auth.middleware.js:11",
+        "src/controllers/iap.controller.js:113"
+      ],
+      "fields": {
+        "body": [],
+        "query": [],
+        "headers": [],
+        "schemas": []
+      },
+      "upload": [],
+      "aiConsent": false,
+      "devOnly": false
+    }
+  ]
+}

@@ -42,7 +42,7 @@ function t(key, lang = 'vi', params = {}) {
   // this only affects text shown to a user or sent to the model.
   // The SRS disclaimer is fixed text, including the reference
   // to medical diagnosis/treatment. Do not rewrite its legal wording.
-  if (typeof text === 'string' && key !== 'checkin.conclusion.disclaimer') {
+  if (typeof text === 'string' && !['checkin.conclusion.disclaimer', 'checkin.conclusion.ai_notice'].includes(key)) {
     text = text.replace(/bác sĩ/gi, 'chuyên gia').replace(/\bdoctor\b/gi, 'specialist');
   }
 

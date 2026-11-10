@@ -1,5 +1,6 @@
 const checkinService = require('../services/checkin/checkin.service');
 const checkinApiService = require('../services/checkin/checkin-api.service');
+const cancellationService = require('../services/checkin/checkin-cancellation.service');
 const engagementService = require('../services/profile/engagement.service');
 const { t, getLang } = require('../i18n');
 const {
@@ -19,6 +20,8 @@ const TRIAGE_STEPS = new Set([
   'followup_status',
   'followup_detail',
 ]);
+const { isDetailedStep, MAX_DETAILED_ANSWERS } = require('../core/checkin/triage-detail-questions');
+const { isAdaptiveStep } = require('../services/checkin/adaptive-question.service');
 
 async function startCheckinHandler(pool, req, res) {
   const {
@@ -63,7 +66,7 @@ async function startCheckinHandler(pool, req, res) {
   // body_location_other: optional free-text, sanitize length
   let other = null;
   if (bodyLocationOther && typeof bodyLocationOther === 'string') {
-    other = bodyLocationOther.trim().slice(0, 200);
+    other = bodyLocationOther.trim().slice(0, 2000);
     if (!other) other = null;
   }
 
@@ -82,8 +85,14 @@ async function startCheckinHandler(pool, req, res) {
     let gift = null;
     try {
       const gifts = require('../services/checkin-gifts/gift.service');
-      gift = await gifts.publicGift(pool, await gifts.safeAssign(pool, req.user.id, session), getLang(req));
-    } catch { /* Rewards never block the accepted health response. */ }
+      gift = await gifts.publicGift(
+        pool,
+        await gifts.safeAssign(pool, req.user.id, session),
+        getLang(req)
+      );
+    } catch {
+      /* Rewards never block the accepted health response. */
+    }
     return res.json({ ok: true, session, gift });
   } catch (err) {
     return res
@@ -131,12 +140,24 @@ async function followUpHandler(pool, req, res) {
 }
 
 async function triageHandler(pool, req, res) {
-  const { checkin_id, previous_answers = [] } = req.body;
+  const {
+    checkin_id,
+    previous_answers = [],
+    conclusion_format,
+    assessment_version,
+    adaptive_questions,
+    phase_id,
+  } = req.body;
   if (!checkin_id)
     return res.status(400).json({ ok: false, error: t('error.missing_checkin_id', getLang(req)) });
   const validAnswers =
     Array.isArray(previous_answers) &&
-    previous_answers.length <= 8 &&
+    previous_answers.length <=
+      (adaptive_questions === true ||
+      assessment_version === 2 ||
+      previous_answers.some((item) => isDetailedStep(item?.step) || isAdaptiveStep(item?.step))
+        ? MAX_DETAILED_ANSWERS
+        : 8) &&
     previous_answers.every(
       (item) =>
         item &&
@@ -144,13 +165,23 @@ async function triageHandler(pool, req, res) {
         item.question.trim().length > 0 &&
         item.question.length <= 500 &&
         (item.step === undefined ||
-          (typeof item.step === 'string' && TRIAGE_STEPS.has(item.step))) &&
+          (typeof item.step === 'string' &&
+            (TRIAGE_STEPS.has(item.step) ||
+              isDetailedStep(item.step) ||
+              isAdaptiveStep(item.step)))) &&
         ((typeof item.answer === 'string' && item.answer.length <= 2000) ||
           (Array.isArray(item.answer) &&
             item.answer.length <= 20 &&
             item.answer.every((answer) => typeof answer === 'string' && answer.length <= 500)))
     );
-  if (!validAnswers) {
+  if (
+    !validAnswers ||
+    (phase_id !== undefined &&
+      (typeof phase_id !== 'string' || !phase_id.trim() || phase_id.length > 160)) ||
+    (adaptive_questions !== undefined && typeof adaptive_questions !== 'boolean') ||
+    (assessment_version !== undefined && assessment_version !== 2) ||
+    (conclusion_format !== undefined && !['structured', 'narrative'].includes(conclusion_format))
+  ) {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
   }
   try {
@@ -159,7 +190,13 @@ async function triageHandler(pool, req, res) {
       req.user.id,
       checkin_id,
       previous_answers,
-      getLang(req)
+      getLang(req),
+      {
+        conclusionFormat: conclusion_format,
+        assessmentVersion: assessment_version,
+        adaptiveQuestions: adaptive_questions,
+        phaseId: phase_id,
+      }
     );
     return res.json({ ok: true, ...result });
   } catch (err) {
@@ -175,6 +212,34 @@ async function triageHandler(pool, req, res) {
     return res
       .status(500)
       .json({ ok: false, error: t('error.server', getLang(req)), code: 'INTERNAL_ERROR' });
+  }
+}
+
+async function cancelCheckinHandler(pool, req, res) {
+  const { checkin_id, phase_id } = req.body;
+  if (
+    !/^[1-9]\d*$/.test(String(checkin_id)) ||
+    typeof phase_id !== 'string' ||
+    !phase_id.trim() ||
+    phase_id.length > 160
+  ) {
+    return res
+      .status(400)
+      .json({ ok: false, code: 'INVALID_INPUT', error: t('error.invalid_payload', getLang(req)) });
+  }
+  try {
+    const result = await cancellationService.cancelCheckin(pool, req.user.id, checkin_id, phase_id);
+    return res.json({ ok: true, ...result });
+  } catch (error) {
+    const code = error.code;
+    const known = ['SESSION_NOT_FOUND', 'TRIAGE_CHANGED', 'CHECKIN_ALREADY_COMPLETED'].includes(
+      code
+    );
+    return res.status(known ? error.statusCode : 500).json({
+      ok: false,
+      code: known ? code : 'INTERNAL_ERROR',
+      error: t(known ? 'checkin.cancel.changed' : 'error.server', getLang(req)),
+    });
   }
 }
 
@@ -366,6 +431,7 @@ async function engagementOptimalTimeHandler(pool, req, res) {
 }
 
 module.exports = {
+  cancelCheckinHandler,
   startCheckinHandler,
   getLocationsHandler,
   followUpHandler,

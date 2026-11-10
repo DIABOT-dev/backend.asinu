@@ -4,7 +4,6 @@ const { plain, containsVisit } = require('./triage-conclusion-guards');
 const segmenter = new Intl.Segmenter('vi', { granularity: 'sentence' });
 const sentences = (text) =>
   [...segmenter.segment(text)].map(({ segment }) => segment.trim()).filter(Boolean);
-const words = (text) => text.trim().split(/\s+/).length;
 const vietnameseLetters = /[ÀÁÂÃÈÉÊÌÍÒÓÔÕÙÚÝĂĐĨŨƠƯàáâãèéêìíòóôõùúýăđĩũơưẠ-ỹ]/u;
 const englishProseWords = new Set(
   'i you your we our please if when and the this that with for can may should understand sleep daily routines feel simple diary help describe changes record details discomfort starts keep regular bedtime poor disrupts activities seek assessment symptoms worsen speak health expert rest comfortably drink water avoid triggers measure pressure glucose fatigue better'.split(
@@ -99,10 +98,7 @@ function validatePresentation(block, value, facts) {
   if (texts.some((text) => /(?:anh|chị|bác|chú|cô|ông|bà|bạn)\s+Asinu\b/iu.test(text)))
     return 'assistant_name_as_patient';
   if (texts.some((text) => /\p{Extended_Pictographic}/u.test(text))) return 'emoji_in_conclusion';
-  if (texts.flatMap(sentences).some((text) => words(text) > 25)) return 'sentence_too_long';
-  if (block === 'loi_nhan' && sentences(value).length > 2) return 'message_sentence_count';
-  if (block === 'lien_quan' && (sentences(value).length < 2 || sentences(value).length > 3))
-    return 'explanation_sentence_count';
+  if (block === 'loi_nhan' && sentences(value).length > 3) return 'message_sentence_count';
   if (block === 'di_kham_khi' && texts.some(conditionalWarningMissingAction))
     return 'conditional_warning_missing_action';
   if (block !== 'nen_lam') return null;
@@ -130,23 +126,9 @@ function validatePresentation(block, value, facts) {
 }
 
 function compactExplanation(text) {
-  const parts = sentences(text);
-  while (parts.length > 3) {
-    let best = -1;
-    let smallest = Infinity;
-    for (let i = 0; i < parts.length - 1; i++) {
-      const combined = words(parts[i]) + words(parts[i + 1]);
-      if (combined <= 25 && combined < smallest) {
-        best = i;
-        smallest = combined;
-      }
-    }
-    if (best < 0) break;
-    // Keep every statement and value. Change punctuation only when the merged
-    // sentence remains within the SRS word budget; never truncate medical facts.
-    parts.splice(best, 2, parts[best].replace(/[.!?]$/, '') + '; ' + parts[best + 1]);
-  }
-  return parts.join(' ');
+  // V3 lets the model explain naturally. Keep its statements; the character
+  // bounds and medical guards, rather than a 2–3 sentence template, apply.
+  return sentences(text).join(' ');
 }
 
 function normalizeMeasurementSentences(text) {

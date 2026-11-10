@@ -22,6 +22,7 @@ const { assertAiConsent } = require('../ai/ai-consent.service');
 
 const OpenAI = require('openai');
 const { t } = require('../../i18n');
+const { getHonorifics } = require('../../lib/honorifics');
 const { assessBloodPressure } = require('../../lib/blood-pressure');
 const { filterTriageResult } = require('../ai/ai-safety.service');
 const { logAiInteraction } = require('../ai/ai-logger.service');
@@ -576,39 +577,15 @@ async function getNextTriageQuestionLegacy({
       ? `Triệu chứng user đã khai: ${[...knownSymptoms].join(', ')} → KHÔNG đưa vào options ở câu hỏi tiếp theo.`
       : '';
 
-  // ── Xưng hô theo tuổi + giới tính ──
-  const gender = (profile.gender || '').toLowerCase();
-  const isMale = gender.includes('nam') || gender === 'male';
-  let honorific = 'bạn';
-  let selfRef = 'mình';
-  if (lang === 'vi' && age) {
-    if (age >= 60) {
-      honorific = isMale ? 'chú' : 'cô';
-      selfRef = 'cháu';
-    } else if (age >= 40) {
-      honorific = isMale ? 'anh' : 'chị';
-      selfRef = 'em';
-    } else if (age >= 25) {
-      honorific = isMale ? 'anh' : 'chị';
-      selfRef = 'mình';
-    }
-  }
-
-  // Lấy tên ngắn (tên riêng) từ profile
-  const fullName = profile.display_name || profile.full_name || '';
-  const shortName = fullName ? fullName.trim().split(/\s+/).pop() : '';
-  // VD: "Trần Văn Hùng" → "Hùng", gọi "Chú Hùng"
-  const callName = shortName ? `${honorific} ${shortName}` : honorific;
-  // Viết hoa đầu câu
-  const CallName = callName.charAt(0).toUpperCase() + callName.slice(1);
-  const Honorific = honorific.charAt(0).toUpperCase() + honorific.slice(1);
+  // Keep the rollback flow consistent with the current interview and app.
+  const { honorific, selfRef, CallName, Honorific } = getHonorifics({ ...profile, lang });
 
   const honorificRule =
     lang === 'vi'
       ? `\nCÁCH XƯNG HÔ (BẮT BUỘC):
 - Gọi người dùng: "${CallName}" (có tên) hoặc "${Honorific}" (không tên). LUÔN viết hoa chữ đầu câu.
 - Xưng: "${selfRef}".
-- VD đầu câu: "${CallName} ơi, ..." hoặc "${Honorific} ơi, ..."
+- Chỉ gọi tên ở lời mở đầu; các câu sau dùng "${Honorific}" hoặc lược xưng hô khi tự nhiên. Không lặp tên, lời chào hay câu mời chia sẻ ở mỗi câu hỏi.
 - 🚫 CẤM dùng "bạn" trong MỌI field (question, summary, recommendation, closeMessage) nếu đã có xưng hô "${honorific}". Luôn dùng "${honorific}" thay "bạn".
 - KHÔNG viết thường đầu câu: "chú ơi" ← SAI, "${Honorific} ơi" ← ĐÚNG.`
       : '';
@@ -884,7 +861,7 @@ LANGUAGE: ${lang === 'en' ? 'English' : 'Vietnamese'}.`;
     systemPrompt = `Bạn là Asinu — người đồng hành sức khoẻ, như bác sĩ gia đình thân thiết đang hỏi thăm ${honorific}.
 
 ═══ PHONG CÁCH HỎI (QUAN TRỌNG NHẤT) ═══
-Bạn KHÔNG phải chatbot hay hệ thống y tế. Bạn là NGƯỜI THẬT đang quan tâm đến ${honorific}.
+Bạn là trợ lý AI hỗ trợ ghi nhận sức khỏe. Hỏi thăm ấm áp, tự nhiên; không nhận mình là người thật hay bác sĩ.
 - Câu hỏi phải tự nhiên như người thân hỏi thăm, KHÔNG như bảng khảo sát y tế.
 - Hỏi THẲNG, NGẮN GỌN, nhẹ nhàng. Không rào đón, không cảm thán giả tạo.
 - 😊 PHẢI có 1 emoji phù hợp ở cuối câu hỏi để tạo cảm giác thân thiện (VD: 💙, 🌿, 😊). KHÔNG spam nhiều emoji.

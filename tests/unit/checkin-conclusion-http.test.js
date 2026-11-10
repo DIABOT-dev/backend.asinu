@@ -38,7 +38,7 @@ const { callTextAi } = require('../../src/services/ai/ai.service');
 const candidate = {
   loi_nhan: 'Chú khó ngủ từ hôm qua và đang đỡ hơn. Cháu mong chú sớm dễ chịu nhé.',
   lien_quan: 'Giấc ngủ và sinh hoạt đều đặn cũng cần được quan tâm.',
-  nen_lam: ['Giữ giờ thức dậy đều đặn.', 'Ghi 2 điều: giấc ngủ và mức độ khó chịu.'],
+  nen_lam: ['Giữ giờ thức dậy đều đặn.', 'Ghi 2 mốc giờ: lúc khó chịu xuất hiện và lúc thay đổi.'],
   di_kham_khi: [
     'Nếu khó ngủ ảnh hưởng nhiều tới sinh hoạt, chú nên đi khám.',
     'Nếu mất ngủ kéo dài, chú nên đi khám sớm hơn.',
@@ -123,6 +123,69 @@ function harness({ condition } = {}) {
   };
 }
 const generations = () => callTextAi.mock.calls.filter(([options]) => options.maxTokens === 700);
+
+test('HTTP detailed interview persists beyond eight answers and replays without another generation', async () => {
+  const h = harness();
+  h.session.body_locations = ['head', 'limbs'];
+  h.session.body_location_other = 'Đầu: Trán; Tay chân: Cổ tay phải';
+  const submitted = [];
+  let final;
+  for (let index = 0; index < 40; index++) {
+    const response = await h.submit({
+      checkin_id: 912,
+      previous_answers: submitted,
+      assessment_version: 2,
+    });
+    expect(response.status).toBe(200);
+    const r = response.body;
+    if (r.isDone) {
+      final = r;
+      break;
+    }
+    expect(r.questionProgress.total).toBeGreaterThanOrEqual(r.questionProgress.current);
+    const answer =
+      r.step === 'symptoms'
+        ? 'Đau đầu, Đau khớp'
+        : r.step === 'red_flags' || r.step.endsWith('_associated')
+          ? 'Không có'
+          : r.options[0];
+    submitted.push({ step: r.step, question: r.question, answer });
+    if (submitted.length === 9) expect(r.isDone).toBe(false);
+  }
+  expect(final?.isDone).toBe(true);
+  expect(submitted.length).toBeGreaterThan(20);
+  expect(h.session.triage_state.assessment_version).toBe(2);
+  const count = generations().length;
+  const replay = await h.submit({
+    checkin_id: 912,
+    previous_answers: submitted,
+    assessment_version: 2,
+  });
+  expect(replay.status).toBe(200);
+  expect(replay.body).toEqual(final);
+  expect(generations()).toHaveLength(count);
+});
+
+test('detailed API still rejects unknown field IDs and requests over its bounded limit', async () => {
+  const h = harness();
+  const invalid = await h.submit({
+    checkin_id: 912,
+    assessment_version: 2,
+    previous_answers: [{ step: 'detail_head_hacked', question: 'Vị trí?', answer: 'abc' }],
+  });
+  expect(invalid.status).toBe(400);
+  const oversized = await h.submit({
+    checkin_id: 912,
+    assessment_version: 2,
+    previous_answers: Array.from({ length: 129 }, () => ({
+      step: 'detail_head_severity',
+      question: 'Mức đau?',
+      answer: 'Nhẹ',
+    })),
+  });
+  expect(oversized.status).toBe(400);
+  expect(callTextAi).not.toHaveBeenCalled();
+});
 beforeEach(() => {
   jest.clearAllMocks();
   callTextAi.mockImplementation(async (options) => ({
@@ -167,6 +230,53 @@ test('HTTP response and stored replay preserve six blocks and legacy fields', as
     h.pool.query.mock.calls.filter(([sql]) => sql.includes('triage_completed_at  = NOW()'))
   ).toHaveLength(1);
 });
+
+test('narrative format travels through the real HTTP handler, generation, storage and replay', async () => {
+  const h = harness();
+  callTextAi.mockImplementation(async (options) => ({
+    content:
+      options.maxTokens === 200
+        ? JSON.stringify({ severity: 'mild', needsDoctor: false, needsFamilyAlert: false })
+        : 'Chú đang khó ngủ từ hôm qua, cháu hiểu chú đang mệt nhé.\n\nNếp sinh hoạt đều đặn giúp mình theo dõi những thay đổi.\n\n- Chú thử giữ giờ đi ngủ đều đặn.\n- Nếu khó ngủ kéo dài, chú hãy đi khám.',
+    model: 'medgemma-27b-it',
+  }));
+  const body = { checkin_id: 912, previous_answers: answers, conclusion_format: 'narrative' };
+  const response = await h.submit(body);
+  expect(response.status).toBe(200);
+  expect(response.body).toMatchObject({
+    conclusionFormat: 'narrative',
+    conclusionSource: 'ai',
+    severity: 'low',
+    needsDoctor: false,
+    followUpHours: 6,
+  });
+  expect(response.body.narrative).toContain('Chú đang khó ngủ từ hôm qua');
+  const calls = callTextAi.mock.calls.length;
+  const replay = await h.submit(body);
+  expect(replay.body).toEqual(response.body);
+  expect(callTextAi.mock.calls.length).toBe(calls);
+});
+
+test('a completed old result opens as a narrative without generating again or changing saved clinical data', async () => {
+  const h = harness();
+  await h.submit();
+  const before = JSON.stringify(h.session);
+  const calls = callTextAi.mock.calls.length;
+  const response = await h.submit({
+    checkin_id: 912,
+    previous_answers: answers,
+    conclusion_format: 'narrative',
+  });
+  expect(response.status).toBe(200);
+  expect(response.body.conclusionFormat).toBe('narrative');
+  expect(response.body.narrative).toContain(candidate.loi_nhan);
+  expect(callTextAi.mock.calls.length).toBe(calls);
+  expect(JSON.stringify(h.session)).toBe(before);
+  expect(
+    (await h.submit({ checkin_id: 912, previous_answers: answers, conclusion_format: 'anything' }))
+      .status
+  ).toBe(400);
+});
 test('concurrent HTTP submissions share one conclusion and one completion', async () => {
   const h = harness();
   const responses = await Promise.all([h.submit(), h.submit(), h.submit()]);
@@ -178,6 +288,75 @@ test('concurrent HTTP submissions share one conclusion and one completion', asyn
   expect(
     h.pool.query.mock.calls.filter(([sql]) => sql.includes('triage_completed_at  = NOW()'))
   ).toHaveLength(1);
+});
+test('concurrent completed requests share the full-speech preparation after clinical completion', async () => {
+  const h = harness();
+  const preparation = require('../../src/services/checkin-call/conclusion-audio.service');
+  let release, entered;
+  const waiting = new Promise((resolve) => {
+    release = resolve;
+  });
+  const started = new Promise((resolve) => {
+    entered = resolve;
+  });
+  const warm = jest.spyOn(preparation, 'prepareConclusionAudio').mockImplementation(async () => {
+    entered();
+    await waiting;
+  });
+  const body = { checkin_id: 912, previous_answers: answers, conclusion_format: 'structured' };
+  let firstFinished = false,
+    secondFinished = false,
+    second;
+  const first = h.submit(body).then((response) => {
+    firstFinished = true;
+    return response;
+  });
+  try {
+    await started;
+    expect(h.session.triage_completed_at).toBeTruthy();
+    second = h.submit(body).then((response) => {
+      secondFinished = true;
+      return response;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(firstFinished).toBe(false);
+    expect(secondFinished).toBe(false);
+    expect(warm).toHaveBeenCalledTimes(1);
+    release();
+    const [a, b] = await Promise.all([first, second]);
+    expect(a.status).toBe(200);
+    expect(b.body).toEqual(a.body);
+    for (const text of [
+      a.body.explanation,
+      ...a.body.todo,
+      ...a.body.seeDoctorWhen,
+      a.body.disclaimer,
+    ])
+      expect(a.body.speechText).toContain(text);
+  } finally {
+    release();
+    await Promise.allSettled([first, second]);
+    warm.mockRestore();
+  }
+});
+test('an unexpected audio-preparation failure cannot fail an already completed clinical result', async () => {
+  const h = harness();
+  const preparation = require('../../src/services/checkin-call/conclusion-audio.service');
+  const warm = jest
+    .spyOn(preparation, 'prepareConclusionAudio')
+    .mockRejectedValue(new Error('synthetic audio failure'));
+  try {
+    const response = await h.submit({
+      checkin_id: 912,
+      previous_answers: answers,
+      conclusion_format: 'structured',
+    });
+    expect(response.status).toBe(200);
+    expect(h.session.triage_completed_at).toBeTruthy();
+    expect(response.body.speechText).toContain(response.body.explanation);
+  } finally {
+    warm.mockRestore();
+  }
 });
 test('foreign session, changed history and malformed answers never overwrite a saved result', async () => {
   const h = harness();
@@ -220,6 +399,9 @@ test('failed follow-up completion cannot use the earlier completion timestamp as
     baseline_answers: answers,
     previous_severity: 'low',
   };
+  // Match followUpCheckin: the previous phase remains in baseline_answers;
+  // the active phase starts with an empty answer list.
+  h.session.triage_messages = [];
   const previous = h.session.triage_summary;
   callTextAi.mockImplementation(async (options) => ({
     content: JSON.stringify(

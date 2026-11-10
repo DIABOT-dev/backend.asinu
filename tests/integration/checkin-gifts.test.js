@@ -116,6 +116,69 @@ describeDb('server-owned check-in gifts on isolated PostgreSQL tables', () => {
     expect((await gifts.assign(pool, f.user, f.session)).loc_snapshot).toEqual(saved.loc_snapshot);
     await pool.query("UPDATE loc_items SET text=$1 WHERE code='proverb_01'", [proverb.text]);
   });
+  test('the senior refresh transforms the complete original catalog once and leaves health tips inactive', async () => {
+    const db = await pool.connect();
+    await db.query('BEGIN');
+    try {
+      // Shadow only this client's catalog; no public or fixture content is changed.
+      await db.query('CREATE TEMP TABLE loc_items (code TEXT PRIMARY KEY,type TEXT,text TEXT,text_en TEXT,serif BOOLEAN DEFAULT FALSE,active BOOLEAN DEFAULT TRUE,reviewed_by TEXT,reviewed_at TIMESTAMPTZ,updated_at TIMESTAMPTZ DEFAULT NOW()) ON COMMIT DROP');
+      const original = fs.readFileSync(path.join(__dirname, '../../db/migrations/111_checkin_gifts.sql'), 'utf8');
+      const start = original.indexOf('INSERT INTO loc_items');
+      const end = original.indexOf('FROM generate_series(1, 60) n ON CONFLICT (code) DO NOTHING;') + 'FROM generate_series(1, 60) n ON CONFLICT (code) DO NOTHING;'.length;
+      await db.query(original.slice(start, end));
+      await db.query(fs.readFileSync(path.join(__dirname, '../../db/migrations/115_gift_fortune_variety.sql'), 'utf8'));
+      const migration = fs.readFileSync(path.join(__dirname, '../../db/migrations/129_gift_senior_content_refresh.sql'), 'utf8');
+      expect((await db.query(migration)).map(result => result.rowCount)).toEqual([60, 20, 12]);
+      const counts = (await db.query("SELECT COUNT(DISTINCT text)::int n FROM loc_items WHERE type='wish'")).rows[0];
+      expect(counts.n).toBe(60);
+      const tips = (await db.query("SELECT * FROM loc_items WHERE type='health_tip'")).rows;
+      expect(tips).toHaveLength(12);
+      expect(tips.every(item => !item.active && !item.reviewed_by && !item.reviewed_at)).toBe(true);
+      expect((await db.query(migration)).map(result => result.rowCount)).toEqual([0, 0, 0]);
+    } finally {
+      await db.query('ROLLBACK');
+      db.release();
+    }
+  });
+  test('the senior content refresh updates only original seeds and preserves reviews, operator edits and assigned gifts', async () => {
+    const f = await fixture();
+    const db = await pool.connect();
+    await db.query('BEGIN');
+    try {
+      const saved = await gifts.assign(db, f.user, f.session);
+      await db.query("UPDATE loc_items SET text='Chúc bạn một ngày bình yên. Cả nhà luôn nhớ đến bạn.', text_en='Wishing you a peaceful day. Your family is thinking of you.', reviewed_by=NULL, reviewed_at=NULL WHERE code='welcome_01'");
+      await db.query("UPDATE loc_items SET text='Operator-approved custom wish' WHERE code='welcome_02'");
+      await db.query("UPDATE loc_items SET text=$1,text_en=$2,reviewed_by=NULL,reviewed_at=NULL WHERE code='proverb_09'", [
+        'Lời nói chẳng mất tiền mua,\nLựa lời mà nói cho vừa lòng nhau.',
+        'Words cost nothing; choose them with care for one another.',
+      ]);
+      await db.query("UPDATE loc_items SET text=$1,text_en=$2,active=FALSE,reviewed_by=NULL,reviewed_at=NULL WHERE code='tip_draft_01'", [
+        'Để sẵn cuốn sổ và cây bút ở nơi dễ thấy, bạn sẽ tiện ghi lại điều muốn hỏi bác sĩ.',
+        'Keep a notebook and pen somewhere easy to see, ready to write down questions for your doctor.',
+      ]);
+      await db.query("UPDATE loc_items SET active=TRUE,reviewed_by='Existing reviewer',reviewed_at=NOW() WHERE code='tip_draft_02'");
+      const approved = (await db.query("SELECT * FROM loc_items WHERE code='tip_draft_02'")).rows[0];
+      const migration = fs.readFileSync(path.join(__dirname, '../../db/migrations/129_gift_senior_content_refresh.sql'), 'utf8');
+      await db.query(migration);
+      const items = (await db.query("SELECT * FROM loc_items WHERE code=ANY($1)", [
+        ['welcome_01', 'welcome_02', 'proverb_09', 'tip_draft_01', 'tip_draft_02'],
+      ])).rows;
+      const byCode = Object.fromEntries(items.map(item => [item.code, item]));
+      expect(byCode.welcome_01.text).toContain('giấc ngủ');
+      expect(byCode.welcome_02.text).toBe('Operator-approved custom wish');
+      expect(byCode.proverb_09.text).toMatch(/^Lời nói chẳng mất tiền mua,\nLựa lời mà nói cho vừa lòng nhau\.\n\n/);
+      expect(byCode.proverb_09.text).toContain('hỏi thăm');
+      expect(byCode.tip_draft_01.text).toContain('đèn');
+      expect(byCode.tip_draft_01).toMatchObject({ active: false, reviewed_by: null, reviewed_at: null });
+      expect(byCode.tip_draft_02).toEqual(approved);
+      expect((await gifts.assign(db, f.user, f.session)).loc_snapshot).toEqual(saved.loc_snapshot);
+      await db.query(migration);
+      expect((await db.query("SELECT * FROM loc_items WHERE code=ANY($1)", [items.map(item => item.code)])).rows).toEqual(items);
+    } finally {
+      await db.query('ROLLBACK');
+      db.release();
+    }
+  });
   test('the pause migration keeps ticket issuance at zero without removing fortunes', async () => {
     const migration = fs.readFileSync(
       path.join(__dirname, '../../db/migrations/113_pause_gift_draws.sql'),
