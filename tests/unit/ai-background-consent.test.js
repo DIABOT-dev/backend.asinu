@@ -12,6 +12,7 @@ test('scheduled AI notifications bind each patient consent without an HTTP sessi
     content: JSON.stringify({ shouldSend: true, title: 'Fixture', body: 'Synthetic notification' }),
   } }] }) }));
   const pool = { query: jest.fn(async (sql, params) => {
+    if (/asinu_brain_/i.test(sql)) throw new Error('Retired Brain tables must not be queried');
     if (sql.includes('FROM user_ai_consents c JOIN users')) return { rows: params[0] === 1 ? [1] : [] };
     if (sql.includes('HAVING')) return { rows: [1, 2].map(id => ({ id, name: 'Fixture', push_token: 'fixture', language_preference: 'vi', hours_inactive: 25 })) };
     return { rows: [] };
@@ -20,6 +21,7 @@ test('scheduled AI notifications bind each patient consent without an HTTP sessi
     const result = await runEngagementNotifications(pool);
     expect(result).toMatchObject({ total: 2, sent: 1, errors: 1 });
     expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch.mock.calls[0][1].body).not.toMatch(/Asinu Brain|check-in sức khoẻ với|checked in with Asinu/i);
     expect(JSON.parse(global.fetch.mock.calls[0][1].body).user).toBe('user_1');
     expect(sendAndSave).toHaveBeenCalledTimes(1);
     expect(sendAndSave.mock.calls[0][1].id).toBe(1);

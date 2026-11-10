@@ -23,7 +23,6 @@ const earlySignalRoutes = require('./src/routes/early-signal.routes');
 const logsRoutes = require('./src/routes/logs.routes');
 const iapRoutes = require('./src/routes/iap.routes');
 const healthFeedRoutes = require('./src/routes/healthFeed.routes');
-const asinuBrainRoutes = require('./asinu-brain-extension/routes/asinuBrain.routes');
 const langMiddleware = require('./src/middleware/lang.middleware');
 const { createRateLimitStore } = require('./src/middleware/rate-limit-store');
 const { getRedis } = require('./src/lib/redis');
@@ -188,7 +187,6 @@ app.use('/api/subscription-household', householdRoutes(pool));
 app.use('/api/early-signals', earlySignalRoutes(pool));
 app.use('/api/logs', logsRoutes(pool));
 app.use('/api/iap', iapRoutes(pool));
-app.use('/api/asinu-brain', asinuBrainRoutes(pool));
 
 // Sentry error handler must run BEFORE our custom one
 app.use(sentryErrorHandler());

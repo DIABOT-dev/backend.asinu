@@ -3,7 +3,7 @@
  *
  * Gửi push notification ngoài app được cá nhân hóa bằng AI.
  * AI phân tích hoạt động thực tế của user (log sức khoẻ hôm nay chưa,
- * lần cuối check-in brain, lần cuối vào app...) rồi sinh nội dung phù hợp.
+ * lần cuối ghi chỉ số, lần cuối vào app...) rồi sinh nội dung phù hợp.
  */
 
 const { getOpenAIReply } = require('../ai/providers/openai');
@@ -64,7 +64,6 @@ async function getUserContext(pool, userId) {
       todayLogTypes: [],
       loggedTodayCount: 0,
       hoursSinceLastLog: null,
-      hoursSinceLastBrain: null,
       latestGlucose: null,
       latestBp: null,
     }
@@ -72,7 +71,7 @@ async function getUserContext(pool, userId) {
 }
 
 /**
- * Lấy context của NHIỀU user cùng lúc — 6 queries thay vì 6 × N queries.
+ * Lấy context của NHIỀU user cùng lúc — 5 queries thay vì 5 × N queries.
  * @param {object} pool
  * @param {number[]} userIds
  * @returns {Map<number, object>} userId → context
@@ -82,7 +81,7 @@ async function getBatchContexts(pool, userIds) {
 
   const ids = userIds; // dùng với ANY($1::int[])
 
-  const [profileRows, todayLogRows, lastLogRows, lastBrainRows, glucoseRows, bpRows] =
+  const [profileRows, todayLogRows, lastLogRows, glucoseRows, bpRows] =
     await Promise.all([
       // 1. Profiles
       pool.query(
@@ -113,17 +112,7 @@ async function getBatchContexts(pool, userIds) {
         [ids]
       ),
 
-      // 4. Lần cuối brain check-in
-      pool.query(
-        `SELECT user_id,
-              EXTRACT(EPOCH FROM (NOW() - MAX(created_at))) / 3600 AS hours_since_brain
-       FROM asinu_brain_sessions
-       WHERE user_id = ANY($1::int[])
-       GROUP BY user_id`,
-        [ids]
-      ),
-
-      // 5. Glucose gần nhất mỗi user (7 ngày) — DISTINCT ON lấy row mới nhất
+      // 4. Glucose gần nhất mỗi user (7 ngày) — DISTINCT ON lấy row mới nhất
       pool.query(
         `SELECT DISTINCT ON (c.user_id)
               c.user_id, d.value, d.unit, c.occurred_at
@@ -136,7 +125,7 @@ async function getBatchContexts(pool, userIds) {
         [ids]
       ),
 
-      // 6. Huyết áp gần nhất mỗi user (7 ngày)
+      // 5. Huyết áp gần nhất mỗi user (7 ngày)
       pool.query(
         `SELECT DISTINCT ON (c.user_id)
               c.user_id, d.systolic, d.diastolic, c.occurred_at
@@ -153,7 +142,6 @@ async function getBatchContexts(pool, userIds) {
   // Index các kết quả theo user_id
   const profiles = new Map(profileRows.rows.map((r) => [r.user_id, r]));
   const lastLogs = new Map(lastLogRows.rows.map((r) => [r.user_id, r]));
-  const lastBrains = new Map(lastBrainRows.rows.map((r) => [r.user_id, r]));
   const glucoses = new Map(glucoseRows.rows.map((r) => [r.user_id, r]));
   const bps = new Map(bpRows.rows.map((r) => [r.user_id, r]));
 
@@ -168,7 +156,6 @@ async function getBatchContexts(pool, userIds) {
   const result = new Map();
   for (const uid of userIds) {
     const ll = lastLogs.get(uid);
-    const lb = lastBrains.get(uid);
     const types = todayLogs.get(uid) ?? [];
     result.set(uid, {
       profile: profiles.get(uid) ?? null,
@@ -177,10 +164,6 @@ async function getBatchContexts(pool, userIds) {
       hoursSinceLastLog:
         ll && !isNaN(parseFloat(ll.hours_since_log))
           ? Math.round(parseFloat(ll.hours_since_log))
-          : null,
-      hoursSinceLastBrain:
-        lb && !isNaN(parseFloat(lb.hours_since_brain))
-          ? Math.round(parseFloat(lb.hours_since_brain))
           : null,
       latestGlucose: glucoses.get(uid) ?? null,
       latestBp: bps.get(uid) ?? null,
@@ -217,7 +200,6 @@ async function generateEngagementNotification(
     todayLogTypes,
     loggedTodayCount,
     hoursSinceLastLog,
-    hoursSinceLastBrain,
     latestGlucose: _latestGlucose,
     latestBp: _latestBp,
   } = context;
@@ -249,14 +231,6 @@ async function generateEngagementNotification(
     );
   }
 
-  if (hoursSinceLastBrain === null) {
-    activityLines.push('- Chưa bao giờ làm check-in sức khoẻ với Asinu Brain');
-  } else if (hoursSinceLastBrain > 24) {
-    activityLines.push(
-      `- Lần cuối check-in với Asinu: ${hoursSinceLastBrain > 48 ? Math.round(hoursSinceLastBrain / 24) + ' ngày' : Math.round(hoursSinceLastBrain) + ' giờ'} trước`
-    );
-  }
-
   if (daysInactive) {
     activityLines.push(`- Chưa mở app: ${daysInactive} ngày`);
   }
@@ -268,18 +242,12 @@ async function generateEngagementNotification(
         goal ? `their goal: "${goal}"` : null,
         conditions ? `their condition: ${conditions}` : null,
         loggedTodayCount === 0 ? "they haven't logged any health data today" : null,
-        hoursSinceLastBrain !== null && hoursSinceLastBrain > 24
-          ? "they haven't checked in with Asinu recently"
-          : null,
         'general encouragement to stay consistent with their health journey',
       ].filter(Boolean)
     : [
         goal ? `mục tiêu "${goal}" của họ` : null,
         conditions ? `bệnh lý ${conditions} của họ` : null,
         loggedTodayCount === 0 ? 'hôm nay chưa khai báo chỉ số sức khoẻ nào' : null,
-        hoursSinceLastBrain !== null && hoursSinceLastBrain > 24
-          ? 'chưa check-in với Asinu gần đây'
-          : null,
         'động lực duy trì thói quen sức khoẻ hàng ngày',
       ].filter(Boolean);
 
@@ -415,7 +383,6 @@ async function previewEngagementNotification(pool, userId) {
       loggedTodayCount: context.loggedTodayCount,
       todayLogTypes: context.todayLogTypes,
       hoursSinceLastLog: context.hoursSinceLastLog,
-      hoursSinceLastBrain: context.hoursSinceLastBrain,
     },
   };
 }
@@ -431,7 +398,7 @@ async function markNotificationSent(pool, userId) {
 async function runEngagementNotifications(pool) {
   const users = await getEligibleUsers(pool);
 
-  // Batch: lấy context của tất cả users trong 6 queries thay vì 6×N
+  // Batch: lấy context của tất cả users trong 5 queries thay vì 5×N
   const contextMap = await getBatchContexts(
     pool,
     users.map((u) => u.id)

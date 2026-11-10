@@ -476,7 +476,7 @@ const shouldAlertFamilyNow = (result.needsFamilyAlert || result.severity === 'hi
 
 ### 9.1 SOS button (quick path)
 
-User nhấn "Báo người thân" trong app (icon medkit đỏ ở `asinu-brain-extension/ui/AsinuEmergencyFAB.tsx`):
+API báo người thân của luồng check-in hiện tại (`checkinApi.emergency`):
 
 ```
 POST /api/mobile/checkin/emergency
