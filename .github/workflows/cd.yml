@@ -17,6 +17,7 @@ on:
             checkin-audit,
             enable-checkin-conclusion,
             checkin-audio-probe,
+            checkin-audio-only-probe,
             restore-operator-ssh,
           ]
         default: deploy
@@ -53,7 +54,7 @@ permissions:
 
 jobs:
   ssh-diagnostics:
-    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'enable-checkin-conclusion' || inputs.operation == 'checkin-audio-probe' || inputs.operation == 'restore-operator-ssh')
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'enable-checkin-conclusion' || (inputs.operation == 'checkin-audio-probe' || inputs.operation == 'checkin-audio-only-probe') || inputs.operation == 'restore-operator-ssh')
     runs-on: ubuntu-24.04
     timeout-minutes: 6
     environment: prod
@@ -61,7 +62,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout read-only audit
-        if: inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'enable-checkin-conclusion' || inputs.operation == 'checkin-audio-probe'
+        if: inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'enable-checkin-conclusion' || (inputs.operation == 'checkin-audio-probe' || inputs.operation == 'checkin-audio-only-probe')
         uses: actions/checkout@v7
       - name: Inspect SSH and API status with the existing administration key
         env:
@@ -123,11 +124,13 @@ jobs:
               -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
               "$VPS_USER@$VPS_HOST" "docker exec -i asinu-backend node - '$lookup64'" < deploy/checkin-preview-audit.cjs
           fi
-          if [ "$OPERATION" = 'checkin-audio-probe' ]; then
-            ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+          if [ "$OPERATION" = 'checkin-audio-probe' ] || [ "$OPERATION" = 'checkin-audio-only-probe' ]; then
+            if [ "$OPERATION" = 'checkin-audio-probe' ]; then
+              ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
               -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
               -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
-              "$VPS_USER@$VPS_HOST" 'docker exec -i asinu-backend node' < deploy/checkin-conclusion-probe.cjs
+                "$VPS_USER@$VPS_HOST" 'docker exec -i asinu-backend node' < deploy/checkin-conclusion-probe.cjs
+            fi
             ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
               -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
               -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
