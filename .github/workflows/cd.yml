@@ -9,8 +9,14 @@ on:
       operation:
         description: Deploy, inspect SSH, or remove a confirmed operator IP ban
         type: choice
-        options: [deploy, ssh-diagnostics, notification-audit, restore-operator-ssh]
+        options: [deploy, ssh-diagnostics, notification-audit, checkin-audit, restore-operator-ssh]
         default: deploy
+      lookup_name:
+        description: Name to find during a read-only check-in audit
+        required: false
+      lookup_phone:
+        description: Phone to inspect during a read-only check-in audit
+        required: false
       operator_ip:
         description: Confirmed operator IPv4 address to unban (restore operation only)
         required: false
@@ -38,7 +44,7 @@ permissions:
 
 jobs:
   ssh-diagnostics:
-    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'notification-audit' || inputs.operation == 'restore-operator-ssh')
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'restore-operator-ssh')
     runs-on: ubuntu-24.04
     timeout-minutes: 3
     environment: prod
@@ -46,7 +52,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout read-only audit
-        if: inputs.operation == 'notification-audit'
+        if: inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit'
         uses: actions/checkout@v7
       - name: Inspect SSH and API status with the existing administration key
         env:
@@ -55,6 +61,8 @@ jobs:
           VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
           OPERATION: ${{ inputs.operation }}
           OPERATOR_IP: ${{ inputs.operator_ip }}
+          LOOKUP_NAME: ${{ inputs.lookup_name }}
+          LOOKUP_PHONE: ${{ inputs.lookup_phone }}
         run: |
           set -eu
           test "$VPS_HOST" = '36.50.176.55'
@@ -91,6 +99,13 @@ jobs:
               -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
               -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
               "$VPS_USER@$VPS_HOST" 'docker exec -i asinu-backend node' < deploy/notification-audit.cjs
+          fi
+          if [ "$OPERATION" = 'checkin-audit' ]; then
+            lookup64="$(node -e 'process.stdout.write(Buffer.from(JSON.stringify({name:process.env.LOOKUP_NAME,phone:process.env.LOOKUP_PHONE})).toString("base64"))')"
+            ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+              -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
+              "$VPS_USER@$VPS_HOST" "docker exec -i asinu-backend node - '$lookup64'" < deploy/checkin-preview-audit.cjs
           fi
 
   package:
