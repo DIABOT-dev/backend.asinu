@@ -88,14 +88,14 @@ function audioMimeType(requestedLanguage = 'vi') {
   return deliveryMimeType(voiceForLanguage(normalizeLanguage(requestedLanguage)));
 }
 
-async function requestSpeech(phrase, voice, version) {
+async function requestSpeech(phrase, voice, version, timeoutMs = synthesisTimeoutMs()) {
   const compress = deliveryMimeType(voice) === 'audio/mpeg' && voiceMimeType(voice) === 'audio/wav';
   try {
     const data = await synthesizeSpeech({
       text: phrase,
       voice,
       apiKey: process.env.VIENEU_API_KEY,
-      timeoutMs: synthesisTimeoutMs(),
+      timeoutMs,
     });
     const delivered = compress ? await encodeMp3(data.audio_data) : data;
     return { ...delivered, audio_version: version };
@@ -104,7 +104,7 @@ async function requestSpeech(phrase, voice, version) {
   }
 }
 
-async function synthesizeText(input, requestedLanguage = 'vi') {
+async function synthesizeText(input, requestedLanguage = 'vi', options = {}) {
   const language = normalizeLanguage(requestedLanguage);
   const phrase = typeof input === 'string' ? input.replace(/\s+/g, ' ').trim() : '';
   if (!phrase)
@@ -120,7 +120,10 @@ async function synthesizeText(input, requestedLanguage = 'vi') {
       'checkinCall.error.audio_unavailable'
     );
   }
-  return requestSpeech(phrase, voice, audioVersion(language, voice));
+  const timeoutMs = Number.isFinite(options.timeoutMs)
+    ? Math.max(1, Math.floor(Math.min(synthesisTimeoutMs(), options.timeoutMs)))
+    : synthesisTimeoutMs();
+  return requestSpeech(phrase, voice, audioVersion(language, voice), timeoutMs);
 }
 
 async function getAudio(pool, key, requestedLanguage = 'vi') {

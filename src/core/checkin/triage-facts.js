@@ -13,11 +13,11 @@ const lower = (value) =>
     .replace(/[.!?]+$/g, '')
     .trim();
 const isUnknown = (value) =>
-  /^(?:(?:tôi|mình|em|cháu)\s+)?(?:không rõ(?: nữa)?|không biết(?: nữa)?|không nhớ(?: rõ)?|chưa rõ|khó nói|khác(?: \(mô tả thêm\))?|unsure|unknown|not sure|i don.t know|i don.t remember)$/.test(
+  /^(?:(?:tôi|mình|em|cháu)\s+)?(?:không rõ(?: nữa)?|không biết(?: nữa)?|không nhớ(?: rõ)?|không chắc(?: chắn)?|chưa rõ|khó nói|khác(?: \(mô tả thêm\))?|unsure|unknown|uncertain|not sure|i don.t know|i don.t remember)$/.test(
     lower(value)
   );
 const isNone = (value) =>
-  /^(?:không(?: có)?(?: gì)?|không có triệu chứng mới|không có dấu hiệu nào|none|no(?: new symptoms)?|nothing)$/.test(
+  /^(?:không(?: có)?(?: gì)?|không có gì thêm|không có triệu chứng mới|không có dấu hiệu nào|none|no(?: new symptoms)?|nothing|nothing else to add)$/.test(
     lower(value)
   );
 

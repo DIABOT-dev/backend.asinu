@@ -5,6 +5,7 @@ const { retireHealthKey } = require('../../security/health-field-encryption');
  */
 
 const { t } = require('../../i18n');
+const { getHonorifics } = require('../../lib/honorifics');
 const {
   normalizePhoneNumber,
   getPhoneVariants,
@@ -24,7 +25,7 @@ const { emitProfileUpdated } = require('../integrations/crm-profile.service');
 async function getProfile(pool, userId) {
   try {
     const cached = await cacheGet(`profile:${userId}`);
-    if (cached) return cached;
+    if (cached?.profile?.checkinAddressing) return cached;
 
     const userResult = await pool.query(
       `SELECT id, email, phone_number, display_name, full_name, avatar_url, created_at, language_preference,
@@ -116,6 +117,12 @@ async function getProfile(pool, userId) {
       // Health profile fields from onboarding
       dateOfBirth: onboarding?.date_of_birth || null,
       age: age,
+      checkinAddressing: getHonorifics({
+        ...onboarding,
+        full_name: user.full_name,
+        display_name: user.display_name || onboarding?.display_name,
+        lang: 'vi',
+      }),
       heightCm: onboarding?.height_cm || null,
       weightKg: onboarding?.weight_kg || null,
       bloodType: onboarding?.blood_type || null,
@@ -474,8 +481,11 @@ async function deleteAccount(pool, userId) {
 
     // Commit transaction
     await client.query('COMMIT');
-    try { retireHealthKey(userId); }
-    catch { logger.warn('health_key_retirement_pending', { user_id: userId }); }
+    try {
+      retireHealthKey(userId);
+    } catch {
+      logger.warn('health_key_retirement_pending', { user_id: userId });
+    }
 
     // Invalidate all caches for this user
     await cacheDel(
@@ -604,7 +614,8 @@ async function getBasicProfile(pool, userId) {
               u.avatar_url, u.language_preference, u.consent_version,
               (u.password_hash IS NOT NULL) AS has_password,
               uop.onboarding_completed_at,
-              uop.age AS age_range, uop.gender, uop.goal
+              uop.age AS age_range, uop.gender, uop.goal, uop.birth_year,
+              TO_CHAR(uop.date_of_birth, 'YYYY-MM-DD') AS date_of_birth
        FROM users u
        LEFT JOIN user_onboarding_profiles uop ON uop.user_id = u.id
        WHERE u.id = $1 AND u.deleted_at IS NULL`,
@@ -627,6 +638,7 @@ async function getBasicProfile(pool, userId) {
         hasPassword: !!r.has_password,
         onboardingCompleted: !!r.onboarding_completed_at,
         ageRange: r.age_range || null,
+        checkinAddressing: getHonorifics({ ...r, age: r.age_range, lang: 'vi' }),
         gender: r.gender || null,
         goal: r.goal || null,
       },

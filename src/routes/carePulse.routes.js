@@ -4,7 +4,6 @@ const { requireAuth } = require('../middleware/auth.middleware');
 const {
   postEvent,
   getStateHandler,
-  ackEscalation,
 } = require('../controllers/carePulse.controller');
 
 function carePulseRoutes(pool) {
@@ -12,7 +11,6 @@ function carePulseRoutes(pool) {
 
   router.post('/events', requireAuth, bindController(postEvent, pool));
   router.get('/state', requireAuth, bindController(getStateHandler, pool));
-  router.post('/escalations/ack', requireAuth, bindController(ackEscalation, pool));
 
   return router;
 }

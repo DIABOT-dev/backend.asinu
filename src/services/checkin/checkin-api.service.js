@@ -4,6 +4,7 @@ const checkinService = require('./checkin.service');
 const caregiverStatusService = require('../care-circle/caregiver-status.service');
 const { markActive } = require('../profile/lifecycle.service');
 const earlySignalService = require('../early-signal/early-signal.service');
+const { publicCheckinSession } = require('./checkin-cancellation.service');
 
 function eventTimestamp(value) {
   if (value instanceof Date) return value.toISOString();
@@ -29,26 +30,28 @@ async function startCheckin(pool, userId, status, locations, other, options) {
       userId,
       `checkin-start:${session.id}:${status}:${eventTimestamp(
         session.occurrence_started_at || session.updated_at
-      )}`
+      )}`,
+      { patientPresent: true }
     )
     .catch((err) => console.warn('[EarlySignal] check-in start evaluation failed:', err.message));
-  return session;
+  return publicCheckinSession(session);
 }
 
 async function recordFollowUp(pool, userId, checkinId, status) {
   const session = await checkinService.recordFollowUp(pool, userId, checkinId, status);
   if (!session) return { session: null, alreadyResolved: false };
   if (session.flow_state === 'resolved' && session.current_status !== status) {
-    return { session, alreadyResolved: true };
+    return { session: publicCheckinSession(session), alreadyResolved: true };
   }
   earlySignalService
     .evaluateAfterNewHealthData(
       pool,
       userId,
-      `checkin-followup:${session.id}:${status}:${eventTimestamp(session.updated_at)}`
+      `checkin-followup:${session.id}:${status}:${eventTimestamp(session.updated_at)}`,
+      { patientPresent: true }
     )
     .catch((err) => console.warn('[EarlySignal] follow-up evaluation failed:', err.message));
-  return { session, alreadyResolved: false };
+  return { session: publicCheckinSession(session), alreadyResolved: false };
 }
 
 async function triggerEmergency(pool, userId, location) {

@@ -13,7 +13,7 @@
  */
 
 const { detectEmergency } = require('./emergency-detector');
-const { getNextStep, calculateConclusion } = require('../../core/checkin/triage-engine');
+const { getNextStep, calculateConclusion, buildQuestion } = require('../../core/checkin/triage-engine');
 const {
   formatQuestion,
   generateConclusion,
@@ -22,11 +22,19 @@ const {
 } = require('../../core/checkin/triage-ai-layer');
 const { t } = require('../../i18n');
 const { normalizeLang } = require('../../core/checkin/triage-i18n');
+const { resolveAdaptiveQuestion, adaptiveFacts, isAdaptiveStep } = require('./adaptive-question.service');
 const { getHonorifics } = require('../../lib/honorifics');
+const {
+  getDetailedNextStep,
+  detailedQuestionsEnabled,
+  isDetailedStep,
+} = require('../../core/checkin/triage-detail-questions');
 const {
   normalizeProfile,
   normalizeAnswers,
   conditionsOf,
+  affirmativeParts,
+  isUnknown,
 } = require('../../core/checkin/triage-facts');
 
 // ─── Emergency type mapping ─────────────────────────────────────────────────
@@ -119,6 +127,8 @@ async function getNextTriageQuestion(input) {
     lang = 'vi',
     profile = {},
     healthContext = {},
+    conclusionFormat = 'structured',
+    assessmentVersion,
     previousAnswers = [],
     previousSessionSummary = null,
     previousTriageMessages = [],
@@ -127,6 +137,8 @@ async function getNextTriageQuestion(input) {
     bodyLocation = null, // legacy single
     bodyLocations = null, // new array
     bodyLocationOther = null, // free-text
+    adaptiveEnabled = false,
+    adaptiveState = { version: 1, sources: [], questions: [] },
   } = input;
 
   // ── Normalize profile: ensure age is set ──
@@ -169,6 +181,7 @@ async function getNextTriageQuestion(input) {
     return { step, answer: a.answer, question: a.question };
   });
   const normalizedAnswers = normalizeAnswers(answersWithSteps);
+  const extraAnswers = adaptiveFacts(adaptiveState, answersWithSteps);
   const baselineAnswers = normalizeAnswers(
     previousTriageMessages.map((entry, index) => ({
       ...entry,
@@ -177,12 +190,13 @@ async function getNextTriageQuestion(input) {
         inferLegacyStep(entry.question, index, ['symptoms', 'onset', 'progression', 'red_flags']),
     }))
   );
-  const engineResult = getNextStep({
+  const engineInput = {
     status,
     phase,
     profile: normalizedProfile,
     healthContext: normalizedHC,
-    previousAnswers: normalizedAnswers,
+    previousAnswers: normalizedAnswers.filter(answer => !isAdaptiveStep(answer.step)),
+    supplementalAnswers: extraAnswers,
     baselineAnswers,
     previousSeverity,
     forceConclusion,
@@ -190,7 +204,17 @@ async function getNextTriageQuestion(input) {
     bodyLocations,
     bodyLocationOther,
     lang,
-  });
+  };
+  let engineResult = detailedQuestionsEnabled({ assessmentVersion, previousAnswers })
+    ? getDetailedNextStep(engineInput)
+    : getNextStep({
+        ...engineInput,
+        previousAnswers: normalizedAnswers.filter((answer) => !isDetailedStep(answer.step) && !isAdaptiveStep(answer.step)),
+      });
+  const assessmentProfile =
+    engineResult.state.detailedAssessmentVersion === 2
+      ? { ...normalizedProfile, medical_conditions: engineResult.state.conditions }
+      : normalizedProfile;
 
   // 1. Extract all symptom texts from previous answers for emergency scanning.
   const allSymptomTexts = answersWithSteps
@@ -201,9 +225,9 @@ async function getNextTriageQuestion(input) {
     .filter(Boolean);
 
   // 2. Emergency check — pure keyword matching, instant, zero-cost.
-  const emergency = detectEmergency(allSymptomTexts, normalizedProfile);
+  const emergency = detectEmergency(allSymptomTexts, assessmentProfile);
   if (emergency.isEmergency) {
-    return formatEmergencyResult(emergency, normalizedProfile, lang);
+    return formatEmergencyResult(emergency, assessmentProfile, lang);
   }
 
   // 2b. AI safety classifier. Re-evaluate the first symptom on each request;
@@ -212,11 +236,13 @@ async function getNextTriageQuestion(input) {
   // Backup cho các emergency NGOÀI keyword list (long tail symptoms).
   // Cost: 1 GPT call ~150 tokens, cache theo symptom.
   let safetyHint = null;
-  const symptomText = engineResult.state.currentSymptoms.join(', ');
+  const symptomText = [engineResult.state.currentSymptoms.join(', '), ...extraAnswers
+    .filter(a => !isUnknown(a.answer) && affirmativeParts(a.answer).length)
+    .map(a => a.answer)].filter(Boolean).join('; ');
   if (symptomText) {
     if (symptomText && symptomText.length >= 2) {
       try {
-        const safety = await classifySymptomSeverity(symptomText, normalizedProfile);
+        const safety = await classifySymptomSeverity(symptomText, assessmentProfile);
         if (safety.severity === 'emergency') {
           // Bypass triage, conclude ngay với severity='emergency' (giữ nguyên,
           // không downgrade về 'high' như trước — emergency là level cao nhất
@@ -251,6 +277,33 @@ async function getNextTriageQuestion(input) {
       }
     }
   }
+
+  if (adaptiveEnabled && !forceConclusion && engineResult.action === 'conclude' &&
+    engineResult.state.allSymptoms.length && !engineResult.state.completedSteps.has('red_flags')) {
+    engineResult = { ...engineResult, ...buildQuestion('red_flags', engineResult.state, lang),
+      action: 'ask', step: 'red_flags' };
+  }
+  let adaptive = adaptiveState;
+  if (adaptiveEnabled && !forceConclusion && !engineResult.state.redFlagsFound?.length) {
+    const resolved = await resolveAdaptiveQuestion({ state: adaptiveState,
+      answers: answersWithSteps, base: engineResult, lang: normalizeLang(lang), profile: assessmentProfile, healthContext: normalizedHC });
+    adaptive = resolved.state;
+    if (resolved.question) {
+      const current = previousAnswers.length + 1;
+      const region = adaptive.questions.find(q => q.step === resolved.question.step)?.region;
+      const groups = engineResult.state.regionDetails || [];
+      const group = groups.find(item => item.region === region);
+      const result = { ...resolved.question, _adaptiveState: adaptive,
+        questionProgress: { current, total: Math.max(current, (engineResult.questionProgress?.total || current) + adaptive.questions.length) },
+        questionGroup: group ? { key: group.region, label: group.label, index: groups.indexOf(group) + 1, total: groups.length } : null };
+      adaptive.lastQuestion = { ...resolved.question, origin: adaptive.questions.find(q => q.step === resolved.question.step)?.origin };
+      return result;
+    }
+  }
+  engineResult.state.adaptiveAnswers = adaptiveFacts(adaptive, answersWithSteps);
+  if (adaptive.sources.some(source => ['fallback', 'capacity'].includes(source.status)) ||
+    engineResult.state.adaptiveAnswers.some(answer => isUnknown(answer.answer)) ||
+    adaptive.questions.some(q => !answersWithSteps.some(a => a.step === q.step))) engineResult.state.assessmentIncomplete = true;
 
   // 4. If the engine says conclude → generate the conclusion via AI layer.
   if (engineResult.action === 'conclude') {
@@ -294,13 +347,15 @@ async function getNextTriageQuestion(input) {
 
     const aiConclusion = await generateConclusion(
       conclusionInput,
-      normalizedProfile,
+      assessmentProfile,
       lang,
       null,
-      normalizedHC
+      normalizedHC,
+      { conclusionFormat }
     );
 
     return {
+      ...(adaptiveEnabled ? { _adaptiveState: adaptive } : {}),
       isDone: true,
       ...aiConclusion,
       severity: conclusion.severity,
@@ -314,7 +369,7 @@ async function getNextTriageQuestion(input) {
   }
 
   // 5. If options empty for associated/red_flags/cause → AI generates mapping
-  const needsAIMapping =
+  const needsAIMapping = !adaptiveEnabled &&
     ['associated', 'cause'].includes(engineResult.step) &&
     (!engineResult.options ||
       engineResult.options.length === 0 ||
@@ -349,20 +404,22 @@ async function getNextTriageQuestion(input) {
   }
 
   // 6. Format the question via the AI layer (template, no GPT).
-  const formatted = formatQuestion(
-    {
-      ...engineResult,
-      previousSessionSummary,
-      bodyLocation,
-      bodyLocations,
-      bodyLocationOther,
-    },
-    normalizedProfile,
-    normalizedAnswers,
-    lang
-  );
+  const formatted = engineResult.detailedQuestion
+    ? engineResult
+    : formatQuestion(
+        {
+          ...engineResult,
+          previousSessionSummary,
+          bodyLocation,
+          bodyLocations,
+          bodyLocationOther,
+        },
+        normalizedProfile,
+        normalizedAnswers,
+        lang
+      );
 
-  return {
+  const questionResult = {
     isDone: false,
     step: engineResult.step,
     question: formatted.question,
@@ -370,7 +427,25 @@ async function getNextTriageQuestion(input) {
     optionsGrouped: engineResult.optionsGrouped || null, // pass T2-grouped symptoms cho FE render section
     multiSelect: formatted.multiSelect,
     allowFreeText: formatted.allowFreeText,
+    ...(engineResult.questionProgress
+      ? {
+          questionProgress: engineResult.questionProgress,
+          questionGroup: engineResult.questionGroup,
+          exclusiveOptions: engineResult.exclusiveOptions || [],
+        }
+      : {}),
   };
+  if (!['symptoms', 'red_flags'].includes(questionResult.step) && questionResult.allowFreeText && questionResult.options?.length <= 1) {
+    questionResult.options = [];
+    questionResult.multiSelect = false;
+    questionResult.skipAnswerLabel = t(questionResult.step === 'cause' ? 'checkin.adaptive.unknown' : 'checkin.adaptive.no_more', lang);
+  }
+  if (adaptiveEnabled) {
+    adaptive.lastQuestion = { step: questionResult.step, question: questionResult.question,
+      options: questionResult.options || [] };
+    questionResult._adaptiveState = adaptive;
+  }
+  return questionResult;
 }
 
 // ─── Exports ────────────────────────────────────────────────────────────────

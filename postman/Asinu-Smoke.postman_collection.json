@@ -1,0 +1,1368 @@
+{
+  "info": {
+    "_postman_id": "47736640-2a32-5f2b-89c8-d2850c813000",
+    "name": "Asinu — Public smoke checks",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Mỗi folder môi trường có 4 GET request công khai để kiểm tra kết nối, Redis/database readiness và danh mục IAP. Không cần đăng nhập."
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.variables.set('now_iso', new Date().toISOString());",
+          "pm.variables.set('now_ms', String(Date.now()));",
+          "pm.variables.set('month', new Date().toISOString().slice(0, 7));"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "const expected = String(pm.variables.get('expected_status') || '');",
+          "pm.test(expected ? 'HTTP status matches expected_status' : 'HTTP response is successful (2xx/3xx)', function () {",
+          "  if (expected) pm.expect(pm.response.code).to.eql(Number(expected));",
+          "  else { pm.expect(pm.response.code).to.be.at.least(200); pm.expect(pm.response.code).to.be.below(400); }",
+          "});",
+          "const contentType = pm.response.headers.get('Content-Type') || '';",
+          "if (/json/i.test(contentType)) {",
+          "  pm.test('Response is valid JSON', function () { pm.response.json(); });",
+          "  if (pm.response.code >= 200 && pm.response.code < 300) {",
+          "    pm.test('Response does not report ok=false', function () { pm.expect(pm.response.json().ok).not.to.eql(false); });",
+          "  }",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "local_base_url",
+      "value": "http://localhost:3300",
+      "type": "string"
+    },
+    {
+      "key": "local_language",
+      "value": "vi",
+      "type": "string"
+    },
+    {
+      "key": "local_email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_tenant_id",
+      "value": "clinic-demo",
+      "type": "string"
+    },
+    {
+      "key": "local_doctor_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_task_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_checkin_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_ai_consent_version",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_cron_secret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_health_check_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_doctor_integration_secret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_google_pubsub_oidc_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_expected_status",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_request_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_consent_version",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_new_password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_capability",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_notice_version",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_guidance_epoch",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "local_draft_revision",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "local_draw_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_patient_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_chat_note_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_member_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_gift_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_med_media_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_dose_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_redemption_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_reward_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_draft_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_schedule_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_attempt_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_audio_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_episode_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_loc_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_draw_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_greeting_template_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_invitation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_connection_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_alert_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_task_type",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_inactive_days",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_notification_trigger",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_feed_item_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_content_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_ivr_call_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_ivr_session_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_question_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_ivr_media_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_notification_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_sepay_api_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_google_id_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_apple_identity_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_oauth_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_oauth_code_verifier",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_oauth_code_challenge",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_provider_oauth_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_oauth_state",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_facebook_access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_search_phone",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_test_phone",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_fcm_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_chat_message_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_script_session_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_option_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_addressee_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_qr_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_gift_cursor",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_media_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_med_capability",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_coin_cursor",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_med_item_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_admin_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_ivr_capability",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_ivr_revision",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_media_expires",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_media_signature",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_media_actor",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_file_name",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_file_mime_type",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_file_content_base64",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_file_size_bytes",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_audio_base64",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_audio_size_bytes",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_payment_event_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_payment_transfer_content",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_protected_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_iap_product_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_google_purchase_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_apple_signed_payload",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_google_pubsub_data_base64",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_google_pubsub_message_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_google_pubsub_subscription",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_ai_model",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_cluster_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_draw_starts_at",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_draw_closes_at",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_draw_at",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "local_ticket_number",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_base_url",
+      "value": "https://asinu.top",
+      "type": "string"
+    },
+    {
+      "key": "production_language",
+      "value": "vi",
+      "type": "string"
+    },
+    {
+      "key": "production_email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_tenant_id",
+      "value": "clinic-demo",
+      "type": "string"
+    },
+    {
+      "key": "production_doctor_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_task_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_checkin_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_ai_consent_version",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_cron_secret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_health_check_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_doctor_integration_secret",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_google_pubsub_oidc_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_expected_status",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_request_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_consent_version",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_new_password",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_capability",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_notice_version",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_guidance_epoch",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "production_draft_revision",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "production_draw_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_patient_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_chat_note_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_member_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_gift_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_med_media_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_dose_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_redemption_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_reward_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_draft_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_schedule_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_attempt_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_audio_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_episode_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_loc_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_draw_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_greeting_template_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_invitation_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_connection_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_alert_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_task_type",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_inactive_days",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_notification_trigger",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_feed_item_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_content_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_ivr_call_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_ivr_session_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_question_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_ivr_media_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_notification_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_sepay_api_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_google_id_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_apple_identity_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_oauth_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_oauth_code_verifier",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_oauth_code_challenge",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_provider_oauth_code",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_oauth_state",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_facebook_access_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_search_phone",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_test_phone",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_fcm_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_chat_message_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_script_session_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_option_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_addressee_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_qr_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_gift_cursor",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_media_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_med_capability",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_coin_cursor",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_med_item_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_admin_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_ivr_capability",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_ivr_revision",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_media_expires",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_media_signature",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_media_actor",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_file_name",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_file_mime_type",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_file_content_base64",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_file_size_bytes",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_audio_base64",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_audio_size_bytes",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_payment_event_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_payment_transfer_content",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_protected_user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_iap_product_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_google_purchase_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_apple_signed_payload",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_google_pubsub_data_base64",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_google_pubsub_message_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_google_pubsub_subscription",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_ai_model",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_cluster_key",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_draw_starts_at",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_draw_closes_at",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_draw_at",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "production_ticket_number",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Local API",
+      "description": "4 GET request công khai của Local API.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{local_access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.variables.set('asinu_mode', 'local');",
+              "for (const key of [\"base_url\",\"language\",\"email\",\"password\",\"access_token\",\"user_id\",\"tenant_id\",\"doctor_id\",\"task_id\",\"checkin_id\",\"ai_consent_version\",\"cron_secret\",\"health_check_token\",\"doctor_integration_secret\",\"google_pubsub_oidc_token\",\"expected_status\",\"request_id\",\"consent_version\",\"new_password\",\"capability\",\"notice_version\",\"guidance_epoch\",\"draft_revision\",\"draw_id\",\"patient_user_id\",\"chat_note_id\",\"member_user_id\",\"gift_id\",\"med_media_id\",\"dose_id\",\"redemption_id\",\"reward_code\",\"draft_id\",\"schedule_id\",\"attempt_id\",\"audio_key\",\"episode_id\",\"loc_code\",\"draw_code\",\"greeting_template_code\",\"invitation_id\",\"connection_id\",\"alert_id\",\"task_type\",\"inactive_days\",\"notification_trigger\",\"feed_item_id\",\"content_id\",\"ivr_call_id\",\"ivr_session_id\",\"question_id\",\"ivr_media_id\",\"notification_id\",\"sepay_api_key\",\"google_id_token\",\"apple_identity_token\",\"oauth_code\",\"oauth_code_verifier\",\"oauth_code_challenge\",\"provider_oauth_code\",\"oauth_state\",\"facebook_access_token\",\"search_phone\",\"test_phone\",\"fcm_token\",\"chat_message_id\",\"script_session_id\",\"option_id\",\"addressee_user_id\",\"qr_token\",\"gift_cursor\",\"media_token\",\"med_capability\",\"coin_cursor\",\"med_item_id\",\"admin_id\",\"ivr_capability\",\"ivr_revision\",\"media_expires\",\"media_signature\",\"media_actor\",\"file_name\",\"file_mime_type\",\"file_content_base64\",\"file_size_bytes\",\"audio_base64\",\"audio_size_bytes\",\"payment_event_id\",\"payment_transfer_content\",\"protected_user_id\",\"iap_product_id\",\"google_purchase_token\",\"apple_signed_payload\",\"google_pubsub_data_base64\",\"google_pubsub_message_id\",\"google_pubsub_subscription\",\"ai_model\",\"cluster_key\",\"draw_starts_at\",\"draw_closes_at\",\"draw_at\",\"ticket_number\"]) {",
+              "  const scoped = 'local_' + key;",
+              "  const value = pm.environment.get(scoped);",
+              "  pm.variables.set(key, value === undefined ? pm.collectionVariables.get(scoped) || '' : value);",
+              "}",
+              "const requestKey = '__local_request_id_' + pm.info.requestName;",
+              "let requestId = pm.variables.get('request_id') || pm.collectionVariables.get(requestKey);",
+              "if (!requestId) { requestId = pm.variables.replaceIn('{{$guid}}'); pm.collectionVariables.set(requestKey, requestId); }",
+              "pm.variables.set('request_id', requestId);"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "GET /api/healthz",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{language}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{local_base_url}}/api/healthz",
+              "host": [
+                "{{local_base_url}}"
+              ],
+              "path": [
+                "api",
+                "healthz"
+              ]
+            },
+            "description": "`GET /api/healthz`\n\nNguồn: `server.js:79`.\n\nXác thực: Không dùng JWT; có thể cần capability hoặc chữ ký từ nhà cung cấp.\n\nHandler: `server.js:79`."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /healthz",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{language}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{local_base_url}}/healthz",
+              "host": [
+                "{{local_base_url}}"
+              ],
+              "path": [
+                "healthz"
+              ]
+            },
+            "description": "`GET /healthz`\n\nNguồn: `server.js:89`.\n\nXác thực: Không dùng JWT; có thể cần capability hoặc chữ ký từ nhà cung cấp.\n\nHandler: `server.js:89`."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/readyz",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{language}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{local_base_url}}/api/readyz",
+              "host": [
+                "{{local_base_url}}"
+              ],
+              "path": [
+                "api",
+                "readyz"
+              ]
+            },
+            "description": "`GET /api/readyz`\n\nNguồn: `server.js:154`.\n\nXác thực: Không dùng JWT; có thể cần capability hoặc chữ ký từ nhà cung cấp.\n\nHandler: `server.js:154`."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/iap/products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{language}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{local_base_url}}/api/iap/products?platform=google",
+              "host": [
+                "{{local_base_url}}"
+              ],
+              "path": [
+                "api",
+                "iap",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "platform",
+                  "value": "google"
+                }
+              ]
+            },
+            "description": "`GET /api/iap/products`\n\nNguồn: `src/routes/iap.routes.js:46`.\n\nXác thực: Không dùng JWT; có thể cần capability hoặc chữ ký từ nhà cung cấp.\n\nHandler: `src/controllers/iap.controller.js:74`.\n\nQuery tùy chọn được để tắt mặc định; bật các tham số bạn cần ở Params."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Production API",
+      "description": "4 GET request công khai của Production API.",
+      "auth": {
+        "type": "bearer",
+        "bearer": [
+          {
+            "key": "token",
+            "value": "{{production_access_token}}",
+            "type": "string"
+          }
+        ]
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.variables.set('asinu_mode', 'production');",
+              "for (const key of [\"base_url\",\"language\",\"email\",\"password\",\"access_token\",\"user_id\",\"tenant_id\",\"doctor_id\",\"task_id\",\"checkin_id\",\"ai_consent_version\",\"cron_secret\",\"health_check_token\",\"doctor_integration_secret\",\"google_pubsub_oidc_token\",\"expected_status\",\"request_id\",\"consent_version\",\"new_password\",\"capability\",\"notice_version\",\"guidance_epoch\",\"draft_revision\",\"draw_id\",\"patient_user_id\",\"chat_note_id\",\"member_user_id\",\"gift_id\",\"med_media_id\",\"dose_id\",\"redemption_id\",\"reward_code\",\"draft_id\",\"schedule_id\",\"attempt_id\",\"audio_key\",\"episode_id\",\"loc_code\",\"draw_code\",\"greeting_template_code\",\"invitation_id\",\"connection_id\",\"alert_id\",\"task_type\",\"inactive_days\",\"notification_trigger\",\"feed_item_id\",\"content_id\",\"ivr_call_id\",\"ivr_session_id\",\"question_id\",\"ivr_media_id\",\"notification_id\",\"sepay_api_key\",\"google_id_token\",\"apple_identity_token\",\"oauth_code\",\"oauth_code_verifier\",\"oauth_code_challenge\",\"provider_oauth_code\",\"oauth_state\",\"facebook_access_token\",\"search_phone\",\"test_phone\",\"fcm_token\",\"chat_message_id\",\"script_session_id\",\"option_id\",\"addressee_user_id\",\"qr_token\",\"gift_cursor\",\"media_token\",\"med_capability\",\"coin_cursor\",\"med_item_id\",\"admin_id\",\"ivr_capability\",\"ivr_revision\",\"media_expires\",\"media_signature\",\"media_actor\",\"file_name\",\"file_mime_type\",\"file_content_base64\",\"file_size_bytes\",\"audio_base64\",\"audio_size_bytes\",\"payment_event_id\",\"payment_transfer_content\",\"protected_user_id\",\"iap_product_id\",\"google_purchase_token\",\"apple_signed_payload\",\"google_pubsub_data_base64\",\"google_pubsub_message_id\",\"google_pubsub_subscription\",\"ai_model\",\"cluster_key\",\"draw_starts_at\",\"draw_closes_at\",\"draw_at\",\"ticket_number\"]) {",
+              "  const scoped = 'production_' + key;",
+              "  const value = pm.environment.get(scoped);",
+              "  pm.variables.set(key, value === undefined ? pm.collectionVariables.get(scoped) || '' : value);",
+              "}",
+              "const requestKey = '__production_request_id_' + pm.info.requestName;",
+              "let requestId = pm.variables.get('request_id') || pm.collectionVariables.get(requestKey);",
+              "if (!requestId) { requestId = pm.variables.replaceIn('{{$guid}}'); pm.collectionVariables.set(requestKey, requestId); }",
+              "pm.variables.set('request_id', requestId);"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "GET /api/healthz",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{language}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{production_base_url}}/api/healthz",
+              "host": [
+                "{{production_base_url}}"
+              ],
+              "path": [
+                "api",
+                "healthz"
+              ]
+            },
+            "description": "`GET /api/healthz`\n\nNguồn: `server.js:79`.\n\nXác thực: Không dùng JWT; có thể cần capability hoặc chữ ký từ nhà cung cấp.\n\nHandler: `server.js:79`."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /healthz",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{language}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{production_base_url}}/healthz",
+              "host": [
+                "{{production_base_url}}"
+              ],
+              "path": [
+                "healthz"
+              ]
+            },
+            "description": "`GET /healthz`\n\nNguồn: `server.js:89`.\n\nXác thực: Không dùng JWT; có thể cần capability hoặc chữ ký từ nhà cung cấp.\n\nHandler: `server.js:89`."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/readyz",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{language}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{production_base_url}}/api/readyz",
+              "host": [
+                "{{production_base_url}}"
+              ],
+              "path": [
+                "api",
+                "readyz"
+              ]
+            },
+            "description": "`GET /api/readyz`\n\nNguồn: `server.js:154`.\n\nXác thực: Không dùng JWT; có thể cần capability hoặc chữ ký từ nhà cung cấp.\n\nHandler: `server.js:154`."
+          },
+          "response": []
+        },
+        {
+          "name": "GET /api/iap/products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept-Language",
+                "value": "{{language}}"
+              }
+            ],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{production_base_url}}/api/iap/products?platform=google",
+              "host": [
+                "{{production_base_url}}"
+              ],
+              "path": [
+                "api",
+                "iap",
+                "products"
+              ],
+              "query": [
+                {
+                  "key": "platform",
+                  "value": "google"
+                }
+              ]
+            },
+            "description": "`GET /api/iap/products`\n\nNguồn: `src/routes/iap.routes.js:46`.\n\nXác thực: Không dùng JWT; có thể cần capability hoặc chữ ký từ nhà cung cấp.\n\nHandler: `src/controllers/iap.controller.js:74`.\n\nQuery tùy chọn được để tắt mặc định; bật các tham số bạn cần ở Params."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

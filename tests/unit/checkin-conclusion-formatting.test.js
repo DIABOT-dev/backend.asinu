@@ -99,7 +99,7 @@ test.each(['tu_theo_doi', 'dat_lich_kham', 'kham_trong_ngay'])(
     expect(warnings.at(-1)).not.toMatch(/hôm nay|ngay|115/);
   }
 );
-test('completing an action never hides unsafe content or weakens the sentence limit', () => {
+test('V3: completing a warning keeps safety checks and accepts a natural longer sentence', () => {
   const warnings = normalizeConditionalWarnings([
     'Nếu chú thấy khó chịu sau khi dùng aspirin.',
     'Nếu khó thở, hãy gọi 115.',
@@ -110,7 +110,7 @@ test('completing an action never hides unsafe content or weakens the sentence li
   const long = 'Nếu ' + 'mệt '.repeat(23).trim() + '.';
   const output = normalizeConditionalWarnings([long]);
   expect(output[0]).toContain('Hãy đi khám nếu');
-  expect(validatePresentation('di_kham_khi', output, facts)).toBe('sentence_too_long');
+  expect(validatePresentation('di_kham_khi', output, facts)).toBeNull();
 });
 test('comparison formatting preserves every word/value while giving each record its own scope', () => {
   const formatted = normalizeMeasurementSentences(raw);
@@ -140,8 +140,9 @@ test('patient-specific prompt requires both useful diary and the correct measure
   const prompt = buildConclusionPrompt(facts);
   expect(prompt).toContain('Ghi 2 mốc giờ');
   expect(prompt).toContain('Đo lại huyết áp và ghi giờ đo.');
-  expect(prompt).toContain('Chú nên đi khám trong vài ngày tới.');
-  expect(buildConclusionSystem(facts)).toContain('never exceed 25');
+  expect(prompt).toContain('chú nên đi khám trong vài ngày tới.');
+  expect(buildConclusionSystem(facts)).toContain('người bạn đồng hành sức khỏe ấm áp');
+  expect(buildConclusionSystem(facts)).not.toContain('never exceed 25');
 });
 test('acknowledging unknown medication records is not a medication instruction or a claim of nonadherence', () => {
   expect(
@@ -170,7 +171,7 @@ test('an exact acknowledgment with the recorded person after the medication phra
   ).toBeTruthy();
 });
 
-test('the short explanation plan preserves the latest reading and its actual predecessor without rewriting history', () => {
+test('V3 includes current and comparable historical readings as facts without prescribing an explanation sentence', () => {
   const withHistory = {
     ...facts,
     chi_so_7_ngay: [
@@ -183,9 +184,67 @@ test('the short explanation plan preserves the latest reading and its actual pre
     ],
   };
   const originalFacts = JSON.stringify(withHistory);
-  const plan = buildConclusionPrompt(withHistory).split('lien_quan:')[1].split('nen_lam:')[0];
-  expect(plan).toContain('128/82 mmHg lúc 13:00 29/10/26');
-  expect(plan).toContain('130/84 mmHg lúc 12:00 29/10/26');
-  expect(plan).not.toContain('141/91');
+  const prompt = buildConclusionPrompt(withHistory);
+  const supplied = JSON.parse(prompt.split('FACTS=')[1].split('\n')[0]);
+  expect(supplied.chi_so_24h).toEqual(withHistory.chi_so_24h);
+  expect(supplied.chi_so_7_ngay).toEqual(withHistory.chi_so_7_ngay);
+  expect(supplied.evaluated_at).toBeUndefined();
+  expect(prompt).not.toContain('Use ONE sentence');
   expect(JSON.stringify(withHistory)).toBe(originalFacts);
 });
+
+test.each(['vi', 'en'])(
+  'V3 %s is open-ended but retains the two safety boundaries and the four-field contract',
+  (lang) => {
+    const system = buildConclusionSystem(facts, lang);
+    const prompt = buildConclusionPrompt(facts, lang);
+    expect(system).toContain(
+      lang === 'vi'
+        ? 'đừng nêu tên thuốc, liều hay chỉnh điều trị'
+        : 'never name a medicine, dose or treatment change'
+    );
+    expect(system).toContain(
+      lang === 'vi'
+        ? 'đừng nói người bệnh mắc một bệnh mà họ chưa khai'
+        : 'never tell the person they have an illness they did not report'
+    );
+    for (const key of ['loi_nhan', 'lien_quan', 'nen_lam', 'di_kham_khi'])
+      expect(prompt).toContain(key);
+    expect(prompt).toContain('2-3');
+    expect(prompt).not.toMatch(/FIRST item MUST|VÍ DỤ|EXACT reading sentences/);
+  }
+);
+
+test('V3 accepts a three-sentence personal message while keeping unsafe medical content blocked', () => {
+  const message =
+    'Chú lại khó ngủ từ hôm qua. Cháu hiểu chú đang mệt. Mình cùng theo dõi hôm nay nhé.';
+  expect(validatePresentation('loi_nhan', message, facts)).toBeNull();
+  expect(validateBlock('loi_nhan', message, facts)).toBeNull();
+  expect(validateBlock('loi_nhan', message + ' Chú hãy dùng aspirin.', facts)).toBe(
+    'drug_name_or_class'
+  );
+});
+
+test.each(['see', 'consult', 'contact', 'speak to', 'talk with'])(
+  'V3 English referral can say %s a health expert without changing its care level',
+  (verb) => {
+    const warnings = [
+      `Please ${verb} a health expert today.`,
+      'If symptoms worsen, contact a health expert.',
+    ];
+    expect(
+      validateBlock('di_kham_khi', warnings, {
+        ...facts,
+        language: 'en',
+        care_level: 'kham_trong_ngay',
+      })
+    ).toBeNull();
+    expect(
+      validateBlock('di_kham_khi', warnings, {
+        ...facts,
+        language: 'en',
+        care_level: 'tu_theo_doi',
+      })
+    ).toBe('upgraded_care_level');
+  }
+);

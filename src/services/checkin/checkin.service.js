@@ -20,6 +20,7 @@
  */
 
 const { deliverNotification } = require('../notification/notification-dispatch.service');
+const { readAdaptiveState, protectAdaptiveState, validateAdaptiveAnswers } = require('./adaptive-question.service');
 const { getPatientRoleForCaregiver } = require('../../lib/relation');
 const {
   getNextTriageQuestion,
@@ -42,6 +43,7 @@ const { buildCheckinContext, applyIllusion } = require('../../core/checkin/illus
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 const logger = require('../../lib/logger');
 const checkinCallService = require('../checkin-call/checkin-call.service');
+const { createCancelCheckpoint, publicCheckinSession } = require('./checkin-cancellation.service');
 const { isRoutineMonitoringCheckin } = require('./checkin-inactivity.policy');
 const console = { log: logger.debug, error: logger.error, warn: logger.warn };
 
@@ -58,7 +60,8 @@ function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sess
       earlySignalService.evaluateAfterNewHealthData(
         pool,
         userId,
-        `checkin:${checkinId}:${fingerprint}`
+        `checkin:${checkinId}:${fingerprint}`,
+        { patientPresent: true }
       )
     )
     .catch((error) =>
@@ -220,7 +223,8 @@ async function getTodayCheckin(pool, userId, requestLang = null) {
     getYesterdaySession(pool, userId),
   ]);
 
-  const session = sessionRes.rows[0] || null;
+  const stored = sessionRes.rows[0] || null;
+  const session = publicCheckinSession(stored);
   const lang = requestLang || profileRes.rows[0]?.lang || 'vi';
   const continuityMessage = buildContinuityMessage(yesterdaySession, lang);
 
@@ -276,6 +280,7 @@ async function startCheckin(
   const date = checkinDateVN();
 
   let restartExisting = false;
+  let cancelCheckpoint = null;
   if (restart) {
     const { rows: existingRows } = await pool.query(
       `SELECT * FROM health_checkins WHERE user_id = $1 AND session_date = $2`,
@@ -285,6 +290,7 @@ async function startCheckin(
     // An active emergency must be resolved through its follow-up flow. A new
     // instant check-in must never silently erase an outstanding high alert.
     if (existing && existing.flow_state !== 'high_alert') {
+      cancelCheckpoint = createCancelCheckpoint(existing);
       await archiveCheckinOccurrence(pool, existing);
       restartExisting = true;
     }
@@ -329,7 +335,7 @@ async function startCheckin(
        triage_summary      = CASE WHEN $9 THEN NULL ELSE health_checkins.triage_summary END,
        triage_severity     = CASE WHEN $9 THEN NULL ELSE health_checkins.triage_severity END,
        triage_completed_at = CASE WHEN $9 THEN NULL ELSE health_checkins.triage_completed_at END,
-       triage_state        = CASE WHEN $9 THEN '{}'::jsonb ELSE health_checkins.triage_state END,
+       triage_state        = CASE WHEN $9 THEN $11::jsonb ELSE health_checkins.triage_state END,
        family_alerted      = CASE WHEN $9 THEN FALSE ELSE health_checkins.family_alerted END,
        family_alerted_at   = CASE WHEN $9 THEN NULL ELSE health_checkins.family_alerted_at END,
        emergency_triggered = CASE WHEN $9 THEN FALSE ELSE health_checkins.emergency_triggered END,
@@ -352,6 +358,7 @@ async function startCheckin(
       bodyLocationOther,
       restartExisting,
       source,
+      JSON.stringify(cancelCheckpoint ? { cancel_checkpoint: cancelCheckpoint } : {}),
     ]
   );
 
@@ -436,6 +443,7 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
        no_response_count = 0,
        resolved_at      = $4,
        triage_state     = $6::jsonb,
+       triage_messages  = CASE WHEN $1 = 'fine' THEN triage_messages ELSE '[]'::jsonb END,
        updated_at       = NOW()
      WHERE id = $5
      RETURNING *`,
@@ -447,6 +455,7 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
       checkinId,
       JSON.stringify({
         phase: 'followup',
+        phase_id: randomUUID(),
         revision: randomUUID(),
         baseline_answers: Array.from(
           new Map(
@@ -457,6 +466,7 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
           ).values()
         ),
         previous_severity: session.triage_severity || null,
+        cancel_checkpoint: createCancelCheckpoint(session),
       }),
     ]
   );
@@ -566,13 +576,47 @@ async function getRecentHealthContext(pool, userId) {
  */
 const triageRequests = new Map();
 function triageFingerprint(answers, lang) {
-  return createHash('sha256').update(JSON.stringify({ answers, lang })).digest('hex');
+  // JSONB changes object key order on a database round trip. Compare the
+  // interview fields in a fixed order so resuming cannot invalidate a result.
+  const canonicalAnswers = answers.map(({ step, question, answer }) => ({ step, question, answer }));
+  return createHash('sha256').update(JSON.stringify({ answers: canonicalAnswers, lang })).digest('hex');
 }
 
-async function processTriageStep(pool, userId, checkinId, previousAnswers, requestLang = null) {
-  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}`;
+async function processTriageStep(
+  pool,
+  userId,
+  checkinId,
+  previousAnswers,
+  requestLang = null,
+  options = {}
+) {
+  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}:${options.conclusionFormat || 'structured'}:${options.assessmentVersion || 'legacy'}:${options.adaptiveQuestions === true ? 'adaptive' : 'fixed'}:${options.phaseId || 'unscoped'}`;
   if (triageRequests.has(key)) return triageRequests.get(key);
-  const pending = processTriageStepOnce(pool, userId, checkinId, previousAnswers, requestLang);
+  const pending = processTriageStepOnce(
+    pool,
+    userId,
+    checkinId,
+    previousAnswers,
+    requestLang,
+    options
+  ).then(async (result) => {
+    if (result.isDone && result.conclusionVersion === 2 && result.severity !== 'emergency') {
+      // Derive speech from the saved visible result even when it was created by
+      // an earlier build with a deliberately abbreviated audio transcript.
+      result = {
+        ...result,
+        speechText: require('../../core/checkin/triage-conclusion-speech').conclusionSpeech(result),
+      };
+      if (options.conclusionFormat) {
+        await require('../checkin-call/conclusion-audio.service').prepareConclusionAudio(
+          userId,
+          result,
+          requestLang || 'vi'
+        ).catch(() => {});
+      }
+    }
+    return result;
+  });
   triageRequests.set(key, pending);
   try {
     return await pending;
@@ -581,7 +625,14 @@ async function processTriageStep(pool, userId, checkinId, previousAnswers, reque
   }
 }
 
-async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, requestLang = null) {
+async function processTriageStepOnce(
+  pool,
+  userId,
+  checkinId,
+  previousAnswers,
+  requestLang = null,
+  options = {}
+) {
   const { rows } = await pool.query(
     `SELECT * FROM health_checkins WHERE id = $1 AND user_id = $2`,
     [checkinId, userId]
@@ -595,17 +646,46 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
   const session = rows[0];
 
   const persistedState = session.triage_state || {};
+  const currentPhaseId = persistedState.phase_id || (persistedState.phase === 'followup'
+    ? persistedState.revision
+    : `initial:${session.occurrence_started_at || session.created_at
+      ? new Date(session.occurrence_started_at || session.created_at).toISOString() : checkinId}`);
+  const storedAnswers = Array.isArray(session.triage_messages) ? session.triage_messages : [];
+  if ((options.phaseId && options.phaseId !== currentPhaseId) ||
+    storedAnswers.length > previousAnswers.length || storedAnswers.some((saved, index) => {
+      const received = previousAnswers[index];
+      return !received || saved.question !== received.question ||
+        JSON.stringify(saved.answer) !== JSON.stringify(received.answer) ||
+        (saved.step && saved.step !== received.step);
+    })) {
+    throw Object.assign(new Error('Check-in changed; reload the latest conversation'), {
+      code: 'TRIAGE_CHANGED', statusCode: 409,
+    });
+  }
+  const adaptiveState = readAdaptiveState(userId, persistedState.adaptive_payload);
+  validateAdaptiveAnswers(adaptiveState, previousAnswers);
+  const adaptiveEnabled = !['false', '0'].includes(process.env.CHECKIN_ADAPTIVE_QUESTIONS_ENABLED) &&
+    (options.adaptiveQuestions === true || persistedState.adaptive_enabled === true);
   const cached = persistedState.completed;
   const cachedMatches =
     cached?.fingerprint ===
-    triageFingerprint(previousAnswers, requestLang || persistedState.lang || 'vi');
+    triageFingerprint(previousAnswers, requestLang || persistedState.lang || 'vi') ||
+    // Older releases hashed the client's object order. The prefix checks above
+    // already establish that every persisted interview field is identical;
+    // requiring the same length and language also excludes extra new answers.
+    (cached?.fingerprint_version === undefined &&
+      cached?.result?.isDone === true &&
+      previousAnswers.length === storedAnswers.length &&
+      (requestLang || persistedState.lang || 'vi') === (persistedState.lang || 'vi'));
   const cachedResult =
     cachedMatches && cached.result?.isDone ? structuredClone(cached.result) : null;
   // The first CAS reserves an answer; it does not prove that completion and
   // next_checkin_at were committed. Recover the saved answer after a failed
   // completion write, without calling AI again or reporting a false success.
   if (cachedResult && cached.finalized !== false && session.triage_completed_at)
-    return cachedResult;
+    return options.conclusionFormat === 'narrative'
+      ? require('../../core/checkin/triage-conclusion-narrative').adaptSavedConclusion(cachedResult)
+      : cachedResult;
   if (cached && !cachedMatches)
     throw Object.assign(new Error('Check-in is complete; start a new follow-up'), {
       code: 'TRIAGE_CHANGED',
@@ -632,6 +712,11 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
     ? persistedState.baseline_answers || session.triage_messages || []
     : [];
 
+  const detailedAssessment = options.assessmentVersion === 2 ||
+    persistedState.assessment_version === 2 ||
+    previousAnswers.some((item) =>
+      require('../../core/checkin/triage-detail-questions').isDetailedStep(item.step)
+    );
   const result =
     cachedResult ||
     (await getNextTriageQuestion({
@@ -642,12 +727,19 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
       lang: selectedLang,
       profile,
       healthContext,
+      conclusionFormat: options.conclusionFormat,
+      assessmentVersion: options.assessmentVersion || persistedState.assessment_version,
       previousAnswers,
       previousSessionSummary: session.triage_summary || null,
       previousTriageMessages: prevTriageMessages,
       previousSeverity:
         persistedState.previous_severity || (isFollowUpPhase ? session.triage_severity : null),
-      forceConclusion: previousAnswers.length >= 8,
+      adaptiveEnabled,
+      adaptiveState,
+      // The detailed interview ends when its applicable questions are answered,
+      // never because the request contains a particular number of answers.
+      // The controller's payload bound remains a request-size safeguard.
+      forceConclusion: !detailedAssessment && !adaptiveEnabled && previousAnswers.length >= 8,
       bodyLocation: session.body_location || null,
       bodyLocations:
         session.body_locations || (session.body_location ? [session.body_location] : null),
@@ -655,6 +747,9 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
       pool,
       userId,
     }));
+
+  const nextAdaptive = result._adaptiveState || adaptiveState;
+  delete result._adaptiveState;
 
   // ── Illusion Layer: enhance response with continuity/empathy/progress ──
   try {
@@ -689,7 +784,7 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
             type: 'single_choice',
           },
           currentStep: previousAnswers.length,
-          totalSteps: isFollowUp ? 2 : 4,
+          totalSteps: result.questionProgress?.total || (isFollowUp ? 2 : 4),
         },
         { greeting: null },
         illusionCtx,
@@ -705,8 +800,22 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
   }
 
   const nextState = {
+    ...(persistedState.cancel_checkpoint ? { cancel_checkpoint: persistedState.cancel_checkpoint } : {}),
+    ...(options.assessmentVersion === 2 || persistedState.assessment_version === 2
+      ? { assessment_version: 2 }
+      : {}),
     phase: isFollowUp ? 'followup' : 'initial',
+    // A phase survives question writes; revision remains a per-write CAS token.
+    // Existing follow-ups adopt their current token once, then keep phase_id.
+    phase_id: persistedState.phase_id || (isFollowUp
+      ? persistedState.revision || randomUUID()
+      : `initial:${session.occurrence_started_at || session.created_at
+        ? new Date(session.occurrence_started_at || session.created_at).toISOString() : checkinId}`),
     revision: randomUUID(),
+    ...(adaptiveEnabled || persistedState.adaptive_enabled ? {
+      adaptive_enabled: true,
+      adaptive_payload: protectAdaptiveState(userId, nextAdaptive),
+    } : {}),
     lang: selectedLang,
     baseline_answers: prevTriageMessages,
     previous_severity:
@@ -714,6 +823,7 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
     ...(result.isDone
       ? {
           completed: {
+            fingerprint_version: 2,
             fingerprint: triageFingerprint(previousAnswers, selectedLang),
             result,
             finalized: false,
@@ -724,13 +834,17 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
   // Reject a stale concurrent response instead of overwriting a newer answer.
   const saved = await pool.query(
     `UPDATE health_checkins SET triage_messages = $1::jsonb,
-       triage_state = $3::jsonb, updated_at = NOW()
+       triage_state = $3::jsonb,
+       last_response_at = CASE WHEN $5 THEN NOW() ELSE last_response_at END,
+       no_response_count = CASE WHEN $5 THEN 0 ELSE no_response_count END,
+       updated_at = NOW()
      WHERE id = $2 AND triage_state = $4::jsonb RETURNING id`,
     [
       JSON.stringify(previousAnswers),
       checkinId,
       JSON.stringify(nextState),
       JSON.stringify(persistedState),
+      previousAnswers.length > storedAnswers.length,
     ]
   );
   if (!saved.rows.length) {
@@ -763,6 +877,9 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
          triage_severity      = $2,
          triage_messages      = $3::jsonb,
          triage_completed_at  = NOW(),
+         last_response_at     = NOW(),
+         no_response_count    = 0,
+         triage_state         = jsonb_set(triage_state, '{completed,committed}', 'true'::jsonb),
          next_checkin_at      = $4,
          emergency_triggered  = COALESCE($6, emergency_triggered),
          flow_state           = CASE WHEN $6 = TRUE THEN 'high_alert' ELSE flow_state END,
@@ -783,6 +900,9 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
         code: 'TRIAGE_CHANGED',
         statusCode: 409,
       });
+    // Cancellation and this update compete on the same row lock. Once the
+    // conclusion is committed, its notifications must finish without rollback.
+    nextState.completed.committed = true;
     await rebuildPatientHealthTimeline(pool, userId).catch((error) =>
       console.warn('[Triage] Timeline refresh unavailable:', error.message)
     );
@@ -824,7 +944,7 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
     }
 
     // #2: System reacts to AI findings
-    await reactToTriageResult(pool, userId, checkinId, result);
+    await reactToTriageResult(pool, userId, checkinId, result, { patientPresent: true });
 
     // #3: Extract and save symptoms for AI memory
     evaluateEarlySignalAfterSymptoms(
@@ -855,9 +975,9 @@ async function processTriageStepOnce(pool, userId, checkinId, previousAnswers, r
  * After triage completes, adjust session state and notifications based on severity.
  * - high   → flow_state='high_alert', next check-in in 1h
  * - medium → ensure follow-up in 3-4h
- * - needsDoctor → high-priority notification to user
+ * - needsDoctor → notification only outside the patient's active result flow
  */
-async function reactToTriageResult(pool, userId, checkinId, result) {
+async function reactToTriageResult(pool, userId, checkinId, result, options = {}) {
   const severity = result.severity || 'low';
 
   try {
@@ -887,8 +1007,9 @@ async function reactToTriageResult(pool, userId, checkinId, result) {
     }
     // For 'low' severity — no additional state changes needed
 
-    // If AI recommends seeing a doctor, send high-priority notification
-    if (result.needsDoctor) {
+    // The active patient receives this guidance in the same API result. A
+    // self-push here arrives before the result/audio UI and interrupts it.
+    if (result.needsDoctor && options.patientPresent !== true) {
       // Get user lang
       const { rows: langRows } = await pool.query(
         `SELECT push_token, COALESCE(language_preference,'vi') AS lang FROM users WHERE id=$1`,
@@ -1171,6 +1292,7 @@ async function shouldAlertFamily(pool, userId, session) {
  * Send follow-up push or escalate to family alert.
  */
 async function runCheckinFollowUps(pool) {
+  const { followUpCopyKeys, followUpSnapshot, isStaleCheckinReminder } = require('../notification/checkin-reminder.policy');
   const now = new Date();
 
   // Atomically claim overdue sessions by pushing next_checkin_at forward,
@@ -1185,7 +1307,7 @@ async function runCheckinFollowUps(pool) {
        AND health_checkins.resolved_at IS NULL
        AND health_checkins.session_date = $2
        AND health_checkins.flow_state != 'resolved'
-     RETURNING health_checkins.*, u.push_token, u.display_name, u.full_name,
+     RETURNING health_checkins.*, health_checkins.last_response_at::text AS reminder_response_version, u.push_token, u.display_name, u.full_name,
                COALESCE(u.language_preference,'vi') as lang,
                (SELECT uop.risk_score FROM user_onboarding_profiles uop WHERE uop.user_id = u.id) as risk_score,
                (SELECT uop.birth_year FROM user_onboarding_profiles uop WHERE uop.user_id = u.id) as birth_year,
@@ -1199,6 +1321,11 @@ async function runCheckinFollowUps(pool) {
   for (const session of overdue) {
     const newMissCount = session.no_response_count + 1;
     const routineMonitoring = isRoutineMonitoringCheckin(session);
+    const copy = followUpCopyKeys(session, newMissCount);
+    const reminderData = followUpSnapshot(session);
+    if (await isStaleCheckinReminder(pool, {
+      type: 'checkin_followup', user_id: session.user_id, data: reminderData,
+    })) continue;
 
     if (newMissCount === 1) {
       // First miss → push + in-app nhắc
@@ -1209,28 +1336,26 @@ async function runCheckinFollowUps(pool) {
       // {{callName}}, {{CallName}}). Trước đây chỉ list 4 → template dùng
       // {{CallName}} (PascalCase) không được fill → render literal.
       const hParams = { ...h };
-      const msg = routineMonitoring
-        ? t('checkin.followup_monitoring', sLang, hParams)
-        : session.flow_state === 'high_alert'
-          ? t('checkin.followup_high_alert', sLang, hParams)
-          : t('checkin.followup_normal', sLang, hParams);
+      const msg = t(copy.body, sLang, hParams);
 
       await sendCheckinNotification(
         pool,
         session.user_id,
         session.push_token,
         'checkin_followup',
-        t('checkin.followup_title', sLang, hParams),
+        t(copy.title, sLang, hParams),
         msg,
-        { checkinId: String(session.id) }
+        reminderData
       );
       sent++;
 
       // Schedule next check — same interval as before
       const nextAt = session.flow_state === 'high_alert' ? hoursFromNow(2) : hoursFromNow(4);
       await pool.query(
-        `UPDATE health_checkins SET no_response_count=$1, next_checkin_at=$2, updated_at=NOW() WHERE id=$3`,
-        [newMissCount, nextAt, session.id]
+        `UPDATE health_checkins SET no_response_count=$1, next_checkin_at=$2, updated_at=NOW()
+         WHERE id=$3 AND last_response_at IS NOT DISTINCT FROM $4
+           AND triage_state=$5::jsonb`,
+        [newMissCount, nextAt, session.id, session.reminder_response_version ?? session.last_response_at, JSON.stringify(session.triage_state || {})]
       );
     } else {
       // 2+ misses: use smart alert logic to decide whether to alert family
@@ -1260,13 +1385,9 @@ async function runCheckinFollowUps(pool) {
         session.user_id,
         session.push_token,
         routineMonitoring ? 'checkin_followup' : 'checkin_followup_urgent',
-        t('checkin.no_response_title', sLang2, hParams2),
-        t(
-          routineMonitoring ? 'checkin.followup_monitoring' : 'checkin.no_response_body',
-          sLang2,
-          hParams2
-        ),
-        { checkinId: String(session.id) }
+        t(copy.title, sLang2, hParams2),
+        t(copy.body, sLang2, hParams2),
+        reminderData
       );
       sent++;
 
@@ -1275,16 +1396,18 @@ async function runCheckinFollowUps(pool) {
         await pool.query(
           `UPDATE health_checkins SET no_response_count=$1, family_alerted=$2,
              family_alerted_at=CASE WHEN $2 THEN NOW() ELSE family_alerted_at END,
-             resolved_at=NOW(), updated_at=NOW() WHERE id=$3`,
-          [newMissCount, doAlert, session.id]
+             resolved_at=NOW(), updated_at=NOW() WHERE id=$3
+               AND last_response_at IS NOT DISTINCT FROM $4 AND triage_state=$5::jsonb`,
+          [newMissCount, doAlert, session.id, session.reminder_response_version ?? session.last_response_at, JSON.stringify(session.triage_state || {})]
         );
       } else {
         const nextAt = session.flow_state === 'high_alert' ? hoursFromNow(2) : hoursFromNow(4);
         await pool.query(
           `UPDATE health_checkins SET no_response_count=$1, family_alerted=$2,
              family_alerted_at=CASE WHEN $2 THEN NOW() ELSE family_alerted_at END,
-             next_checkin_at=$3, updated_at=NOW() WHERE id=$4`,
-          [newMissCount, doAlert, nextAt, session.id]
+             next_checkin_at=$3, updated_at=NOW() WHERE id=$4
+               AND last_response_at IS NOT DISTINCT FROM $5 AND triage_state=$6::jsonb`,
+          [newMissCount, doAlert, nextAt, session.id, session.reminder_response_version ?? session.last_response_at, JSON.stringify(session.triage_state || {})]
         );
       }
     }

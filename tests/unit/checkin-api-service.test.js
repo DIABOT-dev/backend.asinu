@@ -33,7 +33,8 @@ describe('check-in orchestration', () => {
     expect(earlySignal.evaluateAfterNewHealthData).toHaveBeenCalledWith(
       pool,
       7,
-      'checkin-start:12:fine:2026-10-04'
+      'checkin-start:12:fine:2026-10-04',
+      { patientPresent: true }
     );
   });
 
@@ -48,6 +49,16 @@ describe('check-in orchestration', () => {
       session: { id: 12 },
     });
     expect(earlySignal.evaluateAfterNewHealthData).not.toHaveBeenCalled();
+  });
+
+  test('a follow-up response marks the patient present before evaluating signals', async () => {
+    checkin.recordFollowUp.mockResolvedValueOnce({
+      id: 12, flow_state: 'follow_up', current_status: 'tired', updated_at: '2026-11-09',
+    });
+    await api.recordFollowUp(pool, 7, 12, 'tired');
+    expect(earlySignal.evaluateAfterNewHealthData).toHaveBeenCalledWith(
+      pool, 7, 'checkin-followup:12:tired:2026-11-09', { patientPresent: true }
+    );
   });
 
   test('includes caregiver connection state with an emergency result', async () => {

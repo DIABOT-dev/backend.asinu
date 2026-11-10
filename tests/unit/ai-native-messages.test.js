@@ -7,6 +7,7 @@ jest.mock('../../src/services/ai/providers/medgemma', () => ({
       model: 'medgemma-27b-it',
       tokens_used: { prompt: 100, completion: 10 },
       credits_remaining: '5',
+      finish_reason: 'stop',
     },
   })),
 }));
@@ -33,7 +34,11 @@ test('passes native consultation roles and a per-request model through the share
     expect.objectContaining({ messages, model: 'medgemma-27b-it', system: 'Expert review only.' }),
     undefined
   );
-  expect(result).toMatchObject({ credits_remaining: '5', usage: { prompt: 100, completion: 10 } });
+  expect(result).toMatchObject({
+    credits_remaining: '5',
+    usage: { prompt: 100, completion: 10 },
+    finishReason: 'stop',
+  });
 });
 
 test('preserves the established adapter behaviour for legacy message callers', async () => {

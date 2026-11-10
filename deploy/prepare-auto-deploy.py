@@ -95,7 +95,7 @@ process.stdout.write('Migration connection verified\\n');
         ]
         for message, arguments in checks:
             print(message, flush=True)
-            result = subprocess.run(command + arguments, capture_output=True, check=False, timeout=90)
+            result = subprocess.run(command + arguments, stdin=subprocess.DEVNULL, capture_output=True, check=False, timeout=90)
             if result.returncode:
                 raise RuntimeError("Migration configuration or database connection verification failed")
     except BaseException:

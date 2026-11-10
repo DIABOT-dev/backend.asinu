@@ -6,6 +6,7 @@ const scan = require('./medication-scan.service');
 const item = c.z
   .object({
     clientId: c.uuid,
+    existingItemId: c.uuid.optional(),
     display_name: c.z.string().max(120).refine(med.noDose),
     printed_name: c.z.string().max(200).refine(med.noDose).optional(),
     kind: c.z.enum(['MEDICINE', 'SUPPLEMENT']).nullable(),
@@ -51,6 +52,7 @@ const item = c.z
 const snapshotSchema = c.z
   .object({
     version: c.z.literal(1),
+    setupFlow: c.z.literal('dose_first').optional(),
     step: c.z.number().int().min(1).max(4),
     items: c.z.array(item).max(20),
     meals: c.z
@@ -66,7 +68,7 @@ const snapshotSchema = c.z
         c.z
           .object({
             time_local: c.z.string().max(5),
-            meal_anchor: c.z.enum(p.anchors),
+            meal_anchor: c.z.enum(p.anchors).nullable(),
             item_indexes: c.z.array(c.z.number().int().min(0).max(19)).max(20),
             note: c.z.string().max(1200).refine(med.noDose).optional(),
             sourceKeys: c.z.array(c.z.string().max(100)).max(20).optional(),

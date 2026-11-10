@@ -121,7 +121,6 @@ describe('early-signal HTTP contract after route extraction', () => {
     for (const [method, path] of [
       ['post', '/early-signals/evaluate'],
       ['get', '/early-signals/latest'],
-      ['get', '/early-signals/family'],
     ]) {
       expect((await request(app)[method](path)).status).toBe(401);
     }
@@ -162,14 +161,13 @@ describe('early-signal HTTP contract after route extraction', () => {
     expect(earlySignal.latest).toHaveBeenCalledWith(pool, id, 7, 'vi');
   });
 
-  test('retains family result envelope', async () => {
+  test('retired family HTTP shortcut is not exposed', async () => {
     earlySignal.familyLatest.mockResolvedValue([{ user_id: 8 }]);
     const res = await request(app)
       .get('/early-signals/family')
       .set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual({ ok: true, assessments: [{ user_id: 8 }] });
-    expect(earlySignal.familyLatest).toHaveBeenCalledWith(pool, 7, 'vi');
+    expect(res.status).toBe(404);
+    expect(earlySignal.familyLatest).not.toHaveBeenCalled();
   });
 
   test('preserves the service permission denial', async () => {

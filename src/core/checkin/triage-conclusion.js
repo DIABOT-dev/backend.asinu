@@ -1,4 +1,5 @@
 'use strict';
+const { conclusionSpeech } = require('./triage-conclusion-speech');
 
 const { callTextAi } = require('../../services/ai/ai.service');
 const { getHonorifics, getUserAge } = require('../../lib/honorifics');
@@ -9,6 +10,11 @@ const { localizeOption } = require('./triage-i18n');
 
 const BLOCKS = ['loi_nhan', 'lien_quan', 'nen_lam', 'di_kham_khi'];
 const { buildConclusionPrompt, buildConclusionSystem } = require('./triage-conclusion-prompt');
+const {
+  normalizeConclusionCandidate,
+  CONCLUSION_PROMPT_VERSION,
+  CONCLUSION_RENDER_VERSION,
+} = require('./triage-conclusion-normalize');
 const {
   requiredMeasurementTypes,
   validatePresentation,
@@ -22,16 +28,26 @@ const {
   containsVisit,
   visitFault,
   emergencyFault,
+  priorSymptomResolutionFault,
   measurementFault,
   measurementTimeMatches,
 } = require('./triage-conclusion-guards');
 const escapePattern = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const accentSensitiveNames = new Set(['chàm', 'cúm']);
-const phraseText = (text, phrase) => accentSensitiveNames.has(phrase)
-  ? String(text || '').normalize('NFKC').replace(/\p{Cf}/gu, '').replace(/\s+/g, ' ').trim().toLowerCase()
-  : normalize(text);
+const phraseText = (text, phrase) =>
+  accentSensitiveNames.has(phrase)
+    ? String(text || '')
+        .normalize('NFKC')
+        .replace(/\p{Cf}/gu, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .toLowerCase()
+    : normalize(text);
 const phrasePattern = (phrase) =>
-  new RegExp(`(?<![\\p{L}\\p{N}])${escapePattern(phraseText(phrase, phrase))}(?![\\p{L}\\p{N}])`, 'giu');
+  new RegExp(
+    `(?<![\\p{L}\\p{N}])${escapePattern(phraseText(phrase, phrase))}(?![\\p{L}\\p{N}])`,
+    'giu'
+  );
 const hasPhrase = (text, phrase) => phrasePattern(phrase).test(phraseText(text, phrase));
 const short = (value, max = 240) =>
   String(value || '')
@@ -147,6 +163,20 @@ const HARD_PATTERNS = [
   ['markup', /<\/?[a-z][^>]*>/iu],
 ];
 
+function hardConclusionFault(text) {
+  const original = text.normalize('NFKC').replace(/\s+/g, ' ');
+  // A general sign that the body needs care/rest is not a proposed disease.
+  // Remove only that neutral prefix from the speculation check. Every drug,
+  // dose, disease, measurement and treatment check still sees the full text.
+  const speculationText = original.replace(
+    /(?:có thể là|khả năng là)\s+(?:một\s+)?(?:dấu hiệu|tín hiệu)\s+(?:cho thấy\s+)?(?:cơ thể|mình)\s+(?:đang\s+)?(?:cần|muốn)\b/giu,
+    'neutral possibility'
+  );
+  return HARD_PATTERNS.find(([reason, pattern]) =>
+    pattern.test(reason === 'speculative_diagnosis' ? speculationText : original)
+  );
+}
+
 function measurements(context, now) {
   const result = [];
   const add = (row, type, value, unit) => {
@@ -191,15 +221,34 @@ function buildConclusionFacts(state, profile, context = {}, lang = 'vi', now = n
     tuoi: getUserAge(profile),
     gioi: short(profile.gender, 20),
     benh_nen_da_khai: list(
-      conditionsOf(profile.medical_conditions).length
-        ? conditionsOf(profile.medical_conditions)
-        : conditionsOf(context.medical_conditions)
+      state.detailedAssessmentVersion === 2 && state.conditions?.length
+        ? state.conditions
+        : conditionsOf(profile.medical_conditions).length
+          ? conditionsOf(profile.medical_conditions)
+          : conditionsOf(context.medical_conditions)
     ),
     trieu_chung: list(
       state.newSymptoms && state.currentSymptoms?.length ? state.currentSymptoms : state.allSymptoms
     ),
+    ...(state.regionDetails?.length
+      ? {
+          chi_tiet_tung_vung: state.regionDetails,
+          khai_bao_chi_tiet_da_hoan_tat: Boolean(state.detailedAssessmentComplete),
+          tinh_trang_khai_bao_benh_nen: state.historyAssessment,
+        }
+      : {}),
+    ...(Array.isArray(state.bodyLocations) && state.bodyLocations.length
+      ? { vung_kho_chiu: state.bodyLocations }
+      : {}),
+    ...(short(state.bodyLocationOther, 2000)
+      ? { vi_tri_kho_chiu: short(state.bodyLocationOther, 2000) }
+      : {}),
     ...(state.newSymptoms
-      ? { trieu_chung_truoc_do: list(state.baselineSymptoms).filter((symptom) => !state.currentSymptoms?.includes(symptom)) }
+      ? {
+          trieu_chung_truoc_do: list(state.baselineSymptoms).filter(
+            (symptom) => !state.currentSymptoms?.includes(symptom)
+          ),
+        }
       : {}),
     bat_dau: short(state.onset) || null,
     dien_bien:
@@ -209,6 +258,7 @@ function buildConclusionFacts(state, profile, context = {}, lang = 'vi', now = n
     dau_hieu_nguy_hiem_da_hoi: Boolean(state.completedSteps?.has('red_flags')),
     dau_hieu_nguy_hiem_gap: list(state.redFlagsFound),
     assessment_incomplete: Boolean(state.assessmentIncomplete),
+    ...(state.adaptiveAnswers?.length ? { khai_bao_bo_sung: state.adaptiveAnswers } : {}),
     care_level: !state.needsDoctor
       ? 'tu_theo_doi'
       : state.severity === 'high'
@@ -226,32 +276,39 @@ function buildConclusionFacts(state, profile, context = {}, lang = 'vi', now = n
     })),
     trieu_chung_lap_lai: short(context.symptomFrequencyContext, 1000) || null,
     viec_da_ke: list(state.actionsFound),
+    ...(state.careActionsAnswer ? { cham_soc_bo_sung_da_khai: short(state.careActionsAnswer, 600) } : {}),
   };
 }
 
-function validateBlock(block, value, facts) {
+function validateBlock(block, value, facts, { skipCareLevel = false } = {}) {
   const isArray = block === 'nen_lam' || block === 'di_kham_khi';
   if (
     isArray
       ? !Array.isArray(value) ||
         value.length < 2 ||
-        value.length > 3 ||
+        value.length > (block === 'nen_lam' ? 6 : 4) ||
         value.some((v) => typeof v !== 'string' || !v.trim() || v.length > 240)
       : typeof value !== 'string' ||
         !value.trim() ||
-        value.length > (block === 'loi_nhan' ? 450 : 1200)
+        (block !== 'narrative' && value.length > (block === 'loi_nhan' ? 450 : 1200))
   )
     return 'invalid_block';
   const text = isArray ? value.join('. ') : value;
   if ([...text].some((char) => char.charCodeAt(0) <= 8) || /\p{Cf}/u.test(text))
     return 'invalid_text';
   const plain = normalize(text);
-  const hard = HARD_PATTERNS.find(([, pattern]) =>
-    pattern.test(text.normalize('NFKC').replace(/\s+/g, ' '))
-  );
+  if ((['none_reported', 'profile', 'answered'].includes(facts.tinh_trang_khai_bao_benh_nen) ||
+    facts.benh_nen_da_khai?.length) &&
+    /(?:chua|khong).{0,12}(?:co|duoc cung cap|nhan duoc).{0,12}(?:thong tin|biet).{0,40}(?:benh nen|tien su)|(?:missing|not (?:provided|reported)|no information).{0,45}(?:medical history|underlying conditions?|medical conditions?)/u.test(plain))
+    return 'recorded_history_claimed_missing';
+  const hard = hardConclusionFault(text);
   if (hard) return hard[0];
   const knownGroups = new Set(facts.benh_nen_da_khai.flatMap(diseaseGroups));
   if (diseaseGroups(text).some((group) => !knownGroups.has(group))) return 'undeclared_disease';
+  const historyFault = priorSymptomResolutionFault(text);
+  if (historyFault) return historyFault;
+  const medicationMention =
+    /\bthuoc\b|tuan thu dieu tri|\b(?:medication|medicine|treatment adherence)\b/.test(plain);
   const medicationStatements = statements(value).filter((segment) => {
     if (facts.uong_thuoc_hom_nay !== 'chưa ghi') return true;
     const normalized = normalize(segment);
@@ -279,6 +336,7 @@ function validateBlock(block, value, facts) {
     !facts.tuan_thu_thuoc_7_ngay
   )
     return 'unconfirmed_prescription';
+  if (block === 'nen_lam' && medicationMention) return 'nonmedication_actions_only';
   if (
     /(?:đã (?:báo|thông báo|liên hệ)).{0,35}(?:người thân|gia đình)|(?:người thân|gia đình).{0,20}đã (?:được )?(?:báo|thông báo|liên hệ)|family (?:has been|was) notified/iu.test(
       text
@@ -310,8 +368,9 @@ function validateBlock(block, value, facts) {
     /chưa (?:làm gì|xử lý|có biện pháp)|chưa dùng|haven.t (?:done|taken)|no action/iu.test(text)
   )
     return 'invented_action_history';
-  if (block !== 'di_kham_khi' && containsVisit(text)) return 'referral_outside_block';
-  if (block === 'di_kham_khi') {
+  if (!['di_kham_khi', 'narrative'].includes(block) && containsVisit(text))
+    return 'referral_outside_block';
+  if ((block === 'di_kham_khi' || block === 'narrative') && !skipCareLevel) {
     const reason = visitFault(value, facts.care_level);
     if (reason) return reason;
   }
@@ -342,6 +401,71 @@ function validateBlock(block, value, facts) {
   )
     return 'incomplete_assessment_not_acknowledged';
   return null;
+}
+
+const sentenceSegmenter = new Intl.Segmenter('vi', { granularity: 'sentence' });
+const repairableContentFaults = new Set([
+  'recorded_history_claimed_missing',
+  'treatment_change',
+  'medication_instruction',
+  'unconfirmed_prescription',
+  'unconfirmed_prior_symptom_resolution',
+  'insufficient_comparison_data',
+  'ambiguous_measurement_reference',
+  'unmeasured_vital_claim',
+  'measurement_time_not_exact',
+  'ungrounded_measurement',
+  'measurement_type_mismatch',
+  'measurement_unit_missing',
+]);
+
+function repairConclusionContent(block, value, facts) {
+  if (block === 'nen_lam' && Array.isArray(value)) {
+    return value.filter((item) => {
+      if (typeof item !== 'string') return true;
+      const reason = validateBlock(block, [item, item], facts);
+      if (
+        ![
+          'nonmedication_actions_only',
+          'unconfirmed_prescription',
+          'medication_instruction',
+        ].includes(reason)
+      )
+        return true;
+      logger.warn('conclusion_rejected', { block, reason, scope: 'item' });
+      return false;
+    });
+  }
+  if (block === 'di_kham_khi' && Array.isArray(value)) {
+    return value.filter((item) => {
+      if (typeof item !== 'string') return true;
+      // Drop a vague emergency trigger rather than rewriting it into a new
+      // clinical recommendation. Whole-block validation still checks urgency.
+      const reason = emergencyFault([item]);
+      if (reason !== 'nonspecific_emergency_condition') return true;
+      logger.warn('conclusion_rejected', { block, reason, scope: 'item' });
+      return false;
+    });
+  }
+  if (typeof value !== 'string' || !repairableContentFaults.has(validateBlock(block, value, facts)))
+    return value;
+  const kept = [];
+  for (const { segment } of sentenceSegmenter.segment(value)) {
+    const text = segment.trim();
+    const reason = validateBlock(block, text, facts);
+    if (!reason) {
+      kept.push(text);
+      continue;
+    }
+    if (!repairableContentFaults.has(reason)) return value;
+    logger.warn('conclusion_rejected', { block, reason, scope: 'sentence' });
+    if (reason === 'unconfirmed_prior_symptom_resolution') {
+      // Preserve an accurate acknowledgement before "but ... resolved".
+      const prefix = text.split(/,?\s+(?:nhưng|but)\s+/iu)[0];
+      if (prefix !== text && !validateBlock(block, prefix + '.', facts)) kept.push(prefix + '.');
+    }
+  }
+  return kept.join(' ');
 }
 
 function symptomGroup(symptoms) {
@@ -412,7 +536,13 @@ function fallbackBlocks(state, facts, lang) {
   const todo = [key(`${group}.action1`), key(`${group}.action2`)];
   if (requiredMeasurementTypes(facts).length) todo.push(key('measure'));
   return {
-    loi_nhan: key(facts.assessment_incomplete ? 'incomplete' : params.baseline ? 'message_with_baseline' : 'message'),
+    loi_nhan: key(
+      facts.assessment_incomplete
+        ? 'incomplete'
+        : params.baseline
+          ? 'message_with_baseline'
+          : 'message'
+    ),
     lien_quan: facts.benh_nen_da_khai.length ? key('conditions') : key(`${group}.explanation`),
     nen_lam: todo,
     di_kham_khi: [key(`visit.${visit}`), key(`${group}.warning`)],
@@ -424,20 +554,22 @@ function composeConclusion(blocks, state, profile, lang) {
   const hours =
     Number(state.followUpHours) > 0 ? Number(state.followUpHours) : state.isElderly ? 4 : 6;
   const closeMessage = t('checkin.conclusion.followup', lang, { ...h, hours });
-  return {
+  const aiNotice = t('checkin.conclusion.ai_notice', lang);
+  const result = {
     conclusionVersion: 2,
     personalMessage: blocks.loi_nhan,
     explanation: blocks.lien_quan,
     todo: blocks.nen_lam,
     seeDoctorWhen: blocks.di_kham_khi,
     disclaimer: t('checkin.conclusion.disclaimer', lang),
+    aiNotice,
     summary: `${blocks.loi_nhan} ${blocks.lien_quan}`,
     recommendation: [...blocks.nen_lam, ...blocks.di_kham_khi].join('\n'),
     closeMessage,
     followUpHours: hours,
     isEmergency: false,
-    speechText: [blocks.loi_nhan, ...blocks.di_kham_khi, closeMessage].join(' '),
   };
+  return { ...result, speechText: conclusionSpeech(result) };
 }
 
 function includeRecordedFacts(blocks, facts, lang) {
@@ -487,6 +619,7 @@ async function generateStructuredConclusion(state, profile, lang = 'vi', context
   const started = Date.now();
   const rejected = [];
   let generationMeta;
+  const repairs = [];
   try {
     const response = await callTextAi({
       system: buildConclusionSystem(facts, lang),
@@ -503,7 +636,9 @@ async function generateStructuredConclusion(state, profile, lang = 'vi', context
       .trim()
       .replace(/^```(?:json)?\s*/i, '')
       .replace(/\s*```$/, '');
-    const candidate = JSON.parse(raw);
+    const normalized = normalizeConclusionCandidate(JSON.parse(raw), facts, lang);
+    const candidate = normalized.candidate;
+    repairs.push(...normalized.repairs);
     if (typeof candidate?.lien_quan === 'string') {
       candidate.lien_quan = normalizeMeasurementSentences(candidate.lien_quan);
     }
@@ -511,6 +646,8 @@ async function generateStructuredConclusion(state, profile, lang = 'vi', context
       candidate.di_kham_khi = normalizeConditionalWarnings(candidate.di_kham_khi, lang);
     }
     for (const block of BLOCKS) {
+      if (candidate && typeof candidate === 'object')
+        candidate[block] = repairConclusionContent(block, candidate[block], facts);
       const reason =
         validateBlock(block, candidate?.[block], facts) ||
         validatePresentation(block, candidate?.[block], facts);
@@ -530,8 +667,11 @@ async function generateStructuredConclusion(state, profile, lang = 'vi', context
       reason: error instanceof SyntaxError ? 'invalid_json' : 'provider_unavailable',
     });
   }
-  if ((facts.trieu_chung_truoc_do || []).slice(0, 2).some((symptom) =>
-    !hasPhrase(blocks.loi_nhan, localizeConclusionText(symptom, lang)))) {
+  if (
+    (facts.trieu_chung_truoc_do || [])
+      .slice(0, 2)
+      .some((symptom) => !hasPhrase(blocks.loi_nhan, localizeConclusionText(symptom, lang)))
+  ) {
     blocks.loi_nhan = fallbackBlocks(state, facts, lang).loi_nhan;
     rejected.push({ block: 'loi_nhan', reason: 'baseline_context_missing' });
   }
@@ -545,13 +685,20 @@ async function generateStructuredConclusion(state, profile, lang = 'vi', context
     completed = includeRecordedFacts(blocks, facts, lang);
   }
   for (const item of rejected) logger.warn('conclusion_rejected', item);
+  if (repairs.length) logger.info('conclusion_normalized', { repairs });
   if (generationMeta)
     logger.info('conclusion_generated', {
       durationMs: Date.now() - started,
       ...generationMeta,
       fallbackBlocks: new Set(rejected.map((item) => item.block)).size,
     });
-  return composeConclusion(completed, state, profile, lang);
+  const final = normalizeConclusionCandidate(completed, facts, lang).candidate;
+  return {
+    ...composeConclusion(final, state, profile, lang),
+    conclusionPromptVersion: CONCLUSION_PROMPT_VERSION,
+    conclusionRenderVersion: CONCLUSION_RENDER_VERSION,
+    conclusionSource: !generationMeta ? 'fallback' : rejected.length ? 'partial_fallback' : 'ai',
+  };
 }
 
 // Legacy exported predicate remains available for old callers/tests. The fixed
@@ -559,7 +706,7 @@ async function generateStructuredConclusion(state, profile, lang = 'vi', context
 function isSafeConclusion(candidate, profile = {}) {
   if (!candidate?.summary || !candidate?.recommendation) return false;
   const text = `${candidate.summary} ${candidate.recommendation}`;
-  if (HARD_PATTERNS.some(([, pattern]) => pattern.test(text))) return false;
+  if (hardConclusionFault(text)) return false;
   const declared = new Set(list(profile.medical_conditions).flatMap(diseaseGroups));
   return !diseaseGroups(text).some((group) => /(?:bị|mắc)\s/iu.test(text) && !declared.has(group));
 }

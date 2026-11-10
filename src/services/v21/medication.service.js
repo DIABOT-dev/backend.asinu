@@ -435,9 +435,13 @@ async function setup(pool, actor, patient, body) {
   const x = c.z
     .object({
       request_id: c.uuid,
+      merge_existing: c.z.boolean().optional(),
       draft_id: c.uuid.optional(),
       draft_revision: c.z.number().int().positive().optional(),
-      items: c.z.array(itemSchema).min(1).max(20),
+      items: c.z
+        .array(c.z.union([itemSchema, c.z.object({ id: c.uuid }).strict()]))
+        .min(1)
+        .max(20),
       meals: mealSchema,
       slots: c.z
         .array(
@@ -457,7 +461,13 @@ async function setup(pool, actor, patient, body) {
     .parse(body);
   if (
     new Set(x.slots.map((s) => s.time_local)).size !== x.slots.length ||
-    x.slots.some((s) => s.item_indexes.some((i) => i >= x.items.length))
+    x.slots.some(
+      (s) =>
+        new Set(s.item_indexes).size !== s.item_indexes.length ||
+        s.item_indexes.some((i) => i >= x.items.length)
+    ) ||
+    (x.merge_existing &&
+      x.items.some((_, i) => !x.slots.some((slot) => slot.item_indexes.includes(i))))
   )
     throw c.error('MED_SETUP_INVALID');
   const fingerprint = require('node:crypto')
@@ -490,27 +500,64 @@ async function setup(pool, actor, patient, body) {
       throw c.error('MED_DRAFT_CHANGED', 409);
     await saveMeals(db, actor, patient, x.meals);
     const items = [];
-    for (const row of x.items) items.push((await createItem(db, actor, patient, row)).item);
+    for (const row of x.items) {
+      if (!row.id) items.push((await createItem(db, actor, patient, row)).item);
+      else {
+        const existing = (
+          await db.query('SELECT * FROM med_items WHERE id=$1 AND patient_user_id=$2 AND active', [
+            row.id,
+            patient,
+          ])
+        ).rows[0];
+        if (!existing) throw c.error('MED_ITEM_NOT_FOUND', 404);
+        if (items.some((item) => item.id === existing.id)) throw c.error('MED_SETUP_INVALID');
+        items.push(publicItem(existing));
+      }
+    }
     const schedules = [];
-    for (const slot of x.slots)
+    let mergedExisting = false;
+    for (const slot of x.slots) {
+      const existing = x.merge_existing
+        ? (
+            await db.query(
+              "SELECT * FROM med_schedules WHERE patient_user_id=$1 AND time_local=$2 AND active AND consent_state<>'DECLINED' FOR UPDATE",
+              [patient, slot.time_local]
+            )
+          ).rows[0]
+        : null;
+      const oldIds = existing
+        ? (
+            await db.query('SELECT item_id FROM med_schedule_items WHERE schedule_id=$1', [
+              existing.id,
+            ])
+          ).rows.map((row) => row.item_id)
+        : [];
+      if (existing) mergedExisting = true;
       schedules.push(
         (
           await saveSchedule(
             db,
             actor,
             patient,
-            null,
+            existing?.id || null,
             {
               time_local: slot.time_local,
-              meal_anchor: slot.meal_anchor,
-              note: slot.note,
-              item_ids: slot.item_indexes.map((i) => items[i].id),
+              meal_anchor: slot.meal_anchor ?? existing?.meal_anchor,
+              note:
+                slot.note ??
+                (existing ? reveal(patient, 'med_schedules.note', existing.note) || '' : undefined),
+              item_ids: [...new Set([...oldIds, ...slot.item_indexes.map((i) => items[i].id)])],
             },
             { notify: false }
           )
         ).schedule
       );
-    const result = { schedules, items, pendingConsent: Number(actor) !== patient };
+    }
+    const result = {
+      schedules,
+      items,
+      pendingConsent: schedules.some((row) => row.consent_state === 'PENDING'),
+    };
     if (result.pendingConsent)
       await c.message(db, {
         key: 'med.setup.consent:' + x.request_id,
@@ -519,7 +566,14 @@ async function setup(pool, actor, patient, body) {
         kind: 'med_consent',
         payload: { scheduleId: schedules[0].id },
       });
-    await notifySchedule(db, patient, actor, schedules[0].id, 'created', schedules[0]);
+    await notifySchedule(
+      db,
+      patient,
+      actor,
+      schedules[0].id,
+      mergedExisting ? 'updated' : 'created',
+      schedules[0]
+    );
     await db.query(
       'INSERT INTO med_setup_receipts(actor_id,request_id,patient_user_id,fingerprint,result_json) VALUES($1,$2,$3,$4,$5)',
       [
@@ -535,6 +589,90 @@ async function setup(pool, actor, patient, body) {
         "UPDATE med_setup_drafts SET state='SAVED',snapshot_json=NULL,revision=revision+1,updated_at=NOW() WHERE id=$1 AND actor_id=$2 AND patient_user_id=$3",
         [x.draft_id, actor, patient]
       );
+    return result;
+  });
+}
+// Moving one medicine is atomic; past dose snapshots stay on their original schedule.
+async function moveItem(pool, actor, patient, id, body) {
+  patient = await c.patientAccess(pool, actor, patient);
+  await c.assertFeature(pool, patient, 'medication');
+  requireEncryption();
+  c.uuid.parse(id);
+  const x = c.z
+    .object({ item_id: c.uuid, time_local: p.time, request_id: c.uuid })
+    .strict()
+    .parse(body);
+  const fingerprint = require('node:crypto')
+    .createHmac('sha256', process.env.JWT_SECRET)
+    .update(JSON.stringify({ action: 'move_item', patient, id, ...x }))
+    .digest('hex');
+  return c.transaction(pool, async (db) => {
+    await c.lockPatient(db, patient);
+    await c.patientAccess(db, actor, patient);
+    const receipt = (
+      await db.query('SELECT * FROM med_setup_receipts WHERE actor_id=$1 AND request_id=$2', [
+        actor,
+        x.request_id,
+      ])
+    ).rows[0];
+    if (receipt) {
+      if (receipt.fingerprint !== fingerprint) throw c.error('MED_REQUEST_CHANGED', 409);
+      return JSON.parse(reveal(patient, 'med_setup_receipts.result_json', receipt.result_json));
+    }
+    const source = (
+      await db.query(
+        "SELECT * FROM med_schedules WHERE id=$1 AND patient_user_id=$2 AND active AND consent_state<>'DECLINED' FOR UPDATE",
+        [id, patient]
+      )
+    ).rows[0];
+    if (!source) throw c.error('MED_SCHEDULE_NOT_FOUND', 404);
+    const ids = (
+      await db.query('SELECT item_id FROM med_schedule_items WHERE schedule_id=$1', [id])
+    ).rows.map((row) => row.item_id);
+    if (!ids.includes(x.item_id)) throw c.error('MED_ITEM_NOT_FOUND', 404);
+    let targetId = id;
+    if (String(source.time_local).slice(0, 5) !== x.time_local) {
+      const target = (
+        await db.query(
+          "SELECT * FROM med_schedules WHERE patient_user_id=$1 AND time_local=$2 AND active AND consent_state<>'DECLINED' FOR UPDATE",
+          [patient, x.time_local]
+        )
+      ).rows[0];
+      if (ids.length === 1) await remove(db, actor, patient, id);
+      else
+        await saveSchedule(db, actor, patient, id, {
+          time_local: String(source.time_local).slice(0, 5),
+          meal_anchor: source.meal_anchor,
+          item_ids: ids.filter((item) => item !== x.item_id),
+          note: reveal(patient, 'med_schedules.note', source.note) || '',
+        });
+      const targetIds = target
+        ? (
+            await db.query('SELECT item_id FROM med_schedule_items WHERE schedule_id=$1', [
+              target.id,
+            ])
+          ).rows.map((row) => row.item_id)
+        : [];
+      targetId = (
+        await saveSchedule(db, actor, patient, target?.id || null, {
+          time_local: x.time_local,
+          meal_anchor: target?.meal_anchor || null,
+          item_ids: [...new Set([...targetIds, x.item_id])],
+          note: target ? reveal(patient, 'med_schedules.note', target.note) || '' : '',
+        })
+      ).schedule.id;
+    }
+    const result = { sourceScheduleId: id, targetScheduleId: targetId };
+    await db.query(
+      'INSERT INTO med_setup_receipts(actor_id,request_id,patient_user_id,fingerprint,result_json) VALUES($1,$2,$3,$4,$5)',
+      [
+        actor,
+        x.request_id,
+        patient,
+        fingerprint,
+        protect(patient, 'med_setup_receipts.result_json', JSON.stringify(result)),
+      ]
+    );
     return result;
   });
 }
@@ -619,4 +757,5 @@ module.exports = {
   mealSchema,
   cancelScheduleCalls,
   setup,
+  moveItem,
 };

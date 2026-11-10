@@ -11,7 +11,6 @@ const {
   deleteAll,
   getNotificationPreferences,
   updateNotificationPreferences,
-  previewEngagement,
   runEngagement,
   runBasic,
 } = require('../controllers/notification.controller');
@@ -27,7 +26,6 @@ function notificationRoutes(pool) {
   router.delete('/:id', requireAuth, bindController(deleteOne, pool));
   router.get('/preferences', requireAuth, bindController(getNotificationPreferences, pool));
   router.put('/preferences', requireAuth, bindController(updateNotificationPreferences, pool));
-  router.get('/engagement/preview', requireAuth, bindController(previewEngagement, pool));
   router.post('/engagement/run', requireCronSecret, bindController(runEngagement, pool));
   router.post('/basic/run', requireCronSecret, bindController(runBasic, pool));
 

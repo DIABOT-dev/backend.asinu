@@ -68,11 +68,9 @@ const routes = [
   ['post', '/tasks/:taskId/rating', 'submitDoctorRating'],
   ['post', '/privacy', 'requestDoctorPrivacy'],
   ['get', '/privacy', 'getDoctorPrivacyReceipts'],
-  ['post', '/recommendations', 'recommendDoctor'],
   ['post', '/specialists', 'listDoctorDirectory'],
   ['get', '/specialty-options', 'listDoctorDirectorySpecialties'],
   ['get', '/specialists/:doctorId/reviews', 'listDoctorReviews'],
-  ['post', '/specialties', 'listDoctorSpecialties'],
   ['post', '/clinics', 'listDoctorClinics'],
 ];
 
@@ -150,4 +148,11 @@ test('sync controller failures still reach Express error middleware', async () =
   });
   const response = await request(app).get('/doctor/tasks').expect(500);
   expect(response.body).toEqual({ ok: false, code: 'INTERNAL_ERROR' });
+});
+
+
+test.each(['/recommendations', '/specialties'])('retired mobile directory endpoint %s is no longer exposed', async (route) => {
+  await request(app).post('/doctor' + route).send({}).expect(404);
+  expect(controller.recommendDoctor).not.toHaveBeenCalled();
+  expect(controller.listDoctorSpecialties).not.toHaveBeenCalled();
 });

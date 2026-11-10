@@ -13,11 +13,9 @@ const {
   screenDoctorConsultation,
   submitDoctorRating,
   requestDoctorPrivacy,
-  recommendDoctor,
   listDoctorDirectory,
   listDoctorDirectorySpecialties,
   listDoctorReviews,
-  listDoctorSpecialties,
   listDoctorClinics,
   listDoctorTasks,
   listDoctorMessages,
@@ -57,7 +55,6 @@ function doctorTaskRoutes(pool) {
   router.post('/tasks/:taskId/rating', requireAuth, bindController(submitDoctorRating, pool));
   router.post('/privacy', requireAuth, bindController(requestDoctorPrivacy, pool));
   router.get('/privacy', requireAuth, bindController(getDoctorPrivacyReceipts, pool));
-  router.post('/recommendations', requireAuth, bindController(recommendDoctor, pool));
   router.post('/specialists', requireAuth, bindController(listDoctorDirectory, pool));
   router.get(
     '/specialty-options',
@@ -69,7 +66,6 @@ function doctorTaskRoutes(pool) {
     requireAuth,
     bindController(listDoctorReviews, pool)
   );
-  router.post('/specialties', requireAuth, bindController(listDoctorSpecialties, pool));
   router.post('/clinics', requireAuth, bindController(listDoctorClinics, pool));
   return router;
 }

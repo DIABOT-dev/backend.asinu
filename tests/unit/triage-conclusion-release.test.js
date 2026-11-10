@@ -68,6 +68,7 @@ test.each(['vi', 'en'])(
     delete process.env.CHECKIN_STRUCTURED_CONCLUSION_ENABLED;
     const result = await generateConclusion(state, { age: 40 }, lang);
     expect(Object.keys(result).sort()).toEqual([
+      'aiNotice',
       'closeMessage',
       'isEmergency',
       'recommendation',
@@ -77,6 +78,7 @@ test.each(['vi', 'en'])(
     expect(result.recommendation).toBeTruthy();
     expect(result.closeMessage).toContain('6');
     expect(result.isEmergency).toBe(false);
+    expect(result.aiNotice).toBe(require(`../../src/i18n/locales/${lang}.json`)['checkin.conclusion.ai_notice']);
     expect(generateStructuredConclusion).not.toHaveBeenCalled();
   }
 );
