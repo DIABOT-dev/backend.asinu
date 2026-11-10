@@ -37,7 +37,15 @@ if (preflight) process.env.CHECKIN_STRUCTURED_CONCLUSION_ENABLED = 'true';
   assert.equal(result.conclusionVersion, 2);
   assert.equal(result.conclusionFormat, 'narrative');
   assert.equal(result.conclusionSource, 'ai');
-  assert.ok(result.narrative.length > 40);
+  assert.ok(
+    result.narrative.length >= 2000 && result.narrative.length <= 2500,
+    'The main conclusion must match the requested 2000–2500 character range'
+  );
+  assert.equal(
+    result.speechText,
+    require('./src/core/checkin/triage-conclusion-speech').conclusionSpeech(result),
+    'Speech must contain the complete visible conclusion and advice'
+  );
   assert.ok(result.disclaimer && result.aiNotice && result.speechText);
   console.log(
     JSON.stringify({

@@ -127,6 +127,10 @@ jobs:
             ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
               -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
               -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
+              "$VPS_USER@$VPS_HOST" 'docker exec -i asinu-backend node' < deploy/checkin-conclusion-probe.cjs
+            ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+              -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
               "$VPS_USER@$VPS_HOST" 'docker exec -i asinu-backend node' < deploy/checkin-full-audio-probe.cjs
           fi
           if [ "$OPERATION" = 'enable-checkin-conclusion' ]; then
