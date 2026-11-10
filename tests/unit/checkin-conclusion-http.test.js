@@ -289,6 +289,75 @@ test('concurrent HTTP submissions share one conclusion and one completion', asyn
     h.pool.query.mock.calls.filter(([sql]) => sql.includes('triage_completed_at  = NOW()'))
   ).toHaveLength(1);
 });
+test('concurrent completed requests share the full-speech preparation after clinical completion', async () => {
+  const h = harness();
+  const preparation = require('../../src/services/checkin-call/conclusion-audio.service');
+  let release, entered;
+  const waiting = new Promise((resolve) => {
+    release = resolve;
+  });
+  const started = new Promise((resolve) => {
+    entered = resolve;
+  });
+  const warm = jest.spyOn(preparation, 'prepareConclusionAudio').mockImplementation(async () => {
+    entered();
+    await waiting;
+  });
+  const body = { checkin_id: 912, previous_answers: answers, conclusion_format: 'structured' };
+  let firstFinished = false,
+    secondFinished = false,
+    second;
+  const first = h.submit(body).then((response) => {
+    firstFinished = true;
+    return response;
+  });
+  try {
+    await started;
+    expect(h.session.triage_completed_at).toBeTruthy();
+    second = h.submit(body).then((response) => {
+      secondFinished = true;
+      return response;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(firstFinished).toBe(false);
+    expect(secondFinished).toBe(false);
+    expect(warm).toHaveBeenCalledTimes(1);
+    release();
+    const [a, b] = await Promise.all([first, second]);
+    expect(a.status).toBe(200);
+    expect(b.body).toEqual(a.body);
+    for (const text of [
+      a.body.explanation,
+      ...a.body.todo,
+      ...a.body.seeDoctorWhen,
+      a.body.disclaimer,
+    ])
+      expect(a.body.speechText).toContain(text);
+  } finally {
+    release();
+    await Promise.allSettled([first, second]);
+    warm.mockRestore();
+  }
+});
+test('an unexpected audio-preparation failure cannot fail an already completed clinical result', async () => {
+  const h = harness();
+  const preparation = require('../../src/services/checkin-call/conclusion-audio.service');
+  const warm = jest
+    .spyOn(preparation, 'prepareConclusionAudio')
+    .mockRejectedValue(new Error('synthetic audio failure'));
+  try {
+    const response = await h.submit({
+      checkin_id: 912,
+      previous_answers: answers,
+      conclusion_format: 'structured',
+    });
+    expect(response.status).toBe(200);
+    expect(h.session.triage_completed_at).toBeTruthy();
+    expect(response.body.speechText).toContain(response.body.explanation);
+  } finally {
+    warm.mockRestore();
+  }
+});
 test('foreign session, changed history and malformed answers never overwrite a saved result', async () => {
   const h = harness();
   await h.submit();

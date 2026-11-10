@@ -106,7 +106,7 @@ test('a detailed conclusion keeps the explanation but removes a model request to
   );
   expect(result.narrative).toContain('Cháu hiểu chú đang khó chịu.');
   expect(result.narrative).not.toContain('cho cháu biết');
-  expect(result.conclusionPromptVersion).toBe('v3-narrative-deep-details');
+  expect(result.conclusionPromptVersion).toBe('v4-narrative-2000-2500-details');
   expect(logger.warn).toHaveBeenCalledWith('conclusion_rejected', {
     block: 'narrative',
     reason: 'repeated_assessment_question',
@@ -197,21 +197,26 @@ test.each(['vi', 'en'])(
     );
     expect(result).toMatchObject({
       conclusionFormat: 'narrative',
-      conclusionPromptVersion: 'v3-narrative-deep',
+      conclusionPromptVersion: 'v4-narrative-2000-2500',
       conclusionSource: 'ai',
       followUpHours: 3,
     });
     expect(result.narrative).toContain(prose.split('\n')[0]);
     expect(result.narrative).toContain('- ');
     expect(result.narrative).not.toContain('Ghi 2 mốc giờ');
-    expect(result.speechText.length).toBeLessThanOrEqual(1600);
+    expect(result.speechText).toContain(
+      result.narrative
+        .replace(/^\s*-\s+/gm, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+    );
     expect(result.speechText.endsWith(result.aiNotice)).toBe(true);
     expect(result.summary).toBeTruthy();
     expect(result.recommendation).toBeTruthy();
     expect(result.disclaimer).toBe(t('checkin.conclusion.disclaimer', lang));
     expect(JSON.stringify(input)).toBe(before);
     expect(callTextAi.mock.calls[0][0].system).not.toContain('Return only JSON');
-    expect(callTextAi.mock.calls[0][0]).toMatchObject({ maxTokens: 8192, timeoutMs: 60000 });
+    expect(callTextAi.mock.calls[0][0]).toMatchObject({ maxTokens: 1800, timeoutMs: 60000 });
   }
 );
 
@@ -314,13 +319,19 @@ test('a narrative measurement stays where the model discussed it, using the exac
   );
 });
 
-test('a detailed narrative is not replaced merely for exceeding the old 8000-character display cap', async () => {
+test('an oversized narrative is rewritten once instead of cutting off its final advice', async () => {
+  const tail = '- Nếu khó ngủ ảnh hưởng nhiều tới sinh hoạt, chú nên đi khám sớm hơn.';
   const prose =
     'Chú đang khó ngủ và thấy mệt, cháu hiểu chú đang khó chịu.\n\n' +
     'Nếp sinh hoạt đều đặn giúp mình theo dõi những thay đổi trong ngày.\n\n'.repeat(135) +
-    '- Chú nên đi khám trong vài ngày tới.';
-  expect(prose.length).toBeGreaterThan(8000);
-  callTextAi.mockResolvedValue({ content: prose, model: 'medgemma-27b-it', finishReason: 'stop' });
+    tail;
+  let compact = 'Chú đang khó ngủ và thấy mệt, cháu hiểu chú đang khó chịu.\n\n';
+  for (let index = 0; compact.length < 2050; index++)
+    compact += `Gợi ý ${index + 1}: Nếp sinh hoạt đều đặn giúp mình ghi nhận thay đổi trong ngày.\n\n`;
+  compact += '- Chú nên đi khám trong vài ngày tới.';
+  callTextAi
+    .mockResolvedValueOnce({ content: prose, model: 'medgemma-27b-it', finishReason: 'stop' })
+    .mockResolvedValueOnce({ content: compact, model: 'medgemma-27b-it', finishReason: 'stop' });
   const result = await generateConclusion(
     state(),
     profile,
@@ -330,9 +341,11 @@ test('a detailed narrative is not replaced merely for exceeding the old 8000-cha
     { conclusionFormat: 'narrative' }
   );
   expect(result.conclusionSource).toBe('ai');
-  expect(result.narrative.length).toBeGreaterThan(8000);
-  expect(result.narrative).toContain('Chú nên đi khám trong vài ngày tới.');
-  expect(result.speechText.length).toBeLessThanOrEqual(1600);
+  expect(callTextAi).toHaveBeenCalledTimes(2);
+  expect(result.narrative.length).toBeGreaterThanOrEqual(2000);
+  expect(result.narrative.length).toBeLessThanOrEqual(2500);
+  expect(result.narrative).toContain(tail);
+  expect(result.speechText).toContain(tail.replace(/^- /, ''));
 });
 
 test('a deep narrative keeps model-chosen headings and removes unsupported assurances about disease control', async () => {
@@ -377,11 +390,17 @@ test('returns four AI blocks, fixed disclaimer, one server follow-up and legacy 
   expect(result.disclaimer).toContain('chẩn đoán');
   expect(result.closeMessage).toContain('3 giờ');
   expect(result.speechText).toBe(
-    [candidate().loi_nhan, ...candidate().di_kham_khi, result.closeMessage, result.aiNotice].join(
-      ' '
-    )
+    [
+      result.personalMessage,
+      result.explanation,
+      ...result.todo,
+      ...result.seeDoctorWhen,
+      result.disclaimer,
+      result.closeMessage,
+      result.aiNotice,
+    ].join(' ')
   );
-  expect(result.speechText).not.toContain(result.explanation);
+  expect(result.speechText).toContain(result.explanation);
   expect(result.aiNotice).toBe(
     require('../../src/i18n/locales/vi.json')['checkin.conclusion.ai_notice']
   );

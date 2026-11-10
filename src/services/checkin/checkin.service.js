@@ -596,7 +596,24 @@ async function processTriageStep(
     previousAnswers,
     requestLang,
     options
-  );
+  ).then(async (result) => {
+    if (result.isDone && result.conclusionVersion === 2 && result.severity !== 'emergency') {
+      // Derive speech from the saved visible result even when it was created by
+      // an earlier build with a deliberately abbreviated audio transcript.
+      result = {
+        ...result,
+        speechText: require('../../core/checkin/triage-conclusion-speech').conclusionSpeech(result),
+      };
+      if (options.conclusionFormat) {
+        await require('../checkin-call/conclusion-audio.service').prepareConclusionAudio(
+          userId,
+          result,
+          requestLang || 'vi'
+        ).catch(() => {});
+      }
+    }
+    return result;
+  });
   triageRequests.set(key, pending);
   try {
     return await pending;

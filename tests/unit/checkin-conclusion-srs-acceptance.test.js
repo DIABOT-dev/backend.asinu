@@ -61,9 +61,15 @@ test('E7: a bare conditional warning becomes a complete spoken action without re
   expect(result.followUpHours).toBe(input.followUpHours);
   expect(result.recommendation).toContain(result.seeDoctorWhen[1]);
   expect(result.speechText).toBe(
-    [result.personalMessage, ...result.seeDoctorWhen, result.closeMessage, result.aiNotice].join(
-      ' '
-    )
+    [
+      result.personalMessage,
+      result.explanation,
+      ...result.todo,
+      ...result.seeDoctorWhen,
+      result.disclaimer,
+      result.closeMessage,
+      result.aiNotice,
+    ].join(' ')
   );
   expect(input).toEqual(originalDecision);
   expect(logger.warn).not.toHaveBeenCalled();
@@ -162,11 +168,17 @@ test.each(['vi', 'en'])(
     expect(result.summary).toBe(`${result.personalMessage} ${result.explanation}`);
     expect(result.recommendation).toBe([...result.todo, ...result.seeDoctorWhen].join('\n'));
     expect(result.speechText).toBe(
-      [result.personalMessage, ...result.seeDoctorWhen, result.closeMessage, result.aiNotice].join(
-        ' '
-      )
+      [
+        result.personalMessage,
+        result.explanation,
+        ...result.todo,
+        ...result.seeDoctorWhen,
+        result.disclaimer,
+        result.closeMessage,
+        result.aiNotice,
+      ].join(' ')
     );
-    expect(result.speechText.length).toBeLessThanOrEqual(1600);
+    for (const instruction of result.todo) expect(result.speechText).toContain(instruction);
     expect(result.closeMessage).toMatch(lang === 'vi' ? /3 giờ/ : /3 hours/);
     expect(result.disclaimer).toBe(
       require(`../../src/i18n/locales/${lang}.json`)['checkin.conclusion.disclaimer']

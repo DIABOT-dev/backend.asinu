@@ -1,4 +1,5 @@
 'use strict';
+const { conclusionSpeech } = require('./triage-conclusion-speech');
 
 const { callTextAi } = require('../../services/ai/ai.service');
 const { getHonorifics, getUserAge } = require('../../lib/honorifics');
@@ -554,7 +555,7 @@ function composeConclusion(blocks, state, profile, lang) {
     Number(state.followUpHours) > 0 ? Number(state.followUpHours) : state.isElderly ? 4 : 6;
   const closeMessage = t('checkin.conclusion.followup', lang, { ...h, hours });
   const aiNotice = t('checkin.conclusion.ai_notice', lang);
-  return {
+  const result = {
     conclusionVersion: 2,
     personalMessage: blocks.loi_nhan,
     explanation: blocks.lien_quan,
@@ -567,8 +568,8 @@ function composeConclusion(blocks, state, profile, lang) {
     closeMessage,
     followUpHours: hours,
     isEmergency: false,
-    speechText: [blocks.loi_nhan, ...blocks.di_kham_khi, closeMessage, aiNotice].join(' '),
   };
+  return { ...result, speechText: conclusionSpeech(result) };
 }
 
 function includeRecordedFacts(blocks, facts, lang) {
