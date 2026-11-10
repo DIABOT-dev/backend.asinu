@@ -55,7 +55,35 @@ async function audit(client, input) {
   try {
     await client.query("SET LOCAL statement_timeout='10s'");
     const users = (await client.query(query.sql, query.values)).rows;
-    const output = { users, interviews: [] };
+    const logins = (
+      await client.query(
+        `SELECT DISTINCT ON (payload->>'user_id') payload->>'user_id' AS user_id,
+          occurred_at AS last_login_at, payload->>'source_platform' AS login_provider
+        FROM crm_event_outbox WHERE event_type='session.started'
+          AND payload->>'user_id'=ANY($1::text[])
+        ORDER BY payload->>'user_id',occurred_at DESC,id DESC`,
+        [users.map((user) => String(user.id))]
+      )
+    ).rows;
+    const latestLogin =
+      (
+        await client.query(
+          `SELECT u.id,u.full_name,u.display_name,
+          RIGHT(regexp_replace(u.phone_number,'[^0-9]','','g'),4) AS phone_last4,
+          e.occurred_at AS last_login_at,e.payload->>'source_platform' AS login_provider
+        FROM crm_event_outbox e JOIN users u ON u.id::text=e.payload->>'user_id'
+        WHERE e.event_type='session.started' AND u.deleted_at IS NULL
+        ORDER BY e.occurred_at DESC,e.id DESC LIMIT 1`
+        )
+      ).rows[0] || null;
+    const output = {
+      users: users.map((user) => ({
+        ...user,
+        ...logins.find((login) => login.user_id === String(user.id)),
+      })),
+      latest_login: latestLogin,
+      interviews: [],
+    };
     for (const user of users.filter((user) => user.phone_match)) {
       const sessions = (
         await client.query(
