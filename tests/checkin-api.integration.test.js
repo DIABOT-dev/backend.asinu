@@ -584,6 +584,31 @@ describeDatabase('check-in HTTP API contract', () => {
     expect((await post(latest.triage_state.phase_id).expect(200)).body.step).toBe('followup_status');
   });
 
+  test('an instant check-in against a completed high alert continues through follow-up without erasing its prior answers', async () => {
+    const account=await conversationAccount();
+    await account.triage(account.initialAnswers).expect(200);
+    await pool.query("UPDATE health_checkins SET flow_state='high_alert',triage_severity='high' WHERE id=$1",[account.checkinId]);
+    const started=await request(app).post('/api/mobile/checkin/start').set(account.headers)
+      .send({status:'tired',restart:true,source:'instant',body_locations:['abdomen']}).expect(200);
+    expect(started.body.session.triage_messages).toEqual(account.initialAnswers);
+    expect(started.body.session.triage_state.completed.finalized).toBe(true);
+    const previousPhase=started.body.session.triage_state.phase_id;
+    const followed=await request(app).post('/api/mobile/checkin/followup').set(account.headers)
+      .send({checkin_id:account.checkinId,status:'tired'}).expect(200);
+    const session=followed.body.session;
+    expect(session.flow_state).toBe('high_alert');
+    expect(session.triage_state.baseline_answers).toEqual(account.initialAnswers);
+    expect(session.triage_state.phase_id).not.toBe(previousPhase);
+    expect(session.triage_state.previous_severity).toBe('high');
+    expect(session.triage_messages).toEqual([]);
+    const next=await request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({checkin_id:account.checkinId,phase_id:session.triage_state.phase_id,
+        previous_answers:session.triage_messages,assessment_version:2,adaptive_questions:true}).expect(200);
+    expect(next.body).toMatchObject({isDone:false,step:'followup_status'});
+    const resumed=await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200);
+    expect(resumed.body.session.triage_state.baseline_answers).toEqual(account.initialAnswers);
+  });
+
   test.each([
     ...['vi', 'en'].flatMap(lang => ['head', 'chest', 'abdomen', 'limbs', 'skin', 'whole_body', 'mental'].map(region => {
       const { getSymptomsForLocation, LOCATION_LABELS } = require('../src/services/checkin/body-location');
