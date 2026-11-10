@@ -9,7 +9,15 @@ on:
       operation:
         description: Deploy, inspect SSH, or remove a confirmed operator IP ban
         type: choice
-        options: [deploy, ssh-diagnostics, notification-audit, checkin-audit, restore-operator-ssh]
+        options:
+          [
+            deploy,
+            ssh-diagnostics,
+            notification-audit,
+            checkin-audit,
+            enable-checkin-conclusion,
+            restore-operator-ssh,
+          ]
         default: deploy
       lookup_name:
         description: Name to find during a read-only check-in audit
@@ -44,15 +52,15 @@ permissions:
 
 jobs:
   ssh-diagnostics:
-    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'restore-operator-ssh')
+    if: github.event_name == 'workflow_dispatch' && (inputs.operation == 'ssh-diagnostics' || inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'enable-checkin-conclusion' || inputs.operation == 'restore-operator-ssh')
     runs-on: ubuntu-24.04
-    timeout-minutes: 3
+    timeout-minutes: 6
     environment: prod
     permissions:
       contents: read
     steps:
       - name: Checkout read-only audit
-        if: inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit'
+        if: inputs.operation == 'notification-audit' || inputs.operation == 'checkin-audit' || inputs.operation == 'enable-checkin-conclusion'
         uses: actions/checkout@v7
       - name: Inspect SSH and API status with the existing administration key
         env:
@@ -106,6 +114,22 @@ jobs:
               -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
               -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
               "$VPS_USER@$VPS_HOST" "docker exec -i asinu-backend node - '$lookup64'" < deploy/checkin-preview-audit.cjs
+          fi
+          if [ "$OPERATION" = 'enable-checkin-conclusion' ]; then
+            for phase in preflight release verify; do
+              if [ "$phase" = 'release' ]; then
+                remote_command='python3 -'
+                script='deploy/enable-checkin-conclusion.py'
+              else
+                remote_command='docker exec -i asinu-backend node -'
+                if [ "$phase" = 'preflight' ]; then remote_command="$remote_command --preflight"; fi
+                script='deploy/checkin-conclusion-probe.cjs'
+              fi
+              ssh -T -i "$task_dir/key" -o BatchMode=yes -o IdentitiesOnly=yes \
+                -o StrictHostKeyChecking=yes -o HostKeyAlgorithms=ssh-ed25519 \
+                -o UserKnownHostsFile="$task_dir/known_hosts" -o ConnectTimeout=15 \
+                "$VPS_USER@$VPS_HOST" "$remote_command" < "$script"
+            done
           fi
 
   package:
