@@ -1,0 +1,2500 @@
+{
+  "date": "2026-11-11",
+  "branch": "change/check-in",
+  "data": "Synthetic dialogue review, not patient records",
+  "method": "Serial Dr7 calls; minimum 4 seconds between calls; synthetic DB transaction rollback. Durations include deliberate evaluation pacing and are not production latency measurements.",
+  "judgement": "No overall clinical-quality pass. A completed dialogue is not automatically an acceptable dialogue.",
+  "cases": [
+    {
+      "case": "head",
+      "synthetic": true,
+      "permanent_health_rows": 0,
+      "profile": {
+        "age": 23,
+        "gender": "Nam"
+      },
+      "conditions": [],
+      "input": "Tôi đau âm ỉ hai bên trán từ tối qua, mức độ vẫn như cũ. Tôi vẫn sinh hoạt bình thường.",
+      "dialogue": [
+        {
+          "turn": 1,
+          "field": "symptoms",
+          "targets": [],
+          "question": "Bạn đang cảm thấy khó chịu ở hai bên trán như thế nào?",
+          "options": [
+            "Đau đầu",
+            "Chóng mặt",
+            "Mờ mắt",
+            "Ù tai",
+            "Tê bì, châm chích",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Tôi đau âm ỉ hai bên trán từ tối qua, mức độ vẫn như cũ. Tôi vẫn sinh hoạt bình thường.",
+          "source": "ai",
+          "elapsedMs": 5119
+        },
+        {
+          "turn": 2,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Ngoài đau âm ỉ hai bên trán, bạn có đang gặp phải tình trạng nào sau đây không?",
+          "options": [
+            "đau đầu dữ dội đột ngột (như sét đánh)",
+            "yếu hoặc tê nửa người",
+            "nói ngọng, khó nói, không hiểu lời",
+            "co giật",
+            "cứng cổ kèm sốt cao",
+            "mờ mắt đột ngột hoặc mất thị lực",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 19806
+        },
+        {
+          "turn": 3,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Bạn có dấu hiệu nào dưới đây ngay lúc này không?",
+          "options": [
+            "lú lẫn, mất phương hướng",
+            "đau đầu sau chấn thương đầu",
+            "đau đầu ngày càng nặng hơn trong vài ngày",
+            "sốt cao trên 39°C kèm đau đầu dữ dội",
+            "nôn ói nhiều lần không cầm được",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "fallback",
+          "elapsedMs": 16413
+        },
+        {
+          "turn": 4,
+          "field": "source",
+          "targets": [],
+          "question": "Trước khi cơn đau âm ỉ hai bên trán xuất hiện, bạn có gặp phải thay đổi nào sau đây không?",
+          "options": [
+            "Các triệu chứng của bệnh nền có sẵn trở nặng hơn",
+            "Uống thuốc sai giờ, quên liều, đổi thuốc hoặc nghi ngờ tác dụng phụ của thuốc",
+            "Bỏ bữa, ăn món lạ, uống rượu bia/caffeine hoặc uống ít nước hơn bình thường",
+            "Té ngã, va đập hoặc vận động gắng sức",
+            "Ngủ không ngon, căng thẳng, thời tiết thay đổi hoặc tiếp xúc với chất lạ",
+            "Sốt, ho hoặc các triệu chứng bệnh cấp tính khác",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Hai đêm vừa rồi ngủ ít vì làm việc muộn",
+          "source": "ai",
+          "elapsedMs": 7683
+        },
+        {
+          "turn": 5,
+          "field": "associated",
+          "targets": [],
+          "question": "Ngoài đau âm ỉ hai bên trán, bạn có thấy cơ thể có thay đổi nào khác không?",
+          "options": [
+            "Sốt",
+            "Ăn uống kém",
+            "Khó ngủ/ngủ không sâu giấc",
+            "Tiêu chảy/Táo bón",
+            "Tiểu rắt/Tiểu buốt",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 16056
+        }
+      ],
+      "final": {
+        "isDone": true,
+        "severity": "medium",
+        "source": "ai",
+        "assessmentIncomplete": false,
+        "narrative": "Mình đã xem qua những điều bạn chia sẻ. Bạn đang bị đau âm ỉ ở hai bên trán từ tối qua, mức độ đau vẫn như cũ và bạn vẫn sinh hoạt bình thường. Bạn cũng có kể là hai đêm vừa rồi bạn ngủ ít vì làm việc muộn.\n\nĐau đầu là một triệu chứng khá phổ biến, và có nhiều nguyên nhân khác nhau. Khi chúng ta thiếu ngủ, cơ thể và não bộ không được nghỉ ngơi đầy đủ, có thể dẫn đến căng thẳng và gây ra các cơn đau đầu, đặc biệt là đau đầu căng thẳng. Đau đầu căng thẳng thường có tính chất âm ỉ, cảm giác như bị bó chặt hoặc đè nặng ở hai bên đầu hoặc vùng trán, thái dương.\n\nMặc dù bạn vẫn sinh hoạt bình thường và không có các dấu hiệu nguy hiểm khác, nhưng việc đau đầu kéo dài và có thể liên quan đến thói quen sinh hoạt cũng cần được quan tâm.\n\nĐể giúp bạn cảm thấy dễ chịu hơn và cải thiện tình trạng này, mình có một vài gợi ý bạn có thể thử:\n\n- Ngủ đủ giấc: Cố gắng đi ngủ sớm hơn và đảm bảo ngủ đủ 7-9 tiếng mỗi đêm. Giấc ngủ chất lượng sẽ giúp cơ thể và não bộ phục hồi, giảm căng thẳng và có thể làm giảm tần suất cũng như mức độ đau đầu.\n- Nghỉ ngơi hợp lý: Nếu công việc đòi hỏi bạn phải làm việc muộn, hãy cố gắng sắp xếp thời gian để có những khoảng nghỉ ngắn trong ngày. Đứng dậy đi lại, vươn vai hoặc nhắm mắt thư giãn vài phút có thể giúp giảm căng thẳng.\n- Hãy đảm bảo bạn uống đủ nước trong ngày, khoảng 2-2.5 lít nước lọc.\n- Tránh căng thẳng: Cố gắng tìm cách thư giãn sau những giờ làm việc căng thẳng. Bạn có thể thử nghe nhạc nhẹ, đọc sách, đi bộ nhẹ nhàng hoặc tập hít thở sâu.\n- Chườm ấm hoặc lạnh: Một số người thấy dễ chịu hơn khi chườm khăn ấm hoặc lạnh lên vùng trán hoặc thái dương. Bạn có thể thử xem cách nào phù hợp với mình.\n\nBạn nên theo dõi tình trạng đau đầu của mình trong vài ngày tới. Nếu cơn đau đầu không thuyên giảm, trở nên nặng hơn, hoặc nếu bạn bắt đầu xuất hiện thêm các triệu chứng khác như sốt, buồn nôn, nôn, nhìn mờ, yếu liệt tay chân, hoặc bất kỳ dấu hiệu bất thường nào khác, thì bạn nên đi khám bác sĩ để được kiểm tra và tư vấn cụ thể nhé.\n\n- Bạn nên đi khám trong vài ngày tới.",
+        "characters": 2022,
+        "promptVersion": "v5-narrative-2000-4000",
+        "elapsedMs": 7243
+      },
+      "finished": true,
+      "rateLimited": false,
+      "facts": {
+        "processed": [
+          "9968cc9d5c74b9b65e2146889d6e505e85b96a74e7085c8c2d280869ab2bebc0",
+          "6ede5c8cf6c60a4501d7343745657b78a80ff5973a1642d79e4dce13b22409b6",
+          "81b41ed16fbb8b88e26e0e4fdf1d61a220eb88cba27e47787ab1737f1003fd1e",
+          "6610bb291eacc570c297fe2b2c3f4dacacd0f74c162f7ccc96d5aa9c4ac478fa",
+          "0e22556b77af5753a530f2c1cdf2b82687ec169f9e52aadabc60acb69874377a"
+        ],
+        "concerns": [
+          {
+            "id": "c1",
+            "label": "đau âm ỉ hai bên trán",
+            "region": "head",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Tôi đau âm ỉ hai bên trán"
+            },
+            "facts": {
+              "onset": {
+                "value": "tối qua",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "tối qua"
+                }
+              },
+              "progression": {
+                "value": "vẫn như cũ",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "mức độ vẫn như cũ"
+                },
+                "code": "same"
+              }
+            },
+            "detailFields": [],
+            "regionLocation": {
+              "value": "hai bên trán",
+              "evidence": {
+                "answerIndex": -1,
+                "quote": "Đầu: hai bên trán"
+              }
+            }
+          }
+        ],
+        "global": {
+          "impact": {
+            "value": "vẫn sinh hoạt bình thường",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Tôi vẫn sinh hoạt bình thường"
+            },
+            "code": "normal"
+          },
+          "red_flags": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Không có"
+            },
+            "codes": []
+          },
+          "source": {
+            "value": "ngủ ít",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 3,
+              "quote": "ngủ ít"
+            },
+            "code": "activity",
+            "history": [
+              {
+                "value": "Hai đêm vừa rồi ngủ ít vì làm việc muộn",
+                "status": "unresolved",
+                "evidence": {
+                  "answerIndex": 3,
+                  "quote": "Hai đêm vừa rồi ngủ ít vì làm việc muộn"
+                },
+                "codes": []
+              },
+              {
+                "value": "làm việc muộn",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 3,
+                  "quote": "làm việc muộn"
+                },
+                "code": "activity",
+                "history": [
+                  {
+                    "value": "Hai đêm vừa rồi ngủ ít vì làm việc muộn",
+                    "status": "unresolved",
+                    "evidence": {
+                      "answerIndex": 3,
+                      "quote": "Hai đêm vừa rồi ngủ ít vì làm việc muộn"
+                    },
+                    "codes": []
+                  }
+                ]
+              }
+            ]
+          },
+          "associated": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 4,
+              "quote": "Không có"
+            },
+            "codes": []
+          }
+        },
+        "split": {},
+        "warningsAsked": [
+          "đau đầu dữ dội đột ngột (như sét đánh)",
+          "yếu hoặc tê nửa người",
+          "nói ngọng, khó nói, không hiểu lời",
+          "co giật",
+          "cứng cổ kèm sốt cao",
+          "mờ mắt đột ngột hoặc mất thị lực",
+          "lú lẫn, mất phương hướng",
+          "đau đầu sau chấn thương đầu",
+          "đau đầu ngày càng nặng hơn trong vài ngày",
+          "sốt cao trên 39°C kèm đau đầu dữ dội",
+          "nôn ói nhiều lần không cầm được"
+        ],
+        "unresolvedReports": [],
+        "measurementReports": {},
+        "measurementReplies": {},
+        "reportClarifications": {},
+        "nextConcernId": 2,
+        "warningAnswers": [
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 1,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "đau đầu dữ dội đột ngột (như sét đánh)",
+              "yếu hoặc tê nửa người",
+              "nói ngọng, khó nói, không hiểu lời",
+              "co giật",
+              "cứng cổ kèm sốt cao",
+              "mờ mắt đột ngột hoặc mất thị lực"
+            ]
+          },
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "lú lẫn, mất phương hướng",
+              "đau đầu sau chấn thương đầu",
+              "đau đầu ngày càng nặng hơn trong vài ngày",
+              "sốt cao trên 39°C kèm đau đầu dữ dội",
+              "nôn ói nhiều lần không cầm được"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "multi",
+      "synthetic": true,
+      "permanent_health_rows": 0,
+      "profile": {
+        "age": 56,
+        "gender": "Nam"
+      },
+      "conditions": [
+        "Tiểu đường",
+        "Tăng huyết áp"
+      ],
+      "input": "Bàn chân phải tê như kim châm từ hôm qua. Gối phải sưng đau được 4 ngày, vẫn như cũ. Tôi đi chậm hơn nhưng vẫn tự làm được việc hằng ngày. Hôm nay tôi đã dùng thuốc theo hướng dẫn, chưa đo huyết áp.",
+      "dialogue": [
+        {
+          "turn": 1,
+          "field": "symptoms",
+          "targets": [],
+          "question": "Chú ơi, ở bàn chân phải và gối phải, chú đang thấy những triệu chứng nào ạ?",
+          "options": [
+            "Tê bì",
+            "Đau nhức",
+            "Sưng",
+            "Cứng khớp",
+            "Yếu sức",
+            "Chuột rút",
+            "Đỏ hoặc nóng ran",
+            "Khó khăn khi cử động",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Bàn chân phải tê như kim châm từ hôm qua. Gối phải sưng đau được 4 ngày, vẫn như cũ. Tôi đi chậm hơn nhưng vẫn tự làm được việc hằng ngày. Hôm nay tôi đã dùng thuốc theo hướng dẫn, chưa đo huyết áp.",
+          "source": "ai",
+          "elapsedMs": 4935
+        },
+        {
+          "turn": 2,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Ngoài tê và sưng đau ở chân phải, chú có đang gặp phải tình trạng nào sau đây không?",
+          "options": [
+            "tê hoặc yếu đột ngột một bên cơ thể (nghi đột quỵ)",
+            "nói ngọng kèm tê mặt",
+            "mất thị lực đột ngột kèm tê",
+            "yếu cả hai chân đột ngột",
+            "mất kiểm soát tiểu tiện kèm tê chân",
+            "tê lan nhanh từ chân lên (nghi Guillain-Barré)",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 25609
+        },
+        {
+          "turn": 3,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Ngoài tê và sưng đau ở chân phải, chú có đang gặp phải tình trạng nào sau đây không?",
+          "options": [
+            "khó thở kèm yếu cơ",
+            "sau chấn thương cột sống",
+            "co giật kèm tê bì",
+            "Khớp sưng nóng kèm sốt hoặc thấy mệt nhiều",
+            "Khớp đau dữ dội hoặc không thể tì chân, đi lại",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 10884
+        },
+        {
+          "turn": 4,
+          "field": "progression",
+          "targets": [
+            "c1"
+          ],
+          "question": "Từ lúc bắt đầu, tình trạng tê ở bàn chân phải của chú đã đỡ hơn, vẫn vậy hay nặng hơn rồi ạ?",
+          "options": [
+            "Đỡ hơn",
+            "Vẫn vậy",
+            "Nặng hơn",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Vẫn vậy",
+          "source": "ai",
+          "elapsedMs": 7931
+        },
+        {
+          "turn": 5,
+          "field": "character",
+          "targets": [
+            "c2"
+          ],
+          "question": "Gối phải của chú sưng đau với cảm giác như thế nào ạ?",
+          "options": [
+            "Đau nhói",
+            "Đau giật giật",
+            "Đau âm ỉ",
+            "Đau nóng rát",
+            "Đau nhức",
+            "Đau như bị đè nén",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Gối phải sưng và đau âm ỉ",
+          "source": "ai",
+          "elapsedMs": 7941
+        },
+        {
+          "turn": 6,
+          "field": "clinical_context",
+          "targets": [],
+          "question": "Hôm nay chú đã đo đường huyết chưa ạ?",
+          "options": [
+            "Đã đo",
+            "Chưa đo",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Đã đo",
+          "source": "ai",
+          "elapsedMs": 24078
+        },
+        {
+          "turn": 7,
+          "field": "measurements",
+          "targets": [],
+          "question": "Chú cho cháu biết chỉ số đường huyết hôm nay chú đo được là bao nhiêu và vào lúc mấy giờ nhé?",
+          "options": [
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "6.4",
+          "source": "ai",
+          "elapsedMs": 8081
+        },
+        {
+          "turn": 8,
+          "field": "measurements",
+          "targets": [],
+          "question": "Cháu thấy chú đã đo đường huyết được 6.4 rồi, nhưng chưa có đơn vị. Chú cho cháu biết 6.4 là đơn vị gì và chú đo vào lúc mấy giờ nhé?",
+          "options": [
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "mmol/L, đo lúc 7:00 hôm nay",
+          "source": "ai",
+          "clarification": 6,
+          "elapsedMs": 15964
+        },
+        {
+          "turn": 9,
+          "field": "source",
+          "targets": [],
+          "question": "Trước khi bị tê bàn chân và sưng đau gối phải, chú có gặp phải thay đổi nào sau đây không?",
+          "options": [
+            "Các triệu chứng bệnh nền (tiểu đường, huyết áp cao) thay đổi hoặc chỉ số đường huyết/huyết áp khác thường",
+            "Uống nhầm thuốc, quên liều, đổi thuốc hoặc nghi ngờ tác dụng phụ của thuốc",
+            "Bỏ bữa, ăn món lạ, uống rượu bia/cà phê hoặc uống ít nước hơn bình thường",
+            "Bị ngã, va đập hoặc vận động mạnh",
+            "Ngủ kém, căng thẳng, thời tiết thay đổi hoặc tiếp xúc với xà phòng/mỹ phẩm/chất tẩy rửa mới",
+            "Sốt, ho hoặc có triệu chứng bệnh cấp tính khác",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Trước lúc sưng gối tôi có đi bộ lâu hơn thường ngày",
+          "source": "ai",
+          "elapsedMs": 16438
+        },
+        {
+          "turn": 10,
+          "field": "associated",
+          "targets": [],
+          "question": "Ngoài tê bàn chân và sưng đau gối phải, chú có thấy cơ thể mình còn thay đổi nào khác không, ví dụ như sốt, ăn uống, ngủ nghỉ hay đi vệ sinh?",
+          "options": [
+            "Có sốt",
+            "Ăn uống kém hơn",
+            "Khó ngủ/ngủ không ngon giấc",
+            "Đi ngoài bất thường (tiêu chảy/táo bón)",
+            "Đi tiểu bất thường (tiểu rắt/tiểu buốt/tiểu nhiều hơn)",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 15544
+        }
+      ],
+      "final": {
+        "isDone": true,
+        "severity": "high",
+        "source": "ai",
+        "assessmentIncomplete": false,
+        "narrative": "Chào chú, cháu đã tổng hợp lại các thông tin chú vừa cung cấp. Cháu thấy chú đang bị tê như kim châm ở bàn chân phải từ hôm qua và sưng đau âm ỉ ở gối phải được 4 ngày rồi. Chú cũng cho biết là trước khi gối bị sưng, chú có đi bộ lâu hơn thường ngày.\n\nVới những thông tin này, cháu xin được chia sẻ một số điều như sau:\n\n- Tê như kim châm ở bàn chân phải: Tình trạng tê bì chân tay có thể do nhiều nguyên nhân, trong đó có thể liên quan đến bệnh tiểu đường chú đang mắc. Tuy nhiên, một lần đo đường huyết 6.4 mmol/L chưa đủ để đánh giá mức độ kiểm soát đường huyết của chú.\n- Vận động quá mức có thể gây căng thẳng lên khớp gối, dẫn đến sưng và đau. Tình trạng sưng đau này cũng có thể liên quan đến các vấn đề về khớp hoặc viêm.\n- Mối liên hệ giữa các triệu chứng: Hiện tại, chưa thể khẳng định chắc chắn liệu tình trạng tê bì ở bàn chân và sưng đau ở gối có liên quan trực tiếp đến nhau hay không. Mỗi triệu chứng có thể có nguyên nhân riêng, hoặc có thể cùng liên quan đến một vấn đề sức khỏe tiềm ẩn.\n\nĐể giúp chú cảm thấy dễ chịu hơn và theo dõi tình hình sức khỏe, cháu có một vài lời khuyên chú có thể áp dụng tại nhà:\n\n- Nghỉ ngơi hợp lý: Hạn chế đi lại hoặc vận động mạnh ở chân phải để giảm áp lực lên khớp gối đang sưng đau. Việc nghỉ ngơi sẽ giúp khớp có thời gian phục hồi.\n- Chườm lạnh: Chú có thể dùng túi chườm lạnh hoặc khăn bọc đá chườm lên vùng gối bị sưng đau khoảng 15-20 phút mỗi lần, vài lần trong ngày. Việc này có thể giúp giảm sưng và giảm đau tạm thời.\n- Theo dõi đường huyết thường xuyên: Chú nên tiếp tục đo đường huyết theo lịch trình bác sĩ đã hướng dẫn để có cái nhìn tổng thể hơn về mức độ kiểm soát đường huyết của mình. Điều này rất quan trọng để quản lý bệnh tiểu đường và phòng ngừa các biến chứng.\n- Theo dõi các triệu chứng: Chú hãy chú ý xem tình trạng tê ở bàn chân và sưng đau ở gối có thay đổi như thế nào, ví dụ như mức độ đau, sưng có giảm không, hay cảm giác tê có lan rộng hơn không.\n\nCháu thấy chú nên đi khám bác sĩ trong hôm nay để được kiểm tra cụ thể hơn về tình trạng tê bì ở bàn chân và sưng đau ở gối phải. Bác sĩ sẽ có thể đánh giá chính xác nguyên nhân và đưa ra hướng điều trị phù hợp cho chú.\n\nChú hãy đi khám ngay nếu thấy một trong các dấu hiệu sau:\n- Tình trạng tê hoặc sưng đau ở chân phải trở nên nặng hơn, không thể chịu đựng được.\n- Chú bị sốt kèm theo sưng nóng đỏ ở gối.\n- Chú cảm thấy yếu đột ngột ở chân, khó đi lại hoặc không thể tì chân xuống đất.\n- Tình trạng tê lan nhanh lên các vùng khác của cơ thể.\n\n- Đo lại huyết áp và đường huyết và ghi giờ đo.",
+        "characters": 2524,
+        "promptVersion": "v5-narrative-2000-4000",
+        "elapsedMs": 8315
+      },
+      "finished": true,
+      "rateLimited": false,
+      "facts": {
+        "processed": [
+          "848bace6357cedee5975b03dfa2053cac7f458d6a8dee18c3b018b80ba2c5fc0",
+          "00a174a2e1680438054340b171d96fe6fa4f75be578a40050b44331267ab3636",
+          "fc7426c736efd5294cd4519b11241973bb861fef7541fe9bdacd0428f56e825a",
+          "8ce2a254af9cdadd4f375e36168ae7f8eb1a37675fe3f71d85f251742c20108b",
+          "570c855572ced60da456410961e24058c89c8064a667af3f070d62616f2f5bd8",
+          "e6391384a6241926f5932b0020195ac41aa3742f54e7807123af0a3a68407b31",
+          "cd887066595e7bea88b95e57a75cb1eda0e391b619e535c98b749ae95802a07b",
+          "93bd5ff2ade5acacd645b8a5feab16bd12821e6577e341664ee7d056b92fe5e5",
+          "2da557b85e198b825a1c38ba023abb29275e0e7a643850a53387b8e2d81e6bcc",
+          "da7001db9519eec90edeee9fd1257702a2cb6b83d95f5c06bd86e174b1612853"
+        ],
+        "concerns": [
+          {
+            "id": "c1",
+            "label": "Bàn chân phải tê như kim châm",
+            "region": "limbs",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Bàn chân phải tê như kim châm"
+            },
+            "facts": {
+              "onset": {
+                "value": "hôm qua",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "từ hôm qua"
+                }
+              },
+              "character": {
+                "value": "như kim châm",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "như kim châm"
+                }
+              },
+              "progression": {
+                "value": "Vẫn vậy",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 3,
+                  "quote": "Vẫn vậy"
+                },
+                "code": "same"
+              }
+            },
+            "detailFields": [
+              "character"
+            ],
+            "regionLocation": {
+              "value": "bàn chân phải và gối phải",
+              "evidence": {
+                "answerIndex": -1,
+                "quote": "Tay chân: bàn chân phải và gối phải"
+              }
+            }
+          },
+          {
+            "id": "c2",
+            "label": "Gối phải sưng đau",
+            "region": "limbs",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Gối phải sưng đau"
+            },
+            "facts": {
+              "onset": {
+                "value": "4 ngày",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "được 4 ngày"
+                }
+              },
+              "progression": {
+                "value": "vẫn như cũ",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "vẫn như cũ"
+                },
+                "code": "same"
+              },
+              "character": {
+                "value": "sưng và đau âm ỉ",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 4,
+                  "quote": "sưng và đau âm ỉ"
+                }
+              }
+            },
+            "detailFields": [
+              "character"
+            ],
+            "regionLocation": {
+              "value": "bàn chân phải và gối phải",
+              "evidence": {
+                "answerIndex": -1,
+                "quote": "Tay chân: bàn chân phải và gối phải"
+              }
+            }
+          }
+        ],
+        "global": {
+          "impact": {
+            "value": "đi chậm hơn nhưng vẫn tự làm được việc hằng ngày",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Tôi đi chậm hơn nhưng vẫn tự làm được việc hằng ngày"
+            },
+            "code": "slowed"
+          },
+          "medication_today": {
+            "value": "đã dùng thuốc theo hướng dẫn",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Hôm nay tôi đã dùng thuốc theo hướng dẫn"
+            },
+            "code": "medication_as_planned"
+          },
+          "red_flags": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Không có"
+            },
+            "codes": []
+          },
+          "clinical_context": {
+            "value": "đã dùng thuốc theo hướng dẫn; huyet_ap: chưa đo huyết áp; duong_huyet: Đã đo",
+            "status": "reported",
+            "codes": [
+              "medication_as_planned",
+              "reading_available"
+            ]
+          },
+          "measurements_today": {
+            "value": "huyet_ap: chưa đo huyết áp; duong_huyet: Đã đo",
+            "status": "reported",
+            "code": "reading_available"
+          },
+          "measurements": {
+            "value": "mmol/L, đo lúc 7:00 hôm nay",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 7,
+              "quote": "mmol/L, đo lúc 7:00 hôm nay"
+            },
+            "codes": []
+          },
+          "source": {
+            "value": "đi bộ lâu hơn thường ngày",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 8,
+              "quote": "Trước lúc sưng gối tôi có đi bộ lâu hơn thường ngày"
+            },
+            "code": "activity",
+            "history": [
+              {
+                "value": "Trước lúc sưng gối tôi có đi bộ lâu hơn thường ngày",
+                "status": "unresolved",
+                "evidence": {
+                  "answerIndex": 8,
+                  "quote": "Trước lúc sưng gối tôi có đi bộ lâu hơn thường ngày"
+                },
+                "codes": []
+              }
+            ]
+          },
+          "associated": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 9,
+              "quote": "Không có"
+            },
+            "codes": []
+          }
+        },
+        "split": {},
+        "warningsAsked": [
+          "tê hoặc yếu đột ngột một bên cơ thể (nghi đột quỵ)",
+          "nói ngọng kèm tê mặt",
+          "mất thị lực đột ngột kèm tê",
+          "yếu cả hai chân đột ngột",
+          "mất kiểm soát tiểu tiện kèm tê chân",
+          "tê lan nhanh từ chân lên (nghi Guillain-Barré)",
+          "khó thở kèm yếu cơ",
+          "sau chấn thương cột sống",
+          "co giật kèm tê bì",
+          "Khớp sưng nóng kèm sốt hoặc thấy mệt nhiều",
+          "Khớp đau dữ dội hoặc không thể tì chân, đi lại"
+        ],
+        "unresolvedReports": [],
+        "measurementReports": {
+          "huyet_ap": {
+            "value": "chưa đo huyết áp",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "chưa đo huyết áp"
+            },
+            "code": "not_measured"
+          },
+          "duong_huyet": {
+            "value": "Đã đo",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 5,
+              "quote": "Đã đo"
+            },
+            "code": "reading_available"
+          }
+        },
+        "measurementReplies": {
+          "duong_huyet": {
+            "value": "6.4 mmol/L, đo lúc 7:00 hôm nay",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 7,
+              "quote": "mmol/L, đo lúc 7:00 hôm nay"
+            },
+            "parts": [
+              {
+                "value": "6.4",
+                "evidence": {
+                  "answerIndex": 6,
+                  "quote": "6.4"
+                }
+              },
+              {
+                "value": "mmol/L, đo lúc 7:00 hôm nay",
+                "evidence": {
+                  "answerIndex": 7,
+                  "quote": "mmol/L, đo lúc 7:00 hôm nay"
+                }
+              }
+            ],
+            "incompleteValue": false
+          }
+        },
+        "reportClarifications": {},
+        "nextConcernId": 3,
+        "warningAnswers": [
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 1,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "tê hoặc yếu đột ngột một bên cơ thể (nghi đột quỵ)",
+              "nói ngọng kèm tê mặt",
+              "mất thị lực đột ngột kèm tê",
+              "yếu cả hai chân đột ngột",
+              "mất kiểm soát tiểu tiện kèm tê chân",
+              "tê lan nhanh từ chân lên (nghi Guillain-Barré)"
+            ]
+          },
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "khó thở kèm yếu cơ",
+              "sau chấn thương cột sống",
+              "co giật kèm tê bì",
+              "Khớp sưng nóng kèm sốt hoặc thấy mệt nhiều",
+              "Khớp đau dữ dội hoặc không thể tì chân, đi lại"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "skin",
+      "synthetic": true,
+      "permanent_health_rows": 0,
+      "profile": {
+        "age": 78,
+        "gender": "Nữ"
+      },
+      "conditions": [],
+      "input": "Hai cẳng chân ngứa râm ran và nổi mẩn đỏ nhỏ từ hôm qua, vẫn như cũ. Tôi vẫn đi lại sinh hoạt như thường. Hôm trước tôi vừa đổi loại nước giặt.",
+      "dialogue": [
+        {
+          "turn": 1,
+          "field": "symptoms",
+          "targets": [],
+          "question": "Bà ơi, ở hai cẳng chân, bà đang thấy có những triệu chứng nào ạ?",
+          "options": [
+            "Ngứa",
+            "Phát ban",
+            "Da khô",
+            "Có vết bầm",
+            "Nóng rát",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Hai cẳng chân ngứa râm ran và nổi mẩn đỏ nhỏ từ hôm qua, vẫn như cũ. Tôi vẫn đi lại sinh hoạt như thường. Hôm trước tôi vừa đổi loại nước giặt.",
+          "source": "ai",
+          "elapsedMs": 4976
+        },
+        {
+          "turn": 2,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Hiện tại bà có đang gặp phải tình trạng khó thở dữ dội, đau ngực kèm vã mồ hôi, hay ngất/lơ mơ không ạ?",
+          "options": [
+            "Khó thở dữ dội",
+            "Đau ngực kèm vã mồ hôi",
+            "Ngất hoặc lơ mơ",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 19973
+        },
+        {
+          "turn": 3,
+          "field": "character",
+          "targets": [
+            "c2"
+          ],
+          "question": "Cháu hỏi thêm là những nốt mẩn đỏ ở hai cẳng chân trông như thế nào ạ?",
+          "options": [
+            "Các nốt mẩn phẳng",
+            "Các nốt mẩn gồ lên",
+            "Có bọng nước/mụn nước",
+            "Có vảy/bong tróc",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Ngứa râm ran kèm các nốt mẩn đỏ nhỏ ở hai cẳng chân",
+          "source": "ai",
+          "elapsedMs": 12470
+        },
+        {
+          "turn": 4,
+          "field": "associated",
+          "targets": [],
+          "question": "Ngoài ngứa và nổi mẩn đỏ, bà có thấy cơ thể mình có thay đổi nào khác như sốt, ăn uống, ngủ nghỉ hay đi tiêu, đi tiểu không ạ?",
+          "options": [
+            "Có sốt",
+            "Ăn uống kém hơn",
+            "Khó ngủ/ngủ không ngon giấc",
+            "Đi tiêu bất thường (táo bón/tiêu chảy)",
+            "Đi tiểu bất thường (tiểu rắt/tiểu buốt)",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 19499
+        }
+      ],
+      "final": {
+        "isDone": true,
+        "severity": "medium",
+        "source": "ai",
+        "assessmentIncomplete": false,
+        "narrative": "Chào bà,\n\nCháu đã ghi nhận những điều bà chia sẻ về tình hình sức khỏe của mình. Bà đang bị ngứa râm ran và nổi mẩn đỏ nhỏ ở hai cẳng chân từ hôm qua, đến giờ vẫn vậy. Bà cũng có nói là hôm trước bà vừa đổi loại nước giặt. Cháu hiểu là những nốt mẩn đỏ nhỏ này đang khiến bà khó chịu.\n\nNhững biểu hiện này có thể liên quan đến việc bà đã đổi loại nước giặt. Da của chúng ta, đặc biệt là khi lớn tuổi, có thể nhạy cảm hơn với các hóa chất mới trong sản phẩm giặt tẩy. Khi da tiếp xúc với chất lạ, nó có thể phản ứng lại bằng cách gây ngứa và nổi mẩn đỏ.\n\nCháu thấy bà vẫn sinh hoạt bình thường và không có các dấu hiệu nguy hiểm như khó thở dữ dội, đau ngực kèm vã mồ hôi, hay ngất/lơ mơ. Tuy nhiên, để giúp bà cảm thấy dễ chịu hơn và tránh tình trạng nặng thêm, cháu có một vài lời khuyên bà có thể làm tại nhà:\n\n- Tránh tiếp xúc với nước giặt mới: Bà nên thử quay lại dùng loại nước giặt cũ hoặc chọn loại nước giặt dành cho da nhạy cảm, không mùi, không chất tạo màu. Điều này có thể giúp da bà không tiếp xúc thêm với tác nhân gây kích ứng, từ đó giảm phản ứng viêm và ngứa.\n- Mặc quần áo rộng rãi, thoáng mát: Quần áo bó sát có thể cọ xát vào vùng da bị ngứa và mẩn đỏ, làm tình trạng khó chịu tăng lên và có thể gây trầy xước da. Quần áo rộng rãi giúp da được \"thở\" và giảm ma sát.\n- Không gãi mạnh: Gãi có thể làm tổn thương da, khiến tình trạng ngứa nặng hơn và dễ dẫn đến nhiễm trùng. Nếu ngứa quá, bà có thể dùng khăn mát chườm nhẹ lên vùng da bị ảnh hưởng trong khoảng 10-15 phút. Hơi lạnh sẽ giúp làm dịu cảm giác ngứa.\n- Giữ ẩm cho da: Dùng kem dưỡng ẩm không mùi, không gây dị ứng (ví dụ: các loại kem dưỡng ẩm dành cho da nhạy cảm) có thể giúp làm dịu da và giảm ngứa. Bà nên thoa kem dưỡng ẩm ngay sau khi tắm, khi da còn hơi ẩm, để khóa độ ẩm lại.\n\nNếu bà đã làm theo những cách trên mà tình trạng ngứa và mẩn đỏ không đỡ, hoặc nếu bà thấy các nốt mẩn đỏ lan rộng hơn, sưng tấy, chảy dịch, hay bà bắt đầu cảm thấy sốt, ăn uống kém, ngủ không ngon, đi tiêu/tiểu bất thường, thì bà nên đi khám bác sĩ sớm để được kiểm tra cụ thể. Bác sĩ sẽ giúp bà tìm ra nguyên nhân chính xác và có hướng điều trị phù hợp nhất.\n\n- Bà nên đi khám trong vài ngày tới.",
+        "characters": 2163,
+        "promptVersion": "v5-narrative-2000-4000",
+        "elapsedMs": 11362
+      },
+      "finished": true,
+      "rateLimited": false,
+      "facts": {
+        "processed": [
+          "12df83617537b0520c53df386eacc69e345484565296f43f71c35899fcebf711",
+          "05720d45032748bcfc1c7052c1d944676c6d8d95e4315ccc815f6524bf48adea",
+          "2081d14e6fdaca36260bae78219a50a4b825adcc6f7ac4a6fe64ccec2db670ec",
+          "8e2693efacd33da4433bbc9e96e3f3c3da324bbb1e734bb7c5d2a392713ec119"
+        ],
+        "concerns": [
+          {
+            "id": "c1",
+            "label": "ngứa râm ran",
+            "region": "skin",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "ngứa râm ran"
+            },
+            "facts": {
+              "location": {
+                "value": "Hai cẳng chân",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "Hai cẳng chân"
+                }
+              },
+              "onset": {
+                "value": "hôm qua",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "từ hôm qua"
+                }
+              },
+              "progression": {
+                "value": "vẫn như cũ",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "vẫn như cũ"
+                },
+                "code": "same"
+              },
+              "character": {
+                "value": "râm ran",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "râm ran"
+                }
+              }
+            },
+            "detailFields": [
+              "character"
+            ],
+            "regionLocation": {
+              "value": "hai cẳng chân",
+              "evidence": {
+                "answerIndex": -1,
+                "quote": "Da: hai cẳng chân"
+              }
+            }
+          },
+          {
+            "id": "c2",
+            "label": "nổi mẩn đỏ nhỏ",
+            "region": "skin",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "nổi mẩn đỏ nhỏ"
+            },
+            "facts": {
+              "location": {
+                "value": "Hai cẳng chân",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "Hai cẳng chân"
+                }
+              },
+              "onset": {
+                "value": "hôm qua",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "từ hôm qua"
+                }
+              },
+              "progression": {
+                "value": "vẫn như cũ",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "vẫn như cũ"
+                },
+                "code": "same"
+              },
+              "character": {
+                "value": "mẩn đỏ nhỏ",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 2,
+                  "quote": "các nốt mẩn đỏ nhỏ"
+                }
+              }
+            },
+            "detailFields": [
+              "character"
+            ],
+            "regionLocation": {
+              "value": "hai cẳng chân",
+              "evidence": {
+                "answerIndex": -1,
+                "quote": "Da: hai cẳng chân"
+              }
+            }
+          }
+        ],
+        "global": {
+          "impact": {
+            "value": "Tôi vẫn đi lại sinh hoạt như thường.",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Tôi vẫn đi lại sinh hoạt như thường."
+            },
+            "code": "normal"
+          },
+          "source": {
+            "value": "tôi vừa đổi loại nước giặt",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Hôm trước tôi vừa đổi loại nước giặt."
+            },
+            "code": "environment"
+          },
+          "red_flags": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 1,
+              "quote": "Không có"
+            },
+            "codes": []
+          },
+          "associated": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 3,
+              "quote": "Không có"
+            },
+            "codes": []
+          }
+        },
+        "split": {},
+        "warningsAsked": [
+          "Khó thở dữ dội",
+          "Đau ngực kèm vã mồ hôi",
+          "Ngất hoặc lơ mơ"
+        ],
+        "unresolvedReports": [],
+        "measurementReports": {},
+        "measurementReplies": {},
+        "reportClarifications": {},
+        "nextConcernId": 3,
+        "warningAnswers": [
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 1,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "Khó thở dữ dội",
+              "Đau ngực kèm vã mồ hôi",
+              "Ngất hoặc lơ mơ"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "abdomen",
+      "synthetic": true,
+      "permanent_health_rows": 0,
+      "profile": {
+        "age": 65,
+        "gender": "Nữ"
+      },
+      "conditions": [
+        "Tiểu đường"
+      ],
+      "input": "Tôi đầy hơi và khó tiêu quanh rốn từ sau bữa tối hôm qua, không nặng lên. Tôi vẫn làm được các việc thường ngày. Tối qua có ăn món lạ.",
+      "dialogue": [
+        {
+          "turn": 1,
+          "field": "symptoms",
+          "targets": [],
+          "question": "Bác ơi, ở vùng quanh rốn, bác đang thấy có những triệu chứng nào ạ?",
+          "options": [
+            "Đau bụng",
+            "Buồn nôn",
+            "Tiêu chảy",
+            "Đầy hơi",
+            "Khó tiêu",
+            "Táo bón",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Tôi đầy hơi và khó tiêu quanh rốn từ sau bữa tối hôm qua, không nặng lên. Tôi vẫn làm được các việc thường ngày. Tối qua có ăn món lạ.",
+          "source": "ai",
+          "elapsedMs": 5042
+        },
+        {
+          "turn": 2,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Ngoài đầy hơi và khó tiêu, bác có đang gặp phải tình huống nào như khó thở dữ dội, đau ngực kèm vã mồ hôi, hay ngất/lơ mơ không ạ?",
+          "options": [
+            "Khó thở dữ dội",
+            "Đau ngực kèm vã mồ hôi",
+            "Ngất hoặc lơ mơ",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 19962
+        },
+        {
+          "turn": 3,
+          "field": "clinical_context",
+          "targets": [],
+          "question": "Hôm nay bác đã uống thuốc tiểu đường và đo đường huyết chưa ạ?",
+          "options": [
+            "Đã uống thuốc đúng giờ",
+            "Uống thuốc không đúng giờ/có thay đổi",
+            "Không có đơn thuốc tiểu đường",
+            "Đã đo đường huyết (ghi rõ chỉ số, đơn vị và thời gian)",
+            "Chưa đo đường huyết",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Đã uống thuốc đúng giờ, Chưa đo đường huyết",
+          "source": "ai",
+          "elapsedMs": 15808
+        },
+        {
+          "turn": 4,
+          "field": "associated",
+          "targets": [],
+          "question": "Ngoài đầy hơi và khó tiêu, bác có thấy mình bị sốt, ăn uống, ngủ nghỉ hay đi tiêu, đi tiểu có gì khác thường không ạ?",
+          "options": [
+            "Có sốt",
+            "Ăn uống kém hơn",
+            "Khó ngủ/ngủ không ngon giấc",
+            "Đi tiêu bất thường (tiêu chảy/táo bón)",
+            "Đi tiểu bất thường (tiểu rắt/tiểu buốt)",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 7997
+        }
+      ],
+      "final": {
+        "isDone": true,
+        "severity": "medium",
+        "source": "ai",
+        "assessmentIncomplete": false,
+        "narrative": "Cháu đã nắm được các thông tin bác vừa chia sẻ.\n\nBác đang bị đầy hơi và khó tiêu ở vùng quanh rốn từ sau bữa tối hôm qua, không nặng lên. Bác có nói tối qua mình ăn món lạ. Bác vẫn làm được các việc thường ngày, không có khó thở dữ dội, đau ngực kèm vã mồ hôi hay ngất/lơ mơ. Bác cũng không sốt, ăn uống, ngủ nghỉ hay đi tiêu, đi tiểu có gì khác thường.\n\nVới tình trạng của bác, cháu xin được giải thích như sau:\n- Đầy hơi và khó tiêu: Đây là những triệu chứng thường gặp, đặc biệt là sau khi ăn những món lạ hoặc khó tiêu. Khi ăn những thực phẩm không quen hoặc có nhiều dầu mỡ, gia vị, hệ tiêu hóa của mình có thể cần nhiều thời gian và công sức hơn để xử lý, dẫn đến cảm giác đầy bụng, khó tiêu.\n- Bệnh tiểu đường: Bác có bệnh tiểu đường, đây là một yếu tố cần lưu ý. Bệnh tiểu đường có thể ảnh hưởng đến chức năng tiêu hóa, làm chậm quá trình di chuyển thức ăn trong dạ dày và ruột, đôi khi cũng gây ra các triệu chứng như đầy hơi, khó tiêu. Tuy nhiên, hiện tại chưa có dấu hiệu cho thấy các triệu chứng này là do biến chứng của bệnh tiểu đường.\n\nCháu thấy bác vẫn làm được các việc thường ngày và không có các dấu hiệu nguy hiểm khác, nên bác đừng quá lo lắng nhé. Để giúp bác cảm thấy dễ chịu hơn, cháu có một vài lời khuyên nhỏ sau:\n- Ăn uống điều độ:\n- Bác nên ăn những món dễ tiêu, ít dầu mỡ, ít gia vị trong vài ngày tới.\n- Chia nhỏ bữa ăn thành nhiều bữa trong ngày thay vì ăn quá no một lúc.\n- Ăn chậm, nhai kỹ để giảm gánh nặng cho hệ tiêu hóa.\n- Tránh các loại đồ uống có ga, thực phẩm sinh hơi như đậu, bắp cải, bông cải xanh.\n- Uống đủ nước: Uống đủ nước lọc ấm sẽ giúp quá trình tiêu hóa diễn ra thuận lợi hơn.\n- Vận động nhẹ nhàng: Đi bộ nhẹ nhàng sau bữa ăn có thể giúp kích thích nhu động ruột, giảm đầy hơi.\n- Theo dõi đường huyết: Bác nhớ đo đường huyết theo lịch hẹn của bác sĩ để kiểm soát tốt bệnh tiểu đường của mình nhé. Việc kiểm soát đường huyết ổn định cũng góp phần giúp hệ tiêu hóa hoạt động tốt hơn.\n\nNếu các triệu chứng đầy hơi, khó tiêu không giảm đi sau vài ngày, hoặc nếu bác thấy xuất hiện thêm các dấu hiệu như:\n- Đau bụng dữ dội, không thuyên giảm.\n- Nôn mửa liên tục.\n- Sốt cao.\n- Đi ngoài phân đen hoặc có máu.\n- Sụt cân không rõ nguyên nhân.\n- Hoặc bất kỳ triệu chứng nào khác khiến bác cảm thấy lo lắng.\n\nKhi đó, bác nên đi khám bác sĩ sớm để được kiểm tra và tư vấn cụ thể hơn nhé.\n\n- Bác nên đi khám trong vài ngày tới.",
+        "characters": 2365,
+        "promptVersion": "v5-narrative-2000-4000",
+        "elapsedMs": 8231
+      },
+      "finished": true,
+      "rateLimited": false,
+      "facts": {
+        "processed": [
+          "ae3f42991631b5a7ec06d4b9ae7f0f303a718a826cc1e2cd8baf4479c0ed6f8d",
+          "eb104fb29f715a1cec9e556a8cf794ed669e11a2d57292ed5af465bd66b81e83",
+          "be91089353784df619ce11175fefcbb640b1579fc52841d8f114e25b86339dd7",
+          "c5c432d5474f26402adf43e53170f09ebb67bb174cfff065fef7bebff9654edf"
+        ],
+        "concerns": [
+          {
+            "id": "c1",
+            "label": "đầy hơi",
+            "region": "abdomen",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "đầy hơi"
+            },
+            "facts": {
+              "location": {
+                "value": "quanh rốn",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "quanh rốn"
+                }
+              },
+              "onset": {
+                "value": "sau bữa tối hôm qua",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "sau bữa tối hôm qua"
+                }
+              },
+              "progression": {
+                "value": "không nặng lên",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "không nặng lên"
+                },
+                "code": "same"
+              }
+            },
+            "detailFields": [],
+            "regionLocation": {
+              "value": "vùng quanh rốn",
+              "evidence": {
+                "answerIndex": -1,
+                "quote": "Bụng: vùng quanh rốn"
+              }
+            }
+          },
+          {
+            "id": "c2",
+            "label": "khó tiêu",
+            "region": "abdomen",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "khó tiêu"
+            },
+            "facts": {
+              "location": {
+                "value": "quanh rốn",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "quanh rốn"
+                }
+              },
+              "onset": {
+                "value": "sau bữa tối hôm qua",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "sau bữa tối hôm qua"
+                }
+              },
+              "progression": {
+                "value": "không nặng lên",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "không nặng lên"
+                },
+                "code": "same"
+              }
+            },
+            "detailFields": [],
+            "regionLocation": {
+              "value": "vùng quanh rốn",
+              "evidence": {
+                "answerIndex": -1,
+                "quote": "Bụng: vùng quanh rốn"
+              }
+            }
+          }
+        ],
+        "global": {
+          "impact": {
+            "value": "vẫn làm được các việc thường ngày",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Tôi vẫn làm được các việc thường ngày."
+            },
+            "code": "normal"
+          },
+          "source": {
+            "value": "ăn món lạ",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Tối qua có ăn món lạ."
+            },
+            "code": "nutrition"
+          },
+          "red_flags": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 1,
+              "quote": "Không có"
+            },
+            "codes": []
+          },
+          "medication_today": {
+            "value": "Đã uống thuốc đúng giờ",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Đã uống thuốc đúng giờ"
+            },
+            "code": "medication_as_planned"
+          },
+          "clinical_context": {
+            "value": "Đã uống thuốc đúng giờ; duong_huyet: Chưa đo đường huyết",
+            "status": "reported",
+            "codes": [
+              "medication_as_planned",
+              "not_measured"
+            ]
+          },
+          "measurements_today": {
+            "value": "duong_huyet: Chưa đo đường huyết",
+            "status": "reported",
+            "code": "not_measured"
+          },
+          "associated": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 3,
+              "quote": "Không có"
+            },
+            "codes": []
+          }
+        },
+        "split": {},
+        "warningsAsked": [
+          "Khó thở dữ dội",
+          "Đau ngực kèm vã mồ hôi",
+          "Ngất hoặc lơ mơ"
+        ],
+        "unresolvedReports": [],
+        "measurementReports": {
+          "duong_huyet": {
+            "value": "Chưa đo đường huyết",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Chưa đo đường huyết"
+            },
+            "code": "not_measured"
+          }
+        },
+        "measurementReplies": {},
+        "reportClarifications": {},
+        "nextConcernId": 3,
+        "warningAnswers": [
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 1,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "Khó thở dữ dội",
+              "Đau ngực kèm vã mồ hôi",
+              "Ngất hoặc lơ mơ"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "urgent",
+      "synthetic": true,
+      "permanent_health_rows": 0,
+      "profile": {
+        "age": 66,
+        "gender": "Nam"
+      },
+      "conditions": [
+        "Tăng huyết áp"
+      ],
+      "input": "Tôi đột ngột đau thắt giữa ngực, khó thở và vã mồ hôi ngay lúc này.",
+      "dialogue": [
+        {
+          "turn": 1,
+          "field": "symptoms",
+          "targets": [],
+          "question": "Bác ơi, ở giữa ngực bác đang có những triệu chứng nào vậy ạ?",
+          "options": [
+            "Đau ngực",
+            "Tức ngực",
+            "Khó thở",
+            "Hồi hộp, tim đập nhanh",
+            "Vã mồ hôi",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Tôi đột ngột đau thắt giữa ngực, khó thở và vã mồ hôi ngay lúc này.",
+          "source": "ai",
+          "elapsedMs": 5136
+        }
+      ],
+      "final": {
+        "isDone": true,
+        "isEmergency": true,
+        "severity": "emergency",
+        "narrative": "Triệu chứng “Tôi đột ngột đau thắt giữa ngực, khó thở, vã mồ hôi ngay lúc này.” có dấu hiệu nguy cấp.",
+        "characters": 101,
+        "elapsedMs": 3950
+      },
+      "finished": true,
+      "rateLimited": false,
+      "facts": {
+        "processed": [],
+        "concerns": [],
+        "global": {},
+        "split": {},
+        "warningsAsked": [],
+        "unresolvedReports": [],
+        "measurementReports": {},
+        "measurementReplies": {},
+        "reportClarifications": {},
+        "nextConcernId": 1
+      }
+    },
+    {
+      "case": "mental",
+      "synthetic": true,
+      "permanent_health_rows": 0,
+      "profile": {
+        "age": 35,
+        "gender": "Nữ"
+      },
+      "conditions": [],
+      "input": "Tôi trằn trọc khó ngủ đầu giấc khoảng một tuần nay. Dạo này lo chuyện công việc, tình trạng vẫn vậy. Ban ngày làm việc chậm hơn nhưng vẫn tự làm được mọi việc.",
+      "dialogue": [
+        {
+          "turn": 1,
+          "field": "symptoms",
+          "targets": [],
+          "question": "Chị đang thấy khó chịu như thế nào?",
+          "options": [
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Tôi trằn trọc khó ngủ đầu giấc khoảng một tuần nay. Dạo này lo chuyện công việc, tình trạng vẫn vậy. Ban ngày làm việc chậm hơn nhưng vẫn tự làm được mọi việc.",
+          "source": "fallback",
+          "elapsedMs": 10012
+        },
+        {
+          "turn": 2,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Ngoài việc khó ngủ, chị có đang gặp phải những dấu hiệu nào sau đây không?",
+          "options": [
+            "mất ngủ kèm ý định tự tử hoặc tự hại",
+            "mất ngủ kèm lú lẫn, mất phương hướng",
+            "mất ngủ kèm khó thở khi nằm (nghi suy tim)",
+            "mất ngủ kèm đau ngực về đêm",
+            "mất ngủ nhiều ngày kèm ảo giác",
+            "mất ngủ kèm sốt cao kéo dài",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 16939
+        },
+        {
+          "turn": 3,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Chị có đang gặp phải tình trạng mất ngủ kèm sụt cân nhanh không?",
+          "options": [
+            "mất ngủ kèm sụt cân nhanh",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 12053
+        },
+        {
+          "turn": 4,
+          "field": "character",
+          "targets": [
+            "c1"
+          ],
+          "question": "Cảm giác khó ngủ đầu giấc này cụ thể là như thế nào ạ?",
+          "options": [
+            "Cảm giác mọi vật xung quanh quay cuồng",
+            "Cảm giác choáng váng, muốn xỉu",
+            "Cảm giác mất thăng bằng, loạng choạng",
+            "Trằn trọc mãi không ngủ được",
+            "Hay bị tỉnh giấc giữa đêm",
+            "Thức dậy quá sớm và không ngủ lại được",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Khó đi vào giấc ngủ vì cứ nghĩ đến công việc",
+          "source": "ai",
+          "elapsedMs": 9488
+        },
+        {
+          "turn": 5,
+          "field": "associated",
+          "targets": [],
+          "question": "Ngoài việc khó ngủ, chị có thấy mình ăn uống, đi vệ sinh hay có thay đổi nào khác không?",
+          "options": [
+            "Có sốt",
+            "Ăn uống kém hơn",
+            "Đại tiện bất thường",
+            "Tiểu tiện bất thường",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 18522
+        }
+      ],
+      "final": {
+        "isDone": true,
+        "severity": "medium",
+        "source": "ai",
+        "assessmentIncomplete": false,
+        "narrative": "Mình đã xem qua các thông tin chị vừa chia sẻ.\n\nChị đang gặp tình trạng khó ngủ đầu giấc khoảng một tuần nay. Chị kể là mình khó đi vào giấc ngủ vì cứ nghĩ đến công việc. Tình trạng này khiến ban ngày chị làm việc chậm hơn một chút, nhưng vẫn tự làm được mọi việc. Mình hiểu việc trằn trọc khó ngủ vì lo nghĩ công việc có thể khiến chị mệt mỏi và ảnh hưởng đến hiệu suất làm việc.\n\nDưới đây là một số việc chị có thể làm để cải thiện giấc ngủ và giảm bớt căng thẳng:\n\n- Tạo thói quen đi ngủ và thức dậy vào cùng một giờ mỗi ngày: Kể cả vào cuối tuần. Việc này giúp điều hòa đồng hồ sinh học của cơ thể, khiến chị dễ đi vào giấc ngủ hơn.\n- Tạo không gian ngủ thoải mái: Đảm bảo phòng ngủ tối, yên tĩnh và mát mẻ. Tránh sử dụng các thiết bị điện tử như điện thoại, máy tính bảng trước khi ngủ ít nhất 1 giờ vì ánh sáng xanh từ màn hình có thể ảnh hưởng đến việc sản xuất melatonin (hormone giúp ngủ ngon).\n- Thư giãn trước khi ngủ: Chị có thể thử đọc sách, nghe nhạc nhẹ, tắm nước ấm hoặc thiền định để giúp đầu óc thư thái, không còn nghĩ nhiều đến công việc.\n- Hạn chế caffeine và rượu bia vào buổi tối: Các chất này có thể làm gián đoạn giấc ngủ của chị.\n- Tập thể dục đều đặn vào ban ngày: Vận động giúp cơ thể giải tỏa căng thẳng và dễ ngủ hơn vào buổi tối. Tuy nhiên, chị nên tránh tập thể dục quá gần giờ đi ngủ.\n- Ghi lại những lo lắng về công việc: Nếu chị cứ trằn trọc vì nghĩ đến công việc, hãy thử viết ra giấy những điều chị đang lo lắng và những việc cần làm vào ngày hôm sau. Việc này có thể giúp chị giải tỏa bớt gánh nặng trong đầu và dễ ngủ hơn.\n\nChị nên tiếp tục theo dõi tình trạng khó ngủ của mình. Nếu chị thấy các dấu hiệu sau, hãy tìm kiếm sự hỗ trợ từ bác sĩ:\n\n- Tình trạng khó ngủ kéo dài hơn 2-3 tuần và không có dấu hiệu cải thiện dù đã áp dụng các biện pháp trên.\n- Khó ngủ ảnh hưởng nghiêm trọng đến cuộc sống hàng ngày, khiến chị rất mệt mỏi, khó tập trung làm việc hoặc học tập.\n- Chị bắt đầu cảm thấy lo lắng, buồn bã hoặc có bất kỳ thay đổi nào khác về tâm trạng.",
+        "characters": 1995,
+        "promptVersion": "v5-narrative-2000-4000",
+        "elapsedMs": 10620
+      },
+      "finished": true,
+      "rateLimited": false,
+      "review_stage": "mental_before_fix_failed_quality",
+      "facts": {
+        "processed": [
+          "27064855de4809aba1d6129394b0a2e1e11518070fb3f32bf97c6520ebd1608a",
+          "97fc58543907d2ec170117136b3c296384962d0a2c998d20f5ae02c339b5e25c",
+          "e54ee952c45dcc7dfd8f0d0fff01f23c1ac355002b9d7b2d93c8c653c36c77fa",
+          "f13e8c5851d8f9099c6f51e120a3d53daaa5849992bb8b7a04e37b17a5ed1fd2",
+          "f870980818b6a8e139c7cd1a9a38418f23dc96e5ce6832117a960801aa2b785d"
+        ],
+        "concerns": [
+          {
+            "id": "c1",
+            "label": "khó ngủ đầu giấc",
+            "region": "mental",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "khó ngủ đầu giấc"
+            },
+            "facts": {
+              "onset": {
+                "value": "một tuần nay",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "khoảng một tuần nay"
+                }
+              },
+              "progression": {
+                "value": "vẫn vậy",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "tình trạng vẫn vậy"
+                },
+                "code": "same"
+              },
+              "character": {
+                "value": "Khó đi vào giấc ngủ vì cứ nghĩ đến công việc",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 3,
+                  "quote": "Khó đi vào giấc ngủ vì cứ nghĩ đến công việc"
+                }
+              }
+            },
+            "detailFields": [
+              "character"
+            ],
+            "regionLocation": {
+              "value": "khó ngủ đầu giấc",
+              "evidence": {
+                "answerIndex": -1,
+                "quote": "Tinh thần: khó ngủ đầu giấc"
+              }
+            }
+          }
+        ],
+        "global": {
+          "impact": {
+            "value": "làm việc chậm hơn nhưng vẫn tự làm được mọi việc",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Ban ngày làm việc chậm hơn nhưng vẫn tự làm được mọi việc"
+            },
+            "code": "slowed"
+          },
+          "source": {
+            "value": "lo chuyện công việc",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Dạo này lo chuyện công việc"
+            },
+            "code": "activity"
+          },
+          "red_flags": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Không có"
+            },
+            "codes": []
+          },
+          "associated": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 4,
+              "quote": "Không có"
+            },
+            "codes": []
+          }
+        },
+        "split": {},
+        "warningsAsked": [
+          "mất ngủ kèm ý định tự tử hoặc tự hại",
+          "mất ngủ kèm lú lẫn, mất phương hướng",
+          "mất ngủ kèm khó thở khi nằm (nghi suy tim)",
+          "mất ngủ kèm đau ngực về đêm",
+          "mất ngủ nhiều ngày kèm ảo giác",
+          "mất ngủ kèm sốt cao kéo dài",
+          "mất ngủ kèm sụt cân nhanh"
+        ],
+        "unresolvedReports": [],
+        "measurementReports": {},
+        "measurementReplies": {},
+        "reportClarifications": {},
+        "nextConcernId": 2,
+        "warningAnswers": [
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 1,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "mất ngủ kèm ý định tự tử hoặc tự hại",
+              "mất ngủ kèm lú lẫn, mất phương hướng",
+              "mất ngủ kèm khó thở khi nằm (nghi suy tim)",
+              "mất ngủ kèm đau ngực về đêm",
+              "mất ngủ nhiều ngày kèm ảo giác",
+              "mất ngủ kèm sốt cao kéo dài"
+            ]
+          },
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "mất ngủ kèm sụt cân nhanh"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "case": "mental",
+      "synthetic": true,
+      "permanent_health_rows": 0,
+      "profile": {
+        "age": 35,
+        "gender": "Nữ"
+      },
+      "conditions": [],
+      "input": "Tôi trằn trọc khó ngủ đầu giấc khoảng một tuần nay. Dạo này lo chuyện công việc, tình trạng vẫn vậy. Ban ngày làm việc chậm hơn nhưng vẫn tự làm được mọi việc.",
+      "dialogue": [
+        {
+          "turn": 1,
+          "field": "symptoms",
+          "targets": [],
+          "question": "Chị đang thấy khó chịu như thế nào?",
+          "options": [
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Tôi trằn trọc khó ngủ đầu giấc khoảng một tuần nay. Dạo này lo chuyện công việc, tình trạng vẫn vậy. Ban ngày làm việc chậm hơn nhưng vẫn tự làm được mọi việc.",
+          "source": "fallback",
+          "elapsedMs": 10009
+        },
+        {
+          "turn": 2,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Chị có dấu hiệu nào dưới đây ngay lúc này không?",
+          "options": [
+            "Khó thở dữ dội",
+            "Đau ngực kèm vã mồ hôi",
+            "Ngất hoặc lơ mơ",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "fallback",
+          "elapsedMs": 26008
+        },
+        {
+          "turn": 3,
+          "field": "symptoms",
+          "targets": [],
+          "question": "Để mình hiểu rõ phần này, chị đang thấy khó chịu như thế nào?",
+          "options": [
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Tôi trằn trọc khó ngủ đầu giấc khoảng một tuần nay. Dạo này lo chuyện công việc, tình trạng vẫn vậy. Ban ngày làm việc chậm hơn nhưng vẫn tự làm được mọi việc.",
+          "source": "fallback",
+          "clarification": 0,
+          "elapsedMs": 14003
+        }
+      ],
+      "finished": false,
+      "failed": {
+        "code": "EVALUATION_PROVIDER_TIMEOUT",
+        "message": "Stopped this synthetic evaluation after consecutive provider timeouts; not a passed dialogue."
+      },
+      "rateLimited": false,
+      "review_stage": "mental_after_fix_unconfirmed_timeout"
+    },
+    {
+      "case": "mental",
+      "synthetic": true,
+      "permanent_health_rows": 0,
+      "profile": {
+        "age": 35,
+        "gender": "Nữ"
+      },
+      "conditions": [],
+      "input": "Tôi trằn trọc khó ngủ đầu giấc khoảng một tuần nay. Dạo này lo chuyện công việc, tình trạng vẫn vậy. Ban ngày làm việc chậm hơn nhưng vẫn tự làm được mọi việc.",
+      "dialogue": [
+        {
+          "turn": 1,
+          "field": "symptoms",
+          "targets": [],
+          "question": "Ngoài việc khó ngủ đầu giấc, chị còn cảm thấy thế nào nữa không?",
+          "options": [
+            "Lo âu",
+            "Buồn bã",
+            "Mất ngủ",
+            "Căng thẳng",
+            "Mệt mỏi tinh thần",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Tôi trằn trọc khó ngủ đầu giấc khoảng một tuần nay. Dạo này lo chuyện công việc, tình trạng vẫn vậy. Ban ngày làm việc chậm hơn nhưng vẫn tự làm được mọi việc.",
+          "source": "ai",
+          "elapsedMs": 9965
+        },
+        {
+          "turn": 2,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Ngoài việc khó ngủ đầu giấc, chị có đang gặp phải những dấu hiệu nào sau đây không?",
+          "options": [
+            "mất ngủ kèm ý định tự tử hoặc tự hại",
+            "mất ngủ kèm lú lẫn, mất phương hướng",
+            "mất ngủ kèm khó thở khi nằm (nghi suy tim)",
+            "mất ngủ kèm đau ngực về đêm",
+            "mất ngủ nhiều ngày kèm ảo giác",
+            "mất ngủ kèm sốt cao kéo dài",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 39936
+        },
+        {
+          "turn": 3,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Chị có dấu hiệu nào dưới đây ngay lúc này không?",
+          "options": [
+            "mất ngủ kèm sụt cân nhanh",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "fallback",
+          "elapsedMs": 22672
+        },
+        {
+          "turn": 4,
+          "field": "associated",
+          "targets": [],
+          "question": "Ngoài việc khó ngủ đầu giấc, chị có thấy mình bị sốt, ăn uống, đi tiêu hay đi tiểu có gì khác thường không?",
+          "options": [
+            "Có sốt",
+            "Ăn uống kém hơn",
+            "Đi tiêu bất thường",
+            "Đi tiểu bất thường",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 15256
+        }
+      ],
+      "facts": {
+        "processed": [
+          "8fc08ea4c4f035697b9f25088597fc139833fe930c16d43a5f5d5e207286c23c",
+          "8b7766bfdcae591c011ce65e7dc01ba04f28872498336365ce20fb4628214e31",
+          "866efc12589fc57a3c360f3c99b78262be794ee3d38b7b6ce0a4ed92a208b14f",
+          "df802c3517980145872cfb58a0231d9fc6b525c1a45cd58b6de4e3948e0811ad"
+        ],
+        "concerns": [
+          {
+            "id": "c1",
+            "label": "khó ngủ đầu giấc",
+            "region": "mental",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "khó ngủ đầu giấc"
+            },
+            "facts": {
+              "onset": {
+                "value": "một tuần nay",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "khoảng một tuần nay"
+                }
+              },
+              "progression": {
+                "value": "vẫn vậy",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "tình trạng vẫn vậy"
+                },
+                "code": "same"
+              },
+              "character": {
+                "value": "khó ngủ đầu giấc",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "khó ngủ đầu giấc"
+                }
+              }
+            },
+            "detailFields": [
+              "character"
+            ],
+            "regionLocation": {
+              "value": "khó ngủ đầu giấc",
+              "evidence": {
+                "answerIndex": -1,
+                "quote": "Tinh thần: khó ngủ đầu giấc"
+              }
+            }
+          }
+        ],
+        "global": {
+          "impact": {
+            "value": "làm việc chậm hơn nhưng vẫn tự làm được mọi việc",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Ban ngày làm việc chậm hơn nhưng vẫn tự làm được mọi việc"
+            },
+            "code": "slowed"
+          },
+          "source": {
+            "value": "lo chuyện công việc",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Dạo này lo chuyện công việc"
+            },
+            "code": "activity"
+          },
+          "red_flags": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Không có"
+            },
+            "codes": []
+          },
+          "associated": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 3,
+              "quote": "Không có"
+            },
+            "codes": []
+          }
+        },
+        "split": {},
+        "warningsAsked": [
+          "mất ngủ kèm ý định tự tử hoặc tự hại",
+          "mất ngủ kèm lú lẫn, mất phương hướng",
+          "mất ngủ kèm khó thở khi nằm (nghi suy tim)",
+          "mất ngủ kèm đau ngực về đêm",
+          "mất ngủ nhiều ngày kèm ảo giác",
+          "mất ngủ kèm sốt cao kéo dài",
+          "mất ngủ kèm sụt cân nhanh"
+        ],
+        "unresolvedReports": [],
+        "measurementReports": {},
+        "measurementReplies": {},
+        "reportClarifications": {},
+        "nextConcernId": 2,
+        "warningAnswers": [
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 1,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "mất ngủ kèm ý định tự tử hoặc tự hại",
+              "mất ngủ kèm lú lẫn, mất phương hướng",
+              "mất ngủ kèm khó thở khi nằm (nghi suy tim)",
+              "mất ngủ kèm đau ngực về đêm",
+              "mất ngủ nhiều ngày kèm ảo giác",
+              "mất ngủ kèm sốt cao kéo dài"
+            ]
+          },
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "mất ngủ kèm sụt cân nhanh"
+            ]
+          }
+        ]
+      },
+      "final": {
+        "isDone": true,
+        "severity": "medium",
+        "source": "ai",
+        "assessmentIncomplete": false,
+        "narrative": "Mình đã xem qua thông tin chị vừa chia sẻ.\n\nChị đang trằn trọc khó ngủ đầu giấc khoảng một tuần nay. Chị cũng nói dạo này mình lo lắng chuyện công việc, và tình trạng khó ngủ vẫn vậy. Ban ngày, chị thấy mình làm việc chậm hơn một chút nhưng vẫn tự làm được mọi việc.\n\nKhó ngủ đầu giấc, hay khó đi vào giấc ngủ, thường liên quan đến nhiều yếu tố. Khi tâm trí bận rộn với những suy nghĩ, lo toan, cơ thể sẽ khó thư giãn để chìm vào giấc ngủ. Tình trạng này kéo dài một tuần và khiến chị làm việc chậm hơn ban ngày cho thấy giấc ngủ đang bị ảnh hưởng đáng kể.\n\nĐể giúp chị cải thiện tình trạng này, mình có một vài gợi ý chị có thể thử:\n\n- Tạo thói quen đi ngủ đều đặn: Chị nên cố gắng đi ngủ và thức dậy vào cùng một giờ mỗi ngày, kể cả cuối tuần. Điều này giúp điều hòa đồng hồ sinh học của cơ thể, giúp chị dễ ngủ hơn.\n- Tạo không gian ngủ thoải mái: Chị hãy đảm bảo phòng ngủ tối, yên tĩnh và mát mẻ. Tránh dùng điện thoại, máy tính bảng hoặc xem TV ít nhất một giờ trước khi ngủ vì ánh sáng xanh từ các thiết bị này có thể làm gián đoạn giấc ngủ.\n- Thư giãn trước khi ngủ: Chị có thể thử các hoạt động nhẹ nhàng như đọc sách, nghe nhạc nhẹ, tắm nước ấm hoặc thiền định trước khi đi ngủ. Những hoạt động này giúp cơ thể và tâm trí thư giãn, chuẩn bị cho giấc ngủ.\n- Hạn chế caffeine và rượu bia: Chị nên tránh uống cà phê, trà, nước ngọt có ga và rượu bia vào buổi chiều tối, đặc biệt là vài giờ trước khi ngủ. Những chất này có thể kích thích thần kinh hoặc làm gián đoạn chu kỳ giấc ngủ.\n- Vận động nhẹ nhàng ban ngày: Tập thể dục đều đặn vào ban ngày có thể giúp chị ngủ ngon hơn vào buổi tối. Tuy nhiên, chị nên tránh tập thể dục quá gần giờ đi ngủ vì có thể làm cơ thể tỉnh táo.\n- Ghi lại những điều mình lo lắng: Nếu chị đang lo lắng về công việc, chị có thể thử viết ra những suy nghĩ đó vào một cuốn sổ trước khi đi ngủ. Việc này có thể giúp chị \"trút bỏ\" gánh nặng trong đầu và không mang chúng lên giường ngủ.\n\nChị hãy theo dõi tình trạng khó ngủ của mình. Nếu sau khi áp dụng các biện pháp trên mà tình trạng khó ngủ vẫn không cải thiện, hoặc nếu chị cảm thấy lo lắng nhiều hơn, khó tập trung, hay có bất kỳ dấu hiệu bất thường nào khác, chị nên đi khám bác sĩ để được tư vấn và hỗ trợ kịp thời nhé.",
+        "characters": 2211,
+        "promptVersion": "v5-narrative-2000-4000",
+        "elapsedMs": 10809
+      },
+      "finished": true,
+      "rateLimited": false,
+      "review_stage": "mental_after_fix_paced_completed",
+      "provider_summary": {
+        "calls": 13,
+        "failed": 0,
+        "max_elapsed_ms": 4621,
+        "pacing": "6000ms after each completed provider call"
+      }
+    },
+    {
+      "case": "mental_open",
+      "synthetic": true,
+      "permanent_health_rows": 0,
+      "profile": {
+        "age": 35,
+        "gender": "Nữ"
+      },
+      "conditions": [],
+      "input": "Tôi khó ngủ khoảng một tuần nay, tình trạng vẫn vậy. Tôi vẫn làm được các việc thường ngày. Trước đó tôi lo chuyện công việc.",
+      "dialogue": [
+        {
+          "turn": 1,
+          "field": "symptoms",
+          "targets": [],
+          "question": "Chị đang thấy khó chịu như thế nào?",
+          "options": [
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Tôi khó ngủ khoảng một tuần nay, tình trạng vẫn vậy. Tôi vẫn làm được các việc thường ngày. Trước đó tôi lo chuyện công việc.",
+          "source": "fallback",
+          "elapsedMs": 11244
+        },
+        {
+          "turn": 2,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Ngoài việc khó ngủ, chị có đang gặp phải những dấu hiệu nào sau đây không?",
+          "options": [
+            "mất ngủ kèm ý định tự tử hoặc tự hại",
+            "mất ngủ kèm lú lẫn, mất phương hướng",
+            "mất ngủ kèm khó thở khi nằm (nghi suy tim)",
+            "mất ngủ kèm đau ngực về đêm",
+            "mất ngủ nhiều ngày kèm ảo giác",
+            "mất ngủ kèm sốt cao kéo dài",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 43773
+        },
+        {
+          "turn": 3,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Chị có đang bị mất ngủ kèm sụt cân nhanh không?",
+          "options": [
+            "mất ngủ kèm sụt cân nhanh",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 22250
+        },
+        {
+          "turn": 4,
+          "field": "associated",
+          "targets": [],
+          "question": "Ngoài việc khó ngủ, chị có thấy cơ thể mình có thay đổi nào khác không, ví dụ như sốt, ăn uống, đi vệ sinh?",
+          "options": [
+            "Có sốt",
+            "Ăn uống kém hơn",
+            "Đi ngoài bất thường",
+            "Đi tiểu bất thường",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 14865
+        }
+      ],
+      "facts": {
+        "processed": [
+          "d5143cd03f9de93b2fd5043300ea7a0743c5a15a48b9306395761daf7c2a8cfa",
+          "97fc58543907d2ec170117136b3c296384962d0a2c998d20f5ae02c339b5e25c",
+          "137797e07016227a0401ee7aea20bf21509dd9b92403eac291e4adcfc2800e5c",
+          "82b355a8cca1bb97b281a85b3da191249e823abf62c7210e4283a914bef2851e"
+        ],
+        "concerns": [
+          {
+            "id": "c1",
+            "label": "khó ngủ",
+            "region": "mental",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Tôi khó ngủ"
+            },
+            "facts": {
+              "onset": {
+                "value": "khoảng một tuần nay",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "khoảng một tuần nay"
+                }
+              },
+              "progression": {
+                "value": "vẫn vậy",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "tình trạng vẫn vậy"
+                },
+                "code": "same"
+              }
+            },
+            "detailFields": [],
+            "regionLocation": {
+              "value": "giấc ngủ",
+              "evidence": {
+                "answerIndex": -1,
+                "quote": "Tinh thần: giấc ngủ"
+              }
+            }
+          }
+        ],
+        "global": {
+          "impact": {
+            "value": "Tôi vẫn làm được các việc thường ngày",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Tôi vẫn làm được các việc thường ngày"
+            },
+            "code": "normal"
+          },
+          "source": {
+            "value": "lo chuyện công việc",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Trước đó tôi lo chuyện công việc"
+            },
+            "code": "activity"
+          },
+          "red_flags": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Không có"
+            },
+            "codes": []
+          },
+          "associated": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 3,
+              "quote": "Không có"
+            },
+            "codes": []
+          }
+        },
+        "split": {},
+        "warningsAsked": [
+          "mất ngủ kèm ý định tự tử hoặc tự hại",
+          "mất ngủ kèm lú lẫn, mất phương hướng",
+          "mất ngủ kèm khó thở khi nằm (nghi suy tim)",
+          "mất ngủ kèm đau ngực về đêm",
+          "mất ngủ nhiều ngày kèm ảo giác",
+          "mất ngủ kèm sốt cao kéo dài",
+          "mất ngủ kèm sụt cân nhanh"
+        ],
+        "unresolvedReports": [],
+        "measurementReports": {},
+        "measurementReplies": {},
+        "reportClarifications": {},
+        "nextConcernId": 2,
+        "warningAnswers": [
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 1,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "mất ngủ kèm ý định tự tử hoặc tự hại",
+              "mất ngủ kèm lú lẫn, mất phương hướng",
+              "mất ngủ kèm khó thở khi nằm (nghi suy tim)",
+              "mất ngủ kèm đau ngực về đêm",
+              "mất ngủ nhiều ngày kèm ảo giác",
+              "mất ngủ kèm sốt cao kéo dài"
+            ]
+          },
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "mất ngủ kèm sụt cân nhanh"
+            ]
+          }
+        ]
+      },
+      "final": {
+        "isDone": true,
+        "severity": "low",
+        "source": "ai",
+        "assessmentIncomplete": false,
+        "narrative": "Mình đã xem qua thông tin chị vừa chia sẻ.\n\nChị đang khó ngủ khoảng một tuần nay, tình trạng vẫn như cũ và chị vẫn làm được các việc thường ngày. Chị cũng cho biết trước đó mình có lo lắng về công việc.\n\nKhó ngủ có thể do nhiều nguyên nhân, trong đó có yếu tố tâm lý như lo lắng, căng thẳng. Khi tâm trí bận rộn với những suy nghĩ, đặc biệt là những lo lắng, sẽ khó để cơ thể và đầu óc được thư giãn hoàn toàn để đi vào giấc ngủ.\n\nĐể giúp chị dễ ngủ hơn và cải thiện tình trạng này, mình có một vài gợi ý chị có thể thử:\n\n- Tạo thói quen đi ngủ đều đặn: Chị nên cố gắng đi ngủ và thức dậy vào cùng một thời điểm mỗi ngày, kể cả vào cuối tuần. Điều này giúp điều hòa đồng hồ sinh học của cơ thể, khiến chị dễ ngủ hơn vào buổi tối.\n- Tạo không gian ngủ thoải mái: Chị hãy đảm bảo phòng ngủ tối, yên tĩnh và mát mẻ. Tránh dùng các thiết bị điện tử như điện thoại, máy tính bảng trước khi ngủ ít nhất 30 phút vì ánh sáng xanh từ màn hình có thể ảnh hưởng đến chất lượng giấc ngủ.\n- Thư giãn trước khi ngủ: Chị có thể thử các hoạt động nhẹ nhàng giúp thư giãn như đọc sách, nghe nhạc nhẹ, tắm nước ấm hoặc thiền định. Những hoạt động này giúp làm dịu tâm trí và cơ thể, chuẩn bị cho giấc ngủ.\n- Tránh các chất kích thích: Chị nên hạn chế uống cà phê, trà, nước ngọt có ga hoặc rượu bia vào buổi chiều và tối. Các chất này có thể làm chị tỉnh táo hơn và khó ngủ.\n- Vận động nhẹ nhàng: Tập thể dục đều đặn trong ngày có thể giúp chị ngủ ngon hơn vào ban đêm. Tuy nhiên, chị nên tránh tập thể dục quá gần giờ đi ngủ vì có thể làm tăng nhịp tim và khiến chị khó ngủ.\n\nNếu tình trạng khó ngủ của chị kéo dài hoặc trở nên nghiêm trọng hơn, ảnh hưởng nhiều đến cuộc sống hàng ngày, chị nên đi khám bác sĩ để được tư vấn và tìm ra nguyên nhân cụ thể.\n\nChị cũng cần lưu ý đi khám ngay nếu có thêm các dấu hiệu sau:\n\n- Khó ngủ kèm theo cảm giác lú lẫn, mất phương hướng.\n- Khó ngủ kèm theo khó thở khi nằm.\n- Khó ngủ kèm theo đau ngực về đêm.\n- Khó ngủ nhiều ngày kèm theo ảo giác.\n- Khó ngủ kèm theo sốt cao kéo dài.\n- Khó ngủ kèm theo sụt cân nhanh không rõ nguyên nhân.",
+        "characters": 2057,
+        "promptVersion": "v5-narrative-2000-4000",
+        "elapsedMs": 10715
+      },
+      "finished": true,
+      "rateLimited": false,
+      "review_stage": "mental_open_before_open_id_fix",
+      "provider_summary": {
+        "calls": 13,
+        "failed": 0,
+        "max_elapsed_ms": 6442,
+        "pacing": "6000ms after each completed provider call"
+      }
+    },
+    {
+      "case": "mental_open",
+      "synthetic": true,
+      "permanent_health_rows": 0,
+      "profile": {
+        "age": 35,
+        "gender": "Nữ"
+      },
+      "conditions": [],
+      "input": "Tôi khó ngủ khoảng một tuần nay, tình trạng vẫn vậy. Tôi vẫn làm được các việc thường ngày. Trước đó tôi lo chuyện công việc.",
+      "dialogue": [
+        {
+          "turn": 1,
+          "field": "symptoms",
+          "targets": [],
+          "question": "Chị ơi, dạo này giấc ngủ của chị có những biểu hiện nào vậy?",
+          "options": [
+            "Khó đi vào giấc ngủ",
+            "Thường xuyên thức giấc giữa đêm",
+            "Thức dậy quá sớm và không ngủ lại được",
+            "Ngủ dậy vẫn thấy mệt mỏi, không sảng khoái",
+            "Ngủ quá nhiều",
+            "Hay gặp ác mộng",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Tôi khó ngủ khoảng một tuần nay, tình trạng vẫn vậy. Tôi vẫn làm được các việc thường ngày. Trước đó tôi lo chuyện công việc.",
+          "source": "ai",
+          "elapsedMs": 10963
+        },
+        {
+          "turn": 2,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Chị có dấu hiệu nào dưới đây ngay lúc này không?",
+          "options": [
+            "mất ngủ kèm ý định tự tử hoặc tự hại",
+            "mất ngủ kèm lú lẫn, mất phương hướng",
+            "mất ngủ kèm khó thở khi nằm (nghi suy tim)",
+            "mất ngủ kèm đau ngực về đêm",
+            "mất ngủ nhiều ngày kèm ảo giác",
+            "mất ngủ kèm sốt cao kéo dài",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "fallback",
+          "elapsedMs": 39535
+        },
+        {
+          "turn": 3,
+          "field": "red_flags",
+          "targets": [],
+          "question": "Chị có đang gặp tình trạng mất ngủ kèm sụt cân nhanh không?",
+          "options": [
+            "mất ngủ kèm sụt cân nhanh",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 30704
+        },
+        {
+          "turn": 4,
+          "field": "associated",
+          "targets": [],
+          "question": "Ngoài việc khó ngủ, chị có thấy mình có thay đổi nào khác về ăn uống, tiêu tiểu hay sốt không?",
+          "options": [
+            "Có sốt",
+            "Ăn uống kém hơn",
+            "Tiêu hóa có vấn đề (tiêu chảy, táo bón...)",
+            "Tiểu tiện bất thường (tiểu rắt, tiểu đêm nhiều...)",
+            "Không có",
+            "Không rõ",
+            "Khác, nhập hoặc nói câu trả lời"
+          ],
+          "answer": "Không có",
+          "source": "ai",
+          "elapsedMs": 16203
+        }
+      ],
+      "facts": {
+        "processed": [
+          "f4c23c6072afcf7cd9545a262042e77db07debbeca5534e7a9c3a967a4113e42",
+          "cc2fa68f68ce0f4eb74ab2e2fa58e7287cdfb14bbe17ab576bc9397f519c60d2",
+          "8005aa8664c173c1fd3303509c447d170d2ca51c3a57eefcf38e15f387f3e214",
+          "357676da30d7672fbafe30082ac8799ccd42ec4174ccfe238bf06a78c21656b6"
+        ],
+        "concerns": [
+          {
+            "id": "c1",
+            "label": "khó ngủ",
+            "region": "mental",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Tôi khó ngủ"
+            },
+            "facts": {
+              "onset": {
+                "value": "khoảng một tuần nay",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "khoảng một tuần nay"
+                }
+              },
+              "progression": {
+                "value": "vẫn vậy",
+                "status": "reported",
+                "evidence": {
+                  "answerIndex": 0,
+                  "quote": "tình trạng vẫn vậy"
+                },
+                "code": "same"
+              }
+            },
+            "detailFields": [],
+            "regionLocation": {
+              "value": "giấc ngủ",
+              "evidence": {
+                "answerIndex": -1,
+                "quote": "Tinh thần: giấc ngủ"
+              }
+            }
+          }
+        ],
+        "global": {
+          "impact": {
+            "value": "Tôi vẫn làm được các việc thường ngày",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Tôi vẫn làm được các việc thường ngày"
+            },
+            "code": "normal"
+          },
+          "source": {
+            "value": "lo chuyện công việc",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 0,
+              "quote": "Trước đó tôi lo chuyện công việc"
+            },
+            "code": "activity"
+          },
+          "red_flags": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Không có"
+            },
+            "codes": []
+          },
+          "associated": {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 3,
+              "quote": "Không có"
+            },
+            "codes": []
+          }
+        },
+        "split": {},
+        "warningsAsked": [
+          "mất ngủ kèm ý định tự tử hoặc tự hại",
+          "mất ngủ kèm lú lẫn, mất phương hướng",
+          "mất ngủ kèm khó thở khi nằm (nghi suy tim)",
+          "mất ngủ kèm đau ngực về đêm",
+          "mất ngủ nhiều ngày kèm ảo giác",
+          "mất ngủ kèm sốt cao kéo dài",
+          "mất ngủ kèm sụt cân nhanh"
+        ],
+        "unresolvedReports": [],
+        "measurementReports": {},
+        "measurementReplies": {},
+        "reportClarifications": {},
+        "nextConcernId": 2,
+        "warningAnswers": [
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 1,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "mất ngủ kèm ý định tự tử hoặc tự hại",
+              "mất ngủ kèm lú lẫn, mất phương hướng",
+              "mất ngủ kèm khó thở khi nằm (nghi suy tim)",
+              "mất ngủ kèm đau ngực về đêm",
+              "mất ngủ nhiều ngày kèm ảo giác",
+              "mất ngủ kèm sốt cao kéo dài"
+            ]
+          },
+          {
+            "value": "Không có",
+            "status": "reported",
+            "evidence": {
+              "answerIndex": 2,
+              "quote": "Không có"
+            },
+            "codes": [],
+            "keys": [
+              "mất ngủ kèm sụt cân nhanh"
+            ]
+          }
+        ]
+      },
+      "final": {
+        "isDone": true,
+        "severity": "low",
+        "source": "ai",
+        "assessmentIncomplete": false,
+        "narrative": "Chào chị, mình đã xem qua thông tin chị vừa chia sẻ.\n\nChị đang gặp tình trạng khó ngủ khoảng một tuần nay và vẫn chưa cải thiện. Chị cũng cho biết là mình vẫn làm được các việc thường ngày, không bị ảnh hưởng nhiều. Chị có nhắc đến việc mình lo lắng về công việc trước đó.\n\nKhó ngủ có thể do nhiều nguyên nhân, trong đó căng thẳng, lo âu là một nguyên nhân phổ biến. Khi mình lo lắng về công việc, tâm trí có thể hoạt động nhiều hơn vào ban đêm, khiến mình khó đi vào giấc ngủ hoặc ngủ không sâu.\n\nĐể giúp chị cải thiện tình trạng khó ngủ, mình có một vài gợi ý chị có thể tham khảo:\n\n- Tạo thói quen đi ngủ đều đặn: Chị nên cố gắng đi ngủ và thức dậy vào cùng một thời điểm mỗi ngày, kể cả cuối tuần. Điều này giúp điều hòa đồng hồ sinh học của cơ thể, giúp chị dễ ngủ hơn.\n- Tạo không gian ngủ thoải mái: Chị có thể thử làm cho phòng ngủ tối, yên tĩnh và mát mẻ. Tránh dùng điện thoại, máy tính hoặc xem TV trước khi ngủ ít nhất 30 phút, vì ánh sáng xanh từ các thiết bị này có thể ức chế sản xuất melatonin, một hormone giúp điều hòa giấc ngủ.\n- Thư giãn trước khi ngủ: Chị có thể thử các hoạt động thư giãn như đọc sách, nghe nhạc nhẹ, tắm nước ấm hoặc thiền định trước khi đi ngủ. Điều này giúp cơ thể và tâm trí được thả lỏng, dễ dàng chìm vào giấc ngủ hơn.\n- Hạn chế caffeine và rượu bia: Chị nên tránh uống cà phê, trà, nước ngọt có ga và rượu bia vào buổi chiều tối, vì chúng có thể làm gián đoạn giấc ngủ. Caffeine là chất kích thích, còn rượu bia tuy ban đầu có thể gây buồn ngủ nhưng sau đó lại làm gián đoạn chu kỳ giấc ngủ.\n- Vận động nhẹ nhàng: Tập thể dục đều đặn trong ngày có thể giúp chị ngủ ngon hơn vào ban đêm. Tuy nhiên, chị nên tránh tập thể dục quá gần giờ đi ngủ (trong vòng 2-3 tiếng trước khi ngủ), vì nó có thể làm tăng nhịp tim và nhiệt độ cơ thể, khiến chị khó ngủ.\n- Giải quyết căng thẳng: Vì chị có nhắc đến việc lo lắng về công việc, mình có thể thử tìm cách giải tỏa căng thẳng trong ngày. Chị có thể dành thời gian để viết ra những điều mình lo lắng, hoặc chia sẻ với người thân, bạn bè để giảm bớt gánh nặng tâm lý.\n\nMình hiểu là chị đang lo lắng về công việc, nhưng việc ngủ đủ giấc rất quan trọng để giữ sức khỏe và tinh thần tốt. Nếu chị đã thử các cách trên mà tình trạng khó ngủ vẫn không cải thiện, hoặc nếu chị cảm thấy khó ngủ kèm theo các dấu hiệu như:\n\n- Mệt mỏi nhiều, ảnh hưởng đến công việc và sinh hoạt hàng ngày.\n- Khó tập trung, hay quên.\n- Cảm thấy buồn bã, lo âu kéo dài.\n- Có bất kỳ dấu hiệu bất thường nào khác.\n\nKhi đó, chị nên đi khám bác sĩ để được đánh giá cụ thể và tìm ra nguyên nhân chính xác, từ đó có hướng điều trị phù hợp.",
+        "characters": 2590,
+        "promptVersion": "v5-narrative-2000-4000",
+        "elapsedMs": 20848
+      },
+      "finished": true,
+      "rateLimited": false,
+      "review_stage": "mental_open_after_open_id_fix",
+      "provider_summary": {
+        "calls": 15,
+        "failed": 0,
+        "max_elapsed_ms": 4342,
+        "pacing": "6000ms after each completed provider call"
+      }
+    },
+    {
+      "case": "sleep_quality_missing",
+      "kind": "focused_question_not_full_dialogue",
+      "synthetic": true,
+      "provider": [
+        {
+          "model": "medgemma-27b-it",
+          "elapsedMs": 3089,
+          "timeoutMs": 10000,
+          "content": "```json\n{\n  \"field\": \"character\",\n  \"question\": \"Chị có thể cho mình biết rõ hơn về tình trạng khó ngủ này không?\",\n  \"options\": [\n    {\n      \"id\": \"difficulty_falling_asleep\",\n      \"label\": \"Khó đi vào giấc ngủ\"\n    },\n    {\n      \"id\": \"waking_up_frequently\",\n      \"label\": \"Hay bị thức giấc giữa đêm\"\n    },\n    {\n      \"id\": \"waking_up_early\",\n      \"label\": \"Thức dậy quá sớm và không ngủ lại được\"\n    },\n    {\n      \"id\": \"restless_sleep\",\n      \"label\": \"Giấc ngủ không sâu, trằn trọc\"\n    },\n    {\n      \"id\": \"difficulty_staying_asleep\",\n      \"label\": \"Khó duy trì giấc ngủ\"\n    }\n  ]\n}\n```"
+        },
+        {
+          "model": "medgemma-27b-it",
+          "elapsedMs": 2114,
+          "timeoutMs": 10000,
+          "content": "```json\n{\n  \"field\": \"character\",\n  \"question\": \"Chị khó ngủ cụ thể là như thế nào?\",\n  \"options\": [\n    {\n      \"id\": \"difficulty_falling_asleep\",\n      \"label\": \"Khó đi vào giấc ngủ\"\n    },\n    {\n      \"id\": \"waking_up_frequently\",\n      \"label\": \"Hay thức giấc giữa đêm\"\n    },\n    {\n      \"id\": \"waking_up_too_early\",\n      \"label\": \"Thức dậy quá sớm và không ngủ lại được\"\n    },\n    {\n      \"id\": \"not_feeling_rested\",\n      \"label\": \"Ngủ dậy vẫn thấy mệt mỏi, không sảng khoái\"\n    }\n  ]\n}\n```"
+        },
+        {
+          "model": "medgemma-27b-it",
+          "elapsedMs": 1609,
+          "timeoutMs": 5000,
+          "content": "```json\n{\"valid\":true,\"errors\":[]}\n```"
+        }
+      ],
+      "result": {
+        "question": "Chị khó ngủ cụ thể là như thế nào?",
+        "options": [
+          "Khó đi vào giấc ngủ",
+          "Hay thức giấc giữa đêm",
+          "Thức dậy quá sớm và không ngủ lại được",
+          "Ngủ dậy vẫn thấy mệt mỏi, không sảng khoái",
+          "Không rõ",
+          "Khác, nhập hoặc nói câu trả lời"
+        ],
+        "source": "ai",
+        "field": "compact_character"
+      },
+      "noUnrelatedDizzinessOptions": true,
+      "finished": true
+    }
+  ],
+  "paced_retest": {
+    "real_provider_calls": 44,
+    "full_synthetic_dialogue_runs": 3,
+    "distinct_full_scenarios": 2,
+    "focused_question_probes": 1,
+    "provider_timeouts": 0,
+    "provider_http_errors": 0,
+    "max_single_provider_ms": 6442,
+    "production_timeout_settings_changed": false,
+    "note": "A completed dialogue can still include a fallback caused by rejected format/wording; no timeout does not mean every output passed quality review."
+  }
+}
