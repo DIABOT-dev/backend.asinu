@@ -21,6 +21,7 @@
 
 const { deliverNotification } = require('../notification/notification-dispatch.service');
 const { readAdaptiveState, protectAdaptiveState, validateAdaptiveAnswers } = require('./adaptive-question.service');
+const { isCompactStep, validateCompactAnswers } = require('./compact-interview.service');
 const { getPatientRoleForCaregiver } = require('../../lib/relation');
 const {
   getNextTriageQuestion,
@@ -47,7 +48,7 @@ const { createCancelCheckpoint, publicCheckinSession } = require('./checkin-canc
 const { isRoutineMonitoringCheckin } = require('./checkin-inactivity.policy');
 const console = { log: logger.debug, error: logger.error, warn: logger.warn };
 
-function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sessionDate) {
+function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sessionDate, canonicalSymptoms) {
   // Loaded at runtime because the notification service imports this module.
   const earlySignalService = require('../early-signal/early-signal.service');
   const fingerprint = require('crypto')
@@ -55,7 +56,10 @@ function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sess
     .update(JSON.stringify(answers || []))
     .digest('hex')
     .slice(0, 16);
-  saveSymptomLogs(pool, userId, checkinId, answers, sessionDate)
+  const write = canonicalSymptoms === undefined
+    ? saveSymptomLogs(pool, userId, checkinId, answers, sessionDate)
+    : saveSymptomLogs(pool, userId, checkinId, answers, sessionDate, canonicalSymptoms);
+  write
     .then(() =>
       earlySignalService.evaluateAfterNewHealthData(
         pool,
@@ -664,6 +668,7 @@ async function processTriageStepOnce(
   }
   const adaptiveState = readAdaptiveState(userId, persistedState.adaptive_payload);
   validateAdaptiveAnswers(adaptiveState, previousAnswers);
+  validateCompactAnswers(adaptiveState, previousAnswers);
   const adaptiveEnabled = !['false', '0'].includes(process.env.CHECKIN_ADAPTIVE_QUESTIONS_ENABLED) &&
     (options.adaptiveQuestions === true || persistedState.adaptive_enabled === true);
   const cached = persistedState.completed;
@@ -712,7 +717,16 @@ async function processTriageStepOnce(
     ? persistedState.baseline_answers || session.triage_messages || []
     : [];
 
-  const detailedAssessment = options.assessmentVersion === 2 ||
+  // Pin the interview version once a question is offered. Updating the app
+  // must never reinterpret the answers of an already-started interview.
+  const compactEnabled = process.env.CHECKIN_COMPACT_INTERVIEW_ENABLED === undefined
+    ? ['development', 'test'].includes(process.env.NODE_ENV)
+    : ['true', '1'].includes(process.env.CHECKIN_COMPACT_INTERVIEW_ENABLED);
+  const assessmentVersion = persistedState.assessment_version ||
+    (options.assessmentVersion === 3
+      ? storedAnswers.some((a) => !isCompactStep(a.step)) || adaptiveState.lastQuestion || !compactEnabled || isFollowUpPhase ? 2 : 3
+      : options.assessmentVersion);
+  const detailedAssessment = assessmentVersion === 3 || options.assessmentVersion === 2 ||
     persistedState.assessment_version === 2 ||
     previousAnswers.some((item) =>
       require('../../core/checkin/triage-detail-questions').isDetailedStep(item.step)
@@ -728,7 +742,7 @@ async function processTriageStepOnce(
       profile,
       healthContext,
       conclusionFormat: options.conclusionFormat,
-      assessmentVersion: options.assessmentVersion || persistedState.assessment_version,
+      assessmentVersion,
       previousAnswers,
       previousSessionSummary: session.triage_summary || null,
       previousTriageMessages: prevTriageMessages,
@@ -801,8 +815,8 @@ async function processTriageStepOnce(
 
   const nextState = {
     ...(persistedState.cancel_checkpoint ? { cancel_checkpoint: persistedState.cancel_checkpoint } : {}),
-    ...(options.assessmentVersion === 2 || persistedState.assessment_version === 2
-      ? { assessment_version: 2 }
+    ...(options.assessmentVersion || persistedState.assessment_version
+      ? { assessment_version: assessmentVersion }
       : {}),
     phase: isFollowUp ? 'followup' : 'initial',
     // A phase survives question writes; revision remains a per-write CAS token.
@@ -812,7 +826,7 @@ async function processTriageStepOnce(
       : `initial:${session.occurrence_started_at || session.created_at
         ? new Date(session.occurrence_started_at || session.created_at).toISOString() : checkinId}`),
     revision: randomUUID(),
-    ...(adaptiveEnabled || persistedState.adaptive_enabled ? {
+    ...(assessmentVersion === 3 || adaptiveEnabled || persistedState.adaptive_enabled ? {
       adaptive_enabled: true,
       adaptive_payload: protectAdaptiveState(userId, nextAdaptive),
     } : {}),
@@ -952,7 +966,10 @@ async function processTriageStepOnce(
       userId,
       checkinId,
       previousAnswers,
-      session.session_date
+      session.session_date,
+      nextAdaptive.compact?.version === 2 && nextAdaptive.compact.coverage?.processed.length === previousAnswers.length
+        ? nextAdaptive.compact.coverage.concerns.filter((c) => !c.unparsed).map((c) => c.label)
+        : undefined
     );
 
     // Invalidate health score cache so home screen updates immediately

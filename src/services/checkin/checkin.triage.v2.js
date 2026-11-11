@@ -23,6 +23,7 @@ const {
 const { t } = require('../../i18n');
 const { normalizeLang } = require('../../core/checkin/triage-i18n');
 const { resolveAdaptiveQuestion, adaptiveFacts, isAdaptiveStep } = require('./adaptive-question.service');
+const { getCompactNextStep, prepareCompactInterview, resolveCompactQuestion } = require('./compact-interview.service');
 const { getHonorifics } = require('../../lib/honorifics');
 const {
   getDetailedNextStep,
@@ -186,7 +187,7 @@ async function getNextTriageQuestion(input) {
     previousTriageMessages.map((entry, index) => ({
       ...entry,
       step:
-        entry.step ||
+        /^compact_(symptoms|associated)(?:_q\d+)?$/u.exec(entry.step || '')?.[1] || entry.step ||
         inferLegacyStep(entry.question, index, ['symptoms', 'onset', 'progression', 'red_flags']),
     }))
   );
@@ -205,7 +206,10 @@ async function getNextTriageQuestion(input) {
     bodyLocationOther,
     lang,
   };
-  let engineResult = detailedQuestionsEnabled({ assessmentVersion, previousAnswers })
+  const compactInterview = assessmentVersion === 3 && phase !== 'followup';
+  let engineResult = compactInterview
+    ? getCompactNextStep({ ...engineInput, previousAnswers: answersWithSteps, adaptiveState })
+    : detailedQuestionsEnabled({ assessmentVersion, previousAnswers })
     ? getDetailedNextStep(engineInput)
     : getNextStep({
         ...engineInput,
@@ -236,7 +240,10 @@ async function getNextTriageQuestion(input) {
   // Backup cho các emergency NGOÀI keyword list (long tail symptoms).
   // Cost: 1 GPT call ~150 tokens, cache theo symptom.
   let safetyHint = null;
-  const symptomText = [engineResult.state.currentSymptoms.join(', '), ...extraAnswers
+  const compactDetails = compactInterview ? engineResult.state.compactAssessment.answers
+    .filter((answer) => ['character', 'associated'].includes(answer.group) && !isUnknown(answer.answer) && affirmativeParts(answer.answer).length)
+    .map((answer) => answer.answer) : [];
+  const symptomText = [engineResult.state.currentSymptoms.join(', '), ...compactDetails, ...extraAnswers
     .filter(a => !isUnknown(a.answer) && affirmativeParts(a.answer).length)
     .map(a => a.answer)].filter(Boolean).join('; ');
   if (symptomText) {
@@ -278,13 +285,13 @@ async function getNextTriageQuestion(input) {
     }
   }
 
-  if (adaptiveEnabled && !forceConclusion && engineResult.action === 'conclude' &&
+  if (!compactInterview && adaptiveEnabled && !forceConclusion && engineResult.action === 'conclude' &&
     engineResult.state.allSymptoms.length && !engineResult.state.completedSteps.has('red_flags')) {
     engineResult = { ...engineResult, ...buildQuestion('red_flags', engineResult.state, lang),
       action: 'ask', step: 'red_flags' };
   }
   let adaptive = adaptiveState;
-  if (adaptiveEnabled && !forceConclusion && !engineResult.state.redFlagsFound?.length) {
+  if (!compactInterview && adaptiveEnabled && !forceConclusion && !engineResult.state.redFlagsFound?.length) {
     const resolved = await resolveAdaptiveQuestion({ state: adaptiveState,
       answers: answersWithSteps, base: engineResult, lang: normalizeLang(lang), profile: assessmentProfile, healthContext: normalizedHC });
     adaptive = resolved.state;
@@ -300,10 +307,13 @@ async function getNextTriageQuestion(input) {
       return result;
     }
   }
-  engineResult.state.adaptiveAnswers = adaptiveFacts(adaptive, answersWithSteps);
-  if (adaptive.sources.some(source => ['fallback', 'capacity'].includes(source.status)) ||
+  if (compactInterview) {
+    engineResult = await prepareCompactInterview({ ...engineInput, previousAnswers: answersWithSteps, adaptiveState });
+  }
+  engineResult.state.adaptiveAnswers = compactInterview ? [] : adaptiveFacts(adaptive, answersWithSteps);
+  if (!compactInterview && (adaptive.sources.some(source => ['fallback', 'capacity'].includes(source.status)) ||
     engineResult.state.adaptiveAnswers.some(answer => isUnknown(answer.answer)) ||
-    adaptive.questions.some(q => !answersWithSteps.some(a => a.step === q.step))) engineResult.state.assessmentIncomplete = true;
+    adaptive.questions.some(q => !answersWithSteps.some(a => a.step === q.step)))) engineResult.state.assessmentIncomplete = true;
 
   // 4. If the engine says conclude → generate the conclusion via AI layer.
   if (engineResult.action === 'conclude') {
@@ -324,6 +334,12 @@ async function getNextTriageQuestion(input) {
       applySeverityFloor('high', emergency.needsDoctor, emergency.needsFamilyAlert, 1);
     } else if (emergency.severity === 'medium') {
       applySeverityFloor('medium', emergency.needsDoctor, emergency.needsFamilyAlert, 3);
+    }
+
+    if (compactInterview && state.functionalImpact === 'unable') {
+      applySeverityFloor('high', true, state.isElderly || state.hasConditions, 1);
+    } else if (compactInterview && state.functionalImpact === 'slowed') {
+      applySeverityFloor('medium', false, false, 3);
     }
 
     if (safetyHint?.severity === 'urgent') {
@@ -355,7 +371,7 @@ async function getNextTriageQuestion(input) {
     );
 
     return {
-      ...(adaptiveEnabled ? { _adaptiveState: adaptive } : {}),
+      ...(compactInterview ? { _adaptiveState: engineResult.compactAdaptive, assessmentVersion: 3 } : adaptiveEnabled ? { _adaptiveState: adaptive } : {}),
       isDone: true,
       ...aiConclusion,
       severity: conclusion.severity,
@@ -366,6 +382,12 @@ async function getNextTriageQuestion(input) {
       assessmentIncomplete: Boolean(state.assessmentIncomplete),
       recordedSymptoms: state.allSymptoms,
     };
+  }
+
+  // Safety checks above run before the clinical provider generates a question.
+  // Questions are persisted with the same encrypted phase state as old interviews.
+  if (compactInterview) {
+    return resolveCompactQuestion(engineResult, { profile: normalizedProfile, healthContext: normalizedHC, lang });
   }
 
   // 5. If options empty for associated/red_flags/cause → AI generates mapping

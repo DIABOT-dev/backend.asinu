@@ -22,6 +22,7 @@ const TRIAGE_STEPS = new Set([
 ]);
 const { isDetailedStep, MAX_DETAILED_ANSWERS } = require('../core/checkin/triage-detail-questions');
 const { isAdaptiveStep } = require('../services/checkin/adaptive-question.service');
+const { isCompactStep } = require('../services/checkin/compact-interview.service');
 
 async function startCheckinHandler(pool, req, res) {
   const {
@@ -154,8 +155,8 @@ async function triageHandler(pool, req, res) {
     Array.isArray(previous_answers) &&
     previous_answers.length <=
       (adaptive_questions === true ||
-      assessment_version === 2 ||
-      previous_answers.some((item) => isDetailedStep(item?.step) || isAdaptiveStep(item?.step))
+      [2, 3].includes(assessment_version) ||
+      previous_answers.some((item) => isDetailedStep(item?.step) || isAdaptiveStep(item?.step) || isCompactStep(item?.step))
         ? MAX_DETAILED_ANSWERS
         : 8) &&
     previous_answers.every(
@@ -168,7 +169,7 @@ async function triageHandler(pool, req, res) {
           (typeof item.step === 'string' &&
             (TRIAGE_STEPS.has(item.step) ||
               isDetailedStep(item.step) ||
-              isAdaptiveStep(item.step)))) &&
+              isAdaptiveStep(item.step) || isCompactStep(item.step)))) &&
         ((typeof item.answer === 'string' && item.answer.length <= 2000) ||
           (Array.isArray(item.answer) &&
             item.answer.length <= 20 &&
@@ -179,7 +180,7 @@ async function triageHandler(pool, req, res) {
     (phase_id !== undefined &&
       (typeof phase_id !== 'string' || !phase_id.trim() || phase_id.length > 160)) ||
     (adaptive_questions !== undefined && typeof adaptive_questions !== 'boolean') ||
-    (assessment_version !== undefined && assessment_version !== 2) ||
+    (assessment_version !== undefined && ![2, 3].includes(assessment_version)) ||
     (conclusion_format !== undefined && !['structured', 'narrative'].includes(conclusion_format))
   ) {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });

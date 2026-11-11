@@ -23,6 +23,7 @@ describeDatabase('check-in HTTP API contract', () => {
   let adaptivePlan = [];
   let adaptiveProviderFail = false;
   let adaptiveCalls = 0;
+  let compactCalls = 0;
 
   const auth = (token) => ({ Authorization: `Bearer ${token}`, 'Accept-Language': 'vi' });
 
@@ -68,6 +69,11 @@ describeDatabase('check-in HTTP API contract', () => {
     jest.doMock('../src/services/ai/ai.service', () => {
       const actual = jest.requireActual('../src/services/ai/ai.service');
       return { ...actual, callTextAi: async options => {
+        if (options.system?.startsWith('You generate ONE health') || options.system?.startsWith('Review one health intake') ||
+          options.system?.startsWith('Extract explicitly') || options.system?.startsWith('Review patient fact')) {
+          compactCalls++;
+          return require('./fixtures/compact-interview').providerResponse(options);
+        }
         if (options.system?.startsWith('You create follow-up') || options.system?.startsWith('You review a health')) {
           adaptiveCalls++;
           if (adaptiveProviderFail) throw new Error('Synthetic provider unavailable');
@@ -479,6 +485,122 @@ describeDatabase('check-in HTTP API contract', () => {
         .send({ checkin_id: checkinId, previous_answers: answers });
     return { userId, checkinId, headers, entry, initialAnswers, triage };
   }
+
+  test('an existing compact v1 HTTP interview persists AI choices, resumes unchanged and keeps its eight-group plan', async () => {
+    const account = await conversationAccount(56, ['Tiểu đường']);
+    const { protectAdaptiveState } = require('../src/services/checkin/adaptive-question.service');
+    const adaptive = protectAdaptiveState(account.userId, { version: 1, sources: [], questions: [], compact: { version: 1, lang: 'vi', hasConditions: true, questions: [] } });
+    await pool.query("UPDATE health_checkins SET triage_state = jsonb_set(COALESCE(triage_state, '{}'::jsonb), '{adaptive_payload}', to_jsonb($2::text)) WHERE id = $1", [account.checkinId, adaptive]);
+    compactCalls = 0;
+    const triage = (answers, phase) => request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({ checkin_id: account.checkinId, previous_answers: answers, assessment_version: 3,
+        adaptive_questions: true, ...(phase ? { phase_id: phase } : {}) });
+    const parallel = await Promise.all(Array.from({ length: 5 }, () => triage([]).expect(200)));
+    const first = parallel[0].body;
+    expect(parallel.every((r) => r.body.question === first.question)).toBe(true);
+    expect(first).toMatchObject({ assessmentVersion: 3, step: 'compact_symptoms', questionSource: 'ai', questionProgress: { current: 1, total: 9 } });
+    expect(compactCalls).toBe(2);
+    const current = (await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200)).body.session;
+    expect(current.triage_state.assessment_version).toBe(3);
+    expect(current.triage_state.adaptive_payload).toBeUndefined();
+    const phase = current.triage_state.phase_id;
+    await triage([], 'stale-phase').expect(409);
+    await triage([{ step: first.step, question: 'forged', answer: 'Sưng khớp' }], phase).expect(409);
+    const answers = [];
+    const byStep = { compact_symptoms: 'Sưng khớp, Nó bị đau đớn khó đi lại', compact_red_flags: 'Không có', compact_impact: 'Vẫn sinh hoạt bình thường', compact_onset: 'Từ 3 đến dưới 7 ngày', compact_progression: 'Vẫn như cũ', compact_character: 'Đau nhói khi đi lại, ở khớp gối phải', compact_clinical_context: 'Đã dùng thuốc theo hướng dẫn, Hôm nay chưa đo chỉ số', compact_source: 'Ngã hoặc vận động mạnh', compact_associated: 'Không có' };
+    let next = first;
+    while (!next.isDone && answers.length <= 9) {
+      answers.push({ step: next.step, question: next.question, answer: byStep[next.step] });
+      next = (await triage(answers, phase).expect(200)).body;
+      if (answers.length === 3) {
+        const count = compactCalls;
+        const resumed = (await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200)).body.session;
+        expect(resumed.triage_messages).toEqual(answers);
+        expect((await triage(resumed.triage_messages, phase).expect(200)).body).toEqual(next);
+        expect(compactCalls).toBe(count);
+      }
+    }
+    expect(next.isDone).toBe(true);
+    expect(answers).toHaveLength(9);
+    expect(new Set(answers.map((a) => a.step)).size).toBe(9);
+    const replay = (await triage(answers, phase).expect(200)).body;
+    expect(replay.summary).toEqual(next.summary);
+    const stored = (await pool.query('SELECT triage_messages,triage_completed_at FROM health_checkins WHERE id=$1', [account.checkinId])).rows[0];
+    expect(stored.triage_messages).toEqual(answers);
+    expect(stored.triage_completed_at).not.toBeNull();
+  });
+
+  test('new compact coverage HTTP flow preserves separate symptom timelines and resumes without repeated AI calls', async () => {
+    const account = await conversationAccount(56, ['Tiểu đường']);
+    const { readAdaptiveState } = require('../src/services/checkin/adaptive-question.service');
+    const triage = (answers) => request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({ checkin_id: account.checkinId, previous_answers: answers, assessment_version: 3, adaptive_questions: true });
+    const saved = async () => {
+      const row = (await pool.query('SELECT triage_state FROM health_checkins WHERE id=$1', [account.checkinId])).rows[0];
+      return readAdaptiveState(account.userId, row.triage_state.adaptive_payload);
+    };
+    const answers = [];
+    let next = (await triage(answers).expect(200)).body;
+    expect(next.step).toBe('compact_symptoms');
+    expect(next.questionProgress).toBeUndefined();
+    for (let i = 0; i < 40 && !next.isDone; i++) {
+      const state = await saved();
+      expect(state.compact.version).toBe(2);
+      const q = state.compact.questions.find((item) => item.step === next.step);
+      const byCode = (code) => q.choices.find((item) => item.id === code)?.label;
+      const answer = q.field === 'symptoms' ? 'Sưng khớp, Đau nhức' : q.field === 'onset' ?
+        byCode(q.allowDifferent ? 'different' : q.targets[0] === 'c1' ? 'under_day' : 'under_week') :
+        q.field === 'progression' ? byCode('same') : q.field === 'impact' ? byCode('normal') :
+          q.field === 'character' ? q.choices[0].label : q.field === 'clinical_context' ?
+            [byCode('medication_as_planned'), byCode('not_measured')].filter(Boolean).join(', ') : 'Không có';
+      answers.push({ step: next.step, question: next.question, answer });
+      next = (await triage(answers).expect(200)).body;
+      if (!next.isDone) {
+        const count = compactCalls;
+        expect((await triage(answers).expect(200)).body).toEqual(next);
+        expect(compactCalls).toBe(count);
+      }
+    }
+    expect(next.isDone).toBe(true);
+    const final = (await saved()).compact;
+    expect(final.coverage.concerns.map((c) => c.facts.onset.value)).toEqual(['Dưới 24 giờ', 'Từ 3 đến dưới 7 ngày']);
+    for (const field of ['impact', 'clinical_context', 'source', 'associated']) expect(final.questions.filter((q) => q.field === field)).toHaveLength(1);
+    const own = (await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200)).body.session;
+    expect(own.triage_messages).toEqual(answers);
+    expect(own.triage_state.adaptive_payload).toBeUndefined();
+  });
+
+  test('updating the app never converts an in-progress detailed interview to compact', async () => {
+    const account = await conversationAccount();
+    const post = (answers, version) => request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({ checkin_id: account.checkinId, previous_answers: answers, assessment_version: version });
+    const old = (await post([], 2).expect(200)).body;
+    const answers = [{ step: old.step, question: old.question, answer: 'Tiêu chảy' }];
+    const before = (await post(answers, 2).expect(200)).body;
+    const updated = (await post(answers, 3).expect(200)).body;
+    expect(updated.step).toBe(before.step);
+    expect(updated.question).toBe(before.question);
+    expect(updated.step.startsWith('compact_')).toBe(false);
+  });
+
+  test('server rollout flag gates only new compact interviews and does not replace an offered question', async () => {
+    const original = process.env.CHECKIN_COMPACT_INTERVIEW_ENABLED;
+    const post = (account) => request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({ checkin_id: account.checkinId, previous_answers: [], assessment_version: 3 });
+    try {
+      process.env.CHECKIN_COMPACT_INTERVIEW_ENABLED = 'true';
+      const active = await conversationAccount();
+      const question = (await post(active).expect(200)).body;
+      expect(question.step).toBe('compact_symptoms');
+      process.env.CHECKIN_COMPACT_INTERVIEW_ENABLED = 'false';
+      expect((await post(active).expect(200)).body.question).toBe(question.question);
+      const disabled = await conversationAccount();
+      expect((await post(disabled).expect(200)).body.step.startsWith('compact_')).toBe(false);
+    } finally {
+      if (original === undefined) delete process.env.CHECKIN_COMPACT_INTERVIEW_ENABLED;
+      else process.env.CHECKIN_COMPACT_INTERVIEW_ENABLED = original;
+    }
+  });
 
   test('retrying the same completed check-in returns the same conclusion and severity', async () => {
     const account = await conversationAccount();

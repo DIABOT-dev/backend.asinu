@@ -209,7 +209,7 @@ function selectContinuityPrefix(ctx, user) {
 const EMPATHY_RESPONSES = {
   answer_positive: {
     id: 'empathy_positive',
-    vi: ['Tốt quá!', 'Vậy là yên tâm rồi.', 'Đỡ hơn rồi, tốt quá!'],
+    vi: ['Cảm ơn {honorific} đã chia sẻ nhé.', '{selfRef} ghi nhận rồi nhé.', 'Vâng, {selfRef} hiểu rồi.'],
     en: ["That's great!", 'Good to hear!', "That's reassuring!"],
   },
   answer_mild: {
@@ -224,9 +224,9 @@ const EMPATHY_RESPONSES = {
   answer_severe: {
     id: 'empathy_severe',
     vi: [
-      '{selfRef} sẽ theo sát thêm nhé.',
+      '{selfRef} muốn hiểu rõ hơn để hướng dẫn {honorific} nhé.',
       'Để {selfRef} hỏi kỹ hơn.',
-      '{selfRef} hơi lo cho {honorific}.',
+      '{selfRef} nghe rồi. Để {selfRef} xem kỹ phần này nhé.',
     ],
     en: [
       'Let me ask a few more questions.',
@@ -236,15 +236,15 @@ const EMPATHY_RESPONSES = {
   },
   answer_improving: {
     id: 'empathy_improving',
-    vi: ['Đỡ hơn rồi, tốt quá!', 'Vậy là có tiến triển rồi.', 'Tốt lắm, cứ giữ vậy nhé.'],
+    vi: ['Nghe {honorific} nói đã đỡ hơn, {selfRef} mừng rồi.', 'Đã đỡ hơn rồi, vẫn để ý thêm nhé {honorific}.', '{selfRef} ghi nhận là đang đỡ dần nhé.'],
     en: ['Getting better, great!', "That's good progress!", 'Keep it up!'],
   },
   answer_worsening: {
     id: 'empathy_worsening',
     vi: [
-      '{selfRef} hơi lo cho {honorific}.',
-      'Mình cần theo dõi kỹ hơn.',
-      '{selfRef} muốn nắm rõ thêm tình hình.',
+      '{selfRef} nghe rồi. Để {selfRef} xem kỹ phần đang nặng hơn nhé.',
+      'Để {selfRef} hỏi thêm một chút cho rõ nhé.',
+      '{selfRef} muốn hiểu rõ hơn để hướng dẫn {honorific} nhé.',
     ],
     en: ["I'm a bit concerned.", 'We should monitor this closely.', 'Let me check further.'],
   },

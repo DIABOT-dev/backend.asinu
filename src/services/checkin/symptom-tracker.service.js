@@ -98,17 +98,20 @@ const NON_SYMPTOM_ANSWERS = new Set([
  * Extract triệu chứng từ triage_messages array.
  * Chỉ lấy từ câu hỏi TYPE 3 (triệu chứng) và TYPE 6 (red flag).
  */
-function extractSymptoms(triageMessages) {
+function extractSymptoms(triageMessages, canonicalSymptoms) {
+  if (Array.isArray(canonicalSymptoms)) return [...new Set(canonicalSymptoms.filter((value) => typeof value === 'string')
+    .map((value) => value.trim().toLowerCase()).filter((value) => value.length >= 2 && !NON_SYMPTOM_ANSWERS.has(value)))];
   const symptoms = [];
   if (!Array.isArray(triageMessages)) return symptoms;
 
   for (const msg of triageMessages) {
     const q = (msg.question || '').toLowerCase();
-    const ans = (msg.answer || '').toLowerCase();
+    const ans = (Array.isArray(msg.answer) ? msg.answer.join(', ') : msg.answer || '').toLowerCase();
 
     // Chỉ extract từ câu hỏi về triệu chứng
-    const isSymptomQ =
-      q.includes('triệu chứng') ||
+    const isSymptomQ = msg.step?.startsWith('compact_')
+      ? /^compact_(?:symptoms|associated|red_flags)(?:_q\d+)?$/u.test(msg.step)
+      : q.includes('triệu chứng') ||
       q.includes('symptoms') ||
       q.includes('dấu hiệu') ||
       q.includes('vấn đề gì') ||
@@ -149,8 +152,8 @@ function extractSeverity(triageMessages) {
 /**
  * Lưu triệu chứng vào symptom_logs sau khi triage hoàn thành.
  */
-async function saveSymptomLogs(pool, userId, checkinId, triageMessages, sessionDate) {
-  const symptoms = extractSymptoms(triageMessages);
+async function saveSymptomLogs(pool, userId, checkinId, triageMessages, sessionDate, canonicalSymptoms) {
+  const symptoms = extractSymptoms(triageMessages, canonicalSymptoms);
   if (symptoms.length === 0) return;
 
   const severity = extractSeverity(triageMessages);
