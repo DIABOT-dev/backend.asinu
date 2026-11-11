@@ -106,7 +106,7 @@ test('a detailed conclusion keeps the explanation but removes a model request to
   );
   expect(result.narrative).toContain('Cháu hiểu chú đang khó chịu.');
   expect(result.narrative).not.toContain('cho cháu biết');
-  expect(result.conclusionPromptVersion).toBe('v4-narrative-2000-2500-details');
+  expect(result.conclusionPromptVersion).toBe('v5-narrative-2000-4000-details');
   expect(logger.warn).toHaveBeenCalledWith('conclusion_rejected', {
     block: 'narrative',
     reason: 'repeated_assessment_question',
@@ -174,7 +174,7 @@ test('free narrative prompt asks for everyday paragraphs and bullets without the
   expect(prompt).not.toMatch(/loi_nhan|lien_quan|nen_lam|di_kham_khi|Return 4 fields/);
   expect(prompt).not.toContain('Ghi 2 mốc giờ');
   expect(system).toContain('Giải thích ngắn gọn');
-  expect(prompt).toContain('450–500 tiếng');
+  expect(prompt).toContain('2000–4000 ký tự');
   expect(prompt).not.toContain('Dành phần chính cho lời giải thích');
   expect(prompt).toContain('vì sao mỗi việc có ích');
 });
@@ -199,7 +199,7 @@ test.each(['vi', 'en'])(
     );
     expect(result).toMatchObject({
       conclusionFormat: 'narrative',
-      conclusionPromptVersion: 'v4-narrative-2000-2500',
+      conclusionPromptVersion: 'v5-narrative-2000-4000',
       conclusionSource: 'ai',
       followUpHours: 3,
     });
@@ -218,7 +218,7 @@ test.each(['vi', 'en'])(
     expect(result.disclaimer).toBe(t('checkin.conclusion.disclaimer', lang));
     expect(JSON.stringify(input)).toBe(before);
     expect(callTextAi.mock.calls[0][0].system).not.toContain('Return only JSON');
-    expect(callTextAi.mock.calls[0][0]).toMatchObject({ maxTokens: 1100, timeoutMs: 60000 });
+    expect(callTextAi.mock.calls[0][0]).toMatchObject({ maxTokens: 1800, timeoutMs: 60000 });
   }
 );
 
@@ -844,7 +844,8 @@ test('measurement grounding accepts an optional ngày separator but rejects wron
 });
 test('incomplete assessment is acknowledged while no absence of red flags is invented', async () => {
   const result = await generateConclusion({ ...state(), assessmentIncomplete: true }, profile);
-  expect(result.personalMessage).toMatch(/chưa hỏi|chưa đủ/);
+  expect(result.personalMessage).toMatch(/thông tin vẫn chưa rõ/);
+  expect(result.personalMessage).not.toMatch(/chưa hỏi/);
   const facts = buildConclusionFacts({ ...state(), assessmentIncomplete: true }, profile);
   expect(validateBlock('loi_nhan', 'Không có dấu hiệu nguy hiểm.', facts)).toBe(
     'unconfirmed_absence_of_red_flags'

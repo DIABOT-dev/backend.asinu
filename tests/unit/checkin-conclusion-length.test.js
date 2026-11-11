@@ -43,7 +43,7 @@ function prose(lang = 'vi') {
 beforeEach(() => jest.clearAllMocks());
 
 test.each(['vi', 'en'])(
-  '%s main conclusion targets 2000–2500 characters and reads every final instruction',
+  '%s main conclusion targets 2000–4000 characters and reads every final instruction',
   async (lang) => {
     const value = prose(lang);
     callTextAi.mockResolvedValue({
@@ -54,7 +54,7 @@ test.each(['vi', 'en'])(
     const result = await generateNarrativeConclusion(state, profile, lang);
     expect(result.conclusionSource).toBe('ai');
     expect(result.narrative.length).toBeGreaterThanOrEqual(2000);
-    expect(result.narrative.length).toBeLessThanOrEqual(2500);
+    expect(result.narrative.length).toBeLessThanOrEqual(4000);
     expect(result.speechText).toBe(conclusionSpeech(result));
     expect(result.speechText).toContain(
       lang === 'en' ? 'Please arrange an assessment' : 'Chú nên đi khám'
@@ -65,10 +65,10 @@ test.each(['vi', 'en'])(
     expect(callTextAi.mock.calls[0][0]).toMatchObject({
       provider: 'medgemma',
       strictProvider: true,
-      maxTokens: 1100,
+      maxTokens: 1800,
       maxRetries: 0,
     });
-    expect(callTextAi.mock.calls[0][0].system).toContain('2000–2500');
+    expect(callTextAi.mock.calls[0][0].system).toContain('2000–4000');
   }
 );
 
@@ -85,7 +85,7 @@ test('one compact rewrite accounts for both provider calls and keeps the tail wa
       finishReason: 'stop',
     });
   const result = await generateNarrativeConclusion(state, profile);
-  expect(result.narrative.length).toBeLessThanOrEqual(2500);
+  expect(result.narrative.length).toBeLessThanOrEqual(4000);
   expect(result.narrative).toContain(tail);
   expect(result.speechText).toContain(tail.replace(/^- /, ''));
   expect(callTextAi).toHaveBeenCalledTimes(2);
@@ -100,20 +100,89 @@ test('one compact rewrite accounts for both provider calls and keeps the tail wa
   );
 });
 
-test('a rewrite that is still too long uses a safe fallback instead of chopping the ending', async () => {
+test('a complete compact interview with a thin explanation gets one grounded expansion, not fabricated filler', async () => {
+  callTextAi
+    .mockResolvedValueOnce({
+      content:
+        'Chú đang khó ngủ vài ngày nay. Chú nên giữ giờ ngủ đều và đi khám trong vài ngày tới.',
+      finishReason: 'stop',
+    })
+    .mockResolvedValueOnce({ content: prose(), finishReason: 'stop' });
+  const result = await generateNarrativeConclusion(
+    {
+      ...state,
+      assessmentIncomplete: false,
+      compactAssessment: {
+        complete: true,
+        interviewRevision: 2,
+        concerns: [],
+        global: {},
+        answers: [],
+        missing: [],
+      },
+    },
+    profile
+  );
+  expect(result.conclusionSource).toBe('ai');
+  expect(result.narrative.length).toBeGreaterThanOrEqual(2000);
+  expect(callTextAi).toHaveBeenCalledTimes(2);
+  expect(callTextAi.mock.calls[1][0].prompt).toContain('Không thêm dữ kiện người bệnh');
+  expect(logger.info).toHaveBeenCalledWith(
+    'conclusion_generated',
+    expect.objectContaining({ compactReason: 'narrative_too_short', lengthTargetMet: true })
+  );
+});
+
+test('a validated rewrite above the length target keeps the complete AI result instead of replacing it with a short fallback', async () => {
+  const tail = '- Nếu khó ngủ ảnh hưởng nhiều tới sinh hoạt, chú nên đi khám sớm hơn.';
   callTextAi.mockResolvedValue({
-    content: prose() + '\n\n' + prose(),
+    content: prose() + '\n\n' + prose() + '\n\n' + tail,
     usage: { total: 10, completion: 5 },
     finishReason: 'stop',
   });
   const result = await generateNarrativeConclusion(state, profile);
   expect(callTextAi).toHaveBeenCalledTimes(2);
-  expect(result.conclusionSource).toBe('fallback');
+  expect(result.conclusionSource).toBe('ai');
+  expect(result.narrative.length).toBeGreaterThan(4000);
+  expect(result.narrative).toContain(tail);
   expect(result.speechText).toBe(conclusionSpeech(result));
-  expect(logger.warn).toHaveBeenCalledWith(
-    'conclusion_rejected',
-    expect.objectContaining({ requests: 2, tokens: 20, reason: 'narrative_too_long' })
+  expect(logger.info).toHaveBeenCalledWith(
+    'conclusion_generated',
+    expect.objectContaining({
+      requests: 2,
+      tokens: 20,
+      compactReason: 'narrative_too_long',
+      lengthTargetMet: false,
+    })
   );
+});
+
+test('uncertainty in a provider fallback does not claim that answered questions were never asked', async () => {
+  callTextAi.mockRejectedValue(new Error('offline'));
+  const result = await generateNarrativeConclusion(
+    { ...state, assessmentIncomplete: true },
+    profile
+  );
+  expect(result.conclusionSource).toBe('fallback');
+  expect(result.narrative).toContain('Một số thông tin vẫn chưa rõ');
+  expect(result.narrative).not.toContain('chưa hỏi được kỹ');
+});
+
+test('a generated explanation cannot turn reported numbness into confirmed nerve damage or reintroduce Asinu', async () => {
+  callTextAi.mockResolvedValue({
+    content:
+      'Chào chú, cháu là Asinu đây. Chú có kể bàn chân phải bị tê. Đây là tình trạng các dây thần kinh bị tổn thương, gây ra cảm giác tê. Chú nên đi khám trong vài ngày tới.',
+    finishReason: 'stop',
+  });
+  const result = await generateNarrativeConclusion(
+    { ...state, allSymptoms: ['Tê bàn chân phải'], currentSymptoms: ['Tê bàn chân phải'] },
+    profile
+  );
+  expect(result.conclusionSource).toBe('ai');
+  expect(result.narrative).not.toContain('là Asinu');
+  expect(result.narrative).not.toContain('các dây thần kinh bị tổn thương');
+  expect(result.narrative).toContain('bàn chân phải bị tê');
+  expect(result.narrative).toContain('đi khám');
 });
 
 test('compact rewriting uses only the remaining sixty-second AI budget', async () => {

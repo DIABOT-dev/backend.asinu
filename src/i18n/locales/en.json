@@ -1079,7 +1079,7 @@
   "checkin.conclusion.followup": "I will check on you again in {{hours}} hours.",
   "checkin.conclusion.fallback.message": "You reported {{symptoms}}{{timeline}}. I understand these symptoms are worrying you.",
   "checkin.conclusion.fallback.message_with_baseline": "You reported additional {{symptoms}}{{timeline}}. I understand this feels uncomfortable; earlier, you also reported {{baseline}}.",
-  "checkin.conclusion.fallback.incomplete": "I have heard about {{symptoms}}, but some information is still incomplete. Let’s keep monitoring carefully.",
+  "checkin.conclusion.fallback.incomplete": "I have recorded the symptoms you described: {{symptoms}}. Some information remains unconfirmed, so the guidance below has limits. Keep track of any changes.",
   "checkin.conclusion.fallback.conditions": "You reported these existing conditions: {{conditions}}. Today’s symptoms need to be considered alongside them; symptoms alone cannot establish the cause.",
   "checkin.conclusion.fallback.measure": "Measure your {{measurements}} again; record 2 details: the value and measurement time.",
   "checkin.conclusion.fallback.visit.self": "If symptoms persist, worsen or interfere with daily activities, seek an assessment.",

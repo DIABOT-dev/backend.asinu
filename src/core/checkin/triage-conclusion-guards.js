@@ -1,4 +1,5 @@
 'use strict';
+const { reportedMeasurementTimeMatches } = require('./triage-reported-measurements');
 
 const plain = (text) =>
   String(text || '')
@@ -115,6 +116,7 @@ function priorSymptomResolutionFault(value) {
 }
 
 function measurementTimeMatches(text, record, asOf) {
+  if (record.source === 'user_report') return reportedMeasurementTimeMatches(text, record);
   const time = record.luc?.match(/\b(\d{1,2}):(\d{2})\b/);
   const expected = record.luc?.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
   if (!time || !expected) return false;
@@ -164,8 +166,11 @@ function withoutCalendarDates(text) {
 }
 
 function measurementFault(value, facts) {
-  const records = [...facts.chi_so_24h, ...facts.chi_so_7_ngay];
-  const current = new Set(facts.chi_so_24h.map((r) => r.loai));
+  const stored = [...facts.chi_so_24h, ...facts.chi_so_7_ngay];
+  const reported = (facts.chi_so_tu_khai || []).filter((r) => r.is_today);
+  const records = [...stored, ...reported];
+  const verifiedCurrent = new Set(facts.chi_so_24h.map((r) => r.loai));
+  const current = new Set([...facts.chi_so_24h, ...reported].map((r) => r.loai));
   let previousTypes = [];
   const scopes = statements(value).flatMap((sentence) => {
     const separators =
@@ -250,13 +255,14 @@ function measurementFault(value, facts) {
       if (
         !types.length ||
         types.some(
-          (type) => !current.has(type) || records.filter((r) => r.loai === type).length < 2
+          (type) => !verifiedCurrent.has(type) || stored.filter((r) => r.loai === type).length < 2
         )
       )
         return 'insufficient_comparison_data';
     }
     for (const type of named) {
-      if (!current.has(type) && assertsVitalStatus(text, type)) return 'unmeasured_vital_claim';
+      if (!verifiedCurrent.has(type) && assertsVitalStatus(text, type))
+        return 'unmeasured_vital_claim';
     }
     if (mentionedTypes.length) previousTypes = mentionedTypes;
   }

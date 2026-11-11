@@ -7,6 +7,7 @@ const { t } = require('../../i18n');
 const logger = require('../../lib/logger');
 const { conditionsOf } = require('./triage-facts');
 const { localizeOption } = require('./triage-i18n');
+const { reportedMeasurements } = require('./triage-reported-measurements');
 
 const BLOCKS = ['loi_nhan', 'lien_quan', 'nen_lam', 'di_kham_khi'];
 const { buildConclusionPrompt, buildConclusionSystem } = require('./triage-conclusion-prompt');
@@ -214,6 +215,7 @@ function measurements(context, now) {
 function buildConclusionFacts(state, profile, context = {}, lang = 'vi', now = new Date()) {
   const h = getHonorifics({ ...profile, lang });
   const records = measurements(context, now);
+  const reported = reportedMeasurements(state.compactAssessment);
   return {
     language: lang,
     xung_ho: { goi: h.honorific, tu_xung: h.selfRef },
@@ -237,6 +239,7 @@ function buildConclusionFacts(state, profile, context = {}, lang = 'vi', now = n
           tinh_trang_khai_bao_benh_nen: state.historyAssessment,
         }
       : {}),
+    ...(state.compactAssessment ? { phien_hoi_gon: state.compactAssessment } : {}),
     ...(Array.isArray(state.bodyLocations) && state.bodyLocations.length
       ? { vung_kho_chiu: state.bodyLocations }
       : {}),
@@ -266,6 +269,7 @@ function buildConclusionFacts(state, profile, context = {}, lang = 'vi', now = n
         : 'dat_lich_kham',
     chi_so_24h: records.filter((r) => r.within24h),
     chi_so_7_ngay: records.filter((r) => !r.within24h),
+    ...(reported.length ? { chi_so_tu_khai: reported } : {}),
     uong_thuoc_hom_nay:
       context.tookMedicationToday === true ? 'đã có bản ghi uống thuốc' : 'chưa ghi',
     tuan_thu_thuoc_7_ngay: short(context.medicationAdherenceContext, 700) || null,
@@ -276,7 +280,9 @@ function buildConclusionFacts(state, profile, context = {}, lang = 'vi', now = n
     })),
     trieu_chung_lap_lai: short(context.symptomFrequencyContext, 1000) || null,
     viec_da_ke: list(state.actionsFound),
-    ...(state.careActionsAnswer ? { cham_soc_bo_sung_da_khai: short(state.careActionsAnswer, 600) } : {}),
+    ...(state.careActionsAnswer
+      ? { cham_soc_bo_sung_da_khai: short(state.careActionsAnswer, 600) }
+      : {}),
   };
 }
 
@@ -297,9 +303,13 @@ function validateBlock(block, value, facts, { skipCareLevel = false } = {}) {
   if ([...text].some((char) => char.charCodeAt(0) <= 8) || /\p{Cf}/u.test(text))
     return 'invalid_text';
   const plain = normalize(text);
-  if ((['none_reported', 'profile', 'answered'].includes(facts.tinh_trang_khai_bao_benh_nen) ||
-    facts.benh_nen_da_khai?.length) &&
-    /(?:chua|khong).{0,12}(?:co|duoc cung cap|nhan duoc).{0,12}(?:thong tin|biet).{0,40}(?:benh nen|tien su)|(?:missing|not (?:provided|reported)|no information).{0,45}(?:medical history|underlying conditions?|medical conditions?)/u.test(plain))
+  if (
+    (['none_reported', 'profile', 'answered'].includes(facts.tinh_trang_khai_bao_benh_nen) ||
+      facts.benh_nen_da_khai?.length) &&
+    /(?:chua|khong).{0,12}(?:co|duoc cung cap|nhan duoc).{0,12}(?:thong tin|biet).{0,40}(?:benh nen|tien su)|(?:missing|not (?:provided|reported)|no information).{0,45}(?:medical history|underlying conditions?|medical conditions?)/u.test(
+      plain
+    )
+  )
     return 'recorded_history_claimed_missing';
   const hard = hardConclusionFault(text);
   if (hard) return hard[0];

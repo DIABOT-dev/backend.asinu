@@ -1079,7 +1079,7 @@
   "checkin.conclusion.followup": "{{SelfRef}} sẽ hỏi lại {{honorific}} sau {{hours}} giờ nhé.",
   "checkin.conclusion.fallback.message": "{{Honorific}} kể {{symptoms}}{{timeline}}. {{SelfRef}} hiểu những khó chịu này đang làm {{honorific}} bận tâm.",
   "checkin.conclusion.fallback.message_with_baseline": "{{Honorific}} kể thêm {{symptoms}}{{timeline}}. {{SelfRef}} hiểu {{honorific}} đang khó chịu; trước đó {{honorific}} cũng đã kể {{baseline}}.",
-  "checkin.conclusion.fallback.incomplete": "{{SelfRef}} đã nghe {{honorific}} chia sẻ về {{symptoms}}, nhưng vẫn còn thông tin chưa hỏi được kỹ. {{Honorific}} tiếp tục theo dõi những thay đổi của cơ thể nhé.",
+  "checkin.conclusion.fallback.incomplete": "{{SelfRef}} đã ghi nhận {{symptoms}} mà {{honorific}} vừa kể. Một số thông tin vẫn chưa rõ, nên nhận định dưới đây còn có giới hạn. {{Honorific}} theo dõi những thay đổi của cơ thể nhé.",
   "checkin.conclusion.fallback.conditions": "{{Honorific}} đã chia sẻ về bệnh nền {{conditions}}. {{SelfRef}} cần xem thông tin này cùng những khó chịu hôm nay, nên chưa thể nói rõ nguyên nhân.",
   "checkin.conclusion.fallback.measure": "Đo lại {{measurements}}; ghi 2 mục: giá trị và giờ đo.",
   "checkin.conclusion.fallback.visit.self": "Nếu khó chịu kéo dài, nặng hơn hoặc cản trở sinh hoạt, hãy đi khám.",
