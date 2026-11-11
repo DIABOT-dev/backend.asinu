@@ -3,6 +3,7 @@ const { createHash } = require('crypto');
 const { t } = require('../../i18n');
 const { synthesizeSpeech, voiceMimeType } = require('../voice/vieneu.service');
 const { encodeMp3 } = require('../voice/mp3.service');
+const { VI_SPEECH_REVISION, normalizeCheckinSpeech } = require('./speech-text');
 
 const MAX_DYNAMIC_TEXT_LENGTH = 1600;
 const DEFAULT_ASINU_VOICE = 'clone_b935a451-7d65-4b73-a083-d46e56c47d4f';
@@ -76,6 +77,7 @@ function audioVersion(requestedLanguage = 'vi', selectedVoice) {
         provider: 'vieneu',
         format: deliveryMimeType(voice),
         language,
+        ...(language === 'vi' ? { speech_revision: VI_SPEECH_REVISION } : {}),
         voice,
         revision: process.env.CHECKIN_CALL_AUDIO_REVISION || '1',
         phrases: AUDIO_KEYS.map((key) => PHRASES[key][language]),
@@ -106,7 +108,7 @@ async function requestSpeech(phrase, voice, version, timeoutMs = synthesisTimeou
 
 async function synthesizeText(input, requestedLanguage = 'vi', options = {}) {
   const language = normalizeLanguage(requestedLanguage);
-  const phrase = typeof input === 'string' ? input.replace(/\s+/g, ' ').trim() : '';
+  const phrase = normalizeCheckinSpeech(input, language).replace(/\s+/g, ' ').trim();
   if (!phrase)
     throw audioError('Conclusion text is required', 400, 'checkinCall.error.conclusion_required');
   if (phrase.length > MAX_DYNAMIC_TEXT_LENGTH) {
@@ -128,7 +130,7 @@ async function synthesizeText(input, requestedLanguage = 'vi', options = {}) {
 
 async function getAudio(pool, key, requestedLanguage = 'vi') {
   const language = normalizeLanguage(requestedLanguage);
-  const phrase = PHRASES[key]?.[language];
+  const phrase = normalizeCheckinSpeech(PHRASES[key]?.[language], language);
   if (!phrase) throw audioError('Unknown audio key', 404, 'checkinCall.error.unknown_audio');
   const voice = voiceForLanguage(language);
   const localizedAudioKey = language + ':' + key;

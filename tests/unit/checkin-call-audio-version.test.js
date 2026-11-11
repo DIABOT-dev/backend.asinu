@@ -104,4 +104,14 @@ describe('backend-owned check-in call audio revisions', () => {
     expect(result.audio_version).toBe(expected);
     expect(result.audio_version).not.toBe(audio.audioVersion('vi'));
   });
+
+  test('Vietnamese TTS expands the AI acronym without changing the speaker or English wording', async () => {
+    const text = 'Asinu là AI; nếu cần ai hỗ trợ, hãy nhờ Mai. OpenAI và AIHA giữ nguyên.';
+    await consentingSpeech(text, 'vi-VN');
+    await consentingSpeech(text, 'en');
+    const bodies = global.fetch.mock.calls.map(([, request]) => JSON.parse(request.body));
+    expect(bodies[0].input).toBe('Asinu là trí tuệ nhân tạo; nếu cần ai hỗ trợ, hãy nhờ Mai. OpenAI và AIHA giữ nguyên.');
+    expect(bodies[1].input).toBe(text);
+    expect(bodies.map((body) => body.voice)).toEqual(['test-vietnamese', 'test-vietnamese']);
+  });
 });

@@ -46,6 +46,32 @@ test('decimals, distinct instructions and natural repeated words are preserved v
   expect(service.conclusionText(en, 'en')).toBe(en);
 });
 
+test('AI is spoken in full only in Vietnamese, preserving ordinary words, names and medical abbreviations', () => {
+  const text = 'Asinu là AI. Bạn có cần ai hỗ trợ không? Mai và OpenAI giữ nguyên. AIHA không phải AI.';
+  expect(service.conclusionText(text, 'vi-VN')).toBe(
+    'Asinu là trí tuệ nhân tạo. Bạn có cần ai hỗ trợ không? Mai và OpenAI giữ nguyên. AIHA không phải trí tuệ nhân tạo.'
+  );
+  expect(service.conclusionText(text, 'en')).toBe(text);
+});
+
+test('acronym expansion precedes chunking and shares the corrected recording with an already expanded transcript', async () => {
+  const text = Array.from({ length: 70 }, (_, i) => `AI ghi nhận thông tin thứ ${i}.`).join(' ') + ' Lời khuyên cuối vẫn được đọc đủ.';
+  const spoken = text.replace(/\bAI\b/g, 'trí tuệ nhân tạo');
+  audio.synthesizeText.mockImplementation(async (part) => ({
+    ...recording,
+    audio_data: Buffer.from(part + ' '),
+  }));
+  const result = await service.getConclusionAudio(7, text, 'vi');
+  const chunks = audio.synthesizeText.mock.calls.map(([part]) => part);
+  expect(chunks.length).toBeGreaterThan(1);
+  expect(chunks.every((part) => part.length <= 1600)).toBe(true);
+  expect(chunks.join(' ')).toBe(spoken);
+  expect(result.audio_data.toString().trim()).toBe(spoken);
+  const calls = audio.synthesizeText.mock.calls.length;
+  expect(await service.getConclusionAudio(7, spoken, 'vi')).toBe(result);
+  expect(audio.synthesizeText).toHaveBeenCalledTimes(calls);
+});
+
 test('oversized input is not shortened to bypass synthesis validation', async () => {
   const text = 'Câu nói được lặp lại. '.repeat(2000).trim();
   expect(service.conclusionText(text)).toBe(text);

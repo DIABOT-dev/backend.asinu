@@ -3,6 +3,7 @@
 const { createHash } = require('node:crypto');
 const audio = require('./audio.service');
 const { encodeMp3, concatenateMp3 } = require('../voice/mp3.service');
+const { normalizeCheckinSpeech } = require('./speech-text');
 
 const recordings = new Map();
 const pending = new Map();
@@ -68,7 +69,7 @@ function conclusionText(input, language = 'vi') {
   const sentences = [];
   for (const { segment } of new Intl.Segmenter(audio.normalizeLanguage(language), {
     granularity: 'sentence',
-  }).segment(text)) {
+  }).segment(normalizeCheckinSpeech(text, language))) {
     const sentence = segment.trim();
     const identity = sentence
       .replace(
