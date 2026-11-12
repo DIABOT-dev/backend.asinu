@@ -12,6 +12,7 @@ const {
 const { isOfferedAnswer } = require('./adaptive-question.service');
 const { LOCATION_LABELS } = require('./body-location');
 const { requiredMeasurementTypes } = require('../../core/checkin/triage-conclusion-contract');
+const impactOptions = require('./impact-options.service');
 
 const DETAILS = [
   'location',
@@ -69,7 +70,9 @@ function blockingDetails(items, fields, context, label) {
 const clinicalCode = (id) => id.replace(/^(?:huyet_ap|duong_huyet|other)_/u, '');
 
 function impactMeaning(value) {
-  const text = normal(value).replace(
+  const text = normal(value)
+    .replace(/(?<!\p{L})(?:ko|khong)(?!\p{L})/gu, 'không')
+    .replace(/(?<!\p{L})(?:đc|dc)(?!\p{L})/gu, 'được').replace(
     /(?:không|chưa) cần (?:người )?giúp|(?:do not|don't) need help/gu,
     ''
   );
@@ -310,6 +313,38 @@ function sharedMeaning(field, value) {
   return null;
 }
 
+function reuseKnownPainDescriptions(parsed, context) {
+  if (context.field === 'symptoms' || !context.concerns.length ||
+    /ngoài ra|chỗ khác|ở nơi khác|thêm một|another|elsewhere/iu.test(context.answer)) return parsed;
+  const known = context.concerns.filter(c => /đau|nhức|pain|ache|aching/iu.test(c.label));
+  if (known.length !== 1) return parsed;
+  const owner = known[0];
+  const newBodyRegion = Object.entries(LOCATION_LABELS[context.lang === 'en' ? 'en' : 'vi']).some(([key,item]) =>
+    key !== owner.region && ['head','chest','abdomen'].includes(key) &&
+    affirmativeParts(context.answer).some(part => normal(part).includes(normal(item.label))));
+  if (newBodyRegion) return parsed;
+  const aliases = parsed.new_concerns.filter(c =>
+    !context.concerns.some(existing => normal(existing.label) === normal(c.label)) &&
+    /^(?:đau(?:\s+(?:lắm|nhiều|quá|nhức|âm ỉ|nhói))?|nhức|nhói|tức(?:\s+tức)?|âm ỉ|pain|ache|aching|tightness|pressure)$/iu.test(c.label) &&
+    (!c.region || c.region === owner.region) &&
+    !parsed.facts.some(f => f.concern_id === c.id && f.field === 'location' &&
+      !(normal(owner.facts?.location?.value || '') &&
+        (normal(owner.facts.location.value).includes(normal(f.value)) || normal(f.value).includes(normal(owner.facts.location.value))))));
+  if (!aliases.length) return parsed;
+  const aliasIds = new Set(aliases.map(c => c.id));
+  const facts = parsed.facts.map(f => aliasIds.has(f.concern_id) ? { ...f, concern_id: owner.id } : f);
+  for (const alias of aliases) {
+    if (/^(?:tức(?:\s+tức)?|âm ỉ|tightness|pressure)$/iu.test(alias.label) &&
+      !facts.some(f => f.concern_id === owner.id && f.field === 'character'))
+      facts.push({concern_id:owner.id,field:'character',value:alias.label,quote:alias.label,answer_index:context.answer_index});
+  }
+  // Revalidate remapped facts before the independent Dr7 ownership review.
+  // No new body site or diagnosis is inferred by this repair.
+  return validateExtraction(JSON.stringify({...parsed,
+    new_concerns:parsed.new_concerns.filter(c => !aliasIds.has(c.id)),facts,
+  }),context);
+}
+
 // Extraction can only attach patient words to a concern. It cannot diagnose,
 // choose a risk level, turn a causal suspicion into a symptom, or invent facts.
 function validateExtraction(content, context) {
@@ -405,6 +440,14 @@ function validateExtraction(content, context) {
         item.required_details = blockingDetails(item.required_details, item.fields, context, concern.label);
     }
   }
+  // Dr7 sometimes emits symptom denials in an auxiliary fact type. They are
+  // not positive complaints; the complete original reply remains in answers.
+  // Discard only grounded explicit denials, retaining all supported current
+  // facts. An unsupported positive complaint still requires a corrected parse.
+  parsed.facts = parsed.facts.filter((f) => !(f?.field === 'associated_symptoms' &&
+    quoted(context.answer, f.quote) && quoted(f.quote, f.value) &&
+    /^(?:(?:tôi|mình|em|cháu)\s+)?(?:không|chưa|no|not)\s/iu.test(textOf(f.value)) &&
+    !isUnknown(f.value) && !affirmativeParts(f.value).length));
   const pairs = new Set();
   for (const f of parsed.facts) {
     if (!f) return null;
@@ -456,6 +499,7 @@ function validateExtraction(content, context) {
     return null;
   if (parsed.shared_facts !== undefined) {
     if (!Array.isArray(parsed.shared_facts)) return null;
+    const supportedShared = [];
     for (const f of parsed.shared_facts) {
       if (f && quoted(context.answer, f.quote)) f.answer_index = context.answer_index;
       if (
@@ -467,6 +511,10 @@ function validateExtraction(content, context) {
         return null;
       if (!quoted(f.quote, f.value)) f.value = textOf(f.quote);
       const recognized = sharedMeaning(f.field, f.value);
+      // A symptom denial ("không sốt") says nothing about whether BP/glucose
+      // was measured. Drop this unsupported assertion without losing the
+      // independently grounded symptoms and times in a long spoken reply.
+      if (f.field === 'measurements_today' && recognized !== f.code) continue;
       if (f.field === 'impact' && recognized !== f.code) return null;
       if (
         f.field === 'source' &&
@@ -476,7 +524,9 @@ function validateExtraction(content, context) {
       )
         return null;
       if (recognized && recognized !== f.code) return null;
+      supportedShared.push(f);
     }
+    parsed.shared_facts = supportedShared;
   }
   return parsed;
 }
@@ -529,6 +579,13 @@ async function extractAnswer(context, attempt = 0, correction = null) {
           'Eight shared topic groups, not a questionnaire per complaint. detail_fields/requested_details are RECOMMENDED details, not mandatory. Prioritize one or two useful missing details per complaint; keep ALL explicitly supplied facts. Character/location/actual relevant measurements are core. If a supplemental pattern/episode duration/aggravating/actions detail MUST change urgency or the next action, add required_details:[{field,purpose:"urgency"|"next_action",reason:"specific decision this answer changes",quote:"exact current symptom quote"}] on that new_concern or requested_details item. Most ordinary complaints need NO required_details. Generic better understanding/personalization is not a blocking reason. Do not request all possible details. For associated changes, fever, poor appetite, sleep, stool or urine context is a global answer, not automatically a new chief complaint. Add a new_concern only when an explicitly reported distinct problem needs its own assessment. In a bundled detail answer, attribute facts only to the named complaint. For timeline, extract onset and progression independently for each named symptom, never apply one timeline across different symptoms unless explicitly shared.' } : {}),
         CURRENT_ANSWER_INDEX: context.answer_index,
         REQUIRED_ARRAY_KEYS: ['new_concerns', 'facts'],
+        ALLOWED_FACT_FIELDS: FACT_FIELDS,
+        CURRENT_COMPLAINT_RULE:
+          'Capture every distinct CURRENT complaint, including one outside the initially selected regions. Keep its exact named body spot as a location fact; use region:null when the region key is outside ALLOWED_REGION_KEYS. Never force all spoken complaints into the initial region. A denied symptom or a past complaint explicitly said to have resolved is NOT a current concern. Do not invent associated_symptoms facts or attach a resolved old complaint to a current concern. Keep useful onset/location/character/medication facts already supplied anywhere in this reply. A denial of fever or another symptom is NOT a statement about measuring blood pressure or glucose.',
+        CONTINUATION_RULE:
+          'A later answer may add detail/severity to an EXISTING complaint instead of answering the asked group. Reuse its existing ID when ownership is clear; do not create new complaints named only Pain/Đau or a generic sensation like tức tức. A known painful ankle followed by "Đau lắm cứ tức tức ko đi đc" describes that ankle and inability to walk, NOT a new headache or chest complaint. Leave medication unanswered if none was reported, while retaining the symptom details. Explicitly different locations/problems remain new concerns. Do not invent a time for a repeated description.',
+        TIME_SCOPE_RULE:
+          'Keep each explicitly named body spot and each complaint\'s OWN start/course/episode length, even when detail_fields is empty. A selected UI spot does not override a different spot explicitly spoken now. Do not copy an earlier timestamp onto a later complaint with its own time: "vừa nôn một lần" is recent vomiting, not the earlier pain\'s "sáng nay".',
         ALLOWED_REGION_KEYS: context.locations,
         REGION_RULE:
           'region is a key from ALLOWED_REGION_KEYS, never an exact anatomical spot. Put actual body spots in location facts. Existing concerns with unparsed:true are placeholders: replace them with new_concerns for the actual reported symptoms instead of treating a generic placeholder as a real complaint.',
@@ -551,7 +608,8 @@ async function extractAnswer(context, attempt = 0, correction = null) {
       timeoutMs: Math.min(18000, 10000 + estimatedConcerns * 1000),
       maxRetries: 0,
     });
-    const result = validateExtraction(response.content, context);
+    let result = validateExtraction(response.content, context);
+    if (result) result = reuseKnownPainDescriptions(result, context);
     if (!result)
       return attempt === 0
         ? extractAnswer(
@@ -775,7 +833,8 @@ function directAnswer(coverage, question, answer, index) {
         unknown ? 'unknown' : offered || isNone(value) ? 'reported' : 'unresolved',
         index
       ),
-      codes: choices.map((c) => c.id),
+      codes: [...new Set(choices.map((c) => field === 'impact' && impactOptions.contextualImpact(question)
+        ? impactOptions.choiceCode(c) : c.id))],
     };
     if (field === 'red_flags') {
       coverage.warningsAsked.push(...(question.warningKeys || []));
@@ -796,7 +855,9 @@ function directAnswer(coverage, question, answer, index) {
       if (!(field === 'impact' && question.shared))
         target.facts[field] = {
           ...fact(value, unknown ? 'unknown' : 'reported', index),
-          code: choices[0]?.id,
+          code: field === 'impact' && impactOptions.contextualImpact(question)
+            ? choices.map(impactOptions.choiceCode).sort((a,b) => ['unable','slowed','normal'].indexOf(a)-['unable','slowed','normal'].indexOf(b))[0]
+            : choices[0]?.id,
         };
     if (field === 'associated' && !unknown && !isNone(value)) {
       if (question.layout === 'eight_groups') return true;
@@ -961,7 +1022,8 @@ async function refreshCoverage(compact, input) {
             existing.clarified = true;
           }
         } else if (concern) {
-          const fields = question.field === 'timeline' ? question.timelineFields
+          const fields = question.field === 'impact' && question.shared ? []
+            : question.field === 'timeline' ? question.timelineFields
             : question.field === 'character' && question.layout === 'eight_groups'
               ? requiredDetails(compact, concern) : [question.field];
           for (const field of fields || []) if (!concern.facts[field])
