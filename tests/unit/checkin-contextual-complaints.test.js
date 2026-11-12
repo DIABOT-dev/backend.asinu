@@ -104,6 +104,36 @@ test('a region is not guessed for an ambiguous multi-region selection', () => {
   );
 });
 
+test('bare pain in the limbs cannot acquire the headache warning menu through fuzzy matching',()=>{
+ const s=scene(['limbs'],'Đau');s.input.bodyLocationOther='Tay chân: cổ chân phải';
+ const next=getCompactNextStep(s.input);
+ expect(next.state.mappings).not.toContain(resolveComplaint('đau đầu').data);
+ expect(next.state.allSymptoms).toContain('Đau');
+});
+
+test('a new painful region explicitly spoken outside the initial selection retains its owned warnings',()=>{
+ const s=scene(['skin'],'Đau âm ỉ');
+ const answer='Da cổ ngứa, còn bụng dưới bên phải đau âm ỉ từ sáng nay';
+ s.input.bodyLocationOther='Da: vùng cổ';
+ s.input.previousAnswers[0].answer=answer;
+ s.compact.questions[0].choices=[];
+ s.coverage.concerns[0].facts.location={value:'bụng dưới bên phải',status:'reported',evidence:{answerIndex:0,quote:'bụng dưới bên phải'}};
+ const next=getCompactNextStep(s.input);
+ expect(next.state.mappings).toContain(resolveComplaint('đau bụng').data);
+ expect(next.coverageGoal.requiredOptions.map(c=>c.label)).toEqual(expect.arrayContaining(resolveComplaint('đau bụng').data.redFlags));
+ expect(s.coverage.concerns[0].label).toBe('Đau âm ỉ');
+});
+
+test.each(['unresolved','unquoted','ambiguous'])(
+ 'a %s location cannot be used to invent a new anatomical complaint',kind=>{
+  const s=scene(['skin'],'Đau âm ỉ');
+  s.input.bodyLocationOther='Da: vùng cổ';s.compact.questions[0].choices=[];
+  s.input.previousAnswers[0].answer='Đau âm ỉ ở bụng và ngực';
+  s.coverage.concerns[0].facts.location={value:kind==='ambiguous'?'bụng và ngực':'bụng',status:kind==='unresolved'?'unresolved':'reported',
+   evidence:{answerIndex:kind==='unquoted'?99:0,quote:kind==='ambiguous'?'bụng và ngực':'bụng'}};
+  expect(getCompactNextStep(s.input).state.mappings).not.toContain(resolveComplaint('đau bụng').data);
+ });
+
 test.each(['Ngứa', 'Không đau', 'Căng tức nhưng không đau'])(
   'non-pain or negated descriptions do not become abdominal pain: %s',
   (label) => {

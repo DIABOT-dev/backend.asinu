@@ -102,6 +102,17 @@ test('eight primary groups complete a clear chronic-condition check-in without l
   expect(timeline.multiSelect).toBe(true);
 });
 
+test('generic measurement statuses have a different group key from the free-answer escape group',async()=>{
+ const f=flow({healthContext:{medical_conditions:['Suy giáp']}});
+ await f.finish(q=>q.field==='clinical_context'
+  ? [f.label('medication_as_planned'),f.label('other_not_measured')].filter(Boolean).join(', ') : undefined);
+ const clinical=f.seen.find(q=>q.step==='compact_clinical_context');
+ expect(clinical.optionsGrouped.map(g=>g.key)).toEqual(['medication_today','other_measurements','other']);
+ const readings=clinical.optionsGrouped.find(g=>g.key==='other_measurements');
+ expect(readings.items.length).toBe(3);
+ expect(clinical.requiredOptionGroups).toContainEqual(readings.items);
+});
+
 test('a positive associated-context choice does not reopen every primary-question group', async () => {
   const f = flow();
   const assessment = await f.finish(q => q.field === 'associated' ? q.choices.find(c => c.id === 'sleep').label : undefined);
