@@ -46,6 +46,7 @@ const logger = require('../../lib/logger');
 const checkinCallService = require('../checkin-call/checkin-call.service');
 const { createCancelCheckpoint, publicCheckinSession } = require('./checkin-cancellation.service');
 const { isRoutineMonitoringCheckin } = require('./checkin-inactivity.policy');
+const { buildPatientContext } = require('./patient-context.service');
 const console = { log: logger.debug, error: logger.error, warn: logger.warn };
 
 function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sessionDate, canonicalSymptoms) {
@@ -490,12 +491,12 @@ async function recordFollowUp(pool, userId, checkinId, newStatus) {
  */
 async function getUserProfile(pool, userId) {
   const { rows } = await pool.query(
-    `SELECT uop.*, u.id as uid, u.full_name,
+    `SELECT uop.*, u.id as uid, u.full_name, u.updated_at AS account_updated_at,
             COALESCE(uop.display_name, u.display_name) AS display_name,
             COALESCE(u.language_preference, 'vi') as lang
-     FROM user_onboarding_profiles uop
-     JOIN users u ON u.id = uop.user_id
-     WHERE uop.user_id = $1`,
+     FROM users u
+     LEFT JOIN user_onboarding_profiles uop ON u.id = uop.user_id
+     WHERE u.id = $1 AND u.deleted_at IS NULL`,
     [userId]
   );
   return rows[0] || {};
@@ -514,7 +515,7 @@ async function getRecentHealthContext(pool, userId) {
     await Promise.all([
       // Glucose 7 ngày gần nhất (tối đa 5 bản ghi)
       pool.query(
-        `SELECT gl.value, gl.unit, gl.context, lc.occurred_at
+        `SELECT lc.id AS log_id, lc.user_id, gl.value, gl.unit, gl.context, lc.occurred_at
        FROM glucose_logs gl
        JOIN logs_common lc ON lc.id = gl.log_id
        WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '7 days'
@@ -523,7 +524,7 @@ async function getRecentHealthContext(pool, userId) {
       ),
       // Huyết áp 7 ngày gần nhất (tối đa 5 bản ghi)
       pool.query(
-        `SELECT bp.systolic, bp.diastolic, bp.pulse, lc.occurred_at
+        `SELECT lc.id AS log_id, lc.user_id, bp.systolic, bp.diastolic, bp.pulse, lc.occurred_at
        FROM blood_pressure_logs bp
        JOIN logs_common lc ON lc.id = bp.log_id
        WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '7 days'
@@ -532,7 +533,7 @@ async function getRecentHealthContext(pool, userId) {
       ),
       // Cân nặng gần nhất
       pool.query(
-        `SELECT wl.weight_kg, lc.occurred_at
+        `SELECT lc.id AS log_id, lc.user_id, wl.weight_kg, lc.occurred_at
        FROM weight_logs wl
        JOIN logs_common lc ON lc.id = wl.log_id
        WHERE lc.user_id = $1
@@ -541,7 +542,9 @@ async function getRecentHealthContext(pool, userId) {
       ),
       // 3 lần checkin gần nhất (không tính hôm nay)
       pool.query(
-        `SELECT session_date, initial_status, triage_summary, triage_severity
+        `SELECT id, user_id, session_date, initial_status, current_status, flow_state,
+                triage_messages, triage_summary, triage_severity, triage_completed_at,
+                last_response_at, updated_at
        FROM health_checkins
        WHERE user_id = $1
          AND session_date < $2
@@ -711,6 +714,11 @@ async function processTriageStepOnce(
     .startsWith('en')
     ? 'en'
     : 'vi';
+
+  healthContext.patientContext = await buildPatientContext(pool, userId, {
+    profile, healthContext, session, answers: previousAnswers,
+    sessionDate: checkinDateVN(), lang: selectedLang,
+  });
 
   const isFollowUp = isFollowUpPhase;
   const prevTriageMessages = isFollowUpPhase

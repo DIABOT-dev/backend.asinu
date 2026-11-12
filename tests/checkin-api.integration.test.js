@@ -23,6 +23,7 @@ describeDatabase('check-in HTTP API contract', () => {
   let adaptiveProviderFail = false;
   let adaptiveCalls = 0;
   let compactCalls = 0;
+  let observePatientContext = null;
   let failDetailExtraction = false;
 
   const auth = (token) => ({ Authorization: `Bearer ${token}`, 'Accept-Language': 'vi' });
@@ -74,6 +75,8 @@ describeDatabase('check-in HTTP API contract', () => {
           compactCalls++;
           if (failDetailExtraction && options.system.startsWith('Extract explicitly') && JSON.parse(options.prompt).CONTEXT.field === 'character')
             throw new Error('Synthetic detail extraction unavailable');
+          if (observePatientContext && options.system.startsWith('You generate ONE health'))
+            observePatientContext(JSON.parse(options.prompt).CONTEXT.patient_context_markdown);
           return require('./fixtures/compact-interview').providerResponse(options);
         }
         if (options.system?.startsWith('You create follow-up') || options.system?.startsWith('You review a health')) {
@@ -474,6 +477,57 @@ describeDatabase('check-in HTTP API contract', () => {
         .send({ checkin_id: checkinId, previous_answers: answers });
     return { userId, checkinId, headers, entry, initialAnswers, triage };
   }
+
+  test('patient Markdown stays internal and account-scoped, and source corrections/deletions reach the next AI question', async () => {
+    const account = await conversationAccount(56, ['Tăng huyết áp']);
+    const foreign = await conversationAccount(35);
+    const { checkinDateVN } = require('../src/services/checkin/checkin.service');
+    const previous = await pool.query(`INSERT INTO health_checkins
+      (user_id,session_date,initial_status,current_status,flow_state,triage_messages,triage_summary,triage_severity,triage_completed_at)
+      VALUES ($1,$2,'tired','tired','follow_up',$3::jsonb,$4,'medium',NOW()) RETURNING id`,
+      [account.userId, checkinDateVN(-1), JSON.stringify([{ step: 'compact_symptoms', question: 'Triệu chứng?', answer: 'history-context-marker' }]), 'Previous AI explanation']);
+    const note = (await pool.query('INSERT INTO user_memories (user_id,content,category) VALUES ($1,$2,$3) RETURNING id', [account.userId, 'own-context-old', 'preference'])).rows[0];
+    await pool.query('INSERT INTO user_memories (user_id,content,category) VALUES ($1,$2,$3)', [foreign.userId, 'FOREIGN-CONTEXT-PRIVATE', 'health']);
+    await pool.query(`INSERT INTO agent_checkin_memory (user_id,memory_type,memory_key,content,is_active,expires_at) VALUES
+      ($1,'preference','active',$2::jsonb,TRUE,NULL),
+      ($1,'preference','inactive',$3::jsonb,FALSE,NULL),
+      ($1,'preference','expired',$4::jsonb,TRUE,NOW()-INTERVAL '1 day')`,
+      [account.userId, JSON.stringify({ note: 'active-agent-context' }), JSON.stringify({ note: 'INACTIVE-CONTEXT' }), JSON.stringify({ note: 'EXPIRED-CONTEXT' })]);
+    const captures = [];
+    observePatientContext = markdown => captures.push(markdown);
+    const answers = [];
+    const post = () => request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({ checkin_id: account.checkinId, previous_answers: answers, assessment_version: 3, interview_layout: 'eight_groups', adaptive_questions: true }).expect(200);
+    try {
+      const first = (await post()).body;
+      expect(captures.at(-1)).toContain(`user_id: ${account.userId}`);
+      expect(captures.at(-1)).toContain('history-context-marker');
+      expect(captures.at(-1)).toContain('own-context-old');
+      expect(captures.at(-1)).toContain('active-agent-context');
+      for (const secret of ['FOREIGN-CONTEXT-PRIVATE', 'INACTIVE-CONTEXT', 'EXPIRED-CONTEXT']) expect(captures.at(-1)).not.toContain(secret);
+      expect(JSON.stringify(first)).not.toContain('own-context-old');
+      expect(JSON.stringify(first)).not.toContain('patientContext');
+
+      await pool.query('UPDATE user_onboarding_profiles SET gender=$2,updated_at=NOW() WHERE user_id=$1', [account.userId, 'Nữ']);
+      await pool.query('UPDATE user_memories SET content=$2,updated_at=NOW() WHERE id=$1 AND user_id=$3', [note.id, 'own-context-updated', account.userId]);
+      await pool.query('DELETE FROM health_checkins WHERE id=$1 AND user_id=$2', [previous.rows[0].id, account.userId]);
+      answers.push({ step: first.step, question: first.question, answer: first.options[0] });
+      const second = (await post()).body;
+      expect(captures.at(-1)).toContain('own-context-updated');
+      expect(captures.at(-1)).toContain('address_patient: "cô"');
+      expect(captures.at(-1)).not.toContain('own-context-old');
+      expect(captures.at(-1)).not.toContain('history-context-marker');
+
+      await pool.query('DELETE FROM user_memories WHERE id=$1 AND user_id=$2', [note.id, account.userId]);
+      answers.push({ step: second.step, question: second.question, answer: 'Không có' });
+      await post();
+      expect(captures.at(-1)).not.toContain('own-context-updated');
+      const count = captures.length;
+      await request(app).post('/api/mobile/checkin/triage').set(foreign.headers)
+        .send({ checkin_id: account.checkinId, previous_answers: [], assessment_version: 3 }).expect(404);
+      expect(captures).toHaveLength(count);
+    } finally { observePatientContext = null; }
+  });
 
   test('a technical detail-reading failure preserves the prior HTTP conversation and retries the same answer once', async () => {
     const account = await conversationAccount(35);

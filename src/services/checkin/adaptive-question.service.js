@@ -2,6 +2,7 @@
 
 const { createHash, randomUUID } = require('node:crypto');
 const { callTextAi } = require('../ai/ai.service');
+const { PATIENT_CONTEXT_POLICY } = require('./patient-context.service');
 const {
   encryptHealthField,
   decryptHealthField,
@@ -259,7 +260,8 @@ Return JSON {"questions":[{"question":"...","grounding_quote":"exact excerpt fro
 Return zero to three questions. Each question has one idea, <=25 words, and 2-4 short meaningful options, each <=8 words. Every option must be self-contained (e.g. "Hearing is unchanged", "Hearing is reduced"), never just Yes/No. Each single-choice list must measure ONE property; never mix frequency, sound type, loudness or triggers in one list. A symptom can be both continuous and pulse-synchronous, so these are NOT mutually exclusive choices. When absence is possible, include a self-contained absence answer. Do not include generic Other, Unknown or None; the server supplies escape choices.
 Do not repeat any question, answered field or pending template field in CONTEXT. Those fields will already be collected. Add only a clarification specific to SOURCE that the template interview will not cover. Never ask the patient to repeat something already stated in SOURCE (e.g. "sometimes hot" already answers whether heat is constant). If nothing is missing return {"questions":[]}.
 Never ask for a diagnosis, drug, dose, treatment change, brand or private identifier. Never provide advice. Do not assign severity or emergency handling.
-If options contain numbers, provide ranges in the same order: {"min":null|number,"max":null|number,"unit":"..."}; intervals use min inclusive, max exclusive, start with unbounded min, end with unbounded max, touch without gaps, all share a unit. Prefer nonnumeric options if a continuous partition is unclear.`;
+If options contain numbers, provide ranges in the same order: {"min":null|number,"max":null|number,"unit":"..."}; intervals use min inclusive, max exclusive, start with unbounded min, end with unbounded max, touch without gaps, all share a unit. Prefer nonnumeric options if a continuous partition is unclear.
+${context.patient_context_markdown ? PATIENT_CONTEXT_POLICY : ''}`;
   let rejected = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     const response = await callTextAi({
@@ -431,6 +433,7 @@ async function resolveAdaptiveQuestion({
             age: profile.age,
             conditions: profile.medical_conditions || [],
             gender: profile.gender,
+            ...(healthContext.patientContext ? { patient_context_markdown: healthContext.patientContext.markdown } : {}),
             addressing: (() => {
               const { honorific, selfRef } = getHonorifics({ ...profile, lang });
               return { honorific, selfRef };

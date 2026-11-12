@@ -16,6 +16,7 @@ const { buildConclusionFacts } = require('../../core/checkin/triage-conclusion')
 const { getSymptomsForLocation } = require('./body-location');
 const coverage = require('./compact-coverage.service');
 const { resolveComplaint } = require('./clinical-mapping');
+const { PATIENT_CONTEXT_POLICY } = require('./patient-context.service');
 const { isOfferedAnswer } = require('./adaptive-question.service');
 
 function contextualComplaintLabel(concern, input, compact) {
@@ -1056,10 +1057,12 @@ async function generateQuestion(base, input) {
     task +=
       '\nFor this reported dizziness, clarify the sensation: spinning surroundings, feeling faint/lightheaded, or off-balance. Do not ask how long it lasts here.';
   task += '\nPATIENT KNOWLEDGE: Most users are older adults without medical training. Ask only what they can feel, see, recall, or read from their device. Never ask them to identify a cause, a complication, a mechanism, or whether a number is clinically normal. Replace jargon with everyday words; use "đỡ hơn, vẫn vậy hay nặng hơn", not "tiến triển". In source, ask about remembered events (missed meal, new food, less water, fall, heavy lifting, less sleep, changed medicine), not "Do bệnh nền/Do thuốc". They may not remember; uncertainty is valid and must not force guessing. Keep each question brief and kind, without assuming they can recall exact times, doses, or units.';
+  if (input.healthContext?.patientContext) task += `\n${PATIENT_CONTEXT_POLICY}`;
   const context = {
     field,
     lang: input.lang,
     addressing: { honorific: h.honorific, selfRef: h.selfRef },
+    ...(input.healthContext?.patientContext ? { patient_context_markdown: input.healthContext.patientContext.markdown } : {}),
     locations: base.state.bodyLocations,
     exact_location: base.state.bodyLocationOther,
     conditions: base.state.conditions,

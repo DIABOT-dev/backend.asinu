@@ -218,6 +218,7 @@ function buildConclusionFacts(state, profile, context = {}, lang = 'vi', now = n
   const reported = reportedMeasurements(state.compactAssessment);
   return {
     language: lang,
+    ...(context.patientContext ? { ngu_canh_nguoi_dung_markdown: context.patientContext.markdown } : {}),
     xung_ho: { goi: h.honorific, tu_xung: h.selfRef },
     evaluated_at: now.toISOString(),
     tuoi: getUserAge(profile),
