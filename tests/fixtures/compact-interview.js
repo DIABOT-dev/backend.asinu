@@ -89,6 +89,10 @@ function providerResponse(params) {
     return { content: JSON.stringify({ valid: true, errors: [] }) };
   const context = JSON.parse(params.prompt).CONTEXT;
   const field = context.field;
+  if (field === 'timeline' && !params.system.startsWith('Extract explicitly')) return { content: JSON.stringify({ field,
+    question: `${context.addressing.honorific[0].toUpperCase() + context.addressing.honorific.slice(1)} thấy những khó chịu này bắt đầu từ khi nào và thay đổi thế nào đến giờ?`,
+    options: context.required_options,
+  }) };
   if (params.system.startsWith('Extract explicitly')) {
     const answerIndex = context.answer_index;
     const known = context.concerns;

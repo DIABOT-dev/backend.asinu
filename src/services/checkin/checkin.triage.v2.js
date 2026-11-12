@@ -130,6 +130,7 @@ async function getNextTriageQuestion(input) {
     healthContext = {},
     conclusionFormat = 'structured',
     assessmentVersion,
+    interviewLayout,
     previousAnswers = [],
     previousSessionSummary = null,
     previousTriageMessages = [],
@@ -192,6 +193,7 @@ async function getNextTriageQuestion(input) {
     }))
   );
   const engineInput = {
+    interviewLayout,
     status,
     phase,
     profile: normalizedProfile,

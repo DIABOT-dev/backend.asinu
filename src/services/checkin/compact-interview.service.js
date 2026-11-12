@@ -7,6 +7,7 @@ const {
   textOf,
   isUnknown,
   isNone,
+  affirmativeParts,
   conditionsOf,
   progressionOf,
 } = require('../../core/checkin/triage-facts');
@@ -15,6 +16,26 @@ const { buildConclusionFacts } = require('../../core/checkin/triage-conclusion')
 const { getSymptomsForLocation } = require('./body-location');
 const coverage = require('./compact-coverage.service');
 const { resolveComplaint } = require('./clinical-mapping');
+const { isOfferedAnswer } = require('./adaptive-question.service');
+
+function contextualComplaintLabel(concern, input, compact) {
+  const label = textOf(concern.label);
+  const positive = affirmativeParts(label).join(' ');
+  if (!/(?:đau|nhức|nhói|quặn)|\b(?:pain|ache|aching|cramp)\b/iu.test(positive)) return label;
+  const resolved = resolveComplaint(label);
+  // Keep explicitly named complaints, including one outside the initially
+  // selected region. Only a bare pain word may override a fuzzy dictionary hit.
+  if (resolved?.data && !/^(?:đau|nhức|nhói|pain|ache|aching)$/iu.test(label)) return label;
+  let region = concern.region;
+  if (!region && input.bodyLocations?.length === 1) {
+    const question = compact.questions[concern.evidence?.answerIndex];
+    if (question?.field === 'symptoms' && isOfferedAnswer(concern.evidence?.quote || label, question.choices.map(c => c.label)))
+      region = input.bodyLocations[0];
+  }
+  // This binds a reported sensation to its known question location. These are
+  // symptom categories already owned by the safety engine, never diagnoses.
+  return ({ head: 'đau đầu', chest: 'đau ngực', abdomen: 'đau bụng' })[region] || label;
+}
 
 // One coverage plan for the whole conversation, never a questionnaire per area.
 const GROUPS = [
@@ -36,6 +57,7 @@ const SOURCE_CODES = [
   'environment',
   'acute_illness',
 ];
+const EIGHT_GROUPS = GROUPS.filter(([field]) => field !== 'progression').map(([field, ...rest]) => [field === 'onset' ? 'timeline' : field, ...rest]);
 const CONTRACTS = {
   symptoms:
     'Ask which symptoms are bothering this person now, using their selected body locations and exact spots. Mental wellbeing and whole-body are topics, not anatomical spots: never say "ở tinh thần", "vùng tinh thần" or "in your mental"; ask how they have been feeling or sleeping. Offer 5-8 relevant common symptom descriptions from REFERENCE_SYMPTOMS, adding a relevant everyday description if needed. Include ordinary possibilities for the selected spot (for a joint these can include pain, swelling, stiffness, redness/warmth, numbness and movement difficulty); do not offer only two narrow choices. Never list diagnoses or assume pain. Multiple symptoms can apply.',
@@ -47,6 +69,8 @@ const CONTRACTS = {
     'Ask when these symptoms started. In Vietnamese use a complete, caring subject: "Tình trạng [reported symptoms] của [honorific] bắt đầu từ khi nào vậy?" or "Những khó chịu này của [honorific] bắt đầu từ khi nào vậy?". Use the shorter second form if naming every target would make the question too long. Never paste a bare symptom list directly before "bắt đầu khi nào". Use only the supplied honorific and reported symptoms. Options are non-overlapping intervals: under_day (<24 hours), under_three_days (>=24 hours and <3 days), under_week (>=3 and <7 days), week_or_more (>=7 days). Never ask about episode duration here.',
   progression:
     'Ask whether the symptoms have improved, stayed the same or worsened since starting. Options: better, same, worse. Do not ask onset again.',
+  timeline:
+    'Ask warmly when these symptoms started and how they have changed since then, in ONE question. Ask only the missing timeline_fields. The app shows separate sections for onset and progression, so each choice must answer its own section. Onset codes: under_day (<24 hours), under_three_days (>=24 hours and <3 days), under_week (>=3 and <7 days), week_or_more (>=7 days). Course codes: better, same, worse. Different symptoms may have different timelines, explained in Other instead of applying a shared answer.',
   character:
     'Clarify ONE useful missing detail about the TARGET symptoms: exact spot OR how it FEELS. Every option must elaborate the TARGET complaint, never introduce an unrelated type of symptom. Never ask frequency, when it appears, pattern or duration here. Do not repeat a location or sensation already explicitly given. Do not add new symptoms as facts or assume pain. Multiple reported areas share ONE question; allow different details in free text.',
   clinical_context:
@@ -87,6 +111,7 @@ const CODES = {
   source: SOURCE_CODES,
 };
 const EXTRA_FIELDS = {
+  timeline: ['Thời gian và diễn biến', 'Onset and course'],
   location: ['Vị trí cụ thể', 'Exact location'],
   pattern: ['Cách xuất hiện', 'Symptom pattern'],
   episode_duration: ['Thời lượng mỗi đợt', 'Episode duration'],
@@ -115,6 +140,7 @@ function clinicalFallbackChoices(base, lang) {
       ? 'Missed, mistimed or recently changed medicine'
       : 'Quên, dùng sai giờ hoặc mới thay đổi thuốc',
     no_medication: en ? 'Currently have no prescribed medicine' : 'Hiện không có thuốc được kê',
+    medication_unknown: en ? 'Cannot remember whether medicine was taken today' : 'Không nhớ hôm nay đã uống thuốc chưa',
     reading_available: en
       ? `Measured ${measurements || 'a health reading'} today`
       : `Hôm nay đã đo ${measurements || 'chỉ số'}`,
@@ -122,10 +148,57 @@ function clinicalFallbackChoices(base, lang) {
       ? `Have not measured ${measurements || 'any health readings'} today`
       : `Hôm nay chưa đo ${measurements || 'chỉ số'}`,
   };
-  return (base.coverageGoal?.requiredCodes || CODES.clinical_context).map((id) => ({
-    id,
-    label: labels[id],
-  }));
+  return (base.coverageGoal?.requiredCodes || CODES.clinical_context).map((id) => {
+    const match = /^(huyet_ap|duong_huyet|other)_(reading_available|not_measured|reading_unknown)$/u.exec(id);
+    return { id, label: match
+      ? match[2] === 'reading_unknown'
+        ? `${en ? 'Measured' : 'Đã đo'} ${measurementLabel(match[1], lang).toLocaleLowerCase()}${en ? ' today but cannot remember the result' : ' hôm nay nhưng không nhớ kết quả'}`
+        : `${en ? match[2] === 'reading_available' ? 'Measured' : 'Have not measured' : match[2] === 'reading_available' ? 'Hôm nay đã đo' : 'Hôm nay chưa đo'} ${measurementLabel(match[1], lang).toLocaleLowerCase()}${en ? ' today' : ''}`
+      : labels[id] };
+  });
+}
+
+function timelineChoices(fields, lang) {
+  const en = lang === 'en';
+  const labels = {
+    under_day: en ? 'Less than 1 day' : 'Chưa đến 1 ngày',
+    under_three_days: en ? 'From 1 to under 3 days' : 'Từ 1 đến dưới 3 ngày',
+    under_week: en ? 'From 3 to under 7 days' : 'Từ 3 đến dưới 7 ngày',
+    week_or_more: en ? '7 days or more' : 'Từ 7 ngày trở lên',
+    better: en ? 'Getting better' : 'Đang đỡ dần',
+    same: en ? 'Still the same' : 'Vẫn như cũ',
+    worse: en ? 'Getting worse' : 'Có vẻ nặng hơn',
+  };
+  return fields.flatMap(field => CODES[field].map(id => ({ id, label: labels[id] })));
+}
+
+function warningBatchContext(compact, goal, warningCount) {
+  if (goal?.field !== 'red_flags') return undefined;
+  const keyOf = (keys) => JSON.stringify([...new Set(keys)].sort());
+  const batches = [
+    ...new Set(
+      compact.questions
+        .filter((q) => q.field === 'red_flags')
+        .map((q) => keyOf(q.warningKeys || q.choices.map((c) => c.label)))
+    ),
+  ];
+  const key = keyOf(goal.warningKeys || (goal.requiredOptions || []).map((c) => c.label));
+  if (!batches.includes(key)) batches.push(key);
+  return {
+    index: batches.indexOf(key) + 1,
+    total: Math.max(batches.length, Math.ceil(warningCount / (compact.layout === 'eight_groups' ? 12 : 6))),
+    clarification: goal.clarificationIndex !== undefined,
+  };
+}
+
+function warningContinuationQuestion(batch, addressing, lang) {
+  if (lang === 'en')
+    return batch.index === 2
+      ? 'What about these other warning signs: are any happening now?'
+      : `Let’s check warning group ${batch.index}. Are any of these happening now?`;
+  return batch.index === 2
+    ? `Còn những dấu hiệu dưới đây thì sao, ${addressing.honorific} có gặp không?`
+    : `${addressing.selfRef.charAt(0).toLocaleUpperCase() + addressing.selfRef.slice(1)} kiểm tra thêm nhóm dấu hiệu thứ ${batch.index} nhé. ${addressing.honorific.charAt(0).toLocaleUpperCase() + addressing.honorific.slice(1)} có gặp mục nào dưới đây không?`;
 }
 const isCompactStep = (step) =>
   typeof step === 'string' &&
@@ -168,6 +241,7 @@ const unsafe = (value) =>
   );
 const multi = (field) =>
   [
+    'timeline',
     'symptoms',
     'red_flags',
     'character',
@@ -230,12 +304,18 @@ function onsetLabelMatches(id, value) {
     numbers.every((number, i) => number === expected[i]) &&
     (id === 'week_or_more'
       ? /trở lên|tối thiểu|or more|at least/u.test(label)
-      : /dưới|under|less than/u.test(label) ||
+      : /dưới|chưa đến|under|less than/u.test(label) ||
         (id === 'under_day' && /trong vòng|within|past/u.test(label)))
   );
 }
 
 function clinicalLabelMatches(id, value) {
+  const type = /^(huyet_ap|duong_huyet|other)_(reading_available|not_measured|reading_unknown)$/u.exec(id);
+  if (type) {
+    if (type[1] === 'huyet_ap' && !/huyết áp|blood pressure/iu.test(value)) return false;
+    if (type[1] === 'duong_huyet' && !/đường huyết|đường máu|glucose|blood sugar/iu.test(value)) return false;
+    id = type[2];
+  }
   const label = normalized(value);
   const issue =
     /quên|bỏ (?:thuốc|liều)|tự (?:dừng|ngừng)|nhầm|sai|không đúng|thay đổi|đổi thuốc|trễ|muộn|missed|changed|stopped|late|wrong|timing/u.test(
@@ -246,8 +326,10 @@ function clinicalLabelMatches(id, value) {
       label
     );
   const noReading =
-    /(?:chưa|không) đo|not measured|no (?:readings|measurements)|haven.t measured/u.test(label);
-  const measured = /đã đo|có (?:kết quả|chỉ số)|measured|reading|measurement/u.test(label);
+    /(?:chưa|không)(?: có)? đo|not measured|no (?:readings|measurements)|haven.t measured/u.test(label);
+  const measured = /(?:đã|có) đo|có (?:kết quả|chỉ số)|measured|reading|measurement/u.test(label);
+  const forgottenReading = /không (?:nhớ|biết|rõ)(?: rõ)?[^.;]{0,20}(?:kết quả|chỉ số)|cannot remember|don.t remember/u.test(label);
+  if (id === 'medication_unknown') return /không nhớ|không chắc|cannot remember|not sure/u.test(label) && /thuốc|medicine|medication/u.test(label);
   if (id === 'no_medication') return noPrescription && !issue;
   if (id === 'medication_issue') return issue && !noPrescription;
   if (id === 'medication_as_planned')
@@ -256,7 +338,8 @@ function clinicalLabelMatches(id, value) {
       !noPrescription &&
       /(?:đã |đang )?(?:dùng|uống) thuốc|taken|took|as prescribed/u.test(label)
     );
-  if (id === 'reading_available') return measured && !noReading;
+  if (id === 'reading_unknown') return measured && !noReading && forgottenReading;
+  if (id === 'reading_available') return measured && !noReading && !forgottenReading;
   if (id === 'not_measured') return noReading;
   return false;
 }
@@ -461,6 +544,7 @@ function getCoverageNextStep(input) {
   );
   adaptive.compact ||= {
     version: 2,
+    ...(input.interviewLayout === 'eight_groups' ? { layout: 'eight_groups' } : {}),
     lang: input.lang || 'vi',
     hasConditions:
       conditionsOf(input.healthContext?.medical_conditions || input.profile?.medical_conditions)
@@ -475,12 +559,13 @@ function getCoverageNextStep(input) {
   // immediate safety checks. No provider call precedes the keyword safeguard.
   const core = (input.previousAnswers || []).flatMap((a, i) => {
     const q = compact.questions[i];
-    return ['symptoms', 'red_flags'].includes(q?.field) ? [{ ...a, step: q.field }] : [];
+    return ['symptoms', 'red_flags'].includes(q?.field) ? [{ ...a, step: q.field }]
+      : compact.layout === 'eight_groups' && q?.field === 'associated' ? [{ ...a, step: 'symptoms' }] : [];
   });
   const state = buildState(core, input.profile, input.healthContext);
   if (ledger.concerns.length) {
     const concernState = buildState(
-      [{ step: 'symptoms', answer: ledger.concerns.map((c) => c.label) }],
+      [{ step: 'symptoms', answer: ledger.concerns.map((c) => contextualComplaintLabel(c, input, compact)) }],
       input.profile,
       input.healthContext
     );
@@ -551,6 +636,7 @@ function getCoverageNextStep(input) {
       allowDifferent: pendingOffered.allowDifferent,
       warningKeys: pendingOffered.warningKeys,
       clinicalParts: pendingOffered.clinicalParts,
+      timelineFields: pendingOffered.timelineFields,
       requiredCodes: pendingOffered.requiredCodes,
       measurementTypes: pendingOffered.measurementTypes,
       reportClarification: pendingOffered.reportClarification,
@@ -590,6 +676,7 @@ function getCoverageNextStep(input) {
   state.compactAssessment = {
     version: 3,
     interviewRevision: 2,
+    ...(compact.layout ? { interviewLayout: compact.layout } : {}),
     causeIsUnconfirmed: true,
     answers: (input.previousAnswers || []).map((a, i) => ({
       group: compact.questions[i].field,
@@ -605,7 +692,7 @@ function getCoverageNextStep(input) {
   const step =
     pendingOffered?.step ||
     (field ? `compact_${field}${priorCount ? `_q${compact.questions.length + 1}` : ''}` : null);
-  const row = GROUPS.find(([id]) => id === field);
+  const row = (compact.layout === 'eight_groups' ? EIGHT_GROUPS : GROUPS).find(([id]) => id === field);
   const targetLabels =
     goal?.targets.map((id) => ledger.concerns.find((c) => c.id === id)?.label).filter(Boolean) ||
     [];
@@ -616,13 +703,10 @@ function getCoverageNextStep(input) {
         : []),
       ...goal.measurementTypes.map((type) => measurementLabel(type, input.lang))
     );
-  const batch =
-    field === 'red_flags'
-      ? compact.questions.filter((q) => q.field === 'red_flags').findIndex((q) => q.step === step)
-      : -1;
+  const warningBatch = warningBatchContext(compact, goal, warnings.length);
   const warningPart =
-    field === 'red_flags' && warnings.length > 6
-      ? ` · ${input.lang === 'en' ? 'Part' : 'Phần'} ${batch >= 0 ? batch + 1 : compact.questions.filter((q) => q.field === 'red_flags').length + 1}/${Math.ceil(warnings.length / 6)}`
+    warningBatch?.total > 1
+      ? ` · ${input.lang === 'en' ? 'Part' : 'Phần'} ${warningBatch.index}/${warningBatch.total}`
       : '';
   return {
     action: state.redFlagsFound.length || (!goal && !awaitingExtraction) ? 'conclude' : 'ask',
@@ -631,6 +715,10 @@ function getCoverageNextStep(input) {
     state,
     compactAdaptive: adaptive,
     coverageGoal: goal,
+    warningBatch,
+    ...(compact.layout === 'eight_groups' && field ? {
+      questionProgress: { current: row?.[1] || (field === 'measurements' ? 6 : 5), total: 8 },
+    } : {}),
     questionGroup: field
       ? {
           key: field,
@@ -691,7 +779,19 @@ function validateQuestion(content, field, context) {
     /^(?:(?:bạn|anh|chị|chú|cô|bác|ông|bà)\s+)?cho (?:cháu|mình|em|tôi) hỏi[,\s]+(?=(?:cảm giác|chỗ|những|hôm nay|từ khi|trước khi|ngoài)\s)/iu,
     ''
   );
-  const question = unprefixed.charAt(0).toLocaleUpperCase() + unprefixed.slice(1);
+  let question = unprefixed.charAt(0).toLocaleUpperCase() + unprefixed.slice(1);
+  if (field === 'timeline' && context.lang !== 'en')
+    question = question.replace(/(?:đang )?(?:tiến triển|diễn tiến) (?:ra sao|thế nào)/giu, 'đỡ hơn, vẫn vậy hay nặng hơn');
+  if (
+    field === 'red_flags' &&
+    context.warning_batch?.index > 1 &&
+    !context.warning_batch.clarification &&
+    (context.previous_questions.some((q) => normalized(q) === normalized(question)) ||
+      !/\bcòn\b|thêm|tiếp theo|dấu hiệu khác|những dấu hiệu.{0,25}khác|\bother\b|\bnext\b|\bmore\b|\badditional\b/iu.test(
+        question
+      ))
+  )
+    question = warningContinuationQuestion(context.warning_batch, context.addressing, context.lang);
   // A raw symptom list is a label, not the conversational subject requested
   // for onset. Regenerate the wording without changing the clinical choices.
   if (
@@ -766,11 +866,10 @@ function validateQuestion(content, field, context) {
     /[\r\n]|<[^>]+>|(?:tay chân|bụng|da|head|skin)\s*:|anh\s*\/\s*chị|cô\s*\/\s*chú|(?:ở|vùng|in your)\s+(?:tinh thần|mental)/iu.test(
       question
     ) ||
-    (!context.allowRepeatedPrompt &&
-      context.previous_questions.some((q) => normalized(q) === normalized(question))) ||
+    context.previous_questions.some((q) => normalized(q) === normalized(question)) ||
     !Array.isArray(choices) ||
     choices.length < (context.numericInput ? 0 : field === 'red_flags' ? 1 : 2) ||
-    choices.length > 12 ||
+    choices.length > (field === 'red_flags' ? Math.max(12, context.required_options.length) : 12) ||
     choices.some(
       (c) =>
         !c ||
@@ -795,7 +894,7 @@ function validateQuestion(content, field, context) {
   )
     return null;
   if (
-    field === 'character' &&
+    field === 'character' && !context.bundled_details &&
     /xuất hiện|kéo dài|mỗi (?:lần|cơn)|thường xuyên|how often|when|lasts?/iu.test(question)
   )
     return null;
@@ -827,6 +926,18 @@ function validateQuestion(content, field, context) {
     return null;
   if (field === 'clinical_context' && choices.some((c) => !clinicalLabelMatches(c.id, c.label)))
     return null;
+  if (field === 'source' && (/nguyên nhân|do đâu|có phải do|what caused|what is the cause/iu.test(question) ||
+    choices.some(c => /^(?:do\s|biến chứng\s|caused by\s|because of\s)/iu.test(c.label)))) return null;
+  if (field === 'clinical_context' && context.eight_group_interview && context.clinical_parts?.length === 1) {
+    if (context.clinical_parts[0] === 'medication_today' && /đo|huyết áp|đường huyết|measure|blood pressure|glucose/iu.test(question)) return null;
+    if (context.clinical_parts[0] === 'measurements_today' && /dùng thuốc|uống thuốc|medicin|medication/iu.test(question)) return null;
+  }
+  if (field === 'timeline' && context.timeline_fields?.length === 1) {
+    if (context.timeline_fields[0] === 'onset' && /đỡ hơn|nặng hơn|thay đổi thế nào|improv|worsen|changed/iu.test(question)) return null;
+    if (context.timeline_fields[0] === 'progression' && /từ khi nào|bắt đầu khi nào|when.{0,25}start/iu.test(question)) return null;
+  }
+  if (field === 'timeline' && choices.some((c) => ['better', 'same', 'worse'].includes(c.id)
+    ? progressionOf(c.label) !== c.id : !onsetLabelMatches(c.id, c.label))) return null;
   if (context.measurement_types?.length && !context.measurement_types.includes('other')) {
     const unexpectedType = (text) =>
       (/(?:huyết áp|blood pressure)/iu.test(text) &&
@@ -868,12 +979,12 @@ function validateQuestion(content, field, context) {
   if (field === 'symptoms' && choices.length < 5) return null;
   if (
     !CODES[field] &&
-    !['red_flags', 'clarify'].includes(field) &&
+    !['red_flags', 'clarify', 'clinical_context', 'timeline'].includes(field) &&
     choices.filter((c) => c.id !== 'different').length > 8
   )
     return null;
   if (
-    ['red_flags', 'clarify'].includes(field) &&
+    (['red_flags', 'clarify', 'timeline'].includes(field) || (field === 'clinical_context' && context.eight_group_interview)) &&
     (choices.length !== context.required_options.length ||
       context.required_options.some(
         (c) => !choices.some((option) => option.id === c.id && option.label === c.label)
@@ -891,17 +1002,23 @@ function validateQuestion(content, field, context) {
 
 async function generateQuestion(base, input) {
   const field = base.field;
+  const adaptiveSymptomChoices = field === 'symptoms' && base.compactAdaptive.compact.layout === 'eight_groups';
   const h = getHonorifics({ ...input.profile, lang: input.lang });
   const known = buildConclusionFacts(base.state, input.profile, input.healthContext, input.lang);
-  const required = base.coverageGoal?.requiredOptions || warningChoices(base.state, input.lang);
+  const required = field === 'clinical_context' && base.compactAdaptive.compact.layout === 'eight_groups'
+    ? clinicalFallbackChoices(base, input.lang)
+    : field === 'timeline' ? timelineChoices(base.coverageGoal.timelineFields, input.lang)
+    : base.coverageGoal?.requiredOptions || warningChoices(base.state, input.lang);
   let task =
-    CONTRACTS[field].replace(
+    (adaptiveSymptomChoices
+      ? 'Ask what is bothering this person NOW. Generate 5-8 short, meaningful symptom choices from the selected body regions, exact spot, current patient words and dated patient context. There is no fixed symptom menu to copy. Use everyday observable sensations, not disease names. A past complaint is not current unless confirmed today. Do not assume pain, a cause or a complication from a chronic condition. For mental wellbeing ask how the person feels or sleeps, never where inside their mental area. Multiple symptoms may coexist; free input remains available for anything else.'
+      : CONTRACTS[field]).replace(
       'Multiple reported areas share ONE question; allow different details in free text.',
-      base.compactAdaptive.compact.version === 2
+      base.compactAdaptive.compact.version === 2 && base.compactAdaptive.compact.layout !== 'eight_groups'
         ? 'Ask only about the TARGET complaint here, not other complaints.'
         : 'Multiple reported areas share ONE question; allow different details in free text.'
     ) +
-    (base.compactAdaptive.compact.version === 2
+    (base.compactAdaptive.compact.version === 2 && base.compactAdaptive.compact.layout !== 'eight_groups'
       ? '\nAsk ONLY for target_concerns. Reuse all facts already supplied; never repeat a covered field. If allow_different is true, phrase the question about the listed complaints together and include different as a clear escape when their onsets/courses differ. A common answer applies to these targets only, not every symptom in the conversation. Do not combine other dimensions into this question.'
       : '');
   if (base.coverageGoal?.clinicalParts?.length === 1)
@@ -910,11 +1027,24 @@ async function generateQuestion(base, input) {
       task;
   if (base.coverageGoal?.measurementTypes?.length)
     task =
-      `The ONLY measurement type to ask about here is ${base.coverageGoal.measurementTypes.join(', ')} (huyet_ap=blood pressure; duong_huyet=blood glucose; other=the relevant measurement). Do not ask or infer anything about another type. ` +
+      `The ONLY measurement types to ask about here are ${base.coverageGoal.measurementTypes.join(', ')} (huyet_ap=blood pressure; duong_huyet=blood glucose; other=the relevant measurement). Do not ask or infer anything about another type. Typed measurement option IDs must name that exact measurement in the label. ` +
       task;
+  if (base.compactAdaptive.compact.layout === 'eight_groups') task +=
+    '\nThis interview has EIGHT shared topic groups. Do not restart by body area. In character, ask the useful MISSING details supplied in missing_details together, without repeating known details; options must identify which reported complaint they describe when there are several targets. Do not turn every detail into a separate mandatory question. Retain facts already provided. Clinical_context collects medicine status and EACH required measurement in separate option sections on the SAME screen. Actual readings are entered and confirmed inline: blood pressure top/bottom values in mmHg; glucose default mg/dL (the person can select mmol/L if that is the device unit). Do not ask the person to remember a unit. The source group reports events, not a confirmed cause.';
+  if (field === 'clinical_context' && base.compactAdaptive.compact.layout === 'eight_groups') task +=
+    '\nCopy ALL required_options exactly, with their supplied IDs and labels, including measured-but-cannot-remember choices. These are closed factual statuses shown in separate sections, not diagnoses. Do not add questions about doses or ask the person to assess whether a reading is medically normal. Generate only the warm question wording. If only one clinical part is missing, ask ONLY that part.';
+  if (field === 'timeline') task +=
+    '\nCopy ALL required_options exactly, one option per ID, with its given label. These are owned non-overlapping time intervals and course categories displayed in separate sections. Do NOT combine an onset with a course in the same option, generate a Cartesian product, change boundary inclusivity, or paraphrase the interval. Generate only the warm question wording; the exact choices are supplied in CONTEXT.required_options.';
+  if (field === 'character' && base.compactAdaptive.compact.layout === 'eight_groups') task =
+    'Ask ONE clear, short question about the useful missing_details of target_concerns. Focus on one or two related details, required fields first; required:false entries are optional, not a checklist to demand in full. Combine closely related details such as spot/sensation or pattern/episode duration; do not ask already-known facts. Every option must answer this exact question and state which complaint it describes if there are multiple targets. Never assume pain, a diagnosis, a location, or a shared timeline. The patient may explain different details in Other. Do not prescribe or advise. ' + task.slice(task.indexOf('\nThis interview'));
+  if (field === 'character' && base.compactAdaptive.compact.layout === 'eight_groups') task +=
+    '\nRead prior_detail_answers. A relevant natural answer is valid even without clinical terminology. If this is a continuation, acknowledge only what is already clear and ask the SPECIFIC missing detail, in everyday words. Never repeat a broad request to describe the same feelings/location more clearly. Do not ask the person to describe what fever or sweating means; ask only a useful observable missing detail. Prefix a multi-complaint choice with the exact complaint label and a colon so its ownership is unambiguous. The app supplies a cannot-describe-more escape; do not force guessing.';
   if (base.coverageGoal?.clarificationIndex !== undefined)
     task +=
       '\nThis is a clarification of an unclear or incomplete answer, not a new questionnaire. Use CONTEXT.clarification to explain the missing part simply, rephrase rather than repeat the previous question, and keep already-clear facts. Ask only what is still missing. Do not force a person to guess if they explicitly cannot remember or have not measured. For a partial reading, ask only the missing unit/value; never invent a number.';
+  if (base.warningBatch?.index > 1 && !base.warningBatch.clarification)
+    task +=
+      '\nThis is the next batch of DIFFERENT warning signs, after an earlier batch was answered. Make the continuation explicit, for example "Còn những dấu hiệu dưới đây thì sao?" / "What about these other warning signs?". Do not repeat the previous question, ask about all warnings again, or imply the earlier answer was ignored. Keep every required warning unchanged.';
   if (
     field === 'character' &&
     base.state.compactAssessment.concerns?.some(
@@ -925,6 +1055,7 @@ async function generateQuestion(base, input) {
   )
     task +=
       '\nFor this reported dizziness, clarify the sensation: spinning surroundings, feeling faint/lightheaded, or off-balance. Do not ask how long it lasts here.';
+  task += '\nPATIENT KNOWLEDGE: Most users are older adults without medical training. Ask only what they can feel, see, recall, or read from their device. Never ask them to identify a cause, a complication, a mechanism, or whether a number is clinically normal. Replace jargon with everyday words; use "đỡ hơn, vẫn vậy hay nặng hơn", not "tiến triển". In source, ask about remembered events (missed meal, new food, less water, fall, heavy lifting, less sleep, changed medicine), not "Do bệnh nền/Do thuốc". They may not remember; uncertainty is valid and must not force guessing. Keep each question brief and kind, without assuming they can recall exact times, doses, or units.';
   const context = {
     field,
     lang: input.lang,
@@ -935,10 +1066,15 @@ async function generateQuestion(base, input) {
     readings_24h: known.chi_so_24h,
     medication_record: known.uong_thuoc_hom_nay,
     answers: base.state.compactAssessment.answers,
+    ...(adaptiveSymptomChoices ? { symptom_choices_mode: 'patient_context' } : {}),
+    ...(field === 'character' ? { prior_detail_answers: base.state.compactAssessment.answers.filter(a => a.group === 'character').slice(-3) } : {}),
     previous_questions: base.compactAdaptive.compact.questions.map((q) => q.question),
-    required_options: ['red_flags', 'clarify'].includes(field) ? required : [],
+    warning_batch: base.warningBatch,
+    required_options: ['red_flags', 'clarify', 'timeline'].includes(field) ||
+      (field === 'clinical_context' && base.compactAdaptive.compact.layout === 'eight_groups') ? required : [],
     required_option_ids:
       base.coverageGoal?.requiredCodes ||
+      (field === 'timeline' ? (base.coverageGoal.timelineFields || []).flatMap((part) => CODES[part]) : null) ||
       (CODES[field]
         ? [...CODES[field], ...(base.coverageGoal?.allowDifferent ? ['different'] : [])]
         : null),
@@ -964,22 +1100,28 @@ async function generateQuestion(base, input) {
       ),
     measurement_types: base.coverageGoal?.measurementTypes,
     clinical_parts: base.coverageGoal?.clinicalParts,
+    timeline_fields: base.coverageGoal?.timelineFields,
+    bundled_details: field === 'character' && base.compactAdaptive.compact.layout === 'eight_groups',
+    eight_group_interview: base.compactAdaptive.compact.layout === 'eight_groups',
+    missing_details: field === 'character' && base.compactAdaptive.compact.layout === 'eight_groups'
+      ? [...base.state.compactAssessment.missing, ...(base.state.compactAssessment.missing_optional || [])]
+          .filter((fact) => base.coverageGoal.targets.includes(fact.concern_id) && !['onset', 'progression'].includes(fact.field)) : undefined,
     clarification:
       base.coverageGoal?.clarificationIndex === undefined
         ? undefined
         : base.state.compactAssessment.answers[base.coverageGoal.clarificationIndex],
     allowRepeatedPrompt:
       base.compactAdaptive.compact.version === 2 &&
-      ((field === 'red_flags' && base.coverageGoal?.clarificationIndex === undefined) ||
-        !base.compactAdaptive.compact.questions.some(
-          (q) =>
-            q.field === field &&
-            JSON.stringify(q.targets || []) === JSON.stringify(base.coverageGoal?.targets || []) &&
-            JSON.stringify(q.clinicalParts || []) ===
-              JSON.stringify(base.coverageGoal?.clinicalParts || [])
-        )),
+      field !== 'red_flags' &&
+      !base.compactAdaptive.compact.questions.some(
+        (q) =>
+          q.field === field &&
+          JSON.stringify(q.targets || []) === JSON.stringify(base.coverageGoal?.targets || []) &&
+          JSON.stringify(q.clinicalParts || []) ===
+            JSON.stringify(base.coverageGoal?.clinicalParts || [])
+      ),
     reference_symptoms:
-      field === 'symptoms'
+      field === 'symptoms' && !adaptiveSymptomChoices
         ? [
             ...new Set(
               base.state.bodyLocations.flatMap((region) =>
@@ -1024,13 +1166,13 @@ async function generateQuestion(base, input) {
       }),
       jsonMode: true,
       temperature: 0.1,
-      maxTokens: 950,
+      maxTokens: ['red_flags', 'clinical_context'].includes(field) ? Math.max(950, required.length * 100) : 950,
       timeoutMs: 10000,
       maxRetries: 0,
     });
     const question = validateQuestion(response.content, field, context);
     if (!question) {
-      correction = `Rejected question for ${field}. Check structure, addressing and meaning of each option ID. Follow this field only: ${task}`;
+      correction = `Rejected question for ${field}. Check structure, addressing and meaning of each option ID. ${field === 'timeline' ? `Return EXACTLY these separate options without combining, paraphrasing or duplicating them: ${JSON.stringify(required)}. ` : ''}Follow this field only: ${task}`;
       continue;
     }
     const review = await callTextAi({
@@ -1095,6 +1237,7 @@ async function resolveCompactQuestion(base, input) {
             red_flags: 'Are any of these warning signs happening now?',
             impact: 'How are these symptoms affecting your everyday activities?',
             onset: 'When did these symptoms start?',
+            timeline: 'When did these symptoms start, and have they improved or worsened since then?',
             progression: 'Since starting, have the symptoms improved, stayed the same or worsened?',
             character: 'What else can you tell me about the feeling or its exact location?',
             clinical_context: 'How have your medication-taking and measurements been today?',
@@ -1116,6 +1259,7 @@ async function resolveCompactQuestion(base, input) {
             red_flags: `${h.Honorific} có dấu hiệu nào dưới đây ngay lúc này không?`,
             impact: `Những khó chịu này ảnh hưởng thế nào đến sinh hoạt hằng ngày của ${h.honorific}?`,
             onset: `Những khó chịu này của ${h.honorific} bắt đầu từ khi nào vậy?`,
+            timeline: `Những khó chịu này của ${h.honorific} bắt đầu từ khi nào, và đến giờ đỡ hơn hay nặng hơn?`,
             progression: `Từ lúc mới bị đến giờ, ${h.honorific} thấy đỡ hơn, vẫn vậy hay nặng hơn?`,
             character: `${h.Honorific} kể thêm cho ${h.selfRef} về cảm giác hoặc vị trí khó chịu nhé?`,
             clinical_context: `Hôm nay ${h.honorific} dùng thuốc và đo chỉ số như thế nào?`,
@@ -1151,15 +1295,42 @@ async function resolveCompactQuestion(base, input) {
           ? `Have you measured your ${label} today?`
           : `Hôm nay ${h.honorific} đã đo ${label} chưa?`;
       }
+      if (base.field === 'timeline' && base.coverageGoal?.timelineFields?.length === 1)
+        prompts.timeline = prompts[base.coverageGoal.timelineFields[0]];
       const labels =
         base.coverageGoal?.targets
           .map((id) => base.state.compactAssessment.concerns.find((c) => c.id === id)?.label)
           .filter(Boolean) || [];
+      if (base.field === 'character' && adaptive.compact.layout === 'eight_groups') {
+        const subject = labels.join(en ? ' and ' : ' và ');
+        const fields = base.state.compactAssessment.missing
+          .filter(item => base.coverageGoal.targets.includes(item.concern_id) && !['onset', 'progression'].includes(item.field))
+          .map(item => item.field);
+        const continued = adaptive.compact.questions.some(q => q.field === 'character');
+        const detailPrompts = en ? {
+          location: 'where exactly do you feel it?',
+          pattern: 'does it happen all the time or in separate episodes?',
+          episode_duration: 'how long does one episode last?',
+          aggravating: 'when do you notice it becoming worse?',
+          actions: 'what have you already tried, and did it help?',
+          measurement: 'have you measured a related reading, and what did the device show?',
+          character: continued ? 'is there anything else you can describe beyond what you have already said?' : 'how does it feel?',
+        } : {
+          location: 'chỗ khó chịu cụ thể nằm ở đâu vậy?',
+          pattern: 'khó chịu xảy ra liên tục hay từng đợt?',
+          episode_duration: 'mỗi đợt khó chịu kéo dài khoảng bao lâu?',
+          aggravating: `${h.honorific} thấy lúc nào khó chịu tăng lên?`,
+          actions: `${h.honorific} đã thử cách gì và có thấy đỡ không?`,
+          measurement: `${h.honorific} đã đo chỉ số liên quan chưa, máy hiện kết quả thế nào?`,
+          character: continued ? `ngoài những gì đã kể, ${h.honorific} còn mô tả thêm đặc điểm nào không?` : `${h.honorific} thấy có cảm giác cụ thể như thế nào?`,
+        };
+        prompts.character = `${en ? 'About' : 'Về'} ${subject || (en ? 'this discomfort' : 'chỗ khó chịu này')}, ${detailPrompts[fields[0]] || detailPrompts.character}`;
+      }
       question = {
         step: base.step,
         field: base.field,
         question:
-          base.coverageGoal?.clarificationIndex !== undefined
+          base.coverageGoal?.clarificationIndex !== undefined && !(base.field === 'character' && adaptive.compact.layout === 'eight_groups')
             ? `${en ? 'To understand that part clearly' : `Để ${h.selfRef} hiểu rõ phần này`}, ${prompts[base.field].charAt(0).toLocaleLowerCase() + prompts[base.field].slice(1)}`
             : labels.length && !base.coverageGoal?.shared && base.field !== 'onset'
               ? `${en ? 'About' : 'Về'} ${labels.join(', ')}: ${prompts[base.field]}`
@@ -1169,8 +1340,12 @@ async function resolveCompactQuestion(base, input) {
           ? base.coverageGoal?.requiredOptions || warningChoices(base.state, input.lang)
           : base.field === 'clinical_context'
             ? clinicalFallbackChoices(base, input.lang)
+            : base.field === 'timeline'
+              ? timelineChoices(base.coverageGoal.timelineFields || [], input.lang)
             : [],
       };
+      if (base.warningBatch?.index > 1 && !base.warningBatch.clarification)
+        question.question = warningContinuationQuestion(base.warningBatch, h, input.lang);
     }
     question.step = base.step;
     if (base.coverageGoal)
@@ -1183,6 +1358,8 @@ async function resolveCompactQuestion(base, input) {
         reportClarification: base.coverageGoal.reportClarification,
         clarificationIndex: base.coverageGoal.clarificationIndex,
         requiredCodes: base.coverageGoal.requiredCodes,
+        timelineFields: base.coverageGoal.timelineFields,
+        layout: adaptive.compact.layout,
       });
     if (base.coverageGoal?.measurementTypes)
       question.measurementTypes = base.coverageGoal.measurementTypes;
@@ -1190,10 +1367,14 @@ async function resolveCompactQuestion(base, input) {
     adaptive.compact.questions.push(question);
   }
   const unknown = t('checkin.adaptive.unknown', input.lang);
-  const other = t('checkin.adaptive.other', input.lang);
+  const other = base.field === 'timeline' && question.targets?.length > 1
+    ? input.lang === 'en' ? 'Other or different for each symptom, type or speak'
+      : 'Khác hoặc mỗi triệu chứng khác nhau, nhập hoặc nói'
+    : t('checkin.adaptive.other', input.lang);
   const none = t('checkin.triage.option.none', input.lang);
   const absenceAllowed = ['red_flags', 'source', 'associated'].includes(base.field);
-  const exclusiveOptionGroups =
+  const noMoreDetail = adaptive.compact.layout === 'eight_groups' && base.field === 'character' ? coverage.noMoreDetailsLabel(input.lang) : null;
+  let exclusiveOptionGroups =
     base.field === 'clinical_context'
       ? [
           ['medication_as_planned', 'medication_issue', 'no_medication'],
@@ -1202,6 +1383,32 @@ async function resolveCompactQuestion(base, input) {
           .map((ids) => question.choices.filter((c) => ids.includes(c.id)).map((c) => c.label))
           .filter((group) => group.length > 1)
       : [];
+  let optionsGrouped;
+  if (adaptive.compact.layout === 'eight_groups') {
+    const group = (key, label, ids) => ({ key, label, icon: '', items: question.choices.filter((c) => ids.includes(c.id)).map((c) => c.label) });
+    const en = input.lang === 'en';
+    if (base.field === 'timeline') optionsGrouped = (question.timelineFields || []).map((part) => {
+      const concerns = base.state.compactAssessment.concerns.filter((c) => question.targets.includes(c.id) &&
+        (!c.facts[part] || c.facts[part].status === 'unresolved'));
+      const label = part === 'onset' ? en ? 'Started' : 'Bắt đầu từ khi nào?' : en ? 'Since then' : 'Thay đổi đến giờ';
+      return group(part, `${label}${concerns.length && concerns.length < base.state.compactAssessment.concerns.length ? ` · ${concerns.map(c => c.label).join(', ')}` : ''}`, CODES[part]);
+    });
+    if (base.field === 'clinical_context') optionsGrouped = [
+      ...((question.clinicalParts || []).includes('medication_today') ? [group('medication_today', en ? 'Medicine today' : 'Thuốc hôm nay', [...CODES.clinical_context.slice(0, 3), 'medication_unknown'])] : []),
+      ...(question.measurementTypes || []).map((type) => group(type, measurementLabel(type, input.lang), [`${type}_reading_available`, `${type}_not_measured`, `${type}_reading_unknown`])),
+    ];
+    if (optionsGrouped) {
+      optionsGrouped = optionsGrouped.filter((g) => g.items.length);
+      exclusiveOptionGroups = optionsGrouped.map((g) => g.items);
+      optionsGrouped.push({ key: 'other', label: en ? 'Another answer' : 'Câu trả lời khác', icon: '', items: [unknown, other] });
+    }
+  }
+  const measurementInputs = (question.measurementTypes || [])
+    .filter((type) => ['huyet_ap', 'duong_huyet'].includes(type))
+    .filter(() => ['clinical_context', 'measurements'].includes(base.field))
+    .map((type) => ({ type, label: measurementLabel(type, input.lang), unit: type === 'huyet_ap' ? 'mmHg' : 'mg/dL',
+      ...(base.field === 'clinical_context' ? { whenSelected: question.choices.find((c) => c.id === `${type}_reading_available`)?.label } : {}),
+    })).filter((item) => base.field !== 'clinical_context' || item.whenSelected);
   return {
     isDone: false,
     step: question.step,
@@ -1210,6 +1417,7 @@ async function resolveCompactQuestion(base, input) {
       ...new Set([
         ...question.choices.map((c) => c.label),
         ...(absenceAllowed ? [none] : []),
+        ...(noMoreDetail ? [noMoreDetail] : []),
         unknown,
         other,
       ]),
@@ -1221,10 +1429,13 @@ async function resolveCompactQuestion(base, input) {
     ...(['measurement', 'measurements'].includes(base.field) ? { answerInput: 'measurement' } : {}),
     exclusiveOptions: [
       ...(absenceAllowed ? [none] : []),
+      ...(noMoreDetail ? [noMoreDetail] : []),
       unknown,
       ...question.choices.filter((c) => c.id === 'different').map((c) => c.label),
     ],
     exclusiveOptionGroups,
+    ...(optionsGrouped ? { optionsGrouped, requiredOptionGroups: exclusiveOptionGroups } : {}),
+    ...(measurementInputs.length ? { measurementInputs } : {}),
     questionProgress: base.questionProgress,
     questionGroup: base.questionGroup,
     assessmentVersion: 3,
@@ -1243,5 +1454,6 @@ module.exports = {
   validateQuestion,
   selectedCodes,
   GROUPS,
+  EIGHT_GROUPS,
   CODES,
 };

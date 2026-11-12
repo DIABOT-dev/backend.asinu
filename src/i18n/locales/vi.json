@@ -1,6 +1,7 @@
 {
   "checkin.adaptive.other": "Khác, nhập hoặc nói câu trả lời",
   "checkin.adaptive.unknown": "Không rõ",
+  "checkin.triage.answer_retry": "Asinu chưa đọc trọn câu trả lời. Nội dung vẫn được giữ lại; bấm Thử lại để gửi lại nhé.",
   "checkin.adaptive.no_more": "Không có gì thêm",
   "checkin.adaptive.open_question": "{{Honorific}} có thể kể rõ hơn về “{{answer}}” không?",
   "careCircle.relationship.relSon": "Con trai",

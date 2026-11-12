@@ -743,6 +743,7 @@ async function processTriageStepOnce(
       healthContext,
       conclusionFormat: options.conclusionFormat,
       assessmentVersion,
+      interviewLayout: options.interviewLayout,
       previousAnswers,
       previousSessionSummary: session.triage_summary || null,
       previousTriageMessages: prevTriageMessages,

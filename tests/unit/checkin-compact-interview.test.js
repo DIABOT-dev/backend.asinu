@@ -251,6 +251,30 @@ test('generic absence variants do not create duplicate None choices', () => {
     options: [{ id: 'fever', label: 'Có sốt' }, { id: 'sleep', label: 'Khó ngủ' }, { id: 'none', label: 'Không có thay đổi nào khác' }] };
   expect(validateQuestion(JSON.stringify(valid), 'associated', context).choices.map((c) => c.label)).toEqual(['Có sốt', 'Khó ngủ']);
 });
+
+test.each(['bạn', 'chú', 'cô', 'bác', 'ông', 'bà'])(
+  'a second warning batch explicitly continues the screening instead of repeating its heading: %s',
+  (honorific) => {
+    const question = `${honorific} có đang gặp phải tình trạng nào sau đây không?`;
+    const required = [{ id: 'warning_6', label: 'khó thở kèm yếu cơ' }];
+    const context = { lang: 'vi', addressing: { honorific, selfRef: honorific === 'bạn' ? 'mình' : 'cháu' }, previous_questions: [question], required_options: required, warning_batch: { index: 2, total: 2, clarification: false } };
+    const result = validateQuestion(JSON.stringify({ field: 'red_flags', question, options: required }), 'red_flags', context);
+    expect(result.question).toBe(`Còn những dấu hiệu dưới đây thì sao, ${honorific} có gặp không?`);
+    expect(result.choices).toEqual(required);
+    const third = validateQuestion(JSON.stringify({ field: 'red_flags', question, options: required }), 'red_flags', { ...context, warning_batch: { index: 3, total: 3, clarification: false }, previous_questions: [question, result.question] });
+    expect(third.question).not.toBe(result.question);
+  }
+);
+
+test('English warning continuation keeps the exact warning and does not relabel a clarification as different signs', () => {
+  const question = 'Are any of these signs happening now?';
+  const required = [{ id: 'warning_6', label: 'Breathing difficulty with muscle weakness' }];
+  const context = { lang: 'en', addressing: { honorific: 'you', selfRef: 'I' }, previous_questions: [question], required_options: required, warning_batch: { index: 2, total: 2, clarification: false } };
+  const result = validateQuestion(JSON.stringify({ field: 'red_flags', question, options: required }), 'red_flags', context);
+  expect(result.question).toMatch(/other warning signs/);
+  expect(result.choices).toEqual(required);
+  expect(validateQuestion(JSON.stringify({ field: 'red_flags', question, options: required }), 'red_flags', { ...context, warning_batch: { ...context.warning_batch, clarification: true } })).toBeNull();
+});
 test('Dr7 capitalisation alone does not force a duplicate warning generation or fallback', () => {
   const required = { id: 'warning_6', label: 'mất ngủ kèm sụt cân nhanh' };
   const context = { lang: 'vi', addressing: { honorific: 'chị', selfRef: 'mình' }, previous_questions: [], required_options: [required] };

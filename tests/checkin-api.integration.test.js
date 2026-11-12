@@ -19,11 +19,11 @@ describeDatabase('check-in HTTP API contract', () => {
   let originalFetch;
   let checkinCallService;
   let sendVoipNotification;
-  let audioBackup;
   let adaptivePlan = [];
   let adaptiveProviderFail = false;
   let adaptiveCalls = 0;
   let compactCalls = 0;
+  let failDetailExtraction = false;
 
   const auth = (token) => ({ Authorization: `Bearer ${token}`, 'Accept-Language': 'vi' });
 
@@ -72,6 +72,8 @@ describeDatabase('check-in HTTP API contract', () => {
         if (options.system?.startsWith('You generate ONE health') || options.system?.startsWith('Review one health intake') ||
           options.system?.startsWith('Extract explicitly') || options.system?.startsWith('Review patient fact')) {
           compactCalls++;
+          if (failDetailExtraction && options.system.startsWith('Extract explicitly') && JSON.parse(options.prompt).CONTEXT.field === 'character')
+            throw new Error('Synthetic detail extraction unavailable');
           return require('./fixtures/compact-interview').providerResponse(options);
         }
         if (options.system?.startsWith('You create follow-up') || options.system?.startsWith('You review a health')) {
@@ -88,12 +90,26 @@ describeDatabase('check-in HTTP API contract', () => {
     sendVoipNotification =
       require('../src/services/notification/apns.voip.service').sendVoipNotification;
     const audioService = require('../src/services/checkin-call/audio.service');
+    const fixtureHash = createHash('sha256')
+      .update(`${audioService.audioVersion('vi')}\n${audioService.PHRASES.user_prompt.vi}`).digest('hex');
+    // Keep the HTTP audio fixture inside this test process. Never replace the
+    // shared local audio cache while the developer's app may be using it.
+    const routePool = new Proxy(pool, { get(target, key) {
+      if (key === 'query') return (text, values) => {
+        if (typeof text === 'string' && text.startsWith('SELECT audio_data, mime_type FROM checkin_call_audio') &&
+          values?.[0] === 'vi:user_prompt' && values[1] === fixtureHash)
+          return Promise.resolve({ rows: [{ audio_data: Buffer.from('checkin-api-integration-audio'), mime_type: 'audio/mpeg' }] });
+        return target.query(text, values);
+      };
+      const value = Reflect.get(target, key);
+      return typeof value === 'function' ? value.bind(target) : value;
+    } });
 
     app = express();
     app.locals.authPool = pool;
     app.use(express.json());
     app.use('/api/mobile', mobileRoutes(pool));
-    app.use('/api/mobile/checkin-call', checkinCallRoutes(pool));
+    app.use('/api/mobile/checkin-call', checkinCallRoutes(routePool));
 
     const seed = String(Date.now());
     const patient = await pool.query(
@@ -125,18 +141,6 @@ describeDatabase('check-in HTTP API contract', () => {
       [patientId, familyId, JSON.stringify({ can_receive_alerts: true, can_ack_escalation: true })]
     );
 
-    const existingAudio = await pool.query(
-      "SELECT * FROM checkin_call_audio WHERE audio_key = 'vi:user_prompt'"
-    );
-    audioBackup = existingAudio.rows[0] || null;
-    const phrase = audioService.PHRASES.user_prompt.vi;
-    const hash = createHash('sha256')
-      .update(`${audioService.audioVersion('vi')}\n${phrase}`)
-      .digest('hex');
-    await pool.query(
-      "INSERT INTO checkin_call_audio (audio_key, text_hash, mime_type, audio_data) VALUES ('vi:user_prompt',$1,'audio/mpeg',$2) ON CONFLICT (audio_key) DO UPDATE SET text_hash = EXCLUDED.text_hash, mime_type = EXCLUDED.mime_type, audio_data = EXCLUDED.audio_data",
-      [hash, Buffer.from('checkin-api-integration-audio')]
-    );
     const expressApp = app;
     app = await new Promise(resolve => {
       const server = expressApp.listen(0, '127.0.0.1', () => resolve(server));
@@ -146,21 +150,6 @@ describeDatabase('check-in HTTP API contract', () => {
   afterAll(async () => {
     global.fetch = originalFetch;
     if (app?.close) await new Promise((resolve, reject) => app.close(error => error ? reject(error) : resolve()));
-    if (audioBackup) {
-      await pool.query(
-        'INSERT INTO checkin_call_audio (audio_key, text_version, text_hash, mime_type, audio_data, created_at) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (audio_key) DO UPDATE SET text_version = EXCLUDED.text_version, text_hash = EXCLUDED.text_hash, mime_type = EXCLUDED.mime_type, audio_data = EXCLUDED.audio_data, created_at = EXCLUDED.created_at',
-        [
-          audioBackup.audio_key,
-          audioBackup.text_version,
-          audioBackup.text_hash,
-          audioBackup.mime_type,
-          audioBackup.audio_data,
-          audioBackup.created_at,
-        ]
-      );
-    } else {
-      await pool.query("DELETE FROM checkin_call_audio WHERE audio_key = 'vi:user_prompt'");
-    }
     if (createdUserIds.length) {
       // Delete patient-owned episodes before their acknowledging caregivers.
       await pool.query('DELETE FROM checkin_call_episodes WHERE user_id = ANY($1::integer[])', [
@@ -485,6 +474,83 @@ describeDatabase('check-in HTTP API contract', () => {
         .send({ checkin_id: checkinId, previous_answers: answers });
     return { userId, checkinId, headers, entry, initialAnswers, triage };
   }
+
+  test('a technical detail-reading failure preserves the prior HTTP conversation and retries the same answer once', async () => {
+    const account = await conversationAccount(35);
+    const answers = [];
+    const post = () => request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({ checkin_id: account.checkinId, previous_answers: answers, assessment_version: 3, interview_layout: 'eight_groups', adaptive_questions: true });
+    let next = (await post().expect(200)).body;
+    for (let i = 0; i < 8 && !next.step.startsWith('compact_character'); i++) {
+      const label = next.step.startsWith('compact_symptoms') ? 'Sưng khớp'
+        : next.step.startsWith('compact_red_flags') ? 'Không có'
+        : next.step.startsWith('compact_impact') ? next.options[0]
+        : next.step.startsWith('compact_timeline') ? [next.optionsGrouped[0].items[2], next.optionsGrouped[1].items[1]].join(', ') : null;
+      expect(label).toBeTruthy();
+      answers.push({ step: next.step, question: next.question, answer: label });
+      next = (await post().expect(200)).body;
+    }
+    expect(next.step).toMatch(/^compact_character/u);
+    expect(next.exclusiveOptions).toContain('Tôi không biết mô tả thêm');
+    const read = async () => (await pool.query('SELECT triage_messages,triage_state FROM health_checkins WHERE id=$1 AND user_id=$2', [account.checkinId, account.userId])).rows[0];
+    const before = await read();
+    const answer = { step: next.step, question: next.question, answer: 'Sưng khớp gối bên phải, cảm giác căng tức' };
+    answers.push(answer);
+    failDetailExtraction = true;
+    try {
+      const failed = await post().expect(503);
+      expect(failed.body).toMatchObject({ code: 'CHECKIN_ANSWER_RETRY' });
+      expect(failed.body.error).toContain('câu trả lời');
+      expect(await read()).toEqual(before);
+    } finally { failDetailExtraction = false; }
+    const retried = (await post().expect(200)).body;
+    expect((await read()).triage_messages).toEqual(answers);
+    expect((await post().expect(200)).body).toEqual(retried);
+    expect((await read()).triage_messages.filter(item => item.step === answer.step)).toHaveLength(1);
+  });
+
+  test('the screenshot’s dull-pain answer keeps its abdominal question context over the HTTP API', async () => {
+    const account = await conversationAccount(35);
+    const { protectAdaptiveState } = require('../src/services/checkin/adaptive-question.service');
+    const question = { step: 'compact_symptoms', field: 'symptoms', question: 'Bạn đang khó chịu ở bụng trên rốn như thế nào vậy?',
+      choices: [{ id: 'dull', label: 'Đau âm ỉ' }, { id: 'sharp', label: 'Đau nhói' }], origin: 'ai',
+    };
+    const state = { version: 1, sources: [], questions: [], compact: { version: 2, layout: 'eight_groups', lang: 'vi', hasConditions: false, questions: [question] } };
+    await pool.query(`UPDATE health_checkins SET body_location_other=$3, triage_state=jsonb_build_object('assessment_version',3,'adaptive_enabled',true,'adaptive_payload',$4::text)
+      WHERE id=$1 AND user_id=$2`, [account.checkinId, account.userId, 'Bụng: bụng trên rốn', protectAdaptiveState(account.userId, state)]);
+    const answer = { step: question.step, question: question.question, answer: 'Đau âm ỉ' };
+    const result = await request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({ checkin_id: account.checkinId, previous_answers: [answer], assessment_version: 3, interview_layout: 'eight_groups', adaptive_questions: true }).expect(200);
+    expect(result.body).toMatchObject({ step: 'compact_red_flags', questionSource: 'ai' });
+    expect(result.body.options).toContain('nôn ra máu hoặc chất nâu đen');
+    expect(result.body.options).toContain('đi ngoài phân đen hoặc có máu');
+    const saved = (await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200)).body.session;
+    expect(saved.triage_messages).toEqual([answer]);
+    expect(saved.body_location_other).toBe('Bụng: bụng trên rốn');
+  });
+
+  test('the eight-group client negotiates a shared timeline and resumes the saved grouped question', async () => {
+    const account = await conversationAccount(56, ['Tiểu đường', 'Tăng huyết áp']);
+    const answers = [];
+    const triage = () => request(app).post('/api/mobile/checkin/triage').set(account.headers)
+      .send({ checkin_id: account.checkinId, previous_answers: answers, assessment_version: 3,
+        adaptive_questions: true, interview_layout: 'eight_groups' }).expect(200);
+    let next = (await triage()).body;
+    expect(next).toMatchObject({ step: 'compact_symptoms', questionProgress: { current: 1, total: 8 } });
+    for (let i = 0; i < 6 && !next.step.startsWith('compact_timeline'); i++) {
+      const answer = next.step === 'compact_symptoms' ? 'Sưng khớp'
+        : next.step.startsWith('compact_red_flags') ? 'Không có' : 'Vẫn sinh hoạt bình thường';
+      answers.push({ step: next.step, question: next.question, answer });
+      next = (await triage()).body;
+    }
+    expect(next.step).toBe('compact_timeline');
+    expect(next.requiredOptionGroups.map(g => g.length)).toEqual([4, 3]);
+    expect(next.optionsGrouped.map(g => g.key)).toEqual(['onset', 'progression', 'other']);
+    const session = (await request(app).get('/api/mobile/checkin/today').set(account.headers).expect(200)).body.session;
+    expect(session.triage_messages).toEqual(answers);
+    expect((await triage()).body).toEqual(next);
+    expect(session.triage_state.adaptive_payload).toBeUndefined();
+  });
 
   test('an existing compact v1 HTTP interview persists AI choices, resumes unchanged and keeps its eight-group plan', async () => {
     const account = await conversationAccount(56, ['Tiểu đường']);

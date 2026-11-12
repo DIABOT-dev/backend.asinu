@@ -147,6 +147,7 @@ async function triageHandler(pool, req, res) {
     conclusion_format,
     assessment_version,
     adaptive_questions,
+    interview_layout,
     phase_id,
   } = req.body;
   if (!checkin_id)
@@ -181,6 +182,7 @@ async function triageHandler(pool, req, res) {
       (typeof phase_id !== 'string' || !phase_id.trim() || phase_id.length > 160)) ||
     (adaptive_questions !== undefined && typeof adaptive_questions !== 'boolean') ||
     (assessment_version !== undefined && ![2, 3].includes(assessment_version)) ||
+    (interview_layout !== undefined && interview_layout !== 'eight_groups') ||
     (conclusion_format !== undefined && !['structured', 'narrative'].includes(conclusion_format))
   ) {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
@@ -196,11 +198,14 @@ async function triageHandler(pool, req, res) {
         conclusionFormat: conclusion_format,
         assessmentVersion: assessment_version,
         adaptiveQuestions: adaptive_questions,
+        interviewLayout: interview_layout,
         phaseId: phase_id,
       }
     );
     return res.json({ ok: true, ...result });
   } catch (err) {
+    if (err.code === 'CHECKIN_ANSWER_RETRY')
+      return res.status(503).json({ ok: false, code: err.code, error: t('checkin.triage.answer_retry', getLang(req)) });
     if (err.code === 'TRIAGE_CHANGED')
       return res
         .status(409)

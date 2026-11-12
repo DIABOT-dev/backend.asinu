@@ -276,6 +276,72 @@ test('all owned multi-complaint warnings are screened in bounded batches instead
       .every((q) => q.choices.length <= 6)
   ).toBe(true);
   expect(new Set(offered).size).toBe(offered.length);
+  const questions = c.state.compact.questions.filter((q) => q.field === 'red_flags');
+  expect(new Set(questions.map((q) => q.question)).size).toBe(questions.length);
+  expect(questions[1].question).toMatch(/Còn|thêm|tiếp theo/);
+});
+
+test('offline warning batches also use distinct continuation headings and retain every warning', async () => {
+  callTextAi.mockImplementation((params) => {
+    if (
+      params.system.startsWith('You generate ONE') &&
+      JSON.parse(params.prompt).CONTEXT.field === 'red_flags'
+    )
+      throw new Error('synthetic offline');
+    return mockProvider(params);
+  });
+  const c = conversation();
+  await c.complete();
+  const warnings = c.state.compact.questions.filter((q) => q.field === 'red_flags');
+  expect(warnings.length).toBeGreaterThan(1);
+  expect(warnings.every((q) => q.origin === 'fallback')).toBe(true);
+  expect(new Set(warnings.map((q) => q.question)).size).toBe(warnings.length);
+  expect(warnings.flatMap((q) => q.choices.map((o) => o.label))).toEqual(
+    expect.arrayContaining(
+      generateConclusion.mock.calls.at(-1)[0].mappings.flatMap((m) => m.redFlags || [])
+    )
+  );
+});
+
+test('a recorded clarification goal keeps the original warning batch number', async () => {
+  const c = conversation();
+  await c.complete();
+  // Isolate presentation of a stored unresolved batch from triage risk logic.
+  c.state.compact.coverage.warningAnswers[0].status = 'unresolved';
+  const warnings = c.state.compact.questions.filter((q) => q.field === 'red_flags');
+  const view = getCompactNextStep({
+    ...c.input,
+    adaptiveState: c.state,
+    previousAnswers: c.previousAnswers,
+  });
+  expect(view.coverageGoal.warningKeys).toEqual(warnings[0].warningKeys);
+  expect(view.warningBatch).toMatchObject({ index: 1, clarification: true });
+  expect(view.questionGroup.label).toMatch(/Phần 1\//);
+});
+
+test('an already offered duplicate heading remains the canonical wire question when resuming an old phase', async () => {
+  const c = conversation();
+  await c.advance();
+  await c.advance('Đau đầu, sưng gối phải');
+  const first = c.next;
+  await c.advance('Không có');
+  const second = c.state.compact.questions.find((q) => q.step === c.next.step);
+  expect(second.field).toBe('red_flags');
+  second.question = first.question;
+  const calls = callTextAi.mock.calls.length;
+  const resumed = await getNextTriageQuestion({
+    ...c.input,
+    previousAnswers: c.previousAnswers,
+    adaptiveState: c.state,
+  });
+  expect(resumed.question).toBe(first.question);
+  expect(callTextAi).toHaveBeenCalledTimes(calls);
+  expect(() =>
+    validateCompactAnswers(resumed._adaptiveState, [
+      ...c.previousAnswers,
+      { step: resumed.step, question: resumed.question, answer: 'Không có' },
+    ])
+  ).not.toThrow();
 });
 
 test('a selected warning ends immediately without waiting for remaining batches or source questions', async () => {
