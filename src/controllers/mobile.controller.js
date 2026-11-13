@@ -36,13 +36,19 @@ async function createMobileLog(pool, req, res) {
       .json({ ok: false, error: validation.error, details: validation.details });
   }
 
-  const result = await mobileService.createLog(pool, req.user.id, validation.value);
+  const requestKey = req.headers?.['idempotency-key'];
+  if (requestKey !== undefined && (typeof requestKey !== 'string' || !/^[a-zA-Z0-9:_-]{1,120}$/.test(requestKey))) {
+    return res.status(400).json({ ok: false, code: 'INVALID_IDEMPOTENCY_KEY' });
+  }
+  const result = requestKey
+    ? await mobileService.createLog(pool, req.user.id, validation.value, { requestKey })
+    : await mobileService.createLog(pool, req.user.id, validation.value);
 
   if (!result.ok) {
     return res.status(result.statusCode || 500).json(result);
   }
 
-  earlySignalService
+  if (!result.replayed) earlySignalService
     .evaluateAfterNewHealthData(pool, req.user.id, `health-log:${result.logId}`)
     .catch(() => {});
 

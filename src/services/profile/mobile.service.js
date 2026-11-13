@@ -255,15 +255,22 @@ async function checkAndAlertCareCircle(pool, userId, logType, data) {
  * @param {Object} payload - Log payload (validated)
  * @returns {Promise<Object>} - { ok, logId, logType, error }
  */
-async function createLog(pool, userId, payload) {
+async function createLog(pool, userId, payload, { requestKey } = {}) {
   const { updateMissionProgress } = require('../missions/missions.service');
 
   const logType = payload.log_type;
+  if (!VALID_LOG_TYPES.has(logType)) return { ok: false, error: t('error.invalid_log_type'), statusCode: 400 };
   const occurredAt = payload.occurred_at;
   const source = payload.source || 'manual';
   const note = payload.note || null;
-  const metadata = isObject(payload.metadata) ? payload.metadata : {};
   const data = payload.data;
+  const metadata = { ...(isObject(payload.metadata) ? payload.metadata : {}) };
+  // Only the validated request header owns this internal field.
+  delete metadata.request_key;
+  delete metadata.request_fingerprint;
+  if (requestKey) metadata.request_key = requestKey;
+  if (requestKey) metadata.request_fingerprint = require('node:crypto').createHash('sha256')
+    .update(JSON.stringify({ logType, occurredAt, data, note })).digest('hex');
 
   const occurredDate = new Date(occurredAt);
   if (Number.isNaN(occurredDate.getTime())) {
@@ -273,6 +280,20 @@ async function createLog(pool, userId, payload) {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    if (requestKey) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [`mobile-log:${userId}:${requestKey}`]);
+      const previous = await client.query(
+        "SELECT id, log_type, metadata FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') logs_common WHERE user_id=$1 AND metadata->>'request_key'=$2 LIMIT 1", [userId, requestKey]);
+      if (previous.rowCount) {
+        if (previous.rows[0].metadata?.request_fingerprint !== metadata.request_fingerprint) {
+          await client.query('ROLLBACK');
+          return { ok: false, code: 'IDEMPOTENCY_CONFLICT', statusCode: 409 };
+        }
+        await client.query('COMMIT');
+        return { ok: true, logId: previous.rows[0].id, logType: previous.rows[0].log_type, replayed: true };
+      }
+    }
 
     const commonResult = await client.query(
       `INSERT INTO logs_common (user_id, log_type, occurred_at, source, note, metadata)

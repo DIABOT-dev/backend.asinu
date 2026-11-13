@@ -5,6 +5,8 @@ const { requireAuth } = require('../middleware/auth.middleware');
 const { requireAiConsent } = require('../middleware/ai-consent.middleware');
 const aiConsentController = require('../controllers/ai-consent.controller');
 const { chatbotGate } = require('../middleware/chatbot.gate.middleware');
+const appAssistant = require('../controllers/app-assistant.controller');
+const rateLimit = require('express-rate-limit');
 const {
   audioUpload,
   imageUpload,
@@ -77,6 +79,15 @@ const {
 
 function mobileRoutes(pool) {
   const router = express.Router();
+
+  const assistantLimit = rateLimit({ windowMs: 5 * 60 * 1000, max: 15,
+    keyGenerator: req => `app-assistant:${req.user.id}`, standardHeaders: true, legacyHeaders: false,
+    message: { ok: false, code: 'APP_ASSISTANT_RATE_LIMITED' } });
+  const assistantConsent = (req, res, next) => appAssistant.consent(pool, req, res, next);
+  router.post('/assistant/plan', requireAuth, assistantConsent, assistantLimit,
+    bindController(appAssistant.plan, pool));
+  router.post('/assistant/transcribe', requireAuth, assistantConsent, assistantLimit,
+    handleUpload(audioUpload.single('audio')), verifyAudioMagicBytes, bindController(transcribeAudio, pool));
 
   // Logs
   router.post('/logs', requireAuth, bindController(createMobileLog, pool));
