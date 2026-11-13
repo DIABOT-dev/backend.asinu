@@ -84,7 +84,7 @@ function impactMeaning(value) {
     return 'unable';
   if (/chậm hơn|phải nghỉ.*(?:chút|lát)|slower|slowly/u.test(text)) return 'slowed';
   if (
-    /bình thường|như (?:cũ|thường|mọi khi)|vẫn (?:tự )?làm được (?:mọi việc|các việc) (?:hằng ngày|hàng ngày|thường ngày)|usual activities|activities (?:are )?(?:unchanged|normal)|as usual/u.test(
+    /bình thường|như (?:cũ|thường|mọi khi)|vẫn (?:tự )?làm được (?:mọi việc|các việc)(?: sinh hoạt)? (?:hằng ngày|hàng ngày|thường ngày)|usual activities|activities (?:are )?(?:unchanged|normal)|as usual/u.test(
       text
     )
   )
@@ -448,6 +448,15 @@ function validateExtraction(content, context) {
     quoted(context.answer, f.quote) && quoted(f.quote, f.value) &&
     /^(?:(?:tôi|mình|em|cháu)\s+)?(?:không|chưa|no|not)\s/iu.test(textOf(f.value)) &&
     !isUnknown(f.value) && !affirmativeParts(f.value).length));
+  // A situational trigger is not deterioration over time. Preserve its exact
+  // words as an aggravating factor and leave the course for a real answer.
+  parsed.facts = parsed.facts.flatMap((f) => {
+    if (f?.field !== 'progression' ||
+      !/(?:đau.{0,20}hơn|nhức.{0,20}hơn|nặng hơn|pain.{0,20}worse)\s+(?:khi|lúc|mỗi khi|when|with|on)\s/iu.test(f.value || '') ||
+      /ngày càng|càng ngày|mỗi ngày|so với|day by day|getting worse|since yesterday/iu.test(f.value)) return [f];
+    if (parsed.facts.some(other => other?.concern_id === f.concern_id && other.field === 'aggravating')) return [];
+    return [{ ...f, field: 'aggravating', code: undefined }];
+  });
   const pairs = new Set();
   for (const f of parsed.facts) {
     if (!f) return null;
@@ -502,6 +511,13 @@ function validateExtraction(content, context) {
     const supportedShared = [];
     for (const f of parsed.shared_facts) {
       if (f && quoted(context.answer, f.quote)) f.answer_index = context.answer_index;
+      // A source reply already has a reviewed verbatim global answer. Its
+      // optional event taxonomy may be absent; omit only that unclassified
+      // metadata rather than discarding the patient's complete event report.
+      // Do not infer a category, ownership, treatment or measurement.
+      if (context.field === 'source' && f?.field === 'source' && f.code == null &&
+        parsed.global_answer?.relevant === true && quoted(context.answer, f.quote) &&
+        quoted(f.quote, f.value) && (!f.concern_id || ids.has(f.concern_id))) continue;
       if (
         !f ||
         !SHARED_CODES[f.field]?.includes(f.code) ||
@@ -515,6 +531,13 @@ function validateExtraction(content, context) {
       // was measured. Drop this unsupported assertion without losing the
       // independently grounded symptoms and times in a long spoken reply.
       if (f.field === 'measurements_today' && recognized !== f.code) continue;
+      // An unrecognised activity description cannot establish a global impact
+      // code. Omit only that unsupported assertion; keep independently grounded
+      // complaints and times so a focused impact question can clarify it.
+      if (f.field === 'impact' && recognized === null) {
+        if (!parsed.new_concerns.length && !parsed.facts.length) return null;
+        continue;
+      }
       if (f.field === 'impact' && recognized !== f.code) return null;
       if (
         f.field === 'source' &&
@@ -615,7 +638,11 @@ async function extractAnswer(context, attempt = 0, correction = null) {
         ? extractAnswer(
             context,
             1,
-            'The previous extraction failed validation. Use exactly the supplied concern IDs/region keys, one distinct complaint per item, and verbatim quotes from the current answer. Never insert a medical word or paraphrase into a quote. Do not invent a fact for every target; omit a target when the patient only repeats its symptom name without elaboration.'
+            {
+              reason: 'The previous extraction failed validation. Correct this output, not the patient answer. Existing IDs are ONLY those listed below. If that list is empty, every explicitly reported current complaint must be declared in new_concerns using new_1, new_2, etc; facts must reference those IDs, never invented c1/c2 IDs. A name in exact_location is context, not an existing concern ID. Use exact region keys and verbatim current-answer quotes. Omit facts for unelaborated targets. For source, shared_facts is optional; a grounded global_answer with empty arrays is valid. If shared_facts is present every item needs its allowed code.',
+              existing_concern_ids: context.concerns.map(concern => concern.id),
+              previous_extraction: response.content,
+            }
           )
         : null;
     const review = await callTextAi({
@@ -924,7 +951,7 @@ async function refreshCoverage(compact, input) {
         eight_group_interview: grouped(compact),
       };
       extraction = await extractAnswer(context);
-      if (!extraction && grouped(compact) && question.field === 'character') {
+      if (!extraction && grouped(compact) && !done && !isUnknown(answer.answer)) {
         // A technical parsing/review outage is not a reason to ask a patient
         // to describe the same thing again. Leave this answer unprocessed so
         // the saved client draft can retry it without adding another question.
@@ -974,6 +1001,18 @@ async function refreshCoverage(compact, input) {
               question.field === 'clarify'
                 ? incoming
                 : mergeFact(coverage.global[f.field], incoming, f.conflicts_with_previous === true);
+        }
+        // A model may put an explicitly overall activity report on one concern
+        // instead of shared_facts. Reuse its reviewed, verbatim daily-life quote;
+        // never infer overall functioning from one limb or from a symptom alone.
+        if (!coverage.global.impact || coverage.global.impact.status === 'unresolved') {
+          const overall = extraction.facts.find((f) => f.field === 'impact' &&
+            /sinh hoạt|(?:hằng|hàng|thường) ngày|daily|everyday|usual activities/iu.test(f.quote) &&
+            impactMeaning(f.quote) && impactMeaning(f.quote) === impactMeaning(f.value));
+          if (overall) coverage.global.impact = {
+            ...fact(overall.value, 'reported', overall.answer_index, overall.quote),
+            code: impactMeaning(overall.quote),
+          };
         }
         if (Array.isArray(extraction.requested_details)) {
           for (const item of extraction.requested_details) {
@@ -1031,23 +1070,31 @@ async function refreshCoverage(compact, input) {
         }
       }
       if (grouped(compact) && question.field === 'character') {
-        const relevant = extraction?.facts.some(item => DETAILS.includes(item.field));
+        const relevant = extraction?.facts.some(item => DETAILS.includes(item.field) &&
+          question.targets?.includes(item.concern_id));
         const noMore = noFurtherDetail(answer.answer);
+        let descriptionLimited = false;
         for (const id of question.targets || []) {
           const concern = coverage.concerns.find(c => c.id === id);
           if (!concern) continue;
           const replies = compact.questions.slice(0, index + 1).filter(q => q.field === 'character' && q.targets?.includes(id)).length;
-          const acknowledged = extraction?.global_answer?.relevant === true && !relevant && replies >= 2;
+          const acknowledged = !relevant && replies >= 2;
           for (const field of requiredDetails(compact, concern)) {
             // Do not waive a separately justified measurement or safety detail
             // merely because the same open description has been asked twice.
             const openDescription = ['character', 'location'].includes(field) &&
               !concern.blockingDetails?.some(item => item.field === field);
-            if (concernPending(concern, field) && (noMore || (acknowledged && openDescription)))
-              concern.facts[field] = { ...fact(answer.answer, 'unknown', index), resolution: noMore ? 'no_further_detail' : 'answered_without_further_detail' };
+            if (concernPending(concern, field) && (noMore || (acknowledged && openDescription))) {
+              concern.facts[field] = { ...fact(answer.answer, 'unknown', index),
+                resolution: noMore ? 'no_further_detail'
+                  : extraction?.global_answer?.relevant === true ? 'answered_without_further_detail'
+                  : 'not_described_after_clarification' };
+              descriptionLimited = true;
+            }
           }
         }
-        coverage.global.detail_response = fact(answer.answer, relevant || noMore || extraction?.global_answer?.relevant === true ? 'reported' : 'unresolved', index);
+        coverage.global.detail_response = fact(answer.answer,
+          relevant || noMore || descriptionLimited || extraction?.global_answer?.relevant === true ? 'reported' : 'unresolved', index);
       }
     }
     if (question.reportClarification !== undefined) {

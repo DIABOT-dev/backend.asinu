@@ -10,7 +10,7 @@ const { callTextAi } = require('../../src/services/ai/ai.service');
 const { getNextTriageQuestion } = require('../../src/services/checkin/checkin.triage.v2');
 const { getCompactNextStep, validateQuestion, validateCompactAnswers } = require('../../src/services/checkin/compact-interview.service');
 const { readAdaptiveState, protectAdaptiveState } = require('../../src/services/checkin/adaptive-question.service');
-const { providerResponse } = require('../fixtures/compact-interview');
+const { providerResponse, approvedQuestionReview } = require('../fixtures/compact-interview');
 
 const itchOptions = () => [
   { id: 'unaffected', label: 'Ngứa nhẹ nhưng vẫn sinh hoạt bình thường', impact_code: 'normal' },
@@ -24,7 +24,7 @@ beforeEach(() => {
   callTextAi.mockImplementation(async (params) => {
     const payload = JSON.parse(params.prompt), context = payload.CONTEXT;
     if (context.field === 'impact') {
-      if (params.system.startsWith('Review one health intake')) return { content: JSON.stringify({ valid: true, errors: [],
+      if (params.system.startsWith('Review one health intake')) return { content: JSON.stringify({ ...JSON.parse(approvedQuestionReview(params).content),
         impact_codes: reviewerCodes || choices.map(c => ({ id: c.id, code: c.impact_code })),
       }) };
       return { content: JSON.stringify({ field: 'impact',
@@ -106,7 +106,8 @@ test('an off-region impact draft rejected by review is regenerated with the same
     return payload.CONTEXT.field === 'impact' && payload.CORRECTION;
   });
   expect(JSON.parse(retried.prompt).CONTEXT.exact_location).toBe('Da vùng cổ');
-  expect(JSON.parse(retried.prompt).CORRECTION).toEqual(['Mobility choices are unrelated to the reported itch at the neck.']);
+  expect(JSON.parse(retried.prompt).CORRECTION.errors).toEqual(['Mobility choices are unrelated to the reported itch at the neck.']);
+  expect(JSON.parse(retried.prompt).REJECTED_QUESTION.question).toContain('Khớp gối');
 });
 
 test('the same reviewed contextual question survives resume with its exact labels and code mapping', async () => {
@@ -158,6 +159,17 @@ test('an explicit inability remains the strongest selected impact regardless of 
   const flow = await openImpact(); await flow.advance(`${choices[1].label}, ${choices[3].label}`);
   expect(getCompactNextStep(flow.input).state.functionalImpact).toBe('unable');
   expect(flow.input.adaptiveState.compact.coverage.global.impact.codes).toEqual(['slowed', 'unable']);
+});
+
+test('a focused impact question can offer unaffected and one relevant effect without inventing a third choice', async () => {
+  choices = itchOptions().slice(0, 2);
+  const flow = await openImpact();
+  expect(flow.next.questionSource).toBe('ai');
+  expect(flow.next.options).toEqual(expect.arrayContaining(choices.map(choice => choice.label)));
+  expect(flow.input.adaptiveState.compact.questions.at(-1).choices).toHaveLength(2);
+  await flow.advance(choices[1].label);
+  expect(getCompactNextStep(flow.input).state.functionalImpact).toBe('slowed');
+  expect(flow.next.step).toBe('compact_timeline');
 });
 
 test('the server rejects mutually contradictory unaffected and affected choices', async () => {

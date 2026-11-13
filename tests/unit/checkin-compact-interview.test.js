@@ -115,7 +115,7 @@ test('a semantically rejected AI question is regenerated, then replaced by free 
   callTextAi.mockImplementation((p) => p.system.startsWith('Review one') ? { content: '{"valid":false,"errors":["answers do not match question"]}' } : providerResponse(p));
   const result = await getNextTriageQuestion(input());
   expect(result.questionSource).toBe('fallback');
-  expect(callTextAi).toHaveBeenCalledTimes(4);
+  expect(callTextAi).toHaveBeenCalledTimes(6);
 });
 test('forged question text, repeated steps and out-of-order answers are rejected', async () => {
   const first = await getNextTriageQuestion(input());
@@ -202,11 +202,18 @@ test.each(['Anh đang khó chịu thế nào?', 'Bác thấy khó chịu như th
     expect(validateQuestion(JSON.stringify({ ...valid, question }), 'impact', context)).toBeNull();
   }
 );
-test('a narrow chief-symptom list cannot hide missing ordinary choices behind Other', () => {
+test('ordinary symptom coverage is reviewed semantically rather than inferred from a fixed option count', () => {
   const context = { lang: 'vi', addressing: { honorific: 'chú', selfRef: 'cháu' }, previous_questions: [], required_options: [] };
   const valid = JSON.parse(providerResponse({ system: 'fixture', prompt: JSON.stringify({ CONTEXT: { ...context, field: 'symptoms' } }) }).content);
   valid.options = valid.options.slice(0, 2);
-  expect(validateQuestion(JSON.stringify(valid), 'symptoms', context)).toBeNull();
+  const { buildAnswerContract, questionReviewAccepted } = require('../../src/services/checkin/question-answer-contract.service');
+  context.answer_contract = buildAnswerContract({ ...context, field: 'symptoms' });
+  const question = validateQuestion(JSON.stringify(valid), 'symptoms', context);
+  expect(question).not.toBeNull();
+  const review = JSON.parse(providerResponse({ system: 'Review one health intake', prompt: JSON.stringify({ CONTEXT: context, QUESTION: question }) }).content);
+  expect(questionReviewAccepted(question, review, context)).toBe(true);
+  review.ordinary_answers_covered = false;
+  expect(questionReviewAccepted(question, review, context)).toBe(false);
 });
 test('mental wellbeing is not phrased as an anatomical body region', () => {
   const context = { lang: 'vi', addressing: { honorific: 'ông', selfRef: 'cháu' }, previous_questions: [], required_options: [] };

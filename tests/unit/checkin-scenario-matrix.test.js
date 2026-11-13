@@ -80,7 +80,7 @@ let active;
 function provider(params) {
   const ctx = JSON.parse(params.prompt).CONTEXT;
   if (params.system.startsWith('Review patient fact')) return { content: 'APPROVE' };
-  if (params.system.startsWith('Review one')) return { content: '{"valid":true,"errors":[]}' };
+  if (params.system.startsWith('Review one')) return require('../fixtures/compact-interview').approvedQuestionReview(params);
   if (params.system.startsWith('Extract explicitly')) {
     if (ctx.field === 'symptoms') {
       const existing = new Map(ctx.concerns.map((c) => [c.label, c.id]));

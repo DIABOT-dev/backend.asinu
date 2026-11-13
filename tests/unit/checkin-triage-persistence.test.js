@@ -48,7 +48,8 @@ function poolFor() {
   };
   const pool = {
     query: jest.fn(async (sql, args = []) => {
-      if (sql.includes('SELECT * FROM health_checkins WHERE id')) return { rows: [{ ...session }] };
+      if (sql.includes('SELECT * FROM health_checkins WHERE id') || sql.startsWith('SELECT id, user_id, triage_state'))
+        return { rows: args[0] === session.id && args[1] === session.user_id ? [{ ...session }] : [] };
       if (sql.includes('SELECT uop.*'))
         return { rows: [{ birth_year: 1991, gender: 'Nam', medical_conditions: [], lang: 'vi' }] };
       if (sql.includes('RETURNING id') && sql.includes('triage_state = $3')) {
@@ -193,6 +194,37 @@ test('two simultaneous identical submissions share the pending response', async 
   release({ ...completed });
   expect(await first).toEqual(await second);
   expect(getNextTriageQuestion).toHaveBeenCalledTimes(1);
+});
+
+test('AI-wait polls share one operation, and a different account cannot join it', async () => {
+  const { pool } = poolFor();
+  let release;
+  getNextTriageQuestion.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  const options = { waitForAi: true, phaseId: 'initial:12' };
+  const first = processTriageStep(pool, 7, 12, [], 'vi', options);
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  const polls = Array.from({ length: 5 }, () => processTriageStep(pool, 7, 12, [], 'vi', options));
+  await expect(processTriageStep(pool, 7, 12, [{ step: 'symptoms', question: 'Forged concurrent question', answer: 'Other input' }], 'vi', options))
+    .rejects.toMatchObject({ code: 'TRIAGE_CHANGED' });
+  await expect(processTriageStep(pool, 8, 12, [], 'vi', options)).rejects.toMatchObject({ code: 'SESSION_NOT_FOUND' });
+  release({ isDone: false, question: 'Synthetic question', step: 'symptoms', options: ['Synthetic option'] });
+  const accepted = await first;
+  expect(await Promise.all(polls)).toEqual(Array(5).fill(accepted));
+  expect(getNextTriageQuestion).toHaveBeenCalledTimes(1);
+  expect(pool.query.mock.calls.filter(([sql]) => sql.includes('triage_state = $3'))).toHaveLength(1);
+});
+
+test('a cancelled phase cannot save its late AI result', async () => {
+  const { pool, session } = poolFor();
+  let release;
+  getNextTriageQuestion.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  const pending = processTriageStep(pool, 7, 12, [], 'vi', { waitForAi: true, phaseId: 'initial:12' });
+  const checked = expect(pending).rejects.toMatchObject({ code: 'TRIAGE_CHANGED' });
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  session.triage_state = { phase_id: 'synthetic-cancelled-phase' };
+  release({ isDone: false, question: 'Late question', step: 'symptoms', options: [] });
+  await checked;
+  expect(pool.query.mock.calls.filter(([sql]) => sql.includes('UPDATE health_checkins'))).toHaveLength(0);
 });
 
 test('an optional context-store failure does not fail the question API', async () => {

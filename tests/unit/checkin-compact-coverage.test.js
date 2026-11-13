@@ -29,7 +29,8 @@ const { providerResponse, options } = require('../fixtures/compact-interview');
 let extract;
 function mockProvider(params) {
   const context = JSON.parse(params.prompt).CONTEXT;
-  if (params.system.startsWith('Review patient fact') || params.system.startsWith('Review one'))
+  if (params.system.startsWith('Review one')) return require('../fixtures/compact-interview').approvedQuestionReview(params);
+  if (params.system.startsWith('Review patient fact'))
     return { content: '{"valid":true,"errors":[]}' };
   if (params.system.startsWith('Extract explicitly'))
     return { content: JSON.stringify(extract(context)) };

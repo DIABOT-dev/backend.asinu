@@ -149,6 +149,7 @@ async function triageHandler(pool, req, res) {
     adaptive_questions,
     interview_layout,
     phase_id,
+    wait_for_ai,
   } = req.body;
   if (!checkin_id)
     return res.status(400).json({ ok: false, error: t('error.missing_checkin_id', getLang(req)) });
@@ -178,6 +179,7 @@ async function triageHandler(pool, req, res) {
     );
   if (
     !validAnswers ||
+    (wait_for_ai !== undefined && typeof wait_for_ai !== 'boolean') ||
     (phase_id !== undefined &&
       (typeof phase_id !== 'string' || !phase_id.trim() || phase_id.length > 160)) ||
     (adaptive_questions !== undefined && typeof adaptive_questions !== 'boolean') ||
@@ -188,7 +190,7 @@ async function triageHandler(pool, req, res) {
     return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
   }
   try {
-    const result = await checkinService.processTriageStep(
+    const pending = checkinService.processTriageStep(
       pool,
       req.user.id,
       checkin_id,
@@ -200,10 +202,26 @@ async function triageHandler(pool, req, res) {
         adaptiveQuestions: adaptive_questions,
         interviewLayout: interview_layout,
         phaseId: phase_id,
+        waitForAi: wait_for_ai === true,
       }
     );
+    // The service deduplicates the same user/phase/answer request. Reply before
+    // proxy timeouts; repeating this request waits on the SAME operation.
+    let timer;
+    const waiting = Symbol('processing');
+    let result;
+    try {
+      result = wait_for_ai === true
+        ? await Promise.race([pending, new Promise(resolve => { timer = setTimeout(() => resolve(waiting), 8000); })])
+        : await pending;
+    } finally {
+      clearTimeout(timer);
+    }
+    if (result === waiting) return res.status(202).json({ ok: true, processing: true });
     return res.json({ ok: true, ...result });
   } catch (err) {
+    if (err.code === 'CHECKIN_QUESTION_RETRY')
+      return res.status(503).json({ ok: false, code: err.code, error: t('checkin.triage.question_retry', getLang(req)) });
     if (err.code === 'CHECKIN_ANSWER_RETRY')
       return res.status(503).json({ ok: false, code: err.code, error: t('checkin.triage.answer_retry', getLang(req)) });
     if (err.code === 'TRIAGE_CHANGED')

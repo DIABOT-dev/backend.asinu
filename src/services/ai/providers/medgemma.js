@@ -87,9 +87,9 @@ async function callMedGemma({
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   // If the caller passed their own signal, forward its abort.
-  if (signal) {
-    signal.addEventListener('abort', () => controller.abort(), { once: true });
-  }
+  const abort = () => controller.abort(signal.reason);
+  if (signal?.aborted) abort();
+  else signal?.addEventListener('abort', abort, { once: true });
 
   const headers = { 'Content-Type': 'application/json' };
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
@@ -110,6 +110,7 @@ async function callMedGemma({
     data = await response.json();
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener('abort', abort);
   }
   const reply =
     data.choices?.[0]?.message?.content ?? data.predictions?.[0]?.content ?? data.text ?? '';
@@ -146,6 +147,7 @@ async function callMedGemmaWithRetry(opts, { maxRetries = DEFAULT_MAX_RETRIES } 
       return await callMedGemma(opts);
     } catch (err) {
       lastErr = err;
+      if (opts.signal?.aborted) throw opts.signal.reason || err;
       logger.warn('medgemma.attempt_failed', { attempt, err });
       if (err.status >= 400 && err.status < 500 && ![408, 429].includes(err.status)) throw err;
     }

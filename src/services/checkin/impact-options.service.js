@@ -20,7 +20,7 @@ function optionMeaning(label, literalMeaning) {
 }
 
 function normalizeImpactChoices(choices, literalMeaning) {
-  if (choices.length < 3 || choices.length > 6) return null;
+  if (choices.length < 2 || choices.length > 6) return null;
   const normalized = choices.map((choice) => ({
     id: choice.id,
     label: choice.label,

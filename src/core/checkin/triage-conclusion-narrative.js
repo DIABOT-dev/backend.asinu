@@ -2,6 +2,7 @@
 
 const { callTextAi } = require('../../services/ai/ai.service');
 const logger = require('../../lib/logger');
+const { checkinAiWaitEnabled } = require('../../services/ai/checkin-wait-policy.service');
 const {
   buildConclusionFacts,
   validateBlock,
@@ -287,7 +288,7 @@ async function generateNarrativeConclusion(state, profile, lang = 'vi', context 
   let narrative,
     source = 'ai';
   const started = Date.now();
-  const deadline = started + 60_000;
+  const deadline = checkinAiWaitEnabled() ? Infinity : started + 60_000;
   let requests = 0,
     tokens = 0,
     completionTokens = 0,

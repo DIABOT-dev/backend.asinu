@@ -81,7 +81,18 @@ const questions = {
   source: 'Trước lúc khó chịu, {h} có gặp việc nào dưới đây không?',
   associated: 'Ngoài những điều đã kể, {h} có thay đổi nào khác không?',
 };
+function approvedQuestionReview(params) {
+  const { CONTEXT: context, QUESTION: question } = JSON.parse(params.prompt);
+  const contract = context.answer_contract;
+  return { content: JSON.stringify({ valid: true, errors: [], ...(contract ? {
+    question_focus: contract.focus,
+    ordinary_answers_covered: true,
+    choice_checks: question.choices.map(choice => ({ id: choice.id, answer_kind: contract.focus,
+      answers_question: true, context_relevant: true, not_repeated: true, reason: 'Synthetic approved answer fits this question' })),
+  } : {}) }) };
+}
 function providerResponse(params) {
+  if (params.system.startsWith('Review one health intake')) return approvedQuestionReview(params);
   if (
     params.system.startsWith('Review one health intake') ||
     params.system.startsWith('Review patient fact')
@@ -167,4 +178,4 @@ function providerResponse(params) {
     }),
   };
 }
-module.exports = { options, providerResponse };
+module.exports = { options, providerResponse, approvedQuestionReview };

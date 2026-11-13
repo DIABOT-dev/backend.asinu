@@ -2,6 +2,7 @@
   "checkin.adaptive.other": "Other, type or speak your answer",
   "checkin.adaptive.unknown": "Not sure",
   "checkin.triage.answer_retry": "Asinu could not finish reading your answer. Your answer is kept; tap Retry to send it again.",
+  "checkin.triage.question_retry": "Asinu could not prepare a suitable question. Your previous answers are kept; tap Retry.",
   "checkin.adaptive.no_more": "Nothing else to add",
   "checkin.adaptive.open_question": "Could you tell Asinu more about “{{answer}}”?",
   "careCircle.relationship.relSon": "Son",

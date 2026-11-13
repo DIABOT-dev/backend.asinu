@@ -47,6 +47,8 @@ const checkinCallService = require('../checkin-call/checkin-call.service');
 const { createCancelCheckpoint, publicCheckinSession } = require('./checkin-cancellation.service');
 const { isRoutineMonitoringCheckin } = require('./checkin-inactivity.policy');
 const { buildPatientContext } = require('./patient-context.service');
+const { withCheckinAiWait } = require('../ai/checkin-wait-policy.service');
+const { phaseIdOf } = require('./checkin-cancellation.service');
 const console = { log: logger.debug, error: logger.error, warn: logger.warn };
 
 function evaluateEarlySignalAfterSymptoms(pool, userId, checkinId, answers, sessionDate, canonicalSymptoms) {
@@ -582,6 +584,7 @@ async function getRecentHealthContext(pool, userId) {
  * Process one triage step. Returns next question or final summary.
  */
 const triageRequests = new Map();
+const waitingTriagePhases = new Map();
 function triageFingerprint(answers, lang) {
   // JSONB changes object key order on a database round trip. Compare the
   // interview fields in a fixed order so resuming cannot invalidate a result.
@@ -597,8 +600,11 @@ async function processTriageStep(
   requestLang = null,
   options = {}
 ) {
-  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}:${options.conclusionFormat || 'structured'}:${options.assessmentVersion || 'legacy'}:${options.adaptiveQuestions === true ? 'adaptive' : 'fixed'}:${options.phaseId || 'unscoped'}`;
+  const key = `${userId}:${checkinId}:${triageFingerprint(previousAnswers, requestLang)}:${options.conclusionFormat || 'structured'}:${options.assessmentVersion || 'legacy'}:${options.adaptiveQuestions === true ? 'adaptive' : 'fixed'}:${options.phaseId || 'unscoped'}:${options.waitForAi === true ? 'waiting' : 'bounded'}`;
   if (triageRequests.has(key)) return triageRequests.get(key);
+  const waitingPhase = options.waitForAi === true ? `${userId}:${checkinId}:${options.phaseId || 'unscoped'}` : null;
+  if (waitingPhase && waitingTriagePhases.has(waitingPhase))
+    throw Object.assign(new Error('Another answer is being processed for this phase'), { code: 'TRIAGE_CHANGED', statusCode: 409 });
   const pending = processTriageStepOnce(
     pool,
     userId,
@@ -625,10 +631,12 @@ async function processTriageStep(
     return result;
   });
   triageRequests.set(key, pending);
+  if (waitingPhase) waitingTriagePhases.set(waitingPhase, pending);
   try {
     return await pending;
   } finally {
     if (triageRequests.get(key) === pending) triageRequests.delete(key);
+    if (waitingPhase && waitingTriagePhases.get(waitingPhase) === pending) waitingTriagePhases.delete(waitingPhase);
   }
 }
 
@@ -739,9 +747,7 @@ async function processTriageStepOnce(
     previousAnswers.some((item) =>
       require('../../core/checkin/triage-detail-questions').isDetailedStep(item.step)
     );
-  const result =
-    cachedResult ||
-    (await getNextTriageQuestion({
+  const generateNext = () => getNextTriageQuestion({
       status: isFollowUpPhase
         ? session.current_status || session.initial_status
         : session.initial_status,
@@ -769,7 +775,17 @@ async function processTriageStepOnce(
       bodyLocationOther: session.body_location_other || null,
       pool,
       userId,
-    }));
+    });
+  const result = cachedResult || await (options.waitForAi
+    ? withCheckinAiWait(generateNext, async () => {
+      const active = await pool.query(
+        'SELECT id, user_id, triage_state, occurrence_started_at, created_at FROM health_checkins WHERE id=$1 AND user_id=$2',
+        [checkinId, userId]
+      );
+      if (!active.rows[0] || phaseIdOf(active.rows[0]) !== currentPhaseId)
+        throw Object.assign(new Error('Check-in phase changed'), { code: 'TRIAGE_CHANGED', statusCode: 409 });
+    })
+    : generateNext());
 
   const nextAdaptive = result._adaptiveState || adaptiveState;
   delete result._adaptiveState;
@@ -1023,7 +1039,14 @@ async function reactToTriageResult(pool, userId, checkinId, result, options = {}
       const followUpHours = result.followUpHours || 3;
       await pool.query(
         `UPDATE health_checkins SET
-           flow_state      = CASE WHEN flow_state = 'monitoring' THEN 'follow_up' ELSE flow_state END,
+           flow_state      = CASE
+             WHEN flow_state = 'monitoring' THEN 'follow_up'
+             WHEN flow_state = 'high_alert'
+               AND triage_state->>'phase' = 'initial'
+               AND COALESCE(triage_state->>'previous_severity','') NOT IN ('high','emergency')
+               AND NOT COALESCE(emergency_triggered,false)
+             THEN 'follow_up'
+             ELSE flow_state END,
            current_status  = COALESCE(current_status, 'tired'),
            next_checkin_at = LEAST(next_checkin_at, $1),
            updated_at      = NOW()

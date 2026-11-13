@@ -8,6 +8,7 @@ const {
   generateNarrativeConclusion,
 } = require('../../src/core/checkin/triage-conclusion-narrative');
 const { conclusionSpeech } = require('../../src/core/checkin/triage-conclusion-speech');
+const { withCheckinAiWait } = require('../../src/services/ai/checkin-wait-policy.service');
 const state = {
   allSymptoms: ['khó ngủ'],
   currentSymptoms: ['khó ngủ'],
@@ -219,4 +220,19 @@ test('an exhausted AI deadline does not start another request or fabricate conte
   } finally {
     clock.mockRestore();
   }
+});
+
+test('the interactive wait policy accepts a valid conclusion after the former 60-second deadline', async () => {
+  let now = 1000;
+  const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+  try {
+    callTextAi.mockImplementationOnce(async () => {
+      now += 125000;
+      return { content: prose(), finishReason: 'stop' };
+    });
+    const result = await withCheckinAiWait(() => generateNarrativeConclusion(state, profile), async () => {});
+    expect(result.conclusionSource).toBe('ai');
+    expect(result.narrative).toContain('khó ngủ');
+    expect(result.speechText).toBe(conclusionSpeech(result));
+  } finally { clock.mockRestore(); }
 });

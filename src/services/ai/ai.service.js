@@ -10,6 +10,7 @@ const { assertAiConsent } = require('./ai-consent.service');
  */
 
 const medgemmaProvider = require('./providers/medgemma');
+const { waitForCheckinAi } = require('./checkin-wait-policy.service');
 
 // If MedGemma is configured but the provider flag was omitted, prefer the
 // configured clinical endpoint. An implicit OpenAI fallback made production
@@ -31,7 +32,11 @@ const CLINICAL_PROVIDER = (
  *   - jsonMode: boolean (optional, OpenAI only)
  * @returns {Promise<{ content: string, usage: Object, provider: string, model: string }>}
  */
-async function callTextAi({
+async function callTextAi(params) {
+  return waitForCheckinAi(params, callTextAiOnce);
+}
+
+async function callTextAiOnce({
   system,
   prompt,
   messages,
@@ -44,6 +49,7 @@ async function callTextAi({
   strictProvider = false,
   timeoutMs,
   maxRetries,
+  signal,
 }) {
   await assertAiConsent();
   const selectedProvider = String(provider || CLINICAL_PROVIDER).toLowerCase();
@@ -78,6 +84,7 @@ async function callTextAi({
         maxTokens: maxTokens || 800,
         jsonMode,
         ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+        ...(signal ? { signal } : {}),
       },
       maxRetries !== undefined ? { maxRetries } : undefined
     );
@@ -126,7 +133,7 @@ async function callTextAi({
     temperature: temperature !== undefined ? temperature : 0.7,
     max_tokens: maxTokens || 500,
     ...(jsonMode && { response_format: { type: 'json_object' } }),
-  });
+  }, signal ? { signal } : undefined);
 
   const content = response.choices?.[0]?.message?.content || '';
   const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };

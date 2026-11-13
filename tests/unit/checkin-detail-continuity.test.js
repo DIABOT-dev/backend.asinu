@@ -373,7 +373,7 @@ test('new eight-group symptom choices are generated from patient context without
     exact_location: 'Da chân phải',
   });
   expect(context.reference_symptoms).toBeUndefined();
-  expect(params.system).toContain('There is no fixed symptom menu to copy');
+  expect(params.system).toMatch(/no fixed (?:symptom )?menu/i);
   expect(params).toMatchObject({ provider: 'medgemma', strictProvider: true });
 });
 

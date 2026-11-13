@@ -19,6 +19,7 @@ const {
   updatePreferences,
 } = require('../services/notification/smart.schedule.service');
 const { t, getLang } = require('../i18n');
+const { enabled: reminderAssistantEnabled } = require('../services/notification/reminder-assistant.service');
 
 /**
  * POST /api/mobile/test-notification
@@ -198,7 +199,7 @@ async function markAllAsRead(pool, req, res) {
 async function getNotificationPreferences(pool, req, res) {
   try {
     const prefs = await getPreferences(pool, req.user.id);
-    return res.status(200).json({ ok: true, ...prefs });
+    return res.status(200).json({ ok: true, ...prefs, reminder_assistant_enabled: reminderAssistantEnabled() });
   } catch (err) {
     return res
       .status(500)
@@ -258,7 +259,7 @@ async function updateNotificationPreferences(pool, req, res) {
         health_feed_enabled !== undefined ? Boolean(health_feed_enabled) : undefined,
     });
     const prefs = await getPreferences(pool, req.user.id);
-    return res.status(200).json({ ok: true, ...prefs });
+    return res.status(200).json({ ok: true, ...prefs, reminder_assistant_enabled: reminderAssistantEnabled() });
   } catch (err) {
     return res
       .status(500)

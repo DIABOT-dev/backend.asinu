@@ -22,6 +22,7 @@ beforeEach(() => {
   extractExtra = () => ({});
   callTextAi.mockImplementation(async (params) => {
     const c = JSON.parse(params.prompt).CONTEXT;
+    if (params.system.startsWith('Review one')) return require('../fixtures/compact-interview').approvedQuestionReview(params);
     if (params.system.startsWith('Review')) return { content: '{"valid":true,"errors":[]}' };
     if (params.system.startsWith('Extract explicitly')) {
       const facts = c.field === 'character' ? c.concerns.flatMap(concern => {

@@ -17,7 +17,7 @@ const isUnknown = (value) =>
     lower(value)
   );
 const isNone = (value) =>
-  /^(?:không(?: có)?(?: gì)?|không có gì thêm|không có triệu chứng mới|không có dấu hiệu nào|none|no(?: new symptoms)?|nothing|nothing else to add)$/.test(
+  /^(?:không(?: có)?(?: gì)?|không có gì thêm|không có triệu chứng mới|không có dấu hiệu nào|(?:tôi |mình |em |cháu )?không (?:có |thấy )?(?:triệu chứng|biểu hiện|dấu hiệu)(?: nào)? (?:khác|mới)(?: nữa)?|none|no(?: new symptoms)?|nothing|nothing else to add)$/.test(
     lower(value)
   );
 
@@ -36,9 +36,14 @@ function affirmativeParts(value) {
       }
       const part = token.trim();
       if (!part || /^(?:[,;]+|và|and)$/.test(part) || isNone(part) || isUnknown(part)) continue;
-      const negative = /(?:^|\s)(?:không|chưa|ko|khong|no|not)(?:\s+(?:có|bị|thấy))?\s+/i.test(
-        part
+      // These are affirmative complaints containing "không", not denials.
+      // Mask only the internal negation; an outer "không có ăn không ngon"
+      // still denies the complaint and must remain excluded.
+      const negationScope = part.replace(
+        /(?<!\p{L})(?:ăn\s+không\s+ngon(?:\s+miệng)?|ngủ\s+không\s+(?:ngon(?:\s+giấc)?|sâu(?:\s+giấc)?)|không\s+(?:ăn|ngủ)\s+được)(?!\p{L})/giu,
+        'khó chịu'
       );
+      const negative = /(?:^|\s)(?:không|chưa|ko|khong|no|not)(?:\s+(?:có|bị|thấy))?\s+/i.test(negationScope);
       const describesAbilityOrProgress =
         /(?:không|chưa|not)\s+(?:chịu|thở|nhấc|cử động|tiểu|nuốt|nói|nhìn|nghe|đứng được|đi được|able|đỡ|giảm|nặng hơn|rõ|biết|nhớ)/i.test(
           part
@@ -47,6 +52,7 @@ function affirmativeParts(value) {
         negatedList = true;
         continue;
       }
+      if (negationScope !== part && !negative) negatedList = false;
       if (/^(?:tôi\s+)?(?:có|bị|đang|i have|i am)\s+/i.test(part)) negatedList = false;
       if (!negatedList) parts.push(part);
     }
