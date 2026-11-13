@@ -444,7 +444,6 @@ async function resolveAdaptiveQuestion({
             recent_readings: {
               blood_pressure: (healthContext.recentBP || []).slice(0, 5),
               glucose: (healthContext.recentGlucose || []).slice(0, 5),
-              weight: healthContext.latestWeight || null,
             },
             took_medication_today: healthContext.tookMedicationToday === true,
             recent_checkins: (healthContext.previousCheckins || []).slice(0, 3).map((c) => ({

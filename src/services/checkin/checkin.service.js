@@ -513,7 +513,7 @@ async function getRecentHealthContext(pool, userId) {
     getMedicationAdherenceContext,
   } = require('./symptom-tracker.service');
   const currentSessionDate = checkinDateVN();
-  const [glucoseRes, bpRes, weightRes, checkinsRes, medRes, symptomFreqCtx, medAdherenceCtx] =
+  const [glucoseRes, bpRes, checkinsRes, medRes, symptomFreqCtx, medAdherenceCtx] =
     await Promise.all([
       // Glucose 7 ngày gần nhất (tối đa 5 bản ghi)
       pool.query(
@@ -533,15 +533,6 @@ async function getRecentHealthContext(pool, userId) {
        ORDER BY lc.occurred_at DESC LIMIT 5`,
         [userId]
       ),
-      // Cân nặng gần nhất
-      pool.query(
-        `SELECT lc.id AS log_id, lc.user_id, wl.weight_kg, lc.occurred_at
-       FROM weight_logs wl
-       JOIN logs_common lc ON lc.id = wl.log_id
-       WHERE lc.user_id = $1
-       ORDER BY lc.occurred_at DESC LIMIT 1`,
-        [userId]
-      ),
       // 3 lần checkin gần nhất (không tính hôm nay)
       pool.query(
         `SELECT id, user_id, session_date, initial_status, current_status, flow_state,
@@ -557,7 +548,7 @@ async function getRecentHealthContext(pool, userId) {
       // [G8] Medication log today — check if user took medication
       pool.query(
         `SELECT lc.log_type, lc.occurred_at
-       FROM logs_common lc
+       FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') lc
        WHERE lc.user_id = $1 AND lc.log_type = 'medication'
          AND DATE(lc.occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh') = DATE(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
        LIMIT 1`,
@@ -572,7 +563,6 @@ async function getRecentHealthContext(pool, userId) {
   return {
     recentGlucose: glucoseRes.rows,
     recentBP: bpRes.rows,
-    latestWeight: weightRes.rows[0] || null,
     previousCheckins: checkinsRes.rows,
     tookMedicationToday: medRes.rows.length > 0,
     symptomFrequencyContext: symptomFreqCtx,

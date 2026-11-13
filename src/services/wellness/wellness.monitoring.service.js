@@ -78,6 +78,7 @@ const scoreToStatus = (score, config = DEFAULT_CONFIG) => {
  * @param {string} sessionId - Session ID (optional)
  */
 async function logUserActivity(client, userId, activityType, activityData = {}, sessionId = null) {
+  if (activityType === 'HEALTH_MEASUREMENT' && activityData.type === 'weight') return null;
   const result = await client.query(
     `INSERT INTO user_activity_logs (user_id, activity_type, activity_data, session_id)
      VALUES ($1, $2, $3, $4)
@@ -248,10 +249,6 @@ async function updateDailySummary(client, userId, date, activityType, activityDa
           avg_blood_pressure_systolic = COALESCE((avg_blood_pressure_systolic + $3) / 2, $3),
           avg_blood_pressure_diastolic = COALESCE((avg_blood_pressure_diastolic + $4) / 2, $4)`;
         params.push(activityData.systolic, activityData.diastolic);
-      } else if (activityData.type === 'weight' && activityData.value) {
-        updateQuery = `health_measurements = health_measurements + 1,
-          avg_weight = COALESCE((avg_weight + $3) / 2, $3)`;
-        params.push(activityData.value);
       } else if (activityData.type === 'water' && activityData.volume_ml) {
         updateQuery = `health_measurements = health_measurements + 1,
           total_water_ml = COALESCE(total_water_ml, 0) + $3`;
@@ -297,6 +294,7 @@ async function calculateWellnessScore(client, userId) {
     `SELECT activity_type, activity_data, occurred_at
      FROM user_activity_logs
      WHERE user_id = $1 AND occurred_at >= NOW() - INTERVAL '7 days'
+       AND NOT (activity_type = 'HEALTH_MEASUREMENT' AND COALESCE(activity_data->>'type', '') = 'weight')
      ORDER BY occurred_at DESC`,
     [userId]
   );

@@ -87,19 +87,19 @@ const loadDoctorClinicalContext = async (pool, input) => {
       ),
       pool.query(
         `SELECT logs.systolic, logs.diastolic, logs.pulse, 'mmHg' AS unit, common.occurred_at
-           FROM logs_common common JOIN blood_pressure_logs logs ON logs.log_id = common.id
+           FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') common JOIN blood_pressure_logs logs ON logs.log_id = common.id
           WHERE common.user_id = $1 ORDER BY common.occurred_at DESC LIMIT 30`,
         [appUserId]
       ),
       pool.query(
         `SELECT logs.value, logs.unit, logs.context, logs.meal_tag, common.occurred_at
-           FROM logs_common common JOIN glucose_logs logs ON logs.log_id = common.id
+           FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') common JOIN glucose_logs logs ON logs.log_id = common.id
           WHERE common.user_id = $1 ORDER BY common.occurred_at DESC LIMIT 30`,
         [appUserId]
       ),
       pool.query(
         `SELECT logs.med_name, logs.dose_text, logs.frequency_text, common.occurred_at
-           FROM logs_common common JOIN medication_logs logs ON logs.log_id = common.id
+           FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') common JOIN medication_logs logs ON logs.log_id = common.id
           WHERE common.user_id = $1 ORDER BY common.occurred_at DESC LIMIT 30`,
         [appUserId]
       ),

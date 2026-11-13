@@ -374,9 +374,6 @@ async function getNextTriageQuestionLegacy({
   // ── Health context ──
   const glucoseStr = formatGlucose(healthContext.recentGlucose || []);
   const bpStr = formatBP(healthContext.recentBP || []);
-  const weightStr = healthContext.latestWeight
-    ? `${healthContext.latestWeight.weight_kg} kg`
-    : null;
   const prevCheckinsStr = formatPreviousCheckins(healthContext.previousCheckins || []);
 
   // [G4 FIX] Detect dangerous vital signs and inject alert into context
@@ -409,7 +406,6 @@ async function getNextTriageQuestionLegacy({
   const healthDataLines = [
     glucoseStr && `- Glucose 7 ngày gần đây: ${glucoseStr}`,
     bpStr && `- Huyết áp 7 ngày gần đây: ${bpStr}`,
-    weightStr && `- Cân nặng: ${weightStr}`,
     medAdherenceStr && `- ${medAdherenceStr}`,
   ].filter(Boolean);
 

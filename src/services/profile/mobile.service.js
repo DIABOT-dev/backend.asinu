@@ -13,7 +13,6 @@ const { assessBloodPressure } = require('../../lib/blood-pressure');
 const VALID_LOG_TYPES = new Set([
   'glucose',
   'bp',
-  'weight',
   'water',
   'meal',
   'insulin',
@@ -24,7 +23,6 @@ const VALID_LOG_TYPES = new Set([
 const DETAIL_TABLES = {
   glucose: { table: 'glucose_logs', columns: ['value', 'unit', 'context', 'meal_tag'] },
   bp: { table: 'blood_pressure_logs', columns: ['systolic', 'diastolic', 'pulse', 'unit'] },
-  weight: { table: 'weight_logs', columns: ['weight_kg', 'body_fat_percent', 'muscle_percent'] },
   water: { table: 'water_logs', columns: ['volume_ml'] },
   meal: {
     table: 'meal_logs',
@@ -47,7 +45,6 @@ const DETAIL_TABLES = {
 const MISSION_MAPPING = {
   glucose: { key: 'log_glucose', goal: 2 },
   bp: { key: 'log_bp', goal: 2 },
-  weight: { key: 'log_weight', goal: 1 },
   water: { key: 'log_water', goal: 4 },
   meal: { key: 'log_meal', goal: 3 },
   insulin: { key: 'log_insulin', goal: 1 },
@@ -76,14 +73,6 @@ async function insertDetailLog(client, logType, logId, data) {
         `INSERT INTO blood_pressure_logs (log_id, systolic, diastolic, pulse, unit)
          VALUES ($1, $2, $3, $4, $5)`,
         [logId, data.systolic, data.diastolic, data.pulse || null, data.unit || 'mmHg']
-      );
-      break;
-    }
-    case 'weight': {
-      await client.query(
-        `INSERT INTO weight_logs (log_id, weight_kg, body_fat_percent, muscle_percent)
-         VALUES ($1, $2, $3, $4)`,
-        [logId, data.weight_kg, data.body_fat_percent || null, data.muscle_percent || null]
       );
       break;
     }
@@ -374,7 +363,7 @@ async function getRecentLogs(pool, userId, options = {}) {
 
       const commonResult = await pool.query(
         `SELECT id, log_type, occurred_at, source, note, metadata, created_at
-         FROM logs_common
+         FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') logs_common
          WHERE user_id = $1
          ORDER BY occurred_at DESC
          ${fetchAll ? '' : 'LIMIT $2'}`,
@@ -416,7 +405,7 @@ async function getRecentLogs(pool, userId, options = {}) {
 
     const result = await pool.query(
       `SELECT c.id, c.log_type, c.occurred_at, c.source, c.note, c.metadata, c.created_at, ${detailColumns}
-       FROM logs_common c
+       FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') c
        JOIN ${detail.table} d ON d.log_id = c.id
        WHERE c.user_id = $1 AND c.log_type = $2
        ORDER BY c.occurred_at DESC
@@ -457,7 +446,7 @@ async function getTodayLogs(pool, userId, options = {}) {
 
       const commonResult = await pool.query(
         `SELECT id, log_type, occurred_at, source, note, metadata, created_at
-         FROM logs_common
+         FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') logs_common
          WHERE user_id = $1 AND ${todayCondition}
          ORDER BY occurred_at DESC`,
         [userId]
@@ -504,7 +493,7 @@ async function getTodayLogs(pool, userId, options = {}) {
 
     const result = await pool.query(
       `SELECT c.id, c.log_type, c.occurred_at, c.source, c.note, c.metadata, c.created_at, ${detailColumns}
-       FROM logs_common c
+       FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') c
        JOIN ${detail.table} d ON d.log_id = c.id
        WHERE c.user_id = $1 AND c.log_type = $2 AND ${todayCondition}
        ORDER BY c.occurred_at DESC`,

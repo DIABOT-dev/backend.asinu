@@ -203,7 +203,7 @@ const loadPatientProfile = async (pool, req) => {
   const [bloodPressure, glucose, medications, symptoms] = await Promise.all([
     pool.query(
       `SELECT common.occurred_at, logs.systolic, logs.diastolic, logs.pulse, logs.unit
-         FROM logs_common common
+         FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') common
          JOIN blood_pressure_logs logs ON logs.log_id = common.id
         WHERE common.user_id = $1
         ORDER BY common.occurred_at DESC LIMIT 90`,
@@ -211,7 +211,7 @@ const loadPatientProfile = async (pool, req) => {
     ),
     pool.query(
       `SELECT common.occurred_at, logs.value, logs.unit, logs.context, logs.meal_tag
-         FROM logs_common common
+         FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') common
          JOIN glucose_logs logs ON logs.log_id = common.id
         WHERE common.user_id = $1
         ORDER BY common.occurred_at DESC LIMIT 90`,
@@ -220,7 +220,7 @@ const loadPatientProfile = async (pool, req) => {
     pool.query(
       `SELECT logs.med_name, logs.dose_text,
               logs.frequency_text, common.occurred_at
-         FROM logs_common common
+         FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') common
          JOIN medication_logs logs ON logs.log_id = common.id
         WHERE common.user_id = $1
         ORDER BY common.occurred_at DESC LIMIT 150`,

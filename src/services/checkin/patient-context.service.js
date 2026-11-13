@@ -89,6 +89,7 @@ function renderPatientContext({
   history.forEach((row) => assertOwner(row, owner));
   (healthContext.recentBP || []).forEach((row) => assertOwner(row, owner));
   (healthContext.recentGlucose || []).forEach((row) => assertOwner(row, owner));
+  // Old cached payloads remain subject to ownership checks, but are not rendered.
   assertOwner(healthContext.latestWeight, owner);
   memories.forEach((row) => assertOwner(row, owner));
   medicines.forEach((row) => assertOwner(row, owner, 'patient_user_id'));
@@ -284,16 +285,6 @@ function renderPatientContext({
       'blood_glucose',
       { value: row.value, unit: row.unit || null, context: row.context || null }
     );
-  if (healthContext.latestWeight) {
-    const row = healthContext.latestWeight;
-    entry(
-      `weight_logs:${row.log_id || 'record'}`,
-      row.occurred_at,
-      'measurement_at_recorded_time_only',
-      'weight_kg',
-      row.weight_kg
-    );
-  }
   for (const row of medicines.slice(0, 6))
     entry(
       `med_items:${row.id}`,

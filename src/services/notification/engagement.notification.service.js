@@ -94,7 +94,7 @@ async function getBatchContexts(pool, userIds) {
       // 2. Log types hôm nay (group by user + type)
       pool.query(
         `SELECT user_id, log_type
-       FROM logs_common
+       FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') logs_common
        WHERE user_id = ANY($1::int[])
          AND occurred_at >= (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
          AND occurred_at < (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date + INTERVAL '1 day'
@@ -106,7 +106,7 @@ async function getBatchContexts(pool, userIds) {
       pool.query(
         `SELECT user_id,
               EXTRACT(EPOCH FROM (NOW() - MAX(occurred_at))) / 3600 AS hours_since_log
-       FROM logs_common
+       FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') logs_common
        WHERE user_id = ANY($1::int[])
        GROUP BY user_id`,
         [ids]
@@ -116,7 +116,7 @@ async function getBatchContexts(pool, userIds) {
       pool.query(
         `SELECT DISTINCT ON (c.user_id)
               c.user_id, d.value, d.unit, c.occurred_at
-       FROM logs_common c
+       FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') c
        JOIN glucose_logs d ON d.log_id = c.id
        WHERE c.user_id = ANY($1::int[])
          AND c.log_type = 'glucose'
@@ -129,7 +129,7 @@ async function getBatchContexts(pool, userIds) {
       pool.query(
         `SELECT DISTINCT ON (c.user_id)
               c.user_id, d.systolic, d.diastolic, c.occurred_at
-       FROM logs_common c
+       FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') c
        JOIN blood_pressure_logs d ON d.log_id = c.id
        WHERE c.user_id = ANY($1::int[])
          AND c.log_type = 'bp'

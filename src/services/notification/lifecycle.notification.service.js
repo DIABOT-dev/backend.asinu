@@ -140,6 +140,7 @@ async function runWeeklyWellnessSummary(pool) {
             COALESCE((
               SELECT COUNT(*) FROM logs l
               WHERE l.user_id = u.id
+                AND l.log_type <> 'weight'
                 AND l.created_at >= NOW() - INTERVAL '7 days'
             ), 0) AS log_count
      FROM users u

@@ -31,7 +31,6 @@ function todayVietnam() {
 const MISSION_TITLES = {
   log_glucose: t('mission.log_glucose'),
   log_bp: t('mission.log_bp'),
-  log_weight: t('mission.log_weight'),
   log_water: t('mission.log_water'),
   log_meal: t('mission.log_meal'),
   log_insulin: t('mission.log_insulin'),
@@ -42,7 +41,6 @@ const MISSION_TITLES = {
 const MISSION_DESCRIPTIONS = {
   log_glucose: t('mission.desc_glucose'),
   log_bp: t('mission.desc_bp'),
-  log_weight: t('mission.desc_weight'),
   log_water: t('mission.desc_water'),
   log_meal: t('mission.desc_meal'),
   log_insulin: t('mission.desc_insulin'),
@@ -61,7 +59,7 @@ async function getMissions(pool, userId) {
   await client.query(
     `UPDATE user_missions
      SET progress = 0, status = 'active', updated_at = NOW()
-     WHERE user_id = $1
+     WHERE user_id = $1 AND mission_key <> 'log_weight'
        AND last_incremented_date IS NOT NULL
        AND last_incremented_date::text < $2`,
     [userId, today]
@@ -70,14 +68,14 @@ async function getMissions(pool, userId) {
   const result = await client.query(
     `SELECT mission_key, status, progress, goal, updated_at
      FROM user_missions
-     WHERE user_id = $1
+     WHERE user_id = $1 AND mission_key <> 'log_weight'
      ORDER BY mission_key ASC`,
     [userId]
   );
 
   // Check cache after reset (reset may or may not happen)
   const cached = await cacheGet(`missions:${userId}`);
-  if (cached && result.rows.length === 0) return cached;
+  if (cached && result.rows.length === 0) return cached.filter(mission => mission.mission_key !== 'log_weight');
 
   // Add titles and descriptions
   const missionsWithTitles = result.rows.map((mission) => ({
@@ -92,6 +90,7 @@ async function getMissions(pool, userId) {
 }
 
 async function updateMissionProgress(clientOrPool, userId, missionKey, delta, opts = {}) {
+  if (missionKey === 'log_weight') return null;
   await cacheDel(`missions:${userId}`, `tree:summary:${userId}`);
   const client = resolveClient(clientOrPool);
   const now = opts.now ? new Date(opts.now) : new Date();
@@ -99,7 +98,7 @@ async function updateMissionProgress(clientOrPool, userId, missionKey, delta, op
   const today = opts.now ? toDateOnly(now) : todayVietnam();
 
   const existing = await client.query(
-    `SELECT * FROM user_missions WHERE user_id = $1 AND mission_key = $2 FOR UPDATE`,
+    `SELECT * FROM user_missions WHERE user_id = $1 AND mission_key <> 'log_weight' AND mission_key = $2 FOR UPDATE`,
     [userId, missionKey]
   );
 
@@ -117,7 +116,7 @@ async function updateMissionProgress(clientOrPool, userId, missionKey, delta, op
            status = $5,
            last_incremented_date = $6,
            updated_at = $7
-       WHERE user_id = $1 AND mission_key = $2
+       WHERE user_id = $1 AND mission_key <> 'log_weight' AND mission_key = $2
        RETURNING *`,
       [userId, missionKey, nextProgress, goal, status, today, now]
     );
@@ -181,7 +180,7 @@ async function getMissionHistory(pool, userId, days = 30) {
         goal,
         created_at
       FROM mission_history
-      WHERE user_id = $1
+      WHERE user_id = $1 AND mission_key <> 'log_weight'
         AND completed_date >= CURRENT_DATE - $2::integer
       ORDER BY completed_date DESC, mission_key ASC`,
       [userId, days]
@@ -212,7 +211,7 @@ async function getMissionStats(pool, userId) {
         MAX(completed_date) as last_completed,
         MIN(completed_date) as first_completed
       FROM mission_history
-      WHERE user_id = $1
+      WHERE user_id = $1 AND mission_key <> 'log_weight'
       GROUP BY mission_key
       ORDER BY mission_key ASC`,
       [userId]

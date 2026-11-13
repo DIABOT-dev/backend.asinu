@@ -229,15 +229,15 @@ async function inputSnapshot(pool, userId) {
       `SELECT c.id, c.log_type, c.occurred_at, c.source, c.note, c.metadata,
               g.value AS glucose_value, g.unit AS glucose_unit,
               bp.systolic, bp.diastolic, bp.pulse,
-              w.weight_kg, w.body_fat_percent, w.muscle_percent,
+
               wa.volume_ml,
               ml.med_name, ml.dose_text, ml.dose_value, ml.dose_unit,
               meal.calories_kcal, meal.carbs_g, meal.protein_g, meal.fat_g, meal.meal_text,
               insulin.insulin_type, insulin.dose_units, insulin.unit AS insulin_unit
-         FROM logs_common c
+         FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') c
          LEFT JOIN glucose_logs g ON g.log_id = c.id
          LEFT JOIN blood_pressure_logs bp ON bp.log_id = c.id
-         LEFT JOIN weight_logs w ON w.log_id = c.id
+
          LEFT JOIN water_logs wa ON wa.log_id = c.id
          LEFT JOIN medication_logs ml ON ml.log_id = c.id
          LEFT JOIN meal_logs meal ON meal.log_id = c.id

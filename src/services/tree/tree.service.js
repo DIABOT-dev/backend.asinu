@@ -42,7 +42,7 @@ function metric(value, unit, recordedAt, status, extra = {}) {
 }
 
 async function getLatestMetrics(pool, userId) {
-  const [glucoseResult, bloodPressureResult, weightResult, waterResult] = await Promise.all([
+  const [glucoseResult, bloodPressureResult, waterResult] = await Promise.all([
     pool.query(
       `SELECT gl.value, gl.unit, lc.occurred_at
        FROM glucose_logs gl
@@ -62,14 +62,6 @@ async function getLatestMetrics(pool, userId) {
       [userId],
     ),
     pool.query(
-      `SELECT wl.weight_kg, wl.body_fat_percent, wl.muscle_percent, lc.occurred_at
-       FROM weight_logs wl
-       JOIN logs_common lc ON lc.id = wl.log_id
-       WHERE lc.user_id = $1 AND lc.occurred_at >= NOW() - INTERVAL '24 hours'
-       ORDER BY lc.occurred_at DESC LIMIT 1`,
-      [userId],
-    ),
-    pool.query(
       `SELECT COALESCE(SUM(wl.volume_ml), 0) AS total_ml,
               MAX(lc.occurred_at) AS occurred_at,
               COUNT(*)::int AS entry_count
@@ -82,14 +74,12 @@ async function getLatestMetrics(pool, userId) {
 
   const glucoseRow = glucoseResult.rows[0];
   const bloodPressureRow = bloodPressureResult.rows[0];
-  const weightRow = weightResult.rows[0];
   const waterRow = waterResult.rows[0];
   const glucoseValue = toFiniteNumber(glucoseRow?.value);
   const systolic = toFiniteNumber(bloodPressureRow?.systolic);
   const diastolic = toFiniteNumber(bloodPressureRow?.diastolic);
   const bpProfile = { dateOfBirth: bloodPressureRow?.date_of_birth, birthYear: bloodPressureRow?.birth_year };
   const bpAssessment = assessBloodPressure(systolic, diastolic, bpProfile);
-  const weight = toFiniteNumber(weightRow?.weight_kg);
   const waterTotal = toFiniteNumber(waterRow?.total_ml);
 
   return {
@@ -103,10 +93,6 @@ async function getLatestMetrics(pool, userId) {
           { systolic, diastolic, pulse: toFiniteNumber(bloodPressureRow.pulse), classification: bpAssessment.displayCategory, classificationStandard: bpAssessment.standard, classificationScope: bpAssessment.scope },
         )
       : null,
-    weight: metric(weight, 'kg', weightRow?.occurred_at || null, 'available', {
-      bodyFatPercent: toFiniteNumber(weightRow?.body_fat_percent),
-      musclePercent: toFiniteNumber(weightRow?.muscle_percent),
-    }),
     water: waterTotal !== null && waterTotal > 0
       ? metric(waterTotal, 'ml', waterRow.occurred_at, 'available', { entryCount: waterRow.entry_count || 0 })
       : null,
@@ -149,11 +135,11 @@ async function getSupportingActivity(pool, userId) {
     pool.query(
       `SELECT COUNT(*) AS completed_count
        FROM user_missions
-       WHERE user_id = $1 AND status = 'completed' AND last_incremented_date = $2`,
+       WHERE user_id = $1 AND mission_key <> 'log_weight' AND status = 'completed' AND last_incremented_date = $2`,
       [userId, todayVN],
     ),
     pool.query(
-      `SELECT COUNT(*) AS total FROM user_missions WHERE user_id = $1`,
+      `SELECT COUNT(*) AS total FROM user_missions WHERE user_id = $1 AND mission_key <> 'log_weight'`,
       [userId],
     ),
   ]);
@@ -166,7 +152,7 @@ async function getSupportingActivity(pool, userId) {
     const streakResult = await pool.query(
       `SELECT completed_date
        FROM mission_history
-       WHERE user_id = $1
+       WHERE user_id = $1 AND mission_key <> 'log_weight'
          AND completed_date >= (NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date - INTERVAL '31 days'
        GROUP BY completed_date
        HAVING COUNT(DISTINCT mission_key) >= $2
@@ -199,7 +185,7 @@ async function getTreeSummary(pool, userId) {
   try {
     const cacheKey = `tree:dashboard:v3:${userId}`;
     const cached = await cacheGet(cacheKey);
-    if (cached) return cached;
+    if (cached?.journalVersion === 2) return cached;
 
     const [healthStatus, checkin, metrics, supporting] = await Promise.all([
       checkinService.getHealthScore(pool, userId),
@@ -210,6 +196,7 @@ async function getTreeSummary(pool, userId) {
 
     const result = {
       ok: true,
+      journalVersion: 2,
       generatedAt: new Date().toISOString(),
       status: healthStatus.level,
       healthStatus: {
@@ -247,12 +234,12 @@ async function getTreeSummary(pool, userId) {
 async function getTreeHistory(pool, userId) {
   try {
     const cached = await cacheGet(`tree:history:${userId}`);
-    if (cached) return cached;
+    if (cached?.journalVersion === 2) return cached;
 
     // Get daily log counts for the past 7 days (Vietnam timezone)
     const result = await pool.query(
       `SELECT DATE(occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh') as log_date, COUNT(*) as count
-       FROM logs_common
+       FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') logs_common
        WHERE user_id = $1
          AND occurred_at >= NOW() - INTERVAL '7 days'
        GROUP BY DATE(occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh')
@@ -286,7 +273,7 @@ async function getTreeHistory(pool, userId) {
       });
     }
 
-    const historyResult = { ok: true, history };
+    const historyResult = { ok: true, journalVersion: 2, history };
     await cacheSet(`tree:history:${userId}`, historyResult, 1800); // 30 min
     return historyResult;
   } catch (err) {

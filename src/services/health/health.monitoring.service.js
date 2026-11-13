@@ -164,7 +164,7 @@ async function checkInactivityAlerts(pool, userId) {
     const result = await pool.query(
       `SELECT MAX(created_at) as last_log_time
        FROM user_logs 
-       WHERE user_id = $1 AND type IN ('glucose', 'blood-pressure', 'weight')`,
+       WHERE user_id = $1 AND type IN ('glucose', 'blood-pressure')`,
       [userId]
     );
 

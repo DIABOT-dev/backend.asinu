@@ -90,7 +90,6 @@ const logBaseSchema = z.object({
   log_type: z.enum([
     'glucose',
     'bp',
-    'weight',
     'water',
     'meal',
     'insulin',
@@ -132,12 +131,6 @@ const bpSchema = z.object({
   unit: z.preprocess(value => typeof value === 'string' && value.trim().toLowerCase() === 'mmhg' ? 'mmHg' : value, z.literal('mmHg').optional()),
 }).refine(value => value.systolic > value.diastolic, { path: ['diastolic'], message: 'Systolic pressure must be greater than diastolic pressure' });
 
-const weightSchema = z.object({
-  weight_kg: numberField(10, 400),
-  body_fat_percent: numberFieldOptional(1, 80),
-  muscle_percent: numberFieldOptional(1, 80),
-});
-
 const waterSchema = z.object({
   volume_ml: numberField(10, 5000),
 });
@@ -178,7 +171,6 @@ const carePulseLogSchema = z.object({
 const logDataSchemas = {
   glucose: glucoseSchema,
   bp: bpSchema,
-  weight: weightSchema,
   water: waterSchema,
   meal: mealSchema,
   insulin: insulinSchema,

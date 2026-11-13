@@ -31,7 +31,7 @@ async function inferHours(pool, userId) {
        EXTRACT(HOUR FROM occurred_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::smallint AS hour,
        log_type,
        COUNT(*)::int AS cnt
-     FROM logs_common
+     FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') logs_common
      WHERE user_id = $1
        AND occurred_at >= NOW() - INTERVAL '60 days'
      GROUP BY hour, log_type`,

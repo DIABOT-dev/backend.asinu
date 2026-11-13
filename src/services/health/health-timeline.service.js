@@ -60,16 +60,16 @@ const rebuildPatientHealthTimeline = async (pool, userId) => {
               bp.systolic, bp.diastolic, bp.pulse,
               glucose.value AS glucose_value, glucose.unit AS glucose_unit,
               medication.med_name, medication.dose_text, medication.frequency_text,
-              weight.weight_kg, weight.body_fat_percent, weight.muscle_percent,
+
               water.volume_ml,
               meal.calories_kcal, meal.carbs_g, meal.protein_g, meal.fat_g, meal.meal_text,
               insulin.insulin_type, insulin.dose_units, insulin.unit AS insulin_unit,
               insulin.timing, insulin.injection_site
-         FROM logs_common common
+         FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') common
          LEFT JOIN blood_pressure_logs bp ON bp.log_id = common.id
          LEFT JOIN glucose_logs glucose ON glucose.log_id = common.id
          LEFT JOIN medication_logs medication ON medication.log_id = common.id
-         LEFT JOIN weight_logs weight ON weight.log_id = common.id
+
          LEFT JOIN water_logs water ON water.log_id = common.id
          LEFT JOIN meal_logs meal ON meal.log_id = common.id
          LEFT JOIN insulin_logs insulin ON insulin.log_id = common.id
@@ -188,10 +188,6 @@ const rebuildPatientHealthTimeline = async (pool, userId) => {
       values.push(`glucose ${log.glucose_value} ${log.glucose_unit || ''}`);
     if (log.med_name)
       values.push(`medication ${log.med_name} ${log.dose_text || ''} ${log.frequency_text || ''}`);
-    if (log.weight_kg != null)
-      values.push(
-        `weight ${log.weight_kg} kg${log.body_fat_percent != null ? `, body fat ${log.body_fat_percent}%` : ''}`
-      );
     if (log.volume_ml != null) values.push(`water ${log.volume_ml} ml`);
     if (log.meal_text || log.calories_kcal != null)
       values.push(

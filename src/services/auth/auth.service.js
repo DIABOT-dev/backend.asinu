@@ -492,7 +492,6 @@ async function createOrUpdateUserWithPhone(pool, phoneNumber) {
 const DEFAULT_MISSIONS = [
   { mission_key: 'log_glucose', goal: 2 },
   { mission_key: 'log_bp', goal: 2 },
-  { mission_key: 'log_weight', goal: 1 },
   { mission_key: 'log_water', goal: 4 },
   { mission_key: 'log_meal', goal: 3 },
   { mission_key: 'log_insulin', goal: 1 },

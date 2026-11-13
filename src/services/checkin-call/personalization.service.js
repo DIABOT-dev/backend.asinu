@@ -231,7 +231,7 @@ async function userNotice(pool, attemptId, userId, requestedLanguage = 'vi') {
     ),
     prefs.use_health && attempt.severity !== 'URGENT'
       ? pool.query(
-          "SELECT c.log_type, c.occurred_at, bp.systolic, bp.diastolic, g.value AS glucose_value, g.unit AS glucose_unit FROM logs_common c LEFT JOIN blood_pressure_logs bp ON bp.log_id = c.id LEFT JOIN glucose_logs g ON g.log_id = c.id WHERE c.user_id = $1 AND c.log_type IN ('blood_pressure','glucose') AND c.occurred_at BETWEEN now() - interval '48 hours' AND now() ORDER BY c.occurred_at DESC, c.id DESC LIMIT 5",
+          "SELECT c.log_type, c.occurred_at, bp.systolic, bp.diastolic, g.value AS glucose_value, g.unit AS glucose_unit FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') c LEFT JOIN blood_pressure_logs bp ON bp.log_id = c.id LEFT JOIN glucose_logs g ON g.log_id = c.id WHERE c.user_id = $1 AND c.log_type IN ('blood_pressure','glucose') AND c.occurred_at BETWEEN now() - interval '48 hours' AND now() ORDER BY c.occurred_at DESC, c.id DESC LIMIT 5",
           [userId]
         )
       : Promise.resolve({ rows: [] }),

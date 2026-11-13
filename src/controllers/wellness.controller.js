@@ -167,7 +167,6 @@ async function getSummary(pool, req, res) {
               diastolic: s.avg_blood_pressure_diastolic,
             }
           : null,
-        avgWeight: s.avg_weight,
         totalWater: s.total_water_ml,
         endOfDayScore: s.end_of_day_score,
         endOfDayStatus: s.end_of_day_status,

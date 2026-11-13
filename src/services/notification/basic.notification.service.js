@@ -210,12 +210,12 @@ const NOT_SENT_TODAY = (type) => `
 const _NO_LOG_TODAY = (logType = null) =>
   logType
     ? `AND NOT EXISTS (
-      SELECT 1 FROM logs_common lc
+      SELECT 1 FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') lc
       WHERE lc.user_id = u.id AND lc.log_type = '${logType}'
         AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
     )`
     : `AND NOT EXISTS (
-      SELECT 1 FROM logs_common lc
+      SELECT 1 FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') lc
       WHERE lc.user_id = u.id
         AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
     )`;
@@ -243,19 +243,19 @@ async function runMorningSummary(pool, hour, minute, explicitOnly = false) {
             JOIN logs_common lc ON lc.id = lb.log_id
             WHERE lc.user_id = u.id ORDER BY lc.occurred_at DESC LIMIT 1) AS last_bp,
            NOT EXISTS (
-             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id
+             SELECT 1 FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') lc WHERE lc.user_id = u.id
                AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
            ) AS no_log_today,
            NOT EXISTS (
-             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id AND lc.log_type = 'glucose'
+             SELECT 1 FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') lc WHERE lc.user_id = u.id AND lc.log_type = 'glucose'
                AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
            ) AS no_glucose_today,
            NOT EXISTS (
-             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id AND lc.log_type = 'bp'
+             SELECT 1 FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') lc WHERE lc.user_id = u.id AND lc.log_type = 'bp'
                AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
            ) AS no_bp_today,
            NOT EXISTS (
-             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id AND lc.log_type = 'medication'
+             SELECT 1 FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') lc WHERE lc.user_id = u.id AND lc.log_type = 'medication'
                AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
            ) AS no_medication_today
     FROM users u
@@ -419,12 +419,12 @@ async function runEveningSummary(pool, hour, minute, explicitOnly = false) {
             WHERE hc.user_id = u.id AND hc.triage_summary IS NOT NULL
             ORDER BY hc.session_date DESC LIMIT 1) AS last_symptom,
            NOT EXISTS (
-             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id
+             SELECT 1 FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') lc WHERE lc.user_id = u.id
                AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
                AND EXTRACT(HOUR FROM lc.occurred_at AT TIME ZONE '${TZ}') >= 17
            ) AS no_evening_log,
            NOT EXISTS (
-             SELECT 1 FROM logs_common lc WHERE lc.user_id = u.id AND lc.log_type = 'medication'
+             SELECT 1 FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') lc WHERE lc.user_id = u.id AND lc.log_type = 'medication'
                AND DATE(lc.occurred_at AT TIME ZONE '${TZ}') = DATE(NOW() AT TIME ZONE '${TZ}')
            ) AS no_medication_today
     FROM users u
@@ -507,7 +507,7 @@ async function getUserStreak(pool, userId) {
   const { rows } = await pool.query(
     `
     SELECT DISTINCT DATE(occurred_at AT TIME ZONE '${TZ}') AS log_date
-    FROM logs_common WHERE user_id = $1 AND occurred_at >= NOW() - INTERVAL '35 days'
+    FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') logs_common WHERE user_id = $1 AND occurred_at >= NOW() - INTERVAL '35 days'
     ORDER BY log_date DESC
   `,
     [userId]
@@ -571,7 +571,7 @@ async function runWeeklyRecap(pool) {
   for (const user of rows) {
     const { rows: logDays } = await pool.query(
       `SELECT COUNT(DISTINCT DATE(occurred_at AT TIME ZONE '${TZ}'))::int AS days
-       FROM logs_common WHERE user_id = $1 AND occurred_at >= NOW() - INTERVAL '7 days'`,
+       FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') logs_common WHERE user_id = $1 AND occurred_at >= NOW() - INTERVAL '7 days'`,
       [user.id]
     );
     const days = logDays[0]?.days || 0;

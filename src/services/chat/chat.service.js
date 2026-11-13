@@ -499,17 +499,6 @@ CHUYỂN TUYẾN ĐẶC BIỆT — nếu ${honorific} nhắc đến:
           : `huyết áp gần nhất ${bp.systolic}/${bp.diastolic} mmHg${pulse}`
       );
     }
-    if (logsSummary.latest_weight) {
-      const w = logsSummary.latest_weight;
-      const bf = w.bodyfat_pct
-        ? isEn
-          ? `, body fat ${w.bodyfat_pct}%`
-          : `, mỡ ${w.bodyfat_pct}%`
-        : '';
-      metrics.push(
-        isEn ? `latest weight ${w.weight_kg} kg${bf}` : `cân nặng gần nhất ${w.weight_kg} kg${bf}`
-      );
-    }
     if (logsSummary.water_today_ml) {
       metrics.push(
         isEn
@@ -772,10 +761,10 @@ async function getChatHistory(pool, userId, limit = null) {
  */
 async function getHealthLogsSummary(pool, userId) {
   try {
-    const [glucoseResult, bpResult, weightResult, waterResult, medResult] = await Promise.all([
+    const [glucoseResult, bpResult, waterResult, medResult] = await Promise.all([
       pool.query(
         `SELECT d.value, d.unit, c.occurred_at
-         FROM logs_common c
+         FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') c
          JOIN glucose_logs d ON d.log_id = c.id
          WHERE c.user_id = $1 AND c.log_type = 'glucose'
            AND c.occurred_at >= NOW() - INTERVAL '7 days'
@@ -784,7 +773,7 @@ async function getHealthLogsSummary(pool, userId) {
       ),
       pool.query(
         `SELECT d.systolic, d.diastolic, d.pulse, c.occurred_at
-         FROM logs_common c
+         FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') c
          JOIN blood_pressure_logs d ON d.log_id = c.id
          WHERE c.user_id = $1 AND c.log_type = 'bp'
            AND c.occurred_at >= NOW() - INTERVAL '7 days'
@@ -792,17 +781,8 @@ async function getHealthLogsSummary(pool, userId) {
         [userId]
       ),
       pool.query(
-        `SELECT d.weight_kg, d.body_fat_percent, c.occurred_at
-         FROM logs_common c
-         JOIN weight_logs d ON d.log_id = c.id
-         WHERE c.user_id = $1 AND c.log_type = 'weight'
-           AND c.occurred_at >= NOW() - INTERVAL '30 days'
-         ORDER BY c.occurred_at DESC LIMIT 1`,
-        [userId]
-      ),
-      pool.query(
         `SELECT SUM(d.volume_ml) as total_ml, c.occurred_at::date as log_date
-         FROM logs_common c
+         FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') c
          JOIN water_logs d ON d.log_id = c.id
          WHERE c.user_id = $1 AND c.log_type = 'water'
            AND c.occurred_at >= NOW() - INTERVAL '1 days'
@@ -812,7 +792,7 @@ async function getHealthLogsSummary(pool, userId) {
       ),
       pool.query(
         `SELECT d.med_name, d.dose_text, d.frequency_text, c.occurred_at
-         FROM logs_common c
+         FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') c
          JOIN medication_logs d ON d.log_id = c.id
          WHERE c.user_id = $1 AND c.log_type = 'medication'
            AND c.occurred_at >= NOW() - INTERVAL '3 days'
@@ -833,7 +813,6 @@ async function getHealthLogsSummary(pool, userId) {
       latest_glucose: glucoseRows[0] || null,
       glucose_trend: glucoseTrend,
       latest_bp: bpResult.rows[0] || null,
-      latest_weight: weightResult.rows[0] || null,
       water_today_ml: waterResult.rows[0]?.total_ml || null,
       recent_medications: decryptHealthRows(userId, 'medication_logs', ['med_name'], medResult.rows),
     };
@@ -841,7 +820,6 @@ async function getHealthLogsSummary(pool, userId) {
     return {
       latest_glucose: null,
       latest_bp: null,
-      latest_weight: null,
       water_today_ml: null,
       recent_medications: [],
     };
