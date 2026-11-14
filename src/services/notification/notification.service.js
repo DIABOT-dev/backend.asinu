@@ -132,15 +132,15 @@ async function markAsRead(pool, notificationId, userId) {
  * @param {number} userId - User ID
  * @returns {Promise<Object>} - { ok, markedCount, error }
  */
-async function markAllAsRead(pool, userId) {
+async function markAllAsRead(pool, userId, { beforeId = null } = {}) {
   try {
     const result = await pool.query(
       `UPDATE notifications 
        SET is_read = true, read_at = NOW()
        WHERE user_id = $1 AND is_read = false
-         AND NOT (type = ANY($2::text[]))
+         AND NOT (type = ANY($2::text[])) AND ($3::bigint IS NULL OR id <= $3)
        RETURNING id`,
-      [userId, getHiddenNotificationTypes()]
+      [userId, getHiddenNotificationTypes(), beforeId]
     );
 
     return { ok: true, markedCount: result.rows.length };
@@ -229,8 +229,10 @@ async function deleteNotification(pool, notificationId, userId) {
  * @param {number} userId - User ID
  * @returns {Promise<void>}
  */
-async function deleteAllNotifications(pool, userId) {
-  await pool.query('DELETE FROM notifications WHERE user_id = $1', [userId]);
+async function deleteAllNotifications(pool, userId, { beforeId = null } = {}) {
+  if (beforeId !== null) {
+    await pool.query('DELETE FROM notifications WHERE user_id=$1 AND id<=$2 AND NOT(type=ANY($3::text[]))', [userId, beforeId, getHiddenNotificationTypes()]);
+  } else await pool.query('DELETE FROM notifications WHERE user_id = $1', [userId]);
 }
 
 module.exports = {

@@ -117,8 +117,8 @@ async function refreshInferredHours(pool, userId, { force = false } = {}) {
 /**
  * Lấy preferences của user + effective hours để trả về frontend.
  */
-async function getPreferences(pool, userId) {
-  await refreshInferredHours(pool, userId);
+async function getPreferences(pool, userId, { refreshInferred = true } = {}) {
+  if (refreshInferred) await refreshInferredHours(pool, userId);
 
   const { rows } = await pool.query(
     `SELECT morning_hour, evening_hour, water_hour,

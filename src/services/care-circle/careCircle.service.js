@@ -773,10 +773,11 @@ async function updateConnectionPermissions(
   connectionId,
   userId,
   newPermissions,
-  lang = 'vi'
+  lang = 'vi',
+  { patch = false, expected = {} } = {}
 ) {
   // The invitation default must not re-enable revoked access in an existing connection.
-  const perms = normalizePermissions(newPermissions, false);
+  const perms = patch ? Object.fromEntries(Object.entries(newPermissions).filter(([key, value]) => ['can_receive_alerts', 'can_ack_escalation'].includes(key) && typeof value === 'boolean')) : normalizePermissions(newPermissions, false);
   try {
     // Only the original requester (the user who invited and set the
     // initial permissions) is allowed to change them later. Without this
@@ -785,10 +786,12 @@ async function updateConnectionPermissions(
     // without the data-owner's consent.
     const result = await pool.query(
       `UPDATE user_connections
-       SET permissions = $1::jsonb, updated_at = NOW()
+       SET permissions = CASE WHEN $4::boolean THEN COALESCE(permissions,'{}'::jsonb) || $1::jsonb ELSE $1::jsonb END, updated_at = NOW()
        WHERE id = $2 AND requester_id = $3 AND status = 'accepted'
+         AND ($5::boolean IS NULL OR COALESCE((permissions->>'can_receive_alerts')::boolean,FALSE)=$5)
+         AND ($6::boolean IS NULL OR COALESCE((permissions->>'can_ack_escalation')::boolean,FALSE)=$6)
        RETURNING id`,
-      [JSON.stringify(perms), connectionId, userId]
+      [JSON.stringify(perms), connectionId, userId, patch, expected.can_receive_alerts ?? null, expected.can_ack_escalation ?? null]
     );
     if (result.rows.length === 0) {
       return { ok: false, error: t('careCircle.connection_not_found', lang), statusCode: 404 };
