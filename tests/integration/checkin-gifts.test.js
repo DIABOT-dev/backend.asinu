@@ -23,6 +23,7 @@ describeDb('server-owned check-in gifts on isolated PostgreSQL tables', () => {
   let pool, app;
   const tables = [
     'users',
+    'user_ai_consents',
     'user_onboarding_profiles',
     'subscription_households',
     'subscription_household_members',
@@ -244,6 +245,19 @@ describeDb('server-owned check-in gifts on isolated PostgreSQL tables', () => {
       (await pool.query('SELECT count(*) FROM gift_events WHERE household_id=$1', [household.id]))
         .rows[0].count
     ).toBe('1');
+  });
+  test('assistant fortune opening is a preview and reuses the original result across retries', async () => {
+    const tools = require('../../src/services/assistant/domain-tools.service');
+    const f = await fixture();
+    await require('../../src/services/ai/ai-consent.service').grantAiConsent(pool, f.user);
+    const assigned = await gifts.assign(pool, f.user, f.session);
+    const plan = await tools.prepare(pool, f.user, { type: 'app_tool', tool: 'gifts.open', parameters: { box: 2 }, evidence: 'mở hộp 2' });
+    expect((await gifts.today(pool, f.user, 'vi')).gift.openedAt).toBeNull();
+    const result = await tools.execute(pool, f.user, plan.action.planToken);
+    const repeat = await tools.execute(pool, f.user, plan.action.planToken);
+    expect(repeat.answer).toBe(result.answer);
+    const saved = (await pool.query('SELECT selected_box,opened_at FROM gift_events WHERE id=$1', [assigned.id])).rows[0];
+    expect(saved.selected_box).toBe(1); expect(saved.opened_at).toBeTruthy();
   });
   test('opening retries keep the first box/result and one CRM event; other households cannot read or claim it', async () => {
     const a = await fixture(),

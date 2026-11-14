@@ -1,0 +1,76 @@
+{
+  "vi": [
+    {
+      "id": "curated-1",
+      "content_id": "curated-1",
+      "title": "Vì sao người lớn tuổi hay giấu triệu chứng?",
+      "message": "Hiểu tâm lý sợ phiền hà của cha mẹ để có cách quan tâm tinh tế và kịp thời hơn.",
+      "localOnly": true
+    },
+    {
+      "id": "curated-2",
+      "content_id": "curated-2",
+      "title": "Checklist hỏi thăm bố mẹ trong 1 phút",
+      "message": "Chỉ cần 1 phút gọi điện hoặc trò chuyện trực tiếp với 5 câu hỏi nhanh này để nắm bắt tình hình sức khỏe của cha mẹ.",
+      "localOnly": true
+    },
+    {
+      "id": "curated-3",
+      "content_id": "curated-3",
+      "title": "Cách nhắc bố mẹ check-in không gây áp lực",
+      "message": "Làm thế nào để nhắc nhở bố mẹ đo huyết áp, đường huyết mà không khiến họ có cảm giác bị kiểm soát ha...",
+      "localOnly": true
+    },
+    {
+      "id": "curated-4",
+      "content_id": "curated-4",
+      "title": "Cách theo dõi sức khỏe bố mẹ 7 ngày đầu",
+      "message": "7 ngày đầu tiên tham gia Asinu là khoảng thời gian vàng để hình thành thói quen theo dõi sức khỏe chủ động.",
+      "localOnly": true
+    },
+    {
+      "id": "curated-5",
+      "content_id": "curated-5",
+      "title": "5 dấu hiệu ở bố mẹ không nên bỏ qua",
+      "message": "Những dấu hiệu nhỏ có thể là cảnh báo sớm của nhiều vấn đề sức khỏe. Hãy chú ý và theo dõi kịp thời!",
+      "localOnly": true
+    }
+  ],
+  "en": [
+    {
+      "id": "curated-1",
+      "content_id": "curated-1",
+      "title": "Why do seniors often hide symptoms?",
+      "message": "Understanding parents' fear of being a burden helps families care for them more thoughtfully and promptly.",
+      "localOnly": true
+    },
+    {
+      "id": "curated-2",
+      "content_id": "curated-2",
+      "title": "1-minute checklist for checking in on parents",
+      "message": "Just 1 minute over a phone call or chat with these 5 quick questions helps you grasp parents' health situation.",
+      "localOnly": true
+    },
+    {
+      "id": "curated-3",
+      "content_id": "curated-3",
+      "title": "How to remind parents to check in without pressure",
+      "message": "How to remind parents to measure blood pressure and glucose without making them feel controlled or anxious.",
+      "localOnly": true
+    },
+    {
+      "id": "curated-4",
+      "content_id": "curated-4",
+      "title": "How to track parents' health during the first 7 days",
+      "message": "The first 7 days on Asinu are the golden period to form active health tracking habits.",
+      "localOnly": true
+    },
+    {
+      "id": "curated-5",
+      "content_id": "curated-5",
+      "title": "5 signs in parents that should never be ignored",
+      "message": "Small signs can be early warnings of larger health issues. Stay alert and follow up promptly!",
+      "localOnly": true
+    }
+  ]
+}

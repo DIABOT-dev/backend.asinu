@@ -83,9 +83,18 @@ function mobileRoutes(pool) {
   const assistantLimit = rateLimit({ windowMs: 5 * 60 * 1000, max: 15,
     keyGenerator: req => `app-assistant:${req.user.id}`, standardHeaders: true, legacyHeaders: false,
     message: { ok: false, code: 'APP_ASSISTANT_RATE_LIMITED' } });
+  const assistantApplyLimit = rateLimit({ windowMs: 5 * 60 * 1000, max: 30,
+    keyGenerator: req => `app-assistant-apply:${req.user.id}`, standardHeaders: true, legacyHeaders: false,
+    message: { ok: false, code: 'APP_ASSISTANT_RATE_LIMITED' } });
   const assistantConsent = (req, res, next) => appAssistant.consent(pool, req, res, next);
   router.post('/assistant/plan', requireAuth, assistantConsent, assistantLimit,
     bindController(appAssistant.plan, pool));
+  router.post('/assistant/medication/apply', requireAuth, assistantConsent, assistantApplyLimit,
+    bindController(appAssistant.applyMedication, pool));
+  router.post('/assistant/profile/apply', requireAuth, assistantConsent, assistantApplyLimit,
+    bindController(appAssistant.applyProfile, pool));
+  router.post('/assistant/tool/apply', requireAuth, assistantConsent, assistantApplyLimit,
+    bindController(appAssistant.applyTool, pool));
   router.post('/assistant/transcribe', requireAuth, assistantConsent, assistantLimit,
     handleUpload(audioUpload.single('audio')), verifyAudioMagicBytes, bindController(transcribeAudio, pool));
 

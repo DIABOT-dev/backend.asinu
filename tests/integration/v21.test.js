@@ -203,6 +203,255 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       await tx.query('UPDATE coin_balances SET balance=$2 WHERE user_id=$1', [id, n]);
     });
   }
+  test('assistant medication: preview is read-only; confirmation creates real schedules and retries only once', async () => {
+    const assistant = require('../../src/services/assistant/medication-assistant.service');
+    const ai = require('../../src/services/ai/ai-consent.service');
+    const id = await user(), other = await user();
+    await ai.grantAiConsent(db, id); await ai.grantAiConsent(db, other);
+    const context = await assistant.contextForPlan(db, id);
+    const action = assistant.prepare([{ type: 'medication_create', name: 'Hapacol', times: ['07:00', '19:00'],
+      evidence: 'nhắc uống Hapacol mỗi ngày 7 giờ sáng và 7 giờ tối' }], context, id);
+    expect((await med.overview(db, id, id)).items).toHaveLength(0);
+    await expect(assistant.execute(db, other, action.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_PLAN_EXPIRED' });
+    const [result, duplicate] = await Promise.all([
+      assistant.execute(db, id, action.planToken), assistant.execute(db, id, action.planToken),
+    ]);
+    expect(result).toMatchObject({ status: 'applied', count: 2 });
+    expect(!!result.replay || !!duplicate.replay).toBe(true);
+    expect(await assistant.execute(db, id, action.planToken)).toMatchObject({ replay: true });
+    const overview = await med.overview(db, id, id);
+    expect(overview.items.map(item => item.display_name)).toEqual(['Hapacol']);
+    expect(overview.schedules.map(row => row.time_local)).toEqual(['07:00', '19:00']);
+    expect((await assistant.contextForPlan(db, other)).schedules).toHaveLength(0);
+    const now = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60000);
+    try { expect(await assistant.execute(db, id, action.planToken)).toMatchObject({ replay: true }); }
+    finally { now.mockRestore(); }
+  });
+  test('assistant medication: moving a medicine preserves its group companions, and stale plans cannot overwrite edits', async () => {
+    const assistant = require('../../src/services/assistant/medication-assistant.service');
+    const id = await user();
+    await require('../../src/services/ai/ai-consent.service').grantAiConsent(db, id);
+    const a = await item(id), b = await item(id, 'SUPPLEMENT');
+    const original = (await med.saveSchedule(db, id, id, null, { time_local: '07:00', item_ids: [a.id, b.id] })).schedule;
+    const context = await assistant.contextForPlan(db, id);
+    const action = assistant.prepare([{ type: 'medication_move', medicine_ref: `m${context.items.findIndex(row => row.id === a.id) + 1}`,
+      schedule_ref: 's1', time_local: '08:00', evidence: 'đổi thuốc huyết áp từ 7 giờ sáng sang 8 giờ sáng' }], context, id);
+    await assistant.execute(db, id, action.planToken);
+    const current = await med.overview(db, id, id);
+    expect(current.schedules.find(row => row.time_local === '07:00').item_ids).toEqual([b.id]);
+    expect(current.schedules.find(row => row.time_local === '08:00').item_ids).toEqual([a.id]);
+    const nextContext = await assistant.contextForPlan(db, id);
+    const stale = assistant.prepare([{ type: 'medication_move', medicine_ref: `m${nextContext.items.findIndex(row => row.id === b.id) + 1}`,
+      schedule_ref: `s${nextContext.schedules.findIndex(row => row.id === original.id) + 1}`, time_local: '09:00', evidence: 'đổi Vitamin D3 sang 9 giờ sáng' }], nextContext, id);
+    await med.saveSchedule(db, id, id, original.id, { time_local: '07:30', item_ids: [b.id] });
+    await expect(assistant.execute(db, id, stale.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_MEDICATION_CONFLICT' });
+    expect((await med.overview(db, id, id)).schedules.map(row => row.time_local)).toEqual(['07:30', '08:00']);
+  });
+  test('assistant medication: expired/revoked previews never write and a failed batch rolls back all new medicines', async () => {
+    const assistant = require('../../src/services/assistant/medication-assistant.service');
+    const ai = require('../../src/services/ai/ai-consent.service');
+    const id = await user(); await ai.grantAiConsent(db, id);
+    const context = await assistant.contextForPlan(db, id);
+    const create = { type: 'medication_create', name: 'Hapacol', times: ['07:00'], evidence: 'Hapacol mỗi ngày 7 giờ sáng' };
+    const plan = assistant.prepare([create], context, id);
+    const now = jest.spyOn(Date, 'now').mockReturnValue(Date.now() + 11 * 60000);
+    try { await expect(assistant.execute(db, id, plan.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_PLAN_EXPIRED' }); }
+    finally { now.mockRestore(); }
+    await ai.revokeAiConsent(db, id);
+    await expect(assistant.execute(db, id, plan.planToken)).rejects.toMatchObject({ code: 'AI_CONSENT_REQUIRED' });
+    await ai.grantAiConsent(db, id);
+    const existing = await item(id);
+    for (const time_local of ['07:00', '12:00', '19:00']) await med.saveSchedule(db, id, id, null, { time_local, item_ids: [existing.id] });
+    const full = assistant.prepare([{ ...create, times: ['08:00', '09:00'] }], await assistant.contextForPlan(db, id), id);
+    await expect(assistant.execute(db, id, full.planToken)).rejects.toMatchObject({ code: 'MED_SCHEDULE_LIMIT' });
+    const overview = await med.overview(db, id, id);
+    expect(overview.items).toHaveLength(1); expect(overview.schedules).toHaveLength(3);
+  });
+  test('assistant tools: data queries calculate only the authenticated owner readings and Vietnam date window', async () => {
+    const tools = require('../../src/services/assistant/app-tools.service');
+    const id = await user(), other = await user();
+    for (const [owner, amount, days] of [[id, 200, 0], [id, 300, 1], [other, 9999, 0]]) {
+      const log = randomUUID();
+      await db.query("INSERT INTO logs_common(id,user_id,log_type,occurred_at,source) VALUES($1,$2,'water',now()-($3*interval '1 day'),'manual')", [log, owner, days]);
+      await db.query('INSERT INTO water_logs(log_id,volume_ml) VALUES($1,$2)', [log, amount]);
+    }
+    expect(await tools.query(db, id, { topic: 'water', range: 'today' }, 'vi')).toContain('200 ml');
+    expect(await tools.query(db, id, { topic: 'water', range: 'week' }, 'vi')).toContain('500 ml');
+    expect(await tools.query(db, id, { topic: 'water', range: 'yesterday' }, 'vi')).toContain('300 ml');
+    expect(await tools.query(db, other, { topic: 'water', range: 'today' }, 'vi')).toContain('9999 ml');
+    for (const [systolic, diastolic] of [[140, 90], [120, 80]]) {
+      const log = randomUUID();
+      await db.query("INSERT INTO logs_common(id,user_id,log_type,occurred_at,source) VALUES($1,$2,'bp',now(),'manual')", [log, id]);
+      await db.query('INSERT INTO blood_pressure_logs(log_id,systolic,diastolic,unit) VALUES($1,$2,$3,\'mmHg\')', [log, systolic, diastolic]);
+    }
+    expect(await tools.query(db, id, { topic: 'blood_pressure', range: 'today', statistic: 'average' }, 'vi')).toContain('130.0/85.0 mmHg');
+    expect(await tools.query(db, id, { topic: 'blood_pressure', range: 'today', statistic: 'max' }, 'vi')).toContain('140/90 mmHg');
+    expect(await tools.query(db, other, { topic: 'blood_pressure', range: 'today' }, 'vi')).toContain('chưa có');
+  });
+  test('assistant tools: reminder pause, resume, deletion and dose acknowledgements reuse real medication services', async () => {
+    const assistant = require('../../src/services/assistant/medication-assistant.service');
+    const id = await user(); await require('../../src/services/ai/ai-consent.service').grantAiConsent(db, id);
+    const event = await dose(id);
+    let context = await assistant.contextForPlan(db, id);
+    const answer = assistant.prepare([{ type: 'medication_answer', dose_ref: `d${context.doses.findIndex(row => row.id === event.id) + 1}`,
+      answer: 'taken', evidence: 'Tôi đã uống thuốc rồi' }], context, id);
+    await assistant.execute(db, id, answer.planToken);
+    expect((await db.query('SELECT state FROM med_dose_events WHERE id=$1', [event.id])).rows[0].state).toBe('TAKEN');
+    expect(await assistant.execute(db, id, answer.planToken)).toMatchObject({ replay: true });
+    for (const state of ['pause', 'resume', 'delete']) {
+      context = await assistant.contextForPlan(db, id);
+      const plan = assistant.prepare([{ type: 'medication_state', schedule_ref: 's1', state, evidence: 'thao tác lịch thuốc' }], context, id);
+      await assistant.execute(db, id, plan.planToken);
+      const next = await assistant.contextForPlan(db, id);
+      if (state === 'delete') expect(next.schedules).toHaveLength(0);
+      else expect(next.schedules[0].active).toBe(state === 'resume');
+    }
+    expect((await db.query('SELECT state FROM med_dose_events WHERE id=$1', [event.id])).rows[0].state).toBe('TAKEN');
+  });
+  test('assistant tools: signed profile confirmations are owner-bound, replay safely and reject concurrent edits', async () => {
+    const profile = require('../../src/services/assistant/profile-assistant.service');
+    const service = require('../../src/services/profile/profile.service');
+    const ai = require('../../src/services/ai/ai-consent.service');
+    const id = await user(), other = await user(); await ai.grantAiConsent(db, id); await ai.grantAiConsent(db, other);
+    const initial = await profile.read(db, id);
+    const action = profile.prepare({ type: 'profile', changes: { name: 'Trần An', chronicDiseases: ['Tiểu đường'] }, evidence: 'sửa hồ sơ' }, initial, id);
+    await expect(profile.execute(db, other, action.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_PLAN_EXPIRED' });
+    const result = await profile.execute(db, id, action.planToken);
+    expect(result.profile.name).toBe('Trần An'); expect(result.profile.chronicDiseases).toContain('Tiểu đường');
+    const version = (await profile.read(db, id)).version;
+    expect(await profile.execute(db, id, action.planToken)).toMatchObject({ replay: true });
+    expect((await profile.read(db, id)).version).toBe(version);
+    const context = await profile.read(db, id);
+    const pending = profile.prepare({ type: 'profile', changes: { chronicDiseases: ['Tiểu đường', 'Cao huyết áp'] }, evidence: 'thêm bệnh nền' }, context, id);
+    await service.updateProfile(db, id, { chronicDiseases: ['Tiểu đường', 'Gút'] });
+    await expect(profile.execute(db, id, pending.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_PROFILE_CONFLICT' });
+    expect((await profile.read(db, id)).chronicDiseases).toEqual(['Tiểu đường', 'Gút']);
+    const revoked = profile.prepare({ type: 'profile', changes: { name: 'An mới' }, evidence: 'sửa tên' }, await profile.read(db, id), id);
+    await ai.revokeAiConsent(db, id);
+    await expect(profile.execute(db, id, revoked.planToken)).rejects.toMatchObject({ code: 'AI_CONSENT_REQUIRED' });
+    expect((await profile.read(db, id)).name).toBe('Trần An');
+  });
+  test('assistant app tools: bounded inbox changes are owner-only and preserve notifications arriving after preview', async () => {
+    const tools = require('../../src/services/assistant/domain-tools.service');
+    const id = await user(), other = await user();
+    await require('../../src/services/ai/ai-consent.service').grantAiConsent(db, id);
+    const add = async (owner, title) => (await db.query("INSERT INTO notifications(user_id,type,title,message) VALUES($1,'system',$2,'Synthetic fixture') RETURNING id", [owner, title])).rows[0].id;
+    const a = await add(id, 'Older notice'), b = await add(other, 'Other owner notice');
+    const plan = await tools.prepare(db, id, { type: 'app_tool', tool: 'notifications.delete_all', parameters: {}, evidence: 'xoá tất cả thông báo' });
+    expect((await db.query('SELECT id FROM notifications WHERE id=$1', [a])).rowCount).toBe(1);
+    const fresh = await add(id, 'Newly arrived notice');
+    await expect(tools.execute(db, other, plan.action.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_PLAN_EXPIRED' });
+    await tools.execute(db, id, plan.action.planToken);
+    await tools.execute(db, id, plan.action.planToken);
+    expect((await db.query('SELECT id FROM notifications WHERE id=ANY($1::bigint[]) ORDER BY id', [[a, b, fresh]])).rows.map(row => String(row.id)))
+      .toEqual([b, fresh].sort((a, b) => Number(a) - Number(b)).map(String));
+  });
+  test('assistant app tools: settings are previews, preserve unrelated preferences and reject stale or revoked requests', async () => {
+    const tools = require('../../src/services/assistant/domain-tools.service');
+    const ai = require('../../src/services/ai/ai-consent.service');
+    const id = await user(); await ai.grantAiConsent(db, id);
+    const request = patch => ({ type: 'app_tool', tool: 'settings.configure', parameters: patch, evidence: 'đổi cài đặt' });
+    const plan = await tools.prepare(db, id, request({ health_feed_enabled: false }));
+    expect((await db.query('SELECT health_feed_enabled FROM user_notification_preferences WHERE user_id=$1', [id])).rows[0].health_feed_enabled).not.toBe(false);
+    await tools.execute(db, id, plan.action.planToken);
+    expect(await tools.execute(db, id, plan.action.planToken)).toMatchObject({ replay: true });
+    expect((await db.query('SELECT reminders_enabled,health_feed_enabled FROM user_notification_preferences WHERE user_id=$1', [id])).rows[0])
+      .toEqual({ reminders_enabled: true, health_feed_enabled: false });
+    const next = await tools.prepare(db, id, request({ reminders_enabled: false }));
+    await ai.revokeAiConsent(db, id);
+    await expect(tools.execute(db, id, next.action.planToken)).rejects.toMatchObject({ code: 'AI_CONSENT_REQUIRED' });
+  });
+  test('assistant app tools: family sharing is directional and changing alert permission cannot restore revoked health access', async () => {
+    const tools = require('../../src/services/assistant/domain-tools.service');
+    const id = await user(), relative = await user();
+    for (const owner of [id, relative]) await require('../../src/services/ai/ai-consent.service').grantAiConsent(db, owner);
+    await db.query("UPDATE users SET display_name=CASE WHEN id=$1 THEN 'Synthetic owner' ELSE 'Synthetic relative' END WHERE id=ANY($2::integer[])", [id, [id, relative]]);
+    await connect(id, relative);
+    const run = async (owner, tool, parameters) => {
+      const plan = await tools.prepare(db, owner, { type: 'app_tool', tool, parameters, evidence: 'explicit synthetic request' });
+      expect(plan.action).toBeDefined(); return tools.execute(db, owner, plan.action.planToken);
+    };
+    await run(id, 'family.share', { target: 'Synthetic relative', enabled: false });
+    await run(id, 'family.permissions', { target: 'Synthetic relative', changes: { can_receive_alerts: false } });
+    let row = (await db.query('SELECT permissions,addressee_can_view_logs FROM user_connections WHERE requester_id=$1 AND addressee_id=$2', [id, relative])).rows[0];
+    expect(row.permissions.can_view_logs).toBe(false); expect(row.permissions.can_receive_alerts).toBe(false);
+    expect((await tools.prepare(db, id, { type: 'app_tool', tool: 'family.health', parameters: { target: 'Synthetic relative' }, evidence: 'xem sức khoẻ' })).answer).toContain('chưa cho phép');
+    await run(relative, 'family.share', { target: 'Synthetic owner', enabled: true });
+    row = (await db.query('SELECT permissions,addressee_can_view_logs FROM user_connections WHERE requester_id=$1 AND addressee_id=$2', [id, relative])).rows[0];
+    expect(row.addressee_can_view_logs).toBe(true); expect(row.permissions.can_view_logs).toBe(false);
+    const forbidden = await tools.prepare(db, relative, { type: 'app_tool', tool: 'family.permissions', parameters: { target: 'Synthetic owner', changes: { can_receive_alerts: true } }, evidence: 'đổi quyền' });
+    expect(forbidden.action).toBeUndefined(); expect(forbidden.clarify).toBeTruthy();
+  });
+  test('assistant app tools: real call settings retain other fields, replay safely, and reject a conflicting manual time change', async () => {
+    const tools = require('../../src/services/assistant/domain-tools.service');
+    const entitlement = require('../../src/services/payment/entitlement.service');
+    const id = await user(); await require('../../src/services/ai/ai-consent.service').grantAiConsent(db, id);
+    const spy = jest.spyOn(entitlement, 'getEntitlement').mockResolvedValue({ callCenterEnabled: true });
+    try {
+      const args = { type: 'app_tool', tool: 'calls.configure', parameters: { checkin_time: '09:30' }, evidence: '9 giờ 30 sáng' };
+      const plan = await tools.prepare(db, id, args);
+      await tools.execute(db, id, plan.action.planToken);
+      expect(await tools.execute(db, id, plan.action.planToken)).toMatchObject({ replay: true });
+      const current = await require('../../src/services/checkin-call/checkin-call.service').settings(db, id);
+      expect(String(current.checkin_time).slice(0, 5)).toBe('09:30'); expect(current.enabled).toBe(false); expect(current.grace_hours).toBe(6);
+      const next = await tools.prepare(db, id, { ...args, parameters: { checkin_time: '10:30' } });
+      await db.query("UPDATE checkin_call_settings SET checkin_time='11:00' WHERE user_id=$1", [id]);
+      await expect(tools.execute(db, id, next.action.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_TOOL_CONFLICT' });
+      const voice = await tools.prepare(db, id, { type: 'app_tool', tool: 'calls.personalize', parameters: { address: 'chu', use_name: true }, evidence: 'gọi chú và dùng tên' });
+      await tools.execute(db, id, voice.action.planToken);
+      expect((await require('../../src/services/checkin-call/personalization.service').preferences(db, id)).preferences)
+        .toMatchObject({ address: 'chu', use_name: true, use_health: false, weather_enabled: false });
+    } finally { spy.mockRestore(); }
+  });
+  test('assistant app tools: renaming and notes retain dose history and medicine group companions', async () => {
+    const tools = require('../../src/services/assistant/domain-tools.service');
+    const id = await user(); await require('../../src/services/ai/ai-consent.service').grantAiConsent(db, id);
+    const first = (await med.createItem(db, id, id, { display_name: 'Synthetic A', kind: 'MEDICINE', source: 'VOICE', confirmed: true })).item;
+    const second = (await med.createItem(db, id, id, { display_name: 'Synthetic B', kind: 'MEDICINE', source: 'VOICE', confirmed: true })).item;
+    const schedule = await med.saveSchedule(db, id, id, null, { time_local: '07:00', item_ids: [first.id, second.id] });
+    const rename = await tools.prepare(db, id, { type: 'app_tool', tool: 'medication.rename', parameters: { target: 'Synthetic A', name: 'Synthetic renamed' }, evidence: 'rename synthetic' });
+    await tools.execute(db, id, rename.action.planToken);
+    const note = await tools.prepare(db, id, { type: 'app_tool', tool: 'medication.configure', parameters: { target: 'Synthetic renamed', time: '07:00', changes: { note: 'Theo hướng dẫn bác sĩ' } }, evidence: 'change note' });
+    await tools.execute(db, id, note.action.planToken);
+    expect(await tools.execute(db, id, note.action.planToken)).toMatchObject({ replay: true });
+    const context = await require('../../src/services/assistant/medication-assistant.service').contextForPlan(db, id);
+    expect(context.items.find(item => item.id === first.id).name).toBe('Synthetic renamed');
+    expect(context.schedules[0].item_ids.sort()).toEqual([first.id, second.id].sort());
+    expect(context.schedules[0].note).toBe('Theo hướng dẫn bác sĩ');
+    const stale = await tools.prepare(db, id, { type: 'app_tool', tool: 'medication.configure', parameters: { target: 'Synthetic renamed', time: '07:00', changes: { note: 'Ghi chú trong bản xem trước' } }, evidence: 'change note' });
+    await med.saveSchedule(db, id, id, schedule.schedule.id, { time_local: '07:00', item_ids: [first.id, second.id], note: 'Ghi chú vừa sửa bằng tay' });
+    await expect(tools.execute(db, id, stale.action.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_TOOL_CONFLICT' });
+    expect((await require('../../src/services/assistant/medication-assistant.service').contextForPlan(db, id)).schedules[0].note).toBe('Ghi chú vừa sửa bằng tay');
+  });
+  test('assistant app tools: a new unfinished interview does not hide the complete previous conclusion or another owner privacy', async () => {
+    const tools = require('../../src/services/assistant/domain-tools.service');
+    const id = await user(), other = await user(), full = 'Kết luận và lời khuyên đầy đủ. '.repeat(140);
+    const session = (await db.query("INSERT INTO health_checkins(user_id,session_date,initial_status,current_status,flow_state) VALUES($1,CURRENT_DATE,'tired','tired','follow_up') RETURNING id", [id])).rows[0];
+    await db.query(`INSERT INTO health_checkin_occurrences(checkin_id,user_id,session_date,initial_status,current_status,flow_state,started_at,completed_at,snapshot_updated_at,triage_summary)
+      VALUES($1,$2,CURRENT_DATE,'tired','tired','monitoring',now()-interval '1 hour',now()-interval '30 minutes',now()-interval '30 minutes',$3)`, [session.id, id, full]);
+    const result = await tools.prepare(db, id, { type: 'app_tool', tool: 'checkin.conclusion', parameters: { speak: true }, evidence: 'đọc kết luận' });
+    expect(result.answer).toBe(full); expect(result.speech).toBe(full); expect(result.answer.length).toBeGreaterThan(3000);
+    const privateResult = await tools.prepare(db, other, { type: 'app_tool', tool: 'checkin.conclusion', parameters: {}, evidence: 'xem kết luận' });
+    expect(privateResult.answer).not.toContain(full.slice(0, 30));
+  });
+  test('assistant app tools: sending a greeting resolves the real catalog and one signed request spends coins once', async () => {
+    const tools = require('../../src/services/assistant/domain-tools.service');
+    const sender = await user(), recipient = await user();
+    await require('../../src/services/ai/ai-consent.service').grantAiConsent(db, sender);
+    await db.query("UPDATE users SET display_name='Synthetic recipient' WHERE id=$1", [recipient]);
+    await connect(sender, recipient); await seedCoins(sender, 100);
+    await db.query("UPDATE greeting_templates SET active=TRUE,approved_by='synthetic-test-only',approved_at=NOW() WHERE code='MISS_YOU'");
+    const catalog = await coins.catalog(db, sender), template = catalog.templates.find(row => row.code === 'MISS_YOU');
+    const plan = await tools.prepare(db, sender, { type: 'app_tool', tool: 'coins.redeem', parameters: { reward: 'GREETING_CARD', recipient: 'Synthetic recipient', template: template.title }, evidence: 'send explicit synthetic card' });
+    expect((await coins.today(db, sender)).balance).toBe(100);
+    expect(plan.action.label).toContain('Synthetic recipient');
+    await tools.execute(db, sender, plan.action.planToken);
+    await tools.execute(db, sender, plan.action.planToken);
+    expect((await coins.today(db, sender)).balance).toBe(100 - catalog.items.find(row => row.code === 'GREETING_CARD').cost);
+    expect((await db.query('SELECT count(*)::int n FROM reward_redemptions WHERE user_id=$1', [sender])).rows[0].n).toBe(1);
+    // This scenario verifies preparation and redemption, not background delivery.
+    await db.query("DELETE FROM v21_message_outbox WHERE subject_id=$1 AND kind='coin_card'", [sender]);
+  });
   async function cardFixture() {
     const sender = await user(),
       recipient = await user();
