@@ -3,6 +3,7 @@
 const entitlementService = require('./entitlement.service');
 const { planDefinition, localizedPlanName } = require('./subscription-catalog');
 const { t } = require('../../i18n');
+const { transaction } = require('../v21/common');
 
 function serviceError(i18nKey, statusCode, code, i18nParams) {
   return Object.assign(new Error(t(i18nKey, 'vi', i18nParams)), {
@@ -82,9 +83,7 @@ async function addProtectedMember(pool, ownerUserId, memberUserId, lang = 'vi') 
     await entitlementService.reconcileExpiredHousehold(pool, priorHousehold);
   }
 
-  const db = await pool.connect();
-  try {
-    await db.query('BEGIN');
+  await transaction(pool, async (db) => {
     const household = await entitlementService.householdOwnedBy(db, ownerUserId);
     await db.query('SELECT id FROM subscription_households WHERE id = $1 FOR UPDATE', [
       household.id,
@@ -108,8 +107,7 @@ async function addProtectedMember(pool, ownerUserId, memberUserId, lang = 'vi') 
     );
     const activeMembership = current.rows[0];
     if (activeMembership && Number(activeMembership.household_id) === Number(household.id)) {
-      await db.query('COMMIT');
-      return listProtectedMembers(pool, ownerUserId, lang);
+      return;
     }
 
     const countResult = await db.query(
@@ -162,24 +160,16 @@ async function addProtectedMember(pool, ownerUserId, memberUserId, lang = 'vi') 
              added_at = NOW(), removed_at = NULL`,
       [household.id, memberUserId, ownerUserId]
     );
-    await db.query('COMMIT');
-    await Promise.all([
-      entitlementService.invalidateEntitlement(memberUserId),
-      entitlementService.invalidateEntitlement(ownerUserId),
-    ]);
-    return listProtectedMembers(pool, ownerUserId, lang);
-  } catch (error) {
-    await db.query('ROLLBACK');
-    throw error;
-  } finally {
-    db.release();
-  }
+  });
+  await Promise.all([
+    entitlementService.invalidateEntitlement(memberUserId),
+    entitlementService.invalidateEntitlement(ownerUserId),
+  ]);
+  return listProtectedMembers(pool, ownerUserId, lang);
 }
 
 async function removeProtectedMember(pool, ownerUserId, memberUserId, lang = 'vi') {
-  const db = await pool.connect();
-  try {
-    await db.query('BEGIN');
+  await transaction(pool, async (db) => {
     const household = await entitlementService.householdOwnedBy(db, ownerUserId);
     if (household.plan_code === 'free' && Number(memberUserId) === Number(ownerUserId)) {
       throw serviceError('error.household_free_self', 409, 'FREE_SELF_REQUIRED');
@@ -203,18 +193,12 @@ async function removeProtectedMember(pool, ownerUserId, memberUserId, lang = 'vi
          SET status = 'active', added_at = NOW(), removed_at = NULL`,
       [ownHousehold.id, memberUserId]
     );
-    await db.query('COMMIT');
-    await Promise.all([
-      entitlementService.invalidateEntitlement(memberUserId),
-      entitlementService.invalidateEntitlement(ownerUserId),
-    ]);
-    return listProtectedMembers(pool, ownerUserId, lang);
-  } catch (error) {
-    await db.query('ROLLBACK');
-    throw error;
-  } finally {
-    db.release();
-  }
+  });
+  await Promise.all([
+    entitlementService.invalidateEntitlement(memberUserId),
+    entitlementService.invalidateEntitlement(ownerUserId),
+  ]);
+  return listProtectedMembers(pool, ownerUserId, lang);
 }
 
 module.exports = { listProtectedMembers, addProtectedMember, removeProtectedMember };
