@@ -109,8 +109,8 @@ async function query(db, userId, action, lang = 'vi') {
     : en ? `${period}: no check-in records yet.` : `${period}, bạn chưa có lần check-in nào.`;
 }
 
-async function prepareReminders(pool, userId, action, lang) {
-  const plan = await reminders.plan(pool, userId, action.evidence, lang, { readOnly: true });
+async function prepareReminders(pool, userId, action, lang, { signal } = {}) {
+  const plan = await reminders.plan(pool, userId, action.evidence, lang, { readOnly: true, signal });
   return plan.status === 'ready' ? { type: 'routine_reminders', planToken: plan.planToken, changes: plan.changes }
     : { status: 'clarify', question: plan.question || (lang === 'en' ? 'Those reminder times are already set.' : 'Các giờ nhắc này đã được đặt rồi nhé.') };
 }

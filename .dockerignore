@@ -19,6 +19,7 @@ tests
 docs
 audit_pack_v1_*
 *.md
+!src/services/assistant/skills/**
 .DS_Store
 coverage
 .nyc_output

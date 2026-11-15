@@ -59,7 +59,7 @@ const source =
   fs.readFileSync(
     path.join(__dirname, '../../db/migrations/127_medication_multiple_drafts.sql'),
     'utf8'
-  );
+  ) + fs.readFileSync(path.join(__dirname, '../../db/migrations/132_assistant_action_receipts.sql'), 'utf8');
 const describeDb = process.env.CHECKIN_TEST_DATABASE_URL ? describe : describe.skip;
 describeDb('V2.1 on isolated real PostgreSQL tables', () => {
   jest.setTimeout(30000);
@@ -247,6 +247,43 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     await expect(assistant.execute(db, id, stale.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_MEDICATION_CONFLICT' });
     expect((await med.overview(db, id, id)).schedules.map(row => row.time_local)).toEqual(['07:30', '08:00']);
   });
+  test('assistant medication: confirmed catalog tags are encrypted, owner-bound and saved only with the reminder; existing tags survive reuse', async () => {
+    const assistant = require('../../src/services/assistant/medication-assistant.service');
+    const purpose = require('../../src/services/v21/medication-purpose.service');
+    const id = await user(), other = await user();
+    await require('../../src/services/ai/ai-consent.service').grantAiConsent(db, id);
+    const productUrl = 'https://dhgpharma.com.vn/vi/san-pham/giam-dau-ha-sot/hapacol-650-0';
+    const fetcher = jest.spyOn(global, 'fetch').mockImplementation(async url => new Response(
+      url.endsWith('/sitemap.xml') ? `<urlset><url><loc>${productUrl}</loc></url></urlset>`
+        : '<div class="field-field-display-title">Hapacol 650</div><div class="field-field-n-p-indication">Điều trị các triệu chứng đau. Hạ sốt.</div>'
+    ));
+    const lookup = jest.spyOn(purpose, 'lookup');
+    try {
+      const context = await assistant.contextForPlan(db, id);
+      const input = { type: 'medication_create', name: 'Hapacol 650', times: ['07:00'], evidence: 'nhắc uống Hapacol 650 mỗi ngày lúc 7 giờ sáng' };
+      const preview = await assistant.prepareWithPurpose(db, [input], context, id);
+      expect(preview.changes[0].purpose).toMatchObject({ status: 'matched', tags: ['fever_reduction', 'pain_relief'], source: { url: productUrl } });
+      expect((await med.overview(db, id, id)).items).toHaveLength(0);
+      await expect(assistant.execute(db, other, preview.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_PLAN_EXPIRED' });
+      // Mutable display metadata cannot alter what the signed confirmation saves.
+      preview.changes[0].purpose.tags = ['diabetes'];
+      await assistant.execute(db, id, preview.planToken);
+      expect(await assistant.execute(db, id, preview.planToken)).toMatchObject({ replay: true });
+      const stored = (await med.overview(db, id, id)).items[0];
+      expect(stored.purpose_tags).toMatchObject({ codes: ['fever_reduction', 'pain_relief'], confirmedBy: id, source: { url: productUrl } });
+      const raw = (await db.query('SELECT tags_json FROM med_items WHERE id=$1', [stored.id])).rows[0].tags_json;
+      expect(raw).not.toContain('fever_reduction'); expect(raw).not.toContain('DHG');
+      const updated = await assistant.contextForPlan(db, id);
+      expect(JSON.stringify(assistant.modelContext(updated))).not.toContain(productUrl);
+      const reuse = await assistant.prepareWithPurpose(db, [{ ...input, times: ['19:00'] }], updated, id);
+      expect(reuse.changes[0].purpose.tags).toEqual(['fever_reduction', 'pain_relief']);
+      expect(lookup).toHaveBeenCalledTimes(1);
+      await assistant.execute(db, id, reuse.planToken);
+      const after = await med.overview(db, id, id);
+      expect(after.items).toHaveLength(1); expect(after.schedules).toHaveLength(2);
+      expect(after.items[0].purpose_tags).toEqual(stored.purpose_tags);
+    } finally { lookup.mockRestore(); fetcher.mockRestore(); }
+  });
   test('assistant medication: expired/revoked previews never write and a failed batch rolls back all new medicines', async () => {
     const assistant = require('../../src/services/assistant/medication-assistant.service');
     const ai = require('../../src/services/ai/ai-consent.service');
@@ -266,6 +303,103 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     await expect(assistant.execute(db, id, full.planToken)).rejects.toMatchObject({ code: 'MED_SCHEDULE_LIMIT' });
     const overview = await med.overview(db, id, id);
     expect(overview.items).toHaveLength(1); expect(overview.schedules).toHaveLength(3);
+  });
+  test('assistant draft management: read-only list, scoped resume, revision conflicts, confirmed deletion and replay', async () => {
+    const tools = require('../../src/services/assistant/domain-tools.service');
+    const drafts = require('../../src/services/v21/medication-drafts.service');
+    const id = await user(), other = await user();
+    await require('../../src/services/ai/ai-consent.service').grantAiConsent(db, id);
+    const raw = (tool, parameters = {}) => ({ type: 'app_tool', tool, parameters, evidence: 'Xem và quản lý bản nháp lịch thuốc' });
+    expect((await tools.prepare(db, id, raw('medication.drafts'))).answer).toContain('chưa có');
+    expect((await db.query('SELECT id FROM med_setup_drafts WHERE actor_id=$1', [id])).rows).toHaveLength(0);
+    const snapshot = { version: 1, step: 2, items: [{ clientId: randomUUID(), display_name: 'Vitamin D3', kind: 'SUPPLEMENT', source: 'VOICE', confirmed: true, anchors: [] }],
+      meals: { breakfast: '07:00', lunch: '12:00', dinner: '18:00', bedtime: '21:00' }, slots: [], photoMediaId: null };
+    const draftId = randomUUID(); await drafts.write(db, id, id, { id: draftId, revision: 0, snapshot });
+    expect(await tools.prepare(db, id, raw('medication.draft_resume', { target: 'Vitamin D3' }))).toMatchObject({ screen: { screen: 'medication_draft', params: { id: draftId } } });
+    expect((await tools.prepare(db, other, raw('medication.draft_resume', { target: 'Vitamin D3' }))).screen).toBeUndefined();
+    const stale = await tools.prepare(db, id, raw('medication.draft_delete', { target: 'Vitamin D3' }));
+    await drafts.write(db, id, id, { id: draftId, revision: 1, snapshot: { ...snapshot, step: 3 } });
+    await expect(tools.execute(db, id, stale.action.planToken)).rejects.toMatchObject({ code: 'MED_DRAFT_CHANGED' });
+    const preview = await tools.prepare(db, id, raw('medication.draft_delete', { target: 'Vitamin D3' }));
+    expect((await drafts.read(db, id, id, { recoverLegacy: false })).drafts).toHaveLength(1);
+    await expect(tools.execute(db, other, preview.action.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_PLAN_EXPIRED' });
+    await tools.execute(db, id, preview.action.planToken);
+    const secondId = randomUUID(); await drafts.write(db, id, id, { id: secondId, revision: 0, snapshot });
+    expect(await tools.execute(db, id, preview.action.planToken)).toMatchObject({ replay: true });
+    expect((await drafts.read(db, id, id, { recoverLegacy: false })).drafts.map(row => row.id)).toEqual([secondId]);
+    expect((await db.query('SELECT id FROM med_items WHERE patient_user_id=$1', [id])).rows).toHaveLength(0);
+  });
+  test('assistant supplement creation saves SUPPLEMENT and does not classify it or enable medicine calls', async () => {
+    const assistant = require('../../src/services/assistant/medication-assistant.service');
+    const lookup = jest.spyOn(require('../../src/services/v21/medication-purpose.service'), 'lookup');
+    try {
+      const id = await user(); await require('../../src/services/ai/ai-consent.service').grantAiConsent(db, id);
+      const action = { type: 'medication_create', kind: 'SUPPLEMENT', name: 'Vitamin D3', times: ['07:00'], evidence: 'Nhắc dùng vitamin D3 mỗi ngày lúc 7 giờ sáng' };
+      const preview = await assistant.prepareWithPurpose(db, [action], await assistant.contextForPlan(db, id), id);
+      expect((await med.overview(db, id, id)).items).toHaveLength(0);
+      await assistant.execute(db, id, preview.planToken);
+      const overview = await med.overview(db, id, id);
+      expect(overview.items[0]).toMatchObject({ kind: 'SUPPLEMENT', purpose_tags: null });
+      const events = (await db.query('SELECT has_medicine FROM med_dose_events WHERE patient_user_id=$1', [id])).rows;
+      expect(events.length).toBeGreaterThan(0); expect(events.every(row => row.has_medicine === false)).toBe(true);
+      expect(lookup).not.toHaveBeenCalled();
+    } finally { lookup.mockRestore(); }
+  });
+  test('assistant purpose selection: only verified tags, explicit confirmation, stale checks and receipts across later edits', async () => {
+    const tools = require('../../src/services/assistant/domain-tools.service');
+    const purpose = require('../../src/services/v21/medication-purpose.service');
+    const id = await user(), other = await user(); await require('../../src/services/ai/ai-consent.service').grantAiConsent(db, id);
+    const match = { status: 'matched', tags: ['pain_relief', 'fever_reduction'], productName: 'Hapacol 650', source: { name: 'DHG Pharma', url: 'https://dhgpharma.com.vn/vi/san-pham/giam-dau-ha-sot/hapacol-650-0' }, checkedAt: new Date().toISOString() };
+    const token = jwt.sign({ purpose: 'med-purpose-tags', actor: id, patient: id, name: require('node:crypto').createHash('sha256').update('hapacol 650').digest('hex'), ...match }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const saved = (await med.createItem(db, id, id, { display_name: 'Hapacol 650', kind: 'MEDICINE', source: 'VOICE', confirmed: true,
+      tag_confirmation: { token, codes: match.tags } })).item;
+    const raw = (mode, tags = []) => ({ type: 'app_tool', tool: 'medication.purpose', parameters: { target: 'Hapacol 650', mode, tags }, evidence: 'Đổi tag công dụng của thuốc Hapacol 650' });
+    const lookup = jest.spyOn(purpose, 'lookup').mockResolvedValue({ ...match, token });
+    try {
+      const remove = await tools.prepare(db, id, raw('remove', ['fever_reduction']));
+      expect((await med.overview(db, id, id)).items[0].purpose_tags.codes).toHaveLength(2);
+      await expect(tools.execute(db, other, remove.action.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_PLAN_EXPIRED' });
+      await tools.execute(db, id, remove.action.planToken);
+      expect((await med.overview(db, id, id)).items[0].purpose_tags.codes).toEqual(['pain_relief']);
+      const add = await tools.prepare(db, id, raw('add', ['fever_reduction'])); await tools.execute(db, id, add.action.planToken);
+      expect(await tools.execute(db, id, remove.action.planToken)).toMatchObject({ replay: true });
+      expect((await med.overview(db, id, id)).items[0].purpose_tags.codes).toEqual(['pain_relief', 'fever_reduction']);
+      expect((await tools.prepare(db, id, raw('add', ['diabetes']))).clarify).toContain('chưa xác nhận');
+      const stale = await tools.prepare(db, id, raw('clear'));
+      await db.query('UPDATE med_items SET display_name=$2,tags_json=NULL WHERE id=$1', [saved.id, med.protect(id, 'med_items.display_name', 'Tên thuốc mới')]);
+      await expect(tools.execute(db, id, stale.action.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_TOOL_CONFLICT' });
+    } finally { lookup.mockRestore(); }
+  });
+  test('assistant protected members: owner-only, no preview writes, full-plan checks, conflict rollback and idempotent confirmation', async () => {
+    const tools = require('../../src/services/assistant/domain-tools.service');
+    const entitlement = require('../../src/services/payment/entitlement.service');
+    const household = require('../../src/services/payment/household.service');
+    const owner = await user(), a = await user(), b = await user();
+    await require('../../src/services/ai/ai-consent.service').grantAiConsent(db, owner);
+    await connect(owner, a); await connect(owner, b);
+    await db.query('UPDATE users SET full_name=$2,display_name=$2 WHERE id=$1', [a, 'Người A']);
+    await db.query('UPDATE users SET full_name=$2,display_name=$2 WHERE id=$1', [b, 'Người B']);
+    const h = await entitlement.ensureHousehold(db, owner);
+    await db.query("UPDATE subscription_households SET plan_code='antam_2',status='active',current_period_end=NOW()+INTERVAL '30 days' WHERE id=$1", [h.id]);
+    const raw = (tool, target) => ({ type: 'app_tool', tool, parameters: { target }, evidence: `${tool} ${target}` });
+    const add = await tools.prepare(db, owner, raw('subscription.member_add', 'Người A'));
+    expect((await household.listProtectedMembers(db, owner)).protectedMemberCount).toBe(1);
+    await expect(tools.execute(db, a, add.action.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_PLAN_EXPIRED' });
+    await tools.execute(db, owner, add.action.planToken);
+    expect((await household.listProtectedMembers(db, owner)).members.map(row => row.userId)).toEqual(expect.arrayContaining([owner, a]));
+    expect((await tools.prepare(db, owner, raw('subscription.member_add', 'Người B'))).clarify).toContain('đủ số người');
+    await db.query('UPDATE users SET deleted_at=NOW() WHERE id=$1', [a]);
+    expect((await tools.prepare(db, owner, raw('subscription.member_add', 'Người B'))).clarify).toContain('đủ số người');
+    await db.query('UPDATE users SET deleted_at=NULL WHERE id=$1', [a]);
+    expect((await tools.prepare(db, a, raw('subscription.member_remove', 'Người A'))).clarify).toContain('chủ gói');
+    const remove = await tools.prepare(db, owner, raw('subscription.member_remove', 'Người A')); await tools.execute(db, owner, remove.action.planToken);
+    expect(await tools.execute(db, owner, add.action.planToken)).toMatchObject({ replay: true });
+    expect((await household.listProtectedMembers(db, owner)).members.map(row => row.userId)).toEqual([owner]);
+    const stale = await tools.prepare(db, owner, raw('subscription.member_add', 'Người B'));
+    await household.addProtectedMember(db, owner, a);
+    await expect(tools.execute(db, owner, stale.action.planToken)).rejects.toMatchObject({ code: 'APP_ASSISTANT_TOOL_CONFLICT' });
+    expect((await household.listProtectedMembers(db, owner)).members.map(row => row.userId)).toEqual(expect.arrayContaining([owner, a]));
+    expect((await db.query("SELECT status FROM user_connections WHERE requester_id=$1 AND addressee_id=$2", [owner, a])).rows[0].status).toBe('accepted');
   });
   test('assistant tools: data queries calculate only the authenticated owner readings and Vietnam date window', async () => {
     const tools = require('../../src/services/assistant/app-tools.service');

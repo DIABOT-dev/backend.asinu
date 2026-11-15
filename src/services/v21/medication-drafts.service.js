@@ -85,7 +85,7 @@ async function access(db, actor, patient) {
   med.requireEncryption();
   return patient;
 }
-async function read(db, actor, patient) {
+async function read(db, actor, patient, { recoverLegacy = true } = {}) {
   patient = await access(db, actor, patient);
   const load = async () =>
     (
@@ -95,7 +95,7 @@ async function read(db, actor, patient) {
       )
     ).rows;
   let rows = await load();
-  if (!rows.length) {
+  if (!rows.length && recoverLegacy) {
     // Recover a pre-draft upload once. A delete/save tombstone prevents old
     // scans from reappearing. This never runs the model or creates med_items.
     await c.transaction(db, async (tx) => {

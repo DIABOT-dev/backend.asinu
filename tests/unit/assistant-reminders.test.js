@@ -37,3 +37,19 @@ test('a chat reminder preview reads preferences and signs only the reviewed time
     if (enabled === undefined) delete process.env.REMINDER_ASSISTANT_ENABLED; else process.env.REMINDER_ASSISTANT_ENABLED = enabled;
   }
 });
+
+test('cancelling a clock helper prevents its following AI review', async () => {
+  const previous = process.env.REMINDER_ASSISTANT_ENABLED;
+  process.env.REMINDER_ASSISTANT_ENABLED='true';
+  const controller=new AbortController();
+  const db={query:jest.fn().mockResolvedValue({rows:[{reminders_enabled:true,evening_time:'19:00'}]})};
+  callTextAi.mockImplementationOnce(async options=>{
+    expect(options.signal).toBe(controller.signal);
+    controller.abort();
+    return {content:JSON.stringify({status:'ready',changes:[{slot:'evening',action:'set',time:'20:30',evidence:'Đổi giờ nhắc buổi tối sang 8 giờ 30 tối'}]})};
+  });
+  try {
+    await expect(tools.prepareReminders(db,7,{evidence:'Đổi giờ nhắc buổi tối sang 8 giờ 30 tối'},'vi',{signal:controller.signal})).rejects.toHaveProperty('name','AbortError');
+    expect(callTextAi).toHaveBeenCalledTimes(1);
+  } finally {if(previous===undefined)delete process.env.REMINDER_ASSISTANT_ENABLED;else process.env.REMINDER_ASSISTANT_ENABLED=previous;}
+});

@@ -1,0 +1,11 @@
+'use strict';
+const fs = require('node:fs');
+const path = require('node:path');
+const { SkillManager } = require('../skill-manager.service');
+const manager = new SkillManager(__dirname);
+const definitions = manager.groups;
+const getSkill = name => manager.tool(name);
+const catalog = Object.entries(definitions).map(([id, value]) => `${id}: ${value.description}`).join('\n');
+const common = fs.readFileSync(path.join(__dirname, 'COMMON.md'), 'utf8');
+const review = fs.readFileSync(path.join(__dirname, 'REVIEW.md'), 'utf8');
+module.exports = { manager, getSkill, definitions, catalog, common, review };

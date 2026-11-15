@@ -1,11 +1,15 @@
 jest.mock('../../src/services/ai/ai.service', () => ({ callTextAi: jest.fn() }));
+jest.mock('../../src/services/v21/medication-purpose.service', () => ({
+  ...jest.requireActual('../../src/services/v21/medication-purpose.service'),
+  lookup: jest.fn(async () => ({ status: 'not_found', tags: [] })),
+}));
 const { callTextAi } = require('../../src/services/ai/ai.service');
 const { validatePlan, plan, numbersIn, requestSchema } = require('../../src/services/assistant/app-assistant.service');
 const { logBaseSchema } = require('../../src/validation/validation.schemas');
 
 const request = (text, current = { language: 'vi', fontSize: 'normal' }) => ({ text, current });
 const ready = actions => ({ status: 'ready', question: '', actions });
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => { jest.clearAllMocks(); callTextAi.mockReset(); });
 
 test('a mixed request preserves all measurements and app settings without writing', () => {
   const text = 'Ghi đường huyết 120, huyết áp 130/80 nhịp tim 70, uống 500 ml nước, đổi tiếng Anh và chữ lớn hơn';
@@ -90,7 +94,7 @@ test('private tool answers, including shared family health, never enter a subseq
     { role: 'assistant', text: 'PRIVATE_RELATIVE_HEALTH_TOOL_RESULT' },
   ] });
   for (const [options] of callTextAi.mock.calls) expect(options.prompt).not.toContain('PRIVATE_RELATIVE_HEALTH_TOOL_RESULT');
-  expect(callTextAi.mock.calls[0][0].prompt).toContain('Xem sức khỏe người thân');
+  expect(callTextAi.mock.calls[0][0].prompt).not.toContain('Xem sức khỏe người thân');
 });
 
 const medication = require('../../src/services/assistant/medication-assistant.service');
@@ -137,7 +141,7 @@ test('medication planning signs only reviewed previews and sends no real identif
   const secret = process.env.JWT_SECRET;
   process.env.JWT_SECRET = 'assistant-unit-test-only-secret';
   try {
-    const text = 'nhắc uống Metformin mỗi ngày lúc 7 giờ sáng';
+    const text = 'Nhờ Asinu nhắc uống Metformin mỗi ngày, lúc 7 giờ sáng';
     callTextAi.mockResolvedValueOnce({ content: JSON.stringify(ready([{ type: 'medication_create', name: 'Metformin', times: ['07:00'], evidence: text }])) })
       .mockResolvedValueOnce({ content: '{"approved":true}' });
     const result = await plan(request(text), 'vi', { pool: {}, userId: 123 });

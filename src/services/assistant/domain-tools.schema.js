@@ -45,6 +45,16 @@ const definitions = {
     weather_enabled: z.boolean().optional(), region: z.enum(['hanoi', 'hcm', 'danang', 'haiphong', 'cantho', 'hue']).optional() }),
   'settings.configure': patch({ reminders_enabled: z.boolean().optional(), health_feed_enabled: z.boolean().optional() }),
   'medication.weekly': empty,
+  'medication.drafts': empty,
+  'medication.draft_resume': z.object({ target: text.optional() }).strict(),
+  'medication.draft_delete': z.object({ target: text.optional() }).strict(),
+  'medication.purposes': target,
+  'medication.purpose': z.object({ target: text, mode: z.enum(['add', 'remove', 'set', 'clear']),
+    tags: z.array(z.enum(require('../v21/medication-purpose.service').TAG_CODES)).max(9).refine(values => new Set(values).size === values.length).default([]),
+  }).strict().refine(value => value.mode === 'clear' ? !value.tags.length : value.tags.length > 0),
+  'subscription.members': empty,
+  'subscription.member_add': target,
+  'subscription.member_remove': target,
   'medication.history': z.object({ target: text.optional() }).strict(),
   'medication.rename': z.object({ target: text, name: z.string().trim().min(1).max(30) }).strict(),
   'medication.configure': z.object({ target: text, time: clock.optional(), changes: patch({
@@ -73,6 +83,7 @@ const definitions = {
 const schema = z.object({ type: z.literal('app_tool'), tool: z.enum(Object.keys(definitions)),
   parameters: z.record(z.string(), z.unknown()).default({}), evidence: z.string().trim().min(1).max(3000) }).strict();
 const readTools = new Set(['notifications.list', 'missions.status', 'coins.balance', 'coins.history', 'coins.rewards', 'coins.rules',
+  'medication.drafts', 'medication.draft_resume', 'medication.purposes', 'subscription.members',
   'gifts.today', 'gifts.history', 'family.list', 'family.invitations', 'family.health', 'checkin.conclusion', 'calls.settings', 'calls.voice',
   'medication.history', 'medication.weekly', 'early_signal.latest', 'tree.status', 'wallet.status', 'wallet.history', 'subscription.status', 'subscription.compare', 'feed.search', 'feed.read']);
 function parse(action) {
@@ -115,6 +126,14 @@ const descriptions = {
   'settings.configure': 'enable/disable task reminders or health feed; not OS permissions or AI data consent',
   'medication.weekly': 'read this calendar week medication report: total scheduled, taken, skipped and actual health coins earned',
   'medication.history': 'read actual recent dose outcomes, optional exact medicine name',
+  'medication.drafts': 'list this account unfinished medication setup drafts; read-only, does not recover or create drafts',
+  'medication.draft_resume': 'open selected medication draft to continue setup; target is medicine name, one-based draft position or latest; ask if several and unspecified',
+  'medication.draft_delete': 'delete selected unfinished medication draft, not a saved schedule; target is medicine name, position or latest; never discard all drafts implicitly',
+  'medication.purposes': 'read selected medicine current purpose tags and available manufacturer-verified tags',
+  'medication.purpose': 'choose/remove current medicine purpose tags; mode add/remove/set/clear; only manufacturer-verified indications, never infer from symptoms; use exact target medicine name',
+  'subscription.members': 'list members protected by the care plan owned by this account',
+  'subscription.member_add': 'add an explicitly named already-connected relative to this account own active paid care plan, never purchase/upgrade or replace another member',
+  'subscription.member_remove': 'remove an explicitly named protected member from this account own care plan; does not disconnect the relative or delete their account/data',
   'medication.rename': 'rename an explicitly identified medicine, never add a dose',
   'medication.configure': 'change note or meal association for selected medicine schedule, ask original time if several match',
   'early_signal.latest': 'read and explain existing early signal assessment, never generate a diagnosis or trigger a new alert',
@@ -143,4 +162,4 @@ const contract = Object.entries(definitions).map(([tool, shape]) => {
   const fields = Object.entries(object.shape).map(([key, field]) => `${key}${field.isOptional() ? '?' : ''}`).join(', ');
   return `${tool} {${fields}}: ${descriptions[tool]}`;
 }).join('\n');
-module.exports = { schema, definitions, readTools, parse, contract, date };
+module.exports = { schema, definitions, descriptions, readTools, parse, contract, date };

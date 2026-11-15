@@ -15,16 +15,29 @@ async function consent(pool, req, res, next) {
 }
 async function plan(pool, req, res) {
   res.set('Cache-Control', 'no-store');
+  const controller = new AbortController();
+  const cancel = () => { if (!res.writableEnded) controller.abort(Object.assign(new Error('Assistant request cancelled'), { code: 'APP_ASSISTANT_CANCELLED' })); };
+  req.once('aborted', cancel);
+  res.once('close', cancel);
+  if (req.aborted || res.destroyed) cancel();
   try {
-    const result = await assistant.plan(req.body, getLang(req), { pool, userId: req.user.id });
-    if (!(await hasAiConsent(pool, req.user.id))) return res.status(403).json({ ok: false, code: 'AI_CONSENT_REQUIRED' });
+    controller.signal.throwIfAborted();
+    const result = await assistant.plan(req.body, getLang(req), { pool, userId: req.user.id, signal: controller.signal });
+    controller.signal.throwIfAborted();
+    const allowed = await hasAiConsent(pool, req.user.id);
+    controller.signal.throwIfAborted();
+    if (!allowed) return res.status(403).json({ ok: false, code: 'AI_CONSENT_REQUIRED' });
     return res.json({ ok: true, ...result });
   } catch (error) {
+    if (controller.signal.aborted || res.destroyed) return;
     if (['CARE_CIRCLE_DISABLED', 'CAREGIVER_VIEW_DISABLED', 'V21_FEATURE_DISABLED'].includes(error.code)) return res.status(403).json({ ok: false, code: error.code });
     if (error.status === 429) return res.set('Retry-After', '30').status(429).json({ ok: false, code: 'APP_ASSISTANT_RATE_LIMITED' });
     const invalid = error.code === 'APP_ASSISTANT_INVALID_REQUEST';
     return res.status(invalid ? 400 : 503).json({ ok: false,
       code: invalid ? error.code : 'APP_ASSISTANT_UNAVAILABLE' });
+  } finally {
+    req.off('aborted', cancel);
+    res.off('close', cancel);
   }
 }
 async function applyMedication(pool, req, res) {

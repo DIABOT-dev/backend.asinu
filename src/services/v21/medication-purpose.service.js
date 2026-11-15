@@ -228,12 +228,29 @@ function createResolver({ fetcher = (...args) => fetch(...args), now = Date.now 
   return { resolve };
 }
 const resolver = createResolver();
-async function lookup(db, actor, patient, body) {
+async function lookup(db, actor, patient, body, { signal } = {}) {
+  signal?.throwIfAborted();
   patient = await c.patientAccess(db, actor, patient);
   await c.assertFeature(db, patient, 'medication');
+  signal?.throwIfAborted();
   const input = inputSchema.parse(body);
   if (input.kind !== 'MEDICINE') return { status: 'not_applicable', tags: [] };
-  const result = await resolver.resolve(input.name);
+  // The shared resolver caches public product data. Cancelling one chat must
+  // release that caller promptly without cancelling another caller's lookup.
+  const pending = resolver.resolve(input.name);
+  let result;
+  if (!signal) result = await pending;
+  else {
+    let onAbort;
+    try {
+      result = await Promise.race([pending, new Promise((_, reject) => {
+        onAbort = () => reject(signal.reason);
+        signal.addEventListener('abort', onAbort, { once: true });
+        if (signal.aborted) onAbort();
+      })]);
+    } finally { signal.removeEventListener('abort', onAbort); }
+    signal.throwIfAborted();
+  }
   if (result.status !== 'matched' || !result.tags.length) return result;
   return {
     ...result,
@@ -280,6 +297,7 @@ function confirmedTags(actor, patient, item) {
   };
 }
 module.exports = {
+  TAG_CODES,
   lookup,
   confirmedTags,
   confirmationSchema,

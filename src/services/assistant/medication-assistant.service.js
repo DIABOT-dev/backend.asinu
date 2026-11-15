@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { z } = require('zod');
 const c = require('../v21/common');
 const medication = require('../v21/medication.service');
+const purpose = require('../v21/medication-purpose.service');
 const { time } = require('../v21/medication.policy');
 const { hasAiConsent } = require('../ai/ai-consent.service');
 
@@ -12,6 +13,8 @@ const audience = 'asinu:assistant-medication';
 const evidence = z.string().trim().min(1).max(3000);
 const createSchema = z.object({
   type: z.literal('medication_create'), name: medication.itemSchema.shape.display_name,
+  kind: z.enum(['MEDICINE', 'SUPPLEMENT']).optional(),
+  purpose_codes: z.array(z.enum(purpose.TAG_CODES)).max(9).refine(codes => new Set(codes).size === codes.length).optional(),
   times: z.array(time).min(1).max(4).refine(values => new Set(values).size === values.length),
   evidence,
 }).strict();
@@ -29,6 +32,14 @@ const fail = (code, statusCode = 409) => Object.assign(new Error(code), { code, 
 const canAnswer = dose => !!dose && !['TAKEN', 'SKIPPED', 'OUT_OF_MEDS', 'CANCELLED'].includes(dose.state) &&
   Date.now() >= new Date(dose.scheduled_at).getTime() && Date.now() - new Date(dose.scheduled_at).getTime() <= 2 * 3600000;
 const compact = text => normalize(text).replace(/\s+/g, ' ');
+function purposeSelectionMatches(codes, source) {
+  const text = normalize(source);
+  const aliases = { fever_reduction: ['ha sot', 'fever'], pain_relief: ['giam dau', 'pain relief'],
+    blood_pressure: ['huyet ap', 'blood pressure'], diabetes: ['tieu duong', 'duong huyet', 'diabetes', 'blood sugar'],
+    lipids: ['mo mau', 'lipids', 'cholesterol'], antibiotic: ['khang sinh', 'antibiotic'], allergy: ['di ung', 'allergy'],
+    cough: ['ho', 'cough'], stomach: ['da day', 'stomach'] };
+  return codes.every(code => aliases[code]?.some(alias => new RegExp(`\\b${alias}\\b`).test(text)));
+}
 function policyQuestion(actions, request, context, lang) {
   if (!Array.isArray(actions)) return;
   const source = compact(`${request.clarification?.original || ''} ${request.text}`);
@@ -76,7 +87,8 @@ async function readContext(db, userId) {
   if (process.env.HEALTH_FIELD_ENCRYPTION_ENABLED !== 'true') throw fail('MED_ENCRYPTION_REQUIRED', 503);
   const items = (await db.query(
     'SELECT * FROM med_items WHERE patient_user_id=$1 AND active ORDER BY id', [userId]
-  )).rows.map(row => ({ id: row.id, name: medication.reveal(userId, 'med_items.display_name', row.display_name), kind: row.kind }));
+  )).rows.map(row => ({ id: row.id, name: medication.reveal(userId, 'med_items.display_name', row.display_name), kind: row.kind,
+    ...(row.tags_json ? { purpose_tags: JSON.parse(medication.reveal(userId, 'med_items.tags_json', row.tags_json)) } : {}) }));
   const schedules = (await db.query(
     `SELECT s.*,COALESCE(array_agg(si.item_id ORDER BY si.item_id) FILTER(WHERE si.item_id IS NOT NULL),'{}') item_ids
      FROM med_schedules s LEFT JOIN med_schedule_items si ON si.schedule_id=s.id
@@ -121,6 +133,13 @@ function validateAction(action, context, source = action.evidence) {
   if (action.type === 'medication_create') {
     if (!normalize(source).includes(normalize(action.name))) return false;
     const matches = context.items.filter(item => normalize(item.name) === normalize(action.name));
+    if (action.kind === 'SUPPLEMENT' && !/\b(vitamin|thuc pham bo sung|thuc pham chuc nang|thuc pham bao ve suc khoe|tpbs|tpcn|supplements?)\b/.test(normalize(source))) return false;
+    if (action.kind === 'SUPPLEMENT' && action.purpose_codes !== undefined) return false;
+    if (action.purpose_codes?.length && !purposeSelectionMatches(action.purpose_codes, source)) return false;
+    if (action.purpose_codes && !action.purpose_codes.length && !/\b(khong gan|khong tag|bo het tag|bo tat ca tag|no tags|without tags)\b/.test(normalize(source))) return false;
+    if (matches.some(item => action.kind && item.kind !== action.kind)) return false;
+    if (/\bvitamin\b/.test(normalize(action.name)) && action.kind !== 'SUPPLEMENT' &&
+      !/\b(thuoc vitamin|vitamin medicine)\b/.test(normalize(source)) && !matches.length) return false;
     return matches.length <= 1;
   }
   const item = context.items[Number(action.medicine_ref.slice(1)) - 1];
@@ -128,7 +147,7 @@ function validateAction(action, context, source = action.evidence) {
   return !!item && !!schedule && schedule.active !== false && schedule.consent === 'ACTIVE' && schedule.item_ids.includes(item.id);
 }
 
-function prepare(actions, context, userId, source) {
+function prepareOperations(actions, context, source) {
   if (!process.env.JWT_SECRET) throw fail('APP_ASSISTANT_UNAVAILABLE', 503);
   const operations = [], changes = [], seen = new Set();
   for (const action of actions.filter(isMedication)) {
@@ -138,8 +157,15 @@ function prepare(actions, context, userId, source) {
       const key = item?.id || normalize(action.name);
       if (seen.has(key)) throw fail('APP_ASSISTANT_INVALID_REQUEST', 400);
       seen.add(key);
-      operations.push({ kind: 'create', name: action.name, item_id: item?.id, times: action.times });
-      changes.push({ operation: 'create', name: action.name, times: action.times });
+      const itemKind = action.kind || item?.kind || 'MEDICINE';
+      operations.push({ kind: 'create', name: action.name, item_id: item?.id, item_kind: itemKind, times: action.times });
+      if (action.purpose_codes !== undefined) {
+        if (item && JSON.stringify([...action.purpose_codes].sort()) !== JSON.stringify([...(item.purpose_tags?.codes || [])].sort())) throw fail('MED_TAG_EDIT_SEPARATELY', 400);
+        operations[operations.length - 1].purpose_codes = action.purpose_codes;
+      }
+      changes.push({ operation: 'create', name: action.name, times: action.times, itemKind,
+        ...(item?.purpose_tags?.codes?.length ? { purpose: { status: 'matched', tags: item.purpose_tags.codes,
+          productName: item.purpose_tags.productName, source: item.purpose_tags.source } } : {}) });
     } else if (action.type === 'medication_move') {
       const item = context.items[Number(action.medicine_ref.slice(1)) - 1];
       const schedule = context.schedules[Number(action.schedule_ref.slice(1)) - 1];
@@ -160,10 +186,53 @@ function prepare(actions, context, userId, source) {
         name: row.item_ids.map(id => context.items.find(item => item.id === id)?.name).filter(Boolean).join(', '), times: [row.time] });
     }
   }
+  return { operations, changes };
+}
+function signPrepared({ operations, changes }, context, userId) {
   if (!operations.length) return null;
   const planToken = jwt.sign({ kind: 'medication', snapshot: digest(context), operations }, process.env.JWT_SECRET,
     { algorithm: 'HS256', audience, subject: String(userId), jwtid: randomUUID(), expiresIn: '10m' });
   return { type: 'medication', changes, planToken };
+}
+function prepare(actions, context, userId, source) {
+  return signPrepared(prepareOperations(actions, context, source), context, userId);
+}
+
+// Resolve public catalog data only after validating the user's requested actions.
+// Never take purpose codes from the model, and never hold a DB transaction open
+// while fetching the catalog. The preview is the user's confirmation surface.
+async function prepareWithPurpose(db, actions, context, userId, source, { signal } = {}) {
+  signal?.throwIfAborted();
+  const prepared = prepareOperations(actions, context, source);
+  for (const [index, operation] of prepared.operations.entries()) {
+    signal?.throwIfAborted();
+    if (operation.kind !== 'create' || operation.item_id || operation.item_kind === 'SUPPLEMENT') continue;
+    if (operation.purpose_codes?.length === 0) {
+      prepared.changes[index].purpose = { status: 'not_selected', tags: [] };
+      continue;
+    }
+    const result = await purpose.lookup(db, userId, userId, { name: operation.name, kind: 'MEDICINE' }, { signal });
+    signal?.throwIfAborted();
+    if (result.status === 'matched' && result.tags.length) {
+      const selected = operation.purpose_codes || result.tags;
+      if (!selected.every(code => result.tags.includes(code))) throw fail('MED_TAG_NOT_VERIFIED', 400);
+      const confirmation = purpose.confirmationSchema.parse({ token: result.token, codes: selected });
+      const verified = purpose.confirmedTags(userId, userId, {
+        display_name: operation.name, kind: 'MEDICINE', tag_confirmation: confirmation,
+      });
+      operation.tag_confirmation = confirmation;
+      // Display exactly the provenance and tags that the signed operation saves.
+      prepared.changes[index].purpose = { status: 'matched', tags: verified.codes,
+        productName: verified.productName, source: verified.source };
+    } else {
+      if (operation.purpose_codes?.length) throw fail('MED_TAG_NOT_VERIFIED', 400);
+      prepared.changes[index].purpose = {
+        status: ['ambiguous', 'unavailable'].includes(result.status) ? result.status : 'not_found', tags: [],
+      };
+    }
+  }
+  signal?.throwIfAborted();
+  return signPrepared(prepared, context, userId);
 }
 
 async function execute(pool, userId, token) {
@@ -195,7 +264,8 @@ async function execute(pool, userId, token) {
         }));
       } else if (operation.kind === 'create') {
         const item = operation.item_id ? { id: operation.item_id } : (await medication.createItem(db, userId, userId, {
-          display_name: operation.name, kind: 'MEDICINE', source: 'VOICE', confirmed: true,
+          display_name: operation.name, kind: operation.item_kind || 'MEDICINE', source: 'VOICE', confirmed: true,
+          ...(operation.tag_confirmation ? { tag_confirmation: operation.tag_confirmation } : {}),
         })).item;
         for (const localTime of operation.times) {
           // Merge a medicine into an existing time, preserving its other drugs,
@@ -231,4 +301,4 @@ async function execute(pool, userId, token) {
   });
 }
 
-module.exports = { createSchema, moveSchema, stateSchema, answerSchema, isMedication, contextForPlan, modelContext, validateAction, policyQuestion, prepare, execute };
+module.exports = { createSchema, moveSchema, stateSchema, answerSchema, isMedication, contextForPlan, modelContext, validateAction, policyQuestion, prepare, prepareWithPurpose, execute, purposeSelectionMatches };

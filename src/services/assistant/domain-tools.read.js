@@ -3,7 +3,7 @@ const c = require('../v21/common');
 const { t } = require('../../i18n');
 const taskLabel = (code, lang) => ({ CHECKIN: lang === 'en' ? 'Daily check-in' : 'Check-in hằng ngày', MED_ANSWER: lang === 'en' ? 'Medication response' : 'Phản hồi nhắc thuốc', VITAL: lang === 'en' ? 'Record a reading' : 'Ghi chỉ số', GIFT_OPEN: lang === 'en' ? 'Open fortune' : 'Mở lộc', WEEKLY: lang === 'en' ? 'Weekly routine' : 'Duy trì mỗi tuần' }[code] || (lang === 'en' ? 'Health activity' : 'Hoạt động sức khỏe'));
 const rewardLabel = (code, lang) => code === 'GREETING_CARD' ? lang === 'en' ? 'Greeting card' : 'Thiệp gửi người thân' : lang === 'en' ? 'Lucky draw ticket' : 'Vé dự thưởng';
-const fold = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase().trim();
+const fold = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/đ/g, 'd').trim();
 const failed = code => { throw c.error(code || 'APP_ASSISTANT_UNAVAILABLE', 503); };
 const checked = result => result?.ok === false ? failed() : result;
 const local = value => value ? new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }) : '';

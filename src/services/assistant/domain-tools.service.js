@@ -63,6 +63,11 @@ function assertAvailable(tool) {
 async function prepare(db, owner, raw, lang = 'vi', context = {}) {
   const { tool, parameters: args } = schema.parse(raw), en = lang === 'en';
   assertAvailable(tool);
+  const management = require('./management-tools.service');
+  if (management.handles(tool)) {
+    const prepared = await management.prepare(db, owner, tool, args, lang, context);
+    return prepared.payload ? { action: sign(owner, tool, prepared.payload, prepared.label) } : prepared;
+  }
   if (tool === 'calls.weather_device' && !(await require('../payment/entitlement.service').getEntitlement(db, owner)).callCenterEnabled)
     return question('Thông tin thời tiết trong lời hỏi thăm cần gói An Tâm. Bạn có thể xem các gói chăm sóc nhé.', 'Weather in check-in calls requires an An Tam plan. You can view the available care plans.', lang);
   if (schema.readTools.has(tool)) return data.read(db, owner, tool, args, lang, context);
@@ -180,6 +185,7 @@ async function execute(db, owner, token, lang = 'vi') {
   if (!(await require('../ai/ai-consent.service').hasAiConsent(db, owner))) throw c.error('AI_CONSENT_REQUIRED', 403);
   const { tool, payload: p } = plan;
   assertAvailable(tool);
+  if (require('./management-tools.service').handles(tool)) return require('./management-tools.service').execute(db, owner, plan, token, lang);
   let result, answer;
   if (tool.startsWith('notifications.')) {
     const service = require('../notification/notification.service');
