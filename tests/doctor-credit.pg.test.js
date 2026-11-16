@@ -32,6 +32,7 @@ suite('consultation credit policy on isolated PostgreSQL', () => {
       max: 8,
     });
     await pool.query('CREATE TABLE users(id INTEGER PRIMARY KEY, deleted_at TIMESTAMPTZ)');
+    await pool.query('CREATE TABLE doctor_task_outbox(tenant_id TEXT,payload JSONB)');
     const migration = fs
       .readFileSync(
         path.join(__dirname, '../db/migrations/094_asinu_v2_entitlements_and_early_signals.sql'),
@@ -83,6 +84,16 @@ suite('consultation credit policy on isolated PostgreSQL', () => {
   }
   const balance = async () =>
     Number((await pool.query('SELECT SUM(delta) AS n FROM consultation_credit_ledger')).rows[0].n);
+  test('retrying a legacy queued request never reserves a newly available gift', async () => {
+    await pool.query(
+      "INSERT INTO doctor_task_outbox(tenant_id,payload) VALUES('demo-clinic',$1::jsonb)",
+      [JSON.stringify({ payload: { task_id: 'demo-legacy-retry', app_user_id: '1' } })]
+    );
+    expect((await reserve(1, 'demo-legacy-retry')).state).toBe('none');
+    expect((await consultationCreditSummary(pool, 1)).available).toBe(1);
+    await settleConsultationCredit(pool, 1, 'demo-clinic', 'demo-legacy-retry', 'completed');
+    expect(await balance()).toBe(2);
+  });
   test('reserves on request and debits only on completed lifecycle, once', async () => {
     expect((await reserve(1, 'demo-one')).state).toBe('reserved');
     expect(await balance()).toBe(2);

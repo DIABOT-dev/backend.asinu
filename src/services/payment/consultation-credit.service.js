@@ -68,7 +68,17 @@ async function reserveConsultationCredit(db, userId, tenantId, taskId) {
       throw conflict();
     return { state: existing.state, householdId: existing.household_id };
   }
-  const wallet = await loadEligibleWallet(db, userId, true);
+  // Requests queued before the credit policy keep their original financial path
+  // on retry, even when the patient now has an unused annual gift.
+  const legacy = (
+    await db.query(
+      `SELECT 1 AS legacy FROM doctor_task_outbox WHERE tenant_id=$1
+    AND payload->'payload'->>'task_id'=$2 AND payload->'payload'->>'app_user_id'=$3
+    AND NOT ((payload->'payload') ? 'credit_state') LIMIT 1`,
+      [tenantId, taskId, String(userId)]
+    )
+  ).rows[0];
+  const wallet = legacy ? null : await loadEligibleWallet(db, userId, true);
   // A second transaction may have inserted this task while the wallet lock was pending.
   existing = (
     await db.query(

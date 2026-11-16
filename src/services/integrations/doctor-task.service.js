@@ -62,7 +62,12 @@ const comparableTaskEnvelope = (envelope) => {
   // without replacing the original envelope already queued for delivery.
   return stableJson({
     ...stableEnvelope,
-    payload: { ...payload, legal_screening: legalScreening, patient_ref: patientRef },
+    payload: {
+      ...payload,
+      credit_state: payload.credit_state ?? 'none',
+      legal_screening: legalScreening,
+      patient_ref: patientRef,
+    },
   });
 };
 

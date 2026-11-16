@@ -43,7 +43,9 @@ const request = () => ({
 function outbox() {
   let stored = null;
   return {
-    get stored() { return stored; },
+    get stored() {
+      return stored;
+    },
     query: jest.fn(async (sql, params) => {
       if (sql.includes('INSERT INTO doctor_task_outbox')) {
         if (stored) return { rowCount: 0, rows: [] };
@@ -99,25 +101,82 @@ test('a consent write changing the patient profile timestamp does not invalidate
 });
 
 test.each([
-  ['patient owner', (value) => { value.user.id = 43; }],
-  ['patient demographics', (value) => { value.user.age_group = '50-59'; }],
-  ['tenant', (value) => { value.input.tenant_id = 'clinic-other'; }],
-  ['summary', (value) => { value.input.summary = 'Changed synthetic concern'; }],
-  ['specialty', (value) => { value.input.specialty = 'internal_medicine'; }],
-  ['intake', (value) => { value.input.clinical_intake.severity = 'moderate'; }],
-  ['consent', (value) => { value.input.consent_version = 'v2.0.0'; }],
-  ['preferred doctor', (value) => { value.input.preferred_doctor_id = '10000000-0000-4000-8000-000000000001'; }],
-])('reusing a task id with different %s still conflicts and preserves the queued envelope', async (_label, change) => {
-  const pool = outbox();
-  await enqueueDoctorTask(pool, request());
-  const originalEnvelope = JSON.stringify(pool.stored);
-  jest.advanceTimersByTime(15_000);
-  const retry = request();
-  change(retry);
+  [
+    'patient owner',
+    (value) => {
+      value.user.id = 43;
+    },
+  ],
+  [
+    'patient demographics',
+    (value) => {
+      value.user.age_group = '50-59';
+    },
+  ],
+  [
+    'tenant',
+    (value) => {
+      value.input.tenant_id = 'clinic-other';
+    },
+  ],
+  [
+    'summary',
+    (value) => {
+      value.input.summary = 'Changed synthetic concern';
+    },
+  ],
+  [
+    'specialty',
+    (value) => {
+      value.input.specialty = 'internal_medicine';
+    },
+  ],
+  [
+    'intake',
+    (value) => {
+      value.input.clinical_intake.severity = 'moderate';
+    },
+  ],
+  [
+    'consent',
+    (value) => {
+      value.input.consent_version = 'v2.0.0';
+    },
+  ],
+  [
+    'preferred doctor',
+    (value) => {
+      value.input.preferred_doctor_id = '10000000-0000-4000-8000-000000000001';
+    },
+  ],
+])(
+  'reusing a task id with different %s still conflicts and preserves the queued envelope',
+  async (_label, change) => {
+    const pool = outbox();
+    await enqueueDoctorTask(pool, request());
+    const originalEnvelope = JSON.stringify(pool.stored);
+    jest.advanceTimersByTime(15_000);
+    const retry = request();
+    change(retry);
 
+    await expect(enqueueDoctorTask(pool, retry)).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'DOCTOR_TASK_IDEMPOTENCY_CONFLICT',
+    });
+    expect(JSON.stringify(pool.stored)).toBe(originalEnvelope);
+  }
+);
+
+test('legacy retries keep the original envelope when the new code explicitly selects no gifted credit', async () => {
+  const pool = outbox();
+  const first = await enqueueDoctorTask(pool, request());
+  const original = JSON.stringify(pool.stored);
+  const retry = request();
+  retry.input.credit_state = 'none';
+  await expect(enqueueDoctorTask(pool, retry)).resolves.toEqual(first);
+  expect(JSON.stringify(pool.stored)).toBe(original);
+  retry.input.credit_state = 'reserved';
   await expect(enqueueDoctorTask(pool, retry)).rejects.toMatchObject({
-    statusCode: 409,
     code: 'DOCTOR_TASK_IDEMPOTENCY_CONFLICT',
   });
-  expect(JSON.stringify(pool.stored)).toBe(originalEnvelope);
 });
