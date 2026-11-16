@@ -154,6 +154,145 @@ test('different missing details are not mixed into the same question or assigned
   expect(contract).toMatchObject({ focus: 'location', target_ids: ['c1'] });
 });
 
+test('patient uncertainty remains in the conclusion gaps but does not become the next question again', () => {
+  const contract = buildAnswerContract(context({ field: 'character', target_concerns: [{ id: 'c1', label: 'Ngứa' }, { id: 'c2', label: 'Đau đầu' }], missing_details: [
+    { concern_id: 'c1', field: 'character', status: 'unknown' },
+    { concern_id: 'c1', field: 'location', status: 'missing' },
+    { concern_id: 'c2', field: 'location', status: 'unknown' },
+  ] }));
+  expect(contract).toMatchObject({ focus: 'location', detail_field: 'location', target_ids: ['c1'] });
+});
+
+test.each([false, true])('the next question skips a previously unknown detail, including fallback=%s', async fallback => {
+  const request = input(), base = getCompactNextStep(request);
+  base.field = 'character'; base.step = 'compact_character'; base.coverageGoal = { field: 'character', targets: ['c1'] };
+  base.state.compactAssessment.concerns = [{ id: 'c1', label: 'Ngứa da', region: 'skin', facts: { character: { value: 'Không rõ', status: 'unknown' } } }];
+  base.state.compactAssessment.missing = [{ concern_id: 'c1', field: 'character', status: 'unknown' }, { concern_id: 'c1', field: 'location', status: 'missing' }];
+  base.state.compactAssessment.missing_optional = [];
+  callTextAi.mockImplementation(async params => {
+    if (fallback) throw new Error('Synthetic provider unavailable');
+    if (params.system.startsWith('Review one')) return approvedQuestionReview(params);
+    return { content: encode('character', 'Chỗ ngứa cụ thể nằm ở đâu?', ['Ở cẳng chân', 'Ở bàn tay']) };
+  });
+  const result = await resolveCompactQuestion(base, request);
+  expect(result.questionSource).toBe(fallback ? 'fallback' : 'ai');
+  expect(result.question).toMatch(/ở đâu/iu);
+  expect(base.compactAdaptive.compact.questions.at(-1).answerDetailField).toBe('location');
+  if (!fallback) {
+    const generation = callTextAi.mock.calls.find(([p]) => p.system.startsWith('You generate ONE'))[0];
+    expect(JSON.parse(generation.prompt).CONTEXT.answer_contract.focus).toBe('location');
+  }
+});
+
+test.each(['character', 'impact'])('a provider following the documented %s review schema can approve a matching menu on its first attempt', async field => {
+  const request = { ...input(), bodyLocations: ['skin'] }, base = getCompactNextStep(request);
+  base.field = field; base.step = `compact_${field}`; base.coverageGoal = { field, targets: ['c1'] };
+  base.state.compactAssessment.concerns = [{ id: 'c1', label: 'Ngứa da', facts: {}, region: 'skin' }];
+  base.state.compactAssessment.missing = [{ concern_id: 'c1', field: 'character' }];
+  base.state.compactAssessment.missing_optional = [];
+  let generations = 0;
+  callTextAi.mockImplementation(async params => {
+    if (!params.system.startsWith('Review one')) {
+      generations++;
+      if (field === 'character') {
+        expect(params.system).not.toContain('Combine closely related details');
+        return { content: encode(field, 'Chỗ ngứa có cảm giác thế nào vậy?', ['Ngứa râm ran', 'Ngứa châm chích']) };
+      }
+      return { content: JSON.stringify({ field, question: 'Ngứa da ảnh hưởng thế nào đến các việc hằng ngày?', options: [
+        { id: 'unchanged', label: 'Vẫn làm các việc như mọi khi', impact_code: 'normal' },
+        { id: 'pause', label: 'Phải dừng việc để gãi', impact_code: 'slowed' },
+      ] }) };
+    }
+    // Simulate a provider following the last output schema it was given.
+    // A later two-key schema used to discard mandatory per-choice checks.
+    const schemas = [...params.system.matchAll(/(?:Return ONE JSON object with this EXACT schema:|Return JSON) (\{[^\n]*?\})\./gu)];
+    expect(schemas).toHaveLength(1);
+    const template = JSON.parse(schemas.at(-1)[1].replaceAll('true|false', 'true'));
+    const approved = JSON.parse(approvedQuestionReview(params).content);
+    if (field === 'impact') approved.impact_codes = [
+      { id: 'unchanged', code: 'normal' }, { id: 'pause', code: 'slowed' },
+    ];
+    return { content: JSON.stringify(Object.fromEntries(Object.keys(template).map(key => [key, approved[key]]))) };
+  });
+  const result = await resolveCompactQuestion(base, request);
+  expect(result.questionSource).toBe('ai');
+  expect(generations).toBe(1);
+});
+
+test.each([
+  ['location', [{ id: 'c1', label: 'Chóng mặt', region: 'head', facts: {} }]],
+  ['pattern', [{ id: 'c1', label: 'Chóng mặt', region: 'head', facts: {} }]],
+  ['location', [{ id: 'c1', label: 'Ngứa da', region: 'skin', facts: {} }, { id: 'c2', label: 'Chóng mặt', region: 'head', facts: {} }]],
+  ['character', [{ id: 'c1', label: 'Chóng mặt', region: 'head', facts: {} }]],
+])('a %s question receives symptom-specific instructions only when its focus and owner match', async (detail, concerns) => {
+  const request = input(), base = getCompactNextStep(request);
+  base.field = 'character'; base.step = 'compact_character';
+  base.coverageGoal = { field: 'character', targets: concerns.map(c => c.id) };
+  base.state.compactAssessment.concerns = concerns;
+  base.state.compactAssessment.missing = [
+    { concern_id: 'c1', field: detail },
+    ...(concerns.length > 1 ? [{ concern_id: 'c2', field: 'character' }] : []),
+  ];
+  base.state.compactAssessment.missing_optional = [];
+  callTextAi.mockImplementation(async params => {
+    if (params.system.startsWith('Review one')) return approvedQuestionReview(params);
+    const c = JSON.parse(params.prompt).CONTEXT;
+    const question = detail === 'location' ? `${c.addressing.honorific} thấy khó chịu cụ thể ở đâu?`
+      : detail === 'pattern' ? 'Cảm giác này xảy ra liên tục hay từng đợt?' : 'Cảm giác chóng mặt này giống như thế nào?';
+    return { content: encode('character', question,
+      detail === 'location' ? ['Ở trán', 'Ở phía sau đầu'] : detail === 'pattern' ? ['Liên tục', 'Từng đợt'] : ['Cảm giác như quay cuồng', 'Cảm giác chòng chành']) };
+  });
+  const result = await resolveCompactQuestion(base, request);
+  const generation = callTextAi.mock.calls.find(([p]) => p.system.startsWith('You generate ONE'))[0];
+  const c = JSON.parse(generation.prompt).CONTEXT;
+  expect(c.answer_contract.detail_field).toBe(detail);
+  expect(generation.system.includes('For this reported dizziness, clarify the sensation')).toBe(detail === 'character');
+  expect(result.questionSource).toBe('ai');
+});
+
+test('an actual symptom measurement requests a user reading instead of an invented numeric menu', async () => {
+  const request = input(), base = getCompactNextStep(request);
+  base.field = 'character'; base.step = 'compact_character'; base.coverageGoal = { field: 'character', targets: ['c1'] };
+  base.state.compactAssessment.concerns = [{ id: 'c1', label: 'Sốt', region: null, facts: {} }];
+  base.state.compactAssessment.missing = [{ concern_id: 'c1', field: 'measurement' }];
+  base.state.compactAssessment.missing_optional = [];
+  callTextAi.mockImplementation(async params => params.system.startsWith('Review one')
+    ? approvedQuestionReview(params)
+    : { content: encode('character', 'Nhiệt kế hiện bao nhiêu độ vậy?', []) });
+  const result = await resolveCompactQuestion(base, request);
+  const generation = callTextAi.mock.calls.find(([p]) => p.system.startsWith('You generate ONE'))[0];
+  expect(JSON.parse(generation.prompt).CONTEXT.numericInput).toBe(true);
+  expect(generation.system).toContain('Return zero ordinary numeric choices');
+  const review = callTextAi.mock.calls.find(([p]) => p.system.startsWith('Review one'))[0];
+  expect(review.system).toContain('Zero ordinary numeric choices is REQUIRED');
+  expect(review.system).not.toContain('Reject a narrow list that omits ordinary likely answers');
+  expect(result.questionSource).toBe('ai');
+  expect(result.allowFreeText).toBe(true);
+});
+
+test('a grouped clinical question with ten owned statuses is not limited to an eight-choice menu', async () => {
+  const request = input(), base = getCompactNextStep(request);
+  base.field = 'clinical_context'; base.step = 'compact_clinical_context';
+  base.coverageGoal = { field: 'clinical_context', targets: [], clinicalParts: ['medication_today', 'measurements_today'],
+    measurementTypes: ['huyet_ap', 'duong_huyet'], requiredCodes: [
+      'medication_as_planned', 'medication_issue', 'no_medication', 'medication_unknown',
+      'huyet_ap_reading_available', 'huyet_ap_not_measured', 'huyet_ap_reading_unknown',
+      'duong_huyet_reading_available', 'duong_huyet_not_measured', 'duong_huyet_reading_unknown',
+    ] };
+  callTextAi.mockImplementation(async params => {
+    if (params.system.startsWith('Review one')) return approvedQuestionReview(params);
+    const c = JSON.parse(params.prompt).CONTEXT;
+    return { content: JSON.stringify({ field: c.field, question: `Hôm nay ${c.addressing.honorific} dùng thuốc và đo chỉ số như thế nào?`, options: c.required_options }) };
+  });
+  const result = await resolveCompactQuestion(base, request);
+  const generation = callTextAi.mock.calls.find(([p]) => p.system.startsWith('You generate ONE'))[0];
+  const c = JSON.parse(generation.prompt).CONTEXT;
+  expect(c.required_options).toHaveLength(10);
+  expect(generation.system).not.toContain('2-8 for readability');
+  expect(result.questionSource).toBe('ai');
+  for (const choice of c.required_options) expect(result.options).toContain(choice.label);
+});
+
 test('a transparent free-answer fallback does not repeat the complaint prefix twice', async () => {
   const request = input(), base = getCompactNextStep(request);
   base.field = 'character'; base.step = 'compact_character'; base.coverageGoal = { field: 'character', targets: ['c1'] };
@@ -165,6 +304,28 @@ test('a transparent free-answer fallback does not repeat the complaint prefix tw
   expect(result.questionSource).toBe('fallback');
   expect(result.question.match(/Đầy hơi/gu)).toHaveLength(1);
   expect(result.options).not.toContain('Buồn nôn');
+});
+
+test('a fallback detail question names and updates only the complaints missing that same detail', async () => {
+  const request = input(), base = getCompactNextStep(request);
+  base.field = 'character'; base.step = 'compact_character'; base.coverageGoal = { field: 'character', targets: ['c1', 'c2'], shared: true };
+  base.state.compactAssessment.concerns = [
+    { id: 'c1', label: 'Ngứa da', region: 'skin', facts: {} },
+    { id: 'c2', label: 'Đau nhức', region: 'limbs', facts: {} },
+  ];
+  base.state.compactAssessment.missing = [
+    { concern_id: 'c1', field: 'character', status: 'missing' },
+    { concern_id: 'c2', field: 'location', status: 'missing' },
+  ];
+  base.state.compactAssessment.missing_optional = [];
+  callTextAi.mockRejectedValue(new Error('Synthetic provider unavailable'));
+  const result = await resolveCompactQuestion(base, request);
+  const question = base.compactAdaptive.compact.questions.at(-1);
+  expect(result.questionSource).toBe('fallback');
+  expect(question.targets).toEqual(['c1']);
+  expect(question.answerDetailField).toBe('character');
+  expect(result.question).toContain('Ngứa da');
+  expect(result.question).not.toContain('Đau nhức');
 });
 
 test('owned warning/timeline/clinical statuses are preserved instead of randomized for variety', () => {

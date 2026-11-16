@@ -61,6 +61,19 @@ function requiredDetails(compact, concern) {
   ])];
 }
 
+function questionDetailFocus(question) {
+  const field = question.answerDetailField || ({
+    sensation: 'character', measured_value: 'measurement',
+    aggravating_event: 'aggravating', action_and_result: 'actions',
+  })[question.answerFocus] || question.answerFocus;
+  return DETAILS.includes(field) ? field : null;
+}
+
+function questionDetails(compact, question, concern) {
+  const focus = questionDetailFocus(question);
+  return focus ? [focus] : requiredDetails(compact, concern);
+}
+
 function blockingDetails(items, fields, context, label) {
   return (Array.isArray(items) ? items : []).filter(item => item && fields.includes(item.field) &&
     ['urgency', 'next_action'].includes(item.purpose) && typeof item.reason === 'string' &&
@@ -104,8 +117,16 @@ function initialize(compact) {
   compact.coverage.measurementReports ||= {};
   compact.coverage.measurementReplies ||= {};
   compact.coverage.reportClarifications ||= {};
+  compact.coverage.detailAttempts ||= {};
   compact.coverage.nextConcernId ||=
     Math.max(0, ...compact.coverage.concerns.map((c) => Number(c.id.slice(1)))) + 1;
+  // Existing in-progress sessions can contain nested copies from older builds.
+  // Repair those too, before their facts enter the next provider context.
+  for (const value of [...Object.values(compact.coverage.global),
+    ...compact.coverage.concerns.flatMap(concern => Object.values(concern.facts || {}))]) {
+    if (value?.history?.some(entry => Array.isArray(entry?.history)))
+      value.history = factHistory(value.history);
+  }
   return compact.coverage;
 }
 
@@ -226,9 +247,15 @@ function hydrateReadings(compact, input) {
   measurementSummary(compact, input);
 }
 
-function addConcern(coverage, label, evidence, region = null, details = ['character']) {
-  const existing = coverage.concerns.find((c) => normal(c.label) === normal(label));
-  if (existing) return existing;
+function addConcern(coverage, label, evidence, region = null, details = ['character'], reusableIds) {
+  const matches = coverage.concerns.filter((c) => normal(c.label) === normal(label) &&
+    (!reusableIds || reusableIds.has(c.id)));
+  const existing = matches.find(c => c.region === region) ||
+    (matches.length === 1 && (!matches[0].region || !region) ? matches[0] : null);
+  if (existing) {
+    if (!existing.region && region) existing.region = region;
+    return existing;
+  }
   const concern = {
     id: `c${coverage.nextConcernId++}`,
     label: textOf(label),
@@ -245,16 +272,47 @@ function fact(value, status, index, quote = value) {
   return { value: textOf(value), status, evidence: { answerIndex: index, quote: textOf(quote) } };
 }
 
+function reportedFactStatus(field, value) {
+  const text = normal(value).replace(/[.!?]+$/u, '').trim();
+  if (isUnknown(text)) return 'unknown';
+  if (field !== 'onset') return 'reported';
+  // A verbatim report can itself state that the onset is unknown. Match
+  // complete declines only; a remembered date after "but/nhưng" stays usable.
+  const vi = /^(?:(?:tôi|mình|em|cháu|con|anh|chị|cô|chú|bác|ông|bà)\s+)?(?:không|chưa)\s+(?:nhớ|biết|rõ|chắc(?: chắn)?)(?:\s+(?:rõ|chính xác))?(?:\s+(?:là|về))?\s+(?:(?:thời điểm|thời gian|ngày|lúc)(?:\s+bắt đầu)?|bắt đầu(?:\s+từ)?\s+(?:khi|lúc)\s+nào|(?:bị|có từ|từ)\s+(?:khi nào|bao giờ))$/u;
+  const en = /^(?:i\s+)?(?:do not|don['’]t|cannot|can['’]t)\s+(?:remember|know|tell)(?:\s+exactly)?\s+(?:when\s+(?:it|this|the (?:symptoms?|problem))\s+(?:started|began)|(?:the\s+)?(?:onset|start)(?:\s+(?:time|date))?)$/u;
+  return vi.test(text) || en.test(text) ? 'unknown' : 'reported';
+}
+
+function factHistory(previous) {
+  const result = [], seen = new Set();
+  const visit = (entry) => {
+    if (Array.isArray(entry)) { entry.forEach(visit); return; }
+    if (!entry || typeof entry !== 'object') return;
+    (entry.history || []).forEach(visit);
+    const { history: _history, ...snapshot } = entry;
+    const key = JSON.stringify(snapshot);
+    if (!seen.has(key)) { seen.add(key); result.push(snapshot); }
+  };
+  visit(previous);
+  return result;
+}
+
 function mergeFact(previous, incoming, conflict = false) {
   if (!previous) return incoming;
+  // A reviewed answer can resolve an earlier unread/unknown report, with
+  // equal or different words. Uncertainty is not a confirmed opposing fact.
+  // Actual contradictions between reported facts still require clarification.
+  if (['unresolved', 'unknown'].includes(previous.status) && incoming.status === 'reported')
+    return { ...incoming, history: factHistory(previous) };
   if (normal(previous.value) === normal(incoming.value)) return previous;
   if (conflict || (previous.code && incoming.code && previous.code !== incoming.code))
     return {
       ...previous,
       status: 'conflicting',
+      clarified: false,
       alternatives: [...(previous.alternatives || []), incoming],
     };
-  return { ...incoming, history: [...(previous.history || []), previous] };
+  return { ...incoming, history: factHistory(previous) };
 }
 
 function conflictOwner(coverage, conflict) {
@@ -476,6 +534,7 @@ function validateExtraction(content, context) {
     // value ("4 days ago" for "for 4 days"). The review sees this corrected
     // source text; no unquoted model assertion enters the fact ledger.
     if (quoted(evidenceOf(f), f.quote) && !quoted(f.quote, f.value)) f.value = textOf(f.quote);
+    if (reportedFactStatus(f.field, f.value) === 'unknown') delete f.code;
     const key = `${f.concern_id}:${f.field}`;
     if (
       !f ||
@@ -827,7 +886,10 @@ function directAnswer(coverage, question, answer, index) {
       return true;
     }
     coverage.global.detail_response = fact(value, unknown ? 'unknown' : 'reported', index);
-    for (const target of targets) for (const part of requiredDetails({ layout: question.layout }, target)) {
+    for (const target of targets) for (const part of questionDetails({ layout: question.layout }, question, target)) {
+      // A decline answers this question's focus, not every unasked detail.
+      // Older broad questions retain their previous scope; reported facts
+      // are never overwritten here.
       if (concernPending(target, part))
         target.facts[part] = { ...fact(value, 'unknown', index), resolution: unknown ? 'patient_unsure' : 'no_further_detail' };
     }
@@ -959,23 +1021,43 @@ async function refreshCoverage(compact, input) {
       }
       if (extraction) {
         const ids = new Map(coverage.concerns.map((c) => [c.id, c.id]));
+        // Reviewed new IDs represent distinct complaints, even when they use
+        // the same word (e.g. pain in two places). Only reconcile an option
+        // stub created from this very answer, and claim each stub at most once.
+        // Existing complaints must be referenced by their ID, not guessed from
+        // a matching label; that would mix their locations and timelines.
+        const reusableIds = new Set(context.fresh_concern_ids);
+        const claimedIds = new Set();
         for (const c of extraction.new_concerns) {
+          // Tolerate a model repeating a uniquely known label while elaborating
+          // it, provided it reports no new body site or explicit new complaint.
+          // A fresh location or another matching owner must stay separate.
+          const repeated = context.field !== 'symptoms' &&
+            !/ngoài ra|chỗ khác|ở nơi khác|thêm một|another|elsewhere/iu.test(context.answer) &&
+            !extraction.facts.some(f => f.concern_id === c.id && f.field === 'location')
+            ? context.concerns.filter(known => normal(known.label) === normal(c.label) &&
+              (!known.region || !c.region || known.region === c.region) && !claimedIds.has(known.id)) : [];
+          if (repeated.length === 1) reusableIds.add(repeated[0].id);
           const added = addConcern(
             coverage,
             c.label,
             { answerIndex: c.answer_index, quote: c.quote },
             c.region,
-            c.detail_fields
+            c.detail_fields,
+            reusableIds
           );
+          reusableIds.delete(added.id);
+          claimedIds.add(added.id);
           ids.set(c.id, added.id);
           if (grouped(compact) && c.required_details?.length)
             added.blockingDetails = c.required_details;
         }
         for (const f of extraction.facts) {
           const concern = coverage.concerns.find((c) => c.id === ids.get(f.concern_id));
+          const status = reportedFactStatus(f.field, f.value);
           const incoming = {
-            ...fact(f.value, 'reported', f.answer_index, f.quote),
-            ...(f.code ? { code: f.code } : {}),
+            ...fact(f.value, status, f.answer_index, f.quote),
+            ...(f.code && status === 'reported' ? { code: f.code } : {}),
           };
           const previous = concern.facts[f.field];
           if (f.field === 'character' && previous?.status === 'reported' && normal(f.value) === normal(concern.label))
@@ -1064,7 +1146,7 @@ async function refreshCoverage(compact, input) {
           const fields = question.field === 'impact' && question.shared ? []
             : question.field === 'timeline' ? question.timelineFields
             : question.field === 'character' && question.layout === 'eight_groups'
-              ? requiredDetails(compact, concern) : [question.field];
+              ? questionDetails(compact, question, concern) : [question.field];
           for (const field of fields || []) if (!concern.facts[field])
             concern.facts[field] = fact(answer.answer, 'unresolved', index);
         }
@@ -1072,19 +1154,30 @@ async function refreshCoverage(compact, input) {
       if (grouped(compact) && question.field === 'character') {
         const relevant = extraction?.facts.some(item => DETAILS.includes(item.field) &&
           question.targets?.includes(item.concern_id));
+        const answeredFocus = extraction?.facts.some(item => {
+          const owner = coverage.concerns.find(c => c.id === item.concern_id);
+          return owner && question.targets?.includes(owner.id) && questionDetails(compact, question, owner).includes(item.field);
+        });
         const noMore = noFurtherDetail(answer.answer);
         let descriptionLimited = false;
         for (const id of question.targets || []) {
           const concern = coverage.concerns.find(c => c.id === id);
           if (!concern) continue;
-          const replies = compact.questions.slice(0, index + 1).filter(q => q.field === 'character' && q.targets?.includes(id)).length;
-          const acknowledged = !relevant && replies >= 2;
-          for (const field of requiredDetails(compact, concern)) {
+          for (const field of questionDetails(compact, question, concern)) {
+            const pending = concernPending(concern, field);
+            const attemptKey = `${id}:${field}`;
+            // A partial answer that advances another target is useful, not an
+            // unsuccessful attempt to describe every other target. Count only
+            // unanswered attempts at this focus; replayed answers are skipped
+            // by coverage.processed and cannot spend another attempt.
+            if (pending && !answeredFocus && !noMore)
+              coverage.detailAttempts[attemptKey] = (coverage.detailAttempts[attemptKey] || 0) + 1;
+            const acknowledged = pending && !answeredFocus && coverage.detailAttempts[attemptKey] >= 2;
             // Do not waive a separately justified measurement or safety detail
             // merely because the same open description has been asked twice.
             const openDescription = ['character', 'location'].includes(field) &&
               !concern.blockingDetails?.some(item => item.field === field);
-            if (concernPending(concern, field) && (noMore || (acknowledged && openDescription))) {
+            if (pending && (noMore || (acknowledged && openDescription))) {
               concern.facts[field] = { ...fact(answer.answer, 'unknown', index),
                 resolution: noMore ? 'no_further_detail'
                   : extraction?.global_answer?.relevant === true ? 'answered_without_further_detail'

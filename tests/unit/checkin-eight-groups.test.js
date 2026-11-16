@@ -62,7 +62,9 @@ function flow(extra = {}) {
   async function advance(answer) {
     if (answer !== undefined) previousAnswers.push({ step: next.step, question: next.question, answer });
     next = await getNextTriageQuestion({ ...input, previousAnswers, adaptiveState });
-    adaptiveState = next._adaptiveState || adaptiveState;
+    // Resume from serialized state after every answer, as the HTTP/database
+    // path does; counters and question ownership must survive that round trip.
+    adaptiveState = JSON.parse(JSON.stringify(next._adaptiveState || adaptiveState));
     if (!next.isDone) seen.push(next);
     return next;
   }
@@ -208,6 +210,70 @@ test('an unclear timeline triggers a focused clarification rather than pretendin
   expect(q.step).toMatch(/^compact_timeline_q/u);
   expect(f.state.compact.coverage.concerns[0].facts.onset.status).toBe('unresolved');
   expect(generateConclusion).not.toHaveBeenCalled();
+});
+
+test('uncertain sensation is not re-asked and does not erase an answerable location in the complete eight-group flow', async () => {
+  details = ['character', 'location'];
+  const provider = callTextAi.getMockImplementation();
+  callTextAi.mockImplementation(async params => {
+    const c = JSON.parse(params.prompt).CONTEXT;
+    if (params.system.startsWith('You generate ONE') && c.field === 'character' && c.answer_contract?.focus === 'location')
+      return { content: JSON.stringify({ field: 'character', question: 'Chỗ khớp sưng cụ thể nằm ở đâu vậy?',
+        options: [{ id: 'right_knee', label: 'Ở gối phải' }, { id: 'left_knee', label: 'Ở gối trái' }] }) };
+    return provider(params);
+  });
+  extractExtra = c => c.field === 'character' ? {
+    facts: [{ concern_id: c.concerns[0].id, field: 'location', value: 'ở gối phải', quote: 'ở gối phải', answer_index: c.answer_index }],
+    global_answer: { relevant: true, quote: c.answer },
+  } : {};
+  let characterAnswers = 0;
+  const f = flow();
+  const assessment = await f.finish(q => q.field === 'character'
+    ? ++characterAnswers === 1 ? 'Không rõ' : 'Sưng khớp ở gối phải' : undefined);
+  expect(characterAnswers).toBe(2);
+  expect(f.previousAnswers).toHaveLength(9);
+  expect(assessment.concerns[0].facts).toMatchObject({
+    character: { status: 'unknown', value: 'Không rõ' },
+    location: { status: 'reported', value: 'ở gối phải' },
+  });
+  expect(assessment.missing).toEqual(expect.arrayContaining([expect.objectContaining({ field: 'character', status: 'unknown' })]));
+});
+
+test.each(['sensation', 'location'])('off-topic %s replies preserve the other detail and the full interview still finishes', async offTopic => {
+  details = ['character', 'location'];
+  const provider = callTextAi.getMockImplementation();
+  callTextAi.mockImplementation(async params => {
+    const c = JSON.parse(params.prompt).CONTEXT;
+    if (params.system.startsWith('You generate ONE') && c.field === 'character') {
+      const location = c.answer_contract.focus === 'location';
+      const asked = c.previous_questions.filter(q => location ? /ở đâu/iu.test(q) : /cảm giác/iu.test(q)).length;
+      return { content: JSON.stringify({ field: 'character', question: location
+        ? asked ? 'Vị trí khớp sưng cụ thể ở đâu vậy?' : 'Chỗ khớp sưng nằm ở đâu vậy?'
+        : asked ? 'Cảm giác ở chỗ khớp sưng giống thế nào?' : 'Khớp sưng có cảm giác thế nào vậy?',
+      options: location ? [{ id: 'right_knee', label: 'Ở gối phải' }, { id: 'left_knee', label: 'Ở gối trái' }]
+        : [{ id: 'tight', label: 'Căng tức' }, { id: 'stiff', label: 'Căng cứng' }] }) };
+    }
+    return provider(params);
+  });
+  extractExtra = c => c.field === 'character' ? {
+    facts: c.answer === 'Khớp sưng căng tức' ? [{ concern_id: c.concerns[0].id, field: 'character', value: 'căng tức', quote: 'căng tức', answer_index: c.answer_index }]
+      : c.answer === 'Sưng khớp ở gối phải' ? [{ concern_id: c.concerns[0].id, field: 'location', value: 'ở gối phải', quote: 'ở gối phải', answer_index: c.answer_index }] : [],
+    global_answer: { relevant: !c.answer.includes('điện thoại'), quote: c.answer },
+  } : {};
+  const f = flow(), attempts = { character: 0, location: 0 };
+  const assessment = await f.finish(q => {
+    if (q.field !== 'character') return undefined;
+    const field = q.answerDetailField;
+    attempts[field]++;
+    if (field === 'location') expect(f.state.compact.coverage.concerns[0].facts.location?.status).not.toBe('unknown');
+    if (offTopic === 'sensation' && field === 'character') return 'Tôi đang cầm điện thoại';
+    if (offTopic === 'location' && field === 'location' && attempts.location === 1) return 'Tôi đang cầm điện thoại';
+    return field === 'location' ? 'Sưng khớp ở gối phải' : 'Khớp sưng căng tức';
+  });
+  expect(f.previousAnswers).toHaveLength(10);
+  expect(attempts).toEqual(offTopic === 'sensation' ? { character: 2, location: 1 } : { character: 1, location: 2 });
+  expect(assessment.concerns[0].facts.location).toMatchObject({ status: 'reported', value: 'ở gối phải' });
+  expect(assessment.concerns[0].facts.character.status).toBe(offTopic === 'sensation' ? 'unknown' : 'reported');
 });
 
 test('a partially completed clinical answer does not mark the other measurement as answered', async () => {

@@ -1,0 +1,30 @@
+{
+  "synthetic": true,
+  "source": "Dr7 medgemma-27b-it live response captured 2026-11-16; no account data",
+  "answer": "Ngứa da ở cẳng chân. Tôi không nhớ bắt đầu khi nào nhưng đến giờ vẫn như cũ. Tôi vẫn sinh hoạt bình thường.",
+  "extraction": {
+    "new_concerns": [],
+    "facts": [
+      { "concern_id": "c1", "field": "location", "value": "cẳng chân", "quote": "cẳng chân", "answer_index": 0 },
+      { "concern_id": "c1", "field": "onset", "value": "Tôi không nhớ bắt đầu khi nào", "quote": "Tôi không nhớ bắt đầu khi nào", "answer_index": 0 },
+      { "concern_id": "c1", "field": "progression", "code": "same", "value": "đến giờ vẫn như cũ", "quote": "đến giờ vẫn như cũ", "answer_index": 0 }
+    ],
+    "shared_facts": [
+      { "field": "impact", "code": "normal", "value": "Tôi vẫn sinh hoạt bình thường", "quote": "Tôi vẫn sinh hoạt bình thường", "answer_index": 0 }
+    ],
+    "global_answer": {
+      "relevant": true,
+      "quote": "Ngứa da ở cẳng chân. Tôi không nhớ bắt đầu khi nào nhưng đến giờ vẫn như cũ. Tôi vẫn sinh hoạt bình thường."
+    }
+  },
+  "review": {
+    "valid": true,
+    "approved_fact_indices": [0, 1, 2],
+    "rejected_fact_indices": [],
+    "new_concerns_valid": true,
+    "shared_facts_valid": true,
+    "requested_details_valid": true,
+    "global_answer_valid": true,
+    "errors": []
+  }
+}

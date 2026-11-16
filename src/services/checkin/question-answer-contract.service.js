@@ -30,18 +30,21 @@ const RULES = {
 };
 const normalized = value => String(value || '').normalize('NFC').toLocaleLowerCase().trim()
   .replace(/[.!?]+$/u, '').replace(/\s+/gu, ' ');
+// An unknown patient report stays a limitation in the conclusion. It is not
+// an unasked detail to keep requesting from the same person.
+const isPendingDetail = item => !['reported', 'unknown', 'not_applicable'].includes(item.status);
 
 function buildAnswerContract(context) {
   if (OWNED_FIELDS.has(context.field)) return null;
+  const missing = (context.missing_details || []).filter(isPendingDetail);
   let detail;
   if (context.field === 'character' && context.bundled_details) {
-    const missing = context.missing_details || [];
     detail = missing.find(item => item.required === true)?.field || missing[0]?.field || 'character';
   }
   const focus = FOCUS[detail || context.field];
   if (!focus) return null;
   let targetIds = detail
-    ? [...new Set((context.missing_details || []).filter(item => item.field === detail).map(item => item.concern_id))]
+    ? [...new Set(missing.filter(item => item.field === detail).map(item => item.concern_id))]
     : (context.target_concerns || []).map(item => item.id);
   if (!targetIds.length) targetIds = (context.target_concerns || []).map(item => item.id);
   return { version: VERSION, focus, allowed_answer_kinds: ANSWER_KINDS[focus] || [focus], ...(detail ? { detail_field: detail } : {}), target_ids: targetIds, rule: RULES[focus] };
@@ -85,7 +88,9 @@ function questionReviewAccepted(question, verdict, context) {
 function reviewInstruction(context) {
   if (!context.answer_contract) return '';
   const vocabulary = [...new Set([...Object.values(FOCUS), ...Object.values(ANSWER_KINDS).flat(), 'unrelated', 'unclear'])];
-  return `REQUIRED PER-CHOICE REVIEW: First independently infer what QUESTION actually asks, not what its field name claims. Then classify every answer independently. Compare both with CONTEXT.answer_contract; never simply copy the expected focus when the actual wording asks something else.\nReturn ONE JSON object with this EXACT schema: {"valid":true|false,"errors":["short reason"],"question_focus":"one actual intent","ordinary_answers_covered":true|false,"choice_checks":[{"id":"exact existing option ID","answer_kind":"independently classified kind","answers_question":true|false,"context_relevant":true|false,"not_repeated":true|false,"reason":"short reason or null"}]}. Include any independently required impact_codes as well. ordinary_answers_covered MUST be a BOOLEAN, never a list or explanation. The three check flags MUST be BOOLEANS. Use question_focus/answer_kind from ${JSON.stringify(vocabulary)}. choice_checks must contain EVERY offered option exactly once, no missing or duplicate IDs.\nFor each option decide whether it directly answers the VISIBLE question, fits the CURRENT target complaint/location, and avoids re-asking known information. allowed_answer_kinds in the contract specifies which classified kinds are acceptable, not what you must claim the answer means. A true valid flag alone is NOT approval. For a sensation question reject a list of associated symptoms; nausea or a new pain does not describe what existing bloating feels like. For a location question reject sensations or dates. For a prior-event question reject symptoms, diagnoses or follow-up questions. For associated changes reject repeated primary complaints. Distinct wording is not enough: reject near-synonyms padding a generic menu when it misses ordinary alternatives. Explain failures briefly; valid must be false if any required check fails. ${context.answer_contract.rule}\n`;
+  const impactSchema = context.impact_choices_mode === 'patient_context'
+    ? ',"impact_codes":[{"id":"exact existing option ID","code":"normal|slowed|unable"}]' : '';
+  return `REQUIRED PER-CHOICE REVIEW: First independently infer what QUESTION actually asks, not what its field name claims. Then classify every answer independently. Compare both with CONTEXT.answer_contract; never simply copy the expected focus when the actual wording asks something else.\nReturn ONE JSON object with this EXACT schema: {"valid":true|false,"errors":["short reason"],"question_focus":"one actual intent","ordinary_answers_covered":true|false,"choice_checks":[{"id":"exact existing option ID","answer_kind":"independently classified kind","answers_question":true|false,"context_relevant":true|false,"not_repeated":true|false,"reason":"short reason or null"}]${impactSchema}}. ordinary_answers_covered MUST be a BOOLEAN, never a list or explanation. The three check flags MUST be BOOLEANS. Use question_focus/answer_kind from ${JSON.stringify(vocabulary)}. choice_checks must contain EVERY offered option exactly once, no missing or duplicate IDs.\nFor each option decide whether it directly answers the VISIBLE question, fits the CURRENT target complaint/location, and avoids re-asking known information. allowed_answer_kinds in the contract specifies which classified kinds are acceptable, not what you must claim the answer means. A true valid flag alone is NOT approval. For a sensation question reject a list of associated symptoms; nausea or a new pain does not describe what existing bloating feels like. For a location question reject sensations or dates. For a prior-event question reject symptoms, diagnoses or follow-up questions. For associated changes reject repeated primary complaints. Distinct wording is not enough: reject near-synonyms padding a generic menu when it misses ordinary alternatives. Explain failures briefly; valid must be false if any required check fails. ${context.answer_contract.rule}\n`;
 }
 
-module.exports = { VERSION, buildAnswerContract, obviousMismatch, questionReviewAccepted, reviewInstruction, needsReview: field => Boolean(FOCUS[field]) };
+module.exports = { VERSION, buildAnswerContract, obviousMismatch, questionReviewAccepted, reviewInstruction, isPendingDetail, needsReview: field => Boolean(FOCUS[field]) };
