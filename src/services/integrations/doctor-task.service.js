@@ -86,7 +86,7 @@ const integrationUrl = (resource) => {
   return tasksUrl.toString();
 };
 
-const deliverDoctorRequest = async (resource, payload, idempotencyKey) => {
+const deliverDoctorRequest = async (resource, payload, idempotencyKey, locale) => {
   assertDoctorTaskConfig();
   const body = JSON.stringify(payload);
   const timestamp = String(Math.floor(Date.now() / 1000));
@@ -97,6 +97,7 @@ const deliverDoctorRequest = async (resource, payload, idempotencyKey) => {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
+        ...(locale ? { 'accept-language': locale } : {}),
         'x-asinu-timestamp': timestamp,
         'x-asinu-signature': signPayload(body, timestamp),
         ...(idempotencyKey ? { 'x-idempotency-key': idempotencyKey } : {}),
@@ -657,8 +658,10 @@ const flushDoctorTaskOutbox = async (pool, limit = 20) => {
 };
 
 module.exports = {
+  configuredTenantIds,
   assertDoctorTaskConfig,
   assertTenantAllowed,
+  assertPatientOwnsTask,
   buildDoctorTaskEnvelope,
   deliverDoctorTask,
   deliverDoctorRequest,

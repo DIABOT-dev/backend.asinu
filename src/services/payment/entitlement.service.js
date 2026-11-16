@@ -107,7 +107,7 @@ async function ensureHousehold(pool, ownerUserId) {
 async function householdOwnedBy(pool, ownerUserId) {
   const result = await pool.query(
     `SELECT h.*,
-            COALESCE((SELECT SUM(delta) FROM consultation_credit_ledger l WHERE l.household_id = h.id), 0)::integer AS consultation_credits,
+            GREATEST(0,COALESCE((SELECT SUM(delta) FROM consultation_credit_ledger l WHERE l.household_id = h.id), 0) - (SELECT COUNT(*) FROM doctor_consultation_credit_reservations r WHERE r.household_id=h.id AND r.state='reserved'))::integer AS consultation_credits,
             (SELECT COUNT(*)::integer FROM subscription_household_members m WHERE m.household_id = h.id AND m.status = 'active') AS protected_member_count,
             EXISTS (SELECT 1 FROM subscription_household_members m WHERE m.household_id = h.id AND m.user_id = $1 AND m.status = 'active') AS is_protected_member
        FROM subscription_households h
@@ -121,7 +121,7 @@ async function householdOwnedBy(pool, ownerUserId) {
 async function householdProtecting(pool, userId) {
   const result = await pool.query(
     `SELECT h.*, m.added_at, true AS is_protected_member,
-            COALESCE((SELECT SUM(delta) FROM consultation_credit_ledger l WHERE l.household_id = h.id), 0)::integer AS consultation_credits,
+            GREATEST(0,COALESCE((SELECT SUM(delta) FROM consultation_credit_ledger l WHERE l.household_id = h.id), 0) - (SELECT COUNT(*) FROM doctor_consultation_credit_reservations r WHERE r.household_id=h.id AND r.state='reserved'))::integer AS consultation_credits,
             (SELECT COUNT(*)::integer FROM subscription_household_members x WHERE x.household_id = h.id AND x.status = 'active') AS protected_member_count
        FROM subscription_household_members m
        JOIN subscription_households h ON h.id = m.household_id
@@ -290,6 +290,7 @@ async function invalidateHouseholdEntitlements(db, householdId) {
 }
 
 module.exports = {
+  isActiveHousehold,
   ensureHousehold,
   householdOwnedBy,
   householdProtecting,

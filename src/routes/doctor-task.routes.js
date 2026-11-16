@@ -2,6 +2,12 @@ const express = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { bindController } = require('../middleware/controller-handler.middleware');
 const {
+  patientCare,
+  patientCredits,
+  reconsultationContext,
+  cancelPatientTask,
+} = require('../controllers/doctor-care.controller');
+const {
   imageUpload,
   audioUpload,
   handleUpload,
@@ -28,6 +34,15 @@ const {
 
 function doctorTaskRoutes(pool) {
   const router = express.Router();
+  router.get('/care', requireAuth, bindController(patientCare, pool));
+  router.post('/care', requireAuth, bindController(patientCare, pool));
+  router.get(
+    '/tasks/:taskId/reconsultation',
+    requireAuth,
+    bindController(reconsultationContext, pool)
+  );
+  router.post('/tasks/:taskId/cancel', requireAuth, bindController(cancelPatientTask, pool));
+  router.get('/credits', requireAuth, bindController(patientCredits, pool));
   router.post('/screening', requireAuth, bindController(screenDoctorConsultation, pool));
   router.post('/tasks', requireAuth, bindController(requestDoctorTask, pool));
   router.get('/tasks', requireAuth, bindController(listDoctorTasks, pool));

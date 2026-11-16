@@ -130,7 +130,7 @@ describe('temporarily hidden health measurement notifications', () => {
     await expect(markAllAsRead(pool, 42)).resolves.toEqual({ ok: true, markedCount: 1 });
     expect(pool.query).toHaveBeenCalledWith(
       expect.stringContaining('NOT (type = ANY($2::text[]))'),
-      [42, HEALTH_METRIC_REMINDER_TYPES]
+      [42, HEALTH_METRIC_REMINDER_TYPES, null]
     );
   });
   test('paused historical reminders no longer consume the daily budget of other notifications', async () => {

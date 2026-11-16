@@ -1276,5 +1276,8 @@
   "checkin.detail.option.talking_helps": "Chia sẻ với người thân thấy đỡ",
   "checkin.detail.option.less_rubbing_helps": "Bớt cọ xát thấy đỡ",
   "checkin.detail.option.cool_place_helps": "Ở chỗ mát thấy đỡ",
-  "checkin.triage.question.symptoms_selected": "Lúc này, {{honorific}} đang gặp những biểu hiện nào dưới đây?"
+  "checkin.triage.question.symptoms_selected": "Lúc này, {{honorific}} đang gặp những biểu hiện nào dưới đây?",
+  "doctor.care_notice_title": "Kế hoạch chăm sóc có cập nhật",
+  "doctor.care_notice_body": "Mở Asinu để xem yêu cầu theo dõi hoặc kế hoạch chăm sóc.",
+  "doctor.reconsultation_unavailable": "Chỉ có thể tái tư vấn từ ca đã hoàn tất."
 }

@@ -1,3 +1,5 @@
+const { deliverDoctorRequest } = require('./doctor-task.service');
+const { settleConsultationCredit } = require('../payment/consultation-credit.service');
 const { encryptHealthField } = require('../../security/health-field-encryption');
 const { z } = require('zod');
 const { assertTenantAllowed } = require('./doctor-task.service');
@@ -61,9 +63,10 @@ const integrationError = (statusCode, code, message) => {
 
 const isPatientDeletionRace = (error) =>
   error?.code === '23503' &&
-  ['doctor_task_lifecycle_events_app_user_id_fkey', 'doctor_patient_medical_records_user_id_fkey'].includes(
-    error?.constraint
-  );
+  [
+    'doctor_task_lifecycle_events_app_user_id_fkey',
+    'doctor_patient_medical_records_user_id_fkey',
+  ].includes(error?.constraint);
 
 const ignoredDeletedPatientEvent = (event, payload) => ({
   event_id: event.event_id,
@@ -127,6 +130,26 @@ const ingestDoctorLifecycle = async (pool, req) => {
     throw integrationError(404, 'DOCTOR_TASK_NOT_FOUND', 'The Doctor task was not found.');
   }
 
+  const settleCredit = async () => {
+    if (['cancelled', 'expired', 'emergency_referred', 'forwarded'].includes(payload.status)) {
+      const { stopPatientTaskIvr } = require('./doctor-task-closure.service');
+      await stopPatientTaskIvr(pool, Number(appUserId), payload.tenant_id, payload.app_order_id);
+    }
+    const result = await settleConsultationCredit(
+      pool,
+      Number(appUserId),
+      payload.tenant_id,
+      payload.app_order_id,
+      payload.status
+    );
+    if (['consumed', 'released'].includes(result.state))
+      await deliverDoctorRequest('credit-status', {
+        tenant_id: payload.tenant_id,
+        app_user_id: appUserId,
+        task_id: payload.app_order_id,
+        state: result.state,
+      });
+  };
   const persistConsultationOutcome = async () => {
     if (payload.status !== 'completed' || !payload.consultation_summary) return;
     const summary = payload.consultation_summary;
@@ -142,20 +165,40 @@ const ingestDoctorLifecycle = async (pool, req) => {
        )`,
       [
         Number(appUserId),
-        encryptHealthField(Number(appUserId), 'doctor_patient_medical_records.diagnosis', summary.assessment),
-        encryptHealthField(Number(appUserId), 'doctor_patient_medical_records.summary', summary.problem_summary),
-        encryptHealthField(Number(appUserId), 'doctor_patient_medical_records.treatment', summary.next_steps),
-        encryptHealthField(Number(appUserId), 'doctor_patient_medical_records.notes', [
-          `Dấu hiệu cảnh báo: ${summary.warning_signs}`,
-          `Theo dõi/tái tư vấn: ${summary.follow_up_recommendation}`,
-          payload.follow_up_until ? `Trao đổi bổ sung đến: ${payload.follow_up_until}` : null,
-        ]
-          .filter(Boolean)
-          .join('\n')),
+        encryptHealthField(
+          Number(appUserId),
+          'doctor_patient_medical_records.diagnosis',
+          summary.assessment
+        ),
+        encryptHealthField(
+          Number(appUserId),
+          'doctor_patient_medical_records.summary',
+          summary.problem_summary
+        ),
+        encryptHealthField(
+          Number(appUserId),
+          'doctor_patient_medical_records.treatment',
+          summary.next_steps
+        ),
+        encryptHealthField(
+          Number(appUserId),
+          'doctor_patient_medical_records.notes',
+          [
+            `Dấu hiệu cảnh báo: ${summary.warning_signs}`,
+            `Theo dõi/tái tư vấn: ${summary.follow_up_recommendation}`,
+            payload.follow_up_until ? `Trao đổi bổ sung đến: ${payload.follow_up_until}` : null,
+          ]
+            .filter(Boolean)
+            .join('\n')
+        ),
         payload.doctor_ref || null,
         payload.app_order_id,
         event.occurred_at,
-        encryptHealthField(Number(appUserId), 'doctor_patient_medical_records.title', 'Tóm tắt tư vấn bác sĩ'),
+        encryptHealthField(
+          Number(appUserId),
+          'doctor_patient_medical_records.title',
+          'Tóm tắt tư vấn bác sĩ'
+        ),
       ]
     );
     await rebuildPatientHealthTimeline(pool, Number(appUserId));
@@ -167,6 +210,7 @@ const ingestDoctorLifecycle = async (pool, req) => {
     );
 
     if (existing.rows[0]) {
+      await settleCredit();
       await persistConsultationOutcome();
       return { ...existing.rows[0], duplicate: true };
     }
@@ -200,6 +244,7 @@ const ingestDoctorLifecycle = async (pool, req) => {
         }),
       ]
     );
+    await settleCredit();
     await persistConsultationOutcome();
     // pool.query has committed this INSERT before resolving. Only the winning
     // insert announces the change; existing events and conflict retries stay silent.

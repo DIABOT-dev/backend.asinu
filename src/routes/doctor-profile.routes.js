@@ -2,9 +2,11 @@ const express = require('express');
 const controller = require('../controllers/doctor-profile.controller');
 const { bindController } = require('../middleware/controller-handler.middleware');
 const { requireDoctorSignature } = require('../middleware/doctor-signature.middleware');
+const { careEvent } = require('../controllers/doctor-care.controller');
 
 function doctorProfileRoutes(pool) {
   const router = express.Router();
+  router.post('/care/events', bindController(careEvent, pool));
   router.post('/profile', bindController(controller.getDoctorPatientProfile, pool));
   router.post('/patient-files', bindController(controller.createDoctorPatientFile, pool));
   router.post('/lifecycle', bindController(controller.ingestDoctorPatientLifecycle, pool));

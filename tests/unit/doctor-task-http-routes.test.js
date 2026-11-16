@@ -46,7 +46,16 @@ jest.mock('../../src/controllers/doctor-task.controller', () => ({
   getDoctorPrivacyReceipts: jest.fn(),
 }));
 
-const controller = require('../../src/controllers/doctor-task.controller');
+jest.mock('../../src/controllers/doctor-care.controller', () => ({
+  patientCare: jest.fn(),
+  patientCredits: jest.fn(),
+  reconsultationContext: jest.fn(),
+  cancelPatientTask: jest.fn(),
+}));
+const controller = {
+  ...require('../../src/controllers/doctor-task.controller'),
+  ...require('../../src/controllers/doctor-care.controller'),
+};
 const { requireAuth } = require('../../src/middleware/auth.middleware');
 const doctorTaskRoutes = require('../../src/routes/doctor-task.routes');
 const pool = {};
@@ -57,6 +66,11 @@ app.use('/doctor', router);
 app.use((_error, _req, res, _next) => res.status(500).json({ ok: false, code: 'INTERNAL_ERROR' }));
 
 const routes = [
+  ['get', '/care', 'patientCare'],
+  ['post', '/care', 'patientCare'],
+  ['get', '/tasks/:taskId/reconsultation', 'reconsultationContext'],
+  ['post', '/tasks/:taskId/cancel', 'cancelPatientTask'],
+  ['get', '/credits', 'patientCredits'],
   ['post', '/screening', 'screenDoctorConsultation'],
   ['post', '/tasks', 'requestDoctorTask'],
   ['get', '/tasks', 'listDoctorTasks'],
@@ -82,9 +96,11 @@ beforeEach(() => {
     next();
   });
   for (const [name, handler] of Object.entries(controller)) {
-    handler.mockReset().mockImplementation((_pool, req, res) =>
-      res.json({ handler: name, userId: req.user.id, middlewareOrder: req.middlewareOrder })
-    );
+    handler
+      .mockReset()
+      .mockImplementation((_pool, req, res) =>
+        res.json({ handler: name, userId: req.user.id, middlewareOrder: req.middlewareOrder })
+      );
   }
 });
 
@@ -150,9 +166,14 @@ test('sync controller failures still reach Express error middleware', async () =
   expect(response.body).toEqual({ ok: false, code: 'INTERNAL_ERROR' });
 });
 
-
-test.each(['/recommendations', '/specialties'])('retired mobile directory endpoint %s is no longer exposed', async (route) => {
-  await request(app).post('/doctor' + route).send({}).expect(404);
-  expect(controller.recommendDoctor).not.toHaveBeenCalled();
-  expect(controller.listDoctorSpecialties).not.toHaveBeenCalled();
-});
+test.each(['/recommendations', '/specialties'])(
+  'retired mobile directory endpoint %s is no longer exposed',
+  async (route) => {
+    await request(app)
+      .post('/doctor' + route)
+      .send({})
+      .expect(404);
+    expect(controller.recommendDoctor).not.toHaveBeenCalled();
+    expect(controller.listDoctorSpecialties).not.toHaveBeenCalled();
+  }
+);

@@ -37,6 +37,7 @@ const doctorTaskRequestSchema = z
     // The client owns this idempotency key. Generating it only on the server
     // makes a retry after an app restart create a second consultation.
     task_id: z.string().trim().min(1).max(160),
+    previous_task_id: z.string().trim().min(1).max(160).optional(),
   })
   .strict();
 
@@ -392,6 +393,8 @@ const buildDoctorTaskEnvelope = ({ user, input }) => {
     payload: {
       task_id: taskId,
       app_user_id: String(user.id),
+      ...(input.credit_state ? { credit_state: input.credit_state } : {}),
+      ...(input.previous_task_id ? { previous_task_id: input.previous_task_id } : {}),
       specialty: normalizeSpecialty(input.specialty),
       service_flow: input.service_flow,
       priority: input.priority,

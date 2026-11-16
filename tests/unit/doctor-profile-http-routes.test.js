@@ -117,6 +117,7 @@ test('keeps all Doctor integration endpoints and methods unchanged', () => {
         )
       )
   ).toEqual([
+    'POST /care/events',
     'POST /profile',
     'POST /patient-files',
     'POST /lifecycle',
