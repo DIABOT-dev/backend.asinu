@@ -251,6 +251,17 @@ const doctorAiAssistSchema = doctorMessageQuerySchema
       'auto_triage',
     ]),
     task_summary: z.string().trim().min(1).max(5000),
+    consultation_summary: z
+      .object({
+        problem_summary: z.string().trim().min(1).max(3000),
+        assessment: z.string().trim().min(1).max(3000),
+        next_steps: z.string().trim().min(1).max(3000),
+        warning_signs: z.string().trim().min(1).max(3000),
+        follow_up_recommendation: z.string().trim().min(1).max(3000),
+      })
+      .strict()
+      .nullable()
+      .optional(),
     locale: z.enum(['vi', 'en']).default('vi'),
     clinical_support: z
       .object({

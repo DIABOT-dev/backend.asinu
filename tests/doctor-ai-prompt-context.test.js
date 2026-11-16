@@ -186,6 +186,76 @@ test('the opening complaint supports a consultation draft without a synthetic pa
   );
 });
 
+test('a brief reply to an open question reaches the model as an unresolved clinical turn', async () => {
+  const current = context();
+  current.conversation.at(-1).message = 'Dạ.';
+  current.latest_patient_message = current.conversation.at(-1);
+  loadDoctorClinicalContext.mockResolvedValue(current);
+  callTextAi.mockResolvedValue({
+    content: JSON.stringify({
+      patient_reply: 'Bạn nói rõ vị trí đau giúp tôi nhé?',
+      understanding: {
+        reply_to_message_id: '3',
+        speaker: 'patient',
+        subject: 'self',
+        intent: 'uncertain',
+        next_action: 'clarify',
+        evidence: [{ message_id: '3', quote: 'Dạ.' }],
+      },
+    }),
+  });
+  const output = await createDoctorAiAssist({}, { ...input, touchpoint: 'consultation_draft' });
+  expect(JSON.parse(callTextAi.mock.calls[0][0].prompt).conversation_intent).toBe('clinical');
+  expect(output.patient_reply).toBe('Bạn nói rõ vị trí đau giúp tôi nhé?');
+  expect(output.tools_used).toContain('grounded_turn_understanding');
+  expect(callTextAi).toHaveBeenCalledTimes(1);
+});
+
+test('a new measurement-context question survives validation after the value was answered', async () => {
+  const current = context();
+  current.conversation[0].message = 'Tôi theo dõi huyết áp từ sáng nay.';
+  current.conversation[1].message = 'Chỉ số huyết áp bạn đo được là bao nhiêu?';
+  current.conversation[2].message = '120/80 ạ.';
+  current.latest_patient_message = current.conversation[2];
+  loadDoctorClinicalContext.mockResolvedValue(current);
+  callTextAi.mockResolvedValue({
+    content: JSON.stringify({ patient_reply: 'Bạn đo huyết áp khi nào?' }),
+  });
+  const output = await createDoctorAiAssist({}, { ...input, touchpoint: 'consultation_draft' });
+  expect(output.patient_reply).toBe('Bạn đo huyết áp khi nào?');
+  expect(callTextAi).toHaveBeenCalledTimes(1);
+});
+
+test('a model pain-scale question reaches the specialist without a generic replacement', async () => {
+  const generated = 'Trên thang điểm 0–10, cơn đau hiện tại ở mức mấy?';
+  callTextAi.mockResolvedValue({
+    content: JSON.stringify({ clarifying_questions: [generated] }),
+  });
+  const output = await createDoctorAiAssist({}, input);
+  expect(output.clarifying_questions).toEqual([generated]);
+  expect(output.validation_status).toBe('valid');
+  expect(callTextAi).toHaveBeenCalledTimes(1);
+});
+
+test('internal summaries use the configured Doctor model instead of falling through to an unrelated provider default', async () => {
+  const previousChat = process.env.DOCTOR_AI_CHAT_MODEL;
+  const previousInternal = process.env.DOCTOR_AI_MODEL;
+  process.env.DOCTOR_AI_CHAT_MODEL = 'doctor-chat-model';
+  delete process.env.DOCTOR_AI_MODEL;
+  try {
+    await createDoctorAiAssist({}, { ...input, touchpoint: 'soap_note' });
+    expect(callTextAi.mock.calls[0][0].model).toBe('doctor-chat-model');
+    process.env.DOCTOR_AI_MODEL = 'explicit-internal-model';
+    await createDoctorAiAssist({}, { ...input, touchpoint: 'patient_summary' });
+    expect(callTextAi.mock.calls[1][0].model).toBe('explicit-internal-model');
+  } finally {
+    if (previousChat === undefined) delete process.env.DOCTOR_AI_CHAT_MODEL;
+    else process.env.DOCTOR_AI_CHAT_MODEL = previousChat;
+    if (previousInternal === undefined) delete process.env.DOCTOR_AI_MODEL;
+    else process.env.DOCTOR_AI_MODEL = previousInternal;
+  }
+});
+
 test('the complete consultation reaches the provider without cutting older turns or the middle of a message', async () => {
   const current = context();
   current.conversation = Array.from({ length: 120 }, (_, i) => ({

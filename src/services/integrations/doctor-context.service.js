@@ -4,6 +4,7 @@ const { assertTenantAllowed } = require('./doctor-task.service');
 const { assertProfileRequest } = require('./doctor-profile.service');
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 const { clinicalConversation } = require('./doctor-conversation-context');
+const { reconcileMissingData, documentedFacts } = require('./doctor-documented-facts');
 
 const integrationError = (statusCode, code, message) => {
   const error = new Error(message);
@@ -58,7 +59,14 @@ const buildDataQuality = (context) => {
         `Chỉ số huyết áp lúc ${measurement.occurred_at} có tâm thu không lớn hơn tâm trương.`
       );
   }
-  return { missing_data: [...new Set(missing)], conflicts: [...new Set(conflicts)] };
+  if ((context.medications || []).length && documentedFacts(context).noCurrentMedicines)
+    conflicts.push(
+      'Bệnh nhân xác nhận hiện không dùng thuốc nhưng hồ sơ có bản ghi thuốc; cần đối chiếu thời điểm sử dụng.'
+    );
+  return {
+    missing_data: reconcileMissingData(context, [...new Set(missing)]),
+    conflicts: [...new Set(conflicts)],
+  };
 };
 
 const loadDoctorClinicalContext = async (pool, input) => {
@@ -169,9 +177,17 @@ const loadDoctorClinicalContext = async (pool, input) => {
     profile: profile.rows[0] || {},
     blood_pressure: bloodPressure.rows,
     glucose: glucose.rows,
-    medications: require('../../security/health-field-encryption').decryptHealthRows(appUserId, 'medication_logs', ['med_name'], medication.rows),
+    medications: require('../../security/health-field-encryption').decryptHealthRows(
+      appUserId,
+      'medication_logs',
+      ['med_name'],
+      medication.rows
+    ),
     symptoms: symptoms.rows,
     medical_records: records.rows,
+    // This snapshot comes only from the signed Doctor integration. Historical
+    // medical records must not be mistaken for the plan for this task.
+    consultation_summary: input.consultation_summary || null,
     checkins: checkins.rows,
     conversation,
     latest_patient_message: latestPatientMessage,

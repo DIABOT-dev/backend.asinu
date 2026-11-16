@@ -83,6 +83,131 @@ test('regenerates an empty draft with corrective feedback, then returns the vali
   expect(systems[0]).not.toContain('OUTPUT CORRECTION');
 });
 
+test('regeneration retains all earlier corrections instead of oscillating between failures', async () => {
+  const systems = [];
+  for (const reply of ['', 'Tôi là bác sĩ, bạn cần hỗ trợ gì?', 'Bạn muốn trao đổi điều gì?'])
+    callTextAi.mockImplementationOnce(async (request) => {
+      systems.push(request.system);
+      return { content: JSON.stringify({ patient_reply: reply }) };
+    });
+  await createDoctorAiAssist({}, input);
+  expect(systems[2]).toContain('left patient_reply empty');
+  expect(systems[2]).toContain('Use chuyên gia');
+});
+
+test('a recordkeeping question gets a practical answer before more symptom collection', async () => {
+  loadDoctorClinicalContext.mockResolvedValue({
+    profile: {},
+    conversation: [],
+    latest_patient_message: { message: 'Em đau bụng. Em nên theo dõi thế nào?' },
+    missing_data: [],
+    conflicts: [],
+  });
+  callTextAi
+    .mockResolvedValueOnce({ content: JSON.stringify({ patient_reply: 'Em đau vào lúc nào?' }) })
+    .mockResolvedValueOnce({
+      content: JSON.stringify({ patient_reply: 'Em nên ghi lại giờ đau và mức độ đau.' }),
+    });
+  const result = await createDoctorAiAssist({}, input);
+  expect(result.patient_reply).toContain('ghi lại');
+  expect(callTextAi).toHaveBeenCalledTimes(2);
+});
+
+test('a recordkeeping request cannot suppress an urgent care response', async () => {
+  loadDoctorClinicalContext.mockResolvedValue({
+    profile: {},
+    conversation: [],
+    latest_patient_message: { message: 'Em nên ghi lại thế nào?' },
+    missing_data: [],
+    conflicts: [],
+  });
+  callTextAi.mockResolvedValue({
+    content: JSON.stringify({ patient_reply: 'Bạn cần đến cơ sở y tế ngay.', urgency: 'urgent' }),
+  });
+  expect((await createDoctorAiAssist({}, input)).urgency).toBe('urgent');
+});
+
+test('foreign emergency numbers from reference text are not copied into Vietnamese advice', async () => {
+  callTextAi
+    .mockResolvedValueOnce({ content: JSON.stringify({ patient_reply: 'Bạn cần gọi 999 ngay.' }) })
+    .mockResolvedValueOnce({
+      content: JSON.stringify({ patient_reply: 'Bạn cần đến cơ sở y tế ngay.' }),
+    });
+  const result = await createDoctorAiAssist({}, input);
+  expect(result.patient_reply).toBe('Bạn cần đến cơ sở y tế ngay.');
+  expect(callTextAi.mock.calls[1][0].system).toContain('foreign emergency number');
+});
+
+test.each([
+  'Chưa đủ dữ liệu để chẩn đoán tăng huyết áp qua trao đổi này.',
+  'Để chẩn đoán tăng huyết áp cần có sự đánh giá qua nhiều lần đo.',
+])(
+  'uncertainty and requirements for clinician assessment are not an AI diagnosis: %s',
+  async (patient_reply) => {
+    callTextAi.mockResolvedValue({ content: JSON.stringify({ patient_reply }) });
+    expect((await createDoctorAiAssist({}, input)).patient_reply).toBe(patient_reply);
+    expect(callTextAi).toHaveBeenCalledTimes(1);
+  }
+);
+
+test.each([
+  'Chẩn đoán của bạn là tăng huyết áp.',
+  'Chưa đủ dữ liệu để chẩn đoán, bạn nên dùng metformin 500 mg.',
+])(
+  'the assessment wording exception still rejects diagnosis and prescribing: %s',
+  async (patient_reply) => {
+    callTextAi.mockResolvedValue({ content: JSON.stringify({ patient_reply }) });
+    await expect(createDoctorAiAssist({}, input)).rejects.toMatchObject({
+      code: 'DOCTOR_AI_INVALID_RESPONSE',
+    });
+  }
+);
+
+test('a redundant greeting is removed and a referral for clinician diagnosis remains valid', async () => {
+  loadDoctorClinicalContext.mockResolvedValue({
+    profile: {},
+    conversation: [
+      { role: 'patient', message: 'Tôi đau bụng.' },
+      { role: 'doctor', message: 'Bạn đau bao lâu?' },
+      { role: 'patient', message: 'Ba ngày.' },
+    ],
+    latest_patient_message: { message: 'Ba ngày.' },
+    missing_data: [],
+    conflicts: [],
+  });
+  callTextAi.mockResolvedValue({
+    content: JSON.stringify({
+      patient_reply: 'Chào bạn. Bạn nên đến cơ sở y tế để được chẩn đoán và điều trị phù hợp.',
+    }),
+  });
+  const result = await createDoctorAiAssist({}, input);
+  expect(result.patient_reply).toBe(
+    'Bạn nên đến cơ sở y tế để được chẩn đoán và điều trị phù hợp.'
+  );
+  expect(callTextAi).toHaveBeenCalledTimes(1);
+});
+
+test('removing a greeting never makes an unsupported diagnosis or a prescription acceptable', async () => {
+  loadDoctorClinicalContext.mockResolvedValue({
+    profile: {},
+    conversation: [
+      { role: 'doctor', message: 'Bạn cần hỗ trợ gì?' },
+      { role: 'patient', message: 'Tôi đau đầu.' },
+    ],
+    latest_patient_message: { message: 'Tôi đau đầu.' },
+    missing_data: [],
+    conflicts: [],
+  });
+  callTextAi.mockResolvedValue({
+    content: JSON.stringify({
+      patient_reply: 'Chào bạn. Bạn bị tăng huyết áp. Uống aspirin 500 mg.',
+    }),
+  });
+  await expect(createDoctorAiAssist({}, input)).rejects.toMatchObject({
+    code: 'DOCTOR_AI_INVALID_RESPONSE',
+  });
+});
+
 test('rejects repeated unsafe drafts after the bounded retry budget', async () => {
   const systems = [];
   callTextAi.mockImplementation(async (request) => {
@@ -151,4 +276,67 @@ test('regenerates drafts using the wrong service title instead of publishing the
   expect(result.patient_reply).not.toMatch(/bác sĩ/iu);
   expect(callTextAi).toHaveBeenCalledTimes(2);
   expect(callTextAi.mock.calls[1][0].system).toContain('Use chuyên gia');
+});
+
+test('regenerates a summary that broadens a vomiting denial into a nausea denial', async () => {
+  loadDoctorClinicalContext.mockResolvedValue({
+    profile: {},
+    medications: [],
+    missing_data: [],
+    conflicts: [],
+    latest_patient_message: { message: 'Em không sốt, chưa nôn.' },
+    conversation: [{ role: 'patient', message: 'Em không sốt, chưa nôn.' }],
+  });
+  callTextAi
+    .mockResolvedValueOnce({
+      content: JSON.stringify({ clinical_summary: 'Không sốt, không buồn nôn.' }),
+    })
+    .mockResolvedValueOnce({
+      content: JSON.stringify({ clinical_summary: 'Không sốt, chưa nôn.' }),
+    });
+  const output = await createDoctorAiAssist({}, { ...input, touchpoint: 'patient_summary' });
+  expect(output.clinical_summary).toBe('Không sốt, chưa nôn.');
+  expect(callTextAi).toHaveBeenCalledTimes(2);
+  expect(callTextAi.mock.calls[1][0].system).toContain(
+    'Do not assert presence or absence of nausea'
+  );
+});
+
+test('triages the submitted complaint even before the first chat message', async () => {
+  loadDoctorClinicalContext.mockResolvedValue({
+    profile: {},
+    medications: [],
+    missing_data: [],
+    conflicts: [],
+    latest_patient_message: null,
+    initial_patient_statement: { message: 'Em đau bụng từ sáng nay.' },
+    conversation: [{ role: 'patient', message: 'Em đau bụng từ sáng nay.' }],
+  });
+  callTextAi.mockResolvedValue({
+    content: JSON.stringify({ urgency: 'soon', clinical_summary: 'Đau bụng từ sáng nay.' }),
+    provider: 'medgemma',
+    model: 'fixture',
+  });
+  const output = await createDoctorAiAssist({}, { ...input, touchpoint: 'auto_triage' });
+  expect(callTextAi).toHaveBeenCalledTimes(1);
+  expect(output.urgency).toBe('soon');
+  expect(output.provider).toBe('medgemma');
+});
+
+test('regenerates an internal English summary when Vietnamese was requested', async () => {
+  callTextAi
+    .mockResolvedValueOnce({
+      content: JSON.stringify({
+        clinical_summary:
+          'Patient reports intermittent abdominal pain for three days and is asking for advice.',
+      }),
+    })
+    .mockResolvedValueOnce({
+      content: JSON.stringify({ clinical_summary: 'Bệnh nhân đang hỏi về tình trạng đau bụng.' }),
+    });
+  const result = await createDoctorAiAssist({}, { ...input, touchpoint: 'patient_summary' });
+  expect(result.clinical_summary).toBe('Bệnh nhân đang hỏi về tình trạng đau bụng.');
+  expect(callTextAi.mock.calls[1][0].system).toContain(
+    'Write every human-readable field in Vietnamese'
+  );
 });

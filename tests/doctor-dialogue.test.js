@@ -3,6 +3,7 @@ const {
   buildConsultationState,
   validateUnderstanding,
   buildRetrievalContextQuery,
+  isRecordkeepingRequest,
 } = require('../src/services/integrations/doctor-dialogue');
 const context = () => ({
   profile: {},
@@ -16,6 +17,53 @@ const context = () => ({
   latest_patient_message: { id: '3', message: 'Không ạ.' },
 });
 const input = { touchpoint: 'suggested_questions', locale: 'vi', task_summary: 'Mẹ ho.' };
+
+test('a final recordkeeping question skips literature even with prior technique details, but never hides a new emergency', () => {
+  const context = {
+    latest_patient_message: {
+      message:
+        'Em đo vào buổi sáng, nghỉ 5 phút, chưa dùng thuốc. Em nên ghi cả ngày giờ và tư thế khi đo không?',
+    },
+  };
+  expect(buildRetrievalContextQuery(context, 'Theo dõi huyết áp', 'consultation_draft')).toBe('');
+  context.latest_patient_message.message =
+    'Em vừa đi ngoài phân đen, thấy choáng. Em nên ghi cả ngày giờ không?';
+  expect(buildRetrievalContextQuery(context, 'Đau bụng', 'consultation_draft')).toContain(
+    'phân đen'
+  );
+});
+
+test('plain recordkeeping questions do not retrieve unrelated clinical evidence, while clinical changes retain it', () => {
+  const value = context();
+  value.latest_patient_message = {
+    id: '3',
+    message: 'Em nên ghi lại những gì? Có cần ghi từng bữa ăn và giờ đau không ạ?',
+  };
+  value.conversation.at(-1).message = value.latest_patient_message.message;
+  expect(isRecordkeepingRequest(value)).toBe(true);
+  expect(buildRetrievalContextQuery(value, 'Đau bụng.', 'consultation_draft')).toBe('');
+  for (const text of [
+    'Em vừa đi ngoài phân đen, nên ghi gì?',
+    'Em nên ghi thuốc để tự điều trị thế nào?',
+    'Em nên ghi 180/120 rồi chờ đến mai được không?',
+  ]) {
+    value.latest_patient_message.message = text;
+    value.conversation.at(-1).message = text;
+    expect(isRecordkeepingRequest(value)).toBe(false);
+  }
+});
+
+test('a pure closing skips clinical retrieval while a new symptom retains it', () => {
+  const value = context();
+  const closing = 'Dạ, cảm ơn chuyên gia. Em hiểu rồi ạ.';
+  value.conversation.push({ id: '4', role: 'patient', message: closing });
+  value.latest_patient_message = { id: '4', message: closing };
+  expect(buildRetrievalContextQuery(value, 'Mẹ ho.', 'consultation_draft')).toBe('');
+  expect(buildRetrievalContextQuery(value, 'Mẹ ho.', 'patient_summary')).toBe('');
+  value.latest_patient_message.message = 'Cảm ơn, nhưng em vừa đi ngoài phân đen.';
+  value.conversation[3].message = value.latest_patient_message.message;
+  expect(buildRetrievalContextQuery(value, 'Mẹ ho.', 'consultation_draft')).toContain('phân đen');
+});
 
 test('preserves source roles, full message text and latest answer in the native conversation', () => {
   const value = context();
@@ -82,6 +130,35 @@ test('validates short-answer understanding against the real source messages', ()
   ).toEqual(understanding());
 });
 
+test('five verbatim evidence quotes are accepted but an explicit patient question cannot be ignored', () => {
+  const value = context();
+  value.conversation.at(-1).message =
+    'Đau từng cơn. Không sốt. Chưa nôn. Phân cứng. Em nên theo dõi thế nào?';
+  value.latest_patient_message = { id: '3', message: value.conversation.at(-1).message };
+  const record = {
+    ...understanding(),
+    intent: 'question',
+    next_action: 'answer',
+    evidence: [
+      'Đau từng cơn.',
+      'Không sốt.',
+      'Chưa nôn.',
+      'Phân cứng.',
+      'Em nên theo dõi thế nào?',
+    ].map((quote) => ({ message_id: '3', quote })),
+  };
+  expect(
+    validateUnderstanding({ understanding: record }, value, buildConsultationState(value, input))
+  ).toEqual(record);
+  expect(
+    validateUnderstanding(
+      { understanding: { ...record, intent: 'new_information', next_action: 'ask' } },
+      value,
+      buildConsultationState(value, input)
+    ).intent
+  ).toBe('question');
+});
+
 test.each([
   'unknown_message',
   'invented_quote',
@@ -112,13 +189,8 @@ test('context for the model keeps approved knowledge separate from patient and s
     safetyQuestions: [],
   });
   expect(JSON.parse(request.messages[0].content).approved_knowledge[0].source_id).toBe('source');
-  expect(JSON.parse(request.messages.at(-1).content).output_contract.citations).toEqual([
-    expect.objectContaining({
-      source_id: expect.any(String),
-      chunk_id: expect.any(String),
-      quote: expect.any(String),
-    }),
-  ]);
+  expect(JSON.parse(request.messages.at(-1).content).output_contract.citations).toEqual([]);
+  expect(JSON.parse(request.messages.at(-1).content).output_contract.citation_ids).toHaveLength(1);
   expect(request.system).toContain('untrusted evidence');
   expect(request.messages.every((message) => message.role !== 'system')).toBe(true);
 });

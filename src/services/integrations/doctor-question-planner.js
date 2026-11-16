@@ -34,6 +34,7 @@ const patientMessages = (context = {}) => {
 const concernOf = (message) => {
   const patterns = [
     ['headache', /đau đầu|nặng đầu|headache/iu],
+    ['dizziness', /chóng mặt|choáng váng|dizziness|vertigo/iu],
     ['stomach', /đau bụng|stomach/iu],
     ['chest', /đau ngực|chest pain/iu],
     ['cough', /(?:^|[^\p{L}])ho(?:[^\p{L}]|$)|cough/iu],
@@ -62,17 +63,27 @@ const activeConcernMessages = (context = {}) => {
 };
 
 const conversationIntent = (context = {}) => {
-  const lastTurn = clinicalConversation(context).at(-1);
+  const turns = clinicalConversation(context);
+  const lastTurn = turns.at(-1);
   if (lastTurn?.role === 'doctor') return 'awaiting_patient';
   const text = normalize(latestText(context))
     .replace(/[.!?,…]+/g, '')
     .trim();
   if (!text) return 'no_message';
   if (
-    /^(?:(?:vâng|dạ|ừ|ok(?:ay)?|được|rồi|tôi hiểu rồi|mình hiểu rồi|đã rõ|cảm ơn(?:\s+(?:chuyên gia|bác sĩ|bạn|anh|chị|nhiều))?|thank(?:s| you)(?: doctor)?|i understand|got it)(?:\s+(?:ạ|nhé|vâng|rồi|dạ|tôi hiểu rồi|mình hiểu rồi))?[\s,]*)+$/.test(
+    /^(?:(?:vâng|dạ|ừ|ok(?:ay)?|được|rồi|(?:tôi|mình|em|cháu|con) hiểu rồi|đã rõ|cảm ơn(?:\s+(?:chuyên gia|bác sĩ|bạn|anh|chị|nhiều))?|thank(?:s| you)(?: doctor)?|i understand|got it)(?:\s+(?:ạ|nhé|vâng|rồi|dạ|(?:tôi|mình|em|cháu|con) hiểu rồi))?[\s,]*)+$/.test(
       text
     )
   ) {
+    // "Dạ/vâng/OK" after a question may be an answer, or may need
+    // clarification. It is not evidence that the patient wants to close.
+    const previous = turns.at(-2);
+    if (
+      previous?.role === 'doctor' &&
+      /[?？]/u.test(previous.message) &&
+      !/cảm ơn|thank|hiểu|đã rõ|got it/iu.test(text)
+    )
+      return 'clinical';
     return 'acknowledgement';
   }
   if (
@@ -87,8 +98,22 @@ const conversationIntent = (context = {}) => {
 
 const hasAny = (text, terms) => terms.some((term) => text.includes(normalize(term)));
 
+const isMeasurementContextQuestion = (text) =>
+  /huyết áp|blood pressure/iu.test(text) &&
+  /đo|measure|check|take|taken/iu.test(text) &&
+  /khi nào|lúc nào|thời điểm|trước|sau|tư thế|tay nào|máy|when|how|position|which arm|device/iu.test(
+    text
+  ) &&
+  !/bao nhiêu|chỉ số (?:thế nào|ra sao)|what (?:was|is|were).{0,20}(?:reading|value|result)/iu.test(
+    text
+  );
+
+const hasBloodPressureReading = (text) =>
+  /(?<![\d/])\d{2,3}\s*\/\s*\d{2,3}(?!\d|\s*\/)/u.test(text);
+
 const questionTopics = (question) => {
   const text = normalize(question);
+  const measurementContext = isMeasurementContextQuestion(text);
   return Object.entries({
     onset: /đột ngột|bất ngờ|sudden/iu,
     weakness: /(?:^|[^\p{L}])yếu(?!\s+tố)(?:[^\p{L}]|$)|weak/iu,
@@ -105,7 +130,8 @@ const questionTopics = (question) => {
     blood_pressure: /huyết áp|blood pressure/iu,
   })
     .filter(([, pattern]) => pattern.test(text))
-    .map(([topic]) => topic);
+    .map(([topic]) => topic)
+    .filter((topic) => !measurementContext || !['duration', 'blood_pressure'].includes(topic));
 };
 
 const uncertainAnswer = (text) =>
@@ -180,6 +206,7 @@ const contextualAnswers = (context) => {
               'worse',
               'same',
             ]);
+          if (topic === 'blood_pressure') return hasBloodPressureReading(answer);
           return false;
         });
         answers.push({
@@ -459,6 +486,7 @@ const repeatedDurationQuestion = ({ context = {}, text = '' } = {}) => {
   const questions = String(text).match(/[^.!?\n]*\?/g) || [];
   return questions.some((question) => {
     const normalized = normalize(question);
+    if (isMeasurementContextQuestion(normalized)) return false;
     // Duration of each episode remains a valid distinct question.
     if (/mỗi lần|mỗi cơn|each episode|each time/.test(normalized)) return false;
     return /(?:bắt đầu|xuất hiện).{0,40}(?:khi nào|bao lâu)|(?:kéo dài|diễn ra).{0,30}bao lâu|when.{0,50}(?:start|begin)|how long.{0,45}(?:symptom|headache|this|it|been|feel)/iu.test(
@@ -477,6 +505,60 @@ const repeatedAnsweredQuestion = ({ context = {}, text = '' } = {}) => {
   });
 };
 
+// Missing safety history is a question, not a positive stroke finding.
+// https://www.nhs.uk/conditions/stroke/symptoms/
+// https://www.cdc.gov/stroke/signs-symptoms/
+const planDizzinessQuestions = (text, locale, answered) => {
+  const groups = [
+    [
+      {
+        topic: 'weakness',
+        terms: ['yếu một bên', 'yếu tay', 'yếu chân', 'one-sided weakness'],
+        vi: 'yếu một bên',
+        en: 'one-sided weakness',
+      },
+      {
+        topic: 'numbness',
+        terms: ['tê một bên', 'tê tay', 'tê chân', 'one-sided numbness'],
+        vi: 'tê một bên',
+        en: 'one-sided numbness',
+      },
+      {
+        topic: 'speech',
+        terms: ['nói khó', 'khó nói', 'nói ngọng', 'speech'],
+        vi: 'nói khó',
+        en: 'trouble speaking',
+      },
+    ],
+    [
+      {
+        topic: 'vision',
+        terms: ['nhìn mờ', 'nhìn đôi', 'vision'],
+        vi: 'nhìn mờ hoặc nhìn đôi',
+        en: 'blurred or double vision',
+      },
+      {
+        topic: 'balance',
+        terms: ['mất thăng bằng', 'không đi được', 'balance', 'cannot walk'],
+        vi: 'đi lại mất thăng bằng',
+        en: 'trouble walking or keeping balance',
+      },
+    ],
+  ];
+  return groups.map((group, index) => {
+    const missing = group.filter((sign) => !answered.has(sign.topic) && !hasAny(text, sign.terms));
+    return {
+      id: `dizziness_safety_${index + 1}`,
+      category: 'danger',
+      text:
+        locale === 'en'
+          ? `Any ${missing.map((sign) => sign.en).join(', ')} with the dizziness?`
+          : `Khi chóng mặt, bạn có ${missing.map((sign) => sign.vi).join(', ')} không?`,
+      keywords: missing.map((sign) => sign.terms),
+      answered: missing.length === 0,
+    };
+  });
+};
 const buildQuestionPlan = ({ context = {}, locale = 'vi' } = {}) => {
   const intent = conversationIntent(context);
   if (['no_message', 'acknowledgement', 'awaiting_patient'].includes(intent)) return [];
@@ -515,9 +597,20 @@ const buildQuestionPlan = ({ context = {}, locale = 'vi' } = {}) => {
   const currentConcern =
     [...messages].reverse().find((message) => concernOf(message)) || latestText(context);
   const headache = hasAny(normalize(currentConcern), ['đau đầu', 'nặng đầu', 'headache']);
+  const dizziness = hasAny(normalize(currentConcern), [
+    'chóng mặt',
+    'choáng váng',
+    'dizziness',
+    'vertigo',
+  ]);
   const candidates = headache
     ? planHeadacheQuestions(text, locale, answered)
-    : planGenericQuestions(text, locale, answered);
+    : dizziness
+      ? [
+          ...planDizzinessQuestions(text, locale, answered),
+          ...planGenericQuestions(text, locale, answered),
+        ]
+      : planGenericQuestions(text, locale, answered);
   const profile = context.profile || {};
   return candidates
     .filter((candidate) => {
@@ -551,7 +644,9 @@ const planClarifyingQuestions = (input) => addressedQuestionPlan(input).map((ite
 
 const isRequiredSafetyQuestion = (item) =>
   item.category === 'danger' &&
-  (item.id.startsWith('headache_') || item.id === 'clarify_positive_answer');
+  (item.id.startsWith('headache_') ||
+    item.id.startsWith('dizziness_safety_') ||
+    item.id === 'clarify_positive_answer');
 
 const resolveClarifyingQuestions = ({ context = {}, locale = 'vi', generated = [] } = {}) => {
   const plan = addressedQuestionPlan({ context, locale });
@@ -560,10 +655,12 @@ const resolveClarifyingQuestions = ({ context = {}, locale = 'vi', generated = [
   const resolved = answeredTopics(context);
   const patientText = normalize(activeConcernMessages(context).join('\n'));
   for (const topic of questionTopics(patientText)) {
-    if (!['duration', 'location', 'progression'].includes(topic)) resolved.add(topic);
+    if (!['duration', 'location', 'progression', 'blood_pressure'].includes(topic))
+      resolved.add(topic);
   }
   if (hasDuration(patientText)) resolved.add('duration');
-  if (context.blood_pressure?.length) resolved.add('blood_pressure');
+  if (context.blood_pressure?.length || hasBloodPressureReading(patientText))
+    resolved.add('blood_pressure');
   const documented = JSON.stringify({
     profile: context.profile,
     messages: patientMessages(context),
@@ -590,7 +687,16 @@ const resolveClarifyingQuestions = ({ context = {}, locale = 'vi', generated = [
           )
         )
           return false;
-        if ((value.match(/\d+(?:[.,]\d+)?/g) || []).some((number) => !knownNumbers.has(number)))
+        // Scale endpoints are question scaffolding, not a claim about this
+        // patient's age, symptom duration or measurements. Other numbers
+        // still have to occur in the documented patient data.
+        const withoutScale = text.replace(
+          /(?:thang(?:\s+điểm)?|(?:pain\s+)?scale(?:\s+of)?)\s*(?:từ\s*)?[01]\s*(?:[-–—]|đến|tới|to)\s*10\b/gu,
+          ''
+        );
+        if (
+          (withoutScale.match(/\d+(?:[.,]\d+)?/g) || []).some((number) => !knownNumbers.has(number))
+        )
           return false;
         if (repeatedDurationQuestion({ context, text: value })) return false;
         if (questionTopics(value).some((topic) => resolved.has(topic))) return false;

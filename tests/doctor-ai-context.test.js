@@ -87,3 +87,32 @@ test('the submitted patient complaint is available before the first chat message
   expect(conversationIntent(context)).toBe('clinical');
   expect(context.context_version).toBe('0');
 });
+
+test('the actual conversation resolves the current medication gap without inventing an allergy denial', async () => {
+  const context = await loadDoctorClinicalContext(
+    fixturePool([message(1, 'Em chưa uống thuốc gì cả, cũng không có bệnh nền.')]),
+    input
+  );
+  expect(context.missing_data.join(' ')).not.toContain('danh sách thuốc');
+  expect(context.missing_data.join(' ')).toContain('dị ứng');
+});
+
+test('the signed completed plan is included in context and invalidates an older context hash when changed', async () => {
+  const summary = {
+    problem_summary: 'Đau bụng',
+    assessment: 'Chưa xác định nguyên nhân',
+    next_steps: 'Ghi nhật ký',
+    warning_signs: 'Đau tăng cần khám',
+    follow_up_recommendation: 'Trao đổi lại sau 48 giờ',
+  };
+  const first = await loadDoctorClinicalContext(fixturePool([]), {
+    ...input,
+    consultation_summary: summary,
+  });
+  const changed = await loadDoctorClinicalContext(fixturePool([]), {
+    ...input,
+    consultation_summary: { ...summary, next_steps: 'Khám trực tiếp trong hôm nay' },
+  });
+  expect(first.consultation_summary).toEqual(summary);
+  expect(changed.context_hash).not.toBe(first.context_hash);
+});

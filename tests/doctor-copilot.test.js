@@ -248,7 +248,7 @@ describe('context versioning and safety boundaries', () => {
     expect(buildDeterministicClinicalSummary({ context, locale: 'vi' })).not.toContain('37');
   });
 
-  test('suggested questions override hallucinated model summary', () => {
+  test('suggested questions omit an unrequested hallucinated summary', () => {
     const output = __test__.buildOutput({
       raw: {
         ...emptyRawOutput(),
@@ -272,7 +272,7 @@ describe('context versioning and safety boundaries', () => {
       },
       ruleFindings: [],
     });
-    expect(output.clinical_summary).toContain('3 ngày nay');
+    expect(output.clinical_summary).toBe('');
     expect(output.clinical_summary).not.toContain('nam');
     expect(output.clinical_summary).not.toContain('1-2 giờ');
     expect(output.clarifying_questions[0]).toContain('đột ngột');

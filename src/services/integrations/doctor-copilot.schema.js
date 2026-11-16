@@ -134,11 +134,30 @@ const normalizeForQuoteMatch = (value) =>
     .trim()
     .toLocaleLowerCase('vi');
 
+const quotableClinicalText = (content) => {
+  const begin = content.indexOf('BEGIN ORIGINAL SOURCE TEXT');
+  const end = content.indexOf('END ORIGINAL SOURCE TEXT');
+  if (begin < 0 && end < 0)
+    return /ASINU editorial search labels|Snapshot kiểm tra|Loại nguồn:/u.test(content)
+      ? ''
+      : content;
+  let original = end >= 0 && (begin < 0 || end < begin);
+  let cursor = 0;
+  const sections = [];
+  for (const marker of content.matchAll(/BEGIN ORIGINAL SOURCE TEXT|END ORIGINAL SOURCE TEXT/gu)) {
+    if (original) sections.push(content.slice(cursor, marker.index));
+    original = marker[0].startsWith('BEGIN');
+    cursor = marker.index + marker[0].length;
+  }
+  if (original) sections.push(content.slice(cursor));
+  return sections.join('\n');
+};
+
 const validateGroundedCitations = (citations, knowledgeChunks) => {
   const chunks = new Map(
     (knowledgeChunks || []).map((chunk) => [
       `${chunk.source_id}:${chunk.chunk_id}`,
-      normalizeForQuoteMatch(chunk.content),
+      normalizeForQuoteMatch(quotableClinicalText(chunk.content)),
     ])
   );
   const errors = [];
@@ -159,4 +178,5 @@ module.exports = {
   doctorCopilotOutputSchema,
   normalizeCopilotOutput,
   validateGroundedCitations,
+  quotableClinicalText,
 };

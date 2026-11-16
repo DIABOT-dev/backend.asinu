@@ -4,6 +4,7 @@ const {
   buildGroundingFacts,
   buildAnsweredQuestionEvidence,
   conversationIntent,
+  repeatedAnsweredQuestion,
   repeatedDurationQuestion,
 } = require('../src/services/integrations/doctor-question-planner');
 const { __test__ } = require('../src/services/integrations/doctor-ai.service');
@@ -33,6 +34,24 @@ const followUpContext = () => ({
 });
 
 describe('Doctor conversational question planning', () => {
+  test('caregiver-reported dizziness screens missing neurological danger signs before medication history', () => {
+    const message =
+      'Em hỏi cho mẹ em 68 tuổi. Mẹ chóng mặt từ sáng nay, em chưa rõ mẹ uống thuốc gì.';
+    const context = {
+      profile: { birth_year: 1990 },
+      conversation: [{ role: 'patient', message }],
+      latest_patient_message: { message },
+    };
+    const questions = resolveClarifyingQuestions({
+      context,
+      locale: 'vi',
+      generated: ['Mẹ em uống thuốc gì?'],
+    });
+    expect(questions).toHaveLength(2);
+    expect(questions[0]).toMatch(/mẹ.*yếu.*tê.*nói khó/iu);
+    expect(questions[1]).toMatch(/nhìn.*thăng bằng/iu);
+    expect(questions.join(' ')).not.toContain('uống thuốc');
+  });
   test('answered-question evidence excludes a prior complaint, uncertainty and measurement timing', () => {
     const context = {
       conversation: conversation(
@@ -195,6 +214,95 @@ describe('Doctor conversational question planning', () => {
     };
     expect(conversationIntent(context)).toBe('clinical');
     expect(planClarifyingQuestions({ context }).length).toBeGreaterThan(0);
+  });
+
+  test.each(['Dạ.', 'Vâng ạ.', 'Dạ vâng ạ.', 'OK.', 'Yes.'])(
+    'does not close the interview on a short reply to a question: %s',
+    (message) => {
+      const context = {
+        conversation: conversation('Tôi đau bụng.', 'Bạn có buồn nôn không?', message),
+        latest_patient_message: { message },
+      };
+      expect(conversationIntent(context)).toBe('clinical');
+      expect(planClarifyingQuestions({ context }).length).toBeGreaterThan(0);
+    }
+  );
+
+  test('an explicit thanks remains a closing after a question', () => {
+    const message = 'Cảm ơn, tôi hiểu rồi ạ.';
+    const context = {
+      conversation: conversation('Tôi đau bụng.', 'Bạn có cần hỗ trợ gì thêm không?', message),
+      latest_patient_message: { message },
+    };
+    expect(conversationIntent(context)).toBe('acknowledgement');
+  });
+
+  test('mentioning blood pressure does not supply a measurement', () => {
+    const context = {
+      conversation: conversation('Tôi muốn hỏi về huyết áp.', 'Bạn có đo huyết áp không?', 'Có ạ.'),
+      latest_patient_message: { message: 'Có ạ.' },
+    };
+    const generated = ['Chỉ số huyết áp bạn đo được là bao nhiêu?'];
+    expect(resolveClarifyingQuestions({ context, generated })).toEqual(generated);
+  });
+
+  test('a measurement date is not treated as a blood pressure value', () => {
+    const context = {
+      conversation: conversation(
+        'Tôi muốn hỏi về huyết áp.',
+        'Bạn đo huyết áp khi nào?',
+        '16/11/2026 ạ.'
+      ),
+      latest_patient_message: { message: '16/11/2026 ạ.' },
+    };
+    const generated = ['Chỉ số huyết áp bạn đo được là bao nhiêu?'];
+    expect(resolveClarifyingQuestions({ context, generated })).toEqual(generated);
+  });
+
+  test.each([
+    'Bạn đo huyết áp khi nào?',
+    'Bạn đo huyết áp vào lúc nào?',
+    'Bạn đo huyết áp ở tư thế nào?',
+    'When did you measure your blood pressure?',
+  ])('keeps a follow-up about measurement context: %s', (question) => {
+    const context = {
+      conversation: conversation(
+        'Tôi theo dõi huyết áp từ sáng nay.',
+        'Chỉ số huyết áp bạn đo được là bao nhiêu?',
+        '120/80 ạ.'
+      ),
+      latest_patient_message: { message: '120/80 ạ.' },
+      blood_pressure: [{ systolic: 120, diastolic: 80 }],
+    };
+    expect(repeatedAnsweredQuestion({ context, text: question })).toBe(false);
+    expect(repeatedDurationQuestion({ context, text: question })).toBe(false);
+    expect(resolveClarifyingQuestions({ context, generated: [question] })).toEqual([question]);
+    expect(
+      resolveClarifyingQuestions({
+        context,
+        generated: ['Chỉ số huyết áp bạn đo được là bao nhiêu?', question],
+      })
+    ).toEqual([question]);
+  });
+
+  test.each([
+    'Trên thang điểm 0–10, cơn đau hiện tại ở mức mấy?',
+    'On a pain scale of 0 to 10, how intense is the pain?',
+  ])(
+    'preserves a pain-scale question without treating scale endpoints as invented facts: %s',
+    (question) => {
+      const context = {
+        conversation: conversation('Tôi đau bụng từ sáng nay.'),
+        latest_patient_message: { message: 'Tôi đau bụng từ sáng nay.' },
+      };
+      expect(resolveClarifyingQuestions({ context, generated: [question] })).toEqual([question]);
+    }
+  );
+
+  test('a pain scale does not permit an invented patient age in the same question', () => {
+    const context = { latest_patient_message: { message: 'Tôi đau bụng.' } };
+    const invented = 'Bạn 45 tuổi, trên thang điểm 0–10 thì đau mức mấy?';
+    expect(resolveClarifyingQuestions({ context, generated: [invented] })).not.toContain(invented);
   });
 
   test('a greeting gets a single open question rather than a clinical checklist', () => {

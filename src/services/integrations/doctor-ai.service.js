@@ -11,7 +11,6 @@ const {
 const { loadDoctorClinicalContext } = require('./doctor-context.service');
 const { evaluateClinicalRules } = require('./doctor-rule-engine');
 const {
-  buildDeterministicClinicalSummary,
   buildGroundingFacts,
   buildQuestionPlan,
   resolveClarifyingQuestions,
@@ -23,6 +22,13 @@ const {
   isRequiredSafetyQuestion,
 } = require('./doctor-question-planner');
 const { clinicalConversation } = require('./doctor-conversation-context');
+const { buildCitationOptions, resolveCitationOptions } = require('./doctor-citation-options');
+const { reconcileMissingData, unsupportedDocumentedClaims } = require('./doctor-documented-facts');
+const {
+  documentedSoap,
+  requiresKnowledgeCitation,
+  missingPlannedFollowup,
+} = require('./doctor-documentation');
 const {
   resolveCommunicationStyle,
   communicationConflict,
@@ -32,9 +38,10 @@ const {
   buildDialogueRequest,
   validateUnderstanding,
   buildRetrievalContextQuery,
+  isRecordkeepingRequest,
 } = require('./doctor-dialogue');
 
-const PROMPT_VERSION = 'doctor-copilot-2026-10-20.5';
+const PROMPT_VERSION = 'doctor-copilot-2026-11-16.11';
 const OUTPUT_SCHEMA_VERSION = 'doctor-copilot-output-v1';
 
 const buildSystemPrompt = ({ locale, touchpoint, intent = 'clinical', communicationStyle }) =>
@@ -45,8 +52,13 @@ const buildSystemPrompt = ({ locale, touchpoint, intent = 'clinical', communicat
     "Read recent_conversation in order. Answer question_to_answer_now in the context of the whole conversation: a short patient reply may answer the consultant's previous question, rather than introduce a new complaint. Earlier PATIENT answers remain known unless the patient updates them. A consultant's question is not a patient fact.",
     'The opening patient intake is part of this consultation. Interpret brief replies against the immediately preceding specialist question. A reply such as "Không ạ" to a yes/no question or "Quanh rốn ạ" to a location question is meaningful; do not restart the interview. paired_answers contains verbatim question/answer evidence, not permission to invent details. If a reply is uncertain or ambiguous, ask only what needs clarification.',
     'Assert only facts documented in the patient messages or patient_record. known_facts is an index to those sources, not an exhaustive replacement for them. Do not invent age, gender, symptom duration, measurements, medicines, examinations or outcomes. You may ASK about an unknown symptom; never state that it is present or absent without evidence.',
+    'Preserve the exact scope of every patient fact in ALL fields, including clinical_summary and SOAP. Not vomiting does not establish absence of nausea. Fullness after eating does not establish pain after eating. A patient confirmation of no current medicines resolves that gap; an empty medication log alone does not. Leave unreported facts unknown.',
+    'When only birth_year is documented, state the birth year. Do not guess or calculate an exact age without a documented age or full birth date.',
+    'A partial negative history or a negative screening answer never excludes every emergency. Do not write blanket claims such as "không có dấu hiệu cấp tính", "không có dấu hiệu nguy hiểm" or "no red flags". State the specific symptoms actually denied, with patient attribution. Do not certify an entire measurement technique from only a few reported steps. Translate "lump" as "khối bất thường" or "cục", never infer a tumour.',
     'Never diagnose, prescribe, name a medicine in patient-facing text, give doses or advise changing treatment. Do not falsely reassure. Approved rule findings set a minimum urgency and must never be downgraded. Urgent action, when supported, comes before conversational style.',
     'A citation must use a supplied source_id/chunk_id and an exact quote from that chunk. If no source supports a statement, leave citations empty and make uncertainty explicit in the internal fields. Do not put source IDs, JSON, clinical labels or citations into the patient message.',
+    'For clinical advice with approved_knowledge, include a citation supporting the actual advice. Quote original clinical source text, never ASINU editorial labels, search keywords, attribution or document metadata. Patient history comes only from patient evidence, not from the reference documents. Foreign emergency phone numbers and care pathways must not be copied into Vietnamese patient advice.',
+    'Prefer citation_ids: select the supplied citation_id of a relevant passage in approved_knowledge.citation_options. The server supplies its original quote and source identifiers. When using citation_ids, leave citations empty; do not transcribe or paraphrase the source quote. Select only passages that support the advice actually written.',
     'PATIENT-FACING VOICE: patient_reply, follow_up_draft and clarifying_questions must sound like a careful professional texting one person, not an AI report, medical questionnaire or article. Use ordinary words and short sentences. Address the person directly; match forms of address already used in the conversation, otherwise use a neutral form. Do not invent a clinician identity or claim to have examined, diagnosed, booked or contacted anyone.',
     'Respond to what the person just said first. An acknowledgement is optional; do not begin every turn with empathy, thanks or a greeting. Use earlier answers to choose the next step, without reciting them back. If no explanation is needed, start directly with the next useful question. Usually write 2 to 4 short sentences, under 90 words, with no headings, numbered checklist, boilerplate introduction or repeated disclaimer. Ask at most TWO focused questions in one turn. If a direct answer is possible, answer before asking anything else. Do not repeat an answered question or collect unrelated profile fields.',
     'In an ongoing clinical exchange, do not open with a greeting or a routine thank-you. Answer directly. Do not restate symptom onset or location just to acknowledge a short answer. Use everyday wording in patient-facing fields (for example, "đau quanh rốn" rather than "khu trú quanh rốn"). Before asking broad background questions, choose the next detail that helps with this specific complaint unless an immediate safety check takes precedence.',
@@ -107,13 +119,13 @@ const removeHistoricalConversation = (markdown) => {
 
 const touchpointInstruction = {
   patient_summary:
-    'Summarize the patient record before this consultation. Emphasize chronology, relevant conditions, medicines, allergies, missing data and conflicts. Do not write a patient reply.',
+    'Summarize documented patient history and this consultation concisely. Attribute self-reported facts, preserve chronology, relevant conditions, medicines, allergies, missing data and conflicts. Do not add diagnoses, broad negative findings, or reference knowledge as patient facts. No literature citation is needed for patient history. Do not write a patient reply.',
   abnormal_trends:
     'Summarize abnormal measurements and meaningful trends. Separate deterministic rule findings from model interpretation. Do not diagnose.',
   suggested_questions:
     'Generate one or two focused questions that resolve missing or conflicting information and the latest patient concern. Do not repeat answered questions.',
   soap_note:
-    'Convert only documented facts from this consultation into a draft SOAP note. Leave unsupported sections empty and identify missing evidence.',
+    'Write only the subjective SOAP field from documented patient statements, with patient attribution and chronology. Leave objective, assessment and plan empty: the server attaches recorded measurements, the signed completed assessment (if present), and advice actually sent by the clinician. Never invent an examination, a functional disorder, an established diagnosis or a new plan. Put evidence gaps in uncertainties. This is documentation, not a new clinical opinion.',
   consultation_draft:
     'Draft a concise response to the latest patient message for the specialist to edit. Answer the exact question first and ask at most two focused questions.',
   follow_up_draft:
@@ -183,6 +195,17 @@ const resolveClinicalProvider = () => {
 
 const buildOutput = ({ raw, input, context, ruleFindings }) => {
   const normalized = normalizeCopilotOutput(raw);
+  if (clinicalConversation(context).some((turn) => turn.role === 'doctor')) {
+    for (const field of ['patient_reply', 'follow_up_draft']) {
+      normalized[field] = normalized[field].replace(
+        /^(?:(?:xin\s+)?chào(?:\s+(?:em|bạn|bác|anh|chị|cô|chú|cháu))?(?:\s+(?:ạ|nhé))?[.!,:]\s*|(?:hello|hi)(?:\s+there)?[.!,:]\s*)/iu,
+        ''
+      );
+      normalized[field] = normalized[field].replace(/^\p{Ll}/u, (first) =>
+        first.toLocaleUpperCase(input.locale)
+      );
+    }
+  }
   normalized.clarifying_questions = normalized.clarifying_questions.slice(0, 2);
   const communicationStyle = resolveCommunicationStyle(context, { locale: input.locale });
   const patientFacing =
@@ -217,6 +240,23 @@ const buildOutput = ({ raw, input, context, ruleFindings }) => {
     throw error;
   }
   if (
+    input.locale === 'vi' &&
+    patientFacing.some((text) =>
+      /(?:gọi|call|dial|số cấp cứu|đường dây|NHS)\s*(?:(?:đến|tới|số|cấp cứu|on)\s*)?(?:999|111|911|988)\b/iu.test(
+        text
+      )
+    )
+  ) {
+    const error = integrationError(
+      502,
+      'DOCTOR_AI_INVALID_RESPONSE',
+      'The draft copied an unsupported foreign care contact.'
+    );
+    error.retryInstruction =
+      'Do not copy a foreign emergency number or NHS care pathway into Vietnamese patient advice. Refer to a local medical facility and preserve the required urgency.';
+    throw error;
+  }
+  if (
     conversationIntent(context) !== 'awaiting_patient' &&
     patientFacing.some((text) => communicationConflict(text, communicationStyle))
   ) {
@@ -228,7 +268,10 @@ const buildOutput = ({ raw, input, context, ruleFindings }) => {
     error.retryInstruction = `Use the selected communication_style consistently: address the person as "${communicationStyle.patient_address}" and use "${communicationStyle.clinician_self}" for the consultant. Do not reverse speaker roles, invent a clinician identity, or change the clinical facts. Omitting a pronoun is acceptable.`;
     throw error;
   }
-  normalized.missing_data = mergeUniqueStrings(context.missing_data, normalized.missing_data);
+  normalized.missing_data = reconcileMissingData(
+    context,
+    mergeUniqueStrings(context.missing_data, normalized.missing_data)
+  );
   normalized.conflicts = mergeUniqueStrings(context.conflicts, normalized.conflicts);
   normalized.abnormal_findings = [
     ...ruleFindings.map(ruleFindingToAbnormalFinding),
@@ -239,7 +282,9 @@ const buildOutput = ({ raw, input, context, ruleFindings }) => {
     normalized.safety_alerts
   ).slice(0, 12);
   normalized.red_flags = mergeUniqueStrings(
-    getRedFlags(context.latest_patient_message?.message || ''),
+    getRedFlags(
+      context.latest_patient_message?.message || context.initial_patient_statement?.message || ''
+    ),
     normalized.red_flags
   ).slice(0, 8);
   for (const finding of ruleFindings)
@@ -255,10 +300,9 @@ const buildOutput = ({ raw, input, context, ruleFindings }) => {
       locale: input.locale,
       generated: normalized.clarifying_questions,
     });
-    normalized.clinical_summary = buildDeterministicClinicalSummary({
-      context,
-      locale: input.locale,
-    });
+    // The native question response does not produce a separate summary. Do
+    // not replace it with a rendered intake transcript on every question.
+    normalized.clinical_summary = '';
     normalized.clinical_rationale =
       input.locale === 'en'
         ? 'These are the next unanswered questions, prioritizing safety. Earlier patient answers have been taken into account.'
@@ -266,6 +310,43 @@ const buildOutput = ({ raw, input, context, ruleFindings }) => {
   }
 
   const intent = conversationIntent(context);
+  if (
+    input.touchpoint === 'consultation_draft' &&
+    isRecordkeepingRequest(context) &&
+    !['urgent', 'emergency'].includes(normalized.urgency) &&
+    /đi khám|cơ sở y tế|chẩn đoán|điều trị|(?:có thể|có lẽ) là|medicine|diagnos|treat/iu.test(
+      normalized.patient_reply
+    )
+  ) {
+    const error = integrationError(
+      502,
+      'DOCTOR_AI_INVALID_RESPONSE',
+      'A recordkeeping answer added unrequested clinical advice.'
+    );
+    error.retryInstruction =
+      'This turn asks only how to write a record of already reported information. Answer with a short useful log template (time, the reported symptom/measurement, duration and relevant context). Do not add diagnosis, treatment advice, a repeated medical warning or another intake question. Preserve an established emergency urgency.';
+    throw error;
+  }
+  const latestQuestion =
+    (context.latest_patient_message?.message || '').match(/[^.!?\n]+[?？]\s*$/u)?.[0] || '';
+  if (
+    input.touchpoint === 'consultation_draft' &&
+    !['urgent', 'emergency'].includes(normalized.urgency) &&
+    /theo dõi|ghi lại|nhật ký|\b(?:track|record|monitor)\b/iu.test(latestQuestion) &&
+    /thế nào|ra sao|những gì|\b(?:how|what)\b/iu.test(latestQuestion) &&
+    !/(?:nên|cần|có thể|hãy)\s+(?:ghi|đo|theo dõi)|(?:^|[.!]\s*)(?:Ghi|Đo|Theo dõi)|\b(?:record|note|write down|measure)\b/iu.test(
+      normalized.patient_reply
+    )
+  ) {
+    const error = integrationError(
+      502,
+      'DOCTOR_AI_INVALID_RESPONSE',
+      'The draft did not answer the practical tracking question.'
+    );
+    error.retryInstruction =
+      'Answer the patient question about keeping a record first: give brief practical instructions on what to record using the documented concern and approved sources. Do not replace that answer with another symptom interview. Add only necessary safety advice or one relevant clarification.';
+    throw error;
+  }
   if (intent === 'acknowledgement') normalized.clarifying_questions = [];
   if (
     intent === 'awaiting_patient' &&
@@ -300,6 +381,50 @@ const buildOutput = ({ raw, input, context, ruleFindings }) => {
   if (input.touchpoint !== 'follow_up_draft') normalized.follow_up_draft = '';
   if (input.touchpoint !== 'soap_note') {
     normalized.soap_note = { subjective: '', objective: '', assessment: '', plan: '' };
+  } else {
+    normalized.soap_note = documentedSoap(context, normalized.soap_note.subjective, input.locale);
+    if (!context.consultation_summary?.assessment)
+      normalized.uncertainties = mergeUniqueStrings(normalized.uncertainties, [
+        input.locale === 'en'
+          ? 'No completed clinician assessment has been supplied; the assessment field is left empty.'
+          : 'Chưa có nhận định kết luận đã được bác sĩ xác nhận; để trống mục đánh giá.',
+      ]);
+  }
+  const unsupported = unsupportedDocumentedClaims(context, {
+    ...normalized,
+    // Other SOAP fields are attached verbatim from authenticated clinician
+    // documentation or app observations, not inferred from patient speech.
+    soap_note: { subjective: normalized.soap_note.subjective },
+  });
+  if (unsupported.length) {
+    const error = integrationError(
+      502,
+      'DOCTOR_AI_INVALID_RESPONSE',
+      'The AI summary asserts undocumented patient facts.'
+    );
+    error.retryInstruction = unsupported.join(' ');
+    throw error;
+  }
+  const internalText = [normalized.clinical_summary, ...Object.values(normalized.soap_note)];
+  if (
+    input.locale === 'vi' &&
+    internalText.some(
+      (text) =>
+        text.length > 60 &&
+        !/[\p{M}đ]/u.test(text.normalize('NFD').toLowerCase()) &&
+        /\b(?:patient reports|patient (?:is|has|denies)|the patient|no (?:known|abnormal)|based on|there (?:is|are))\b/iu.test(
+          text
+        )
+    )
+  ) {
+    const error = integrationError(
+      502,
+      'DOCTOR_AI_INVALID_RESPONSE',
+      'The clinical summary is not in the requested language.'
+    );
+    error.retryInstruction =
+      'Write every human-readable field in Vietnamese (vi), including clinical_summary and SOAP. Preserve the exact documented facts and keep unknown symptoms unknown.';
+    throw error;
   }
 
   const requiredDraft =
@@ -316,6 +441,23 @@ const buildOutput = ({ raw, input, context, ruleFindings }) => {
       `The AI output is missing the required ${requiredDraft}.`
     );
     error.retryInstruction = `The previous output left ${requiredDraft} empty. Write the requested ready-to-send draft in ${requiredDraft}, using only documented facts and all existing safety rules.`;
+    throw error;
+  }
+  if (
+    input.touchpoint === 'follow_up_draft' &&
+    !['urgent', 'emergency'].includes(normalized.urgency) &&
+    missingPlannedFollowup(
+      context.consultation_summary?.follow_up_recommendation,
+      normalized.follow_up_draft
+    )
+  ) {
+    const error = integrationError(
+      502,
+      'DOCTOR_AI_INVALID_RESPONSE',
+      'The follow-up draft omitted the documented review interval.'
+    );
+    error.retryInstruction =
+      'Preserve the review interval and its condition from patient_record.completed_consultation.follow_up_recommendation in the follow-up message. Do not substitute an older plan or invent an appointment. Include the documented warning signs. A new urgent problem takes priority.';
     throw error;
   }
   if (
@@ -338,7 +480,22 @@ const buildOutput = ({ raw, input, context, ruleFindings }) => {
   // such as existing medicines and measurements remain available to clinicians.
   for (const field of ['patient_reply', 'follow_up_draft']) {
     if (!normalized[field]) continue;
-    if (filterAiOutput(normalized[field], 'low', input.locale).modified) {
+    // A referral for a clinician's diagnosis is not a diagnosis by this draft.
+    // All other diagnosis, prescription, medicine and dose checks still apply.
+    const safetyText = normalized[field]
+      .replace(
+        /((?:đi khám|đến cơ sở y tế|gặp chuyên gia)[^.!?\n]{0,80}để\s+được\s+)chẩn đoán/giu,
+        '$1đánh giá'
+      )
+      .replace(
+        /((?:chưa (?:thể|đủ (?:thông tin|dữ liệu|cơ sở) để)|không thể)\s+)chẩn đoán/giu,
+        '$1kết luận'
+      )
+      .replace(
+        /((?:để|việc|muốn)\s+)chẩn đoán(?=[^.!?\n]{0,100}(?:cần|phải)[^.!?\n]{0,100}(?:đánh giá|thăm khám|chuyên gia|cơ sở y tế|nhiều lần đo))/giu,
+        '$1đánh giá'
+      );
+    if (filterAiOutput(safetyText, 'low', input.locale).modified) {
       const error = integrationError(
         502,
         'DOCTOR_AI_INVALID_RESPONSE',
@@ -365,6 +522,20 @@ const buildOutput = ({ raw, input, context, ruleFindings }) => {
   );
   if (citationErrors.length)
     throw integrationError(502, 'DOCTOR_AI_CITATION_INVALID', citationErrors.join(' '));
+  if (
+    requiresKnowledgeCitation(input.touchpoint) &&
+    input.clinical_support.knowledge_chunks.length &&
+    !parsed.data.citations.length
+  ) {
+    const error = integrationError(
+      502,
+      'DOCTOR_AI_CITATION_INVALID',
+      'The clinical draft is missing a supporting source selection.'
+    );
+    error.retryInstruction =
+      'Select a supplied citation_id from approved_knowledge.citation_options that supports the actual clinical advice. Put that ID in citation_ids and leave citations empty. Never select an irrelevant passage or invent evidence.';
+    throw error;
+  }
   return parsed.data;
 };
 
@@ -389,7 +560,10 @@ const outputContract = {
   missing_data: ['string'],
   conflicts: ['string'],
   follow_up_draft: 'string',
-  citations: [{ source_id: 'UUID', chunk_id: 'UUID', quote: 'exact quote from chunk' }],
+  citations: [],
+  citation_ids: [
+    'supplied citation_id of a relevant original source passage; preferred over manually copying citations',
+  ],
   uncertainties: ['string'],
   safety_alerts: ['string'],
 };
@@ -431,7 +605,9 @@ const createDoctorAiAssist = async (pool, input) => {
   const ruleFindings = evaluateClinicalRules(input.clinical_support.rules, context);
   const questionPlan = buildQuestionPlan({ context, locale: input.locale });
   const communicationStyle = resolveCommunicationStyle(context, { locale: input.locale });
+  const citationOptions = buildCitationOptions(input.clinical_support.knowledge_chunks);
   const promptPayload = {
+    output_language: input.locale === 'en' ? 'English (en)' : 'Vietnamese (vi)',
     communication_style: communicationStyle,
     conversation_intent: conversationIntent(context),
     question_to_answer_now: context.latest_patient_message || context.initial_patient_statement,
@@ -458,6 +634,7 @@ const createDoctorAiAssist = async (pool, input) => {
         checkins: context.checkins,
       },
       medical_records: context.medical_records,
+      completed_consultation: context.consultation_summary,
       timeline: limitContextText(
         removeHistoricalConversation(context.health_timeline_markdown),
         16000
@@ -475,13 +652,13 @@ const createDoctorAiAssist = async (pool, input) => {
         .filter((item) => !isRequiredSafetyQuestion(item))
         .map(({ id, category }) => ({ id, category })),
     },
-    approved_knowledge: input.clinical_support.knowledge_chunks.map((chunk) => ({
+    approved_knowledge: citationOptions.map((chunk) => ({
       source_id: chunk.source_id,
       chunk_id: chunk.chunk_id,
       title: chunk.title,
       publisher: chunk.publisher,
       version: chunk.version,
-      content: chunk.content,
+      citation_options: chunk.options,
     })),
     output_contract: outputContract,
     answered_questions_do_not_repeat: buildAnsweredQuestionEvidence(context),
@@ -501,7 +678,9 @@ const createDoctorAiAssist = async (pool, input) => {
       })
     : null;
   const requestedModel =
-    (dialogue ? process.env.DOCTOR_AI_CHAT_MODEL : process.env.DOCTOR_AI_MODEL) || undefined;
+    (dialogue
+      ? process.env.DOCTOR_AI_CHAT_MODEL || process.env.DOCTOR_AI_MODEL
+      : process.env.DOCTOR_AI_MODEL || process.env.DOCTOR_AI_CHAT_MODEL) || undefined;
   const usage = { prompt: 0, completion: 0 };
   let lastResponse;
   let understanding;
@@ -512,13 +691,13 @@ const createDoctorAiAssist = async (pool, input) => {
       conversationIntent(context) === 'awaiting_patient' &&
       ['suggested_questions', 'consultation_draft'].includes(input.touchpoint);
     if (
-      (input.touchpoint === 'auto_triage' && !context.latest_patient_message) ||
+      (input.touchpoint === 'auto_triage' &&
+        !context.latest_patient_message &&
+        !context.initial_patient_statement) ||
       awaitingPatient
     ) {
-      // A newly queued task can legitimately arrive before the patient sends
-      // the first chat message. Do not spend a model call asking Dr7 to infer
-      // urgency from a null current question; the safe result is deterministic
-      // and leaves triage ready to run again when the patient replies.
+      // Only defer when both chat and the submitted complaint are absent.
+      // A valid intake is enough to assess urgency before the first chat turn.
       const raw = emptyCopilotOutput();
       raw.clinical_summary = input.task_summary;
       raw.clinical_rationale = awaitingPatient
@@ -559,6 +738,7 @@ const createDoctorAiAssist = async (pool, input) => {
         ...(dialogue ? { timeoutMs: 25000, maxRetries: 0 } : {}),
       };
       const initialSystemPrompt = modelRequest.system;
+      const corrections = new Set();
       let attempt = 0;
       for (;;) {
         try {
@@ -566,7 +746,7 @@ const createDoctorAiAssist = async (pool, input) => {
           lastResponse = response;
           usage.prompt += Math.max(0, Number(response.usage?.prompt) || 0);
           usage.completion += Math.max(0, Number(response.usage?.completion) || 0);
-          const raw = parseModelJson(response.content);
+          const raw = resolveCitationOptions(parseModelJson(response.content), citationOptions);
           if (dialogue) understanding = validateUnderstanding(raw, context, dialogue.state);
           output = buildOutput({
             raw,
@@ -580,16 +760,17 @@ const createDoctorAiAssist = async (pool, input) => {
           attempt += 1;
           // Feedback is static validation guidance, never raw provider output
           // or patient content. Keep the original safety instructions intact.
-          modelRequest.system = `${initialSystemPrompt}\nOUTPUT CORRECTION: ${
+          const correction =
             error.retryInstruction ||
             (error.code === 'DOCTOR_AI_CITATION_INVALID'
-              ? 'Use only supplied source and chunk IDs with exact quotes from those chunks. Remove any unsupported citation.'
-              : 'Return valid JSON matching output_contract with every required field.')
-          }`;
+              ? 'Select only supplied citation_id values in approved_knowledge.citation_options. Remove any unsupported citation.'
+              : 'Return valid JSON matching output_contract with every required field.');
+          corrections.add(correction);
+          modelRequest.system = `${initialSystemPrompt}\nOUTPUT CORRECTION: ${[...corrections].join('\n')}`;
           modelRequest.prompt = JSON.stringify({
             ...promptPayload,
             validation_feedback: {
-              correction: error.retryInstruction || 'Return valid JSON matching output_contract.',
+              correction: [...corrections].join('\n'),
               already_answered_topics: [
                 ...new Set(
                   promptPayload.answered_questions_do_not_repeat.flatMap((item) => item.topics)
@@ -624,7 +805,9 @@ const createDoctorAiAssist = async (pool, input) => {
     const outputTokens = usage.completion || null;
     const latencyMs = Date.now() - startedAt;
     const validationStatus =
-      input.clinical_support.knowledge_chunks.length > 0 && output.citations.length === 0
+      requiresKnowledgeCitation(input.touchpoint) &&
+      input.clinical_support.knowledge_chunks.length > 0 &&
+      output.citations.length === 0
         ? 'insufficient_evidence'
         : 'valid';
     await logAiInteraction(pool, {
@@ -725,7 +908,7 @@ const getDoctorAiContextVersion = async (pool, input) => {
     context_version: context.context_version,
     context_hash: context.context_hash,
     policy_version: input.clinical_support.policy_version,
-    retrieval_query: buildRetrievalContextQuery(context, input.task_summary),
+    retrieval_query: buildRetrievalContextQuery(context, input.task_summary, input.touchpoint),
   };
 };
 
