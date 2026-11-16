@@ -32,7 +32,9 @@ suite('consultation credit policy on isolated PostgreSQL', () => {
       max: 8,
     });
     await pool.query('CREATE TABLE users(id INTEGER PRIMARY KEY, deleted_at TIMESTAMPTZ)');
-    await pool.query('CREATE TABLE doctor_task_outbox(tenant_id TEXT,payload JSONB)');
+    await pool.query(
+      "CREATE TABLE doctor_task_outbox(tenant_id TEXT,payload JSONB,status TEXT DEFAULT 'pending')"
+    );
     const migration = fs
       .readFileSync(
         path.join(__dirname, '../db/migrations/094_asinu_v2_entitlements_and_early_signals.sql'),
@@ -208,5 +210,112 @@ suite('consultation credit policy on isolated PostgreSQL', () => {
       (await pool.query('SELECT COUNT(*)::int n FROM doctor_consultation_credit_reservations'))
         .rows[0].n
     ).toBe(0);
+  });
+  test.each(['cancelled', 'completed'])(
+    'privacy reconciliation settles a %s case and binds the Doctor receipt',
+    async (status) => {
+      const {
+        settlePrivacyCredits,
+      } = require('../src/services/integrations/doctor-privacy-credit.service');
+      await reserve(1, 'demo-privacy');
+      const send = jest.fn(async () => {}),
+        doctorId = crypto.randomUUID();
+      const input = {
+        userId: 1,
+        tenantId: 'demo-clinic',
+        settlements: [{ doctor_task_id: doctorId, task_id: 'demo-privacy', status }],
+      };
+      await settlePrivacyCredits(pool, input, send);
+      await settlePrivacyCredits(pool, input, send);
+      expect(await balance()).toBe(status === 'completed' ? 1 : 2);
+      expect(send).toHaveBeenLastCalledWith('credit-status', {
+        tenant_id: 'demo-clinic',
+        app_user_id: '1',
+        task_id: 'demo-privacy',
+        doctor_task_id: doctorId,
+        state: status === 'completed' ? 'consumed' : 'released',
+      });
+    }
+  );
+  test('privacy receipt delivery can retry after the local debit commits, without a second debit', async () => {
+    const {
+      settlePrivacyCredits,
+    } = require('../src/services/integrations/doctor-privacy-credit.service');
+    await reserve(1, 'demo-privacy-retry');
+    const send = jest
+      .fn()
+      .mockRejectedValueOnce(new Error('Synthetic receipt outage'))
+      .mockResolvedValue({});
+    const input = {
+      userId: 1,
+      tenantId: 'demo-clinic',
+      settlements: [
+        { doctor_task_id: crypto.randomUUID(), task_id: 'demo-privacy-retry', status: 'completed' },
+      ],
+    };
+    await expect(settlePrivacyCredits(pool, input, send)).rejects.toThrow(
+      'Synthetic receipt outage'
+    );
+    expect(await balance()).toBe(1);
+    await settlePrivacyCredits(pool, input, send);
+    expect(await balance()).toBe(1);
+    expect(send).toHaveBeenCalledTimes(2);
+  });
+  test('privacy reconciliation cannot debit another patient or accept a nonterminal outcome', async () => {
+    const {
+      settlePrivacyCredits,
+    } = require('../src/services/integrations/doctor-privacy-credit.service');
+    await reserve(2, 'demo-other-patient');
+    const send = jest.fn();
+    const input = {
+      userId: 1,
+      tenantId: 'demo-clinic',
+      settlements: [
+        { doctor_task_id: crypto.randomUUID(), task_id: 'demo-other-patient', status: 'completed' },
+      ],
+    };
+    await settlePrivacyCredits(pool, input, send);
+    expect(await balance()).toBe(2);
+    expect(send).not.toHaveBeenCalled();
+    await expect(
+      settlePrivacyCredits(
+        pool,
+        { ...input, settlements: [{ ...input.settlements[0], status: 'in_progress' }] },
+        send
+      )
+    ).rejects.toMatchObject({ code: 'DOCTOR_PRIVACY_SETTLEMENT_INVALID' });
+  });
+  test('an authoritative privacy receipt releases requests that never reached Doctor but preserves unproven sent cases', async () => {
+    const {
+      settlePrivacyCredits,
+    } = require('../src/services/integrations/doctor-privacy-credit.service');
+    await reserve(1, 'demo-pending');
+    await reserve(2, 'demo-sent');
+    for (const [user, task, status] of [
+      [1, 'demo-pending', 'processing'],
+      [2, 'demo-sent', 'sent'],
+    ])
+      await pool.query(
+        'INSERT INTO doctor_task_outbox(tenant_id,payload,status) VALUES($1,$2,$3)',
+        [
+          'demo-clinic',
+          JSON.stringify({ payload: { app_user_id: String(user), task_id: task } }),
+          status,
+        ]
+      );
+    const send = jest.fn();
+    await settlePrivacyCredits(
+      pool,
+      { userId: 1, tenantId: 'demo-clinic', version: 1, settlements: [] },
+      send
+    );
+    expect((await consultationCreditSummary(pool, 1)).available).toBe(1);
+    expect(send).not.toHaveBeenCalled();
+    await settlePrivacyCredits(
+      pool,
+      { userId: 2, tenantId: 'demo-clinic', version: 1, settlements: [] },
+      send
+    );
+    expect((await consultationCreditSummary(pool, 2)).available).toBe(0);
   });
 });

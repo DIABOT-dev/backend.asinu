@@ -131,3 +131,24 @@ test('client risk fields cannot downgrade the replayed answers or patient contex
   expect(queued.clinical_intake.progression).toBe('worsening');
   expect(queued.summary).toContain('Nặng dần');
 });
+
+test('a finalized gift id cannot recreate a consultation after its original request is anonymized', async () => {
+  const credits = require('../../src/services/payment/consultation-credit.service');
+  credits.reserveConsultationCredit.mockResolvedValueOnce({ state: 'released' });
+  const pool = database([{ id: 7, consent_accepted_at: new Date(), consent_version: 'v2' }]);
+  const defaultQuery = pool.query.getMockImplementation();
+  pool.query.mockImplementation((sql, ...args) =>
+    sql.includes('FROM doctor_task_outbox')
+      ? Promise.resolve({ rows: [] })
+      : defaultQuery(sql, ...args)
+  );
+  await expect(
+    requestDoctorTask(pool, 7, {
+      ...screenedInput(),
+      task_id: 'old-finalized-task',
+      tenant_id: 'clinic-demo',
+    })
+  ).rejects.toMatchObject({ statusCode: 409, code: 'DOCTOR_TASK_CLOSED' });
+  expect(doctorTask.enqueueDoctorTask).not.toHaveBeenCalled();
+  expect(pool.query).toHaveBeenCalledWith('ROLLBACK');
+});

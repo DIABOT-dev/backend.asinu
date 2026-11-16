@@ -1279,5 +1279,6 @@
   "checkin.triage.question.symptoms_selected": "Which of these symptoms are you experiencing now?",
   "doctor.care_notice_title": "Care plan update",
   "doctor.care_notice_body": "Open Asinu to view your care invitation or plan.",
-  "doctor.reconsultation_unavailable": "Reconsultation requires a completed consultation."
+  "doctor.reconsultation_unavailable": "Reconsultation requires a completed consultation.",
+  "doctor.consultation_closed": "The previous consultation is closed. Please submit a new request."
 }

@@ -160,6 +160,19 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
   assertTenantAllowed(input.tenant_id);
   const envelope = buildPrivacyRequestEnvelope({ userId, input });
   const response = await deliverDoctorRequest('privacy', envelope, envelope.idempotency_key);
+  if (['withdraw_consent', 'anonymize', 'delete'].includes(input.action)) {
+    const { settlePrivacyCredits } = require('./doctor-privacy-credit.service');
+    await settlePrivacyCredits(
+      pool,
+      {
+        userId,
+        tenantId: input.tenant_id,
+        settlements: response.data?.credit_settlements,
+        version: response.data?.credit_settlement_version,
+      },
+      deliverDoctorRequest
+    );
+  }
   if (input.action === 'grant_consent') {
     await pool.query(
       `UPDATE users SET consent_accepted_at = NOW(), consent_version = $1, updated_at = NOW()
@@ -279,6 +292,13 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
       [userId]
     );
   }
+  if (input.action === 'withdraw_consent') {
+    await pool.query(
+      `UPDATE doctor_task_outbox SET status='dead',locked_at=NULL,last_error='privacy_consent_withdrawn',updated_at=NOW()
+      WHERE tenant_id=$1 AND payload->'payload'->>'app_user_id'=$2 AND status<>'sent'`,
+      [input.tenant_id, String(userId)]
+    );
+  }
   if (input.action === 'anonymize' || input.action === 'delete') {
     const files = await pool.query(
       `SELECT public_id, mime_type, resource_type, delivery_type
@@ -325,6 +345,9 @@ const submitPrivacyRequest = async (pool, { userId, input }) => {
         `UPDATE doctor_task_outbox
             SET event_id = 'anon-event-' || id::text,
                 idempotency_key = 'anon-key-' || id::text,
+                status=CASE WHEN status='sent' THEN 'sent' ELSE 'dead' END,
+                locked_at=NULL,
+                last_error=CASE WHEN status='sent' THEN last_error ELSE 'privacy_anonymized' END,
                 payload = jsonb_build_object(
                   'event_id', 'anon-event-' || id::text,
                   'idempotency_key', 'anon-key-' || id::text,
@@ -641,7 +664,7 @@ const flushDoctorTaskOutbox = async (pool, limit = 20) => {
         `UPDATE doctor_task_outbox
             SET status = 'sent', sent_at = NOW(), response_status = $2,
                 locked_at = NULL, last_error = NULL, updated_at = NOW()
-          WHERE id = $1`,
+          WHERE id = $1 AND status='processing'`,
         [row.id, status]
       );
     } catch (error) {
@@ -654,7 +677,7 @@ const flushDoctorTaskOutbox = async (pool, limit = 20) => {
             SET status = CASE WHEN attempts >= $2 THEN 'dead' ELSE 'failed' END,
                 next_attempt_at = NOW() + ($3 || ' seconds')::interval,
                 locked_at = NULL, last_error = LEFT($4, 1000), updated_at = NOW()
-          WHERE id = $1`,
+          WHERE id = $1 AND status='processing'`,
         [row.id, MAX_ATTEMPTS, String(retryDelaySeconds(attempts)), message]
       );
     }

@@ -129,6 +129,20 @@ async function requestDoctorTask(pool, userId, input) {
     }
 
     const credit = await reserveConsultationCredit(db, userId, input.tenant_id, input.task_id);
+    if (['consumed', 'released'].includes(credit.state)) {
+      const original = await db.query(
+        `SELECT 1 FROM doctor_task_outbox WHERE tenant_id=$1
+        AND payload->'payload'->>'task_id'=$2 AND payload->'payload'->>'app_user_id'=$3`,
+        [input.tenant_id, input.task_id, String(userId)]
+      );
+      if (!original.rows[0])
+        throw Object.assign(
+          new Error(
+            t('doctor.consultation_closed', input.clinical_intake.screening_locale || 'vi')
+          ),
+          { statusCode: 409, code: 'DOCTOR_TASK_CLOSED' }
+        );
+    }
     input = { ...input, credit_state: credit.state === 'none' ? 'none' : 'reserved' };
     const result = await enqueueDoctorTask(db, { user: patient, input });
     // Queue the CRM service-order projection beside the Doctor task.
