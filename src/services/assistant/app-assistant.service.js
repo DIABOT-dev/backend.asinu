@@ -51,6 +51,50 @@ function numbersIn(text) {
   }
   return numbers;
 }
+// Height has its own unit conversion. Applying this to numbersIn would also
+// loosen journal/BP checks, where e.g. "12/8" must never become "120/80".
+function heightMatches(value, evidence) {
+  // Recognize the actual unit before accent folding: "mệt" is not "mét".
+  const text = evidence.normalize('NFC').toLowerCase().replace(/(?<!\p{L})(?:mét|met)(?!\p{L})/gu, 'meter')
+    .normalize('NFD').replace(/[\u0300-\u036f]/gu, '');
+  const meter = '(?:meters?|metres?|m)';
+  const centimeter = '(?:centimeters?|centimetres?|xentimet|xang[ -]?ti[ -]?met(?:er)?|cm)';
+  const decimal = '\\d+(?:[.,]\\d+)?';
+  const word = '(?:khong|mot|hai|ba|bon|tu|nam|lam|sau|bay|tam|chin|muoi|tram|linh|le|phay)';
+  const spoken = `${word}(?:\\s+${word})*\\b`;
+  const quantity = `(?:${decimal}|${spoken})`;
+  const exact = source => /^\d/u.test(source) ? Number(source.replace(',', '.')) : numbersIn(source)[0];
+  const values = [], compounds = [];
+  // Numeric suffixes without a repeated cm unit must contain two digits:
+  // "1m70" is exact; ambiguous shorthand such as "1m7" is not guessed.
+  const compound = new RegExp(`(?<![\\p{L}\\d.,])(${quantity})\\s*${meter}(?!\\p{L})(?:\\s*(${quantity})(?:\\s*(${centimeter})(?!\\p{L}))?)?(?!\\d|[.,]\\d)`, 'gu');
+  for (const match of text.matchAll(compound)) {
+    compounds.push([match.index, match.index + match[0].length]);
+    const meters = exact(match[1]);
+    if (!Number.isFinite(meters)) continue;
+    if (match[2] === undefined) values.push(meters * 100);
+    else {
+      const cm = exact(match[2]);
+      const exactSuffix = match[3] || /^\d{2}$/u.test(match[2]) || !/^\d/u.test(match[2]) && cm >= 10;
+      if (Number.isInteger(meters) && Number.isFinite(cm) && cm >= 0 && cm < 100 && exactSuffix) values.push(meters * 100 + cm);
+    }
+  }
+  const centimeters = new RegExp(`(?<![\\p{L}\\d.,])(${quantity})\\s*${centimeter}(?!\\p{L})`, 'gu');
+  for (const match of text.matchAll(centimeters)) {
+    // The "70 cm" in "1 m 70 cm" is a component, not a second height.
+    if (!compounds.some(([start, end]) => match.index >= start && match.index < end)) values.push(exact(match[1]));
+  }
+  const hasUnit = compounds.length > 0 || new RegExp(`(?:${decimal}\\s*|\\b)${centimeter}(?!\\p{L})`, 'u').test(text);
+  if (!hasUnit) {
+    // Bare centimeters remain supported next to the height field, but a number
+    // attached to a weight/date/age elsewhere is not evidence for this field.
+    const bare = new RegExp(`\\b(?:chieu cao|height)(?:\\s+(?:cua|toi|minh|giup|cho|la|thanh|to|is|my))*\\s+(${quantity})(?![\\p{L}\\d]|[.,]\\d)(?!\\s*(?:kg|kilograms?|feet|foot|ft|inches?|inch|tuoi|years?)\\b)`, 'gu');
+    for (const match of text.matchAll(bare)) values.push(exact(match[1]));
+    if (new RegExp(`^${quantity}$`, 'u').test(text.trim())) values.push(exact(text.trim()));
+  }
+  if (new Set(values).size > 1 && /\b(hay|hoac|or|either|khong chac|khong nho)\b/u.test(text)) return false;
+  return values.some(height => Math.abs(height - value) < 0.000001);
+}
 function validatePlan(raw, request, medicationContext, profileContext) {
   const parsed = responseSchema.safeParse(raw);
   if (!parsed.success) return null;
@@ -93,7 +137,7 @@ function validatePlan(raw, request, medicationContext, profileContext) {
       if (!medication.validateAction(action, medicationContext, source)) return null;
     } else if (action.type === 'profile') {
       const fold = value => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-      if (action.changes.heightCm !== undefined && !numbers.includes(action.changes.heightCm)) return null;
+      if (action.changes.heightCm !== undefined && !heightMatches(action.changes.heightCm, action.evidence)) return null;
       if (action.changes.bloodType && !source.toUpperCase().includes(action.changes.bloodType)) return null;
       if (action.changes.name && !fold(source).includes(fold(action.changes.name))) return null;
       if (action.changes.chronicDiseases && profileContext?.chronicDiseases?.length) {

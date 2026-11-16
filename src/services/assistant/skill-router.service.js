@@ -20,7 +20,7 @@ function select(request) {
   if (/\b(nuoc|water|huyet ap|blood pressure|duong huyet|blood sugar|glucose|bua an|breakfast|lunch|dinner|meal)\b/u.test(text) || /\b(toi vua an|ghi bua)\b/u.test(text)) {
     if (!med || /\b(ghi|do|log|measure|readings?|nuoc|water|bua an|chi so)\b/u.test(text)) found.add('journal');
   }
-  add('profile', /\b(ho so|thong tin ca nhan|profile|ngay sinh|sinh ngay|gioi tinh|chieu cao|nhom mau|benh nen|declared conditions|avatar|anh dai dien|doi ten toi|doi ten cua toi|doi ten thanh|ten cua toi)\b/u);
+  add('profile', /\b(ho so|thong tin ca nhan|profile|ngay sinh|sinh ngay|gioi tinh|chieu cao|height|nhom mau|benh nen|declared conditions|avatar|anh dai dien|doi ten toi|doi ten cua toi|doi ten thanh|ten cua toi)\b/u);
   add('settings', /\b(co chu|font|ngon ngu|tieng anh|tieng viet|language|cap quyen|permission|camera|microphone|quyen micro|quyen anh|cai dat ung dung|app settings)\b/u);
   if (/\b(bat|tat|enable|disable|turn on|turn off)\b/u.test(text) && /\b(nhac nhiem vu|ban tin|health feed|task reminders|thong bao|notifications)\b/u.test(text)) found.add('settings');
   if (/\b(nhac|reminders?|remind)\b/u.test(text) && (!med || /\b(nhac buoi|routine|nhac nhiem vu)\b/u.test(text))) found.add('reminders');
