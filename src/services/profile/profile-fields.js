@@ -7,22 +7,23 @@ function normalizeAddress(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('invalid_address');
   const address = {};
   for (const [key, max] of [['province', 120], ['ward', 120], ['street', 300]]) {
-    if (typeof value[key] !== 'string' || value[key].length > max || value[key].includes('\u0000')) throw new Error('invalid_address');
-    address[key] = value[key].replace(/\s+/g, ' ').trim();
+    const field = value[key] ?? '';
+    if (typeof field !== 'string' || field.length > max || field.includes('\u0000')) throw new Error('invalid_address');
+    address[key] = field.replace(/\s+/g, ' ').trim();
   }
-  const populated = Object.values(address).filter(Boolean).length;
-  if (populated === 0) return null;
-  if (populated !== 3) throw new Error('invalid_address');
-  const coded = value.provinceCode !== undefined || value.wardCode !== undefined;
-  if (coded && (typeof value.provinceCode !== 'string' || typeof value.wardCode !== 'string')) throw new Error('invalid_address');
-  const province = coded ? provinces.find(province => province.code === value.provinceCode)
+  for (const key of ['provinceCode','wardCode']) if (value[key] !== undefined && typeof value[key] !== 'string') throw new Error('invalid_address');
+  const hasProvince = !!(address.province || value.provinceCode);
+  const hasWard = !!(address.ward || value.wardCode);
+  if (!hasProvince && !hasWard && !address.street) return null;
+  if (hasWard && !hasProvince) throw new Error('invalid_address');
+  const province = value.provinceCode ? provinces.find(province => province.code === value.provinceCode)
     : provinces.find(province => fold(province.name) === fold(address.province)) ?? provinces.find(province => shortName(province.name) === shortName(address.province));
-  if (!province) throw new Error('invalid_address');
-  const candidates = province.wards.filter(ward => shortName(ward.name) === shortName(address.ward));
-  const ward = coded ? province.wards.find(ward => ward.code === value.wardCode)
-    : province.wards.find(ward => fold(ward.name) === fold(address.ward)) ?? (candidates.length === 1 ? candidates[0] : undefined);
-  if (!ward) throw new Error('invalid_address');
-  return { provinceCode: province.code, province: province.name, wardCode: ward.code, ward: ward.name, street: address.street };
+  if (hasProvince && !province) throw new Error('invalid_address');
+  const candidates = province?.wards.filter(ward => shortName(ward.name) === shortName(address.ward)) ?? [];
+  const ward = value.wardCode ? province?.wards.find(ward => ward.code === value.wardCode)
+    : province?.wards.find(ward => fold(ward.name) === fold(address.ward)) ?? (candidates.length === 1 ? candidates[0] : undefined);
+  if (hasWard && !ward) throw new Error('invalid_address');
+  return { provinceCode: province?.code ?? '', province: province?.name ?? '', wardCode: ward?.code ?? '', ward: ward?.name ?? '', street: address.street };
 }
 
 function validBirthDate(value, now = new Date()) {

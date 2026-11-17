@@ -43,7 +43,7 @@ test('addresses normalize whitespace and can be removed explicitly', async () =>
   expect((await service.updateProfile(pool, 7, { address: null })).profile.address).toBeNull();
   expect(normalizeAddress({ province: '', ward: '', street: '' })).toBeNull();
 });
-test.each([[], 'Hà Nội', {}, { province: 'Hà Nội' }, { ...address, street: 123 }, { ...address, street: 'x'.repeat(301) }, { ...address, ward: '\u0000' }, { ...address, provinceCode: '99' }, { ...address, provinceCode: 1 }, { ...address, wardCode: '99999' }, { ...address, provinceCode: '79' }, { province: 'Hà Nội', ward: 'Phường không tồn tại', street: '12 Phố A' }])('invalid address rejects the entire request before any write: %j', async value => {
+test.each([[], 'Hà Nội', { ward: 'Phường Ba Đình' }, { wardCode: '00004' }, { ...address, street: 123 }, { ...address, street: 'x'.repeat(301) }, { ...address, ward: '\u0000' }, { ...address, provinceCode: '99' }, { ...address, provinceCode: 1 }, { ...address, wardCode: '99999' }, { ...address, provinceCode: '79' }, { province: 'Hà Nội', ward: 'Phường không tồn tại', street: '12 Phố A' }])('invalid address rejects the entire request before any write: %j', async value => {
   const { pool } = fixture();
   const result = await service.updateProfile(pool, 7, { name: 'Must not change', address: value });
   expect(result).toMatchObject({ ok: false, statusCode: 400 });
@@ -81,3 +81,10 @@ test('the HTTP controller authorizes by the session and forwards only supported 
   pool.query.mockClear(); await controller.updateProfile(pool, { body: { address } }, res);
   expect(res.status).toHaveBeenLastCalledWith(401); expect(pool.query).not.toHaveBeenCalled();
 });
+
+test.each([
+ [{province:'Hà Nội'}, {provinceCode:'01',province:'Thành phố Hà Nội',wardCode:'',ward:'',street:''}],
+ [{province:'Hà Nội',ward:'Ba Đình'}, {...address,street:''}],
+ [{street:'12 Phố A'}, {provinceCode:'',province:'',wardCode:'',ward:'',street:'12 Phố A'}],
+ [{}, null],
+])('all address fields are optional while a ward requires its province: %j',async(input,expected)=>{const{pool}=fixture();const result=await service.updateProfile(pool,7,{address:input});expect(result.profile.address).toEqual(expected);});
