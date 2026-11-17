@@ -25,6 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../../lib/logger');
 const { captureException } = require('../../lib/sentry');
+const { appleMoney, appleRefundMoney, googleOrderMoney } = require('./store-money');
 const subscriptionService = require('./subscription.service');
 const { assertNotRevoked } = require('./iap-revocation.service');
 const { productForId } = require('./subscription-catalog');
@@ -221,6 +222,7 @@ async function verifyAppleReceipt({ signedTransaction } = {}) {
       expiresAt: decoded.expiresDate ? new Date(decoded.expiresDate).toISOString() : null,
       environment: decoded.environment,
       offerId: decoded.offerIdentifier || null,
+      ...appleMoney(decoded),
     };
   } catch (err) {
     logger.warn('iap.apple_verify.failed', { message: err.message });
@@ -356,6 +358,7 @@ async function verifyGooglePurchase({ productId, purchaseToken } = {}) {
         : null,
       expiresAt: item.expiryTime ? new Date(item.expiryTime).toISOString() : null,
       environment: data.testPurchase ? 'sandbox' : 'production',
+      ...(await googleOrderMoney(publisher, packageName, data.latestOrderId)),
       basePlanId: item.offerDetails?.basePlanId || null,
       offerId: item.offerDetails?.offerId || null,
     };
@@ -382,14 +385,16 @@ async function recordReceipt(
     basePlanId,
     offerId,
     rawPayload,
+    amountMinor,
+    currency,
   }
 ) {
   try {
     const insert = await pool.query(
       `INSERT INTO iap_receipts
          (user_id, platform, product_id, transaction_id, original_transaction_id, expires_at,
-          plan_code, billing_period, base_plan_id, offer_id, raw_payload)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb)
+          plan_code, billing_period, base_plan_id, offer_id, raw_payload,amount_minor,currency)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb,$12,$13)
        ON CONFLICT (transaction_id) DO NOTHING
        RETURNING id`,
       [
@@ -404,6 +409,8 @@ async function recordReceipt(
         basePlanId || null,
         offerId || null,
         JSON.stringify(rawPayload || {}),
+        amountMinor ?? null,
+        currency ?? null,
       ]
     );
     if (insert.rowCount) return { inserted: true, userId: Number(userId) };
@@ -507,6 +514,8 @@ async function verifyAndActivate(pool, userId, payload = {}) {
     basePlanId,
     offerId,
     rawPayload: { ...payload, environment: verification.environment },
+    amountMinor: verification.amountMinor,
+    currency: verification.currency,
   });
 
   if (!receipt.inserted && receipt.userId !== Number(userId)) {
@@ -519,6 +528,18 @@ async function verifyAndActivate(pool, userId, payload = {}) {
 
   if (!receipt.inserted) {
     logger.info('iap.receipt.duplicate', { user_id: userId, transactionId });
+    await pool.query(
+      'UPDATE iap_receipts SET amount_minor=COALESCE($3,amount_minor),currency=COALESCE($4,currency) WHERE transaction_id=$1 AND user_id=$2',
+      [transactionId, userId, verification.amountMinor ?? null, verification.currency ?? null]
+    );
+    await subscriptionService.publishVerifiedPayment(pool, userId, {
+      productId,
+      transactionId,
+      originalTransactionId,
+      platform: isApplePlatform(platform) ? 'apple' : 'google',
+      amountMinor: verification.amountMinor,
+      currency: verification.currency,
+    });
     const current = await subscriptionService.getStatus(pool, userId);
     const expectedExpiry = expiresAt ? new Date(expiresAt).getTime() : 0;
     const currentExpiry = current.expiresAt ? new Date(current.expiresAt).getTime() : 0;
@@ -544,6 +565,8 @@ async function verifyAndActivate(pool, userId, payload = {}) {
     platform: isApplePlatform(platform) ? PLATFORM_APPLE : PLATFORM_GOOGLE,
     basePlanId,
     offerId,
+    amountMinor: verification.amountMinor,
+    currency: verification.currency,
   });
 
   if (result.ok) {
@@ -655,6 +678,7 @@ async function handleAppleNotification(pool, envelope) {
     productId: tx.productId,
     expiresAt: tx.expiresDate ? new Date(tx.expiresDate).toISOString() : null,
     action,
+    ...(action === 'refund' ? appleRefundMoney(tx) : appleMoney(tx)),
     rawPayload: {
       notificationType,
       subtype,
@@ -765,6 +789,12 @@ async function handleGoogleNotification(pool, body) {
     productId: item.productId,
     expiresAt: item.expiryTime ? new Date(item.expiryTime).toISOString() : null,
     action,
+    ...(await googleOrderMoney(
+      publisher,
+      payload.packageName,
+      info.latestOrderId,
+      action === 'refund'
+    )),
     rawPayload: { notificationType: type, packageName: payload.packageName },
   });
 }

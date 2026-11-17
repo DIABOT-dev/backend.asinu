@@ -3,7 +3,7 @@
 const { cacheGet, cacheSet } = require('../../lib/redis');
 const { t } = require('../../i18n');
 const { sendAndSave } = require('../notification/basic.notification.service');
-const { emitCrmEventAsync } = require('../integrations/crm-event.service');
+const { enqueueCrmEvent } = require('../integrations/crm-event.service');
 const entitlementService = require('./entitlement.service');
 const revocations = require('./iap-revocation.service');
 const { planDefinition, productForId, localizedPlanName } = require('./subscription-catalog');
@@ -17,10 +17,17 @@ async function getStatus(pool, userId) {
   const cached = await cacheGet(cacheKey);
   // An entitlement must stop at the Store period end even if Redis still
   // holds an older paid snapshot (sandbox periods can be very short).
-  const validCount = cached && Number.isInteger(cached.protectedMemberCount) &&
-    Number.isInteger(cached.protectedMemberLimit) && cached.protectedMemberCount >= 0 &&
+  const validCount =
+    cached &&
+    Number.isInteger(cached.protectedMemberCount) &&
+    Number.isInteger(cached.protectedMemberLimit) &&
+    cached.protectedMemberCount >= 0 &&
     cached.protectedMemberCount <= cached.protectedMemberLimit;
-  if (cached && validCount && (!cached.isAnTam || Date.parse(cached.expiresAt || '') > Date.now())) {
+  if (
+    cached &&
+    validCount &&
+    (!cached.isAnTam || Date.parse(cached.expiresAt || '') > Date.now())
+  ) {
     return cached;
   }
   const status = await entitlementService.getEntitlement(pool, userId);
@@ -72,8 +79,8 @@ async function notifyActivated(pool, userId, expiresAt) {
   );
 }
 
-function emitSubscriptionEvent(pool, type, details) {
-  emitCrmEventAsync(
+async function emitSubscriptionEvent(pool, type, details) {
+  return enqueueCrmEvent(
     pool,
     type,
     {
@@ -86,11 +93,41 @@ function emitSubscriptionEvent(pool, type, details) {
       expires_at: details.expiresAt ? new Date(details.expiresAt).toISOString() : undefined,
       external_ref: details.transactionId,
       provider: details.platform,
-      amount_minor: 0,
-      currency: 'VND',
+      amount_minor: Number.isSafeInteger(details.amountMinor) ? details.amountMinor : null,
+      amount_status: Number.isSafeInteger(details.amountMinor) ? 'verified' : 'unknown',
+      currency: details.currency ?? null,
+      payer_user_id: String(details.userId),
+      original_external_ref: details.originalTransactionId || details.transactionId || null,
+      parent_external_ref: details.refundParentRef || details.transactionId || null,
       txn_type: 'subscription',
     },
-    { event_id: `${type}:${details.platform}:${details.transactionId || details.userId}` }
+    {
+      event_id: `${type}:${details.platform}:${details.transactionId || details.userId}`,
+      strict: true,
+    }
+  );
+}
+
+async function publishVerifiedPayment(db, userId, options) {
+  return require('../integrations/crm-domain-events.service').enqueueProjection(
+    db,
+    'payment.completed',
+    `${options.platform}:${options.transactionId}`,
+    {
+      user_id: String(userId),
+      payer_user_id: String(userId),
+      beneficiary_user_id: String(userId),
+      external_ref: options.transactionId,
+      original_external_ref: options.originalTransactionId || options.transactionId,
+      parent_external_ref: options.originalTransactionId || options.transactionId,
+      provider: options.platform,
+      product_code: options.productId,
+      txn_type: 'subscription',
+      status: 'completed',
+      amount_minor: Number.isSafeInteger(options.amountMinor) ? options.amountMinor : null,
+      amount_status: Number.isSafeInteger(options.amountMinor) ? 'verified' : 'unknown',
+      currency: options.currency ?? null,
+    }
   );
 }
 
@@ -132,6 +169,23 @@ async function activateFromIap(pool, userId, options) {
         }
       );
     }
+    await emitSubscriptionEvent(db, options.crmEventType || 'subscription.started', {
+      userId,
+      planCode: plan.code,
+      productId: options.productId,
+      transactionId: options.transactionId,
+      originalTransactionId: options.originalTransactionId,
+      platform: options.platform,
+      expiresAt,
+      status: 'active',
+      amountMinor: options.amountMinor,
+      currency: options.currency,
+    });
+    await publishVerifiedPayment(db, userId, options);
+    await require('../integrations/crm-domain-events.service').enqueueHouseholdEntitlements(
+      db,
+      household.id
+    );
     await db.query('COMMIT');
   } catch (error) {
     await db.query('ROLLBACK');
@@ -145,15 +199,6 @@ async function activateFromIap(pool, userId, options) {
   }
   await entitlementService.invalidateHouseholdEntitlements(pool, household.id);
   notifyActivated(pool, userId, expiresAt).catch(() => {});
-  emitSubscriptionEvent(pool, options.crmEventType || 'subscription.started', {
-    userId,
-    planCode: plan.code,
-    productId: options.productId,
-    transactionId: options.transactionId,
-    platform: options.platform,
-    expiresAt,
-    status: 'active',
-  });
   return {
     ok: true,
     planCode: plan.code,
@@ -218,6 +263,8 @@ async function applyIapWebhookEvent(pool, event) {
       billingPeriod: product.billing_period,
       expiresAt: event.expiresAt,
       platform: event.platform,
+      amountMinor: event.amountMinor,
+      currency: event.currency,
       crmEventType: 'subscription.renewed',
     });
   }
@@ -259,6 +306,38 @@ async function applyIapWebhookEvent(pool, event) {
         event.action === 'refund' ? 'refunded' : event.action === 'revoke' ? 'revoked' : 'expired'
       );
     }
+    if (event.action === 'refund')
+      await emitSubscriptionEvent(db, 'payment.refunded', {
+        userId,
+        planCode: 'free',
+        productId: event.productId,
+        transactionId: event.transactionId,
+        originalTransactionId: event.originalTransactionId,
+        refundParentRef: event.transactionId,
+        platform: event.platform,
+        expiresAt: event.expiresAt,
+        status: 'refunded',
+        amountMinor: event.amountMinor,
+        currency: event.currency,
+      });
+    if (!ignored) {
+      await emitSubscriptionEvent(
+        db,
+        event.action === 'expire' ? 'subscription.expired' : 'subscription.cancelled',
+        {
+          userId,
+          planCode: 'free',
+          productId: event.productId,
+          transactionId: event.transactionId,
+          originalTransactionId: event.originalTransactionId,
+          platform: event.platform,
+          expiresAt: event.expiresAt,
+          status: event.action,
+          amountMinor: event.amountMinor,
+          currency: event.currency,
+        }
+      );
+    }
     await db.query('COMMIT');
   } catch (error) {
     await db.query('ROLLBACK');
@@ -274,30 +353,6 @@ async function applyIapWebhookEvent(pool, event) {
   );
   // Retry cache invalidation even when the database downgrade already committed.
   if (ignored) return { ok: true, ignored: true, reason: 'newer entitlement active' };
-  if (event.action === 'refund') {
-    emitSubscriptionEvent(pool, 'payment.refunded', {
-      userId,
-      planCode: 'free',
-      productId: event.productId,
-      transactionId: event.transactionId,
-      platform: event.platform,
-      expiresAt: event.expiresAt,
-      status: 'refunded',
-    });
-  }
-  emitSubscriptionEvent(
-    pool,
-    event.action === 'expire' ? 'subscription.expired' : 'subscription.cancelled',
-    {
-      userId,
-      planCode: 'free',
-      productId: event.productId,
-      transactionId: event.transactionId,
-      platform: event.platform,
-      expiresAt: event.expiresAt,
-      status: event.action,
-    }
-  );
   return { ok: true, userId, planCode: 'free' };
 }
 
@@ -370,6 +425,21 @@ async function activateSubscription(pool, userId, orderCode, options = {}) {
               subscription_end = $2, completed_at = NOW() WHERE order_code = $1`,
       [orderCode, expiresAt]
     );
+    await emitSubscriptionEvent(db, 'subscription.activated', {
+      userId,
+      planCode: 'antam_2',
+      productId: 'legacy.bank-transfer',
+      transactionId: orderCode,
+      platform: 'legacy',
+      expiresAt,
+      status: 'active',
+      amountMinor: Number(pending.rows[0].amount),
+      currency: 'VND',
+    });
+    await require('../integrations/crm-domain-events.service').enqueueHouseholdEntitlements(
+      db,
+      household.id
+    );
     if (ownsTransaction) await db.query('COMMIT');
   } catch (error) {
     if (ownsTransaction) await db.query('ROLLBACK');
@@ -384,18 +454,10 @@ async function activateSubscription(pool, userId, orderCode, options = {}) {
 
 async function notifyLegacyActivated(pool, userId, orderCode, result) {
   await entitlementService.invalidateHouseholdEntitlements(pool, result.householdId);
-  emitSubscriptionEvent(pool, 'subscription.activated', {
-    userId,
-    planCode: 'antam_2',
-    productId: 'legacy.bank-transfer',
-    transactionId: orderCode,
-    platform: 'legacy',
-    expiresAt: result.expiresAt,
-    status: 'active',
-  });
 }
 
 module.exports = {
+  publishVerifiedPayment,
   getStatus,
   isAnTam,
   getVoiceUsageThisMonth,

@@ -1,0 +1,15 @@
+# On VPS 103: /opt/data/traefik/dynamic/ninerouter-api.yml.
+# Uses the existing 9router-svc service. Dashboard keeps its Basic Auth router.
+http:
+  routers:
+    ninerouter-asinu-api:
+      rule: 'Host(`9router.asinu.top`) && (Path(`/v1/models`) || Path(`/v1/chat/completions`))'
+      priority: 200
+      entryPoints: [websecure]
+      middlewares: [ninerouter-asinu-source]
+      service: 9router-svc
+      tls: { certResolver: letsencrypt }
+  middlewares:
+    ninerouter-asinu-source:
+      ipAllowList:
+        sourceRange: ['36.50.176.55/32']

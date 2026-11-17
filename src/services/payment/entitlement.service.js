@@ -32,6 +32,23 @@ async function reconcileExpiredHousehold(pool, household) {
       [household.owner_user_id]
     );
     if (isExpiredHousehold(locked.rows[0])) {
+      const expired = locked.rows[0];
+      await require('../integrations/crm-event.service').enqueueCrmEvent(
+        db,
+        'subscription.expired',
+        {
+          user_id: String(expired.owner_user_id),
+          beneficiary_user_id: String(expired.owner_user_id),
+          plan_code: expired.plan_code,
+          state: 'churn',
+          status: 'expired',
+          expires_at: new Date(expired.current_period_end).toISOString(),
+        },
+        {
+          event_id: `subscription.expired:${expired.id}:${new Date(expired.current_period_end).toISOString()}`,
+          strict: true,
+        }
+      );
       downgraded = await downgradeHouseholdToFree(db, household.owner_user_id);
     }
     if (ownsClient) await db.query('COMMIT');
@@ -248,6 +265,11 @@ async function downgradeHouseholdToFree(db, ownerUserId, status = 'expired') {
      ON CONFLICT (household_id, user_id) DO UPDATE
        SET status = 'active', added_at = NOW(), removed_at = NULL`,
     [household.id, ownerUserId]
+  );
+  await require('../integrations/crm-domain-events.service').enqueueHouseholdEntitlements(
+    db,
+    household.id,
+    excess.rows.map((row) => Number(row.user_id))
   );
   return {
     ...updated.rows[0],

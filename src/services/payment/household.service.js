@@ -160,6 +160,11 @@ async function addProtectedMember(pool, ownerUserId, memberUserId, lang = 'vi') 
              added_at = NOW(), removed_at = NULL`,
       [household.id, memberUserId, ownerUserId]
     );
+    await require('../integrations/crm-domain-events.service').enqueueHouseholdEntitlements(
+      db,
+      household.id,
+      [Number(memberUserId)]
+    );
   });
   await Promise.all([
     entitlementService.invalidateEntitlement(memberUserId),
@@ -192,6 +197,11 @@ async function removeProtectedMember(pool, ownerUserId, memberUserId, lang = 'vi
        ON CONFLICT (household_id, user_id) DO UPDATE
          SET status = 'active', added_at = NOW(), removed_at = NULL`,
       [ownHousehold.id, memberUserId]
+    );
+    await require('../integrations/crm-domain-events.service').enqueueHouseholdEntitlements(
+      db,
+      household.id,
+      [Number(memberUserId)]
     );
   });
   await Promise.all([

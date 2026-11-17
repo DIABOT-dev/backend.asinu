@@ -48,6 +48,8 @@ const emitCareCircleChange = (pool, connection, status = connection?.status) => 
       relationship_type: connection.relationship_type || null,
       role: connection.role || null,
       can_receive_alerts: Boolean(connection.permissions?.can_receive_alerts),
+      can_view_logs: Boolean(connection.permissions?.can_view_logs),
+      can_ack_escalation: Boolean(connection.permissions?.can_ack_escalation),
       status,
     },
     {
@@ -71,7 +73,8 @@ function normalizePermissions(input, defaultCanViewLogs = DEFAULT_PERMISSIONS.ca
     return { ...DEFAULT_PERMISSIONS, can_view_logs: defaultCanViewLogs };
   }
   return {
-    can_view_logs: input.can_view_logs === undefined ? defaultCanViewLogs : input.can_view_logs === true,
+    can_view_logs:
+      input.can_view_logs === undefined ? defaultCanViewLogs : input.can_view_logs === true,
     can_receive_alerts: Boolean(input.can_receive_alerts),
     can_ack_escalation: Boolean(input.can_ack_escalation),
   };
@@ -238,7 +241,8 @@ async function createInvitationFromQr(pool, requesterId, data, lang = 'vi') {
 async function createInvitation(pool, requesterId, data, lang = 'vi') {
   const { addressee_id, permissions } = data;
   const parsedRelationship = careCircleRelationshipSchema.safeParse(data.relationship_type);
-  if (!parsedRelationship.success) return { ok: false, statusCode: 400, error: t('error.invalid_data', lang) };
+  if (!parsedRelationship.success)
+    return { ok: false, statusCode: 400, error: t('error.invalid_data', lang) };
   const relationship_type = parsedRelationship.data;
   const parsedRole = careCircleFamilyRoleSchema.safeParse(data.role);
   if (!parsedRole.success) return familyRoleError(lang);
@@ -688,7 +692,9 @@ async function updateConnection(pool, connectionId, userId, data, lang = 'vi') {
   const parsed = careCircleConnectionUpdateSchema.safeParse(data || {});
   if (!parsed.success) {
     if (parsed.error.issues.some((issue) => issue.path[0] === 'role')) return familyRoleError(lang);
-    const emptyUpdate = parsed.error.issues.some((issue) => issue.message === 'careCircle.need_at_least_one_field');
+    const emptyUpdate = parsed.error.issues.some(
+      (issue) => issue.message === 'careCircle.need_at_least_one_field'
+    );
     return {
       ok: false,
       error: t(emptyUpdate ? 'careCircle.need_at_least_one_field' : 'error.invalid_data', lang),
@@ -777,7 +783,14 @@ async function updateConnectionPermissions(
   { patch = false, expected = {} } = {}
 ) {
   // The invitation default must not re-enable revoked access in an existing connection.
-  const perms = patch ? Object.fromEntries(Object.entries(newPermissions).filter(([key, value]) => ['can_receive_alerts', 'can_ack_escalation'].includes(key) && typeof value === 'boolean')) : normalizePermissions(newPermissions, false);
+  const perms = patch
+    ? Object.fromEntries(
+        Object.entries(newPermissions).filter(
+          ([key, value]) =>
+            ['can_receive_alerts', 'can_ack_escalation'].includes(key) && typeof value === 'boolean'
+        )
+      )
+    : normalizePermissions(newPermissions, false);
   try {
     // Only the original requester (the user who invited and set the
     // initial permissions) is allowed to change them later. Without this
@@ -791,7 +804,14 @@ async function updateConnectionPermissions(
          AND ($5::boolean IS NULL OR COALESCE((permissions->>'can_receive_alerts')::boolean,FALSE)=$5)
          AND ($6::boolean IS NULL OR COALESCE((permissions->>'can_ack_escalation')::boolean,FALSE)=$6)
        RETURNING id`,
-      [JSON.stringify(perms), connectionId, userId, patch, expected.can_receive_alerts ?? null, expected.can_ack_escalation ?? null]
+      [
+        JSON.stringify(perms),
+        connectionId,
+        userId,
+        patch,
+        expected.can_receive_alerts ?? null,
+        expected.can_ack_escalation ?? null,
+      ]
     );
     if (result.rows.length === 0) {
       return { ok: false, error: t('careCircle.connection_not_found', lang), statusCode: 404 };

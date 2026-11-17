@@ -6,6 +6,40 @@ const YAML = require('yaml');
 const { SkillManager } = require('../../src/services/assistant/skill-manager.service');
 const directory = path.resolve(__dirname, '../../src/services/assistant/skills');
 
+test.each(require('../fixtures/assistant-9router-flat-arguments.json'))(
+  'the observed 9Router response for $id retains the requested domain fields', ({ id, planner }) => {
+    const scenario = require('../fixtures/assistant-skill-cases.cjs').find(value => value.id === id);
+    const manager = new SkillManager(directory);
+    const result = manager.decode(planner, [scenario.skill], { text: scenario.text });
+    const expected = require('../../src/services/assistant/domain-tools.schema').parse(scenario.actions[0]);
+    // These spellings are accepted by the actual target resolver.
+    if (expected.parameters.target === 'mới nhất' && result.actions[0].parameters.target === 'latest')
+      expected.parameters.target = 'latest';
+    expect(result.actions).toEqual([expected]);
+  }
+);
+
+test.each([
+  ['family-invite', 'family', { phone: '0900000000', ownerId: 99 }],
+  ['family-permissions', 'family', { target: 'Người Thử', changes: { can_view_logs: true } }],
+  ['wallet-topup', 'billing', { amount: -1 }],
+  ['wallet-topup', 'billing', { amount: '100000' }],
+  ['gifts-open', 'gifts', { box: 7 }],
+  ['gifts-open', 'gifts', {}],
+  ['family-invite', 'family', { relationship: 'bạn' }],
+  ['notifications-list', 'notifications', { parameters: {}, unread: true }],
+  ['gifts-open', 'gifts', { type: 'app_tool', tool: 'notifications.delete_all', box: 2 }],
+])('format compatibility still rejects invalid or conflicting %s arguments', (name, group, args) => {
+  const manager = new SkillManager(directory);
+  expect(() => manager.decode({ status: 'ready', calls: [{ name, arguments: args }] }, [group], { text: 'Synthetic request.' })).toThrow();
+});
+
+test('flat domain arguments cannot escape the selected group or bypass native skill schemas', () => {
+  const manager = new SkillManager(directory);
+  expect(() => manager.decode({ status: 'ready', calls: [{ name: 'wallet-topup', arguments: { amount: 100000 } }] }, ['journal'], { text: 'x' })).toThrow('outside selected catalog');
+  expect(() => manager.decode({ status: 'ready', calls: [{ name: 'log-water', arguments: { parameters: { volume_ml: 200 } } }] }, ['journal'], { text: 'x' })).toThrow();
+});
+
 test('discovery and tool specs expose metadata without loading instruction bodies', () => {
   const manager = new SkillManager(directory);
   expect(manager.list()).toHaveLength(115);

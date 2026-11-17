@@ -183,7 +183,7 @@ const resolveClinicalProvider = () => {
   const provider = String(
     process.env.DOCTOR_AI_PROVIDER || process.env.AI_PROVIDER_CLINICAL || 'medgemma'
   ).toLowerCase();
-  if (!['medgemma', 'openai'].includes(provider)) {
+  if (!['medgemma', '9router', 'openai'].includes(provider)) {
     throw integrationError(
       503,
       'DOCTOR_AI_PROVIDER_UNAVAILABLE',
@@ -876,9 +876,11 @@ const createDoctorAiAssist = async (pool, input) => {
       model:
         lastResponse?.model ||
         requestedModel ||
-        (provider === 'medgemma'
-          ? process.env.MEDGEMMA_MODEL || 'medgemma-4b-it'
-          : process.env.OPENAI_MODEL),
+        (provider === '9router'
+          ? process.env.NINEROUTER_MODEL
+          : provider === 'medgemma'
+            ? process.env.MEDGEMMA_MODEL || 'medgemma-4b-it'
+            : process.env.OPENAI_MODEL),
       inputTokens: usage.prompt || null,
       outputTokens: usage.completion || null,
       latencyMs: Date.now() - startedAt,
@@ -887,7 +889,7 @@ const createDoctorAiAssist = async (pool, input) => {
       error: error instanceof Error ? error.message : 'Unknown clinical AI error',
     });
     if (error?.statusCode) throw error;
-    if (error?.code === 'MEDGEMMA_INSUFFICIENT_CREDIT') {
+    if (['MEDGEMMA_INSUFFICIENT_CREDIT', 'NINEROUTER_INSUFFICIENT_CREDIT'].includes(error?.code)) {
       throw integrationError(
         503,
         'DOCTOR_AI_QUOTA_EXCEEDED',

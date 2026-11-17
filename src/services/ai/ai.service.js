@@ -10,6 +10,7 @@ const { assertAiConsent } = require('./ai-consent.service');
  */
 
 const medgemmaProvider = require('./providers/medgemma');
+const { getClinicalConfig } = require('./providers/clinical-config');
 const { waitForCheckinAi } = require('./checkin-wait-policy.service');
 
 // If MedGemma is configured but the provider flag was omitted, prefer the
@@ -17,7 +18,12 @@ const { waitForCheckinAi } = require('./checkin-wait-policy.service');
 // provider selection impossible to verify and could send clinical context to
 // the wrong vendor.
 const CLINICAL_PROVIDER = (
-  process.env.AI_PROVIDER_CLINICAL || (process.env.MEDGEMMA_ENDPOINT ? 'medgemma' : 'openai')
+  process.env.AI_PROVIDER_CLINICAL ||
+  (process.env.NINEROUTER_ENDPOINT
+    ? '9router'
+    : process.env.MEDGEMMA_ENDPOINT
+      ? 'medgemma'
+      : 'openai')
 ).toLowerCase();
 
 /**
@@ -54,7 +60,10 @@ async function callTextAiOnce({
   await assertAiConsent();
   const selectedProvider = String(provider || CLINICAL_PROVIDER).toLowerCase();
   // ─── 1. MedGemma Route ───────────────────────────────────────────────────
-  if (selectedProvider === 'medgemma' && medgemmaProvider.isConfigured()) {
+  if (
+    ['medgemma', '9router'].includes(selectedProvider) &&
+    medgemmaProvider.isConfigured(selectedProvider)
+  ) {
     let finalPrompt = prompt || '';
     let finalSystem = system || '';
 
@@ -77,6 +86,7 @@ async function callTextAiOnce({
     const res = await medgemmaProvider.callMedGemmaWithRetry(
       {
         system: finalSystem,
+        provider: selectedProvider,
         prompt: finalPrompt,
         ...(preserveMessageRoles && messages ? { messages } : {}),
         ...(requestedModel ? { model: requestedModel } : {}),
@@ -92,15 +102,23 @@ async function callTextAiOnce({
     return {
       content: res.reply,
       usage: res.meta?.tokens_used || { prompt: 0, completion: 0, total: 0 },
-      provider: 'medgemma',
+      provider: res.provider || selectedProvider,
       model: res.meta?.model || 'medgemma',
       finishReason: res.meta?.finish_reason || null,
       credits_remaining: res.meta?.credits_remaining || null,
     };
   }
 
-  if (selectedProvider === 'medgemma' && strictProvider) {
-    throw new Error('MEDGEMMA_ENDPOINT is not set');
+  const routerSelected = getClinicalConfig({ provider: selectedProvider }).provider === '9router';
+  if (
+    selectedProvider === '9router' ||
+    (selectedProvider === 'medgemma' && (strictProvider || routerSelected))
+  ) {
+    throw new Error(
+      routerSelected
+        ? '9Router endpoint, API key and model must be configured'
+        : 'MEDGEMMA_ENDPOINT is not set'
+    );
   }
 
   // ─── 2. OpenAI Route (Default / Fallback) ───────────────────────────────
@@ -127,13 +145,16 @@ async function callTextAiOnce({
     ...(maxRetries !== undefined ? { maxRetries } : {}),
   });
 
-  const response = await client.chat.completions.create({
-    model,
-    messages: openaiMessages,
-    temperature: temperature !== undefined ? temperature : 0.7,
-    max_tokens: maxTokens || 500,
-    ...(jsonMode && { response_format: { type: 'json_object' } }),
-  }, signal ? { signal } : undefined);
+  const response = await client.chat.completions.create(
+    {
+      model,
+      messages: openaiMessages,
+      temperature: temperature !== undefined ? temperature : 0.7,
+      max_tokens: maxTokens || 500,
+      ...(jsonMode && { response_format: { type: 'json_object' } }),
+    },
+    signal ? { signal } : undefined
+  );
 
   const content = response.choices?.[0]?.message?.content || '';
   const usage = response.usage || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };

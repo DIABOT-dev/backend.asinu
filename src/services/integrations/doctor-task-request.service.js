@@ -159,12 +159,11 @@ async function requestDoctorTask(pool, userId, input) {
         specialty: normalizeSpecialty(input.specialty),
         service_flow: input.service_flow,
         priority: input.priority,
-        summary: input.summary,
+        dispatch_owner: 'app',
+        credit_state: input.credit_state,
+        previous_task_id: input.previous_task_id || null,
         consent_status: 'accepted',
         consent_version: input.consent_version,
-        patient_display_name: patient.display_name || patient.full_name || null,
-        patient_age_group: patient.age_group == null ? null : String(patient.age_group),
-        patient_gender: patient.gender || null,
         profile_version: patient.profile_version
           ? new Date(patient.profile_version).toISOString()
           : null,
@@ -174,6 +173,11 @@ async function requestDoctorTask(pool, userId, input) {
       },
       { event_id: `service.requested:${result.task_id}`, correlation_id: result.task_id }
     );
+    if (credit.householdId)
+      await require('./crm-domain-events.service').enqueueHouseholdEntitlements(
+        db,
+        credit.householdId
+      );
     await db.query('COMMIT');
     if (credit.householdId) {
       const { invalidateHouseholdEntitlements } = require('../payment/entitlement.service');

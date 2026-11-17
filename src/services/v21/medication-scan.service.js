@@ -153,13 +153,18 @@ async function scan(pool, actor, patient, file) {
   });
   let result, model;
   try {
-    const endpoint = new URL(process.env.MEDGEMMA_ENDPOINT || '');
-    model = process.env.MED_SCAN_MODEL || 'med-gemini';
+    const config = require('../ai/providers/clinical-config').getClinicalConfig({
+      model: process.env.MED_SCAN_MODEL,
+      vision: true,
+    });
+    const endpoint = new URL(config.endpoint);
+    model = config.model;
     if (
-      (process.env.AI_PROVIDER_CLINICAL || 'medgemma') !== 'medgemma' ||
+      !['medgemma', '9router'].includes(process.env.AI_PROVIDER_CLINICAL || 'medgemma') ||
       endpoint.protocol !== 'https:' ||
-      endpoint.hostname !== 'dr7.ai' ||
-      !process.env.MEDGEMMA_API_KEY
+      (config.provider === 'medgemma' && endpoint.hostname !== 'dr7.ai') ||
+      !config.apiKey ||
+      !model
     )
       throw c.error('MED_SCAN_PROVIDER_UNAVAILABLE', 503);
     const prompt = fs.readFileSync(path.join(__dirname, 'medication-scan.prompt.txt'), 'utf8');
@@ -167,10 +172,11 @@ async function scan(pool, actor, patient, file) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: 'Bearer ' + process.env.MEDGEMMA_API_KEY,
+        Authorization: 'Bearer ' + config.apiKey,
       },
       body: JSON.stringify({
         model,
+        stream: false,
         messages: [
           {
             role: 'user',

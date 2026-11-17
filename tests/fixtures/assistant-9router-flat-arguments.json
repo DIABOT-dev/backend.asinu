@@ -1,0 +1,398 @@
+[
+  {
+    "id": "subscription.member_add",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "add-subscription-member",
+          "arguments": {
+            "target": "Người Thử"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "subscription.member_remove",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "remove-subscription-member",
+          "arguments": {
+            "target": "Người Thử"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "notifications.list",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "notifications-list",
+          "arguments": {
+            "unread": true
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "notifications.read",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "notifications-read",
+          "arguments": {
+            "target": "latest"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "notifications.delete",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "notifications-delete",
+          "arguments": {
+            "target": "mới nhất"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "coins.redeem",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "coins-redeem",
+          "arguments": {
+            "reward": "DRAW_TICKET"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "gifts.open",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "gifts-open",
+          "arguments": {
+            "box": 2
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "family.health",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "family-health",
+          "arguments": {
+            "target": "Người Thử"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "family.invite",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "family-invite",
+          "arguments": {
+            "phone": "0900000000"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "family.accept",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "family-accept",
+          "arguments": {
+            "target": "Người Thử"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "family.reject",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "family-reject",
+          "arguments": {
+            "target": "Người Thử"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "family.cancel",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "family-cancel",
+          "arguments": {
+            "target": "Người Thử"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "family.remove",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "family-remove",
+          "arguments": {
+            "target": "Người Thử"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "family.edit",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "family-edit",
+          "arguments": {
+            "relationship": "bạn",
+            "target": "Người Thử"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "family.share",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "family-share",
+          "arguments": {
+            "enabled": false,
+            "target": "Người Thử"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "family.permissions",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "family-permissions",
+          "arguments": {
+            "changes": {
+              "can_receive_alerts": true
+            },
+            "target": "Người Thử"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "calls.configure",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "calls-configure",
+          "arguments": {
+            "checkin_time": "09:00"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "calls.personalize",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "calls-personalize",
+          "arguments": {
+            "address": "chu"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "settings.configure",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "settings-configure",
+          "arguments": {
+            "health_feed_enabled": false
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "feed.search",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "feed-search",
+          "arguments": {
+            "query": "giấc ngủ"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "feed.read",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "feed-read",
+          "arguments": {
+            "target": "Giấc ngủ tốt"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "feed.save",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "feed-save",
+          "arguments": {
+            "target": "Giấc ngủ tốt"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "feed.unsave",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "feed-unsave",
+          "arguments": {
+            "target": "Giấc ngủ tốt"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "feed.hide",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "feed-hide",
+          "arguments": {
+            "target": "Giấc ngủ tốt"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "wallet.topup",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "wallet-topup",
+          "arguments": {
+            "amount": 100000
+          }
+        }
+      ]
+    }
+  },
+  {
+    "id": "subscription.upgrade",
+    "planner": {
+      "status": "ready",
+      "question": "",
+      "calls": [
+        {
+          "name": "subscription-upgrade",
+          "arguments": {
+            "billing": "yearly",
+            "plan": "antam_4"
+          }
+        }
+      ]
+    }
+  }
+]

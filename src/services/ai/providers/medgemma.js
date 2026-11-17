@@ -1,40 +1,24 @@
 const { assertAiConsent } = require('../ai-consent.service');
+const { getClinicalConfig, isClinicalConfigured } = require('./clinical-config');
 /**
- * MedGemma provider.
- *
- * Per the MVP audit, clinical reasoning (check-in triage, symptom
- * analysis, alert filtering, script generation) should run on Google's
- * MedGemma rather than a general chat model. This file is the thin HTTP
- * client; routing (which call goes to which provider) lives in
- * chat.provider.service.
- *
- * Deployment options the env supports:
- *   1. Vertex AI                     — set MEDGEMMA_ENDPOINT to the
- *                                       prediction URL + a service-account
- *                                       bearer in MEDGEMMA_API_KEY
- *   2. Self-hosted (HF/Replicate/own) — same shape, just a different URL
- *
- * Everything is no-op if MEDGEMMA_ENDPOINT is not set — the chat provider
- * will fall back to the script/rule path so the app stays usable while
- * we wire production access.
+ * OpenAI-compatible clinical HTTP client. The legacy module/function names
+ * remain for existing callers; clinical-config selects Dr7 or 9Router and
+ * resolves the actual model. Consent, role validation and retries are shared.
  */
 
 const logger = require('../../../lib/logger');
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_RETRIES = 2;
-// Dr7's medical chat endpoint documents this model id. Keep it as the safe
-// default while allowing production to select another MedGemma variant.
-const DEFAULT_MODEL = 'medgemma-4b-it';
-
-function isConfigured() {
-  return Boolean(process.env.MEDGEMMA_ENDPOINT);
+function isConfigured(provider) {
+  return isClinicalConfigured(provider);
 }
 
 async function callMedGemma({
   prompt,
   system,
   messages,
+  provider,
   model: requestedModel,
   maxTokens = 800,
   temperature = 0.3,
@@ -43,16 +27,19 @@ async function callMedGemma({
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
   await assertAiConsent();
-  if (!isConfigured()) {
-    throw new Error('MEDGEMMA_ENDPOINT is not set');
+  if (!isConfigured(provider)) {
+    throw new Error(
+      getClinicalConfig({ provider }).provider === '9router'
+        ? '9Router endpoint, API key and model must be configured'
+        : 'MEDGEMMA_ENDPOINT is not set'
+    );
   }
 
-  const endpoint = process.env.MEDGEMMA_ENDPOINT;
-  const apiKey = process.env.MEDGEMMA_API_KEY || '';
   // Resolve this at request time so a process manager/container can inject or
   // rotate the model setting before the next request without relying on the
   // module import order.
-  const model = requestedModel || process.env.MEDGEMMA_MODEL || DEFAULT_MODEL;
+  const config = getClinicalConfig({ provider, model: requestedModel });
+  const { endpoint, apiKey, model } = config;
   if (
     messages !== undefined &&
     (!Array.isArray(messages) ||
@@ -69,6 +56,7 @@ async function callMedGemma({
   // here if a specific endpoint needs a different layout.
   const body = JSON.stringify({
     model,
+    stream: false,
     messages: [
       ...(system ? [{ role: 'system', content: system }] : []),
       ...(messages || [{ role: 'user', content: String(prompt || '') }]),
@@ -79,9 +67,7 @@ async function callMedGemma({
     // OpenAI's response_format extension. The prompt still requests JSON and
     // the caller validates/parses it, while this opt-in keeps the default body
     // compatible with Dr7 and other OpenAI-compatible medical endpoints.
-    ...(jsonMode && process.env.MEDGEMMA_SUPPORTS_JSON_MODE === 'true'
-      ? { response_format: { type: 'json_object' } }
-      : {}),
+    ...(jsonMode && config.supportsJsonMode ? { response_format: { type: 'json_object' } } : {}),
   });
 
   const controller = new AbortController();
@@ -101,9 +87,13 @@ async function callMedGemma({
     if (!response.ok) {
       // Keep provider failures machine-readable without logging its raw body,
       // which may echo clinical input. Credit/auth failures cannot be retried.
-      const error = new Error(`MedGemma API ${response.status}`);
+      const error = new Error(
+        `${config.provider === '9router' ? '9Router' : 'MedGemma'} API ${response.status}`
+      );
       error.status = response.status;
-      error.code = response.status === 402 ? 'MEDGEMMA_INSUFFICIENT_CREDIT' : 'MEDGEMMA_HTTP_ERROR';
+      const prefix = config.provider === '9router' ? 'NINEROUTER' : 'MEDGEMMA';
+      error.code =
+        response.status === 402 ? `${prefix}_INSUFFICIENT_CREDIT` : `${prefix}_HTTP_ERROR`;
       await response.body?.cancel().catch(() => undefined);
       throw error;
     }
@@ -122,7 +112,7 @@ async function callMedGemma({
   const usage = data.usage || {};
   return {
     reply: reply.trim(),
-    provider: 'medgemma',
+    provider: config.provider,
     meta: {
       model: data.model || model,
       finish_reason: data.choices?.[0]?.finish_reason || null,
@@ -147,7 +137,7 @@ async function callMedGemmaWithRetry(opts, { maxRetries = DEFAULT_MAX_RETRIES } 
       return await callMedGemma(opts);
     } catch (err) {
       lastErr = err;
-      if (opts.signal?.aborted) throw opts.signal.reason || err;
+      if (opts?.signal?.aborted) throw opts.signal.reason || err;
       logger.warn('medgemma.attempt_failed', { attempt, err });
       if (err.status >= 400 && err.status < 500 && ![408, 429].includes(err.status)) throw err;
     }

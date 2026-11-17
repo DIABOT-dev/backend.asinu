@@ -143,8 +143,8 @@ async function getChatReply(message, context, history = [], systemPrompt = null)
     return { reply: t('chat.service_busy', 'vi'), provider: 'fallback' };
   }
 
-  if (provider === 'medgemma') {
-    if (!isMedGemmaConfigured()) {
+  if (['medgemma', '9router'].includes(provider)) {
+    if (!isMedGemmaConfigured(provider)) {
       return buildUnavailableReply();
     }
     try {

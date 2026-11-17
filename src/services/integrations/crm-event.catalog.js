@@ -41,16 +41,23 @@ const CRM_PHASE_ONE_EVENT_TYPES = Object.freeze([
   'service.requested',
   'service.accepted',
   'service.started',
+  'service.updated',
   'service.completed',
   'service.cancelled',
   'service.expired',
+  'entitlement.updated',
+  'medication.updated',
+  'reward.updated',
+  'early_signal.updated',
+  'notification.delivery_updated',
+  'onboarding.updated',
 ]);
 
 const CRM_DEFERRED_EVENT_TYPES = Object.freeze([
   'health.label.updated',
   'health.label.revoked',
   'service.dispatched',
-  'service.updated',
+  'household.updated',
 ]);
 
 const CRM_EVENT_TYPES = Object.freeze([...CRM_PHASE_ONE_EVENT_TYPES, ...CRM_DEFERRED_EVENT_TYPES]);

@@ -133,6 +133,14 @@ class SkillManager {
       const manifest = this.tool(call.name).manifest;
       if (!groups.includes(manifest.group)) throw new Error('Skill outside selected catalog');
       let args = call.arguments;
+      // Some compatible models put a domain tool's fields directly under
+      // arguments. Restore only the missing wrapper; the same strict domain
+      // schema still rejects unknown fields, invalid values and missing data.
+      // Never merge mixed nested/flat arguments or alter native skill inputs.
+      if (manifest.selector.type === 'app_tool' && !own(args, 'parameters')) {
+        const { evidence, ...parameters } = args;
+        args = { parameters, ...(own(args, 'evidence') ? { evidence } : {}) };
+      }
       // Provenance is server-owned, not a model-rewritten quotation. The clock
       // helper alone needs an exact task segment so mixed commands stay separate.
       if (request && manifest.selector.type !== 'routine_reminders') {

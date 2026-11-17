@@ -20,6 +20,7 @@ const { cacheGet, cacheSet } = require('../../lib/redis');
 const { detectEmergency } = require('../../services/checkin/emergency-detector');
 const { safeValidate, SymptomAnalysisSchema } = require('../../lib/ai-schemas');
 const medgemma = require('../../services/ai/providers/medgemma');
+const { getClinicalConfig } = require('../../services/ai/providers/clinical-config');
 const logger = require('../../lib/logger');
 const { createHash } = require('node:crypto');
 
@@ -51,8 +52,9 @@ function getClient() {
  */
 async function callProvider({ system, user, temperature, maxTokens }) {
   await assertAiConsent();
-  if (AI_PROVIDER === 'medgemma' && medgemma.isConfigured()) {
+  if (['medgemma', '9router'].includes(AI_PROVIDER) && medgemma.isConfigured(AI_PROVIDER)) {
     const res = await medgemma.callMedGemmaWithRetry({
+      provider: AI_PROVIDER,
       system,
       prompt: user,
       temperature,
@@ -61,10 +63,16 @@ async function callProvider({ system, user, temperature, maxTokens }) {
     return {
       content: res.reply,
       usage: { total_tokens: res.meta?.tokens_used?.total },
-      provider: 'medgemma',
+      provider: res.provider || AI_PROVIDER,
       model: res.meta?.model || 'medgemma',
     };
   }
+
+  if (
+    ['medgemma', '9router'].includes(AI_PROVIDER) &&
+    getClinicalConfig({ provider: AI_PROVIDER }).provider === '9router'
+  )
+    throw new Error('9Router is not configured');
 
   // OpenAI path
   const response = await getClient().chat.completions.create({
@@ -91,7 +99,9 @@ function symptomCacheKey(kind, rawInput, context) {
   // context, or put their symptom narrative in a Redis key.
   if (!Number.isSafeInteger(Number(context?.userId)) || Number(context.userId) <= 0) return null;
   const normalized = rawInput.toLowerCase().trim().replace(/\s+/g, ' ');
-  const digest = createHash('sha256').update(JSON.stringify([normalized, context])).digest('hex');
+  const digest = createHash('sha256')
+    .update(JSON.stringify([normalized, context]))
+    .digest('hex');
   return `sym:v2:${kind}:user:${context.userId}:${digest}`;
 }
 

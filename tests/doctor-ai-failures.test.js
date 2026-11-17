@@ -35,30 +35,36 @@ beforeEach(() => {
   });
 });
 
-test('clinical AI exposes exhausted provider credit without fallback or repeated generation', async () => {
-  callTextAi.mockRejectedValue(
-    Object.assign(new Error('MedGemma API 402'), {
-      status: 402,
-      code: 'MEDGEMMA_INSUFFICIENT_CREDIT',
-    })
-  );
-  const previousProvider = process.env.DOCTOR_AI_PROVIDER;
-  process.env.DOCTOR_AI_PROVIDER = 'medgemma';
-  try {
-    await expect(createDoctorAiAssist({}, input)).rejects.toMatchObject({
-      statusCode: 503,
-      code: 'DOCTOR_AI_QUOTA_EXCEEDED',
-    });
-    expect(callTextAi).toHaveBeenCalledTimes(1);
-    expect(callTextAi.mock.calls[0][0]).toMatchObject({
-      provider: 'medgemma',
-      strictProvider: true,
-    });
-  } finally {
-    if (previousProvider === undefined) delete process.env.DOCTOR_AI_PROVIDER;
-    else process.env.DOCTOR_AI_PROVIDER = previousProvider;
+test.each(['medgemma', '9router'])(
+  'clinical AI exposes exhausted %s credit without fallback or repeated generation',
+  async (provider) => {
+    callTextAi.mockRejectedValue(
+      Object.assign(new Error('MedGemma API 402'), {
+        status: 402,
+        code:
+          provider === '9router'
+            ? 'NINEROUTER_INSUFFICIENT_CREDIT'
+            : 'MEDGEMMA_INSUFFICIENT_CREDIT',
+      })
+    );
+    const previousProvider = process.env.DOCTOR_AI_PROVIDER;
+    process.env.DOCTOR_AI_PROVIDER = provider;
+    try {
+      await expect(createDoctorAiAssist({}, input)).rejects.toMatchObject({
+        statusCode: 503,
+        code: 'DOCTOR_AI_QUOTA_EXCEEDED',
+      });
+      expect(callTextAi).toHaveBeenCalledTimes(1);
+      expect(callTextAi.mock.calls[0][0]).toMatchObject({
+        provider,
+        strictProvider: true,
+      });
+    } finally {
+      if (previousProvider === undefined) delete process.env.DOCTOR_AI_PROVIDER;
+      else process.env.DOCTOR_AI_PROVIDER = previousProvider;
+    }
   }
-});
+);
 
 test('regenerates an empty draft with corrective feedback, then returns the valid draft', async () => {
   const systems = [];

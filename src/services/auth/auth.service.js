@@ -117,7 +117,8 @@ async function getCrmUserPayload(pool, userId) {
     gender: user.gender || null,
     zalo_user_id: user.zalo_id || null,
     lead_source: 'asinu_app',
-    account_tier: user.account_tier || 'free',
+    account_tier: user.account_tier && user.account_tier !== 'free' ? 'premium' : 'free',
+    plan_code: user.account_tier || 'free',
     subscription_expires_at: user.subscription_expires_at
       ? new Date(user.subscription_expires_at).toISOString()
       : null,
@@ -243,18 +244,35 @@ async function verifySocialToken(provider, token) {
         const ticket = await googleVerifier.verifyIdToken({ idToken: token, audience: audiences });
         const data = ticket.getPayload();
         if (!data?.sub || (data.azp && !audiences.includes(data.azp))) return { valid: false };
-        return { valid: true, profile: { sub: data.sub, name: data.name,
-          email: data.email_verified === true ? data.email : null } };
+        return {
+          valid: true,
+          profile: {
+            sub: data.sub,
+            name: data.name,
+            email: data.email_verified === true ? data.email : null,
+          },
+        };
       }
       // Older clients send access tokens. Bind these to Asinu's OAuth clients
       // before fetching userinfo. Credentials never enter request URLs/logs.
-      const tokenInfo = await fetchProviderJson('https://oauth2.googleapis.com/tokeninfo', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-      }, 'google.tokeninfo');
-      if (!tokenInfo.ok || !audiences.includes(tokenInfo.data.aud) ||
-          (tokenInfo.data.azp && !audiences.includes(tokenInfo.data.azp)) ||
-          !(Number(tokenInfo.data.expires_in) > 0)) return { valid: false };
+      const tokenInfo = await fetchProviderJson(
+        'https://oauth2.googleapis.com/tokeninfo',
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        },
+        'google.tokeninfo'
+      );
+      if (
+        !tokenInfo.ok ||
+        !audiences.includes(tokenInfo.data.aud) ||
+        (tokenInfo.data.azp && !audiences.includes(tokenInfo.data.azp)) ||
+        !(Number(tokenInfo.data.expires_in) > 0)
+      )
+        return { valid: false };
       const result = await fetchProviderJson(
         'https://www.googleapis.com/oauth2/v2/userinfo',
         { headers: { Authorization: `Bearer ${token}` } },
@@ -267,8 +285,14 @@ async function verifySocialToken(provider, token) {
         return { valid: false };
       }
 
-      return { valid: true, profile: { email: data.verified_email === true ? data.email : null,
-        name: data.name, sub: data.id } };
+      return {
+        valid: true,
+        profile: {
+          email: data.verified_email === true ? data.email : null,
+          name: data.name,
+          sub: data.id,
+        },
+      };
     }
 
     if (provider === 'apple') {

@@ -27,7 +27,10 @@ const buildCrmEnvelope = (eventType, payload, options = {}) => {
   // invalid event can be written to the durable outbox.
   assertCrmEventType(eventType);
   return {
-    event_id: options.event_id || `${eventType}:${crypto.randomUUID()}`,
+    event_id:
+      options.event_id && options.event_id.length > 160
+        ? `${eventType}:${crypto.createHash('sha256').update(options.event_id).digest('hex')}`
+        : options.event_id || `${eventType}:${crypto.randomUUID()}`,
     event_type: eventType,
     occurred_at: options.occurred_at || new Date().toISOString(),
     source: options.source || 'asinu-backend',
@@ -106,6 +109,7 @@ const enqueueCrmEvent = async (pool, eventType, payload, options = {}) => {
     );
     return { queued: true, event_id: envelope.event_id };
   } catch (error) {
+    if (options.strict) throw error;
     logger.error('crm_event_enqueue_failed', { event_type: eventType, err: error });
     return { queued: false, error: error?.message };
   }

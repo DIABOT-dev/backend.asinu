@@ -171,6 +171,26 @@ async function settleConsultationCredit(pool, userId, tenantId, taskId, status) 
         outcome = { state };
       }
     }
+    if (row && ['consumed', 'released'].includes(outcome.state)) {
+      await require('../integrations/crm-event.service').enqueueCrmEvent(
+        db,
+        'service.updated',
+        {
+          user_id: String(userId),
+          app_user_id: String(userId),
+          tenant_id: tenantId,
+          app_order_id: taskId,
+          credit_state: outcome.state,
+          dispatch_owner: 'app',
+        },
+        { event_id: `credit-state:${tenantId}:${taskId}:${outcome.state}`, strict: true }
+      );
+      if (row.household_id)
+        await require('../integrations/crm-domain-events.service').enqueueHouseholdEntitlements(
+          db,
+          row.household_id
+        );
+    }
     await db.query('COMMIT');
   } catch (error) {
     await db.query('ROLLBACK');
