@@ -29,13 +29,17 @@ validation still apply. This configuration does not change the separate
 OpenAI chat or speech services. New model IDs have no assumed Dr7 pricing.
 
 Install `deploy/ninerouter-api.traefik.yml` in Traefik's dynamic directory on
-VPS 103. It permits only the ASINU server to reach the two required API paths;
+VPS 103. It permits the ASINU server (`36.50.176.55/32`), the existing allowed
+source (`42.116.207.209/32`), and the current local workstation
+(`118.70.84.244/32`, verified 2026-11-17) to reach the two API paths;
 9Router must keep `requireApiKey=true`. Dashboard Basic Auth remains on the
 existing router. Do not send the dashboard password as a model API key.
 
 Before switching, test `/v1/models` and a synthetic JSON completion from the
 ASINU server with a valid API key. Test an invalid key, verify the dashboard
 still requests Basic Auth, and confirm the API rejects other source IPs.
+If the workstation's public IP changes, replace its `/32` entry with the newly
+verified public IPv4 address. Local requests still require a valid 9Router API key.
 Retain a protected copy of the previous runtime Compose file and its image
 for rollback. Do not put API keys, runtime Compose contents, or patient
 payloads in deployment reports.

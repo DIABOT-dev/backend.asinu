@@ -12,4 +12,5 @@ http:
   middlewares:
     ninerouter-asinu-source:
       ipAllowList:
-        sourceRange: ['36.50.176.55/32']
+        # Preserve existing allowed sources and add the current local workstation.
+        sourceRange: ['36.50.176.55/32', '42.116.207.209/32', '118.70.84.244/32']
