@@ -409,10 +409,19 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       await db.query("INSERT INTO logs_common(id,user_id,log_type,occurred_at,source) VALUES($1,$2,'water',now()-($3*interval '1 day'),'manual')", [log, owner, days]);
       await db.query('INSERT INTO water_logs(log_id,volume_ml) VALUES($1,$2)', [log, amount]);
     }
-    expect(await tools.query(db, id, { topic: 'water', range: 'today' }, 'vi')).toContain('200 ml');
-    expect(await tools.query(db, id, { topic: 'water', range: 'week' }, 'vi')).toContain('500 ml');
-    expect(await tools.query(db, id, { topic: 'water', range: 'yesterday' }, 'vi')).toContain('300 ml');
-    expect(await tools.query(db, other, { topic: 'water', range: 'today' }, 'vi')).toContain('9999 ml');
+    const client = await db.connect();
+    try {
+      for (const timezone of ['UTC', 'Asia/Ho_Chi_Minh', 'America/New_York']) {
+        await client.query("SELECT set_config('TimeZone',$1,FALSE)", [timezone]);
+        expect(await tools.query(client, id, { topic: 'water', range: 'today' }, 'vi')).toContain('200 ml');
+        expect(await tools.query(client, id, { topic: 'water', range: 'week' }, 'vi')).toContain('500 ml');
+        expect(await tools.query(client, id, { topic: 'water', range: 'yesterday' }, 'vi')).toContain('300 ml');
+        expect(await tools.query(client, other, { topic: 'water', range: 'today' }, 'vi')).toContain('9999 ml');
+      }
+    } finally {
+      await client.query('RESET TimeZone');
+      client.release();
+    }
     for (const [systolic, diastolic] of [[140, 90], [120, 80]]) {
       const log = randomUUID();
       await db.query("INSERT INTO logs_common(id,user_id,log_type,occurred_at,source) VALUES($1,$2,'bp',now(),'manual')", [log, id]);

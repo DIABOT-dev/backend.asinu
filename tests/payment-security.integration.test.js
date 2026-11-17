@@ -22,6 +22,7 @@ jest.mock('../src/services/notification/basic.notification.service', () => ({
   sendAndSave: jest.fn().mockResolvedValue({ ok: true }),
 }));
 jest.mock('../src/services/integrations/crm-event.service', () => ({
+  ...jest.requireActual('../src/services/integrations/crm-event.service'),
   emitCrmEventAsync: jest.fn(),
 }));
 

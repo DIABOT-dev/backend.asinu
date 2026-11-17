@@ -33,8 +33,8 @@ async function query(db, userId, action, lang = 'vi') {
     end = Math.round((Date.parse(action.endDate) - calendarDay.getTime()) / 86400000) + 1;
   }
   const params = [userId, start, end, tz];
-  const bounds = `c.occurred_at >= (((now() AT TIME ZONE $4)::date + $2::int) AT TIME ZONE $4)
-    AND c.occurred_at < (((now() AT TIME ZONE $4)::date + $3::int) AT TIME ZONE $4)`;
+  const bounds = `c.occurred_at >= (((now() AT TIME ZONE $4)::date + $2::int)::timestamp AT TIME ZONE $4)
+    AND c.occurred_at < (((now() AT TIME ZONE $4)::date + $3::int)::timestamp AT TIME ZONE $4)`;
   const periods = en ? { today: 'Today', yesterday: 'Yesterday', week: 'Last 7 days', month: 'Last 30 days', this_week: 'This week', this_month: 'This month' }
     : { today: 'Hôm nay', yesterday: 'Hôm qua', week: '7 ngày gần đây', month: '30 ngày gần đây', this_week: 'Tuần này', this_month: 'Tháng này' };
   const period = action.range === 'custom' ? `${action.startDate} → ${action.endDate}` : periods[action.range];
@@ -100,8 +100,8 @@ async function query(db, userId, action, lang = 'vi') {
     ).join('\n');
   }
   const rows = (await db.query(`SELECT current_status AS status,created_at FROM health_checkins WHERE user_id=$1
-    AND created_at >= (((now() AT TIME ZONE $4)::date + $2::int) AT TIME ZONE $4)
-    AND created_at < (((now() AT TIME ZONE $4)::date + $3::int) AT TIME ZONE $4)
+    AND created_at >= (((now() AT TIME ZONE $4)::date + $2::int)::timestamp AT TIME ZONE $4)
+    AND created_at < (((now() AT TIME ZONE $4)::date + $3::int)::timestamp AT TIME ZONE $4)
     ORDER BY created_at DESC LIMIT 15`, params)).rows;
   const labels = en ? { fine: 'Feeling well', tired: 'Feeling tired', very_tired: 'Feeling very tired' }
     : { fine: 'Ổn', tired: 'Hơi mệt', very_tired: 'Rất mệt' };
