@@ -89,6 +89,8 @@ function mobileRoutes(pool) {
   const assistantConsent = (req, res, next) => appAssistant.consent(pool, req, res, next);
   router.post('/assistant/plan', requireAuth, assistantConsent, assistantLimit,
     bindController(appAssistant.plan, pool));
+  router.post('/assistant/read-cache', requireAuth, assistantConsent, assistantLimit,
+    bindController(appAssistant.replayReadCache, pool));
   router.post('/assistant/medication/apply', requireAuth, assistantConsent, assistantApplyLimit,
     bindController(appAssistant.applyMedication, pool));
   router.post('/assistant/profile/apply', requireAuth, assistantConsent, assistantApplyLimit,

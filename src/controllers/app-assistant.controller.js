@@ -1,5 +1,6 @@
 'use strict';
 const assistant = require('../services/assistant/app-assistant.service');
+const readCache = require('../services/assistant/assistant-read-cache.service');
 const { hasAiConsent } = require('../services/ai/ai-consent.service');
 const { getLang, t } = require('../i18n');
 const medication = require('../services/assistant/medication-assistant.service');
@@ -13,7 +14,7 @@ async function consent(pool, req, res, next) {
     return next();
   } catch (error) { return next(error); }
 }
-async function plan(pool, req, res) {
+async function respondPlan(pool, req, res, operation) {
   res.set('Cache-Control', 'no-store');
   const controller = new AbortController();
   const cancel = () => { if (!res.writableEnded) controller.abort(Object.assign(new Error('Assistant request cancelled'), { code: 'APP_ASSISTANT_CANCELLED' })); };
@@ -22,7 +23,7 @@ async function plan(pool, req, res) {
   if (req.aborted || res.destroyed) cancel();
   try {
     controller.signal.throwIfAborted();
-    const result = await assistant.plan(req.body, getLang(req), { pool, userId: req.user.id, signal: controller.signal });
+    const result = await operation(req.body, getLang(req), { pool, userId: req.user.id, signal: controller.signal });
     controller.signal.throwIfAborted();
     const allowed = await hasAiConsent(pool, req.user.id);
     controller.signal.throwIfAborted();
@@ -30,6 +31,8 @@ async function plan(pool, req, res) {
     return res.json({ ok: true, ...result });
   } catch (error) {
     if (controller.signal.aborted || res.destroyed) return;
+    if (error.code === 'APP_ASSISTANT_READ_CACHE_MISS') return res.status(409).json({ ok: false, code: error.code });
+    if ([401, 403].includes(error.statusCode) && error.code) return res.status(error.statusCode).json({ ok: false, code: error.code });
     if (['CARE_CIRCLE_DISABLED', 'CAREGIVER_VIEW_DISABLED', 'V21_FEATURE_DISABLED'].includes(error.code)) return res.status(403).json({ ok: false, code: error.code });
     if (error.status === 429) return res.set('Retry-After', '30').status(429).json({ ok: false, code: 'APP_ASSISTANT_RATE_LIMITED' });
     const invalid = error.code === 'APP_ASSISTANT_INVALID_REQUEST';
@@ -40,6 +43,8 @@ async function plan(pool, req, res) {
     res.off('close', cancel);
   }
 }
+const plan = (pool, req, res) => respondPlan(pool, req, res, assistant.plan);
+const replayReadCache = (pool, req, res) => respondPlan(pool, req, res, readCache.replay);
 async function applyMedication(pool, req, res) {
   res.set('Cache-Control', 'no-store');
   const input = z.object({ planToken: z.string().min(1).max(20000) }).strict().safeParse(req.body);
@@ -74,4 +79,4 @@ async function applyTool(pool, req, res) {
       ...(known && (error.publicMessage || error.i18nKey) ? { error: error.publicMessage || t(error.i18nKey, getLang(req), error.i18nParams) } : {}) });
   }
 }
-module.exports = { consent, plan, applyMedication, applyProfile, applyTool };
+module.exports = { consent, plan, replayReadCache, applyMedication, applyProfile, applyTool };
