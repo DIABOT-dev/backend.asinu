@@ -71,6 +71,13 @@ if [ "$healthy" -eq 1 ]; then
         const { rows } = await pool.query("SELECT to_regclass($1) IS NOT NULL AS present, has_table_privilege(current_user,$1,$2) AS can_read, has_table_privilege(current_user,$1,$3) AS can_insert", ["public.health_checkin_cancellations", "SELECT", "INSERT"]);
         console.log(JSON.stringify({ cancellation_schema: rows[0] }));
         if (!rows[0].present || !rows[0].can_read || !rows[0].can_insert) throw new Error("Cancellation schema is not ready");
+        for (const name of ["public.crm_event_outbox", "public.crm_projection_revisions", "public.crm_command_receipts"]) {
+          const check = await pool.query("SELECT to_regclass($1) IS NOT NULL AS present, has_table_privilege(current_user,$1,$2) AS can_read, has_table_privilege(current_user,$1,$3) AS can_insert, has_table_privilege(current_user,$1,$4) AS can_update", [name, "SELECT", "INSERT", "UPDATE"]);
+          console.log(JSON.stringify({ crm_schema: name, ...check.rows[0] }));
+          if (!check.rows[0].present || !check.rows[0].can_read || !check.rows[0].can_insert || !check.rows[0].can_update) throw new Error("CRM source schema is not ready");
+        }
+        const sequence = await pool.query("SELECT has_sequence_privilege(current_user,$1,$2) AS allowed", ["public.crm_operational_event_sequence", "USAGE"]);
+        if (!sequence.rows[0].allowed) throw new Error("CRM outbox sequence is not ready");
       } finally { await pool.end(); }
     })().catch(() => { console.error("Cancellation schema verification failed"); process.exitCode = 1; });
   '; then
