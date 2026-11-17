@@ -68,6 +68,7 @@ async function updateProfile(pool, req, res) {
   const {
     name,
     phone,
+    address,
     dateOfBirth,
     gender,
     heightCm,
@@ -79,6 +80,7 @@ async function updateProfile(pool, req, res) {
   const result = await profileService.updateProfile(pool, req.user.id, {
     name,
     phone,
+    address,
     dateOfBirth,
     gender,
     heightCm,

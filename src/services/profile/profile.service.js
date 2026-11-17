@@ -15,6 +15,7 @@ const { cacheGet, cacheSet, cacheDel } = require('../../lib/redis');
 const logger = require('../../lib/logger');
 const { emitCrmEventAsync } = require('../integrations/crm-event.service');
 const { emitProfileUpdated } = require('../integrations/crm-profile.service');
+const { normalizeAddress, validBirthDate } = require('./profile-fields');
 
 /**
  * Get user profile with onboarding data
@@ -25,10 +26,10 @@ const { emitProfileUpdated } = require('../integrations/crm-profile.service');
 async function getProfile(pool, userId) {
   try {
     const cached = await cacheGet(`profile:${userId}`);
-    if (cached?.profile?.checkinAddressing) return cached;
+    if (cached?.profile?.checkinAddressing && Object.prototype.hasOwnProperty.call(cached.profile, 'address')) return cached;
 
     const userResult = await pool.query(
-      `SELECT id, email, phone_number, display_name, full_name, avatar_url, created_at, language_preference,
+      `SELECT id, email, phone_number, display_name, full_name, avatar_url, profile_address, created_at, language_preference,
               consent_version,
               (password_hash IS NOT NULL) AS has_password
        FROM users
@@ -112,6 +113,7 @@ async function getProfile(pool, userId) {
         (user.email ? user.email.split('@')[0] : `User123 ${user.id}`),
       email: user.email || null,
       phone: user.phone_number || null,
+      address: user.profile_address || null,
       relationship: t('profile.caregiver_label'),
       avatarUrl: user.avatar_url || null,
       // Health profile fields from onboarding
@@ -169,6 +171,15 @@ async function updateProfile(pool, userId, updates) {
     language,
   } = updates;
 
+  let address;
+  if (updates.address !== undefined) {
+    try { address = normalizeAddress(updates.address); }
+    catch { return { ok: false, error: t('profile.address_invalid'), statusCode: 400 }; }
+  }
+  if (dateOfBirth !== undefined && !validBirthDate(dateOfBirth)) {
+    return { ok: false, error: t('profile.birth_date_invalid'), statusCode: 400 };
+  }
+
   try {
     // Update name and phone in users table
     const userFields = [];
@@ -209,6 +220,12 @@ async function updateProfile(pool, userId, updates) {
     if (language !== undefined) {
       userFields.push(`language_preference = $${userParamIndex}`);
       userValues.push(language);
+      userParamIndex++;
+    }
+
+    if (address !== undefined) {
+      userFields.push(`profile_address = $${userParamIndex}::jsonb`);
+      userValues.push(address === null ? null : JSON.stringify(address));
       userParamIndex++;
     }
 
@@ -610,7 +627,7 @@ async function updatePushToken(
 async function getBasicProfile(pool, userId) {
   try {
     const { rows } = await pool.query(
-      `SELECT u.id, u.email, u.phone_number, u.full_name, u.display_name,
+      `SELECT u.id, u.email, u.phone_number, u.full_name, u.display_name, u.profile_address,
               u.avatar_url, u.language_preference, u.consent_version,
               (u.password_hash IS NOT NULL) AS has_password,
               uop.onboarding_completed_at,
@@ -632,6 +649,8 @@ async function getBasicProfile(pool, userId) {
         name: r.full_name || r.display_name || (r.email ? r.email.split('@')[0] : `User ${r.id}`),
         email: r.email || null,
         phone: r.phone_number || null,
+        address: r.profile_address || null,
+        dateOfBirth: r.date_of_birth || null,
         avatarUrl: r.avatar_url || null,
         languagePreference: r.language_preference || 'vi',
         consentVersion: r.consent_version || 'v1.0.0',
