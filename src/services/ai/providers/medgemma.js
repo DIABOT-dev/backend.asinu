@@ -10,6 +10,11 @@ const logger = require('../../../lib/logger');
 
 const DEFAULT_TIMEOUT_MS = 30000;
 const DEFAULT_MAX_RETRIES = 2;
+function isContextLimit(detail) {
+  const error = detail?.error;
+  return ['context_length_exceeded', 'context_window_exceeded', 'max_context_length_exceeded'].includes(error?.code)
+    || typeof error?.message === 'string' && /maximum context length|context window.{0,55}(exceed|too (?:long|many))|too many input tokens|prompt is too long/iu.test(error.message);
+}
 function isConfigured(provider) {
   return isClinicalConfigured(provider);
 }
@@ -92,8 +97,13 @@ async function callMedGemma({
       );
       error.status = response.status;
       const prefix = config.provider === '9router' ? 'NINEROUTER' : 'MEDGEMMA';
+      // Classify a context rejection without exposing the provider payload.
+      // Some providers include part of the user's prompt in error messages.
+      const contextLimit = response.status === 413 || [400, 422].includes(response.status) && typeof response.json === 'function'
+        && isContextLimit(await response.json().catch(() => null));
       error.code =
-        response.status === 402 ? `${prefix}_INSUFFICIENT_CREDIT` : `${prefix}_HTTP_ERROR`;
+        contextLimit ? 'AI_CONTEXT_LIMIT'
+          : response.status === 402 ? `${prefix}_INSUFFICIENT_CREDIT` : `${prefix}_HTTP_ERROR`;
       await response.body?.cancel().catch(() => undefined);
       throw error;
     }
