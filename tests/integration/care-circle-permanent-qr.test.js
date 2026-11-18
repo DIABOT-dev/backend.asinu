@@ -31,6 +31,7 @@ suite('Permanent Care Circle QR, real PostgreSQL', () => {
     await db.query(`CREATE TEMP TABLE user_connections (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(), requester_id INTEGER, addressee_id INTEGER,
       requested_by INTEGER, status TEXT, relationship_type TEXT, role TEXT, permissions JSONB,
+      requester_shares_notifications BOOLEAN DEFAULT FALSE, addressee_shares_notifications BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ
     )`);
     await db.query(`CREATE UNIQUE INDEX qr_test_connection_pair ON user_connections
@@ -75,15 +76,25 @@ suite('Permanent Care Circle QR, real PostgreSQL', () => {
   test('multiple relatives reuse one code, invitations remain pending and duplicates stay blocked', async () => {
     const code = await service.createQrToken(db, 1);
     for (const requester of [2, 3]) {
-      expect(await service.createInvitationFromQr(db, requester, { token: code.token, role: 'than-nhan', permissions: { can_view_logs: false } }))
+      expect(await service.createInvitationFromQr(db, requester, {
+        token: code.token, role: 'than-nhan', permissions: { can_view_logs: false }, share_notifications: requester === 2,
+      }))
         .toMatchObject({ ok: true, invitation: { requester_id: requester, addressee_id: 1,
-          status: 'pending', permissions: { can_view_logs: false } } });
+          status: 'pending', permissions: { can_view_logs: false },
+          requester_shares_notifications: requester === 2, addressee_shares_notifications: false } });
     }
     expect(await service.previewQrToken(db, code.token, 2))
       .toMatchObject({ ok: false, code: 'CARE_CIRCLE_CONNECTION_EXISTS' });
     const row = (await db.query('SELECT consumed_at, revoked_at, expires_at FROM pg_temp.care_circle_qr_tokens WHERE token_value=$1', [code.token])).rows[0];
     expect(row).toEqual({ consumed_at: null, revoked_at: null, expires_at: null });
     expect(await service.createQrToken(db, 1)).toEqual(code);
+  });
+
+  test('phone invitations record only explicitly enabled sharing from the sender', async () => {
+    expect(await service.createInvitation(db, 2, { addressee_id: 3, share_notifications: true }))
+      .toMatchObject({ ok: true, invitation: {
+        status: 'pending', requester_shares_notifications: true, addressee_shares_notifications: false,
+      } });
   });
 
   test('deleting an account removes its permanent QR', async () => {

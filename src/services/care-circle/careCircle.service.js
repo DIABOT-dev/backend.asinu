@@ -202,6 +202,7 @@ async function createInvitationFromQr(pool, requesterId, data, lang = 'vi') {
       relationship_type: data.relationship_type,
       role: parsedRole.data,
       permissions: data.permissions,
+      share_notifications: data.share_notifications,
     },
     lang
   );
@@ -284,11 +285,12 @@ async function createInvitation(pool, requesterId, data, lang = 'vi') {
         relationship_type,
         role,
         permissions,
+        requester_shares_notifications,
         created_at,
         updated_at
-      ) VALUES ($1,$2,'pending',$1,$3,$4,$5,NOW(),NOW())
+      ) VALUES ($1,$2,'pending',$1,$3,$4,$5,$6,NOW(),NOW())
       RETURNING *`,
-      [requesterId, addressee_id, relationship_type || null, role || null, JSON.stringify(perms)]
+      [requesterId, addressee_id, relationship_type || null, role || null, JSON.stringify(perms), data.share_notifications === true]
     );
 
     const invitation = result.rows[0];
