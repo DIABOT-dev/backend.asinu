@@ -63,6 +63,18 @@ async function saveFeedback(pool, userId, messageId, messageText, feedbackType) 
   );
 }
 
+async function setAssistantRating(pool, userId, messageId, messageText, feedbackType) {
+  await pool.query(
+    `INSERT INTO chat_feedback (user_id, message_id, message_text, feedback_type)
+     VALUES ($1,$2,$3,$4)
+     ON CONFLICT (user_id, message_id)
+       WHERE feedback_type IN ('like', 'dislike') AND message_id LIKE 'asinu-assistant:%'
+     DO UPDATE SET feedback_type=EXCLUDED.feedback_type, updated_at=NOW()
+     WHERE chat_feedback.feedback_type <> EXCLUDED.feedback_type`,
+    [userId, messageId, encryptHealthField(userId, 'chat_feedback.message_text', messageText), feedbackType]
+  );
+}
+
 /**
  * Get chat notes with pagination
  * Returns { notes, total }
@@ -125,6 +137,7 @@ module.exports = {
   deleteFeedback,
   updateFeedbackType,
   saveFeedback,
+  setAssistantRating,
   getChatNotes,
   deleteNote,
   getChatFeedbacks,
