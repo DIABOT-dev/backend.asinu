@@ -10,6 +10,7 @@ const {
   careCircleQrInvitationSchema,
 } = require('../validation/validation.schemas');
 const caregiverView = require('../services/care-circle/caregiver-view.service');
+const { getSharedNotifications } = require('../services/notification/notification.service');
 const { healthAccessSchema, memberCalendarSchema } = require('../validation/care-circle-health.schemas');
 const { careCircleConnectionUpdateSchema, familyRoleError } = require('../validation/care-circle-family.schemas');
 const {
@@ -26,7 +27,12 @@ const {
   updateConnection: serviceUpdateConnection,
   updateConnectionPermissions: serviceUpdateConnectionPermissions,
   updateHealthAccess: serviceUpdateHealthAccess,
+  updateNotificationAccess: serviceUpdateNotificationAccess,
 } = require('../services/care-circle/careCircle.service');
+
+const connectionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const positiveDatabaseId = value => typeof value === 'string' && /^[1-9]\d{0,9}$/.test(value) &&
+  Number(value) <= 2147483647;
 
 function invalidCareCirclePayload(req, res, issues) {
   const lang = getLang(req);
@@ -358,11 +364,34 @@ async function getMemberHealthSummary(pool, req, res) {
 
 async function updateHealthAccess(pool, req, res) {
   const parsed = healthAccessSchema.safeParse(req.body);
-  if (!parsed.success || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id)) {
+  if (!parsed.success || !connectionIdPattern.test(req.params.id)) {
     return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
   }
   const result = await serviceUpdateHealthAccess(pool, req.params.id, req.user.id, parsed.data.can_view_logs, getLang(req));
   return res.status(result.ok ? 200 : result.statusCode || 500).json(result);
+}
+
+async function updateNotificationAccess(pool, req, res) {
+  const shareNotifications = req.body?.share_notifications;
+  if (typeof shareNotifications !== 'boolean' || !connectionIdPattern.test(req.params.id)) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+  }
+  const result = await serviceUpdateNotificationAccess(pool, req.params.id, req.user.id, shareNotifications, getLang(req));
+  return res.status(result.ok ? 200 : result.statusCode).json(result);
+}
+
+async function getMemberNotifications(pool, req, res) {
+  res.set('Cache-Control', 'private, no-store');
+  const { memberId } = req.params;
+  const { before } = req.query;
+  if (!positiveDatabaseId(memberId) || (before !== undefined && !positiveDatabaseId(before))) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_params', getLang(req)) });
+  }
+  const result = await getSharedNotifications(pool, req.user.id, Number(memberId), before === undefined ? null : Number(before));
+  if (!result) {
+    return res.status(403).json({ ok: false, code: 'NOTIFICATION_ACCESS_DENIED', error: t('error.no_access', getLang(req)) });
+  }
+  return res.json({ ok: true, ...result });
 }
 
 async function getMemberHealthCalendar(pool, req, res) {
@@ -410,4 +439,6 @@ module.exports = {
   getMemberHealthCalendar,
   getMemberHealthOverview,
   updateHealthAccess,
+  updateNotificationAccess,
+  getMemberNotifications,
 };

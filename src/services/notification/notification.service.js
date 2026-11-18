@@ -99,6 +99,45 @@ async function getNotifications(pool, userId, options = {}) {
   }
 }
 
+// Authorize and read the owner's visible inbox in the same database snapshot.
+async function getSharedNotifications(pool, viewerId, ownerId, beforeId = null) {
+  const pageSize = 30;
+  const { rows } = await pool.query(
+    `SELECT COALESCE(NULLIF(BTRIM(u.display_name), ''), NULLIF(BTRIM(u.full_name), '')) AS "memberName",
+            n.id, n.type, n.title, n.message, n.data, n.created_at
+     FROM users u
+     LEFT JOIN LATERAL (
+       SELECT id, type, title, message, data, created_at
+       FROM notifications
+       WHERE user_id = u.id AND ($3::integer IS NULL OR id < $3)
+         AND NOT (type = ANY($4::text[]))
+       ORDER BY id DESC
+       LIMIT $5
+     ) n ON TRUE
+     WHERE u.id = $1 AND u.deleted_at IS NULL AND u.id <> $2
+       AND EXISTS (
+         SELECT 1 FROM user_connections c
+         WHERE c.status = 'accepted'
+           AND LEAST(c.requester_id, c.addressee_id) = LEAST($1::integer, $2::integer)
+           AND GREATEST(c.requester_id, c.addressee_id) = GREATEST($1::integer, $2::integer)
+           AND CASE WHEN c.requester_id = u.id
+               THEN c.requester_shares_notifications ELSE c.addressee_shares_notifications END
+       )
+     ORDER BY n.id DESC`,
+    [ownerId, viewerId, beforeId, getHiddenNotificationTypes(), pageSize + 1]
+  );
+  if (!rows.length) return null;
+  const notifications = rows.slice(0, pageSize).filter(row => row.id !== null).map(row => {
+    const { id, type, title, message, created_at } = presentNotification(row);
+    return { id, type, title, message, created_at };
+  });
+  return {
+    memberName: rows[0].memberName,
+    notifications,
+    nextBefore: rows.length > pageSize ? notifications.at(-1).id : null,
+  };
+}
+
 /**
  * Mark notification as read
  * @param {Object} pool - Database pool
@@ -237,6 +276,7 @@ async function deleteAllNotifications(pool, userId, { beforeId = null } = {}) {
 
 module.exports = {
   getNotifications,
+  getSharedNotifications,
   markAsRead,
   markAllAsRead,
   getUserPushToken,

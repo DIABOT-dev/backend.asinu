@@ -6,15 +6,17 @@ const { Client } = require('pg');
 const {
   verifyCaregiverAccess,
   updateHealthAccess,
+  updateNotificationAccess,
   normalizePermissions,
 } = require('../../src/services/care-circle/careCircle.service');
 const { caregiverLogs, memberHealthOverview } = require('../../src/services/care-circle/caregiver-view.service');
+const { getSharedNotifications } = require('../../src/services/notification/notification.service');
 
 // Explicit opt-in. Fixtures are TEMP tables inside a transaction; no app rows
 // or migration history are changed, and teardown always rolls back.
 const url = process.env.CARE_CIRCLE_TEST_DATABASE_URL;
 const suite = url ? describe : describe.skip;
-suite('directional health consent, real PostgreSQL', () => {
+suite('directional Care Circle consent, real PostgreSQL', () => {
   let db;
   const id = '10000000-0000-4000-8000-000000000001';
   beforeAll(async () => {
@@ -25,12 +27,14 @@ suite('directional health consent, real PostgreSQL', () => {
       id UUID PRIMARY KEY, requester_id INTEGER, addressee_id INTEGER,
       status TEXT, permissions JSONB NOT NULL, updated_at TIMESTAMPTZ
     ) ON COMMIT DROP`);
-    await db.query(
-      fs.readFileSync(
-        path.join(__dirname, '../../db/migrations/102_care_circle_directional_health_access.sql'),
-        'utf8'
-      )
-    );
+    await db.query(`
+      CREATE TEMP TABLE users (id INTEGER, display_name TEXT, full_name TEXT, avatar_url TEXT, deleted_at TIMESTAMPTZ);
+      CREATE TEMP TABLE notifications (id SERIAL PRIMARY KEY, user_id INTEGER, type TEXT, title TEXT, message TEXT, data JSONB, created_at TIMESTAMPTZ DEFAULT NOW());
+      INSERT INTO users VALUES (7, '', 'Relative', NULL, NULL), (8, 'Viewer', NULL, NULL, NULL), (9, 'Outsider', NULL, NULL, NULL);
+    `);
+    for (const name of ['102_care_circle_directional_health_access.sql', '137_care_circle_notification_access.sql']) {
+      await db.query(fs.readFileSync(path.join(__dirname, '../../db/migrations', name), 'utf8'));
+    }
   });
   beforeEach(async () => {
     await db.query('DELETE FROM pg_temp.user_connections');
@@ -82,13 +86,11 @@ suite('directional health consent, real PostgreSQL', () => {
   });
   test('overview returns current measurements only while the relative shares them', async () => {
     await db.query(`
-      CREATE TEMP TABLE users (id INTEGER, display_name TEXT, full_name TEXT, avatar_url TEXT, deleted_at TIMESTAMPTZ);
       CREATE TEMP TABLE user_onboarding_profiles (user_id INTEGER, height_cm NUMERIC, weight_kg NUMERIC);
       CREATE TEMP TABLE logs_common (id INTEGER, user_id INTEGER, log_type TEXT, occurred_at TIMESTAMPTZ, note TEXT, metadata JSONB);
       CREATE TEMP TABLE blood_pressure_logs (log_id INTEGER, systolic INTEGER, diastolic INTEGER, pulse INTEGER, unit TEXT DEFAULT 'mmHg');
       CREATE TEMP TABLE glucose_logs (log_id INTEGER, value NUMERIC, unit TEXT);
       CREATE TEMP TABLE meal_logs (log_id INTEGER, meal_text TEXT);
-      INSERT INTO users VALUES (7, '', 'Relative', NULL, NULL), (8, 'Viewer', NULL, NULL, NULL);
       INSERT INTO user_onboarding_profiles VALUES (7, 170, 68);
       INSERT INTO logs_common VALUES (1, 7, 'bp', NOW() - INTERVAL '1 day'),
         (2, 7, 'blood_pressure', NOW()), (3, 7, 'bp', NOW() + INTERVAL '1 day'),
@@ -117,6 +119,45 @@ suite('directional health consent, real PostgreSQL', () => {
   test('removed connections lose access even when the old consent was granted', async () => {
     await db.query('DELETE FROM pg_temp.user_connections');
     expect(await verifyCaregiverAccess(db, 8, 7)).toBe(false);
+  });
+  test('existing health permission grants no inbox access and only the owner can share their inbox', async () => {
+    expect(await verifyCaregiverAccess(db, 8, 7)).toBe(true);
+    expect(await getSharedNotifications(db, 8, 7)).toBeNull();
+    expect((await updateNotificationAccess(db, id, 9, true)).statusCode).toBe(404);
+    await updateNotificationAccess(db, id, 8, true);
+    expect(await getSharedNotifications(db, 8, 7)).toBeNull();
+    expect(await getSharedNotifications(db, 7, 8)).toEqual({ memberName: 'Viewer', notifications: [], nextBefore: null });
+    expect(await getSharedNotifications(db, 8, 8)).toBeNull();
+    await db.query("UPDATE pg_temp.user_connections SET status = 'pending'");
+    expect(await getSharedNotifications(db, 7, 8)).toBeNull();
+    expect((await updateNotificationAccess(db, id, 8, true)).statusCode).toBe(404);
+  });
+  test('shared inbox pages contain only the selected owner’s visible notification text and stop on revocation', async () => {
+    await db.query(`
+      INSERT INTO notifications(user_id, type, title, message, data)
+        SELECT 7, 'general', 'Notice ' || number, 'Member message', '{"secret":"not included"}'
+        FROM generate_series(1, 32) number;
+      INSERT INTO notifications(user_id, type, title, message) VALUES
+        (8, 'general', 'Viewer’s personal notification', 'Viewer message'),
+        (9, 'general', 'Third-party notification', 'Other message');
+    `);
+    await updateNotificationAccess(db, id, 7, true);
+    const first = await getSharedNotifications(db, 8, 7);
+    expect(first.memberName).toBe('Relative');
+    expect(first.notifications).toHaveLength(30);
+    expect(first.notifications[0]).toEqual({
+      id: expect.any(Number), type: 'general', title: 'Notice 32',
+      message: 'Member message', created_at: expect.any(Date),
+    });
+    const second = await getSharedNotifications(db, 8, 7, first.nextBefore);
+    expect(second.notifications.map(item => item.title)).toEqual(['Notice 2', 'Notice 1']);
+    expect(second.nextBefore).toBeNull();
+    expect(await getSharedNotifications(db, 9, 7)).toBeNull();
+    await updateNotificationAccess(db, id, 7, false);
+    expect(await getSharedNotifications(db, 8, 7, first.nextBefore)).toBeNull();
+    await updateNotificationAccess(db, id, 7, true);
+    await db.query('DELETE FROM pg_temp.user_connections WHERE id=$1', [id]);
+    expect(await getSharedNotifications(db, 8, 7)).toBeNull();
   });
   test('new invitations default to viewing access but explicit opt-out stays disabled', () => {
     expect(normalizePermissions(undefined).can_view_logs).toBe(true);

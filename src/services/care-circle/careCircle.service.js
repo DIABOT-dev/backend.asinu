@@ -919,6 +919,24 @@ async function updateHealthAccess(pool, connectionId, ownerId, canViewLogs, lang
   return { ok: true, connection: rows[0] };
 }
 
+async function updateNotificationAccess(pool, connectionId, ownerId, shareNotifications, lang = 'vi') {
+  const { rows } = await pool.query(
+    `UPDATE user_connections
+     SET requester_shares_notifications = CASE WHEN requester_id = $2
+           THEN $3::boolean ELSE requester_shares_notifications END,
+         addressee_shares_notifications = CASE WHEN addressee_id = $2
+           THEN $3::boolean ELSE addressee_shares_notifications END
+     WHERE id = $1 AND status = 'accepted'
+       AND requester_id <> addressee_id AND (requester_id = $2 OR addressee_id = $2)
+     RETURNING requester_shares_notifications, addressee_shares_notifications`,
+    [connectionId, ownerId, shareNotifications]
+  );
+  if (!rows.length) {
+    return { ok: false, statusCode: 404, error: t('careCircle.connection_not_found', lang) };
+  }
+  return { ok: true, access: rows[0] };
+}
+
 /**
  * Get patient's recent logs visible to caregiver
  * @param {Object} pool - Database pool
@@ -1003,6 +1021,7 @@ module.exports = {
   updateConnection,
   updateConnectionPermissions,
   updateHealthAccess,
+  updateNotificationAccess,
 
   // Caregiver data access
   caregiverAccessSql,
