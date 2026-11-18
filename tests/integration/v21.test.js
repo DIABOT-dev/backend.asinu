@@ -2447,6 +2447,28 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     expect(out.body.report).toMatchObject({ taken: 1, total: 1, coins: 5 });
     await request(app).get('/api/mobile/coins/history?before=').set(auth(id)).expect(200);
   });
+  test('coin history serves ten rows per page and never includes another user’s entries', async () => {
+    const owner = await user(), other = await user();
+    const { rows } = await db.query(
+      `INSERT INTO coin_ledger (user_id,delta,reason,ref_id,local_date,expires_at)
+       SELECT CASE WHEN n <= 20 THEN $1::int ELSE $2::int END,
+         1,'REFUND',gen_random_uuid(),CURRENT_DATE,NOW()+INTERVAL '12 months'
+       FROM generate_series(1,21) n RETURNING id, user_id`,
+      [owner, other]
+    );
+    const history = () => request(app).get('/api/mobile/coins/history').set(auth(owner));
+    const first = (await history().query({ limit: 10 }).expect(200)).body;
+    expect(first.items).toHaveLength(10);
+    expect(first.nextBefore).toBe(String(first.items.at(-1).id));
+    const second = (await history().query({ limit: 10, before: first.nextBefore }).expect(200)).body;
+    expect(second.items).toHaveLength(10);
+    expect(second.nextBefore).toBeNull();
+    expect([...first.items, ...second.items].map((row) => row.id)).toEqual(
+      rows.filter((row) => row.user_id === owner).reverse().map((row) => row.id)
+    );
+    expect((await history().expect(200)).body).not.toHaveProperty('nextBefore');
+    await history().query({ limit: 31 }).expect(400);
+  });
   test('two remote reminder hours have one invitation, one call, and an explicit atomic consent review', async () => {
     const id = await user(),
       child = await user(),

@@ -5,6 +5,7 @@ const entitlement = require('../payment/entitlement.service');
 const { selectExtra, selectLoc, SCALE } = require('./gift-policy');
 const { enqueueCrmEvent } = require('../integrations/crm-event.service');
 const logger = require('../../lib/logger');
+const { parsePageLimit, pageResult } = require('../../lib/list-pagination');
 const DAY_SQL = "(NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date";
 const calendarDate = (value) =>
   value instanceof Date
@@ -305,25 +306,37 @@ async function open(pool, userId, giftId, box, lang) {
   return publicGift(pool, result, lang);
 }
 
-async function history(pool, userId, before, lang) {
+async function history(pool, userId, before, lang, requestedLimit) {
+  const limit = parsePageLimit(requestedLimit, 30);
+  const paged = requestedLimit !== undefined;
+  const [day, beforeId, extra] = typeof before === 'string' ? before.split(',') : [];
   if (
     before &&
     (typeof before !== 'string' ||
-      !/^\d{4}-\d{2}-\d{2}$/.test(before) ||
-      !Number.isFinite(Date.parse(before)) ||
-      new Date(before).toISOString().slice(0, 10) !== before)
+      !/^\d{4}-\d{2}-\d{2}$/.test(day) ||
+      !Number.isFinite(Date.parse(day)) ||
+      new Date(day).toISOString().slice(0, 10) !== day ||
+      extra !== undefined ||
+      (beforeId !== undefined && (!paged || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(beforeId))))
   )
     throw giftError('INVALID_DATE');
   const household = await householdFor(pool, userId);
   const rows = (
     await pool.query(
-      'SELECT * FROM gift_events WHERE (household_id=$1 OR user_id=$3) AND opened_at IS NOT NULL AND ($2::date IS NULL OR date_vn < $2::date) ORDER BY date_vn DESC LIMIT 30',
-      [household.id, before || null, userId]
+      `SELECT * FROM gift_events WHERE (household_id=$1 OR user_id=$3)
+       AND opened_at IS NOT NULL AND ($2::date IS NULL OR date_vn < $2
+         OR (date_vn = $2 AND id < $4::uuid))
+       ORDER BY date_vn DESC, id DESC LIMIT $5`,
+      [household.id, day || null, userId, beforeId || null, paged ? limit + 1 : limit]
     )
   ).rows;
+  const page = paged ? pageResult(rows, limit, row => `${calendarDate(row.date_vn)},${row.id}`) : {
+    items: rows,
+    nextBefore: rows.length === limit ? calendarDate(rows.at(-1).date_vn) : null,
+  };
   return {
-    items: await Promise.all(rows.map((row) => publicGift(pool, row, lang))),
-    nextBefore: rows.length === 30 ? calendarDate(rows.at(-1).date_vn) : null,
+    items: await Promise.all(page.items.map((row) => publicGift(pool, row, lang))),
+    nextBefore: page.nextBefore,
   };
 }
 

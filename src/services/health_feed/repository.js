@@ -307,7 +307,7 @@ async function insertFeedItems(pool, user, selectedItems) {
   return inserted;
 }
 
-async function listFeed(pool, userId) {
+async function listFeed(pool, userId, page) {
   const { rows } = await pool.query(
     `SELECT f.id, f.user_id, f.content_id, f.patient_id, f.feed_type,
             CASE WHEN COALESCE(u.language_preference, 'vi') = 'en'
@@ -322,14 +322,16 @@ async function listFeed(pool, userId) {
               ELSE f.action_label END AS action_label,
             f.action_target, f.created_at, f.read_at, f.dismissed_at, f.expires_at,
             CASE WHEN f.priority >= 100 THEN 'warning' ELSE 'info' END AS severity_level
+            ${page ? `, to_char(f.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_time` : ''}
        FROM health_feed_feed_items f
        JOIN users u ON u.id = f.user_id
        JOIN health_feed_content_items c ON c.id = f.content_id
       WHERE f.user_id = $1
         AND f.dismissed_at IS NULL
-      ORDER BY f.priority DESC, f.created_at DESC
-      LIMIT 5`,
-    [userId]
+        AND ($2::integer IS NULL OR (f.priority, f.created_at, f.id) < ($2, $3::timestamptz, $4::uuid))
+      ORDER BY f.priority DESC, f.created_at DESC, f.id DESC
+      LIMIT $5`,
+    [userId, page?.before?.priority ?? null, page?.before?.time ?? null, page?.before?.id ?? null, page?.limit ?? 5]
   );
   return rows;
 }
@@ -429,7 +431,7 @@ async function unsaveContent(pool, userId, contentId) {
   );
 }
 
-async function listSaved(pool, userId) {
+async function listSaved(pool, userId, page) {
   const { rows } = await pool.query(
     `SELECT c.id,
             CASE WHEN COALESCE(u.language_preference, 'vi') = 'en'
@@ -439,12 +441,15 @@ async function listSaved(pool, userId) {
               THEN COALESCE(c.translations->'en'->>'summary', c.summary)
               ELSE c.summary END AS summary,
             c.content_type, sc.saved_at
+            ${page ? `, to_char(sc.saved_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_time` : ''}
        FROM health_feed_saved_content sc
        JOIN health_feed_content_items c ON c.id = sc.content_id
        JOIN users u ON u.id = sc.user_id
       WHERE sc.user_id = $1
-      ORDER BY sc.saved_at DESC`,
-    [userId]
+        AND ($2::timestamptz IS NULL OR (sc.saved_at, sc.content_id) < ($2, $3::text))
+      ORDER BY sc.saved_at DESC, sc.content_id DESC
+      LIMIT $4`,
+    [userId, page?.before?.time ?? null, page?.before?.id ?? null, page?.limit ?? null]
   );
   return rows;
 }

@@ -100,6 +100,37 @@ describeDb('server-owned check-in gifts on isolated PostgreSQL tables', () => {
     await request(app).post('/gift/open').send({}).expect(401);
     await request(app).get('/ops/config').expect(401);
   });
+  test('gift history pages preserve both opened receipts on the same day across a household change', async () => {
+    const owner = await fixture(), other = await fixture();
+    const ownerGift = await gifts.assign(pool, owner.user, owner.session);
+    const otherGift = await gifts.assign(pool, other.user, other.session);
+    const { rows } = await pool.query(
+      `INSERT INTO gift_events
+        (id,household_id,user_id,date_vn,loc_id,loc_snapshot,extra,answer,random_value,config_snapshot,opened_at)
+       SELECT ('b94f1c9d-af81-4d4c-9b19-' || lpad(n::text, 12, '0'))::uuid,
+         CASE WHEN n IN (10,22) THEN other.household_id ELSE own.household_id END,
+         CASE WHEN n IN (11,22) THEN other.user_id ELSE own.user_id END,
+         own.date_vn - CASE WHEN n <= 10 THEN n ELSE n - 1 END,
+         own.loc_id,own.loc_snapshot,'none','fine',0,own.config_snapshot,now()
+       FROM generate_series(1,22) n
+       CROSS JOIN (SELECT * FROM gift_events WHERE id = $1) own
+       CROSS JOIN (SELECT * FROM gift_events WHERE id = $2) other RETURNING id`,
+      [ownerGift.id, otherGift.id]
+    );
+    const history = () => request(app).get('/gift/history').set(auth(owner.user));
+    const first = (await history().query({ limit: 10 }).expect(200)).body;
+    expect(first.items).toHaveLength(10);
+    const second = (await history().query({ limit: 10, before: first.nextBefore }).expect(200)).body;
+    expect(second.items).toHaveLength(10);
+    const last = (await history().query({ limit: 10, before: second.nextBefore }).expect(200)).body;
+    expect(last.items).toHaveLength(1);
+    expect(last.nextBefore).toBeNull();
+    expect(second.items[0].day).toBe(first.items.at(-1).day);
+    const expected = rows.slice(0, 21).map((row) => row.id);
+    [expected[9], expected[10]] = [expected[10], expected[9]];
+    expect([...first.items, ...second.items, ...last.items].map((row) => row.id)).toEqual(expected);
+    await history().query({ limit: 31 }).expect(400);
+  });
   test('the variety migration adds proverbs and inactive tip drafts without replacing saved gifts or edited content', async () => {
     const f = await fixture();
     const saved = await gifts.assign(pool, f.user, f.session);

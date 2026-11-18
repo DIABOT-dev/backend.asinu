@@ -2,6 +2,7 @@
 const c = require('./common');
 const entitlement = require('../payment/entitlement.service');
 const greetingCards = require('./greeting-cards.service');
+const { parsePageLimit, pageResult } = require('../../lib/list-pagination');
 
 async function addCredit(db, user, reason, ref, amount, date, expires) {
   const saved = (
@@ -137,17 +138,15 @@ async function today(pool, user) {
     };
   });
 }
-async function history(pool, user, before) {
+async function history(pool, user, before, requestedLimit) {
   await c.assertFeature(pool, user, 'coins');
   const cursor = before == null || before === '' ? null : c.idSchema.parse(before);
-  return {
-    items: (
-      await pool.query(
-        'SELECT l.*,r.status reward_status,r.catalog_code,t.ticket_no FROM coin_ledger l LEFT JOIN reward_redemptions r ON r.ledger_id=l.id LEFT JOIN draw_tickets t ON t.redemption_id=r.id WHERE l.user_id=$1 AND ($2::bigint IS NULL OR l.id<$2) ORDER BY l.id DESC LIMIT 30',
-        [user, cursor]
-      )
-    ).rows,
-  };
+  const limit = parsePageLimit(requestedLimit, 30);
+  const { rows } = await pool.query(
+    'SELECT l.*,r.status reward_status,r.catalog_code,t.ticket_no FROM coin_ledger l LEFT JOIN reward_redemptions r ON r.ledger_id=l.id LEFT JOIN draw_tickets t ON t.redemption_id=r.id WHERE l.user_id=$1 AND ($2::bigint IS NULL OR l.id<$2) ORDER BY l.id DESC LIMIT $3',
+    [user, cursor, requestedLimit === undefined ? limit : limit + 1]
+  );
+  return requestedLimit === undefined ? { items: rows } : pageResult(rows, limit, row => String(row.id));
 }
 async function catalog(db, user) {
   await c.assertFeature(db, user, 'coins');
