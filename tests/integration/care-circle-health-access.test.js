@@ -8,6 +8,7 @@ const {
   updateHealthAccess,
   normalizePermissions,
 } = require('../../src/services/care-circle/careCircle.service');
+const { caregiverLogs, memberHealthOverview } = require('../../src/services/care-circle/caregiver-view.service');
 
 // Explicit opt-in. Fixtures are TEMP tables inside a transaction; no app rows
 // or migration history are changed, and teardown always rolls back.
@@ -78,6 +79,40 @@ suite('directional health consent, real PostgreSQL', () => {
     await db.query("UPDATE pg_temp.user_connections SET status = 'pending'");
     expect(await verifyCaregiverAccess(db, 8, 7)).toBe(false);
     expect((await updateHealthAccess(db, id, 7, true)).statusCode).toBe(404);
+  });
+  test('overview returns current measurements only while the relative shares them', async () => {
+    await db.query(`
+      CREATE TEMP TABLE users (id INTEGER, display_name TEXT, full_name TEXT, avatar_url TEXT, deleted_at TIMESTAMPTZ);
+      CREATE TEMP TABLE user_onboarding_profiles (user_id INTEGER, height_cm NUMERIC, weight_kg NUMERIC);
+      CREATE TEMP TABLE logs_common (id INTEGER, user_id INTEGER, log_type TEXT, occurred_at TIMESTAMPTZ, note TEXT, metadata JSONB);
+      CREATE TEMP TABLE blood_pressure_logs (log_id INTEGER, systolic INTEGER, diastolic INTEGER, pulse INTEGER, unit TEXT DEFAULT 'mmHg');
+      CREATE TEMP TABLE glucose_logs (log_id INTEGER, value NUMERIC, unit TEXT);
+      CREATE TEMP TABLE meal_logs (log_id INTEGER, meal_text TEXT);
+      INSERT INTO users VALUES (7, '', 'Relative', NULL, NULL), (8, 'Viewer', NULL, NULL, NULL);
+      INSERT INTO user_onboarding_profiles VALUES (7, 170, 68);
+      INSERT INTO logs_common VALUES (1, 7, 'bp', NOW() - INTERVAL '1 day'),
+        (2, 7, 'blood_pressure', NOW()), (3, 7, 'bp', NOW() + INTERVAL '1 day'),
+        (4, 7, 'glucose', NOW()), (5, 8, 'bp', NOW()), (6, 7, 'meal', NOW());
+      INSERT INTO blood_pressure_logs (log_id, systolic, diastolic, pulse) VALUES (1, 110, 70, 71), (2, 120, 80, 72),
+        (3, 130, 90, 73), (5, 140, 90, 74);
+      INSERT INTO glucose_logs VALUES (4, 5.5, 'mmol/L');
+      INSERT INTO meal_logs VALUES (6, 'Bữa sáng');
+    `);
+    expect(await memberHealthOverview(db, 8, 7)).toEqual({
+      name: 'Relative', avatarUrl: null, heightCm: '170', weightKg: '68',
+      systolic: 120, diastolic: 80, pulse: 72, bloodPressureUnit: 'mmHg', glucose: '5.5', glucoseUnit: 'mmol/L',
+    });
+    expect(await memberHealthOverview(db, 7, 8)).toBeNull();
+    expect(await memberHealthOverview(db, 9, 7)).toBeNull();
+    expect(await memberHealthOverview(db, 7, 7)).toBeNull();
+    const { logs } = await caregiverLogs(db, 8, 7, 'vi');
+    expect(logs.map(row => row.id).sort()).toEqual([1, 2, 4, 6]);
+    expect(logs.find(row => row.id === 2).detail).toEqual({ systolic: 120, diastolic: 80, unit: 'mmHg' });
+    expect(logs.find(row => row.id === 4).detail).toEqual({ value: 5.5, unit: 'mmol/L' });
+    expect(logs.find(row => row.id === 6).detail).toEqual({ meal_text: 'Bữa sáng' });
+    await updateHealthAccess(db, id, 7, false);
+    expect(await memberHealthOverview(db, 8, 7)).toBeNull();
+    expect(await caregiverLogs(db, 8, 7, 'vi')).toBeNull();
   });
   test('removed connections lose access even when the old consent was granted', async () => {
     await db.query('DELETE FROM pg_temp.user_connections');

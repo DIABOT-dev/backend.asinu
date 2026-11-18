@@ -378,6 +378,19 @@ async function getMemberHealthCalendar(pool, req, res) {
   return res.json({ ok: true, ...result });
 }
 
+async function getMemberHealthOverview(pool, req, res) {
+  res.set('Cache-Control', 'private, no-store');
+  const memberId = Number(req.params.memberId);
+  if (!Number.isInteger(memberId) || memberId <= 0 || memberId > 2147483647) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_patient_id', getLang(req)) });
+  }
+  const overview = await caregiverView.memberHealthOverview(pool, req.user.id, memberId);
+  if (!overview) {
+    return res.status(403).json({ ok: false, code: 'HEALTH_ACCESS_DENIED', error: t('error.no_permission_logs', getLang(req)) });
+  }
+  return res.json({ ok: true, overview });
+}
+
 module.exports = {
   createInvitation,
   createQrToken,
@@ -395,5 +408,6 @@ module.exports = {
   getCaregiverCheckins,
   getMemberHealthSummary,
   getMemberHealthCalendar,
+  getMemberHealthOverview,
   updateHealthAccess,
 };

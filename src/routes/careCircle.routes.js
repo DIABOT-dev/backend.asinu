@@ -16,6 +16,7 @@ const {
   updateConnectionPermissions,
   updateHealthAccess,
   getMemberHealthCalendar,
+  getMemberHealthOverview,
 } = require('../controllers/careCircle.controller');
 
 function careCircleRoutes(pool) {
@@ -39,6 +40,7 @@ function careCircleRoutes(pool) {
   router.put('/connections/:id/permissions', requireAuth, bind(updateConnectionPermissions));
   router.put('/connections/:id/health-access', requireAuth, bind(updateHealthAccess));
   router.get('/member/:memberId/health-calendar', requireAuth, caregiverViewLogs, bind(getMemberHealthCalendar));
+  router.get('/member/:memberId/health-overview', requireAuth, caregiverViewLogs, bind(getMemberHealthOverview));
   router.delete('/connections/:id', requireAuth, bind(deleteConnection));
 
   return router;
