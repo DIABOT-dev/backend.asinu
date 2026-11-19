@@ -75,7 +75,7 @@ module.exports = (pool) => {
   );
   r.get(
     '/coins/history',
-    json((req) => coins.history(pool, req.user.id, req.query.before, req.query.limit))
+    json((req) => coins.history(pool, req.user.id, req.query.before, req.query.limit, req.query.scope))
   );
   r.get(
     '/rewards',

@@ -577,6 +577,19 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     const privateResult = await tools.prepare(db, other, { type: 'app_tool', tool: 'checkin.conclusion', parameters: {}, evidence: 'xem kết luận' });
     expect(privateResult.answer).not.toContain(full.slice(0, 30));
   });
+  test('the reward catalog includes profile photos only for accepted greeting recipients', async () => {
+    const sender = await user(), relative = await user(), noPhoto = await user(), stranger = await user();
+    const avatarUrl = 'https://images.example.test/family.jpg';
+    await db.query('UPDATE users SET avatar_url=$1 WHERE id=ANY($2::int[])', [avatarUrl, [relative, stranger]]);
+    await connect(relative, sender);
+    await connect(sender, noPhoto);
+
+    const response = await request(app).get('/api/mobile/rewards').set(auth(sender)).expect(200);
+    expect(response.body.recipients).toEqual([
+      expect.objectContaining({ id: relative, avatarUrl }),
+      expect.objectContaining({ id: noPhoto, avatarUrl: null }),
+    ]);
+  });
   test('assistant app tools: sending a greeting resolves the real catalog and one signed request spends coins once', async () => {
     const tools = require('../../src/services/assistant/domain-tools.service');
     const sender = await user(), recipient = await user();
@@ -2468,6 +2481,52 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     );
     expect((await history().expect(200)).body).not.toHaveProperty('nextBefore');
     await history().query({ limit: 31 }).expect(400);
+  });
+  test('coin history paginates earnings and spending separately from refunds and expiry', async () => {
+    const owner = await user(), other = await user();
+    const { rows: uses } = await db.query(
+      `INSERT INTO coin_ledger (user_id,delta,reason,ref_id,local_date)
+       SELECT CASE WHEN n <= 12 THEN $1::int ELSE $2::int END,
+         -1,'REDEEM',gen_random_uuid(),CURRENT_DATE
+       FROM generate_series(1,13) n RETURNING id, user_id`,
+      [owner, other]
+    );
+    const { rows: credits } = await db.query(
+      `INSERT INTO coin_ledger (user_id,delta,reason,ref_id,local_date,expires_at)
+       SELECT CASE WHEN n=14 THEN $2::int ELSE $1::int END,
+         1,CASE WHEN n=13 THEN 'REFUND' ELSE 'CHECKIN' END,
+         gen_random_uuid(),CURRENT_DATE,NOW()+INTERVAL '12 months'
+       FROM generate_series(1,14) n RETURNING id, user_id, reason`,
+      [owner, other]
+    );
+    await db.query(
+      "INSERT INTO coin_ledger (user_id,delta,reason,ref_id,local_date) VALUES($1,-1,'EXPIRE',gen_random_uuid(),CURRENT_DATE)",
+      [owner]
+    );
+    const history = () => request(app).get('/api/mobile/coins/history').set(auth(owner));
+    const full = (await history().query({ limit: 10 }).expect(200)).body;
+    expect(full.items.some((row) => row.reason === 'REDEEM')).toBe(false);
+    const first = (await history().query({ limit: 10, scope: 'usage' }).expect(200)).body;
+    expect(first.items).toHaveLength(10);
+    const next = (await history().query({
+      limit: 10, scope: 'usage', before: first.nextBefore,
+    }).expect(200)).body;
+    expect(next.items).toHaveLength(2);
+    expect(next.nextBefore).toBeNull();
+    expect([...first.items, ...next.items].map((row) => row.id)).toEqual(
+      uses.filter((row) => row.user_id === owner).reverse().map((row) => row.id)
+    );
+    const earnedFirst = (await history().query({ limit: 10, scope: 'earned' }).expect(200)).body;
+    expect(earnedFirst.items).toHaveLength(10);
+    const earnedNext = (await history().query({
+      limit: 10, scope: 'earned', before: earnedFirst.nextBefore,
+    }).expect(200)).body;
+    expect(earnedNext.items).toHaveLength(2);
+    expect(earnedNext.nextBefore).toBeNull();
+    expect([...earnedFirst.items, ...earnedNext.items].map((row) => row.id)).toEqual(
+      credits.filter((row) => row.user_id === owner && row.reason === 'CHECKIN')
+        .reverse().map((row) => row.id)
+    );
   });
   test('two remote reminder hours have one invitation, one call, and an explicit atomic consent review', async () => {
     const id = await user(),
