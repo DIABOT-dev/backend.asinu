@@ -8,10 +8,10 @@ const {
   cancelPatientTask,
 } = require('../controllers/doctor-care.controller');
 const {
-  imageUpload,
+  doctorAttachmentUpload,
   audioUpload,
   handleUpload,
-  verifyImageMagicBytes,
+  verifyDoctorAttachment,
   verifyAudioMagicBytes,
 } = require('../middleware/upload.middleware');
 const {
@@ -56,8 +56,8 @@ function doctorTaskRoutes(pool) {
   router.post(
     '/tasks/:taskId/attachments',
     requireAuth,
-    handleUpload(imageUpload.single('file')),
-    verifyImageMagicBytes,
+    handleUpload(doctorAttachmentUpload.single('file')),
+    verifyDoctorAttachment,
     bindController(createDoctorAttachment, pool)
   );
   router.post(

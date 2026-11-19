@@ -2,9 +2,11 @@
 
 const {
   evaluateConsultationScreening: evaluate,
+  readConsultationInitialRequest,
   screeningRequestSchema,
 } = require('../../src/services/integrations/doctor-screening.service');
 const { buildDoctorTaskEnvelope } = require('../../src/services/integrations/doctor-task.policy');
+const { t } = require('../../src/i18n');
 const profile = { birth_year: 1992, medical_conditions: [] };
 const summary = 'Tôi bị đau đầu';
 const answer = (step, value, text = '') => ({
@@ -19,6 +21,23 @@ const answers = [
   answer('progression', 'stable'),
   answer('impact', 'mild'),
 ];
+
+test.each(['vi', 'en'])('reads the saved description and five screening answers separately (%s)', (locale) => {
+  const description = 'First line\nSecond line';
+  const result = evaluate({ summary: description, answers, locale }, profile);
+  const record = result.recorded_answers
+    .map((entry) => `${entry.question}: ${entry.answers.join('; ')}`)
+    .join('\n');
+  const riskLabel = t(`doctor.screening.risk.${result.risk_level}`, locale);
+  const stored = `${description}\n\n${result.message}\n${record}\n${riskLabel}`;
+  expect(readConsultationInitialRequest(stored)).toEqual({
+    description,
+    answers: result.recorded_answers.map(({ step, question, answers: values }) =>
+      ({ step, question, answer: values.join('; ') })),
+    risk_label: riskLabel,
+  });
+  expect(readConsultationInitialRequest(description)).toBeNull();
+});
 const run = (values = [], extra = {}, patient = profile) =>
   evaluate({ summary, answers: values, locale: 'vi', ...extra }, patient);
 

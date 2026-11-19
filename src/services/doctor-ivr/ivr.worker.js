@@ -363,13 +363,6 @@ async function deadlines(pool) {
     )
   ).rows;
   for (const s of expired) await ivr.audit(pool, s, 'system', 'session.expired', {}, s.id);
-  const closed = (
-    await pool.query(
-      "UPDATE doctor_ivr_sessions SET status='closed',updated_at=NOW() WHERE status='replied' AND replied_at<=NOW()-INTERVAL '24 hours' RETURNING *"
-    )
-  ).rows;
-  for (const s of closed)
-    await ivr.audit(pool, s, 'system', 'session.closed', { automatic: true }, s.id);
   const reminders = (
     await pool.query(
       "SELECT * FROM doctor_ivr_sessions WHERE status='sent' AND remind_at<=NOW() AND expires_at>NOW() AND reminder_count<3 ORDER BY remind_at LIMIT 5"

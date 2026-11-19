@@ -961,7 +961,7 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
       audio_url: null,
     });
   });
-  test('AI report failure preserves structured answers and permits a manual reviewed reply and automatic closure once', async () => {
+  test('AI report failure preserves answers, and a manual reply stays open until acknowledged', async () => {
     await newTask('report-provider-outage');
     const created = await invoke('approve', { content: content() });
     await worker.runDoctorIvrWorker(pool);
@@ -987,7 +987,9 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     );
     await worker.runDoctorIvrWorker(pool);
     await worker.runDoctorIvrWorker(pool);
-    expect((await ivr.patientGet(pool, 1, s.id)).status).toBe('closed');
+    expect((await ivr.patientGet(pool, 1, s.id)).status).toBe('replied');
+    expect((await ivr.patientAction(pool, 1, s.id, { action: 'ack' })).status).toBe('closed');
+    expect((await ivr.patientAction(pool, 1, s.id, { action: 'ack' })).status).toBe('closed');
     expect(
       (
         await pool.query(

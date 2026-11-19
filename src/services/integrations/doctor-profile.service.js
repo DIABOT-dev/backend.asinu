@@ -91,6 +91,16 @@ const assertProfileRequest = (body) => {
   return { tenantId, appUserId, taskId };
 };
 
+const patientAvatarUrl = (value) => {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  try {
+    const avatar = new URL(value);
+    return avatar.protocol === 'https:' && !avatar.username && !avatar.password ? avatar.href : null;
+  } catch {
+    return null;
+  }
+};
+
 const loadPatientProfile = async (pool, req) => {
   verifyDoctorSignature(req);
   const { tenantId, appUserId, taskId } = assertProfileRequest(req.body);
@@ -111,7 +121,7 @@ const loadPatientProfile = async (pool, req) => {
   }
 
   const result = await pool.query(
-    `SELECT u.id,
+    `SELECT u.id, u.avatar_url,
             p.gender, p.age, p.birth_year, p.date_of_birth,
             COALESCE(p.medical_conditions, '[]'::jsonb) AS medical_conditions,
             COALESCE(p.chronic_symptoms, '[]'::jsonb) AS chronic_symptoms,
@@ -241,6 +251,7 @@ const loadPatientProfile = async (pool, req) => {
     : [];
 
   return {
+    avatar_url: patientAvatarUrl(patient.avatar_url),
     gender: patient.gender || null,
     age,
     consultation_history: consultationHistory.rows,

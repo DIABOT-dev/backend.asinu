@@ -9,6 +9,7 @@ const { verifyDoctorSignature, assertProfileRequest } = require('./doctor-profil
 const { uploadBuffer, deleteAsset } = require('../media/cloudinary-upload.service');
 const {
   authenticatedAssetUrl,
+  isSupportedPatientFile,
   requirePrivateDeliveryConfig,
   resourceTypeForMime,
 } = require('../media/private-media.service');
@@ -19,6 +20,7 @@ const { t } = require('../../i18n');
 const logger = require('../../lib/logger');
 const crypto = require('crypto');
 const { resolveDoctorAttachmentContent } = require('./doctor-attachment.service');
+const { readConsultationInitialRequest } = require('./doctor-screening.service');
 
 const integrationError = (statusCode, code, message) => {
   const error = new Error(message);
@@ -107,6 +109,8 @@ const isDoctorTaskMessageable = ({ status, followUpUntil }, messageType, now = n
     Boolean(followUpUntil && new Date(followUpUntil).getTime() > now.getTime())
   );
 };
+
+const isSystemSender = (senderRef) => senderRef === 'doctor-sla-worker';
 
 const parseAttachment = (content) => {
   if (typeof content !== 'string' || !content.startsWith('[ASINU_ATTACHMENT]')) return null;
@@ -256,11 +260,17 @@ const listMessages = async (
       LIMIT 500`,
     [tenantId, taskId, userId, ...join.params]
   );
-  const messages = result.rows.map(hydrateMessageMedia);
+  const messages = result.rows.map((row) => {
+    const message = hydrateMessageMedia(row);
+    return viewerType === 'patient' && message.sender_type === 'doctor' && isSystemSender(message.sender_ref)
+      ? { ...message, sender_type: 'system' }
+      : message;
+  });
   const pinned = messages.filter((message) => message.is_pinned && !message.is_deleted);
   return {
     task_id: taskId,
     summary: task.summary || null,
+    initial_request: readConsultationInitialRequest(task.summary),
     messages,
     pinned_message: pinned[pinned.length - 1] || null,
     typing: await listTyping(pool, tenantId, taskId, viewerType, viewerRef),
@@ -386,34 +396,41 @@ const sendPatientMessage = async (pool, { userId, taskId, input }) => {
 const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
   assertTenantAllowed(input.tenant_id);
   await loadOwnedTask(pool, input.tenant_id, taskId, userId);
-  if (!file?.buffer || file.size <= 0 || file.size > 10 * 1024 * 1024) {
-    throw integrationError(400, 'INVALID_PATIENT_FILE', 'A valid image up to 10 MB is required.');
+  if (
+    !file?.buffer ||
+    file.buffer.length > 10 * 1024 * 1024 ||
+    !isSupportedPatientFile(file.buffer, file.mimetype)
+  ) {
+    throw integrationError(400, 'INVALID_PATIENT_FILE', 'A valid image or PDF up to 10 MB is required.');
   }
 
   // Check the message key before touching Cloudinary. A mobile retry must not
   // create another file when the original message was already persisted.
-  const existingMessage = await pool.query(
-    `SELECT ${RAW_MESSAGE_COLUMNS}
-       FROM doctor_task_messages
-      WHERE tenant_id = $1 AND task_id = $2 AND user_id = $3 AND client_message_id = $4`,
-    [input.tenant_id, taskId, userId, input.client_message_id]
-  );
-  if (existingMessage.rows[0]) {
-    const existing = decryptMessage(existingMessage.rows[0]);
-    if (existing.sender_type !== 'patient' || existing.message_type !== input.message_type) {
+  const findUploadedAttachment = async () => {
+    const { rows: [row] } = await pool.query(
+      `SELECT ${RAW_MESSAGE_COLUMNS}
+         FROM doctor_task_messages
+        WHERE tenant_id = $1 AND task_id = $2 AND user_id = $3 AND client_message_id = $4`,
+      [input.tenant_id, taskId, userId, input.client_message_id]
+    );
+    if (!row) return null;
+    const existing = decryptMessage(row);
+    const attachment = parseAttachment(existing.content);
+    if (existing.sender_type !== 'patient' || existing.message_type !== input.message_type || !attachment) {
       throw integrationError(
         409,
         'MESSAGE_IDEMPOTENCY_CONFLICT',
         'The message id was reused with different data.'
       );
     }
-    const attachment = parseAttachment(existing.content);
     return {
       ...hydrateMessageMedia(existing),
       duplicate: true,
-      ...(attachment ? { attachment: privateMedia(attachment) } : {}),
+      attachment: privateMedia(attachment),
     };
-  }
+  };
+  const existing = await findUploadedAttachment();
+  if (existing) return existing;
 
   try {
     requirePrivateDeliveryConfig();
@@ -424,53 +441,69 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
       'Private file delivery is not configured.'
     );
   }
+  const resourceType = resourceTypeForMime(file.mimetype);
   const uploaded = await uploadBuffer(file.buffer, {
     folder: process.env.CLOUDINARY_PATIENT_FILE_FOLDER || 'asinu/patient-files',
-    resource_type: 'image',
+    resource_type: resourceType,
     type: 'authenticated',
-    use_filename: true,
-    unique_filename: true,
+    ...(resourceType === 'raw'
+      ? { public_id: `${crypto.randomUUID()}.pdf` }
+      : { use_filename: true, unique_filename: true }),
   });
-  const privateUrl = authenticatedAssetUrl(
-    uploaded.public_id,
-    'image',
-    'authenticated',
-    file.mimetype
-  );
-  if (!privateUrl)
-    throw integrationError(
-      503,
-      'CLOUDINARY_PRIVATE_DELIVERY_NOT_CONFIGURED',
-      'Private file delivery is not configured.'
-    );
-  const fileResult = await pool.query(
-    `INSERT INTO doctor_patient_files
-      (user_id, name, mime_type, size_bytes, secure_url, public_id, resource_type, delivery_type, source_task_id, uploaded_by)
-     VALUES ($1,$2,$3,$4,$5,$6,'image','authenticated',$7,$8)
-     RETURNING id, name, mime_type, size_bytes, secure_url, public_id, resource_type, delivery_type, source_task_id, uploaded_by, created_at`,
-    [
-      userId,
-      String(file.originalname).slice(0, 255),
-      file.mimetype,
-      file.size,
-      privateUrl,
-      uploaded.public_id || null,
-      taskId,
-      String(userId),
-    ]
-  );
-  const attachment = fileResult.rows[0];
-  const content = `[ASINU_ATTACHMENT]${JSON.stringify({
-    id: String(attachment.id),
-    name: attachment.name,
-    mime_type: attachment.mime_type,
-    size_bytes: attachment.size_bytes,
-    public_id: attachment.public_id,
-    resource_type: attachment.resource_type,
-    delivery_type: attachment.delivery_type,
-    url: privateUrl,
-  })}`;
+  let attachment;
+  const discardUpload = async () => {
+    if (attachment) {
+      await pool
+        .query('DELETE FROM doctor_patient_files WHERE id = $1 AND user_id = $2', [
+          attachment.id,
+          userId,
+        ])
+        .catch(() => {});
+    }
+    if (uploaded.public_id) {
+      await deleteAsset(uploaded.public_id, resourceType, 'authenticated').catch(() => {});
+    }
+  };
   try {
+    const privateUrl = authenticatedAssetUrl(
+      uploaded.public_id,
+      resourceType,
+      'authenticated',
+      file.mimetype
+    );
+    if (!privateUrl)
+      throw integrationError(
+        503,
+        'CLOUDINARY_PRIVATE_DELIVERY_NOT_CONFIGURED',
+        'Private file delivery is not configured.'
+      );
+    const fileResult = await pool.query(
+      `INSERT INTO doctor_patient_files
+        (user_id, name, mime_type, size_bytes, secure_url, public_id, resource_type, delivery_type, source_task_id, uploaded_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,'authenticated',$8,$9)
+       RETURNING id, name, mime_type, size_bytes, secure_url, public_id, resource_type, delivery_type, source_task_id, uploaded_by, created_at`,
+      [
+        userId,
+        String(file.originalname).slice(0, 255),
+        file.mimetype,
+        file.buffer.length,
+        privateUrl,
+        uploaded.public_id,
+        resourceType,
+        taskId,
+        String(userId),
+      ]
+    );
+    attachment = fileResult.rows[0];
+    const content = `[ASINU_ATTACHMENT]${JSON.stringify({
+      id: String(attachment.id),
+      name: attachment.name,
+      mime_type: attachment.mime_type,
+      size_bytes: attachment.size_bytes,
+      public_id: attachment.public_id,
+      resource_type: attachment.resource_type,
+      delivery_type: attachment.delivery_type,
+    })}`;
     const message = await sendPatientMessage(pool, {
       userId,
       taskId,
@@ -480,14 +513,7 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
       // Two identical uploads can pass the pre-check concurrently. The
       // message unique constraint is the final authority; remove the losing
       // file and return the already-persisted attachment.
-      await pool
-        .query('DELETE FROM doctor_patient_files WHERE id = $1 AND user_id = $2', [
-          attachment.id,
-          userId,
-        ])
-        .catch(() => {});
-      if (uploaded.public_id)
-        await deleteAsset(uploaded.public_id, 'image', 'authenticated').catch(() => {});
+      await discardUpload();
       const existingAttachment = parseAttachment(message.content);
       return {
         ...hydrateMessageMedia(message),
@@ -496,23 +522,17 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
     }
     return {
       ...hydrateMessageMedia(message),
-      attachment: privateMedia({
-        ...attachment,
-        public_id: uploaded.public_id,
-        resource_type: 'image',
-        delivery_type: 'authenticated',
-      }),
+      attachment: privateMedia(attachment),
     };
   } catch (error) {
-    await pool
-      .query('DELETE FROM doctor_patient_files WHERE id = $1 AND user_id = $2', [
-        attachment.id,
-        userId,
-      ])
-      .catch(() => {});
-    if (uploaded.public_id) {
-      await deleteAsset(uploaded.public_id, 'image', 'authenticated').catch(() => {});
+    // Reconcile a retry that overlapped a previous upload with the same key.
+    const retained = await findUploadedAttachment().catch(() => null);
+    const committedAttachment = retained && parseAttachment(retained.content);
+    if (attachment && committedAttachment?.id === String(attachment.id)) {
+      return retained;
     }
+    await discardUpload();
+    if (retained) return retained;
     throw error;
   }
 };
@@ -960,7 +980,8 @@ const sendDoctorMessage = async (pool, req, input) => {
     );
     if (user.rows[0]) {
       const lang = user.rows[0].language === 'en' ? 'en' : 'vi';
-      const doctorName = typeof input.sender_name === 'string' ? input.sender_name.trim() : '';
+      const systemMessage = isSystemSender(input.sender_ref);
+      const doctorName = !systemMessage && typeof input.sender_name === 'string' ? input.sender_name.trim() : '';
       const voice = parseVoice(input.content);
       const attachment = parseAttachment(content);
       const preview = voice
@@ -975,7 +996,7 @@ const sendDoctorMessage = async (pool, req, input) => {
         pool,
         user.rows[0],
         'doctor_message',
-        t('push.doctor_message_title', lang),
+        t(systemMessage ? 'push.doctor_system_message_title' : 'push.doctor_message_title', lang),
         messagePreview,
         {
           type: 'doctor_message',
@@ -986,9 +1007,11 @@ const sendDoctorMessage = async (pool, req, input) => {
         'high',
         {
           // Do not put the patient's health details on the device lock screen.
-          pushBody: doctorName
-            ? t('push.doctor_lockscreen_named', lang, { name: doctorName })
-            : t('push.doctor_lockscreen_generic', lang),
+          pushBody: systemMessage
+            ? t('push.doctor_system_lockscreen', lang)
+            : doctorName
+              ? t('push.doctor_lockscreen_named', lang, { name: doctorName })
+              : t('push.doctor_lockscreen_generic', lang),
         }
       );
     }

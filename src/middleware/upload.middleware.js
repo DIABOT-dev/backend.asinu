@@ -1,5 +1,6 @@
 const multer = require('multer');
 const { t, getLang } = require('../i18n');
+const { isSupportedPatientFile } = require('../services/media/private-media.service');
 
 const ALLOWED_AUDIO_MIMETYPES = new Set([
   'audio/m4a',
@@ -53,6 +54,31 @@ const imageUpload = multer({
     }), false);
   },
 });
+
+const doctorAttachmentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => {
+    const allowed = file.mimetype === 'application/pdf'
+      ? /\.pdf$/i.test(file.originalname)
+      : ALLOWED_IMAGE_MIMETYPES.has(file.mimetype) && ALLOWED_IMAGE_EXTENSIONS.test(file.originalname);
+    if (allowed) return cb(null, true);
+    return cb(Object.assign(new Error(t('doctor.attachment_invalid', getLang(req))), {
+      code: 'INVALID_PATIENT_FILE',
+    }), false);
+  },
+});
+
+function verifyDoctorAttachment(req, res, next) {
+  if (!isSupportedPatientFile(req.file?.buffer, req.file?.mimetype)) {
+    return res.status(400).json({
+      ok: false,
+      code: 'INVALID_PATIENT_FILE',
+      error: t('doctor.attachment_invalid', getLang(req)),
+    });
+  }
+  return next();
+}
 
 /**
  * Inspect the first bytes of an audio buffer and confirm it matches a known
@@ -159,7 +185,7 @@ function handleUpload(uploadMiddleware) {
       if (err) return res.status(400).json({
         ok: false,
         ...(err.code === 'LIMIT_FILE_SIZE' ? { code: 'UPLOAD_FILE_TOO_LARGE' }
-          : err.code === 'IMAGE_TYPE_UNSUPPORTED' ? { code: err.code } : {}),
+          : ['IMAGE_TYPE_UNSUPPORTED', 'INVALID_PATIENT_FILE'].includes(err.code) ? { code: err.code } : {}),
         error: err.message,
       });
       next();
@@ -170,9 +196,11 @@ function handleUpload(uploadMiddleware) {
 module.exports = {
   audioUpload,
   imageUpload,
+  doctorAttachmentUpload,
   handleUpload,
   verifyAudioMagicBytes,
   verifyImageMagicBytes,
+  verifyDoctorAttachment,
   isAudioBuffer,
   isImageBuffer,
 };

@@ -507,7 +507,8 @@ const requestDoctorDirectorySpecialties = async () => {
   const responses = await Promise.allSettled(
     tenantIds.map(async (tenantId) => {
       const response = await deliverDoctorRequest('specialties', { tenant_id: tenantId });
-      return Array.isArray(response.data?.items) ? response.data.items : [];
+      const items = Array.isArray(response.data?.items) ? response.data.items : [];
+      return items.map((item) => ({ ...item, routingTenantId: tenantId }));
     })
   );
   const fulfilled = responses.filter((result) => result.status === 'fulfilled');

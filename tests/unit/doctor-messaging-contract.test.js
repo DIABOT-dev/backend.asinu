@@ -5,6 +5,7 @@ const {
 } = require('../../src/services/integrations/doctor-task.policy');
 const {
   isDoctorTaskMessageable,
+  listMessages,
 } = require('../../src/services/integrations/doctor-messaging.service');
 
 const validAction = {
@@ -82,4 +83,29 @@ test('Closed consultations cannot receive text or voice, while follow-up remains
       'voice'
     )
   ).toBe(false);
+});
+jest.mock('../../src/services/integrations/doctor-task.service', () => ({
+  ...jest.requireActual('../../src/services/integrations/doctor-task.service'),
+  assertTenantAllowed: jest.fn(),
+}));
+
+
+test('patient threads expose reminders as system messages and preserve clinician replies', async () => {
+  const pool = {
+    query: jest.fn()
+      .mockResolvedValueOnce({ rows: [{ app_user_id: '42', summary: 'Consultation' }] })
+      .mockResolvedValueOnce({ rows: [{ status: 'in_progress' }] })
+      .mockResolvedValueOnce({
+        rows: [
+          { id: 'reminder', sender_type: 'doctor', sender_ref: 'doctor-sla-worker', content: 'Priority update' },
+          { id: 'reply', sender_type: 'doctor', sender_ref: 'doctor-1', content: 'Specialist reply' },
+        ],
+      })
+      .mockResolvedValue({ rows: [] }),
+  };
+  const result = await listMessages(pool, 'clinic-demo', 'task-1', 42);
+  expect(result.messages.map(({ id, sender_type }) => [id, sender_type])).toEqual([
+    ['reminder', 'system'],
+    ['reply', 'doctor'],
+  ]);
 });
