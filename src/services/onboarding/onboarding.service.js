@@ -339,6 +339,28 @@ function calcGroup(score) {
   return 'monitoring';
 }
 
+async function getProfileV2(pool, userId) {
+  const { rows } = await pool.query(
+    `SELECT u.id AS user_id,
+            COALESCE(NULLIF(u.full_name, ''), NULLIF(u.display_name, ''), p.display_name) AS full_name,
+            u.phone_number AS phone,
+            COALESCE(p.birth_year, EXTRACT(YEAR FROM p.date_of_birth)::int) AS birth_year,
+            p.gender, p.height_cm, p.weight_kg, p.blood_type, p.medical_conditions,
+            p.daily_medication, p.checkup_freq, p.exercise_freq, p.sleep_hours,
+            p.meals_per_day, p.post_meal_drowsy, p.dinner_time, p.sweet_intake, p.user_goal
+     FROM users u LEFT JOIN user_onboarding_profiles p ON p.user_id = u.id
+     WHERE u.id = $1 AND u.deleted_at IS NULL`,
+    [userId]
+  );
+  if (!rows.length) return null;
+  return {
+    ...rows[0],
+    medical_conditions: rows[0].medical_conditions === null
+      ? null : normalizeStringList(rows[0].medical_conditions),
+    user_goal: normalizeStringList(rows[0].user_goal),
+  };
+}
+
 /**
  * Upsert user onboarding profile (V2 — fixed 5-page wizard).
  * @param {Object} pool - Database pool
@@ -346,7 +368,41 @@ function calcGroup(score) {
  * @param {Object} data - V2 onboarding data
  * @returns {Promise<Object>} - Saved profile
  */
-async function upsertProfileV2(pool, userId, data) {
+async function upsertProfileV2(pool, userId, updates) {
+  const client = await pool.connect();
+  let result;
+  try {
+    await client.query('BEGIN');
+    await client.query('SELECT id FROM users WHERE id = $1 AND deleted_at IS NULL FOR NO KEY UPDATE', [userId]);
+    const { rows } = await client.query(
+      'SELECT * FROM user_onboarding_profiles WHERE user_id = $1 FOR UPDATE', [userId]
+    );
+    result = await saveProfileV2(client, userId, updates, rows[0]);
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  if (result.consent.rowCount) {
+    const version = result.consent.rows[0].consent_version || 'v1.0.0';
+    emitCrmEventAsync(
+      pool,
+      'consent.updated',
+      { user_id: String(userId), consent_type: 'privacy_policy', status: 'accepted', version },
+      { event_id: `consent.updated:privacy_policy:${userId}:${version}` }
+    );
+  }
+  await cacheDel(`profile:${userId}`, `user:name:${userId}`);
+  emitProfileUpdated(pool, userId, result.saved);
+  await rebuildPatientHealthTimeline(pool, userId);
+  return result.saved;
+}
+
+async function saveProfileV2(client, userId, updates, previous) {
+  const data = { ...previous, ...updates };
   const {
     full_name,
     birth_year,
@@ -372,8 +428,15 @@ async function upsertProfileV2(pool, userId, data) {
 
   const risk_score = calcRiskScore(data);
   const user_group = calcGroup(risk_score);
+  const changedColumns = [
+    'birth_year', 'gender', 'height_cm', 'weight_kg', 'blood_type', 'medical_conditions',
+    'daily_medication', 'checkup_freq', 'exercise_freq', 'sleep_hours', 'meals_per_day',
+    'post_meal_drowsy', 'dinner_time', 'sweet_intake', 'user_goal',
+  ].filter(column => Object.hasOwn(updates, column));
+  if (changedColumns.length) changedColumns.push('risk_score', 'user_group');
+  changedColumns.push('onboarding_completed_at', 'updated_at');
 
-  const result = await pool.query(
+  const result = await client.query(
     `INSERT INTO user_onboarding_profiles (
       user_id,
       birth_year,
@@ -404,26 +467,7 @@ async function upsertProfileV2(pool, userId, data) {
       NOW(), NOW(), NOW()
     )
     ON CONFLICT (user_id) DO UPDATE SET
-      birth_year              = EXCLUDED.birth_year,
-      gender                  = EXCLUDED.gender,
-      height_cm               = EXCLUDED.height_cm,
-      weight_kg               = EXCLUDED.weight_kg,
-      blood_type              = EXCLUDED.blood_type,
-      medical_conditions      = EXCLUDED.medical_conditions,
-      chronic_symptoms        = '[]'::jsonb,
-      daily_medication        = EXCLUDED.daily_medication,
-      checkup_freq            = EXCLUDED.checkup_freq,
-      exercise_freq           = EXCLUDED.exercise_freq,
-      sleep_hours             = EXCLUDED.sleep_hours,
-      meals_per_day           = EXCLUDED.meals_per_day,
-      post_meal_drowsy        = EXCLUDED.post_meal_drowsy,
-      dinner_time             = EXCLUDED.dinner_time,
-      sweet_intake            = EXCLUDED.sweet_intake,
-      user_goal               = EXCLUDED.user_goal,
-      risk_score              = EXCLUDED.risk_score,
-      user_group              = EXCLUDED.user_group,
-      onboarding_completed_at = NOW(),
-      updated_at              = NOW()
+      ${changedColumns.map(column => `${column} = EXCLUDED.${column}`).join(', ')}
     RETURNING *`,
     [
       userId,
@@ -466,14 +510,14 @@ async function upsertProfileV2(pool, userId, data) {
   }
   if (userUpdates.length > 0) {
     userParams.push(userId);
-    await pool.query(
+    await client.query(
       `UPDATE users SET ${userUpdates.join(', ')} WHERE id = $${paramIdx}`,
       userParams
     );
   }
 
   // Ghi nhận sự đồng ý chính sách bảo mật Nghị định 13
-  const consentResult = await pool.query(
+  const consent = await client.query(
     `UPDATE users 
         SET consent_accepted_at = NOW(), 
             consent_version = 'v1.0.0' 
@@ -483,29 +527,7 @@ async function upsertProfileV2(pool, userId, data) {
     [userId]
   );
 
-  if (consentResult.rowCount) {
-    emitCrmEventAsync(
-      pool,
-      'consent.updated',
-      {
-        user_id: String(userId),
-        consent_type: 'privacy_policy',
-        status: 'accepted',
-        version: consentResult.rows[0].consent_version || 'v1.0.0',
-      },
-      {
-        event_id: `consent.updated:privacy_policy:${userId}:${consentResult.rows[0].consent_version || 'v1.0.0'}`,
-      }
-    );
-  }
-
-  // Invalidate profile cache so next fetch returns fresh data
-  await cacheDel(`profile:${userId}`, `user:name:${userId}`);
-
-  emitProfileUpdated(pool, userId, { ...data, medical_conditions: normalizedConditions });
-  await rebuildPatientHealthTimeline(pool, userId);
-
-  return saved;
+  return { saved, consent };
 }
 
 // =====================================================
@@ -538,6 +560,7 @@ module.exports = {
   upsertProfile,
   upsertProfileFromAI,
   upsertProfileV2,
+  getProfileV2,
   getProfile,
   checkPhoneDuplicate,
 };

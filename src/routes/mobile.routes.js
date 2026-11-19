@@ -34,6 +34,7 @@ const {
   getMissionsHandler,
 } = require('../controllers/missions.controller');
 const {
+  onboardingProfileV2,
   onboardingCompleteV2,
 } = require('../controllers/onboarding.controller');
 const {
@@ -152,6 +153,7 @@ function mobileRoutes(pool) {
   router.get('/missions', requireAuth, bindController(getMissionsHandler, pool));
 
   // Onboarding — V2 fixed 5-page wizard
+  router.get('/onboarding/profile-v2', requireAuth, bindController(onboardingProfileV2, pool));
   router.post('/onboarding/complete-v2', requireAuth, bindController(onboardingCompleteV2, pool));
 
   // Profile
