@@ -1,7 +1,7 @@
 const express = require('express');
 const request = require('supertest');
 const {
-  imageUpload, handleUpload, verifyImageMagicBytes,
+  imageUpload, handleUpload, verifyImageMagicBytes, doctorAttachmentUpload, verifyDoctorAttachment,
 } = require('../../src/middleware/upload.middleware');
 
 const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0x10, 0, 0, 0, 0, 0, 0]);
@@ -72,5 +72,31 @@ describe('image upload multipart contract', () => {
     expect(response.status).toBe(400);
     expect(response.body.code).toBe('UPLOAD_FILE_TOO_LARGE');
     expect(uploaded).not.toHaveBeenCalled();
+  });
+});
+
+describe('consultation attachment upload', () => {
+  const app = express();
+  app.post('/attachments', handleUpload(doctorAttachmentUpload.single('file')), verifyDoctorAttachment,
+    (req, res) => res.json({ mime: req.file.mimetype }));
+
+  test.each([
+    ['scan.jpg', 'image/jpeg', jpeg],
+    ['record.pdf', 'application/pdf', Buffer.from('%PDF-1.7\n%%EOF')],
+  ])('accepts %s alongside the existing image formats', async (filename, contentType, bytes) => {
+    const response = await request(app).post('/attachments').attach('file', bytes, { filename, contentType }).expect(200);
+    expect(response.body.mime).toBe(contentType);
+  });
+
+  test('rejects a PDF whose bytes do not match its declared format', async () => {
+    const response = await request(app).post('/attachments')
+      .attach('file', jpeg, { filename: 'record.pdf', contentType: 'application/pdf' }).expect(400);
+    expect(response.body.code).toBe('INVALID_PATIENT_FILE');
+  });
+
+  test('rejects multiple files in one attachment message', async () => {
+    await request(app).post('/attachments')
+      .attach('file', jpeg, { filename: 'scan.jpg', contentType: 'image/jpeg' })
+      .attach('file', jpeg, { filename: 'other.jpg', contentType: 'image/jpeg' }).expect(400);
   });
 });

@@ -11,14 +11,14 @@ jest.mock('../../src/middleware/auth.middleware', () => ({
   }),
 }));
 jest.mock('../../src/middleware/upload.middleware', () => ({
-  imageUpload: { single: jest.fn(() => 'image') },
+  doctorAttachmentUpload: { single: jest.fn(() => 'attachment') },
   audioUpload: { single: jest.fn(() => 'audio') },
   handleUpload: (kind) => (req, _res, next) => {
     req.middlewareOrder.push(`${kind}-upload`);
     next();
   },
-  verifyImageMagicBytes: (req, _res, next) => {
-    req.middlewareOrder.push('image-magic');
+  verifyDoctorAttachment: (req, _res, next) => {
+    req.middlewareOrder.push('attachment-validation');
     next();
   },
   verifyAudioMagicBytes: (req, _res, next) => {
@@ -134,7 +134,7 @@ test.each(routes)(
 );
 
 test.each([
-  ['/tasks/task-1/attachments', 'createDoctorAttachment', ['auth', 'image-upload', 'image-magic']],
+  ['/tasks/task-1/attachments', 'createDoctorAttachment', ['auth', 'attachment-upload', 'attachment-validation']],
   ['/tasks/task-1/voice', 'createDoctorVoice', ['auth', 'audio-upload', 'audio-magic']],
 ])('%s preserves authentication, upload and magic-byte ordering', async (path, name, order) => {
   const response = await request(app).post(`/doctor${path}`).send({}).expect(200);
