@@ -12,11 +12,11 @@ const dayText = (value) =>
     ? `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
     : String(value).slice(0, 10);
 async function familyResult(db, event, revision = 'initial') {
+  if (event.state === 'TAKEN') return;
   const family = (
     await db.query(
-      `SELECT CASE WHEN c.requester_id=$1 THEN c.addressee_id ELSE c.requester_id END id,
-  COALESCE(f.problems_only,FALSE) problems_only FROM user_connections c LEFT JOIN med_family_preferences f
-  ON f.patient_user_id=$1 AND f.caregiver_id=CASE WHEN c.requester_id=$1 THEN c.addressee_id ELSE c.requester_id END
+      `SELECT CASE WHEN c.requester_id=$1 THEN c.addressee_id ELSE c.requester_id END id
+  FROM user_connections c
   WHERE c.status='accepted' AND (c.requester_id=$1 OR c.addressee_id=$1)
   AND COALESCE((c.permissions->>'can_receive_alerts')::boolean,FALSE)`,
       [event.patient_user_id]
@@ -32,7 +32,6 @@ async function familyResult(db, event, revision = 'initial') {
         ).rows[0].n
       : 0;
   for (const recipient of family) {
-    if (recipient.problems_only && event.state === 'TAKEN') continue;
     const nodevice = event.state === 'SKIPPED_NO_DEVICE';
     await c.message(db, {
       key: nodevice

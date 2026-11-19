@@ -2746,7 +2746,7 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       voice.mockRestore();
     }
   });
-  test.each(['remove', 'meals', 'preferences', 'item'])(
+  test.each(['remove', 'meals', 'item'])(
     'revoking Care Circle before the %s write transaction prevents the write',
     async (kind) => {
       const id = await user(),
@@ -2782,15 +2782,13 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
                   dinner: '19:00',
                   bedtime: '22:00',
                 })
-            : kind === 'preferences'
-              ? () => med.preferences(pool, child, id, { problems_only: true })
-              : () =>
-                  med.createItem(pool, child, id, {
-                    display_name: 'Thuốc khác',
-                    kind: 'MEDICINE',
-                    source: 'CHIP',
-                    confirmed: true,
-                  });
+            : () =>
+                med.createItem(pool, child, id, {
+                  display_name: 'Thuốc khác',
+                  kind: 'MEDICINE',
+                  source: 'CHIP',
+                  confirmed: true,
+                });
       await expect(work()).rejects.toMatchObject({ code: 'MED_CARE_CIRCLE_REQUIRED' });
       expect(
         (await db.query('SELECT active FROM med_schedules WHERE id=$1', [schedule.id])).rows[0]
@@ -2835,7 +2833,7 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       ).rows[0].calendar_date
     ).toBe(c.localDate());
   });
-  test('SRS EA9/EA12: alerts honor permissions and problems-only; repeated out-of-meds counts stay private', async () => {
+  test('SRS EA9/EA12: family alerts default to problems only and respect Care Circle permissions', async () => {
     const parent = await user(),
       child = await user(),
       muted = await user();
@@ -2845,7 +2843,7 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       'UPDATE user_connections SET permissions=permissions||\'{"can_receive_alerts":false}\'::jsonb WHERE requester_id=$1 AND addressee_id=$2',
       [parent, muted]
     );
-    await med.preferences(db, child, parent, { problems_only: true });
+    expect((await med.overview(db, child, parent)).problemsOnly).toBe(true);
     const morning = await dose(parent);
     await calls.answer(db, parent, morning.id, { button: 1, request_id: randomUUID() });
     expect(
@@ -2886,6 +2884,44 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
         )
       ).rowCount
     ).toBe(0);
+  });
+  test('an old family preference cannot enable or deliver successful-dose alerts', async () => {
+    const parent = await user(),
+      child = await user();
+    await connect(parent, child);
+    await db.query(
+      'INSERT INTO med_family_preferences(caregiver_id,patient_user_id,problems_only) VALUES($1,$2,FALSE)',
+      [child, parent]
+    );
+    expect((await med.overview(db, child, parent)).problemsOnly).toBe(true);
+
+    const endpoint = '/api/mobile/medication/family-preferences?patientId=' + parent;
+    const legacyEnable = await request(app)
+      .put(endpoint)
+      .set(auth(child))
+      .send({ problems_only: true });
+    expect(legacyEnable.status).toBe(200);
+    expect(legacyEnable.body.problems_only).toBe(true);
+    const legacyDisable = await request(app)
+      .put(endpoint)
+      .set(auth(child))
+      .send({ problems_only: false });
+    expect(legacyDisable.status).toBe(409);
+    expect(legacyDisable.body.code).toBe('MED_FAMILY_ALERTS_FIXED');
+
+    const event = await dose(parent);
+    await calls.answer(db, parent, event.id, { button: 1, request_id: randomUUID() });
+    expect((await db.query(
+      "SELECT 1 FROM v21_message_outbox WHERE subject_id=$1 AND kind='med_result'",
+      [parent]
+    )).rowCount).toBe(0);
+    expect(await notificationDelivery.reserveNotification(db, {
+      userId: child,
+      type: 'med_result',
+      title: 'Asinu',
+      body: 'Confirmed medication',
+      data: { patientId: parent, doseId: event.id, state: 'TAKEN' },
+    })).toBeNull();
   });
   test('SRS EA10: an existing app check-in prevents another question or a second daily check-in award', async () => {
     const id = await user();
