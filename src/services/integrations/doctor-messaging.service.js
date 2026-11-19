@@ -20,6 +20,7 @@ const { t } = require('../../i18n');
 const logger = require('../../lib/logger');
 const crypto = require('crypto');
 const { resolveDoctorAttachmentContent } = require('./doctor-attachment.service');
+const { readConsultationInitialRequest } = require('./doctor-screening.service');
 
 const integrationError = (statusCode, code, message) => {
   const error = new Error(message);
@@ -108,6 +109,8 @@ const isDoctorTaskMessageable = ({ status, followUpUntil }, messageType, now = n
     Boolean(followUpUntil && new Date(followUpUntil).getTime() > now.getTime())
   );
 };
+
+const isSystemSender = (senderRef) => senderRef === 'doctor-sla-worker';
 
 const parseAttachment = (content) => {
   if (typeof content !== 'string' || !content.startsWith('[ASINU_ATTACHMENT]')) return null;
@@ -257,11 +260,17 @@ const listMessages = async (
       LIMIT 500`,
     [tenantId, taskId, userId, ...join.params]
   );
-  const messages = result.rows.map(hydrateMessageMedia);
+  const messages = result.rows.map((row) => {
+    const message = hydrateMessageMedia(row);
+    return viewerType === 'patient' && message.sender_type === 'doctor' && isSystemSender(message.sender_ref)
+      ? { ...message, sender_type: 'system' }
+      : message;
+  });
   const pinned = messages.filter((message) => message.is_pinned && !message.is_deleted);
   return {
     task_id: taskId,
     summary: task.summary || null,
+    initial_request: readConsultationInitialRequest(task.summary),
     messages,
     pinned_message: pinned[pinned.length - 1] || null,
     typing: await listTyping(pool, tenantId, taskId, viewerType, viewerRef),
@@ -971,7 +980,8 @@ const sendDoctorMessage = async (pool, req, input) => {
     );
     if (user.rows[0]) {
       const lang = user.rows[0].language === 'en' ? 'en' : 'vi';
-      const doctorName = typeof input.sender_name === 'string' ? input.sender_name.trim() : '';
+      const systemMessage = isSystemSender(input.sender_ref);
+      const doctorName = !systemMessage && typeof input.sender_name === 'string' ? input.sender_name.trim() : '';
       const voice = parseVoice(input.content);
       const attachment = parseAttachment(content);
       const preview = voice
@@ -986,7 +996,7 @@ const sendDoctorMessage = async (pool, req, input) => {
         pool,
         user.rows[0],
         'doctor_message',
-        t('push.doctor_message_title', lang),
+        t(systemMessage ? 'push.doctor_system_message_title' : 'push.doctor_message_title', lang),
         messagePreview,
         {
           type: 'doctor_message',
@@ -997,9 +1007,11 @@ const sendDoctorMessage = async (pool, req, input) => {
         'high',
         {
           // Do not put the patient's health details on the device lock screen.
-          pushBody: doctorName
-            ? t('push.doctor_lockscreen_named', lang, { name: doctorName })
-            : t('push.doctor_lockscreen_generic', lang),
+          pushBody: systemMessage
+            ? t('push.doctor_system_lockscreen', lang)
+            : doctorName
+              ? t('push.doctor_lockscreen_named', lang, { name: doctorName })
+              : t('push.doctor_lockscreen_generic', lang),
         }
       );
     }

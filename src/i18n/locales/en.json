@@ -518,6 +518,8 @@
   "push.health_alert_bp_body": "Latest blood pressure reading: {{systolic}}/{{diastolic}} mmHg.",
   "push.health_alert_family_title": "{{name}}: {{alert}}",
   "push.doctor_message_title": "New message from your doctor",
+  "push.doctor_system_message_title": "Consultation update from Asinu",
+  "push.doctor_system_lockscreen": "Asinu has an update about your consultation.",
   "push.doctor_voice_preview": "Sent a voice message.",
   "push.doctor_attachment_preview": "Sent an attachment.",
   "push.doctor_message_preview": "Dr. {{name}}: {{preview}}",

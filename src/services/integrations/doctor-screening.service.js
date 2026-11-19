@@ -182,4 +182,41 @@ function evaluateConsultationScreening(input, profile = {}) {
   return invalidAnswer();
 }
 
-module.exports = { screeningAnswerSchema, screeningRequestSchema, evaluateConsultationScreening };
+function readConsultationInitialRequest(summary) {
+  if (!summary) return null;
+  const text = summary.replace(/\r\n/g, '\n');
+  for (const lang of ['vi', 'en']) {
+    const marker = `\n\n${copy('result.ready', lang)}\n`;
+    const start = text.lastIndexOf(marker);
+    const description = text.slice(0, start).trim();
+    if (start < 0 || !description) continue;
+
+    const content = text.slice(start + marker.length);
+    const riskStart = content.lastIndexOf('\n');
+    if (riskStart < 0) continue;
+    const riskLabel = content.slice(riskStart + 1).trim();
+    if (!['low', 'medium', 'high', 'emergency'].some((risk) => riskLabel === copy(`risk.${risk}`, lang))) continue;
+
+    let remaining = `\n${content.slice(0, riskStart)}`;
+    const answers = [];
+    for (const step of [...STEPS].reverse()) {
+      const question = copy(`question.${step}`, lang);
+      const prefix = `\n${question}: `;
+      const boundary = remaining.lastIndexOf(prefix);
+      if (boundary < 0) break;
+      const answer = remaining.slice(boundary + prefix.length).trim();
+      if (!answer) break;
+      answers.unshift({ step, question, answer });
+      remaining = remaining.slice(0, boundary);
+    }
+    if (answers.length === STEPS.length && !remaining) return { description, answers, risk_label: riskLabel };
+  }
+  return null;
+}
+
+module.exports = {
+  screeningAnswerSchema,
+  screeningRequestSchema,
+  evaluateConsultationScreening,
+  readConsultationInitialRequest,
+};
