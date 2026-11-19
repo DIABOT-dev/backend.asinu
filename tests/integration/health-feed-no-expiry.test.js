@@ -5,6 +5,7 @@ const path = require('node:path');
 const { Client } = require('pg');
 const { databaseOptions } = require('../../src/lib/database-options');
 const repo = require('../../src/services/health_feed/repository');
+const { getFeed, getSaved } = require('../../src/services/health_feed/controller');
 
 const url = process.env.CHECKIN_TEST_DATABASE_URL;
 const suite = url ? describe : describe.skip;
@@ -39,6 +40,7 @@ suite('Health Feed without expiry, isolated PostgreSQL fixtures', () => {
       'notifications',
       'health_feed_content_items',
       'health_feed_feed_items',
+      'health_feed_saved_content',
     ]) {
       await db.query(
         `CREATE TEMP TABLE ${table} (LIKE public.${table} INCLUDING ALL) ON COMMIT DROP`
@@ -46,7 +48,7 @@ suite('Health Feed without expiry, isolated PostgreSQL fixtures', () => {
     }
     await db.query('ALTER TABLE health_feed_feed_items ALTER COLUMN expires_at SET NOT NULL');
     await db.query(
-      "INSERT INTO users (id, display_name) VALUES (1,'Fixture one'),(2,'Fixture two'),(3,'Fixture three')"
+      "INSERT INTO users (id, display_name) VALUES (1,'Fixture one'),(2,'Fixture two'),(3,'Fixture three'),(4,'Fixture four')"
     );
     for (const id of ['old-unread', 'old-read', 'old-dismissed', 'other-account', 'new-item']) {
       await db.query(
@@ -123,5 +125,54 @@ suite('Health Feed without expiry, isolated PostgreSQL fixtures', () => {
     expect(await repo.listFeed(db, 2)).toHaveLength(1);
     expect(await repo.dismiss(db, 2, item.id)).toBe(true);
     expect(await repo.listFeed(db, 2)).toEqual([]);
+  });
+
+  test('feed and saved pages traverse 10 rows at a time across priority, time and ID ties', async () => {
+    const previousFlag = process.env.ENABLE_HEALTH_FEED;
+    process.env.ENABLE_HEALTH_FEED = 'true';
+    const identities = Array.from({ length: 22 }, (_, i) => `paging-${String(i).padStart(2, '0')}`);
+    const read = async (endpoint, query, userId = 2) => {
+      const res = { status: jest.fn().mockReturnThis(), json: jest.fn((value) => value) };
+      return endpoint(db, { user: { id: userId }, query }, res);
+    };
+
+    try {
+      await db.query(`INSERT INTO health_feed_content_items (id,title,body,target_flow)
+        SELECT id,id,id,'FLOW_NURTURE' FROM unnest($1::text[]) id`, [identities]);
+      await db.query(`INSERT INTO health_feed_feed_items
+          (id,user_id,content_id,feed_type,title,message,created_at,priority)
+        SELECT ('c4c72c75-4ce0-47d3-bc54-' || lpad(ordinality::text, 12, '0'))::uuid,
+          CASE WHEN ordinality <= 21 THEN 2 ELSE 1 END, id, 'article', id, id,
+          '2025-01-01T07:30:00.123456Z'::timestamptz + (ordinality / 12) * interval '1 microsecond',
+          CASE WHEN ordinality > 10 THEN 100 ELSE 0 END
+        FROM unnest($1::text[]) WITH ORDINALITY input(id, ordinality)`, [identities]);
+      await db.query(`INSERT INTO health_feed_saved_content (user_id,content_id,saved_at)
+        SELECT CASE WHEN ordinality <= 21 THEN 2 ELSE 1 END, id,
+          '2025-01-01T07:30:00.123456Z'::timestamptz + (ordinality / 12) * interval '1 microsecond'
+        FROM unnest($1::text[]) WITH ORDINALITY input(id, ordinality)`, [identities]);
+
+      for (const [endpoint, listKey, idKey, legacySize] of [
+        [getFeed, 'feed', 'content_id', 5],
+        [getSaved, 'saved', 'id', 21],
+      ]) {
+        const first = await read(endpoint, { limit: '10' });
+        expect(first[listKey]).toHaveLength(10);
+        expect(first[listKey][0]).not.toHaveProperty('cursor_time');
+        expect(typeof first.nextBefore).toBe('string');
+        const second = await read(endpoint, { limit: '10', before: first.nextBefore });
+        expect(second[listKey]).toHaveLength(10);
+        expect(typeof second.nextBefore).toBe('string');
+        const last = await read(endpoint, { limit: '10', before: second.nextBefore });
+        expect(last[listKey]).toHaveLength(1);
+        expect(last.nextBefore).toBeNull();
+        const ids = [...first[listKey], ...second[listKey], ...last[listKey]].map((row) => row[idKey]);
+        expect(ids).toEqual(identities.slice(0, 21).reverse());
+        expect((await read(endpoint, { limit: '10', before: first.nextBefore }, 4))[listKey]).toEqual([]);
+        expect((await read(endpoint, {}))[listKey]).toHaveLength(legacySize);
+      }
+    } finally {
+      if (previousFlag === undefined) delete process.env.ENABLE_HEALTH_FEED;
+      else process.env.ENABLE_HEALTH_FEED = previousFlag;
+    }
   });
 });

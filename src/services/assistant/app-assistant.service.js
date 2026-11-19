@@ -171,11 +171,28 @@ function validatePlan(raw, request, medicationContext, profileContext) {
 
 async function plan(input, lang = 'vi', { pool, userId, signal } = {}) {
   signal?.throwIfAborted();
-  const callModel = async options => {
+  let contextCompacted = false;
+  const invokeModel = async options => {
     signal?.throwIfAborted();
     const result = await callTextAi({ ...options, ...(signal ? { signal } : {}) });
     signal?.throwIfAborted();
     return result;
+  };
+  const callModel = async options => {
+    if (contextCompacted) {
+      const prompt = commandScope.compactReadContext(options.prompt);
+      return invokeModel(prompt ? { ...options, prompt } : options);
+    }
+    try {
+      return await invokeModel(options);
+    } catch (error) {
+      signal?.throwIfAborted();
+      if (error?.code !== 'AI_CONTEXT_LIMIT') throw error;
+      const prompt = commandScope.compactReadContext(options.prompt);
+      if (!prompt) throw error;
+      contextCompacted = true;
+      return invokeModel({ ...options, prompt });
+    }
   };
   const checked = requestSchema.safeParse(input);
   if (!checked.success) throw Object.assign(new Error('Invalid assistant request'), { code: 'APP_ASSISTANT_INVALID_REQUEST', statusCode: 400 });

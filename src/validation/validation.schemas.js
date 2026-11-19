@@ -109,6 +109,7 @@ const careCircleInvitationSchema = z.object({
   relationship_type: careCircleRelationshipSchema,
   role: careCircleInvitationRoleSchema,
   permissions: permissionsSchema.optional(),
+  share_notifications: z.boolean().optional(),
 });
 
 const careCircleQrTokenSchema = z.object({
@@ -119,6 +120,7 @@ const careCircleQrInvitationSchema = careCircleQrTokenSchema.extend({
   relationship_type: careCircleRelationshipSchema,
   role: careCircleInvitationRoleSchema,
   permissions: permissionsSchema.optional(),
+  share_notifications: z.boolean().optional(),
 });
 
 const escalationAckSchema = z.object({

@@ -119,6 +119,18 @@ describe('medgemma provider', () => {
     await expect(medgemma.callMedGemma({ prompt: 'hi' })).rejects.toThrow(/502/);
   });
 
+  test('reports a machine-readable overflow without exposing the upstream prompt', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ error: { code: 'context_length_exceeded', message: 'Private prompt excerpt' } }),
+    });
+    await expect(medgemma.callMedGemmaWithRetry({ prompt: 'input' })).rejects.toMatchObject({
+      status: 400, code: 'AI_CONTEXT_LIMIT', message: 'MedGemma API 400',
+    });
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
   test.each([400, 401, 402, 403])(
     'does not retry non-recoverable HTTP %i failures',
     async (status) => {

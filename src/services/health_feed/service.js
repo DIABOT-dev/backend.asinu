@@ -126,12 +126,12 @@ async function buildFeedForUsers(pool, userIds) {
   return { enabled: true, processed: contexts.length, inserted, queued };
 }
 
-async function ensureUserFeed(pool, userId) {
+async function ensureUserFeed(pool, userId, page) {
   if (!isHealthFeedEnabled()) return { enabled: false, feed: [] };
-  const current = await repo.listFeed(pool, userId);
-  if (current.length > 0) return { enabled: true, feed: current };
+  const current = await repo.listFeed(pool, userId, page);
+  if (current.length > 0 || page?.before) return { enabled: true, feed: current };
   await buildFeedForUsers(pool, [userId]);
-  const feed = await repo.listFeed(pool, userId);
+  const feed = await repo.listFeed(pool, userId, page);
   return { enabled: true, feed };
 }
 

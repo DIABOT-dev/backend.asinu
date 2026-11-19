@@ -99,15 +99,10 @@ async function overview(db, actor, patient, { includePaused = false } = {}) {
       patient,
     ])
   ).rows[0];
-  const familyPrefs = (
-    await db.query(
-      'SELECT problems_only FROM med_family_preferences WHERE caregiver_id=$1 AND patient_user_id=$2',
-      [actor, patient]
-    )
-  ).rows[0];
+  const self = Number(actor) === patient;
   return {
     remindersEnabled: prefs?.reminders_enabled !== false,
-    problemsOnly: !!familyPrefs?.problems_only,
+    problemsOnly: !self,
     patientId: patient,
     items: items.rows.map(publicItem),
     schedules: schedules.rows.map(publicSchedule),
@@ -118,7 +113,7 @@ async function overview(db, actor, patient, { includePaused = false } = {}) {
       bedtime: '21:30',
     },
     conditions: profile.rows[0]?.medical_conditions || [],
-    self: Number(actor) === patient,
+    self,
     flags: await c.config(db, patient),
     ...(await require('./medication-drafts.service').read(db, actor, patient)),
   };
@@ -723,15 +718,9 @@ async function preferences(pool, actor, target, body) {
   const patient = await c.patientAccess(pool, actor, target);
   await c.assertFeature(pool, patient, 'medication');
   const x = c.z.object({ problems_only: c.z.boolean() }).strict().parse(body);
-  return c.transaction(pool, async (db) => {
-    await c.lockPatient(db, patient);
-    await c.patientAccess(db, actor, patient);
-    await db.query(
-      'INSERT INTO med_family_preferences(caregiver_id,patient_user_id,problems_only) VALUES($1,$2,$3) ON CONFLICT(caregiver_id,patient_user_id) DO UPDATE SET problems_only=$3',
-      [actor, patient, x.problems_only]
-    );
-    return x;
-  });
+  // Older app versions can still submit the fixed policy.
+  if (!x.problems_only) throw c.error('MED_FAMILY_ALERTS_FIXED', 409);
+  return x;
 }
 module.exports = {
   consentMany,

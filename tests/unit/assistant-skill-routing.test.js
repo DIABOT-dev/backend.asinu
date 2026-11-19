@@ -382,3 +382,33 @@ test('short read follow-ups retain bounded prior user requests without assistant
   expect(router.inputForModel(value, ['journal']).READ_CONTEXT).toEqual(['Xem huyết áp hôm nay']);
   expect(JSON.stringify(router.inputForModel(value, ['journal']))).not.toContain('PRIVATE_SHARED_RESULT');
 });
+
+test.each([0, 1, 2])('a context rejection at model stage %i retries once without changing the current read request', async (stage) => {
+  const text = 'Thế hôm nay?';
+  const prior = 'Xem huyết áp hôm qua ' + 'mô tả '.repeat(60);
+  const value = { ...request(text), conversation: [
+    { role: 'user', text: 'Yêu cầu cũ hơn' },
+    { role: 'assistant', text: 'PRIVATE_SHARED_RESULT' },
+    { role: 'user', text: prior },
+  ] };
+  const resultByStage = [{ content: '{"skills":["journal"]}' },
+    ready({ type: 'query', topic: 'blood_pressure', range: 'today', evidence: text }), { content: '{"approved":true}' }];
+  resultByStage.forEach((result, i) => {
+    if (i === stage) callTextAi.mockRejectedValueOnce(Object.assign(new Error('maximum context length'), { code: 'AI_CONTEXT_LIMIT' }));
+    callTextAi.mockResolvedValueOnce(result);
+  });
+  const db = { query: jest.fn() };
+  const query = jest.spyOn(tools, 'query').mockResolvedValue('Huyết áp đã ghi hôm nay.');
+  await expect(service.plan(value, 'vi', { pool: db, userId: 7 })).resolves.toMatchObject({
+    status: 'answer', actions: [], answer: 'Huyết áp đã ghi hôm nay.',
+  });
+  expect(callTextAi).toHaveBeenCalledTimes(4);
+  const prompts = callTextAi.mock.calls.map(([option]) => JSON.parse(option.prompt));
+  expect(prompts[stage].INPUT.READ_CONTEXT).toHaveLength(2);
+  for (const prompt of prompts.slice(stage + 1)) {
+    expect(prompt.INPUT).toEqual({ text, READ_CONTEXT: [prior.slice(0, 120)] });
+    expect(JSON.stringify(prompt)).not.toContain('PRIVATE_SHARED_RESULT');
+  }
+  expect(query).toHaveBeenCalledTimes(1);
+  expect(db.query).not.toHaveBeenCalled();
+});

@@ -1280,5 +1280,7 @@
   "doctor.care_notice_title": "Care plan update",
   "doctor.care_notice_body": "Open Asinu to view your care invitation or plan.",
   "doctor.reconsultation_unavailable": "Reconsultation requires a completed consultation.",
-  "doctor.consultation_closed": "The previous consultation is closed. Please submit a new request."
+  "doctor.consultation_closed": "The previous consultation is closed. Please submit a new request.",
+  "profile.address_invalid": "Invalid address. Select a province or city before choosing a ward or commune.",
+  "profile.birth_date_invalid": "The date of birth must be valid and within the last 150 years."
 }

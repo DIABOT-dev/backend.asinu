@@ -577,6 +577,19 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     const privateResult = await tools.prepare(db, other, { type: 'app_tool', tool: 'checkin.conclusion', parameters: {}, evidence: 'xem kết luận' });
     expect(privateResult.answer).not.toContain(full.slice(0, 30));
   });
+  test('the reward catalog includes profile photos only for accepted greeting recipients', async () => {
+    const sender = await user(), relative = await user(), noPhoto = await user(), stranger = await user();
+    const avatarUrl = 'https://images.example.test/family.jpg';
+    await db.query('UPDATE users SET avatar_url=$1 WHERE id=ANY($2::int[])', [avatarUrl, [relative, stranger]]);
+    await connect(relative, sender);
+    await connect(sender, noPhoto);
+
+    const response = await request(app).get('/api/mobile/rewards').set(auth(sender)).expect(200);
+    expect(response.body.recipients).toEqual([
+      expect.objectContaining({ id: relative, avatarUrl }),
+      expect.objectContaining({ id: noPhoto, avatarUrl: null }),
+    ]);
+  });
   test('assistant app tools: sending a greeting resolves the real catalog and one signed request spends coins once', async () => {
     const tools = require('../../src/services/assistant/domain-tools.service');
     const sender = await user(), recipient = await user();
@@ -2447,6 +2460,74 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
     expect(out.body.report).toMatchObject({ taken: 1, total: 1, coins: 5 });
     await request(app).get('/api/mobile/coins/history?before=').set(auth(id)).expect(200);
   });
+  test('coin history serves ten rows per page and never includes another user’s entries', async () => {
+    const owner = await user(), other = await user();
+    const { rows } = await db.query(
+      `INSERT INTO coin_ledger (user_id,delta,reason,ref_id,local_date,expires_at)
+       SELECT CASE WHEN n <= 20 THEN $1::int ELSE $2::int END,
+         1,'REFUND',gen_random_uuid(),CURRENT_DATE,NOW()+INTERVAL '12 months'
+       FROM generate_series(1,21) n RETURNING id, user_id`,
+      [owner, other]
+    );
+    const history = () => request(app).get('/api/mobile/coins/history').set(auth(owner));
+    const first = (await history().query({ limit: 10 }).expect(200)).body;
+    expect(first.items).toHaveLength(10);
+    expect(first.nextBefore).toBe(String(first.items.at(-1).id));
+    const second = (await history().query({ limit: 10, before: first.nextBefore }).expect(200)).body;
+    expect(second.items).toHaveLength(10);
+    expect(second.nextBefore).toBeNull();
+    expect([...first.items, ...second.items].map((row) => row.id)).toEqual(
+      rows.filter((row) => row.user_id === owner).reverse().map((row) => row.id)
+    );
+    expect((await history().expect(200)).body).not.toHaveProperty('nextBefore');
+    await history().query({ limit: 31 }).expect(400);
+  });
+  test('coin history paginates earnings and spending separately from refunds and expiry', async () => {
+    const owner = await user(), other = await user();
+    const { rows: uses } = await db.query(
+      `INSERT INTO coin_ledger (user_id,delta,reason,ref_id,local_date)
+       SELECT CASE WHEN n <= 12 THEN $1::int ELSE $2::int END,
+         -1,'REDEEM',gen_random_uuid(),CURRENT_DATE
+       FROM generate_series(1,13) n RETURNING id, user_id`,
+      [owner, other]
+    );
+    const { rows: credits } = await db.query(
+      `INSERT INTO coin_ledger (user_id,delta,reason,ref_id,local_date,expires_at)
+       SELECT CASE WHEN n=14 THEN $2::int ELSE $1::int END,
+         1,CASE WHEN n=13 THEN 'REFUND' ELSE 'CHECKIN' END,
+         gen_random_uuid(),CURRENT_DATE,NOW()+INTERVAL '12 months'
+       FROM generate_series(1,14) n RETURNING id, user_id, reason`,
+      [owner, other]
+    );
+    await db.query(
+      "INSERT INTO coin_ledger (user_id,delta,reason,ref_id,local_date) VALUES($1,-1,'EXPIRE',gen_random_uuid(),CURRENT_DATE)",
+      [owner]
+    );
+    const history = () => request(app).get('/api/mobile/coins/history').set(auth(owner));
+    const full = (await history().query({ limit: 10 }).expect(200)).body;
+    expect(full.items.some((row) => row.reason === 'REDEEM')).toBe(false);
+    const first = (await history().query({ limit: 10, scope: 'usage' }).expect(200)).body;
+    expect(first.items).toHaveLength(10);
+    const next = (await history().query({
+      limit: 10, scope: 'usage', before: first.nextBefore,
+    }).expect(200)).body;
+    expect(next.items).toHaveLength(2);
+    expect(next.nextBefore).toBeNull();
+    expect([...first.items, ...next.items].map((row) => row.id)).toEqual(
+      uses.filter((row) => row.user_id === owner).reverse().map((row) => row.id)
+    );
+    const earnedFirst = (await history().query({ limit: 10, scope: 'earned' }).expect(200)).body;
+    expect(earnedFirst.items).toHaveLength(10);
+    const earnedNext = (await history().query({
+      limit: 10, scope: 'earned', before: earnedFirst.nextBefore,
+    }).expect(200)).body;
+    expect(earnedNext.items).toHaveLength(2);
+    expect(earnedNext.nextBefore).toBeNull();
+    expect([...earnedFirst.items, ...earnedNext.items].map((row) => row.id)).toEqual(
+      credits.filter((row) => row.user_id === owner && row.reason === 'CHECKIN')
+        .reverse().map((row) => row.id)
+    );
+  });
   test('two remote reminder hours have one invitation, one call, and an explicit atomic consent review', async () => {
     const id = await user(),
       child = await user(),
@@ -2665,7 +2746,7 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       voice.mockRestore();
     }
   });
-  test.each(['remove', 'meals', 'preferences', 'item'])(
+  test.each(['remove', 'meals', 'item'])(
     'revoking Care Circle before the %s write transaction prevents the write',
     async (kind) => {
       const id = await user(),
@@ -2701,15 +2782,13 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
                   dinner: '19:00',
                   bedtime: '22:00',
                 })
-            : kind === 'preferences'
-              ? () => med.preferences(pool, child, id, { problems_only: true })
-              : () =>
-                  med.createItem(pool, child, id, {
-                    display_name: 'Thuốc khác',
-                    kind: 'MEDICINE',
-                    source: 'CHIP',
-                    confirmed: true,
-                  });
+            : () =>
+                med.createItem(pool, child, id, {
+                  display_name: 'Thuốc khác',
+                  kind: 'MEDICINE',
+                  source: 'CHIP',
+                  confirmed: true,
+                });
       await expect(work()).rejects.toMatchObject({ code: 'MED_CARE_CIRCLE_REQUIRED' });
       expect(
         (await db.query('SELECT active FROM med_schedules WHERE id=$1', [schedule.id])).rows[0]
@@ -2754,7 +2833,7 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       ).rows[0].calendar_date
     ).toBe(c.localDate());
   });
-  test('SRS EA9/EA12: alerts honor permissions and problems-only; repeated out-of-meds counts stay private', async () => {
+  test('SRS EA9/EA12: family alerts default to problems only and respect Care Circle permissions', async () => {
     const parent = await user(),
       child = await user(),
       muted = await user();
@@ -2764,7 +2843,7 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
       'UPDATE user_connections SET permissions=permissions||\'{"can_receive_alerts":false}\'::jsonb WHERE requester_id=$1 AND addressee_id=$2',
       [parent, muted]
     );
-    await med.preferences(db, child, parent, { problems_only: true });
+    expect((await med.overview(db, child, parent)).problemsOnly).toBe(true);
     const morning = await dose(parent);
     await calls.answer(db, parent, morning.id, { button: 1, request_id: randomUUID() });
     expect(
@@ -2805,6 +2884,44 @@ describeDb('V2.1 on isolated real PostgreSQL tables', () => {
         )
       ).rowCount
     ).toBe(0);
+  });
+  test('an old family preference cannot enable or deliver successful-dose alerts', async () => {
+    const parent = await user(),
+      child = await user();
+    await connect(parent, child);
+    await db.query(
+      'INSERT INTO med_family_preferences(caregiver_id,patient_user_id,problems_only) VALUES($1,$2,FALSE)',
+      [child, parent]
+    );
+    expect((await med.overview(db, child, parent)).problemsOnly).toBe(true);
+
+    const endpoint = '/api/mobile/medication/family-preferences?patientId=' + parent;
+    const legacyEnable = await request(app)
+      .put(endpoint)
+      .set(auth(child))
+      .send({ problems_only: true });
+    expect(legacyEnable.status).toBe(200);
+    expect(legacyEnable.body.problems_only).toBe(true);
+    const legacyDisable = await request(app)
+      .put(endpoint)
+      .set(auth(child))
+      .send({ problems_only: false });
+    expect(legacyDisable.status).toBe(409);
+    expect(legacyDisable.body.code).toBe('MED_FAMILY_ALERTS_FIXED');
+
+    const event = await dose(parent);
+    await calls.answer(db, parent, event.id, { button: 1, request_id: randomUUID() });
+    expect((await db.query(
+      "SELECT 1 FROM v21_message_outbox WHERE subject_id=$1 AND kind='med_result'",
+      [parent]
+    )).rowCount).toBe(0);
+    expect(await notificationDelivery.reserveNotification(db, {
+      userId: child,
+      type: 'med_result',
+      title: 'Asinu',
+      body: 'Confirmed medication',
+      data: { patientId: parent, doseId: event.id, state: 'TAKEN' },
+    })).toBeNull();
   });
   test('SRS EA10: an existing app check-in prevents another question or a second daily check-in award', async () => {
     const id = await user();

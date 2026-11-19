@@ -33,7 +33,7 @@ function createGiftController(pool) {
     open: json(async (req) => ({
       gift: await gifts.open(pool, req.user.id, req.body?.gift_id, req.body?.box, getLang(req)),
     })),
-    history: json((req) => gifts.history(pool, req.user.id, req.query.before, getLang(req))),
+    history: json((req) => gifts.history(pool, req.user.id, req.query.before, getLang(req), req.query.limit)),
     rules: json((req) => gifts.rules(pool, id(req.params.id), getLang(req))),
     results: json((req) => draw.results(pool, id(req.params.id))),
     config: json(() => admin.getConfig(pool)),

@@ -2,6 +2,7 @@
 const c = require('./common');
 const entitlement = require('../payment/entitlement.service');
 const greetingCards = require('./greeting-cards.service');
+const { parsePageLimit, pageResult } = require('../../lib/list-pagination');
 
 async function addCredit(db, user, reason, ref, amount, date, expires) {
   const saved = (
@@ -137,17 +138,23 @@ async function today(pool, user) {
     };
   });
 }
-async function history(pool, user, before) {
+async function history(pool, user, before, requestedLimit, requestedScope) {
   await c.assertFeature(pool, user, 'coins');
   const cursor = before == null || before === '' ? null : c.idSchema.parse(before);
-  return {
-    items: (
-      await pool.query(
-        'SELECT l.*,r.status reward_status,r.catalog_code,t.ticket_no FROM coin_ledger l LEFT JOIN reward_redemptions r ON r.ledger_id=l.id LEFT JOIN draw_tickets t ON t.redemption_id=r.id WHERE l.user_id=$1 AND ($2::bigint IS NULL OR l.id<$2) ORDER BY l.id DESC LIMIT 30',
-        [user, cursor]
-      )
-    ).rows,
-  };
+  const limit = parsePageLimit(requestedLimit, 30);
+  const scope = c.z.enum(['usage', 'earned']).optional().parse(requestedScope) ?? null;
+  const { rows } = await pool.query(
+    `SELECT l.*,r.status reward_status,r.catalog_code,t.ticket_no FROM coin_ledger l
+     LEFT JOIN reward_redemptions r ON r.ledger_id=l.id
+     LEFT JOIN draw_tickets t ON t.redemption_id=r.id
+     WHERE l.user_id=$1 AND ($2::bigint IS NULL OR l.id<$2)
+       AND ($4::text IS NULL
+         OR ($4='usage' AND l.reason='REDEEM' AND l.delta<0)
+         OR ($4='earned' AND l.delta>0 AND l.reason IN ('CHECKIN','MED_ANSWER','VITAL','GIFT_OPEN','WEEKLY')))
+     ORDER BY l.id DESC LIMIT $3`,
+    [user, cursor, requestedLimit === undefined ? limit : limit + 1, scope]
+  );
+  return requestedLimit === undefined ? { items: rows } : pageResult(rows, limit, row => String(row.id));
 }
 async function catalog(db, user) {
   await c.assertFeature(db, user, 'coins');
@@ -178,7 +185,8 @@ async function catalog(db, user) {
   const recipients = connected
     ? (
         await db.query(
-          `SELECT u.id,COALESCE(u.full_name,u.display_name) name FROM user_connections c JOIN users u
+          `SELECT u.id,COALESCE(u.full_name,u.display_name) name,u.avatar_url AS "avatarUrl"
+  FROM user_connections c JOIN users u
   ON u.id=CASE WHEN c.requester_id=$1 THEN c.addressee_id ELSE c.requester_id END AND u.deleted_at IS NULL
   WHERE c.status='accepted' AND (c.requester_id=$1 OR c.addressee_id=$1) ORDER BY u.id`,
           [user]

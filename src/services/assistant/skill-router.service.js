@@ -47,6 +47,17 @@ function inputForModel(request, ids) {
   }
   return input;
 }
+function compactReadContext(prompt) {
+  const value = JSON.parse(prompt);
+  const prior = value.INPUT?.READ_CONTEXT;
+  if (!prior?.length) return null;
+  // Preserve the latest topic hint while reducing the optional context.
+  // The current command, clarification and tool rules must be unchanged.
+  const latest = prior.at(-1);
+  if (prior.length === 1 && latest.length <= 120) delete value.INPUT.READ_CONTEXT;
+  else value.INPUT.READ_CONTEXT = [latest.slice(0, 120).replace(/[\uD800-\uDBFF]$/u, '')];
+  return JSON.stringify(value);
+}
 function prompts(ids, request) {
   if (!validIds(ids)) throw new Error('Invalid assistant skills');
   const requireEvidence = !!request && source(request).length > 3000;
@@ -96,4 +107,4 @@ async function route(request, callTextAi, lang) {
     return { skills: [], question: value.question.trim() };
   return null;
 }
-module.exports = { select, route, expand, validIds, contextFor, explicitCommand, explicitClock, prompts, reviewPrompt, decode, inputForModel, accepts, noMedContext, getSkill, definitions };
+module.exports = { select, route, expand, validIds, contextFor, explicitCommand, explicitClock, prompts, reviewPrompt, decode, inputForModel, compactReadContext, accepts, noMedContext, getSkill, definitions };

@@ -202,6 +202,7 @@ async function createInvitationFromQr(pool, requesterId, data, lang = 'vi') {
       relationship_type: data.relationship_type,
       role: parsedRole.data,
       permissions: data.permissions,
+      share_notifications: data.share_notifications,
     },
     lang
   );
@@ -284,11 +285,12 @@ async function createInvitation(pool, requesterId, data, lang = 'vi') {
         relationship_type,
         role,
         permissions,
+        requester_shares_notifications,
         created_at,
         updated_at
-      ) VALUES ($1,$2,'pending',$1,$3,$4,$5,NOW(),NOW())
+      ) VALUES ($1,$2,'pending',$1,$3,$4,$5,$6,NOW(),NOW())
       RETURNING *`,
-      [requesterId, addressee_id, relationship_type || null, role || null, JSON.stringify(perms)]
+      [requesterId, addressee_id, relationship_type || null, role || null, JSON.stringify(perms), data.share_notifications === true]
     );
 
     const invitation = result.rows[0];
@@ -874,6 +876,16 @@ async function updateConnectionPermissions(
 // CAREGIVER DATA ACCESS
 // =====================================================
 
+const caregiverAccessSql = `SELECT id FROM user_connections
+     WHERE status = 'accepted'
+       AND LEAST(requester_id, addressee_id) = LEAST($1::integer, $2::integer)
+       AND GREATEST(requester_id, addressee_id) = GREATEST($1::integer, $2::integer)
+       AND CASE WHEN requester_id = $1
+         THEN permissions->'can_view_logs' = 'true'::jsonb
+         ELSE addressee_can_view_logs
+       END
+     LIMIT 1`;
+
 /**
  * Verify caregiver has can_view_logs permission for a patient
  * @param {Object} pool - Database pool
@@ -883,18 +895,7 @@ async function updateConnectionPermissions(
  */
 async function verifyCaregiverAccess(pool, caregiverId, patientId) {
   if (Number(caregiverId) === Number(patientId)) return false;
-  const { rows } = await pool.query(
-    `SELECT id FROM user_connections
-     WHERE status = 'accepted'
-       AND LEAST(requester_id, addressee_id) = LEAST($1::integer, $2::integer)
-       AND GREATEST(requester_id, addressee_id) = GREATEST($1::integer, $2::integer)
-       AND CASE WHEN requester_id = $1
-         THEN permissions->'can_view_logs' = 'true'::jsonb
-         ELSE addressee_can_view_logs
-       END
-     LIMIT 1`,
-    [patientId, caregiverId]
-  );
+  const { rows } = await pool.query(caregiverAccessSql, [patientId, caregiverId]);
   return rows.length > 0;
 }
 
@@ -920,6 +921,24 @@ async function updateHealthAccess(pool, connectionId, ownerId, canViewLogs, lang
   return { ok: true, connection: rows[0] };
 }
 
+async function updateNotificationAccess(pool, connectionId, ownerId, shareNotifications, lang = 'vi') {
+  const { rows } = await pool.query(
+    `UPDATE user_connections
+     SET requester_shares_notifications = CASE WHEN requester_id = $2
+           THEN $3::boolean ELSE requester_shares_notifications END,
+         addressee_shares_notifications = CASE WHEN addressee_id = $2
+           THEN $3::boolean ELSE addressee_shares_notifications END
+     WHERE id = $1 AND status = 'accepted'
+       AND requester_id <> addressee_id AND (requester_id = $2 OR addressee_id = $2)
+     RETURNING requester_shares_notifications, addressee_shares_notifications`,
+    [connectionId, ownerId, shareNotifications]
+  );
+  if (!rows.length) {
+    return { ok: false, statusCode: 404, error: t('careCircle.connection_not_found', lang) };
+  }
+  return { ok: true, access: rows[0] };
+}
+
 /**
  * Get patient's recent logs visible to caregiver
  * @param {Object} pool - Database pool
@@ -929,9 +948,20 @@ async function updateHealthAccess(pool, connectionId, ownerId, canViewLogs, lang
  */
 async function getCaregiverLogs(pool, patientId, days = 7) {
   const { rows } = await pool.query(
-    `SELECT lc.id, lc.log_type, lc.occurred_at, lc.note, lc.metadata
+    `SELECT lc.id, lc.log_type, lc.occurred_at, lc.note, lc.metadata,
+            CASE
+              WHEN bp.log_id IS NOT NULL THEN jsonb_build_object(
+                'systolic', bp.systolic, 'diastolic', bp.diastolic, 'unit', bp.unit)
+              WHEN glucose.log_id IS NOT NULL THEN jsonb_build_object(
+                'value', glucose.value, 'unit', glucose.unit)
+              WHEN meal.log_id IS NOT NULL THEN jsonb_build_object('meal_text', meal.meal_text)
+            END AS detail
      FROM logs_common lc
+     LEFT JOIN blood_pressure_logs bp ON bp.log_id = lc.id AND lc.log_type IN ('bp', 'blood_pressure')
+     LEFT JOIN glucose_logs glucose ON glucose.log_id = lc.id AND lc.log_type = 'glucose'
+     LEFT JOIN meal_logs meal ON meal.log_id = lc.id AND lc.log_type = 'meal'
      WHERE lc.user_id = $1 AND lc.occurred_at > NOW() - INTERVAL '${days} days'
+       AND lc.occurred_at <= NOW()
      ORDER BY lc.occurred_at DESC
      LIMIT 50`,
     [patientId]
@@ -993,8 +1023,10 @@ module.exports = {
   updateConnection,
   updateConnectionPermissions,
   updateHealthAccess,
+  updateNotificationAccess,
 
   // Caregiver data access
+  caregiverAccessSql,
   verifyCaregiverAccess,
   getCaregiverLogs,
   getCaregiverCheckins,

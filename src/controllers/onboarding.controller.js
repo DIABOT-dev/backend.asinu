@@ -70,6 +70,17 @@ async function onboardingComplete(pool, req, res) {
   }
 }
 
+async function onboardingProfileV2(pool, req, res) {
+  res.set('Cache-Control', 'private, no-store');
+  try {
+    const profile = await onboardingService.getProfileV2(pool, req.user.id);
+    if (!profile) return res.status(404).json({ ok: false, error: t('error.user_not_found', getLang(req)) });
+    return res.json({ ok: true, profile });
+  } catch {
+    return res.status(500).json({ ok: false, error: t('error.server', getLang(req)) });
+  }
+}
+
 /**
  * POST /api/mobile/onboarding/complete-v2
  * V2 fixed 5-page wizard
@@ -110,5 +121,6 @@ module.exports = {
   upsertOnboardingProfile,
   onboardingNext,
   onboardingComplete,
+  onboardingProfileV2,
   onboardingCompleteV2,
 };

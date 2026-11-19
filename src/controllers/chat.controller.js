@@ -124,12 +124,20 @@ async function transcribeAudio(pool, req, res) {
  * Like / dislike / note a chat message
  */
 async function postChatFeedback(pool, req, res) {
-  const { messageId, messageText, feedbackType } = req.body;
+  const { messageId, messageText, feedbackType } = req.body || {};
   const userId = req.user.id;
   if (!['like', 'dislike', 'note'].includes(feedbackType) || !messageId || !messageText) {
     return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
   }
   try {
+    if (typeof messageId === 'string' && messageId.startsWith('asinu-assistant:')) {
+      if (feedbackType === 'note' || messageId === 'asinu-assistant:' || messageId.length > 255 ||
+          typeof messageText !== 'string' || !messageText.trim()) {
+        return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+      }
+      await feedbackService.setAssistantRating(pool, userId, messageId, messageText, feedbackType);
+      return res.json({ ok: true, action: 'saved' });
+    }
     if (feedbackType === 'note') {
       const existing = await feedbackService.checkExistingNote(pool, userId, messageId);
       if (existing.length > 0) {

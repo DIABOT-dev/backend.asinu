@@ -1280,5 +1280,7 @@
   "doctor.care_notice_title": "Kế hoạch chăm sóc có cập nhật",
   "doctor.care_notice_body": "Mở Asinu để xem yêu cầu theo dõi hoặc kế hoạch chăm sóc.",
   "doctor.reconsultation_unavailable": "Chỉ có thể tái tư vấn từ ca đã hoàn tất.",
-  "doctor.consultation_closed": "Ca trước đã đóng. Vui lòng gửi yêu cầu mới."
+  "doctor.consultation_closed": "Ca trước đã đóng. Vui lòng gửi yêu cầu mới.",
+  "profile.address_invalid": "Địa chỉ không hợp lệ. Vui lòng chọn tỉnh/thành phố trước khi chọn phường/xã.",
+  "profile.birth_date_invalid": "Ngày sinh không hợp lệ hoặc nằm ngoài khoảng 150 năm gần đây."
 }
