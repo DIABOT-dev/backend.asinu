@@ -22,8 +22,13 @@ async function guarded(name, work) {
   }
 }
 async function notifyPatient(pool, s, type = 'doctor_ivr_session') {
+  let language;
   try {
-    await ivr.scope(pool, { tenant_id: s.tenant_id, task_id: s.task_id, app_user_id: s.user_id });
+    ({ language } = await ivr.scope(pool, {
+      tenant_id: s.tenant_id,
+      task_id: s.task_id,
+      app_user_id: s.user_id,
+    }));
   } catch {
     return false;
   }
@@ -35,18 +40,13 @@ async function notifyPatient(pool, s, type = 'doctor_ivr_session') {
       type === 'doctor_ivr_reply'
         ? 'notification.doctor_ivr_reply_title'
         : 'notification.doctor_ivr_request_title',
-      'vi'
+      language
     ),
     t(
       type === 'doctor_ivr_reply'
         ? 'notification.doctor_ivr_reply_body'
-        : 'notification.doctor_ivr_request_count_body',
-      'vi',
-      {
-        doctorName: s.doctor_name,
-        count: s.question_count || t('doctor_ivr.some_questions', 'vi'),
-        minutes: s.duration_minutes || 3,
-      }
+        : 'notification.doctor_ivr_request_body',
+      language
     ),
     {
       type,
@@ -363,23 +363,17 @@ async function deadlines(pool) {
     )
   ).rows;
   for (const s of expired) await ivr.audit(pool, s, 'system', 'session.expired', {}, s.id);
+  // Patients may open the chat invitation before the first notification is sent.
   const reminders = (
     await pool.query(
-      "SELECT * FROM doctor_ivr_sessions WHERE status='sent' AND remind_at<=NOW() AND expires_at>NOW() AND reminder_count<3 ORDER BY remind_at LIMIT 5"
+      `SELECT * FROM doctor_ivr_sessions
+        WHERE remind_at<=NOW() AND expires_at>NOW() AND reminder_count<3
+          AND (status='sent' OR (reminder_count=0 AND status IN ('in_progress','completed','reported')))
+        ORDER BY remind_at LIMIT 5`
     )
   ).rows;
   for (const s of reminders) {
-    const set = (
-      await pool.query('SELECT content_enc FROM doctor_ivr_question_sets WHERE id=$1', [
-        s.question_set_id,
-      ])
-    ).rows[0];
-    const content = ivr.reveal(s.user_id, 'question-set', set.content_enc);
-    const sent = await notifyPatient(pool, {
-      ...s,
-      question_count: content.questions.length,
-      duration_minutes: Math.max(1, Math.ceil(content.est_duration_s / 60)),
-    });
+    const sent = await notifyPatient(pool, s);
     if (sent)
       await pool.query(
         'UPDATE doctor_ivr_sessions SET reminder_count=reminder_count+1,remind_at=NULL WHERE id=$1 AND remind_at=$2',

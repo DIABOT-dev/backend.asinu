@@ -100,34 +100,45 @@ const doctorReviewsRequestSchema = z
   })
   .strict();
 
+const messageReactionSchema = z.enum(['👍', '❤️', '😊', '😮', '😢', '🙏']).nullable().optional();
+
 const patientMessageRequestSchema = z
   .object({
     tenant_id: z.string().trim().min(1).max(120),
     content: z.string().trim().min(1).max(5000),
     message_type: z.enum(['reply', 'follow_up']).default('reply'),
     client_message_id: z.string().uuid(),
+    reply_to_message_id: z.string().uuid().optional(),
   })
   .strict();
 
 const messageActionSchema = z
   .object({
     tenant_id: z.string().trim().min(1).max(120),
-    action: z.enum(['read', 'typing', 'edit', 'unsend', 'delete_for_me', 'pin', 'unpin']),
+    action: z.enum(['read', 'typing', 'edit', 'unsend', 'delete_for_me', 'pin', 'unpin', 'react']),
     message_id: z.string().uuid().optional(),
     message_ids: z.array(z.string().uuid()).max(100).optional(),
     content: z.string().trim().min(1).max(5000).optional(),
     is_typing: z.boolean().optional(),
+    reaction: messageReactionSchema,
   })
   .strict()
   .superRefine((value, context) => {
     if (
-      ['edit', 'unsend', 'delete_for_me', 'pin', 'unpin'].includes(value.action) &&
+      ['edit', 'unsend', 'delete_for_me', 'pin', 'unpin', 'react'].includes(value.action) &&
       !value.message_id
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['message_id'],
         message: 'A message id is required.',
+      });
+    }
+    if ((value.action === 'react') !== (value.reaction !== undefined)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reaction'],
+        message: 'A reaction or null is required for a reaction action.',
       });
     }
     if (value.action === 'edit' && !value.content) {
@@ -167,6 +178,7 @@ const doctorMessageSendSchema = doctorMessageQuerySchema
     content: z.string().trim().min(1).max(5000),
     message_type: z.enum(['question', 'consultation', 'follow_up']),
     client_message_id: z.string().uuid(),
+    reply_to_message_id: z.string().uuid().optional(),
     sender_ref: z.string().trim().min(1).max(160),
     sender_name: z.string().trim().max(160).nullable().optional(),
   })
@@ -174,23 +186,31 @@ const doctorMessageSendSchema = doctorMessageQuerySchema
 
 const doctorMessageActionSchema = doctorMessageQuerySchema
   .extend({
-    action: z.enum(['read', 'typing', 'edit', 'unsend', 'delete_for_me', 'pin', 'unpin']),
+    action: z.enum(['read', 'typing', 'edit', 'unsend', 'delete_for_me', 'pin', 'unpin', 'react']),
     message_id: z.string().uuid().optional(),
     message_ids: z.array(z.string().uuid()).max(100).optional(),
     content: z.string().trim().min(1).max(5000).optional(),
     is_typing: z.boolean().optional(),
+    reaction: messageReactionSchema,
     actor_ref: z.string().trim().min(1).max(160),
   })
   .strict()
   .superRefine((value, context) => {
     if (
-      ['edit', 'unsend', 'delete_for_me', 'pin', 'unpin'].includes(value.action) &&
+      ['edit', 'unsend', 'delete_for_me', 'pin', 'unpin', 'react'].includes(value.action) &&
       !value.message_id
     ) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['message_id'],
         message: 'A message id is required.',
+      });
+    }
+    if ((value.action === 'react') !== (value.reaction !== undefined)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reaction'],
+        message: 'A reaction or null is required for a reaction action.',
       });
     }
     if (value.action === 'edit' && !value.content) {
@@ -235,6 +255,7 @@ const doctorVoiceSendSchema = doctorMessageQuerySchema
       .min(0)
       .max(10 * 60 * 1000),
     client_message_id: z.string().uuid(),
+    reply_to_message_id: z.string().uuid().optional(),
     sender_ref: z.string().trim().min(1).max(160),
     sender_name: z.string().trim().max(160).nullable().optional(),
   })

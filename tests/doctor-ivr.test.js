@@ -229,7 +229,7 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
       connectionString: url.toString(),
       options: `-c search_path=${schema},public`,
     });
-    await pool.query(`CREATE TABLE users(id INTEGER PRIMARY KEY,deleted_at TIMESTAMPTZ,fcm_token TEXT,voip_push_token TEXT,voip_push_environment TEXT);INSERT INTO users(id) VALUES(1),(2);
+    await pool.query(`CREATE TABLE users(id INTEGER PRIMARY KEY,deleted_at TIMESTAMPTZ,fcm_token TEXT,voip_push_token TEXT,voip_push_environment TEXT,language_preference TEXT);INSERT INTO users(id) VALUES(1),(2);
    CREATE TABLE checkin_call_attempts(target_user_id INTEGER,state TEXT,ring_deadline TIMESTAMPTZ,confirm_deadline TIMESTAMPTZ);
    CREATE TABLE doctor_task_outbox(id SERIAL,tenant_id TEXT,payload JSONB,created_at TIMESTAMPTZ DEFAULT NOW());
    CREATE TABLE doctor_task_lifecycle_events(tenant_id TEXT,task_id TEXT,status TEXT,doctor_ref TEXT,payload JSONB,occurred_at TIMESTAMPTZ,created_at TIMESTAMPTZ);
@@ -249,6 +249,14 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
         payload: { app_user_id: '1', task_id: input.task_id, summary: 'Fixture' },
       },
     ]);
+    for (const migration of [
+      '082_doctor_task_messages.sql',
+      '085_doctor_chat_messenger_features.sql',
+      '109_encrypted_message_storage.sql',
+      '139_doctor_chat_interactions.sql',
+    ]) {
+      await pool.query(fs.readFileSync(require('path').join(__dirname, '../db/migrations', migration), 'utf8'));
+    }
     await pool.query(
       fs.readFileSync(
         require('path').join(__dirname, '../db/migrations/116_doctor_ivr_pilot.sql'),
@@ -348,7 +356,21 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
   test('approve → listen/choose → report → physician reply → acknowledge, with ownership, revisions and immutable versions', async () => {
     const value = content();
     value.questions[0].options[1].red_flag = true;
+    const { listMessages } = require('../src/services/integrations/doctor-messaging.service');
+    const loadChat = () => listMessages(pool, input.tenant_id, input.task_id, 1);
+    await invoke('save', { content: value });
+    expect((await loadChat()).messages).toEqual([]);
     const sent = await invoke('approve', { content: value });
+    expect((await loadChat()).messages).toMatchObject([
+      {
+        id: sent.message_id,
+        sender_type: 'system',
+        ivr_session_id: sent.session_id,
+        content: 'Bác sĩ đã gửi câu hỏi',
+      },
+    ]);
+    const { sendAndSave } = require('../src/services/notification/basic.notification.service');
+    sendAndSave.mockResolvedValue(false);
     await worker.runDoctorIvrWorker(pool);
     let s = await ivr.patientGet(pool, 1, sent.session_id);
     expect(s.status).toBe('sent');
@@ -358,6 +380,17 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     const requestId = randomUUID();
     s = await answer(s, 'q1', 'q1_b', { request_id: requestId });
     expect(s.current_question_id).toBe('q2');
+    sendAndSave.mockClear().mockResolvedValue(true);
+    await worker.runDoctorIvrWorker(pool);
+    expect(sendAndSave).toHaveBeenCalledWith(
+      pool,
+      1,
+      'doctor_ivr_session',
+      'Bác sĩ đã gửi câu hỏi',
+      expect.any(String),
+      expect.objectContaining({ sessionId: sent.session_id }),
+      'high'
+    );
     expect(
       (await pool.query("SELECT 1 FROM doctor_ivr_events WHERE event_type='red_flag.detected'"))
         .rowCount
@@ -368,6 +401,7 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     await expect(invoke('approve', { content: value })).rejects.toMatchObject({
       code: 'IVR_SESSION_ACTIVE',
     });
+    expect((await loadChat()).messages).toHaveLength(1);
     await expect(invoke('cancel', { session_id: s.id })).rejects.toMatchObject({
       code: 'IVR_ALREADY_STARTED',
     });

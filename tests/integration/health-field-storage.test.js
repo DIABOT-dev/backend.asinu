@@ -83,6 +83,90 @@ const url = process.env.SECURITY_TEST_DATABASE_URL;
     expect(raw).not.toBe(edited);
     expect(fields.decryptHealthField(userId, 'doctor_task_messages.content', raw)).toBe(edited);
   });
+  test('Doctor replies and reactions sync across viewers with private quote previews', async () => {
+    const patientRef = String(userId);
+    const doctorRef = crypto.randomUUID();
+    const patientInput = (content, reference) => ({
+      tenant_id: tenant,
+      message_type: 'reply',
+      content,
+      client_message_id: crypto.randomUUID(),
+      ...(reference ? { reply_to_message_id: reference } : {}),
+    });
+    const original = await messaging.sendPatientMessage(pool, {
+      userId, taskId, input: patientInput('Nội dung thử nghiệm'),
+    });
+    const act = (actorType, action, reaction, messageId = original.id) => messaging.messageAction(pool, {
+      tenantId: tenant, taskId, userId, actorType,
+      actorRef: actorType === 'patient' ? patientRef : doctorRef,
+      action, messageId, reaction,
+    });
+    await act('doctor', 'pin');
+    const { broadcastChatEvent } = require('../../src/services/integrations/doctor-chat-realtime');
+    const { deliverDoctorRequest } = require('../../src/services/integrations/doctor-task.service');
+    broadcastChatEvent.mockClear();
+    deliverDoctorRequest.mockClear();
+    await act('patient', 'react', '👍');
+    await act('patient', 'react', '👍');
+    expect(broadcastChatEvent).toHaveBeenCalledTimes(1);
+    expect(deliverDoctorRequest).toHaveBeenCalledTimes(1);
+    expect(deliverDoctorRequest).toHaveBeenCalledWith('chat-events', expect.objectContaining({
+      payload: { task_id: taskId, app_user_id: patientRef, action: 'react', message_id: original.id },
+    }), expect.any(String));
+    expect((await act('doctor', 'react', '👍')).reactions).toEqual([
+      { emoji: '👍', count: 2, reacted_by_me: true },
+    ]);
+    expect((await act('patient', 'react', null)).reactions).toEqual([
+      { emoji: '👍', count: 1, reacted_by_me: false },
+    ]);
+    const doctorInput = {
+      ...patientInput('Trả lời thử nghiệm', original.id),
+      task_id: taskId,
+      app_user_id: patientRef,
+      message_type: 'consultation',
+      sender_ref: doctorRef,
+    };
+    const answer = await messaging.sendDoctorMessage(pool, {}, doctorInput);
+    expect(answer.reply_to).toMatchObject({
+      id: original.id, content: 'Nội dung thử nghiệm', kind: 'text', sender_type: 'patient',
+    });
+    expect(await messaging.sendDoctorMessage(pool, {}, doctorInput)).toMatchObject({
+      id: answer.id, duplicate: true,
+    });
+    await expect(messaging.sendDoctorMessage(pool, {}, {
+      ...doctorInput,
+      reply_to_message_id: undefined,
+    })).rejects.toMatchObject({ code: 'MESSAGE_IDEMPOTENCY_CONFLICT' });
+
+    const otherThread = `unrelated-${crypto.randomUUID()}`;
+    const foreign = (await pool.query(
+      `INSERT INTO doctor_task_messages(tenant_id,task_id,user_id,sender_type,content,client_message_id)
+       VALUES ($1,$2,$3,'patient','Another fixture',$4) RETURNING id`,
+      [tenant, otherThread, userId, crypto.randomUUID()]
+    )).rows[0];
+    await expect(messaging.sendPatientMessage(pool, {
+      userId, taskId, input: patientInput('Invalid quote', foreign.id),
+    })).rejects.toMatchObject({ code: 'MESSAGE_NOT_FOUND' });
+    await expect(act('doctor', 'react', '❤️', foreign.id)).rejects.toMatchObject({ code: 'MESSAGE_NOT_FOUND' });
+
+    const getAnswer = async (viewerType, viewerRef) => {
+      const thread = await messaging.listMessages(pool, tenant, taskId, userId, viewerType, viewerRef);
+      return { thread, answer: thread.messages.find((message) => message.id === answer.id) };
+    };
+    await act('doctor', 'pin', undefined, answer.id);
+    expect((await getAnswer('patient', patientRef)).thread.pinned_message.id).toBe(answer.id);
+    await act('doctor', 'pin');
+    expect((await getAnswer('patient', patientRef)).thread.pinned_message.id).toBe(original.id);
+    await act('doctor', 'unpin', undefined, answer.id);
+    await act('patient', 'delete_for_me');
+    const hidden = await getAnswer('patient', patientRef);
+    expect(hidden.answer.reply_to).toBeNull();
+    expect(hidden.thread.pinned_message).toBeNull();
+    expect((await getAnswer('doctor', doctorRef)).answer.reply_to.content).toBe('Nội dung thử nghiệm');
+    await expect(act('patient', 'react', '😊')).rejects.toMatchObject({ code: 'MESSAGE_NOT_FOUND' });
+    await act('patient', 'unsend');
+    expect((await getAnswer('doctor', doctorRef)).answer.reply_to).toBeNull();
+  });
   test('consultation records and Doctor AI context remain readable after encryption', async () => {
     const now = new Date().toISOString();
     await lifecycle.ingestDoctorLifecycle(pool, { body: {

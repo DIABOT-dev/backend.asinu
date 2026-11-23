@@ -37,6 +37,8 @@ const {
 } = require('../services/integrations/doctor-patient-conversation.service');
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const validOptionalReply = (value) =>
+  value === undefined || (typeof value === 'string' && UUID_PATTERN.test(value));
 
 const screenDoctorConsultation = async (pool, req, res) => {
   const parsed = screeningRequestSchema.safeParse(req.body);
@@ -262,13 +264,15 @@ const createDoctorAttachment = async (pool, req, res) => {
   const taskId = String(req.params.taskId || '').trim();
   const tenantId = String(req.query.tenant_id || req.body?.tenant_id || '').trim();
   const clientMessageId = String(req.headers['x-client-message-id'] || '').trim();
+  const replyToMessageId = req.body?.reply_to_message_id;
   if (
     !taskId ||
     taskId.length > 160 ||
     !tenantId ||
     tenantId.length > 120 ||
     !req.file ||
-    !UUID_PATTERN.test(clientMessageId)
+    !UUID_PATTERN.test(clientMessageId) ||
+    !validOptionalReply(replyToMessageId)
   ) {
     return res.status(400).json({
       ok: false,
@@ -283,6 +287,7 @@ const createDoctorAttachment = async (pool, req, res) => {
       taskId,
       tenantId,
       clientMessageId,
+      replyToMessageId,
       file: req.file,
     });
   } catch (error) {
@@ -297,6 +302,7 @@ const createDoctorVoice = async (pool, req, res) => {
   const tenantId = String(req.body?.tenant_id || req.query.tenant_id || '').trim();
   const clientMessageId = String(req.headers['x-client-message-id'] || '').trim();
   const durationMs = Number(req.body?.duration_ms || 0);
+  const replyToMessageId = req.body?.reply_to_message_id;
   if (
     !taskId ||
     taskId.length > 160 ||
@@ -304,6 +310,7 @@ const createDoctorVoice = async (pool, req, res) => {
     tenantId.length > 120 ||
     !req.file ||
     !UUID_PATTERN.test(clientMessageId) ||
+    !validOptionalReply(replyToMessageId) ||
     !Number.isInteger(durationMs) ||
     durationMs < 0 ||
     durationMs > 10 * 60 * 1000
@@ -321,6 +328,7 @@ const createDoctorVoice = async (pool, req, res) => {
       taskId,
       tenantId,
       clientMessageId,
+      replyToMessageId,
       file: req.file,
       durationMs,
     });
@@ -361,6 +369,7 @@ const createDoctorMessageAction = async (pool, req, res) => {
     messageIds: parsed.data.message_ids,
     content: parsed.data.content,
     isTyping: parsed.data.is_typing,
+    reaction: parsed.data.reaction,
   });
   return res.json({ ok: true, data });
 };

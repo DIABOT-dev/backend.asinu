@@ -219,8 +219,8 @@ const failedDraft = () => ({
 });
 const poolFixture = ({ supplement = false } = {}) => {
   const query = jest.fn(async (sql) => ({
-    rows: sql.includes('SELECT id FROM users')
-      ? [{ id: 1 }]
+    rows: sql.includes('FROM users WHERE id=$1 AND deleted_at IS NULL')
+      ? [{ id: 1, language_preference: 'vi' }]
       : sql.includes('MAX(version)')
         ? [{ n: 1 }]
         : supplement && sql.includes('SELECT is_supplement,status')
