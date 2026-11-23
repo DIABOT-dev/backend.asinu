@@ -16,6 +16,11 @@ function doctorProfileRoutes(pool) {
     bindController(controller.queryDoctorMessages, pool)
   );
   router.post(
+    '/messages/presence',
+    requireDoctorSignature,
+    bindController(controller.setDoctorChatPresence, pool)
+  );
+  router.post(
     '/messages/send',
     requireDoctorSignature,
     bindController(controller.sendDoctorMessage, pool)

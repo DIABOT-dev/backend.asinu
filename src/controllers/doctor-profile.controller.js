@@ -37,6 +37,7 @@ function doctorRequestHandler(requestService, createsResource = false) {
 }
 
 const queryDoctorMessages = doctorRequestHandler(requests.queryDoctorMessagesRequest);
+const setDoctorChatPresence = doctorRequestHandler(requests.setDoctorChatPresenceRequest);
 const sendDoctorMessage = doctorRequestHandler(requests.sendDoctorMessageRequest, true);
 const doctorMessageAction = doctorRequestHandler(requests.doctorMessageActionRequest);
 const sendDoctorVoice = doctorRequestHandler(requests.sendDoctorVoiceRequest, true);
@@ -48,6 +49,7 @@ module.exports = {
   createDoctorPatientFile,
   ingestDoctorPatientLifecycle,
   queryDoctorMessages,
+  setDoctorChatPresence,
   sendDoctorMessage,
   doctorMessageAction,
   sendDoctorVoice,

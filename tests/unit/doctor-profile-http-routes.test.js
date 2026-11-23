@@ -13,6 +13,7 @@ jest.mock('../../src/services/integrations/doctor-lifecycle.service', () => ({
 }));
 jest.mock('../../src/services/integrations/doctor-messaging.service', () => ({
   queryDoctorMessages: jest.fn(),
+  setDoctorChatPresence: jest.fn(),
   sendDoctorMessage: jest.fn(),
   doctorMessageAction: jest.fn(),
   sendDoctorVoice: jest.fn(),
@@ -48,6 +49,13 @@ const signedCases = [
     schema: policy.doctorMessageQuerySchema,
     errorKey: 'error.invalid_message_query',
     input: base,
+  },
+  {
+    path: '/messages/presence',
+    operation: messaging.setDoctorChatPresence,
+    schema: policy.doctorPresenceSchema,
+    errorKey: 'error.invalid_doctor_action',
+    input: { ...base, viewer_ref: ' doctor-1 ', session_id: messageId, revision: 2, active: false },
   },
   {
     path: '/messages/send',
@@ -107,7 +115,7 @@ const signedCases = [
 
 beforeEach(() => jest.resetAllMocks());
 
-test('keeps all Doctor integration endpoints and methods unchanged', () => {
+test('exposes the expected Doctor integration endpoints and methods', () => {
   expect(
     router.stack
       .filter((layer) => layer.route)
@@ -122,6 +130,7 @@ test('keeps all Doctor integration endpoints and methods unchanged', () => {
     'POST /patient-files',
     'POST /lifecycle',
     'POST /messages/query',
+    'POST /messages/presence',
     'POST /messages/send',
     'POST /messages/action',
     'POST /messages/voice',

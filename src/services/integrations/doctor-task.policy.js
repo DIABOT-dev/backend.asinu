@@ -164,7 +164,7 @@ const messageActionSchema = z
     }
   });
 
-const doctorMessageQuerySchema = z
+const doctorMessageIdentitySchema = z
   .object({
     tenant_id: z.string().trim().min(1).max(120),
     task_id: z.string().trim().min(1).max(160),
@@ -173,7 +173,18 @@ const doctorMessageQuerySchema = z
   })
   .strict();
 
-const doctorMessageSendSchema = doctorMessageQuerySchema
+const doctorMessageQuerySchema = doctorMessageIdentitySchema.extend({
+  viewer_active: z.boolean().optional(),
+});
+
+const doctorPresenceSchema = doctorMessageIdentitySchema.extend({
+  viewer_ref: z.string().trim().min(1).max(160),
+  session_id: z.string().uuid(),
+  revision: z.number().int().positive(),
+  active: z.boolean(),
+});
+
+const doctorMessageSendSchema = doctorMessageIdentitySchema
   .extend({
     content: z.string().trim().min(1).max(5000),
     message_type: z.enum(['question', 'consultation', 'follow_up']),
@@ -184,7 +195,7 @@ const doctorMessageSendSchema = doctorMessageQuerySchema
   })
   .strict();
 
-const doctorMessageActionSchema = doctorMessageQuerySchema
+const doctorMessageActionSchema = doctorMessageIdentitySchema
   .extend({
     action: z.enum(['read', 'typing', 'edit', 'unsend', 'delete_for_me', 'pin', 'unpin', 'react']),
     message_id: z.string().uuid().optional(),
@@ -236,7 +247,7 @@ const doctorMessageActionSchema = doctorMessageQuerySchema
     }
   });
 
-const doctorVoiceSendSchema = doctorMessageQuerySchema
+const doctorVoiceSendSchema = doctorMessageIdentitySchema
   .extend({
     content_base64: z
       .string()
@@ -261,7 +272,7 @@ const doctorVoiceSendSchema = doctorMessageQuerySchema
   })
   .strict();
 
-const doctorAiAssistSchema = doctorMessageQuerySchema
+const doctorAiAssistSchema = doctorMessageIdentitySchema
   .extend({
     touchpoint: z.enum([
       'patient_summary',
@@ -490,6 +501,7 @@ module.exports = {
   patientMessageRequestSchema,
   messageActionSchema,
   doctorMessageQuerySchema,
+  doctorPresenceSchema,
   doctorMessageSendSchema,
   doctorMessageActionSchema,
   doctorVoiceSendSchema,

@@ -21,6 +21,7 @@ const {
   listPrivacyReceipts,
 } = require('../services/integrations/doctor-task.service');
 const {
+  listMessages,
   listPatientTasks,
   messageAction,
 } = require('../services/integrations/doctor-messaging.service');
@@ -220,7 +221,9 @@ const listDoctorMessages = async (pool, req, res) => {
       code: 'TASK_TENANT_REQUIRED',
     });
   }
-  const data = await listPatientConversation(pool, tenantId, taskId, req.user.id);
+  const data = await (req.query.view === 'messages'
+    ? listMessages(pool, tenantId, taskId, req.user.id)
+    : listPatientConversation(pool, tenantId, taskId, req.user.id));
   return res.json({ ok: true, data });
 };
 

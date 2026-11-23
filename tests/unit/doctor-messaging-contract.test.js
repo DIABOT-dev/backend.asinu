@@ -1,12 +1,16 @@
 const {
   messageActionSchema,
   doctorMessageActionSchema,
+  doctorMessageQuerySchema,
   doctorVoiceSendSchema,
 } = require('../../src/services/integrations/doctor-task.policy');
 const {
   isDoctorTaskMessageable,
   listMessages,
 } = require('../../src/services/integrations/doctor-messaging.service');
+const { listPatientConversation } = require('../../src/services/integrations/doctor-patient-conversation.service');
+const { requestDoctorTaskStatus } = require('../../src/services/integrations/doctor-task.service');
+const { listDoctorMessages } = require('../../src/controllers/doctor-task.controller');
 
 const validAction = {
   tenant_id: 'clinic-demo',
@@ -87,6 +91,7 @@ test('Closed consultations cannot receive text or voice, while follow-up remains
 jest.mock('../../src/services/integrations/doctor-task.service', () => ({
   ...jest.requireActual('../../src/services/integrations/doctor-task.service'),
   assertTenantAllowed: jest.fn(),
+  requestDoctorTaskStatus: jest.fn(),
 }));
 
 
@@ -108,4 +113,76 @@ test('patient threads expose reminders as system messages and preserve clinician
     ['reminder', 'system'],
     ['reply', 'doctor'],
   ]);
+  // REST responses include only the task-scoped transport state. They do not
+  // infer presence from the two messages above.
+  expect(result.patient_presence).toEqual({ status: 'offline' });
+});
+
+test('the live message view returns the owned thread without waiting for Doctor task status', async () => {
+  requestDoctorTaskStatus.mockClear();
+  const pool = {
+    query: jest.fn()
+      .mockResolvedValueOnce({ rows: [{ app_user_id: '42', summary: 'Consultation' }] })
+      .mockResolvedValueOnce({ rows: [{ status: 'in_progress' }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'reply', sender_type: 'doctor', content: 'New reply' }] })
+      .mockResolvedValue({ rows: [] }),
+  };
+  const req = {
+    params: { taskId: 'task-1' },
+    query: { tenant_id: 'clinic-demo', view: 'messages' },
+    user: { id: 42 },
+  };
+  const res = { json: jest.fn() };
+  await listDoctorMessages(pool, req, res);
+  expect(res.json).toHaveBeenCalledWith({
+    ok: true, data: expect.objectContaining({ messages: [expect.objectContaining({ id: 'reply' })] }),
+  });
+  expect(requestDoctorTaskStatus).not.toHaveBeenCalled();
+  await expect(listDoctorMessages(pool, { ...req, user: { id: 43 } }, res)).rejects.toMatchObject({
+    statusCode: 404,
+  });
+});
+
+test('the patient sees foreground presence for the expert currently assigned by Doctor', async () => {
+  const clock = jest.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+  let doctorRef = 'expert-1';
+  const pool = {
+    query: jest.fn(async (sql) => ({
+      rows: sql.includes('FROM doctor_task_outbox')
+        ? [{ app_user_id: '42' }]
+        : sql.includes('FROM doctor_task_lifecycle_events')
+          ? [{ status: 'waiting_user', doctor_ref: 'legacy-external-reference' }]
+          : [],
+    })),
+  };
+  const profile = { tenant_id: 'clinic-demo', task_id: 'presence-task', app_user_id: '42' };
+  requestDoctorTaskStatus.mockImplementation(async () => ({
+    status: 'waiting_user', doctor: { id: doctorRef, name: 'Expert Fixture' },
+  }));
+  const patientMessages = () => listPatientConversation(pool, 'clinic-demo', 'presence-task', '42');
+  const readAsDoctor = (actor, active) =>
+    listMessages(pool, 'clinic-demo', 'presence-task', '42', 'doctor', actor, active);
+
+  try {
+    expect(doctorMessageQuerySchema.safeParse({ ...profile, viewer_active: true }).success).toBe(true);
+    expect(doctorMessageQuerySchema.safeParse({ ...profile, viewer_active: 'true' }).success).toBe(false);
+    await readAsDoctor('expert-1', false);
+    await readAsDoctor('other-expert', true);
+    expect((await patientMessages()).doctor_presence).toEqual({ doctor_ref: 'expert-1', status: 'offline', expires_at: null });
+    await readAsDoctor('expert-1', true);
+    expect((await patientMessages()).doctor_presence).toEqual({
+      doctor_ref: 'expert-1', status: 'online', expires_at: new Date(Date.now() + 25_000).toISOString(),
+    });
+    clock.mockReturnValue(1_800_000_015_000);
+    await readAsDoctor('expert-1', true);
+    clock.mockReturnValue(1_800_000_033_000);
+    expect((await patientMessages()).doctor_presence.status).toBe('online');
+    doctorRef = 'expert-2';
+    expect((await patientMessages()).doctor_presence.status).toBe('offline');
+    doctorRef = 'expert-1';
+    clock.mockReturnValue(1_800_000_061_000);
+    expect((await patientMessages()).doctor_presence.status).toBe('offline');
+  } finally {
+    clock.mockRestore();
+  }
 });

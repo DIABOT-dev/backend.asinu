@@ -8,6 +8,7 @@ const {
 } = require('./doctor-messaging.service');
 const { requestDoctorTaskStatus } = require('./doctor-task.service');
 const { waitForDoctorTask } = require('./doctor-task-readiness');
+const { readDoctorPresence } = require('./doctor-chat-realtime');
 
 async function getPatientMessageState(tenantId, taskId, userId) {
   const status = await waitForDoctorTask(() =>
@@ -38,7 +39,11 @@ async function listPatientConversation(pool, tenantId, taskId, userId) {
   } catch {
     // Keep history available during a temporary Doctor outage.
   }
-  return { ...data, task_status: taskStatus };
+  return {
+    ...data,
+    task_status: taskStatus,
+    doctor_presence: readDoctorPresence(tenantId, taskId, taskStatus?.doctor?.id),
+  };
 }
 
 async function sendPatientConversationMessage(pool, { userId, taskId, input }) {

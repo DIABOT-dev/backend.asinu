@@ -42,6 +42,7 @@ const {
 } = require('./doctor-dialogue');
 
 const PROMPT_VERSION = 'doctor-copilot-2026-11-16.11';
+const PATIENT_SUMMARY_PROMPT_VERSION = 'doctor-patient-summary-2026-11-23.1';
 const OUTPUT_SCHEMA_VERSION = 'doctor-copilot-output-v1';
 
 const buildSystemPrompt = ({ locale, touchpoint, intent = 'clinical', communicationStyle }) =>
@@ -119,7 +120,13 @@ const removeHistoricalConversation = (markdown) => {
 
 const touchpointInstruction = {
   patient_summary:
-    'Summarize documented patient history and this consultation concisely. Attribute self-reported facts, preserve chronology, relevant conditions, medicines, allergies, missing data and conflicts. Do not add diagnoses, broad negative findings, or reference knowledge as patient facts. No literature citation is needed for patient history. Do not write a patient reply.',
+    [
+      'Prepare a concise overview of the selected patient for the consultant. In clinical_summary, use the third person and at most three short sentences about the patient-reported reason for this consultation and how it evolved, based on the intake and conversation. Attribute reports to the patient. When an intake or dated message says “today”, anchor it to the date of that intake or message in Asia/Ho_Chi_Minh.',
+      'The interface already lists the recorded medicines and allergies, declared history, and latest blood pressure and glucose with their dates. Use patient_record to check facts and identify gaps, but do not repeat these rows, age, birth year or gender in clinical_summary.',
+      'Put each unresolved point once in missing_data. Keep actual contradictions in conflicts and use uncertainties only for a distinct limitation that cannot be expressed as a missing fact. Do not repeat a gap from deterministic_tools.missing_data in any model field. Combine questions about current medicine, indication and dose into one point when all are unknown.',
+      'A negative choice on an intake only applies to the listed options. Leave individual symptoms unknown when the options are not documented. A reminder log does not confirm current medication use, indication or actual dose. An empty allergy record does not confirm absence of allergies. Do not add diagnoses or reference knowledge as patient facts.',
+      'Keep patient_reply, follow_up_draft, clarifying_questions and clinical_rationale empty. This overview is reference-only and must never be sent to the patient.',
+    ].join('\n'),
   abnormal_trends:
     'Summarize abnormal measurements and meaningful trends. Separate deterministic rule findings from model interpretation. Do not diagnose.',
   suggested_questions:
@@ -833,7 +840,8 @@ const createDoctorAiAssist = async (pool, input) => {
       model: response.model,
       usage: { input_tokens: inputTokens, output_tokens: outputTokens },
       latency_ms: latencyMs,
-      prompt_version: PROMPT_VERSION,
+      prompt_version:
+        input.touchpoint === 'patient_summary' ? PATIENT_SUMMARY_PROMPT_VERSION : PROMPT_VERSION,
       output_schema_version: OUTPUT_SCHEMA_VERSION,
       policy_version: input.clinical_support.policy_version,
       retrieval: {

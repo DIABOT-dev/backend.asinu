@@ -15,7 +15,12 @@ const {
 } = require('../media/private-media.service');
 const { rebuildPatientHealthTimeline } = require('../health/health-timeline.service');
 const { isAudioBuffer } = require('../../middleware/upload.middleware');
-const { broadcastChatEvent } = require('./doctor-chat-realtime');
+const {
+  broadcastChatEvent,
+  chatPresence,
+  recordDoctorPresence,
+  updateDoctorPresence,
+} = require('./doctor-chat-realtime');
 const { t } = require('../../i18n');
 const logger = require('../../lib/logger');
 const crypto = require('crypto');
@@ -302,10 +307,18 @@ const listMessages = async (
   taskId,
   userId,
   viewerType = 'patient',
-  viewerRef = String(userId)
+  viewerRef = String(userId),
+  viewerActive = false
 ) => {
   assertTenantAllowed(tenantId);
   const task = await loadOwnedTask(pool, tenantId, taskId, userId);
+  if (
+    viewerType === 'doctor' &&
+    viewerActive &&
+    isDoctorTaskMessageable({ status: task.lifecycle_status, followUpUntil: task.follow_up_until }, 'follow_up')
+  ) {
+    recordDoctorPresence(tenantId, taskId, viewerRef);
+  }
   const join = messageViewerJoin(viewerType, viewerRef);
   const result = await pool.query(
     `SELECT ${messageProjection}
@@ -334,6 +347,9 @@ const listMessages = async (
     messages,
     pinned_message: pinned[0] || null,
     typing: await listTyping(pool, tenantId, taskId, viewerType, viewerRef),
+    // This is based only on the authenticated task-scoped chat transport.
+    // Do not substitute recent messages or typing for patient presence.
+    patient_presence: chatPresence(tenantId, taskId),
   };
 };
 
@@ -463,6 +479,12 @@ const sendPatientMessage = async (pool, { userId, taskId, input }) => {
     // retry path. A failed direct call must never make the patient's send
     // fail or create a duplicate message.
     if (doctorEnvelope) {
+      broadcastChatEvent({
+        tenantId: input.tenant_id,
+        taskId,
+        type: 'chat.message.changed',
+        data: { task_id: taskId, message_id: String(message.id), action: 'created' },
+      });
       void deliverDoctorRequest('messages', doctorEnvelope, doctorEnvelope.idempotency_key).catch(
         (error) => {
           logger.warn('doctor_message_direct_delivery_failed', {
@@ -474,12 +496,6 @@ const sendPatientMessage = async (pool, { userId, taskId, input }) => {
       );
     }
     await rebuildPatientHealthTimeline(pool, userId);
-    broadcastChatEvent({
-      tenantId: input.tenant_id,
-      taskId,
-      type: 'chat.message.changed',
-      data: { task_id: taskId, message_id: String(message.id), action: 'created' },
-    });
     return message.reply_to_message_id
       ? {
           ...(await selectMessage(client, input.tenant_id, taskId, message.id, 'patient', userId)),
@@ -1043,7 +1059,6 @@ const messageAction = async (pool, input) => {
       throw integrationError(400, 'INVALID_MESSAGE_ACTION', 'Unsupported message action.');
     }
   }
-  await rebuildPatientHealthTimeline(pool, userId);
   broadcastChatEvent({
     tenantId,
     taskId,
@@ -1058,6 +1073,7 @@ const messageAction = async (pool, input) => {
   if (actorType === 'patient' && action !== 'delete_for_me') {
     relayDoctorChatChange({ tenantId, taskId, userId, action, messageId });
   }
+  await rebuildPatientHealthTimeline(pool, userId);
   return selectMessage(pool, tenantId, taskId, messageId, actorType, actorRef);
 };
 
@@ -1123,8 +1139,25 @@ const queryDoctorMessages = async (pool, req, input) => {
     taskId,
     appUserId,
     'doctor',
-    input.viewer_ref || input.sender_ref || 'doctor'
+    input.viewer_ref || input.sender_ref || 'doctor',
+    input.viewer_active === true && Boolean(input.viewer_ref)
   );
+};
+
+const setDoctorChatPresence = async (pool, req, input) => {
+  verifyDoctorSignature(req);
+  const { tenantId, appUserId, taskId } = assertProfileRequest(input);
+  const task = await loadOwnedTask(pool, tenantId, taskId, appUserId);
+  const active = input.active && isDoctorTaskMessageable({
+    status: task.lifecycle_status,
+    followUpUntil: task.follow_up_until,
+  }, 'follow_up');
+  updateDoctorPresence(tenantId, taskId, input.viewer_ref, {
+    sessionId: input.session_id,
+    revision: input.revision,
+    active,
+  });
+  return { accepted: true };
 };
 
 const sendDoctorMessage = async (pool, req, input) => {
@@ -1157,6 +1190,12 @@ const sendDoctorMessage = async (pool, req, input) => {
     replyToMessageId: input.reply_to_message_id,
   });
   if (!message.duplicate) {
+    broadcastChatEvent({
+      tenantId,
+      taskId,
+      type: 'chat.message.changed',
+      data: { task_id: taskId, message_id: String(message.id), action: 'created' },
+    });
     const user = await pool.query(
       `SELECT id, push_token, COALESCE(language_preference, 'vi') AS language
          FROM users WHERE id = $1 AND deleted_at IS NULL`,
@@ -1191,6 +1230,7 @@ const sendDoctorMessage = async (pool, req, input) => {
         },
         'high',
         {
+          waitForPush: false,
           // Do not put the patient's health details on the device lock screen.
           pushBody: systemMessage
             ? t('push.doctor_system_lockscreen', lang)
@@ -1200,12 +1240,6 @@ const sendDoctorMessage = async (pool, req, input) => {
         }
       );
     }
-    broadcastChatEvent({
-      tenantId,
-      taskId,
-      type: 'chat.message.changed',
-      data: { task_id: taskId, message_id: String(message.id), action: 'created' },
-    });
   }
   await rebuildPatientHealthTimeline(pool, appUserId);
   if (message.reply_to_message_id) {
@@ -1330,6 +1364,7 @@ module.exports = {
   sendPatientVoice,
   messageAction,
   queryDoctorMessages,
+  setDoctorChatPresence,
   sendDoctorMessage,
   sendDoctorVoice,
   doctorMessageAction,
