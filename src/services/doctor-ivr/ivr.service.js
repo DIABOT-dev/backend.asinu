@@ -13,7 +13,11 @@ const {
   materializeGeneratedQuestions,
 } = require('./question-set.schema');
 const { assertTenantAllowed } = require('../integrations/doctor-task.service');
-const { loadOwnedTask } = require('../integrations/doctor-messaging.service');
+const {
+  loadOwnedTask,
+  insertIvrQuestionMessage,
+} = require('../integrations/doctor-messaging.service');
+const { broadcastChatEvent } = require('../integrations/doctor-chat-realtime');
 const { hasAiConsent: mayProcessAi, withAiUser } = require('../ai/ai-consent.service');
 const { callTextAi } = require('../ai/ai.service');
 const { loadDoctorClinicalContext } = require('../integrations/doctor-context.service');
@@ -77,7 +81,7 @@ async function scope(pool, input) {
     throw error('IVR_INVALID_SCOPE', 'Thông tin ca không hợp lệ.', 400);
   const task = await loadOwnedTask(pool, input.tenant_id, input.task_id, user);
   const owner = (
-    await pool.query('SELECT id FROM users WHERE id=$1 AND deleted_at IS NULL', [user])
+    await pool.query('SELECT id, language_preference FROM users WHERE id=$1 AND deleted_at IS NULL', [user])
   ).rows[0];
   if (!owner) throw error('IVR_NOT_FOUND', 'Không tìm thấy phiên.', 404);
   const privacy = (
@@ -88,7 +92,13 @@ async function scope(pool, input) {
   ).rows[0];
   if (privacy && privacy.action !== 'grant_consent')
     throw error('IVR_CONSENT_WITHDRAWN', 'Quyền chia sẻ hồ sơ đã được thu hồi.', 403);
-  return { user, task, tenant: input.tenant_id, taskId: input.task_id };
+  return {
+    user,
+    task,
+    tenant: input.tenant_id,
+    taskId: input.task_id,
+    language: owner.language_preference === 'en' ? 'en' : 'vi',
+  };
 }
 async function audit(db, s, actor, type, detail = {}, sessionId = null) {
   await db.query(
@@ -487,7 +497,7 @@ async function doctorOperation(pool, input) {
         content.greeting = `Cuộc gọi có thể được ghi âm. ${content.greeting}`;
       Object.assign(content, validateQuestionSet(content, { supplement: !!data.supplement }));
     }
-    return transaction(pool, async (db) => {
+    const result = await transaction(pool, async (db) => {
       await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`ivr:${s.tenant}:${s.taskId}`]);
       const current = (
         await db.query(
@@ -579,8 +589,29 @@ async function doctorOperation(pool, input) {
         ]
       );
       await audit(db, s, actor, 'session.preparing', {}, sessionId);
-      return { question_set_id: id, version, session_id: sessionId, status: 'draft' };
+      const message = await insertIvrQuestionMessage(db, {
+        tenantId: s.tenant,
+        taskId: s.taskId,
+        userId: s.user,
+        sessionId,
+        language: s.language,
+      });
+      return {
+        question_set_id: id,
+        version,
+        session_id: sessionId,
+        status: 'draft',
+        message_id: message.id,
+      };
     });
+    if (result.message_id)
+      broadcastChatEvent({
+        tenantId: s.tenant,
+        taskId: s.taskId,
+        type: 'chat.message.changed',
+        data: { task_id: s.taskId, message_id: String(result.message_id), action: 'created' },
+      });
+    return result;
   }
   if (op === 'template') {
     const content = validateQuestionSet(data.content, { supplement: !!data.supplement });

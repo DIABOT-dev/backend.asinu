@@ -55,7 +55,7 @@ async function sendPatientConversationMessage(pool, { userId, taskId, input }) {
 
 async function sendPatientConversationAttachment(
   pool,
-  { userId, taskId, tenantId, clientMessageId, file }
+  { userId, taskId, tenantId, clientMessageId, replyToMessageId, file }
 ) {
   await getPatientMessageState(tenantId, taskId, userId);
   return sendPatientAttachment(pool, {
@@ -66,6 +66,7 @@ async function sendPatientConversationAttachment(
       content: '',
       message_type: 'follow_up',
       client_message_id: clientMessageId,
+      ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
     },
     file,
   });
@@ -73,13 +74,17 @@ async function sendPatientConversationAttachment(
 
 async function sendPatientConversationVoice(
   pool,
-  { userId, taskId, tenantId, clientMessageId, file, durationMs }
+  { userId, taskId, tenantId, clientMessageId, replyToMessageId, file, durationMs }
 ) {
   await getPatientMessageState(tenantId, taskId, userId);
   return sendPatientVoice(pool, {
     userId,
     taskId,
-    input: { tenant_id: tenantId, client_message_id: clientMessageId },
+    input: {
+      tenant_id: tenantId,
+      client_message_id: clientMessageId,
+      ...(replyToMessageId ? { reply_to_message_id: replyToMessageId } : {}),
+    },
     file,
     durationMs,
   });

@@ -889,6 +889,13 @@ const createDoctorAiAssist = async (pool, input) => {
       error: error instanceof Error ? error.message : 'Unknown clinical AI error',
     });
     if (error?.statusCode) throw error;
+    if (error?.code === 'NINEROUTER_HTTP_ERROR' && error.status === 403) {
+      throw integrationError(
+        503,
+        'DOCTOR_AI_NINEROUTER_FORBIDDEN',
+        '9Router returned HTTP 403 while generating AI assistance.'
+      );
+    }
     if (['MEDGEMMA_INSUFFICIENT_CREDIT', 'NINEROUTER_INSUFFICIENT_CREDIT'].includes(error?.code)) {
       throw integrationError(
         503,

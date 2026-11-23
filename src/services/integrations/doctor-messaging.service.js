@@ -81,7 +81,7 @@ const relayDoctorChatChange = ({
 const RAW_MESSAGE_COLUMNS = `id, task_id, sender_type, sender_ref, message_type, content,
   client_message_id, created_at, delivered_at, read_at, read_by_type, read_by_ref,
   edited_at, deleted_at, deleted_by_type, deleted_by_ref, pinned_at, pinned_by_type,
-  pinned_by_ref, user_id`;
+  pinned_by_ref, user_id, reply_to_message_id`;
 
 const messageProjection = `
   m.id, m.task_id, m.sender_type, m.sender_ref, m.message_type,
@@ -92,6 +92,19 @@ const messageProjection = `
   (d.message_id IS NOT NULL) AS is_deleted_for_me,
   (m.edited_at IS NOT NULL) AS is_edited,
   (m.pinned_at IS NOT NULL) AS is_pinned,
+  CASE WHEN m.deleted_at IS NULL AND d.message_id IS NULL THEN m.reply_to_message_id END AS reply_to_message_id,
+  quoted.id AS quoted_id, quoted.sender_type AS quoted_sender_type, quoted.sender_ref AS quoted_sender_ref,
+  quoted.message_type AS quoted_message_type, quoted.content AS quoted_content,
+  CASE WHEN m.deleted_at IS NOT NULL OR d.message_id IS NOT NULL THEN '[]'::jsonb
+       ELSE COALESCE((
+         SELECT jsonb_agg(to_jsonb(grouped) ORDER BY grouped.emoji)
+           FROM (SELECT emoji, count(*)::int AS count,
+                        bool_or(actor_type = $4 AND actor_ref = $5) AS reacted_by_me
+                   FROM doctor_task_message_reactions
+                  WHERE message_id = m.id
+                  GROUP BY emoji) grouped
+       ), '[]'::jsonb)
+  END AS reactions,
   CASE WHEN m.read_at IS NOT NULL THEN 'seen' ELSE 'sent' END AS delivery_status`;
 
 const isDoctorTaskMessageable = ({ status, followUpUntil }, messageType, now = new Date()) => {
@@ -110,7 +123,9 @@ const isDoctorTaskMessageable = ({ status, followUpUntil }, messageType, now = n
   );
 };
 
-const isSystemSender = (senderRef) => senderRef === 'doctor-sla-worker';
+const ivrQuestionSender = 'doctor-ivr-worker';
+const isSystemSender = (senderRef) =>
+  senderRef === 'doctor-sla-worker' || senderRef === ivrQuestionSender;
 
 const parseAttachment = (content) => {
   if (typeof content !== 'string' || !content.startsWith('[ASINU_ATTACHMENT]')) return null;
@@ -169,6 +184,8 @@ const decryptMessage = (message) => {
 const hydrateMessageMedia = (message) => {
   message = decryptMessage(message);
   if (!message || typeof message.content !== 'string') return message;
+  if (message.sender_type === 'doctor' && message.sender_ref === ivrQuestionSender)
+    return { ...message, ivr_session_id: message.client_message_id };
   const attachment = parseAttachment(message.content);
   if (attachment) {
     return {
@@ -186,10 +203,49 @@ const hydrateMessageMedia = (message) => {
   return message;
 };
 
+const projectMessage = (row) => {
+  if (!row) return null;
+  const {
+    quoted_id: id,
+    quoted_sender_type: senderType,
+    quoted_sender_ref: senderRef,
+    quoted_message_type: messageType,
+    quoted_content: quotedContent,
+    ...message
+  } = row;
+  const projected = hydrateMessageMedia(message);
+  if (!id || typeof quotedContent !== 'string') return { ...projected, reply_to: null };
+  const { content } = decryptMessage({ user_id: row.user_id, content: quotedContent });
+  const kind = content.startsWith('[ASINU_ATTACHMENT]')
+    ? 'attachment'
+    : content.startsWith('[ASINU_VOICE]')
+      ? 'voice'
+      : 'text';
+  return {
+    ...projected,
+    reply_to: {
+      id,
+      sender_type: senderType === 'doctor' && isSystemSender(senderRef) ? 'system' : senderType,
+      message_type: messageType,
+      kind,
+      content: kind === 'text' ? Array.from(content).slice(0, 180).join('') : null,
+    },
+  };
+};
+
 const messageViewerJoin = (viewerType, viewerRef) => ({
   sql: `LEFT JOIN doctor_task_message_deletions d
           ON d.tenant_id = m.tenant_id AND d.task_id = m.task_id AND d.message_id = m.id
-         AND d.viewer_type = $4 AND d.viewer_ref = $5`,
+         AND d.viewer_type = $4 AND d.viewer_ref = $5
+        LEFT JOIN doctor_task_messages quoted
+          ON quoted.id = m.reply_to_message_id AND quoted.tenant_id = m.tenant_id
+         AND quoted.task_id = m.task_id AND quoted.user_id = m.user_id
+         AND quoted.deleted_at IS NULL AND m.deleted_at IS NULL AND d.message_id IS NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM doctor_task_message_deletions hidden
+            WHERE hidden.tenant_id = quoted.tenant_id AND hidden.task_id = quoted.task_id
+              AND hidden.message_id = quoted.id AND hidden.viewer_type = $4 AND hidden.viewer_ref = $5
+         )`,
   params: [viewerType, String(viewerRef)],
 });
 
@@ -202,7 +258,7 @@ const selectMessage = async (pool, tenantId, taskId, messageId, viewerType, view
       WHERE m.tenant_id = $1 AND m.task_id = $2 AND m.id = $3`,
     [tenantId, taskId, messageId, ...join.params]
   );
-  return hydrateMessageMedia(result.rows[0] || null);
+  return projectMessage(result.rows[0]);
 };
 
 const loadOwnedTask = async (pool, tenantId, taskId, userId) => {
@@ -261,18 +317,22 @@ const listMessages = async (
     [tenantId, taskId, userId, ...join.params]
   );
   const messages = result.rows.map((row) => {
-    const message = hydrateMessageMedia(row);
-    return viewerType === 'patient' && message.sender_type === 'doctor' && isSystemSender(message.sender_ref)
+    const message = projectMessage(row);
+    return viewerType === 'patient' &&
+      message.sender_type === 'doctor' &&
+      isSystemSender(message.sender_ref)
       ? { ...message, sender_type: 'system' }
       : message;
   });
-  const pinned = messages.filter((message) => message.is_pinned && !message.is_deleted);
+  const pinned = messages
+    .filter((message) => message.is_pinned && !message.is_deleted && !message.is_deleted_for_me)
+    .sort((a, b) => new Date(b.pinned_at) - new Date(a.pinned_at));
   return {
     task_id: taskId,
     summary: task.summary || null,
     initial_request: readConsultationInitialRequest(task.summary),
     messages,
-    pinned_message: pinned[pinned.length - 1] || null,
+    pinned_message: pinned[0] || null,
     typing: await listTyping(pool, tenantId, taskId, viewerType, viewerRef),
   };
 };
@@ -281,8 +341,18 @@ const insertMessage = async (client, input) => {
   const inserted = await client.query(
     `INSERT INTO doctor_task_messages(
        tenant_id, task_id, user_id, sender_type, sender_ref,
-       message_type, content, client_message_id
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+       message_type, content, client_message_id, reply_to_message_id
+     ) SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9::uuid
+        WHERE $9::uuid IS NULL OR EXISTS (
+          SELECT 1 FROM doctor_task_messages target
+           WHERE target.id = $9::uuid AND target.tenant_id = $1 AND target.task_id = $2
+             AND target.user_id = $3 AND target.deleted_at IS NULL
+             AND NOT EXISTS (
+               SELECT 1 FROM doctor_task_message_deletions hidden
+                WHERE hidden.tenant_id = $1 AND hidden.task_id = $2 AND hidden.message_id = target.id
+                  AND hidden.viewer_type = $4 AND hidden.viewer_ref = $5
+             )
+        )
      ON CONFLICT (tenant_id, task_id, client_message_id) DO NOTHING
      RETURNING ${RAW_MESSAGE_COLUMNS}`,
     [
@@ -294,6 +364,7 @@ const insertMessage = async (client, input) => {
       input.messageType,
       encryptHealthField(input.userId, 'doctor_task_messages.content', input.content),
       input.clientMessageId,
+      input.replyToMessageId ?? null,
     ]
   );
   if (inserted.rows[0]) return { ...decryptMessage(inserted.rows[0]), duplicate: false };
@@ -304,7 +375,19 @@ const insertMessage = async (client, input) => {
     [input.tenantId, input.taskId, input.clientMessageId]
   );
   const message = decryptMessage(existing.rows[0]);
-  if (!message || message.sender_type !== input.senderType || message.content !== input.content) {
+  if (!message && input.replyToMessageId) {
+    throw integrationError(
+      404,
+      'MESSAGE_NOT_FOUND',
+      'The message being replied to is unavailable.'
+    );
+  }
+  if (
+    !message ||
+    message.sender_type !== input.senderType ||
+    message.content !== input.content ||
+    (message.reply_to_message_id ?? null) !== (input.replyToMessageId ?? null)
+  ) {
     throw integrationError(
       409,
       'MESSAGE_IDEMPOTENCY_CONFLICT',
@@ -313,6 +396,18 @@ const insertMessage = async (client, input) => {
   }
   return { ...message, duplicate: true };
 };
+
+const insertIvrQuestionMessage = (client, { tenantId, taskId, userId, sessionId, language }) =>
+  insertMessage(client, {
+    tenantId,
+    taskId,
+    userId,
+    senderType: 'doctor',
+    senderRef: ivrQuestionSender,
+    messageType: 'question',
+    content: t('notification.doctor_ivr_request_title', language),
+    clientMessageId: sessionId,
+  });
 
 const sendPatientMessage = async (pool, { userId, taskId, input }) => {
   assertTenantAllowed(input.tenant_id);
@@ -338,6 +433,7 @@ const sendPatientMessage = async (pool, { userId, taskId, input }) => {
       messageType: input.message_type,
       content: input.content,
       clientMessageId: input.client_message_id,
+      replyToMessageId: input.reply_to_message_id,
     });
     if (!message.duplicate) {
       const eventId = `doctor.task.message.received:${message.id}`;
@@ -384,7 +480,12 @@ const sendPatientMessage = async (pool, { userId, taskId, input }) => {
       type: 'chat.message.changed',
       data: { task_id: taskId, message_id: String(message.id), action: 'created' },
     });
-    return message;
+    return message.reply_to_message_id
+      ? {
+          ...(await selectMessage(client, input.tenant_id, taskId, message.id, 'patient', userId)),
+          duplicate: message.duplicate,
+        }
+      : message;
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
     throw error;
@@ -401,13 +502,19 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
     file.buffer.length > 10 * 1024 * 1024 ||
     !isSupportedPatientFile(file.buffer, file.mimetype)
   ) {
-    throw integrationError(400, 'INVALID_PATIENT_FILE', 'A valid image or PDF up to 10 MB is required.');
+    throw integrationError(
+      400,
+      'INVALID_PATIENT_FILE',
+      'A valid image or PDF up to 10 MB is required.'
+    );
   }
 
   // Check the message key before touching Cloudinary. A mobile retry must not
   // create another file when the original message was already persisted.
   const findUploadedAttachment = async () => {
-    const { rows: [row] } = await pool.query(
+    const {
+      rows: [row],
+    } = await pool.query(
       `SELECT ${RAW_MESSAGE_COLUMNS}
          FROM doctor_task_messages
         WHERE tenant_id = $1 AND task_id = $2 AND user_id = $3 AND client_message_id = $4`,
@@ -416,7 +523,12 @@ const sendPatientAttachment = async (pool, { userId, taskId, input, file }) => {
     if (!row) return null;
     const existing = decryptMessage(row);
     const attachment = parseAttachment(existing.content);
-    if (existing.sender_type !== 'patient' || existing.message_type !== input.message_type || !attachment) {
+    if (
+      existing.sender_type !== 'patient' ||
+      existing.message_type !== input.message_type ||
+      !attachment ||
+      (existing.reply_to_message_id ?? null) !== (input.reply_to_message_id ?? null)
+    ) {
       throw integrationError(
         409,
         'MESSAGE_IDEMPOTENCY_CONFLICT',
@@ -581,7 +693,11 @@ const sendPatientVoice = async (pool, { userId, taskId, input, file, durationMs 
   );
   if (existingMessage.rows[0]) {
     const existing = decryptMessage(existingMessage.rows[0]);
-    if (existing.sender_type !== 'patient' || existing.message_type !== 'voice') {
+    if (
+      existing.sender_type !== 'patient' ||
+      existing.message_type !== 'voice' ||
+      (existing.reply_to_message_id ?? null) !== (input.reply_to_message_id ?? null)
+    ) {
       throw integrationError(
         409,
         'MESSAGE_IDEMPOTENCY_CONFLICT',
@@ -727,10 +843,77 @@ const assertOwnMessage = (message, actorType, actorRef) => {
   }
 };
 
+const setMessageReaction = async (
+  pool,
+  { tenantId, taskId, userId, actorType, actorRef, messageId, reaction }
+) => {
+  const params = [tenantId, taskId, userId, messageId, actorType, String(actorRef)];
+  const change =
+    reaction === null
+      ? `DELETE FROM doctor_task_message_reactions
+        WHERE message_id IN (SELECT id FROM target) AND actor_type = $5 AND actor_ref = $6`
+      : `INSERT INTO doctor_task_message_reactions(message_id, actor_type, actor_ref, emoji)
+       SELECT id, $5, $6, $7 FROM target
+       ON CONFLICT (message_id, actor_type, actor_ref) DO UPDATE SET emoji = EXCLUDED.emoji
+        WHERE doctor_task_message_reactions.emoji IS DISTINCT FROM EXCLUDED.emoji`;
+  if (reaction !== null) params.push(reaction);
+  const {
+    rows: [result],
+  } = await pool.query(
+    `WITH target AS (
+       SELECT m.id FROM doctor_task_messages m
+        WHERE m.tenant_id = $1 AND m.task_id = $2 AND m.user_id = $3 AND m.id = $4
+          AND m.deleted_at IS NULL
+          AND NOT EXISTS (
+            SELECT 1 FROM doctor_task_message_deletions d
+             WHERE d.tenant_id = $1 AND d.task_id = $2 AND d.message_id = m.id
+               AND d.viewer_type = $5 AND d.viewer_ref = $6
+          )
+        FOR UPDATE
+     ), changed AS (
+       ${change}
+       RETURNING 1
+     ) SELECT EXISTS (SELECT 1 FROM target) AS visible, EXISTS (SELECT 1 FROM changed) AS changed`,
+    params
+  );
+  if (!result.visible) {
+    throw integrationError(404, 'MESSAGE_NOT_FOUND', 'The message was not found.');
+  }
+  return result.changed;
+};
+
 const messageAction = async (pool, input) => {
   const { tenantId, taskId, userId, actorType, actorRef, action, messageId } = input;
   assertTenantAllowed(tenantId);
   const task = await loadOwnedTask(pool, tenantId, taskId, userId);
+  if (action === 'react') {
+    if (!messageId || input.reaction === undefined) {
+      throw integrationError(400, 'INVALID_MESSAGE_ACTION', 'A message and reaction are required.');
+    }
+    if (
+      !isDoctorTaskMessageable(
+        { status: task.lifecycle_status, followUpUntil: task.follow_up_until },
+        'follow_up'
+      )
+    ) {
+      throw integrationError(
+        409,
+        'TASK_NOT_MESSAGEABLE',
+        'The consultation conversation is closed.'
+      );
+    }
+    if (await setMessageReaction(pool, input)) {
+      broadcastChatEvent({
+        tenantId,
+        taskId,
+        type: 'chat.message.changed',
+        data: { task_id: taskId, message_id: String(messageId), action },
+      });
+      if (actorType === 'patient')
+        relayDoctorChatChange({ tenantId, taskId, userId, action, messageId });
+    }
+    return selectMessage(pool, tenantId, taskId, messageId, actorType, actorRef);
+  }
   if (action === 'read') {
     const result = await markMessagesRead(pool, { ...input, actorType, actorRef });
     if (result.updated > 0) {
@@ -971,6 +1154,7 @@ const sendDoctorMessage = async (pool, req, input) => {
     messageType: input.message_type,
     content,
     clientMessageId: input.client_message_id,
+    replyToMessageId: input.reply_to_message_id,
   });
   if (!message.duplicate) {
     const user = await pool.query(
@@ -981,7 +1165,8 @@ const sendDoctorMessage = async (pool, req, input) => {
     if (user.rows[0]) {
       const lang = user.rows[0].language === 'en' ? 'en' : 'vi';
       const systemMessage = isSystemSender(input.sender_ref);
-      const doctorName = !systemMessage && typeof input.sender_name === 'string' ? input.sender_name.trim() : '';
+      const doctorName =
+        !systemMessage && typeof input.sender_name === 'string' ? input.sender_name.trim() : '';
       const voice = parseVoice(input.content);
       const attachment = parseAttachment(content);
       const preview = voice
@@ -1023,6 +1208,12 @@ const sendDoctorMessage = async (pool, req, input) => {
     });
   }
   await rebuildPatientHealthTimeline(pool, appUserId);
+  if (message.reply_to_message_id) {
+    return {
+      ...(await selectMessage(pool, tenantId, taskId, message.id, 'doctor', input.sender_ref)),
+      duplicate: message.duplicate,
+    };
+  }
   return parseAttachment(content) ? hydrateMessageMedia(message) : message;
 };
 
@@ -1080,6 +1271,7 @@ const sendDoctorVoice = async (pool, req, input) => {
       sender_name: input.sender_name,
       message_type: 'voice',
       client_message_id: input.client_message_id,
+      reply_to_message_id: input.reply_to_message_id,
       content: `[ASINU_VOICE]${JSON.stringify({
         name: String(input.file_name || 'voice-message').slice(0, 255),
         mime_type: input.mime_type || 'audio/webm',
@@ -1124,12 +1316,14 @@ const doctorMessageAction = async (pool, req, input) => {
     content: input.content,
     messageIds: input.message_ids,
     isTyping: input.is_typing,
+    reaction: input.reaction,
   });
 };
 
 module.exports = {
   loadOwnedTask,
   listMessages,
+  insertIvrQuestionMessage,
   listPatientTasks,
   sendPatientMessage,
   sendPatientAttachment,
