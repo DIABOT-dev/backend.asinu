@@ -137,6 +137,7 @@ function nowVN() {
  * Optional `overridePriority` lets callers (e.g. NotificationOrchestrator) set priority explicitly.
  * Set `options.push=false` only when a notification is intentionally limited
  * to the in-app inbox.
+ * Set `options.waitForPush=false` to return once the inbox and push job are saved.
  */
 async function sendAndSave(
   pool,
@@ -162,6 +163,13 @@ async function sendAndSave(
     });
     if (!reserved) return false;
     if (options.push === false) return !reserved.existing;
+    if (options.waitForPush === false) {
+      // The durable outbox retries if delivery is interrupted after reservation.
+      void deliverNotification(pool, reserved.notificationId).catch((error) => {
+        logger.warn('notification.delivery_failed', { userId, type, error });
+      });
+      return true;
+    }
     const result = await deliverNotification(pool, reserved.notificationId);
     return result.ok;
   } catch (error) {

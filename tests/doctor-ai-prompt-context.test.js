@@ -256,6 +256,24 @@ test('internal summaries use the configured Doctor model instead of falling thro
   }
 });
 
+test('patient summaries are explicitly a third-person overview of the selected patient for the consultant', async () => {
+  await createDoctorAiAssist({}, { ...input, touchpoint: 'patient_summary' });
+  const request = callTextAi.mock.calls[0][0];
+  const payload = JSON.parse(request.prompt);
+
+  expect(payload.request).toContain('selected patient for the consultant');
+  expect(payload.request).toContain('third person');
+  expect(payload.request).toContain('recorded medicines and allergies');
+  expect(payload.request).toContain('do not repeat these rows');
+  expect(payload.request).toContain('each unresolved point once');
+  expect(payload.request).toContain('date of that intake or message');
+  expect(payload.request).toContain('A reminder log does not confirm current medication use');
+  expect(payload.request).toContain('reference-only');
+  expect(payload.request).toContain('never be sent to the patient');
+  expect(payload.patient_record.observations).toHaveProperty('blood_pressure');
+  expect(payload.patient_record.observations).toHaveProperty('medications');
+});
+
 test('the complete consultation reaches the provider without cutting older turns or the middle of a message', async () => {
   const current = context();
   current.conversation = Array.from({ length: 120 }, (_, i) => ({

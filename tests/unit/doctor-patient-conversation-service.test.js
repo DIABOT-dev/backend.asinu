@@ -55,6 +55,7 @@ describe('doctor patient conversation rules', () => {
     await expect(conversation.listPatientConversation(pool, 'tenant', 'task', 5)).resolves.toEqual({
       messages: [{ id: 'message' }],
       task_status: null,
+      doctor_presence: null,
     });
   });
 
@@ -68,6 +69,7 @@ describe('doctor patient conversation rules', () => {
       summary: 'Synthetic request',
       messages: [],
       task_status: null,
+      doctor_presence: null,
     });
   });
 
@@ -78,6 +80,7 @@ describe('doctor patient conversation rules', () => {
     await expect(conversation.listPatientConversation(pool, 'tenant', 'task', 5)).resolves.toEqual({
       messages: [],
       task_status: status,
+      doctor_presence: null,
     });
   });
 });

@@ -107,6 +107,28 @@ describe('external notification delivery', () => {
     ).toBe(false);
   });
 
+  test('can acknowledge a saved chat notification before the push provider completes', async () => {
+    const pool = createPool();
+    let completePush;
+    let pushStarted;
+    const started = new Promise((resolve) => { pushStarted = resolve; });
+    mockSendPushNotification.mockImplementationOnce(() => {
+      pushStarted();
+      return new Promise((resolve) => { completePush = resolve; });
+    });
+    try {
+      await expect(
+        sendAndSave(pool, 42, 'doctor_message', 'New reply', 'New reply', {
+          message_id: 'message-1',
+        }, 'high', { waitForPush: false })
+      ).resolves.toBe(true);
+      await started;
+      expect(pool.query.mock.calls.some(([sql]) => sql.includes('INSERT INTO notification_push_outbox'))).toBe(true);
+    } finally {
+      completePush?.({ ok: true });
+    }
+  });
+
   test('does not save or push optional reminders without explicit opt-in', async () => {
     const pool = createPool('ExpoPushToken[notification-delivery-test]', false);
 

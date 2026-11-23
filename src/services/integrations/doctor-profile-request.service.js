@@ -1,5 +1,6 @@
 const {
   doctorMessageQuerySchema,
+  doctorPresenceSchema,
   doctorMessageSendSchema,
   doctorMessageActionSchema,
   doctorVoiceSendSchema,
@@ -7,6 +8,7 @@ const {
 } = require('./doctor-task.policy');
 const {
   queryDoctorMessages,
+  setDoctorChatPresence,
   sendDoctorMessage,
   doctorMessageAction,
   sendDoctorVoice,
@@ -28,6 +30,11 @@ const queryDoctorMessagesRequest = validatedDoctorRequest(
   doctorMessageQuerySchema,
   'error.invalid_message_query',
   queryDoctorMessages
+);
+const setDoctorChatPresenceRequest = validatedDoctorRequest(
+  doctorPresenceSchema,
+  'error.invalid_doctor_action',
+  setDoctorChatPresence
 );
 const sendDoctorMessageRequest = validatedDoctorRequest(
   doctorMessageSendSchema,
@@ -57,6 +64,7 @@ const getDoctorAiContextVersionRequest = validatedDoctorRequest(
 
 module.exports = {
   queryDoctorMessagesRequest,
+  setDoctorChatPresenceRequest,
   sendDoctorMessageRequest,
   doctorMessageActionRequest,
   sendDoctorVoiceRequest,
