@@ -9,7 +9,10 @@ jest.mock('../../src/services/integrations/doctor-profile.service', () => ({
   verifyDoctorSignature: jest.fn(),
 }));
 jest.mock('../../src/services/notification/basic.notification.service', () => ({ sendAndSave: jest.fn() }));
-jest.mock('../../src/services/integrations/doctor-chat-realtime', () => ({ broadcastChatEvent: jest.fn() }));
+jest.mock('../../src/services/integrations/doctor-chat-realtime', () => ({
+  ...jest.requireActual('../../src/services/integrations/doctor-chat-realtime'),
+  broadcastChatEvent: jest.fn(),
+}));
 
 const { Pool } = require('pg');
 const fs = require('fs');
