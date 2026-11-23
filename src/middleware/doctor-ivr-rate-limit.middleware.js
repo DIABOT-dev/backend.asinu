@@ -1,18 +1,28 @@
 'use strict';
 const rateLimit = require('express-rate-limit');
-function createDoctorIvrGenerationLimiter() {
+function createOperationLimiter(operation, limitCount, code, error) {
   const limit = rateLimit({
     windowMs: 60000,
-    limit: 5,
+    limit: limitCount,
     keyGenerator: (req) => `${req.body?.tenant_id}:${req.body?.doctor_id}`,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
-    message: {
-      ok: false,
-      code: 'IVR_RATE_LIMIT',
-      error: 'Bạn đã tạo nhiều bộ câu hỏi. Vui lòng thử lại sau một phút.',
-    },
+    message: { ok: false, code, error },
   });
-  return (req, res, next) => (req.body?.operation === 'generate' ? limit(req, res, next) : next());
+  return (req, res, next) => (req.body?.operation === operation ? limit(req, res, next) : next());
 }
-module.exports = { createDoctorIvrGenerationLimiter };
+const createDoctorIvrGenerationLimiter = () =>
+  createOperationLimiter(
+    'generate',
+    5,
+    'IVR_RATE_LIMIT',
+    'Bạn đã tạo nhiều bộ câu hỏi. Vui lòng thử lại sau một phút.'
+  );
+const createDoctorIvrPreviewLimiter = () =>
+  createOperationLimiter(
+    'preview',
+    12,
+    'IVR_PREVIEW_RATE_LIMIT',
+    'Bạn đã nghe thử nhiều lần. Vui lòng thử lại sau một phút.'
+  );
+module.exports = { createDoctorIvrGenerationLimiter, createDoctorIvrPreviewLimiter };

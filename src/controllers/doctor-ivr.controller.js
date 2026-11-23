@@ -5,6 +5,23 @@ const ivr = require('../services/doctor-ivr/ivr.service');
 const calls = require('../services/doctor-ivr/ivr.calls');
 const policy = require('../services/doctor-ivr/ivr.policy');
 const uuid = (value) => z.string().uuid().parse(value);
+const previewInput = z
+  .object({
+    text: z.string().trim().min(1).max(600),
+    greeting: z.string().trim().max(300).optional(),
+    fixed: z.boolean().optional(),
+    options: z
+      .array(
+        z
+          .object({
+            key: z.number().int().min(1).max(6),
+            label: z.string().trim().min(1).max(120),
+          })
+          .strict()
+      )
+      .max(6),
+  })
+  .strict();
 const patientInput = z
   .object({
     action: z.enum(['start', 'ack', 'back', 'snooze', 'answer']),
@@ -58,7 +75,17 @@ function createDoctorIvrController(pool) {
           doctor_id: z.string().uuid(),
           doctor_name: z.string().min(1).max(160),
           specialty: z.string().max(160).optional(),
-          operation: z.enum(['list', 'generate', 'save', 'approve', 'template', 'cancel', 'reply']),
+          operation: z.enum([
+            'list',
+            'generate',
+            'preview',
+            'recording',
+            'save',
+            'approve',
+            'template',
+            'cancel',
+            'reply',
+          ]),
           data: z.record(z.string(), z.unknown()).default({}),
         })
         .strict()
@@ -67,6 +94,18 @@ function createDoctorIvrController(pool) {
         z.enum(['ai', 'template', 'manual']).parse(input.data.source);
       if (input.data.session_id !== undefined) uuid(input.data.session_id);
       if (input.data.supplement !== undefined) z.boolean().parse(input.data.supplement);
+      if (input.operation === 'preview' || input.operation === 'recording') {
+        const audio = await ivr.doctorOperation(pool, {
+          ...input,
+          data: input.operation === 'preview'
+            ? previewInput.parse(input.data)
+            : z.object({ answer_id: z.string().uuid() }).strict().parse(input.data),
+        });
+        return res
+          .set('Cache-Control', 'private, no-store')
+          .type(audio.mime_type)
+          .send(audio.audio_data);
+      }
       return json(res, await ivr.doctorOperation(pool, input));
     }),
     adminOperation: handle(async (req, res) => {
@@ -151,6 +190,21 @@ function createDoctorIvrController(pool) {
           String(req.params.questionId)
         )
       )
+    ),
+    answerAudio: handle(async (req, res) =>
+      json(
+        res.set('Cache-Control', 'private, no-store'),
+        await ivr.answerAudio(
+          pool,
+          req.user.id,
+          uuid(req.params.id),
+          req.params.questionId,
+          req.params.optionId
+        )
+      )
+    ),
+    closingAudio: handle(async (req, res) =>
+      json(res, await ivr.closingAudio(pool, req.user.id, uuid(req.params.id)))
     ),
     media: handle(async (req, res) => {
       const result = await ivr.media(

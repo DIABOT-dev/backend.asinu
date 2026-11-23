@@ -6,8 +6,8 @@ const {
   nextQuestion,
   materializeGeneratedQuestions,
 } = require('../src/services/doctor-ivr/question-set.schema');
-function fixtureWav() {
-  const bytes = Buffer.alloc(44 + 16000 * 2 * 2);
+function fixtureWav(seconds = 2) {
+  const bytes = Buffer.alloc(44 + 16000 * 2 * seconds);
   bytes.write('RIFF', 0);
   bytes.writeUInt32LE(bytes.length - 8, 4);
   bytes.write('WAVEfmt ', 8);
@@ -180,7 +180,7 @@ describe('IVR encryption boundary', () => {
 
 const describeDb = process.env.DOCTOR_IVR_TEST_DATABASE_URL ? describe : describe.skip;
 describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
-  let pool, admin, ivr, worker, schema;
+  let pool, admin, ivr, worker, schema, synthesizeAudio;
   const input = {
     tenant_id: 'clinic-demo',
     task_id: 'ivr-fixture-task',
@@ -230,6 +230,7 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
       options: `-c search_path=${schema},public`,
     });
     await pool.query(`CREATE TABLE users(id INTEGER PRIMARY KEY,deleted_at TIMESTAMPTZ,fcm_token TEXT,voip_push_token TEXT,voip_push_environment TEXT,language_preference TEXT);INSERT INTO users(id) VALUES(1),(2);
+   CREATE TABLE user_onboarding_profiles(user_id INTEGER PRIMARY KEY, birth_year INTEGER, age INTEGER, gender TEXT, date_of_birth DATE);
    CREATE TABLE checkin_call_attempts(target_user_id INTEGER,state TEXT,ring_deadline TIMESTAMPTZ,confirm_deadline TIMESTAMPTZ);
    CREATE TABLE doctor_task_outbox(id SERIAL,tenant_id TEXT,payload JSONB,created_at TIMESTAMPTZ DEFAULT NOW());
    CREATE TABLE doctor_task_lifecycle_events(tenant_id TEXT,task_id TEXT,status TEXT,doctor_ref TEXT,payload JSONB,occurred_at TIMESTAMPTZ,created_at TIMESTAMPTZ);
@@ -293,7 +294,8 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
         'utf8'
       )
     );
-    jest
+    jest.resetModules();
+    synthesizeAudio = jest
       .spyOn(require('../src/services/checkin-call/audio.service'), 'synthesizeText')
       .mockResolvedValue({ audio_data: Buffer.from('fixture-tts'), mime_type: 'audio/mpeg' });
     jest
@@ -380,6 +382,10 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     const requestId = randomUUID();
     s = await answer(s, 'q1', 'q1_b', { request_id: requestId });
     expect(s.current_question_id).toBe('q2');
+    await pool.query(
+      "UPDATE doctor_ivr_sessions SET remind_at=date_trunc('milliseconds', NOW())-INTERVAL '1 second'+INTERVAL '123 microseconds' WHERE id=$1",
+      [s.id]
+    );
     sendAndSave.mockClear().mockResolvedValue(true);
     await worker.runDoctorIvrWorker(pool);
     expect(sendAndSave).toHaveBeenCalledWith(
@@ -389,8 +395,17 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
       'Bác sĩ đã gửi câu hỏi',
       expect.any(String),
       expect.objectContaining({ sessionId: sent.session_id }),
-      'high'
+      'high',
+      { waitForPush: false }
     );
+    const { rows: [reminder] } = await pool.query(
+      'SELECT reminder_count,remind_at FROM doctor_ivr_sessions WHERE id=$1',
+      [s.id]
+    );
+    expect(reminder).toMatchObject({ reminder_count: 1, remind_at: null });
+    sendAndSave.mockClear();
+    await worker.runDoctorIvrWorker(pool);
+    expect(sendAndSave).not.toHaveBeenCalled();
     expect(
       (await pool.query("SELECT 1 FROM doctor_ivr_events WHERE event_type='red_flag.detected'"))
         .rowCount
@@ -439,6 +454,46 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     s = await ivr.patientAction(pool, 1, s.id, { action: 'ack' });
     expect(s.status).toBe('closed');
     expect((await ivr.patientAction(pool, 1, s.id, { action: 'ack' })).status).toBe('closed');
+  });
+  test('reads a saved choice through cached VieNeu audio scoped to the patient and question', async () => {
+    await newTask('answer-audio');
+    const questions = content();
+    questions.questions[0].options[1].red_flag = true;
+    const { session_id: id } = await invoke('approve', { content: questions });
+    await worker.runDoctorIvrWorker(pool);
+    let session = await ivr.patientAction(pool, 1, id, { action: 'start' });
+    for (const [user, question, option] of [
+      [2, 'q1', 'q1_a'], [1, 'q2', 'q2_a'], [1, 'q1', 'q1_x'],
+    ]) {
+      await expect(ivr.answerAudio(pool, user, id, question, option)).rejects.toMatchObject({
+        statusCode: 404,
+      });
+    }
+    synthesizeAudio.mockClear();
+    const load = () => ivr.answerAudio(pool, 1, id, 'q1', 'q1_b');
+    const [prefetched, concurrent] = await Promise.all([load(), load()]);
+    expect(prefetched).toEqual({ base64: Buffer.from('fixture-tts').toString('base64'), mimeType: 'audio/mpeg' });
+    expect(concurrent).toEqual(prefetched);
+    expect(synthesizeAudio).toHaveBeenCalledTimes(1);
+    expect(synthesizeAudio).toHaveBeenCalledWith('Bạn đã chọn: Từ hôm trước', 'vi', { timeoutMs: 8000 });
+    session = await answer(session, 'q1', 'q1_b');
+    expect(session.current_question_id).toBe('q2');
+    await expect(load()).resolves.toEqual(prefetched);
+    await expect(ivr.answerAudio(pool, 1, id, 'q1', 'q1_a')).rejects.toMatchObject({ statusCode: 404 });
+    expect(synthesizeAudio).toHaveBeenCalledTimes(1);
+    await expect(ivr.closingAudio(pool, 1, id)).rejects.toMatchObject({ statusCode: 404 });
+    session = await answer(session, 'q2', 'q2_a');
+    session = await answer(session, 'q3', 'q3_a');
+    session = await answer(session, 'q_final', 'qf_no');
+    expect(session.status).toBe('completed');
+    const safety = 'Hướng dẫn an toàn dùng trong kiểm thử.';
+    await pool.query('UPDATE doctor_ivr_sessions SET policy = policy || $2::jsonb WHERE id=$1', [
+      id,
+      JSON.stringify({ safety_message: safety }),
+    ]);
+    await expect(ivr.closingAudio(pool, 2, id)).rejects.toMatchObject({ statusCode: 404 });
+    await expect(ivr.closingAudio(pool, 1, id)).resolves.toEqual(prefetched);
+    expect(synthesizeAudio).toHaveBeenLastCalledWith(`${questions.closing} ${safety}`, 'vi', { timeoutMs: 8000 });
   });
   test('private templates remain encrypted and feature flag stops new sessions', async () => {
     await invoke('template', { content: clone(content()), name: 'Mẫu riêng' });
@@ -625,6 +680,11 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     });
     expect(s.current_question_id).toBe('q2');
     expect(s.answers[0].stt_status).toBe('awaiting_upload');
+    expect(s.answers[0]).toMatchObject({ audio_url: null, needs_review: false });
+    await expect(ivr.patientAction(
+      pool, 1, s.id, { action: 'answer', request_id: requestId },
+      { buffer: fixtureWav(0.25), mimetype: 'audio/wav' }
+    )).rejects.toMatchObject({ code: 'IVR_AUDIO_TOO_SHORT', statusCode: 400 });
     // A real two-second PCM WAV exercises ffprobe; no provider receives this fixture.
     const bytes = fixtureWav();
     s = await ivr.patientAction(
@@ -636,10 +696,12 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     );
     expect(s.current_question_id).toBe('q2');
     expect(s.answers[0].audio_url).toBeTruthy();
+    expect(s.answers[0].needs_review).toBe(false);
     const stored = (
       await pool.query('SELECT audio_enc FROM doctor_ivr_answers WHERE session_id=$1', [s.id])
     ).rows[0];
-    expect(stored.audio_enc).not.toContain('RIFF');
+    expect(stored.audio_enc).not.toBe(bytes.toString('base64'));
+    expect(ivr.reveal(1, 'audio', stored.audio_enc)).toBe(bytes.toString('base64'));
     await worker.runDoctorIvrWorker(pool);
     s = await ivr.patientGet(pool, 1, s.id);
     expect(s.answers[0].transcript).toBe('Câu trả lời bằng giọng nói.');
@@ -648,6 +710,13 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     const url = new URL(s.answers[0].audio_url, 'http://localhost');
     const params = url.searchParams,
       answerId = url.pathname.split('/').at(-1);
+    await expect(invoke('recording', { answer_id: answerId })).resolves.toEqual({
+      audio_data: bytes,
+      mime_type: 'audio/wav',
+    });
+    await expect(invoke('recording', { answer_id: randomUUID() })).rejects.toMatchObject({
+      statusCode: 404,
+    });
     expect(
       (
         await ivr.media(

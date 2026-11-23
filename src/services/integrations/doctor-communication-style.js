@@ -76,11 +76,26 @@ const isCaregiverMessage = (text) =>
     text
   );
 
-const profileAddress = (profile, now) => {
+const profileAge = (profile, now = new Date()) => {
+  const birthday = profile?.date_of_birth ? new Date(profile.date_of_birth) : null;
+  if (birthday && Number.isFinite(birthday.getTime())) {
+    const hadBirthday = now.getUTCMonth() > birthday.getUTCMonth() ||
+      (now.getUTCMonth() === birthday.getUTCMonth() && now.getUTCDate() >= birthday.getUTCDate());
+    const age = now.getUTCFullYear() - birthday.getUTCFullYear() - Number(!hadBirthday);
+    if (age >= 0 && age <= 120 && birthday <= now) return age;
+  }
   const year = Number(profile?.birth_year);
   const currentYear = now.getUTCFullYear();
-  if (!Number.isInteger(year) || year < currentYear - 120 || year > currentYear) return null;
-  const age = currentYear - year;
+  if (Number.isInteger(year) && year >= currentYear - 120 && year <= currentYear)
+    return currentYear - year;
+  const recordedAge = String(profile?.age ?? '').trim();
+  const age = recordedAge ? Number(recordedAge) : NaN;
+  return Number.isInteger(age) && age >= 0 && age <= 120 ? age : null;
+};
+
+const profileAddress = (profile, now) => {
+  const age = profileAge(profile, now);
+  if (age === null) return null;
   if (age >= 60) return 'bác';
   if (age < 18) return 'em';
   const gender = normalize(profile?.gender);
@@ -175,4 +190,4 @@ const communicationConflict = (text, style) => {
   return Boolean(self && self !== style.clinician_self);
 };
 
-module.exports = { resolveCommunicationStyle, addressQuestionTemplate, communicationConflict };
+module.exports = { resolveCommunicationStyle, addressQuestionTemplate, communicationConflict, profileAge };

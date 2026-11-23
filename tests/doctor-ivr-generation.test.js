@@ -12,11 +12,14 @@ jest.mock('../src/services/ai/ai-consent.service', () => ({
   withAiUser: jest.fn((_pool, _user, work) => work()),
 }));
 jest.mock('../src/services/ai/ai.service', () => ({ callTextAi: jest.fn() }));
+jest.mock('../src/services/checkin-call/audio.service', () => ({ synthesizeText: jest.fn() }));
 
 const {
   loadDoctorClinicalContext,
 } = require('../src/services/integrations/doctor-context.service');
 const { callTextAi } = require('../src/services/ai/ai.service');
+const { hasAiConsent } = require('../src/services/ai/ai-consent.service');
+const { synthesizeText } = require('../src/services/checkin-call/audio.service');
 const { doctorOperation } = require('../src/services/doctor-ivr/ivr.service');
 const { fixedFinal } = require('../src/services/doctor-ivr/question-set.schema');
 const { applyQuestionTextRepairs } = require('../src/services/doctor-ivr/question-generation');
@@ -32,6 +35,48 @@ beforeEach(() => {
     profile: { birth_year: new Date().getUTCFullYear() - 68, daily_medication: 'yes' },
     medications: [],
   });
+});
+
+test('read-aloud previews use the app TTS and do not save or deliver a question set', async () => {
+  const pool = poolFixture();
+  const audio = { audio_data: Buffer.from('fixture'), mime_type: 'audio/wav' };
+  synthesizeText.mockResolvedValueOnce(audio);
+  const preview = await doctorOperation(pool, {
+    tenant_id: 'clinic-demo',
+    task_id: 'generation-test',
+    app_user_id: '1',
+    doctor_id: 'doctor-test',
+    operation: 'preview',
+    data: {
+      greeting: 'Chào anh/chị.',
+      text: 'Anh/chị có khó ngủ không?',
+      options: [
+        { key: 1, label: 'Có' },
+        { key: 2, label: 'Không' },
+      ],
+    },
+  });
+  expect(preview).toBe(audio);
+  expect(synthesizeText).toHaveBeenCalledWith(
+    'Chào anh/chị. Anh/chị có khó ngủ không? Một: Có. Hai: Không.',
+    'vi',
+    { timeoutMs: 25000 }
+  );
+  expect(pool.query.mock.calls.some(([sql]) => sql.startsWith('INSERT'))).toBe(false);
+});
+
+test('does not synthesize interview audio when the patient has not consented', async () => {
+  hasAiConsent.mockResolvedValueOnce(false);
+  await expect(
+    doctorOperation(poolFixture(), {
+      tenant_id: 'clinic-demo',
+      task_id: 'generation-test',
+      app_user_id: '1',
+      doctor_id: 'doctor-test',
+      operation: 'preview',
+    })
+  ).rejects.toMatchObject({ code: 'AI_CONSENT_REQUIRED' });
+  expect(synthesizeText).not.toHaveBeenCalled();
 });
 
 test('question generation retains the age, conditions and medication supplied by the existing clinical context', async () => {
@@ -101,6 +146,104 @@ test('question generation retains the age, conditions and medication supplied by
     allergies: ['Dị ứng đã khai báo'],
   });
   expect(prompt.medications).toEqual([{ med_name: 'Thuốc đã khai báo' }]);
+});
+
+test.each([
+  [{ age: 22, gender: 'Nam' }, 'anh'],
+  [{ age: 32, gender: 'nữ' }, 'chị'],
+  [{ age: 67, gender: 'male' }, 'bác'],
+  [{ age: 14, gender: 'female' }, 'em'],
+  [{ age: 32 }, 'bạn'],
+])('uses the IVR patient profile address consistently for %j', async (profile, expected) => {
+  const fixture = poolFixture();
+  const query = fixture.query.getMockImplementation();
+  fixture.query.mockImplementation(async (sql) =>
+    sql.includes('SELECT birth_year, age, gender') ? { rows: [profile] } : query(sql)
+  );
+  const input = {
+    tenant_id: 'clinic-demo',
+    task_id: 'address-test',
+    app_user_id: '1',
+    doctor_id: 'doctor-test',
+  };
+  const capitalized = expected[0].toLocaleUpperCase('vi') + expected.slice(1);
+  const draft = failedDraft();
+  draft.questions[0].text = 'Anh/chị có khó ngủ suốt đêm không?';
+  draft.questions[2].text = 'Anh/chị có uống trà trước giờ ngủ không?';
+  callTextAi.mockResolvedValueOnce({ content: JSON.stringify(draft) });
+  const listed = await doctorOperation(fixture, { ...input, operation: 'list' });
+  const generated = await doctorOperation(fixture, { ...input, operation: 'generate' });
+  expect(listed.patient_address).toBe(expected);
+  expect(JSON.parse(callTextAi.mock.calls[0][0].prompt).address).toBe(capitalized);
+  expect(generated.content.questions[0].text).toBe(capitalized + ' có khó ngủ suốt đêm không?');
+  expect(generated.content.greeting).toContain('Chào ' + expected + '.');
+  expect(generated.content.questions.at(-1).text).toBe(
+    capitalized + ' có muốn hỏi bác sĩ điều gì không?'
+  );
+});
+
+test('accepts seven distinct unanswered topics plus the fixed final question', async () => {
+  loadDoctorClinicalContext.mockResolvedValue({
+    initial_patient_statement: { message: 'Tôi bị khó ngủ.' },
+    conversation: [],
+    profile: { age: 68 },
+    medications: [],
+  });
+  const questions = [
+    ['symptom', 'Bác có thức giấc giữa đêm không?'],
+    ['onset', 'Bác bắt đầu khó ngủ từ tuần này phải không?'],
+    ['course', 'Gần đây bác có khó ngủ hơn không?'],
+    ['impact', 'Tình trạng này ảnh hưởng sinh hoạt của bác thế nào?'],
+    ['context', 'Bác có uống trà trước giờ ngủ không?'],
+    ['safety', 'Bác có bị khó thở lúc nằm không?'],
+    ['medication', 'Bác có mới đổi thuốc gần đây không?'],
+  ].map(([focus, text]) => ({
+    focus,
+    text,
+    answer_kind: focus === 'impact' ? 'impact' : 'yes_no',
+  }));
+  callTextAi.mockResolvedValueOnce({
+    content: JSON.stringify({ title: 'Hỏi thêm về giấc ngủ', questions }),
+  });
+  const result = await generate(poolFixture());
+  expect(callTextAi).toHaveBeenCalledTimes(1);
+  expect(callTextAi.mock.calls[0][0].system).toContain('Tạo từ 3 đến 7 câu nội dung');
+  expect(result.content.questions).toHaveLength(8);
+  expect(result.content.questions.at(-1)).toMatchObject({ id: 'q_final', fixed: true });
+});
+
+test('repairs AI questions that ask patients to score pain on a numerical scale', async () => {
+  const draft = failedDraft();
+  draft.questions[2].text = 'Bác có uống trà trước giờ ngủ không?';
+  const painScore = {
+    focus: 'symptom',
+    text: 'Mức đau đầu hiện tại của bác là bao nhiêu điểm trên thang 0 đến 10?',
+    answer_kind: 'numeric',
+    unit: 'điểm',
+    thresholds: [3, 6],
+  };
+  const simplerPainQuestion = {
+    focus: 'symptom',
+    text: 'Bây giờ cơn đau đầu thế nào?',
+    answer_kind: 'single_choice',
+    options: [{ label: 'Đau nhẹ' }, { label: 'Đau vừa' }, { label: 'Đau nhiều' }],
+  };
+  callTextAi
+    .mockResolvedValueOnce({
+      content: JSON.stringify({ ...draft, questions: [painScore, ...draft.questions.slice(1)] }),
+    })
+    .mockResolvedValueOnce({
+      content: JSON.stringify({
+        ...draft,
+        questions: [simplerPainQuestion, ...draft.questions.slice(1)],
+      }),
+    });
+  const result = await generate(poolFixture());
+  expect(callTextAi).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(callTextAi.mock.calls[1][0].prompt).previous_error).toContain(
+    'Không hỏi tự chấm điểm'
+  );
+  expect(result.content.questions[0].text).toBe(simplerPainQuestion.text);
 });
 
 test('repairs a schema-valid but ambiguous single-choice question before returning an AI draft', async () => {
@@ -335,7 +478,7 @@ test('does not start another provider call when less than 500ms remains', async 
       now += 9750;
       return { content: JSON.stringify(failedDraft()) };
     });
-    await expect(generate(poolFixture())).rejects.toMatchObject({ code: 'IVR_GENERATION_FAILED' });
+    await expect(generate(poolFixture())).rejects.toMatchObject({ code: 'IVR_GENERATION_TIMEOUT' });
     expect(callTextAi).toHaveBeenCalledTimes(1);
   } finally {
     clock.mockRestore();
@@ -352,11 +495,43 @@ test('does not return provider output that arrives after the original deadline',
       now += 10001;
       return { content: JSON.stringify(draft) };
     });
-    await expect(generate(poolFixture())).rejects.toMatchObject({ code: 'IVR_GENERATION_FAILED' });
+    await expect(generate(poolFixture())).rejects.toMatchObject({ code: 'IVR_GENERATION_TIMEOUT' });
     expect(callTextAi).toHaveBeenCalledTimes(1);
   } finally {
     clock.mockRestore();
   }
+});
+
+test('accepts a valid draft that arrives within a configured longer deadline', async () => {
+  const previousTimeout = process.env.DOCTOR_IVR_QUESTION_TIMEOUT_MS;
+  process.env.DOCTOR_IVR_QUESTION_TIMEOUT_MS = '25000';
+  let now = 1000;
+  const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+  try {
+    const draft = failedDraft();
+    draft.questions[2].text = 'Bác có uống trà trước giờ ngủ không?';
+    callTextAi.mockImplementationOnce(async () => {
+      now += 12000;
+      return { content: JSON.stringify(draft) };
+    });
+    const { content } = await generate(poolFixture());
+    expect(content.questions).toHaveLength(4);
+    expect(callTextAi).toHaveBeenCalledTimes(1);
+    expect(callTextAi.mock.calls[0][0]).toMatchObject({ timeoutMs: 25000 });
+  } finally {
+    clock.mockRestore();
+    if (previousTimeout === undefined) delete process.env.DOCTOR_IVR_QUESTION_TIMEOUT_MS;
+    else process.env.DOCTOR_IVR_QUESTION_TIMEOUT_MS = previousTimeout;
+  }
+});
+
+test('reports provider timeouts distinctly and does not repeat the request', async () => {
+  callTextAi.mockRejectedValueOnce(Object.assign(new Error('timed out'), { name: 'AbortError' }));
+  await expect(generate(poolFixture())).rejects.toMatchObject({
+    code: 'IVR_GENERATION_TIMEOUT',
+    statusCode: 504,
+  });
+  expect(callTextAi).toHaveBeenCalledTimes(1);
 });
 
 test('does not retry a consent rejection during repair', async () => {
@@ -402,14 +577,26 @@ test('repairs multiple compound questions by index while preserving the order, c
   expect(content.questions[2].options[0]).toMatchObject({ label: 'Có', suggested_red_flag: true });
 });
 
-test('automatically persists an encrypted AI draft and restores it without another provider call', async () => {
+test('creates an editable AI draft and persists it only on explicit save', async () => {
   const draft = failedDraft();
   draft.questions[2].text = 'Bác có uống trà buổi chiều không?';
   callTextAi.mockResolvedValue({ content: JSON.stringify(draft) });
   const pool = poolFixture();
   const generated = await generate(pool);
-  expect(generated.question_set_id).toEqual(expect.any(String));
-  expect(generated.version).toBe(1);
+  expect(generated.question_set_id).toBeUndefined();
+  expect(
+    pool.query.mock.calls.some(([sql]) => sql.startsWith('INSERT INTO doctor_ivr_question_sets('))
+  ).toBe(false);
+  const saved = await doctorOperation(pool, {
+    tenant_id: 'clinic-demo',
+    task_id: 'compound-generation',
+    app_user_id: '1',
+    doctor_id: 'doctor-test',
+    operation: 'save',
+    data: { content: generated.content, source: 'ai' },
+  });
+  expect(saved.question_set_id).toEqual(expect.any(String));
+  expect(saved.version).toBe(1);
   const inserts = pool.query.mock.calls.filter(([sql]) =>
     sql.startsWith('INSERT INTO doctor_ivr_question_sets(')
   );
@@ -422,7 +609,7 @@ test('automatically persists an encrypted AI draft and restores it without anoth
   ).toBe(false);
   const fallback = pool.query.getMockImplementation();
   pool.query.mockImplementation(async (sql, args) => {
-    if (sql.startsWith('SELECT * FROM doctor_ivr_question_sets'))
+    if (sql.includes('FROM doctor_ivr_question_sets q'))
       return {
         rows: [
           {
@@ -444,7 +631,7 @@ test('automatically persists an encrypted AI draft and restores it without anoth
     operation: 'list',
   });
   expect(restored.question_sets[0]).toMatchObject({
-    id: generated.question_set_id,
+    id: saved.question_set_id,
     source: 'ai',
     status: 'draft',
     content: generated.content,
@@ -452,7 +639,7 @@ test('automatically persists an encrypted AI draft and restores it without anoth
   expect(callTextAi).toHaveBeenCalledTimes(1);
 });
 
-test('draft persistence failures do not spend more AI calls or report a successful generation', async () => {
+test('reports explicit save failures without calling the generator again', async () => {
   const draft = failedDraft();
   draft.questions[2].text = 'Bác có uống trà buổi chiều không?';
   callTextAi.mockResolvedValue({ content: JSON.stringify(draft) });
@@ -463,9 +650,58 @@ test('draft persistence failures do not spend more AI calls or report a successf
       throw new Error('draft storage unavailable');
     return fallback(sql, args);
   });
-  await expect(generate(pool)).rejects.toThrow('draft storage unavailable');
+  const generated = await generate(pool);
+  await expect(
+    doctorOperation(pool, {
+      tenant_id: 'clinic-demo',
+      task_id: 'compound-generation',
+      app_user_id: '1',
+      doctor_id: 'doctor-test',
+      operation: 'save',
+      data: { content: generated.content, source: 'ai' },
+    })
+  ).rejects.toThrow('draft storage unavailable');
   expect(callTextAi).toHaveBeenCalledTimes(1);
   expect(pool.query.mock.calls.some(([sql]) => sql === 'ROLLBACK')).toBe(true);
+});
+
+test('lists deliberate saves and hides only legacy generated autosaves', async () => {
+  const { seal } = require('../src/services/doctor-ivr/ivr.service');
+  const draft = failedDraft();
+  draft.questions[2].text = 'Bác có uống trà buổi chiều không?';
+  callTextAi.mockResolvedValue({ content: JSON.stringify(draft) });
+  const pool = poolFixture();
+  const { content } = await generate(pool);
+  const fallback = pool.query.getMockImplementation();
+  const row = (version, priorType, explicit) => ({
+    id: 'draft-' + version,
+    version,
+    status: 'draft',
+    source: 'ai',
+    content_enc: seal(1, 'question-set', content),
+    saved_event: seal(1, 'event', { version, explicit, content }),
+    prior_type: priorType,
+    prior_event: seal(1, 'event', { content }),
+  });
+  pool.query.mockImplementation(async (sql, args) =>
+    sql.includes('FROM doctor_ivr_question_sets q')
+      ? {
+          rows: [
+            row(3, 'question_set.generated', undefined),
+            row(2, 'question_set.generated', true),
+            row(1, 'question_set.saved', undefined),
+          ],
+        }
+      : fallback(sql, args)
+  );
+  const result = await doctorOperation(pool, {
+    tenant_id: 'clinic-demo',
+    task_id: 'compound-generation',
+    app_user_id: '1',
+    doctor_id: 'doctor-test',
+    operation: 'list',
+  });
+  expect(result.question_sets.map((value) => value.id)).toEqual(['draft-2', 'draft-1']);
 });
 
 test('a task closed during generation cannot save a draft or trigger another provider call', async () => {

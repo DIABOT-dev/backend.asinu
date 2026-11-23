@@ -10,6 +10,7 @@ const {
 const { nativeCallActionLimiter } = require('../middleware/checkin-call-rate-limit.middleware');
 const {
   createDoctorIvrGenerationLimiter,
+  createDoctorIvrPreviewLimiter,
 } = require('../middleware/doctor-ivr-rate-limit.middleware');
 const { createDoctorIvrController } = require('../controllers/doctor-ivr.controller');
 module.exports = function doctorIvrRoutes(pool) {
@@ -19,6 +20,7 @@ module.exports = function doctorIvrRoutes(pool) {
     '/ivr/doctor',
     requireDoctorSignature,
     createDoctorIvrGenerationLimiter(),
+    createDoctorIvrPreviewLimiter(),
     controller.doctorOperation
   );
   router.post('/ivr/admin', requireDoctorSignature, controller.adminOperation);
@@ -41,6 +43,8 @@ module.exports = function doctorIvrRoutes(pool) {
     controller.uploadVoice
   );
   router.get('/ivr/sessions/:id/audio/:questionId', requireAuth, controller.questionAudio);
+  router.get('/ivr/sessions/:id/audio/:questionId/answers/:optionId', requireAuth, controller.answerAudio);
+  router.get('/ivr/sessions/:id/closing-audio', requireAuth, controller.closingAudio);
   router.get('/ivr/media/:id', controller.media);
   return router;
 };

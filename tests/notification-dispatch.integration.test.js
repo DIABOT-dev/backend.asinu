@@ -239,6 +239,24 @@ describeDatabase(
       expect(duplicate).toEqual({ notificationId: first.notificationId, existing: true });
       expect(await inboxCount()).toBe(1);
     });
+    test('an IVR notification stays unique after the cooldown while a new reminder is distinct', async () => {
+      const type = 'doctor_ivr_session';
+      const invitation = message({ event_id: 'doctor_ivr_session:fixture:0' }, type);
+      const first = await reserveNotification(pool, invitation);
+      expect(await deliverNotification(pool, first.notificationId)).toMatchObject({ ok: true });
+      await pool.query(
+        "UPDATE notifications SET created_at=NOW()-INTERVAL '10 minutes' WHERE id=$1",
+        [first.notificationId]
+      );
+      const retry = await reserveNotification(pool, invitation);
+      const reminder = await reserveNotification(
+        pool,
+        message({ event_id: 'doctor_ivr_session:fixture:1' }, type)
+      );
+      expect(retry).toEqual({ notificationId: first.notificationId, existing: true });
+      expect(reminder.notificationId).not.toBe(first.notificationId);
+      expect(await inboxCount()).toBe(2);
+    });
     test('different routine queues cannot push together and deferred work keeps its retry budget', async () => {
       await optIn();
       const rows = await Promise.all(
