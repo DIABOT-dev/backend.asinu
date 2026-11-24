@@ -55,7 +55,8 @@ async function notifyPatient(pool, s, type = 'doctor_ivr_session') {
       tenantId: s.tenant_id,
       event_id: `${type}:${s.id}:${s.reminder_count || 0}`,
     },
-    'high'
+    'high',
+    { waitForPush: false }
   );
 }
 async function prepare(pool) {
@@ -364,20 +365,21 @@ async function deadlines(pool) {
   ).rows;
   for (const s of expired) await ivr.audit(pool, s, 'system', 'session.expired', {}, s.id);
   // Patients may open the chat invitation before the first notification is sent.
+  // Keep PostgreSQL's full timestamp precision when clearing a reserved reminder.
   const reminders = (
     await pool.query(
-      `SELECT * FROM doctor_ivr_sessions
+      `SELECT *, remind_at::text AS scheduled_remind_at FROM doctor_ivr_sessions
         WHERE remind_at<=NOW() AND expires_at>NOW() AND reminder_count<3
           AND (status='sent' OR (reminder_count=0 AND status IN ('in_progress','completed','reported')))
         ORDER BY remind_at LIMIT 5`
     )
   ).rows;
   for (const s of reminders) {
-    const sent = await notifyPatient(pool, s);
-    if (sent)
+    const reserved = await notifyPatient(pool, s);
+    if (reserved)
       await pool.query(
-        'UPDATE doctor_ivr_sessions SET reminder_count=reminder_count+1,remind_at=NULL WHERE id=$1 AND remind_at=$2',
-        [s.id, s.remind_at]
+        'UPDATE doctor_ivr_sessions SET reminder_count=reminder_count+1,remind_at=NULL WHERE id=$1 AND remind_at=$2::timestamptz',
+        [s.id, s.scheduled_remind_at]
       );
   }
   const reply = (

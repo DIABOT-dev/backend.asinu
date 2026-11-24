@@ -160,6 +160,8 @@ async function reserveNotification(
     }
     let eventKey = notificationEventKey(data);
     const eventIdentity = explicitEventIdentity(data);
+    const oncePerIvrEvent =
+      eventIdentity.value !== null && ['doctor_ivr_session', 'doctor_ivr_reply'].includes(type);
     if (type === 'doctor_message' && !data.messageId && !data.message_id) {
       // Older writers may only supply a task ID. Keep distinct message text
       // in that conversation, but coalesce retries of identical content.
@@ -169,20 +171,28 @@ async function reserveNotification(
     }
     // Different patients/events must not suppress each other's alerts. Retrying
     // a failed push reuses the same inbox row rather than consuming the cap again.
-    if (cooldownMinutes > 0 && type !== INACTIVITY_NOTICE_TYPE) {
+    if ((cooldownMinutes > 0 || oncePerIvrEvent) && type !== INACTIVITY_NOTICE_TYPE) {
       const recent = await client.query(
         `SELECT id FROM notifications WHERE user_id = $1 AND type = $2
            AND (event_key IS NOT DISTINCT FROM $3 OR EXISTS (
              SELECT 1 FROM unnest($5::text[]) AS field
               WHERE data->>field = $6
            ))
-           AND (created_at >= NOW() - make_interval(mins => $4) OR EXISTS (
+           AND ($7::boolean OR created_at >= NOW() - make_interval(mins => $4) OR EXISTS (
              SELECT 1 FROM notification_push_outbox o
               WHERE o.notification_id = notifications.id
                 AND o.state IN ('PENDING','RETRY','INFLIGHT') AND o.expires_at > NOW()
            ))
          ORDER BY created_at DESC LIMIT 1`,
-        [userId, type, eventKey, cooldownMinutes, eventIdentity.aliases, eventIdentity.value]
+        [
+          userId,
+          type,
+          eventKey,
+          cooldownMinutes,
+          eventIdentity.aliases,
+          eventIdentity.value,
+          oncePerIvrEvent,
+        ]
       );
       if (recent.rows[0]) {
         const notificationId = recent.rows[0].id;

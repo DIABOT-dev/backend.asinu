@@ -104,7 +104,7 @@ function validateQuestionSet(value, { supplement = false } = {}) {
       if (
         q.id !== 'q_final' ||
         !q.fixed ||
-        !/^(?:anh\/chị|anh|chị|ông|bà|cô|chú|bác) có muốn hỏi bác sĩ điều gì không\?$/iu.test(
+        !/^(?:anh\/chị|anh|chị|ông|bà|cô|chú|bác|em|bạn) có muốn hỏi bác sĩ điều gì không\?$/iu.test(
           q.text
         )
       )
@@ -247,7 +247,7 @@ function materializeGeneratedQuestions(value, address = 'Anh/chị') {
             .object({
               text: phrase(25),
               focus: z
-                .enum(['symptom', 'onset', 'course', 'impact', 'context', 'safety'])
+                .enum(['symptom', 'onset', 'course', 'impact', 'context', 'safety', 'medication'])
                 .optional(),
               answer_kind: z
                 .enum(['yes_no', 'frequency', 'impact', 'numeric', 'single_choice'])

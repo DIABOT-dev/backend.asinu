@@ -1,9 +1,11 @@
 const { getSecret, keyringEnabled } = require('../../security/openbao-keyring.cjs');
 ('use strict');
 const crypto = require('node:crypto');
+const { isDeepStrictEqual } = require('node:util');
 const { compatibleDeviceTokens } = require('./ivr.devices');
 const { inspectRecording } = require('./recording');
-const { questionSpeech } = require('./question-speech');
+const { questionSpeech, spokenQuestion } = require('./question-speech');
+const { audioVersion, synthesizeText } = require('../checkin-call/audio.service');
 const { questionSetChanges } = require('./question-set.diff');
 const { patientPolicy, nextEvening, nextCallTime, questionFingerprint } = require('./ivr.policy');
 const { reportFlags, asksForMoreInformation } = require('./content-quality');
@@ -20,7 +22,13 @@ const {
 const { broadcastChatEvent } = require('../integrations/doctor-chat-realtime');
 const { hasAiConsent: mayProcessAi, withAiUser } = require('../ai/ai-consent.service');
 const { callTextAi } = require('../ai/ai.service');
+const { isAiTimeout } = require('../ai/checkin-wait-policy.service');
 const { loadDoctorClinicalContext } = require('../integrations/doctor-context.service');
+const {
+  resolveCommunicationStyle,
+  communicationConflict,
+  profileAge,
+} = require('../integrations/doctor-communication-style');
 const {
   generationSystem,
   repairSystem,
@@ -30,6 +38,8 @@ const {
 const error = (code, message, statusCode = 409) =>
   Object.assign(new Error(message), { code, statusCode });
 const enabled = () => process.env.DOCTOR_IVR_ENABLED === 'true';
+const answerAudioPrefix = 'answer:';
+const patientAudioJobs = new Map();
 function key() {
   const value = keyringEnabled()
     ? getSecret('doctor-ivr')
@@ -155,10 +165,10 @@ async function serialize(db, s, { doctor = false, actor = String(s.user_id) } = 
     stt_status: a.stt_status,
     needs_review:
       a.answer_type === 'voice' &&
-      (a.stt_status !== 'done' ||
-        a.stt_needs_review ||
-        a.stt_confidence === null ||
-        Number(a.stt_confidence) < 0.6),
+      Boolean(a.audio_enc) &&
+      (a.stt_status === 'failed' ||
+        (a.stt_status === 'done' &&
+          (a.stt_needs_review || a.stt_confidence === null || Number(a.stt_confidence) < 0.6))),
     is_red_flag: a.is_red_flag,
     skip_reason: a.skip_reason,
     answered_at: a.answered_at,
@@ -220,6 +230,62 @@ async function serialize(db, s, { doctor = false, actor = String(s.user_id) } = 
     replied_at: s.replied_at,
   };
 }
+async function readIvrPatientProfile(pool, userId) {
+  const { rows: [profile] } = await pool.query(
+    'SELECT birth_year, age, gender, date_of_birth::text AS date_of_birth FROM user_onboarding_profiles WHERE user_id=$1',
+    [userId]
+  );
+  return profile;
+}
+function assertTaskOpen(task) {
+  if (['completed', 'cancelled', 'expired', 'emergency_referred', 'forwarded'].includes(
+    task.lifecycle_status
+  ))
+    throw error('IVR_TASK_CLOSED', 'Ca tư vấn đã kết thúc.');
+}
+
+async function listQuestionSets(pool, { tenant, taskId, user }) {
+  const { rows } = await pool.query(
+    `SELECT q.id, q.version, q.status, q.source, q.content_enc,
+            saved.detail_enc AS saved_event, prior.event_type AS prior_type,
+            prior.detail_enc AS prior_event
+       FROM doctor_ivr_question_sets q
+       LEFT JOIN LATERAL (
+         SELECT e.detail_enc
+           FROM doctor_ivr_events e
+          WHERE e.tenant_id=q.tenant_id AND e.task_id=q.task_id AND e.user_id=q.user_id
+            AND e.actor=q.created_by AND e.event_type='question_set.saved'
+            AND e.created_at=q.created_at AND q.status='draft' AND q.source='ai'
+          ORDER BY e.id DESC LIMIT 1
+       ) saved ON true
+       LEFT JOIN LATERAL (
+         SELECT e.event_type, e.detail_enc
+           FROM doctor_ivr_events e
+          WHERE e.tenant_id=q.tenant_id AND e.task_id=q.task_id AND e.user_id=q.user_id
+            AND e.created_at<q.created_at AND saved.detail_enc IS NOT NULL
+            AND e.event_type IN ('question_set.generated','question_set.saved','question_set.approved')
+          ORDER BY e.created_at DESC, e.id DESC LIMIT 1
+       ) prior ON true
+      WHERE q.tenant_id=$1 AND q.task_id=$2 AND q.user_id=$3
+      ORDER BY q.version DESC`,
+    [tenant, taskId, user]
+  );
+  return rows.flatMap((row) => {
+    const content = reveal(user, 'question-set', row.content_enc);
+    const save = reveal(user, 'event', row.saved_event);
+    // Older versions persisted a generated draft as the first save after
+    // generation. Keep its records for audit, but omit it from saved drafts.
+    if (
+      row.prior_type === 'question_set.generated' &&
+      save?.version === row.version &&
+      save.explicit !== true &&
+      isDeepStrictEqual(reveal(user, 'event', row.prior_event)?.content, content)
+    )
+      return [];
+    return [{ id: row.id, version: row.version, status: row.status, source: row.source, content }];
+  });
+}
+
 async function doctorOperation(pool, input) {
   const requestStartedAt = Date.now();
   if (input.operation === 'list' && !enabled()) return { enabled: false };
@@ -228,13 +294,25 @@ async function doctorOperation(pool, input) {
   if (!actor) throw error('IVR_INVALID_DOCTOR', 'Thiếu bác sĩ phụ trách.', 400);
   const op = input.operation,
     data = input.data || {};
+  if (op === 'recording') {
+    // The signed Doctor request has already checked the current clinician assignment.
+    const entry = (await pool.query(
+      `SELECT a.audio_enc,a.mime_type,session.* FROM doctor_ivr_answers a
+       JOIN doctor_ivr_sessions session ON session.id=a.session_id
+       WHERE a.id=$1 AND a.active AND a.answer_type='voice' AND a.audio_enc IS NOT NULL
+         AND session.tenant_id=$2 AND session.task_id=$3 AND session.user_id=$4`,
+      [data.answer_id, s.tenant, s.taskId, s.user]
+    )).rows[0];
+    if (!entry) throw error('IVR_NOT_FOUND', 'Không tìm thấy ghi âm.', 404);
+    await audit(pool, entry, actor, 'audio.listened', {}, entry.id);
+    return {
+      audio_data: Buffer.from(reveal(s.user, 'audio', entry.audio_enc), 'base64'),
+      mime_type: entry.mime_type,
+    };
+  }
   if (op === 'list') {
-    const sets = (
-      await pool.query(
-        'SELECT * FROM doctor_ivr_question_sets WHERE tenant_id=$1 AND task_id=$2 AND user_id=$3 ORDER BY version DESC',
-        [s.tenant, s.taskId, s.user]
-      )
-    ).rows;
+    const profile = await readIvrPatientProfile(pool, s.user);
+    const sets = await listQuestionSets(pool, s);
     const sessions = (
       await pool.query(
         'SELECT id FROM doctor_ivr_sessions WHERE tenant_id=$1 AND task_id=$2 AND user_id=$3 ORDER BY created_at DESC',
@@ -243,18 +321,13 @@ async function doctorOperation(pool, input) {
     ).rows;
     return {
       enabled: true,
+      patient_address: resolveCommunicationStyle({ profile }).patient_address,
       capabilities: {
         app: true,
         call: process.env.DOCTOR_IVR_CALL_ENABLED === 'true',
         confidence: 'model_likelihood_estimate',
       },
-      question_sets: sets.map((q) => ({
-        id: q.id,
-        version: q.version,
-        status: q.status,
-        source: q.source,
-        content: reveal(s.user, 'question-set', q.content_enc),
-      })),
+      question_sets: sets,
       sessions: await Promise.all(
         sessions.map(async (row) =>
           serialize(pool, await getSession(pool, row.id, s.user), { doctor: true, actor })
@@ -274,23 +347,36 @@ async function doctorOperation(pool, input) {
       })),
     };
   }
-  if (
-    ['completed', 'cancelled', 'expired', 'emergency_referred', 'forwarded'].includes(
-      s.task.lifecycle_status
-    )
-  )
-    throw error('IVR_TASK_CLOSED', 'Ca tư vấn đã kết thúc.');
+  if (op === 'preview') {
+    if (!(await mayProcessAi(pool, s.user)))
+      throw error('AI_CONSENT_REQUIRED', 'Người bệnh chưa đồng ý xử lý AI.', 403);
+    try {
+      const spoken = spokenQuestion(data, data.greeting || (data.fixed ? 'Cuối cùng,' : ''));
+      return await withAiUser(pool, s.user, () =>
+        synthesizeText(spoken, 'vi', { timeoutMs: 25000 })
+      );
+    } catch (cause) {
+      if (cause.code === 'AI_CONSENT_REQUIRED') throw cause;
+      throw error('IVR_PREVIEW_UNAVAILABLE', 'Chưa phát được giọng Tuấn Anh.', 503);
+    }
+  }
+  assertTaskOpen(s.task);
   if (op === 'generate') {
     if (!(await mayProcessAi(pool, s.user)))
       throw error('AI_CONSENT_REQUIRED', 'Người bệnh chưa đồng ý xử lý AI.', 403);
-    const context = await loadDoctorClinicalContext(pool, input);
-    const birthYear = Number(context.profile?.birth_year);
-    const currentYear = new Date().getUTCFullYear();
-    const age =
-      Number.isInteger(birthYear) && birthYear > 1900 && birthYear <= currentYear
-        ? currentYear - birthYear
-        : null;
-    const address = Number(context.profile?.age ?? age) >= 60 ? 'Bác' : 'Anh/chị';
+    const [context, profile] = await Promise.all([
+      loadDoctorClinicalContext(pool, input),
+      readIvrPatientProfile(pool, s.user),
+    ]);
+    const addressProfile = profile ?? context.profile;
+    const style = resolveCommunicationStyle({ profile: addressProfile });
+    const address = style.patient_address[0].toLocaleUpperCase('vi') + style.patient_address.slice(1);
+    const usePatientAddress = (text) =>
+      typeof text === 'string'
+        ? text.replace(/\banh\s*\/\s*chị(?!\p{L}|\/)/giu, (word) =>
+            word[0] === 'A' ? address : style.patient_address
+          )
+        : text;
     const recent = (
       await pool.query(
         "SELECT payload->'payload'->>'summary' summary FROM doctor_task_outbox WHERE payload->'payload'->>'app_user_id'=$1 AND tenant_id=$2 AND payload->'payload'->>'task_id'<>$3 ORDER BY created_at DESC LIMIT 3",
@@ -340,7 +426,7 @@ async function doctorOperation(pool, input) {
       task: context.initial_patient_statement,
       conversation: context.conversation.slice(-12),
       profile: {
-        age: context.profile?.age ?? age,
+        age: profileAge(addressProfile),
         gender: context.profile?.gender,
         medical_conditions: context.profile?.conditions ?? context.profile?.medical_conditions,
         chronic_symptoms: context.profile?.chronic_symptoms,
@@ -357,11 +443,18 @@ async function doctorOperation(pool, input) {
     };
     let last, previousDraft, accepted;
     const repairs = [];
-    const deadline = requestStartedAt + 10000;
+    const configuredTimeout = Number(process.env.DOCTOR_IVR_QUESTION_TIMEOUT_MS);
+    const timeout =
+      Number.isSafeInteger(configuredTimeout) &&
+      configuredTimeout >= 10000 &&
+      configuredTimeout <= 30000
+        ? configuredTimeout
+        : 10000;
+    const deadline = requestStartedAt + timeout;
     for (let attempt = 0; attempt < 3; attempt++) {
       const targets = last ? compoundRepairTargets(previousDraft, address) : [];
       const remainingMs = deadline - Date.now();
-      // Never give a retry a fresh timeout or extend the 10-second AI budget.
+      // Generation and repairs share one deadline.
       if (remainingMs < 500) break;
       try {
         const result = await withAiUser(pool, s.user, () =>
@@ -389,7 +482,7 @@ async function doctorOperation(pool, input) {
             maxRetries: 0,
           })
         );
-        if (Date.now() >= deadline) throw new Error('Đã hết thời gian tạo bộ câu hỏi.');
+        if (Date.now() >= deadline) break;
         const generated = JSON.parse(
           result.content.replace(/^```(?:json)?\s*/u, '').replace(/\s*```$/u, '')
         );
@@ -411,6 +504,22 @@ async function doctorOperation(pool, input) {
             'Thời điểm bắt đầu đã có trong lời kể. Không dùng focus onset; thay bằng điều còn thiếu.'
           );
         const value = materializeGeneratedQuestions(previousDraft, address);
+        value.greeting = usePatientAddress(value.greeting);
+        value.closing = usePatientAddress(value.closing);
+        value.questions = value.questions.map((q) => ({ ...q, text: usePatientAddress(q.text) }));
+        if (value.questions.some((q) => communicationConflict(q.text, style)))
+          throw new Error('Xưng hô với người bệnh theo address và dùng nhất quán trong bộ câu hỏi.');
+        if (
+          value.questions.some(
+            (q) =>
+              q.unit &&
+              /đau/iu.test(q.text) &&
+              /thang (?:điểm|(?:từ )?0)|bao nhiêu điểm|chấm.{0,12}điểm/iu.test(q.text)
+          )
+        )
+          throw new Error(
+            'Hỏi mức đau bằng lời dễ chọn, dùng Đau nhẹ, Đau vừa, Đau nhiều. Không hỏi tự chấm điểm.'
+          );
         const repeatedOnset =
           knownFacts.onset_known &&
           value.questions.find((q) =>
@@ -449,17 +558,17 @@ async function doctorOperation(pool, input) {
       } catch (e) {
         last = e;
         if (e.code === 'AI_CONSENT_REQUIRED') throw e;
+        if (isAiTimeout(e)) break;
       }
     }
     if (accepted) {
-      await audit(pool, s, actor, 'question_set.generated', accepted);
-      const saved = await doctorOperation(pool, {
-        ...input,
-        operation: 'save',
-        data: { content: accepted.content, source: 'ai', supplement: !!data.supplement },
-      });
-      return { content: accepted.content, ...saved };
+      const current = await scope(pool, input);
+      assertTaskOpen(current.task);
+      await audit(pool, current, actor, 'question_set.generated', accepted);
+      return { content: accepted.content };
     }
+    if (isAiTimeout(last) || deadline - Date.now() < 500)
+      throw error('IVR_GENERATION_TIMEOUT', 'AI chưa hoàn tất bộ câu hỏi trong thời gian chờ.', 504);
     throw error(
       'IVR_GENERATION_FAILED',
       'Chưa tạo được bộ câu hỏi hợp lệ. Hãy thử lại hoặc tự soạn.',
@@ -566,6 +675,7 @@ async function doctorOperation(pool, input) {
         : null;
       await audit(db, s, actor, `question_set.${op === 'approve' ? 'approved' : 'saved'}`, {
         version,
+        ...(op === 'save' ? { explicit: true } : {}),
         content,
         changes: questionSetChanges(previousContent, content),
       });
@@ -922,6 +1032,8 @@ async function patientAction(pool, user, id, input, file = null) {
 }
 async function questionAudio(pool, user, id, questionId) {
   assertEnabled();
+  if (questionId.startsWith(answerAudioPrefix))
+    throw error('IVR_NOT_FOUND', 'Không tìm thấy câu hỏi.', 404);
   const s = await getSession(pool, id, user);
   await scope(pool, { tenant_id: s.tenant_id, task_id: s.task_id, app_user_id: user });
   const item = (
@@ -931,6 +1043,80 @@ async function questionAudio(pool, user, id, questionId) {
     )
   ).rows[0];
   if (!item) throw error('IVR_AUDIO_PENDING', 'Âm thanh đang chuẩn bị.', 503);
+  return { base64: reveal(user, 'tts', item.audio_enc), mimeType: item.mime_type };
+}
+async function answerAudio(pool, user, id, questionId, optionId) {
+  assertEnabled();
+  const session = await getSession(pool, id, user);
+  await scope(pool, { tenant_id: session.tenant_id, task_id: session.task_id, app_user_id: user });
+  const content = reveal(user, 'question-set', session.content_enc);
+  const question = content.questions.find((item) => item.id === questionId);
+  const option = question?.options.find((item) => item.id === optionId && item.type === 'option');
+  const notFound = () => error('IVR_NOT_FOUND', 'Không tìm thấy âm thanh xác nhận.', 404);
+  if (!option || !['in_progress', 'completed', 'reported', 'replied'].includes(session.status))
+    throw notFound();
+  if (session.current_question_id !== questionId) {
+    const saved = await pool.query(
+      "SELECT 1 FROM doctor_ivr_answers WHERE session_id=$1 AND question_id=$2 AND option_id=$3 AND active AND answer_type='option'",
+      [id, questionId, optionId]
+    );
+    if (!saved.rowCount) throw notFound();
+  }
+
+  return patientAudio(pool, session, `Bạn đã chọn: ${option.label}`);
+}
+async function closingAudio(pool, user, id) {
+  assertEnabled();
+  const session = await getSession(pool, id, user);
+  await scope(pool, { tenant_id: session.tenant_id, task_id: session.task_id, app_user_id: user });
+  if (!['completed', 'reported', 'replied', 'closed'].includes(session.status))
+    throw error('IVR_NOT_FOUND', 'Chưa có lời kết cho phiên này.', 404);
+  const content = reveal(user, 'question-set', session.content_enc);
+  const flagged = await pool.query(
+    'SELECT 1 FROM doctor_ivr_answers WHERE session_id=$1 AND active AND is_red_flag LIMIT 1',
+    [id]
+  );
+  const safety = flagged.rowCount
+    ? session.policy?.safety_message || String(process.env.DOCTOR_IVR_SAFETY_MESSAGE || '')
+    : '';
+  return patientAudio(pool, session, [content.closing, safety].filter(Boolean).join(' '));
+}
+async function patientAudio(pool, session, spoken) {
+  const user = session.user_id;
+  const hash = crypto.createHash('sha256').update(audioVersion('vi')).update(spoken).digest('hex');
+  const cacheId = `${answerAudioPrefix}${hash}`;
+  const jobKey = `${user}:${hash}`;
+  let job = patientAudioJobs.get(jobKey);
+  if (!job) {
+    job = (async () => {
+      const cached = (
+        await pool.query(
+          'SELECT a.audio_enc,a.mime_type FROM doctor_ivr_audio_cache a JOIN doctor_ivr_question_sets q ON q.id=a.question_set_id WHERE q.user_id=$1 AND a.question_id=$2 LIMIT 1',
+          [user, cacheId]
+        )
+      ).rows[0];
+      if (cached) return cached;
+
+      const audio = await withAiUser(pool, user, () =>
+        synthesizeText(spoken, 'vi', { timeoutMs: 8000 })
+      );
+      const raw = audio.audio_data || audio.base64;
+      const base64 = Buffer.isBuffer(raw) ? raw.toString('base64') : raw;
+      if (typeof base64 !== 'string' || !base64)
+        throw error('IVR_AUDIO_PENDING', 'Âm thanh chưa sẵn sàng.', 503);
+      const item = {
+        audio_enc: seal(user, 'tts', base64),
+        mime_type: audio.mime_type || audio.mimeType || 'audio/mpeg',
+      };
+      await pool.query(
+        'INSERT INTO doctor_ivr_audio_cache(question_set_id,question_id,audio_enc,mime_type,content_hash) VALUES($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING',
+        [session.question_set_id, cacheId, item.audio_enc, item.mime_type, hash]
+      );
+      return item;
+    })().finally(() => patientAudioJobs.delete(jobKey));
+    patientAudioJobs.set(jobKey, job);
+  }
+  const item = await job;
   return { base64: reveal(user, 'tts', item.audio_enc), mimeType: item.mime_type };
 }
 async function media(pool, id, expires, signature, actor) {
@@ -991,5 +1177,7 @@ module.exports = {
   patientGet,
   patientAction,
   questionAudio,
+  answerAudio,
+  closingAudio,
   media,
 };
