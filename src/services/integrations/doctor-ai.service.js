@@ -42,7 +42,7 @@ const {
 } = require('./doctor-dialogue');
 
 const PROMPT_VERSION = 'doctor-copilot-2026-11-16.11';
-const PATIENT_SUMMARY_PROMPT_VERSION = 'doctor-patient-summary-2026-11-23.1';
+const PATIENT_SUMMARY_PROMPT_VERSION = 'doctor-patient-summary-2026-11-26.1';
 const OUTPUT_SCHEMA_VERSION = 'doctor-copilot-output-v1';
 
 const buildSystemPrompt = ({ locale, touchpoint, intent = 'clinical', communicationStyle }) =>
@@ -121,8 +121,8 @@ const removeHistoricalConversation = (markdown) => {
 const touchpointInstruction = {
   patient_summary:
     [
-      'Prepare a concise overview of the selected patient for the consultant. In clinical_summary, use the third person and at most three short sentences about the patient-reported reason for this consultation and how it evolved, based on the intake and conversation. Attribute reports to the patient. When an intake or dated message says “today”, anchor it to the date of that intake or message in Asia/Ho_Chi_Minh.',
-      'The interface already lists the recorded medicines and allergies, declared history, and latest blood pressure and glucose with their dates. Use patient_record to check facts and identify gaps, but do not repeat these rows, age, birth year or gender in clinical_summary.',
+      'Prepare an overview of the selected patient for the consultant. Use the complete consultation conversation from the first message through the latest exchange, the submitted intake and screening, and the patient answers in ivr_intake including transcribed questions or concerns. In clinical_summary, use the third person and cover each distinct concern, changes over time, findings confirmed in conversation and any specialist advice actually given. Attribute each report to its source. When an intake or dated message says “today”, anchor it to the date of that intake or message in Asia/Ho_Chi_Minh.',
+      'Read all the declared health profile fields in patient_record and integrate relevant history, medicines, allergies, measurements and habits with the current concern. The interface already lists the recorded medicines and allergies, declared history, and latest blood pressure and glucose with their dates, so do not repeat these rows verbatim. Include additional details and any corrections revealed in this consultation. Distinguish declarations from dated observations, and an unanswered question or unavailable recording from a denial.',
       'Put each unresolved point once in missing_data. Keep actual contradictions in conflicts and use uncertainties only for a distinct limitation that cannot be expressed as a missing fact. Do not repeat a gap from deterministic_tools.missing_data in any model field. Combine questions about current medicine, indication and dose into one point when all are unknown.',
       'A negative choice on an intake only applies to the listed options. Leave individual symptoms unknown when the options are not documented. A reminder log does not confirm current medication use, indication or actual dose. An empty allergy record does not confirm absence of allergies. Do not add diagnoses or reference knowledge as patient facts.',
       'Keep patient_reply, follow_up_draft, clarifying_questions and clinical_rationale empty. This overview is reference-only and must never be sent to the patient.',
@@ -631,6 +631,10 @@ const createDoctorAiAssist = async (pool, input) => {
     touchpoint: input.touchpoint,
     request: touchpointInstruction[input.touchpoint],
     recent_conversation: buildPromptConversation(context),
+    ...(input.touchpoint === 'patient_summary' ? {
+      consultation_intake: { answers: context.clinical_intake ?? null, screening: context.legal_screening ?? null },
+      ivr_intake: context.ivr_intake || [],
+    } : {}),
     patient_record: {
       profile: context.profile,
       observations: {

@@ -55,6 +55,14 @@ const broadcastChatEvent = ({ tenantId, taskId, type, data }) => {
   }
 };
 
+const broadcastIvrInvitationChange = (tenantId, taskId, sessionId) =>
+  broadcastChatEvent({
+    tenantId,
+    taskId,
+    type: 'chat.ivr.invitation.changed',
+    data: { session_id: sessionId },
+  });
+
 const readDoctorPresence = (tenantId, taskId, doctorRef) => {
   if (!doctorRef) return null;
   const sessions = doctorPresence.get(doctorPresenceKey(tenantId, taskId, doctorRef));
@@ -305,6 +313,7 @@ module.exports = {
   CHAT_PROTOCOL,
   attachDoctorChatWebSocketServer,
   broadcastChatEvent,
+  broadcastIvrInvitationChange,
   chatPresence,
   readDoctorPresence,
   recordDoctorPresence,

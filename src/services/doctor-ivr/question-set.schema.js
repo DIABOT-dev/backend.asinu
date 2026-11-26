@@ -1,6 +1,15 @@
 'use strict';
 const { z } = require('zod');
 const { questionIssues, questionMessages } = require('./content-quality');
+const MAX_INITIAL_DURATION_SECONDS = 180;
+const MAX_SUPPLEMENT_DURATION_SECONDS = 300;
+const QUESTION_TRANSITION_SECONDS = 5;
+// A session cannot fit more questions than this even before any text is read.
+const MAX_SESSION_QUESTIONS = Math.floor(
+  MAX_SUPPLEMENT_DURATION_SECONDS / QUESTION_TRANSITION_SECONDS
+);
+const maxIvrDurationSeconds = (supplement = false) =>
+  supplement ? MAX_SUPPLEMENT_DURATION_SECONDS : MAX_INITIAL_DURATION_SECONDS;
 const identifier = z.string().regex(/^[a-zA-Z][a-zA-Z0-9_-]{0,63}$/);
 const words = (value) => value.trim().split(/\s+/u).filter(Boolean).length;
 const phrase = (max) =>
@@ -44,9 +53,9 @@ const question = z
 const base = z
   .object({
     title: phrase(15),
-    est_duration_s: z.number().int().positive().max(180),
+    est_duration_s: z.number().int().positive().max(MAX_SUPPLEMENT_DURATION_SECONDS),
     greeting: z.string().max(400),
-    questions: z.array(question).min(2).max(8),
+    questions: z.array(question).min(2).max(MAX_SESSION_QUESTIONS),
     closing: z.string().max(400),
   })
   .strict();
@@ -63,7 +72,7 @@ function estimateDuration(content) {
     content.closing,
     ...content.questions.flatMap((q) => [q.text, ...q.options.map((o) => `${o.key} ${o.label}`)]),
   ].join(' ');
-  return Math.ceil(words(spoken) / 2.7 + content.questions.length * 5);
+  return Math.ceil(words(spoken) / 2.7 + content.questions.length * QUESTION_TRANSITION_SECONDS);
 }
 function validateQuestionSet(value, { supplement = false } = {}) {
   const content = base.parse(value);
@@ -71,8 +80,7 @@ function validateQuestionSet(value, { supplement = false } = {}) {
     throw Object.assign(new Error(message), { statusCode: 400, code: 'IVR_INVALID_QUESTION_SET' });
   };
   const count = content.questions.length - 1;
-  if (count < (supplement ? 1 : 3) || count > (supplement ? 3 : 7))
-    fail('Cần 3–7 câu nội dung; phiên bổ sung có 1–3 câu.');
+  if (!supplement && (count < 3 || count > 7)) fail('Phiên đầu cần 3–7 câu nội dung.');
   const ids = new Set(),
     texts = new Set(),
     allOptions = new Set();
@@ -159,7 +167,8 @@ function validateQuestionSet(value, { supplement = false } = {}) {
     }
   }
   const duration = estimateDuration(content);
-  if (duration > 180) fail('Nội dung đọc quá dài cho phiên 3 phút.');
+  const durationLimit = maxIvrDurationSeconds(supplement);
+  if (duration > durationLimit) fail(`Nội dung đọc quá dài cho phiên ${durationLimit / 60} phút.`);
   return { ...content, est_duration_s: duration };
 }
 function nextQuestion(content, questionId, optionId) {
@@ -236,7 +245,11 @@ function generatedOptions(q) {
     ...(q.suggested_red_flag_keys?.includes(index + 1) ? { suggested_red_flag: true } : {}),
   }));
 }
-function materializeGeneratedQuestions(value, address = 'Anh/chị') {
+function materializeGeneratedQuestions(
+  value,
+  address = 'Anh/chị',
+  { guidedSupplement = false } = {}
+) {
   if (value?.questions?.at?.(-1)?.id === 'q_final') return value;
   const generated = z
     .object({
@@ -247,7 +260,23 @@ function materializeGeneratedQuestions(value, address = 'Anh/chị') {
             .object({
               text: phrase(25),
               focus: z
-                .enum(['symptom', 'onset', 'course', 'impact', 'context', 'safety', 'medication'])
+                .enum([
+                  'symptom',
+                  'associated_symptom',
+                  'onset',
+                  'onset_pattern',
+                  'course',
+                  'impact',
+                  'context',
+                  'safety',
+                  'blood_pressure_systolic',
+                  'blood_pressure_diastolic',
+                  'glucose',
+                  'measurement_time',
+                  'medication',
+                  'medication_time',
+                  'medication_dose',
+                ])
                 .optional(),
               answer_kind: z
                 .enum(['yes_no', 'frequency', 'impact', 'numeric', 'single_choice'])
@@ -273,15 +302,27 @@ function materializeGeneratedQuestions(value, address = 'Anh/chị') {
             .strict()
         )
         .min(1)
-        .max(7),
+        .max(MAX_SESSION_QUESTIONS - 1),
     })
     .strict()
     .parse(value);
   const focuses = generated.questions.map((q) => q.focus).filter(Boolean);
-  if (new Set(focuses).size !== focuses.length)
+  if (!guidedSupplement && new Set(focuses).size !== focuses.length)
     throw new Error('Các câu phải có focus khác nhau; không hỏi nhiều câu cùng khai thác một ý.');
   if (generated.questions.some((q) => q.answer_kind && !q.focus))
     throw new Error('Mỗi câu dùng answer_kind cần focus để tránh hỏi trùng ý.');
+  if (
+    generated.questions.some(
+      (q) =>
+        [
+          'blood_pressure_systolic',
+          'blood_pressure_diastolic',
+          'glucose',
+          'medication_dose',
+        ].includes(q.focus) && !['numeric', 'single_choice'].includes(q.answer_kind)
+    )
+  )
+    throw new Error('Hỏi trị số hoặc lượng thuốc bằng đáp án cụ thể, thay cho câu chỉ Có/Không.');
   return {
     title: generated.title,
     est_duration_s: 150,
@@ -326,4 +367,6 @@ module.exports = {
   fixedFinal,
   normalize,
   materializeGeneratedQuestions,
+  maxIvrDurationSeconds,
+  MAX_SESSION_QUESTIONS,
 };

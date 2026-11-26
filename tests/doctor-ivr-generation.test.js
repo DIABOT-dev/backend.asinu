@@ -12,15 +12,17 @@ jest.mock('../src/services/ai/ai-consent.service', () => ({
   withAiUser: jest.fn((_pool, _user, work) => work()),
 }));
 jest.mock('../src/services/ai/ai.service', () => ({ callTextAi: jest.fn() }));
+jest.mock('../src/services/ai/providers/openai', () => ({ getWhisperTranscription: jest.fn() }));
 jest.mock('../src/services/checkin-call/audio.service', () => ({ synthesizeText: jest.fn() }));
 
 const {
   loadDoctorClinicalContext,
 } = require('../src/services/integrations/doctor-context.service');
 const { callTextAi } = require('../src/services/ai/ai.service');
+const { getWhisperTranscription } = require('../src/services/ai/providers/openai');
 const { hasAiConsent } = require('../src/services/ai/ai-consent.service');
 const { synthesizeText } = require('../src/services/checkin-call/audio.service');
-const { doctorOperation } = require('../src/services/doctor-ivr/ivr.service');
+const { doctorOperation, seal } = require('../src/services/doctor-ivr/ivr.service');
 const { fixedFinal } = require('../src/services/doctor-ivr/question-set.schema');
 const { applyQuestionTextRepairs } = require('../src/services/doctor-ivr/question-generation');
 
@@ -79,13 +81,59 @@ test('does not synthesize interview audio when the patient has not consented', a
   expect(synthesizeText).not.toHaveBeenCalled();
 });
 
-test('question generation retains the age, conditions and medication supplied by the existing clinical context', async () => {
+test('does not load the consultation profile for question generation without AI consent', async () => {
+  hasAiConsent.mockResolvedValueOnce(false);
+  await expect(generate(poolFixture())).rejects.toMatchObject({ code: 'AI_CONSENT_REQUIRED' });
+  expect(loadDoctorClinicalContext).not.toHaveBeenCalled();
+  expect(callTextAi).not.toHaveBeenCalled();
+});
+
+test('question generation receives authorized intake, profile, dated health records and earlier answered questions', async () => {
   process.env.DOCTOR_IVR_ENABLED = 'true';
   process.env.DOCTOR_IVR_ENCRYPTION_KEY = 'ab'.repeat(32);
   const year = new Date().getUTCFullYear();
+  const clinicalIntake = { symptom_onset: 'today', progression: 'stable', severity: 'moderate' };
+  const screening = { screened_at: '2026-10-20T09:00:00Z', screening_version: 'consultation-v2' };
+  const bloodPressure = {
+    systolic: 120,
+    diastolic: 79,
+    unit: 'mmHg',
+    occurred_at: '2026-10-15T07:00:00Z',
+  };
+  const glucose = {
+    value: 120,
+    unit: 'mg/dL',
+    context: 'before_meal',
+    occurred_at: '2026-10-16T05:00:00Z',
+  };
+  const checkin = { session_date: '2026-10-19', triage_summary: 'Người bệnh báo khó ngủ' };
+  const medicine = {
+    med_name: 'Thuốc đã khai báo',
+    dose_text: '1 viên',
+    occurred_at: '2026-10-17T12:00:00Z',
+    source: 'reminder',
+  };
+  const symptom = { symptom_name: 'Khó ngủ', occurred_date: '2026-10-19' };
+  const medicalRecord = {
+    record_type: 'consultation_summary',
+    summary: 'Lần khám đã ghi nhận tăng huyết áp',
+    recorded_at: '2026-10-13T08:00:00Z',
+  };
+  const initialStatement = {
+    message: 'Tôi khó ngủ gần đây.\n\nVấn đề này bắt đầu từ khi nào?: Hôm nay',
+  };
+  const previousQuestion = 'Bác đo huyết áp được bao nhiêu?';
+  const previousAnswer = '128/80 mmHg';
   loadDoctorClinicalContext.mockResolvedValue({
-    initial_patient_statement: { message: 'Tôi khó ngủ gần đây.' },
-    conversation: [],
+    initial_patient_statement: initialStatement,
+    clinical_intake: clinicalIntake,
+    legal_screening: screening,
+    conversation: [
+      { ...initialStatement, role: 'patient', source: 'intake' },
+      { role: 'doctor', message: previousQuestion },
+      { role: 'patient', message: previousAnswer },
+      ...Array.from({ length: 12 }, () => ({ role: 'patient', message: 'Tình trạng vẫn vậy.' })),
+    ],
     profile: {
       birth_year: year - 68,
       gender: 'female',
@@ -94,7 +142,12 @@ test('question generation retains the age, conditions and medication supplied by
       daily_medication: true,
       allergies: ['Dị ứng đã khai báo'],
     },
-    medications: [{ med_name: 'Thuốc đã khai báo' }],
+    blood_pressure: [bloodPressure],
+    glucose: [glucose],
+    checkins: [{ ...checkin, id: 'fixture-checkin' }],
+    symptoms: [symptom],
+    medications: [medicine],
+    medical_records: [medicalRecord],
   });
   const content = {
     title: 'Hỏi thêm tình trạng',
@@ -145,7 +198,20 @@ test('question generation retains the age, conditions and medication supplied by
     daily_medication: true,
     allergies: ['Dị ứng đã khai báo'],
   });
-  expect(prompt.medications).toEqual([{ med_name: 'Thuốc đã khai báo' }]);
+  expect(prompt).toMatchObject({
+    task: initialStatement,
+    consultation_intake: { answers: clinicalIntake, screening },
+    observations: { blood_pressure: [bloodPressure], glucose: [glucose], symptoms: [symptom] },
+    medications: [medicine],
+    medical_records: [medicalRecord],
+  });
+  expect(prompt.observations.checkins).toEqual([checkin]);
+  expect(prompt.conversation).toHaveLength(12);
+  expect(prompt.answered_questions).toContainEqual({
+    question: previousQuestion,
+    patient_answer: previousAnswer,
+    topics: ['blood_pressure'],
+  });
 });
 
 test.each([
@@ -209,6 +275,68 @@ test('accepts seven distinct unanswered topics plus the fixed final question', a
   expect(callTextAi).toHaveBeenCalledTimes(1);
   expect(callTextAi.mock.calls[0][0].system).toContain('Tạo từ 3 đến 7 câu nội dung');
   expect(result.content.questions).toHaveLength(8);
+  expect(result.content.questions.at(-1)).toMatchObject({ id: 'q_final', fixed: true });
+});
+
+test('can ask about how pain began, measurements and separate medication details in one first session', async () => {
+  loadDoctorClinicalContext.mockResolvedValue({
+    initial_patient_statement: { message: 'Tôi đau đầu từ sáng nay, đã dùng thuốc giảm đau.' },
+    profile: { age: 31, gender: 'male', conditions: ['Tăng huyết áp', 'Tiểu đường'] },
+    clinical_intake: { symptom_onset: 'today', progression: 'stable', severity: 'moderate' },
+    conversation: [],
+  });
+  const question = (focus, text, options) => ({
+    focus,
+    text,
+    answer_kind: options ? 'single_choice' : 'yes_no',
+    ...(options ? { options: options.map((label) => ({ label })) } : {}),
+  });
+  const numeric = (focus, text, unit, thresholds) => ({
+    focus,
+    text,
+    unit,
+    thresholds,
+    answer_kind: 'numeric',
+  });
+  const questions = [
+    question('onset_pattern', 'Cơn đau có dữ dội ngay khi bắt đầu không?'),
+    question('safety', 'Lúc đau đầu, anh có thấy khó nói không?'),
+    question('symptom', 'Cơn đau tập trung chủ yếu ở đâu?', ['Một bên đầu', 'Cả đầu']),
+    numeric(
+      'blood_pressure_systolic',
+      'Số trên của huyết áp lúc đau đầu nằm trong khoảng nào?',
+      'mmHg',
+      [120, 140]
+    ),
+    numeric('glucose', 'Đường huyết lúc đau đầu nằm trong khoảng nào?', 'mg/dL', [100, 150]),
+    numeric('medication_time', 'Anh uống thuốc giảm đau cách đây bao lâu?', 'giờ', [1, 3]),
+    question('medication_dose', 'Anh đã uống bao nhiêu viên thuốc giảm đau?', [
+      'Một viên',
+      'Hai viên',
+    ]),
+  ];
+  const title = 'Hỏi thêm về đau đầu';
+  callTextAi
+    .mockResolvedValueOnce({
+      content: JSON.stringify({
+        title,
+        questions: [
+          questions[0],
+          questions[1],
+          question('blood_pressure_systolic', 'Anh đã đo huyết áp chưa?'),
+        ],
+      }),
+    })
+    .mockResolvedValueOnce({ content: JSON.stringify({ title, questions }) });
+  const result = await generate(poolFixture());
+  expect(callTextAi).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(callTextAi.mock.calls[1][0].prompt).previous_error).toContain(
+    'Hỏi trị số hoặc lượng thuốc'
+  );
+  expect(result.content.questions.map((q) => q.text).slice(0, -1)).toEqual(
+    questions.map((q) => q.text)
+  );
+  expect(result.content.questions[3].options.at(-1)).toMatchObject({ type: 'voice' });
   expect(result.content.questions.at(-1)).toMatchObject({ id: 'q_final', fixed: true });
 });
 
@@ -361,13 +489,22 @@ const failedDraft = () => ({
   ],
 });
 const poolFixture = ({ supplement = false } = {}) => {
+  const firstSession = supplement && {
+    id: 'first-session',
+    user_id: 1,
+    status: 'reported',
+    is_supplement: false,
+    content_enc: seal(1, 'question-set', { questions: [] }),
+  };
   const query = jest.fn(async (sql) => ({
     rows: sql.includes('FROM users WHERE id=$1 AND deleted_at IS NULL')
       ? [{ id: 1, language_preference: 'vi' }]
       : sql.includes('MAX(version)')
         ? [{ n: 1 }]
-        : supplement && sql.includes('SELECT is_supplement,status')
-          ? [{ is_supplement: false, status: 'reported' }]
+        : firstSession &&
+            (sql.includes('SELECT id, is_supplement, status') ||
+              sql.includes('SELECT s.*,q.content_enc'))
+          ? [firstSession]
           : [],
   }));
   return { query, connect: jest.fn(async () => ({ query, release: jest.fn() })) };
@@ -555,6 +692,154 @@ test('repairs a one-question supplement without adding unrelated questions', asy
   const { content } = await generate(poolFixture({ supplement: true }), { supplement: true });
   expect(content.questions).toHaveLength(2);
   expect(content.questions.at(-1).id).toBe('q_final');
+});
+
+test('a supplement covers more than seven distinct topics requested by the specialist', async () => {
+  const symptoms = ['buồn nôn', 'chóng mặt', 'mất ngủ', 'mệt', 'đau họng', 'sốt'];
+  const note = `Hỏi lượng thuốc giảm đau và thuốc ho đã uống. Hỏi riêng về ${symptoms.join(', ')}.`;
+  const draft = {
+    title: 'Lượng thuốc đã dùng',
+    questions: [
+      {
+        text: 'Bác đã uống bao nhiêu viên thuốc giảm đau?',
+        focus: 'medication_dose',
+        answer_kind: 'single_choice',
+        options: [{ label: 'Một viên' }, { label: 'Hai viên' }],
+      },
+      {
+        text: 'Bác đã uống bao nhiêu viên thuốc ho?',
+        focus: 'medication_dose',
+        answer_kind: 'single_choice',
+        options: [{ label: 'Một viên' }, { label: 'Hai viên' }],
+      },
+      ...symptoms.map((symptom) => ({
+        text: `Bác có bị ${symptom} không?`,
+        focus: 'associated_symptom',
+        answer_kind: 'yes_no',
+      })),
+    ],
+  };
+  callTextAi.mockResolvedValueOnce({ content: JSON.stringify(draft) });
+  const { content } = await generate(poolFixture({ supplement: true }), {
+    supplement: true,
+    supplement_request: `  ${note}  `,
+  });
+  const providerRequest = callTextAi.mock.calls[0][0];
+  expect(JSON.parse(providerRequest.prompt)).toMatchObject({
+    supplement_request: note,
+    required_content_questions: 'Theo các ý cần hỏi, ít nhất 1',
+    max_duration_seconds: 300,
+  });
+  expect(providerRequest.system).toContain('Không thêm chủ đề khác cho đủ số');
+  expect(content.questions).toHaveLength(9);
+  expect(content.questions.at(-2).text).toBe('Bác có bị sốt không?');
+  expect(content.questions.at(-1).id).toBe('q_final');
+  expect(content.questions[0].options.map((item) => item.label)).toEqual([
+    'Một viên',
+    'Hai viên',
+    'Khác, nói câu trả lời',
+  ]);
+});
+
+test('a supplementary plan that exceeds five minutes asks the specialist to shorten the notes', async () => {
+  callTextAi.mockResolvedValueOnce({ content: '{"follow_up_duration_exceeded":true}' });
+  await expect(
+    generate(poolFixture({ supplement: true }), {
+      supplement: true,
+      supplement_request: 'Hỏi kỹ các mục trong ghi chú bệnh nhân.',
+    })
+  ).rejects.toMatchObject({
+    code: 'IVR_SUPPLEMENT_DURATION_LIMIT',
+    statusCode: 422,
+    message: expect.stringContaining('5 phút'),
+  });
+  expect(callTextAi).toHaveBeenCalledTimes(1);
+});
+
+test.each(['Chỉnh cách hỏi để người bệnh dễ chọn thời điểm.', ''])(
+  'regenerates an unsent supplement with feedback %j and leaves approval to the specialist',
+  async (feedback) => {
+    const pool = poolFixture({ supplement: true });
+    const note = 'Hỏi thời điểm uống thuốc giảm đau.';
+    const revision = {
+      title: 'Thuốc đã dùng',
+      questions: [{ text: 'Bác uống thuốc giảm đau lúc nào?', options: ['Sáng', 'Chiều'] }],
+      feedback,
+    };
+    callTextAi.mockResolvedValueOnce({ content: JSON.stringify({
+      title: 'Giờ dùng thuốc',
+      questions: [{
+        text: 'Bác uống thuốc giảm đau vào buổi nào?',
+        focus: 'medication_time',
+        answer_kind: 'single_choice',
+        options: [{ label: 'Buổi sáng' }, { label: 'Buổi chiều' }, { label: 'Buổi tối' }],
+      }],
+    }) });
+    const { content } = await generate(pool, {
+      supplement: true,
+      ...(feedback ? { supplement_request: note } : {}),
+      supplement_revision: revision,
+    });
+    const request = callTextAi.mock.calls[0][0];
+    expect(JSON.parse(request.prompt)).toMatchObject({
+      ...(feedback ? { supplement_request: note } : {}),
+      supplement_revision: revision,
+      previous_intake: expect.any(Array),
+    });
+    expect(request.system).toContain('Khi góp ý trống, giữ phạm vi câu hỏi');
+    expect(content.questions[0].options.map((option) => option.label)).toEqual([
+      'Buổi sáng', 'Buổi chiều', 'Buổi tối', 'Khác, nói câu trả lời',
+    ]);
+    expect(content.questions.at(-1).fixed).toBe(true);
+    expect(pool.query.mock.calls.some(([sql]) => sql.startsWith('INSERT INTO doctor_ivr_sessions'))).toBe(false);
+  }
+);
+
+test('requires a supplement and either draft content or revision feedback', async () => {
+  const revision = { title: 'Hỏi thêm', questions: [], feedback: '' };
+  const pool = poolFixture({ supplement: true });
+  await expect(generate(pool, { supplement: true, supplement_revision: revision }))
+    .rejects.toMatchObject({ code: 'IVR_INVALID_SUPPLEMENT_REVISION' });
+  await expect(generate(pool, {
+    supplement: false, supplement_revision: { ...revision, feedback: 'Hỏi ngắn hơn.' },
+  })).rejects.toMatchObject({ code: 'IVR_INVALID_SUPPLEMENT_REVISION' });
+  expect(callTextAi).not.toHaveBeenCalled();
+});
+
+test.each([
+  { supplement: true, supplement_request: '  ' },
+  { supplement: true, supplement_request: 'a'.repeat(1201) },
+  { supplement: false, supplement_request: 'Hỏi thêm vị trí đau.' },
+])('rejects invalid specialist notes before generation', async (data) => {
+  await expect(generate(poolFixture({ supplement: true }), data)).rejects.toMatchObject({
+    code: 'IVR_INVALID_SUPPLEMENT_REQUEST',
+  });
+  expect(callTextAi).not.toHaveBeenCalled();
+});
+
+test('dictation turns clinician audio into editable text without saving or sending a question set', async () => {
+  const pool = poolFixture({ supplement: true });
+  const bytes = Buffer.from([0x1a, 0x45, 0xdf, 0xa3, 0, 0, 0, 0, 0, 0, 0, 0]);
+  const input = {
+    tenant_id: 'clinic-demo',
+    task_id: 'dictation-task',
+    app_user_id: '1',
+    doctor_id: 'doctor-test',
+    operation: 'dictate',
+    data: { mime_type: 'audio/webm', audio_base64: bytes.toString('base64') },
+  };
+  getWhisperTranscription.mockResolvedValueOnce('  Hỏi vị trí đau. ');
+  await expect(doctorOperation(pool, input)).resolves.toEqual({ text: 'Hỏi vị trí đau.' });
+  expect(getWhisperTranscription).toHaveBeenCalledWith(bytes, 'dictation.webm', 'vi');
+  expect(pool.query.mock.calls.some(([sql]) => /^INSERT/iu.test(sql))).toBe(false);
+  expect(callTextAi).not.toHaveBeenCalled();
+
+  await expect(
+    doctorOperation(pool, { ...input, data: { ...input.data, audio_base64: 'YQ==' } })
+  ).rejects.toMatchObject({ code: 'IVR_INVALID_DICTATION' });
+  hasAiConsent.mockResolvedValueOnce(false);
+  await expect(doctorOperation(pool, input)).rejects.toMatchObject({ code: 'AI_CONSENT_REQUIRED' });
+  expect(getWhisperTranscription).toHaveBeenCalledTimes(1);
 });
 
 test('repairs multiple compound questions by index while preserving the order, choices and final question', async () => {

@@ -1072,7 +1072,7 @@
   "notification.checkin_inactivity.body": "{{patientName}} has not checked in for 7 days. Asinu has paused their check-in reminders and calls. Reminders will resume when they check in again.",
   "notification.doctor_ivr_reply_title": "Your doctor has replied",
   "notification.doctor_ivr_request_title": "Your doctor sent you questions",
-  "notification.doctor_ivr_reply_body": "You can read or listen to your consultation result on Asinu.",
+  "notification.doctor_ivr_reply_body": "Open Asinu to view your consultation result.",
   "notification.doctor_ivr_request_body": "Open Asinu to answer your doctor's questions.",
   "doctor_ivr.invalid_input": "The interview input is not valid.",
   "doctor_ivr.generation_failed": "Unable to generate valid questions. Retry or write your own.",

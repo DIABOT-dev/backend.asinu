@@ -1,4 +1,5 @@
 const { t, getLang } = require('../i18n');
+const { z } = require('zod');
 const {
   doctorTaskRequestSchema,
   patientRatingRequestSchema,
@@ -19,9 +20,12 @@ const {
   requestDoctorSpecialties,
   requestDoctorClinics,
   listPrivacyReceipts,
+  assertTenantAllowed,
+  deliverDoctorRequest,
 } = require('../services/integrations/doctor-task.service');
 const {
   listMessages,
+  loadOwnedTask,
   listPatientTasks,
   messageAction,
 } = require('../services/integrations/doctor-messaging.service');
@@ -227,6 +231,31 @@ const listDoctorMessages = async (pool, req, res) => {
   return res.json({ ok: true, data });
 };
 
+const callRequestFields = {
+  tenant_id: z.string().trim().min(1).max(120),
+  request_id: z.string().uuid(),
+};
+const callRequestSchema = z.discriminatedUnion('action', [
+  z.object({ ...callRequestFields, action: z.literal('request'), mode: z.enum(['voice', 'video']) }).strict(),
+  z.object({ ...callRequestFields, action: z.literal('status') }).strict(),
+  z.object({ ...callRequestFields, action: z.literal('cancel') }).strict(),
+]);
+
+const requestConsultationCall = async (pool, req, res) => {
+  const taskId = String(req.params.taskId || '').trim();
+  const parsed = callRequestSchema.safeParse(req.body);
+  if (!taskId || taskId.length > 160 || !parsed.success) {
+    return res.status(400).json({ ok: false, error: t('error.invalid_data', getLang(req)) });
+  }
+  const userId = String(req.user.id);
+  assertTenantAllowed(parsed.data.tenant_id);
+  await loadOwnedTask(pool, parsed.data.tenant_id, taskId, userId);
+  const { data } = await deliverDoctorRequest('call-requests', {
+    ...parsed.data, task_id: taskId, app_user_id: userId,
+  });
+  return res.set('Cache-Control', 'no-store').json({ ok: true, data });
+};
+
 const sendTaskReadinessError = (error, req, res) => {
   if (error?.code !== 'DOCTOR_TASK_NOT_READY') return false;
   res.status(409).json({
@@ -390,6 +419,7 @@ module.exports = {
   listDoctorClinics,
   listDoctorTasks,
   listDoctorMessages,
+  requestConsultationCall,
   createDoctorMessage,
   createDoctorAttachment,
   createDoctorVoice,

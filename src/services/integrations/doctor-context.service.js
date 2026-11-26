@@ -74,7 +74,10 @@ const loadDoctorClinicalContext = async (pool, input) => {
   assertTenantAllowed(tenantId);
   const task = await pool.query(
     `SELECT payload->'payload'->>'app_user_id' AS app_user_id,
-            payload->'payload'->>'summary' AS summary, created_at
+            payload->'payload'->>'summary' AS summary,
+            payload->'payload'->'clinical_intake' AS clinical_intake,
+            payload->'payload'->'legal_screening' AS legal_screening,
+            created_at
        FROM doctor_task_outbox
       WHERE tenant_id = $1 AND payload->>'event_type' = 'doctor.task.requested'
         AND payload->'payload'->>'task_id' = $2 LIMIT 1`,
@@ -83,13 +86,20 @@ const loadDoctorClinicalContext = async (pool, input) => {
   if (!task.rows[0] || task.rows[0].app_user_id !== appUserId) {
     throw integrationError(404, 'DOCTOR_TASK_NOT_FOUND', 'The Doctor task was not found.');
   }
-  const [profile, bloodPressure, glucose, medication, symptoms, records, checkins, messages] =
+  const patientSummary = input.touchpoint === 'patient_summary';
+  const declaredProfile = patientSummary ? `,
+                p.age, p.date_of_birth::text AS date_of_birth, p.height_cm, p.weight_kg, p.blood_type,
+                p.body_type, p.joint_issues, p.flexibility, p.stairs_performance, p.exercise_freq,
+                p.walking_habit, p.water_intake, p.sleep_duration, p.sleep_hours, p.checkup_freq,
+                p.meals_per_day, p.post_meal_drowsy, p.dinner_time, p.sweet_intake, p.goal, p.user_goal,
+                COALESCE(p.raw_profile->'medications', '[]'::jsonb) AS declared_medications` : '';
+  const [profile, bloodPressure, glucose, medication, symptoms, records, checkins, messages, ivrIntake] =
     await Promise.all([
       pool.query(
         `SELECT p.birth_year, p.gender, p.daily_medication,
                 COALESCE(p.medical_conditions, '[]'::jsonb) AS conditions,
                 COALESCE(p.chronic_symptoms, '[]'::jsonb) AS chronic_symptoms,
-                COALESCE(p.raw_profile->'allergies', '[]'::jsonb) AS allergies
+                COALESCE(p.raw_profile->'allergies', '[]'::jsonb) AS allergies${declaredProfile}
            FROM user_onboarding_profiles p WHERE p.user_id = $1`,
         [appUserId]
       ),
@@ -106,7 +116,7 @@ const loadDoctorClinicalContext = async (pool, input) => {
         [appUserId]
       ),
       pool.query(
-        `SELECT logs.med_name, logs.dose_text, logs.frequency_text, common.occurred_at
+        `SELECT logs.med_name, logs.dose_text, logs.frequency_text, common.occurred_at, common.source
            FROM (SELECT * FROM logs_common WHERE log_type <> 'weight') common JOIN medication_logs logs ON logs.log_id = common.id
           WHERE common.user_id = $1 ORDER BY common.occurred_at DESC LIMIT 30`,
         [appUserId]
@@ -137,6 +147,9 @@ const loadDoctorClinicalContext = async (pool, input) => {
           ORDER BY created_at ASC, id ASC`,
         [tenantId, taskId, appUserId]
       ),
+      patientSummary
+        ? require('../doctor-ivr/ivr.service').loadConsultationIvrIntake(pool, { tenant: tenantId, taskId, user: Number(appUserId) })
+        : [],
     ]);
   records.rows = decryptHealthRows(
     appUserId,
@@ -147,7 +160,7 @@ const loadDoctorClinicalContext = async (pool, input) => {
   messages.rows = decryptHealthRows(appUserId, 'doctor_task_messages', ['content'], messages.rows);
   const timelineMarkdown = await rebuildPatientHealthTimeline(pool, appUserId);
   const conversation = clinicalConversation({
-    conversation: messages.rows.map((message) => ({
+    conversation: messages.rows.filter((message) => !patientSummary || message.sender_ref !== 'doctor-ivr-worker').map((message) => ({
       id: String(message.id),
       role: message.sender_type === 'patient' ? 'patient' : 'doctor',
       sender_ref: message.sender_ref,
@@ -193,6 +206,7 @@ const loadDoctorClinicalContext = async (pool, input) => {
     latest_patient_message: latestPatientMessage,
     initial_patient_statement: initialPatientStatement,
     health_timeline_markdown: timelineMarkdown,
+    ...(patientSummary ? { ivr_intake: ivrIntake } : {}),
   };
   const quality = buildDataQuality(context);
   const hashInput = {
@@ -200,10 +214,16 @@ const loadDoctorClinicalContext = async (pool, input) => {
     health_timeline_markdown: undefined,
     task_summary: input.task_summary || '',
     policy_version: input.clinical_support?.policy_version || '',
+    ...(patientSummary ? {
+      clinical_intake: task.rows[0].clinical_intake ?? null,
+      legal_screening: task.rows[0].legal_screening ?? null,
+    } : {}),
   };
   return {
     ...context,
     ...quality,
+    clinical_intake: task.rows[0].clinical_intake ?? null,
+    legal_screening: task.rows[0].legal_screening ?? null,
     context_version: latestPatientMessage?.id || '0',
     context_hash: hashClinicalContext(hashInput),
   };

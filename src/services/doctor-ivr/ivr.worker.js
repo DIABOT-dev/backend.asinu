@@ -9,6 +9,7 @@ const { callTextAi } = require('../ai/ai.service');
 const { synthesizeText } = require('../checkin-call/audio.service');
 const { getWhisperTranscription } = require('../ai/providers/openai');
 const { deliverDoctorRequest } = require('../integrations/doctor-task.service');
+const { broadcastIvrInvitationChange } = require('../integrations/doctor-chat-realtime');
 const { sendAndSave } = require('../notification/basic.notification.service');
 const busy = new Set();
 const { runCalls } = require('./ivr.calls');
@@ -403,6 +404,12 @@ async function events(pool, urgent = false) {
         "UPDATE doctor_ivr_events SET delivery_attempts=delivery_attempts+1,next_attempt_at=NOW()+(CASE WHEN event_type='red_flag.detected' THEN 2 ELSE LEAST(300,POWER(2,LEAST(delivery_attempts,8))) END)*INTERVAL '1 second' WHERE id=$1",
         [e.id]
       );
+      if (
+        e.delivery_attempts === 0 &&
+        ['session.sent', 'session.completed', 'session.expired', 'session.unreachable'].includes(e.event_type)
+      ) {
+        broadcastIvrInvitationChange(e.tenant_id, e.task_id, e.session_id);
+      }
       try {
         await deliverDoctorRequest(
           'ivr-events',

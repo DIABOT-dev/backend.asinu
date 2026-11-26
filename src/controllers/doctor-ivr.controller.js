@@ -78,6 +78,8 @@ function createDoctorIvrController(pool) {
           operation: z.enum([
             'list',
             'generate',
+            'dictate',
+            'draft_reply',
             'preview',
             'recording',
             'save',
@@ -85,6 +87,7 @@ function createDoctorIvrController(pool) {
             'template',
             'cancel',
             'reply',
+            'reply_video',
           ]),
           data: z.record(z.string(), z.unknown()).default({}),
         })
@@ -92,7 +95,24 @@ function createDoctorIvrController(pool) {
         .parse(req.body);
       if (input.data.source !== undefined)
         z.enum(['ai', 'template', 'manual']).parse(input.data.source);
-      if (input.data.session_id !== undefined) uuid(input.data.session_id);
+      if (input.operation === 'draft_reply' || input.data.session_id !== undefined)
+        uuid(input.data.session_id);
+      if (input.operation === 'draft_reply')
+        input.data = z.object({
+          session_id: z.string().uuid(),
+          revision: z.object({
+            current_reply: z.string().trim().min(1),
+            feedback: z.string().trim().min(1),
+          }).strict().optional(),
+        }).strict().parse(input.data);
+      if (input.operation === 'reply_video')
+        input.data = z.object({
+          session_id: z.string().uuid(),
+          request_id: z.string().uuid(),
+          mime_type: z.enum(['video/mp4', 'video/webm']),
+          video_base64: z.string().min(1).max(13_981_016),
+        }).strict().parse(input.data);
+      if (input.data.replace_session_id !== undefined) uuid(input.data.replace_session_id);
       if (input.data.supplement !== undefined) z.boolean().parse(input.data.supplement);
       if (input.operation === 'preview' || input.operation === 'recording') {
         const audio = await ivr.doctorOperation(pool, {

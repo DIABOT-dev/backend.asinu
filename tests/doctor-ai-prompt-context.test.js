@@ -256,7 +256,21 @@ test('internal summaries use the configured Doctor model instead of falling thro
   }
 });
 
-test('patient summaries are explicitly a third-person overview of the selected patient for the consultant', async () => {
+test('patient summaries use the declared profile, intake and recorded answers of the current consultation', async () => {
+  const current = context();
+  current.profile = {
+    conditions: ['Bệnh nền trong hồ sơ'],
+    sleep_hours: '6',
+    declared_medications: ['Thuốc đã khai báo'],
+  };
+  current.clinical_intake = { progression: 'stable' };
+  current.legal_screening = { emergency: false };
+  current.ivr_intake = [{ is_supplement: true, answers: [{
+    question: 'Anh có muốn hỏi bác sĩ điều gì không?',
+    answer: 'Tôi muốn trao đổi thêm về kết quả đo.',
+    answer_type: 'voice',
+  }] }];
+  loadDoctorClinicalContext.mockResolvedValue(current);
   await createDoctorAiAssist({}, { ...input, touchpoint: 'patient_summary' });
   const request = callTextAi.mock.calls[0][0];
   const payload = JSON.parse(request.prompt);
@@ -272,6 +286,15 @@ test('patient summaries are explicitly a third-person overview of the selected p
   expect(payload.request).toContain('never be sent to the patient');
   expect(payload.patient_record.observations).toHaveProperty('blood_pressure');
   expect(payload.patient_record.observations).toHaveProperty('medications');
+  expect(payload.patient_record.profile).toEqual(current.profile);
+  expect(payload.consultation_intake).toEqual({
+    answers: current.clinical_intake,
+    screening: current.legal_screening,
+  });
+  expect(payload.ivr_intake).toEqual(current.ivr_intake);
+  expect(payload.recent_conversation.map((turn) => turn.message)).toEqual(
+    current.conversation.map((turn) => turn.message)
+  );
 });
 
 test('the complete consultation reaches the provider without cutting older turns or the middle of a message', async () => {

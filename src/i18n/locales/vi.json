@@ -1072,7 +1072,7 @@
   "notification.checkin_inactivity.body": "{{patientName}} đã 7 ngày không check-in. Asinu tạm dừng thông báo nhắc và cuộc gọi check-in cho người này. Khi check-in trở lại, lịch nhắc sẽ tiếp tục.",
   "notification.doctor_ivr_reply_title": "Bác sĩ đã trả lời",
   "notification.doctor_ivr_request_title": "Bác sĩ đã gửi câu hỏi",
-  "notification.doctor_ivr_reply_body": "Bạn có thể đọc hoặc nghe kết quả tư vấn trên Asinu.",
+  "notification.doctor_ivr_reply_body": "Mở Asinu để xem kết quả tư vấn.",
   "notification.doctor_ivr_request_body": "Mở Asinu để trả lời câu hỏi của bác sĩ.",
   "doctor_ivr.invalid_input": "Dữ liệu phiên chưa hợp lệ.",
   "doctor_ivr.generation_failed": "Chưa tạo được bộ câu hỏi hợp lệ. Hãy thử lại hoặc tự soạn.",

@@ -11,6 +11,8 @@ const { nativeCallActionLimiter } = require('../middleware/checkin-call-rate-lim
 const {
   createDoctorIvrGenerationLimiter,
   createDoctorIvrPreviewLimiter,
+  createDoctorIvrDictationLimiter,
+  createDoctorIvrReplyDraftLimiter,
 } = require('../middleware/doctor-ivr-rate-limit.middleware');
 const { createDoctorIvrController } = require('../controllers/doctor-ivr.controller');
 module.exports = function doctorIvrRoutes(pool) {
@@ -21,6 +23,8 @@ module.exports = function doctorIvrRoutes(pool) {
     requireDoctorSignature,
     createDoctorIvrGenerationLimiter(),
     createDoctorIvrPreviewLimiter(),
+    createDoctorIvrDictationLimiter(),
+    createDoctorIvrReplyDraftLimiter(),
     controller.doctorOperation
   );
   router.post('/ivr/admin', requireDoctorSignature, controller.adminOperation);

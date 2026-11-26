@@ -34,10 +34,12 @@ const message = (index, content, sender_type = 'patient', sender_ref = '42') => 
   message_type: 'reply',
   created_at: new Date(Date.UTC(2026, 9, 20, 0, index)).toISOString(),
 });
-const fixturePool = (messages, summary = '') => ({
+const fixturePool = (messages, summary = '', intake = {}) => ({
   query: jest.fn(async (sql, params) => {
     if (sql.includes('FROM doctor_task_outbox'))
-      return { rows: [{ app_user_id: '42', summary, created_at: '2026-10-20T00:00:00Z' }] };
+      return {
+        rows: [{ app_user_id: '42', summary, created_at: '2026-10-20T00:00:00Z', ...intake }],
+      };
     if (sql.includes('FROM doctor_task_messages')) {
       expect(params).toEqual(['fixture-clinic', 'fixture-task', '42']);
       const limit = Number(sql.match(/LIMIT (\d+)/)?.[1] || messages.length);
@@ -75,8 +77,16 @@ test('automated SLA messages do not replace the latest clinical speaker', async 
 });
 
 test('the submitted patient complaint is available before the first chat message without inventing a message version', async () => {
+  const intake = {
+    clinical_intake: { symptom_onset: 'today', progression: 'stable', severity: 'moderate' },
+    legal_screening: {
+      emergency: false,
+      reason: 'consultation_screened_follow_up',
+      screened_at: '2026-10-20T00:00:00Z',
+    },
+  };
   const context = await loadDoctorClinicalContext(
-    fixturePool([], 'Tôi đau bụng từ sáng nay.'),
+    fixturePool([], 'Tôi đau bụng từ sáng nay.', intake),
     input
   );
   expect(context.conversation[0]).toMatchObject({
@@ -84,6 +94,7 @@ test('the submitted patient complaint is available before the first chat message
     message: 'Tôi đau bụng từ sáng nay.',
     source: 'intake',
   });
+  expect(context).toMatchObject(intake);
   expect(conversationIntent(context)).toBe('clinical');
   expect(context.context_version).toBe('0');
 });

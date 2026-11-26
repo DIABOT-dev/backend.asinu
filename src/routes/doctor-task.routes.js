@@ -25,6 +25,7 @@ const {
   listDoctorClinics,
   listDoctorTasks,
   listDoctorMessages,
+  requestConsultationCall,
   createDoctorMessage,
   createDoctorAttachment,
   createDoctorVoice,
@@ -47,6 +48,7 @@ function doctorTaskRoutes(pool) {
   router.post('/tasks', requireAuth, bindController(requestDoctorTask, pool));
   router.get('/tasks', requireAuth, bindController(listDoctorTasks, pool));
   router.get('/tasks/:taskId/messages', requireAuth, bindController(listDoctorMessages, pool));
+  router.post('/tasks/:taskId/call-requests', requireAuth, bindController(requestConsultationCall, pool));
   router.post('/tasks/:taskId/messages', requireAuth, bindController(createDoctorMessage, pool));
   router.post(
     '/tasks/:taskId/messages/action',

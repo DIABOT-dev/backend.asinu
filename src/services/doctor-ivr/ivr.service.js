@@ -4,11 +4,15 @@ const crypto = require('node:crypto');
 const { isDeepStrictEqual } = require('node:util');
 const { compatibleDeviceTokens } = require('./ivr.devices');
 const { inspectRecording } = require('./recording');
+const { isAudioBuffer } = require('../../middleware/upload.middleware');
 const { questionSpeech, spokenQuestion } = require('./question-speech');
 const { audioVersion, synthesizeText } = require('../checkin-call/audio.service');
 const { questionSetChanges } = require('./question-set.diff');
 const { patientPolicy, nextEvening, nextCallTime, questionFingerprint } = require('./ivr.policy');
 const { reportFlags, asksForMoreInformation } = require('./content-quality');
+const { draftPatientReply, intakeAnswers } = require('./reply-drafting');
+const { uploadBuffer, deleteAsset } = require('../media/cloudinary-upload.service');
+const { authenticatedAssetUrl, requirePrivateDeliveryConfig } = require('../media/private-media.service');
 const {
   validateQuestionSet,
   nextQuestion,
@@ -19,26 +23,31 @@ const {
   loadOwnedTask,
   insertIvrQuestionMessage,
 } = require('../integrations/doctor-messaging.service');
-const { broadcastChatEvent } = require('../integrations/doctor-chat-realtime');
+const { broadcastChatEvent, broadcastIvrInvitationChange } = require('../integrations/doctor-chat-realtime');
 const { hasAiConsent: mayProcessAi, withAiUser } = require('../ai/ai-consent.service');
 const { callTextAi } = require('../ai/ai.service');
+const { getWhisperTranscription } = require('../ai/providers/openai');
 const { isAiTimeout } = require('../ai/checkin-wait-policy.service');
 const { loadDoctorClinicalContext } = require('../integrations/doctor-context.service');
 const {
   resolveCommunicationStyle,
   communicationConflict,
-  profileAge,
 } = require('../integrations/doctor-communication-style');
 const {
   generationSystem,
   repairSystem,
   compoundRepairTargets,
   applyQuestionTextRepairs,
+  buildQuestionGenerationContext,
+  supplementRequestInstruction,
+  supplementRevisionInstruction,
+  supplementRevisionInput,
 } = require('./question-generation');
 const error = (code, message, statusCode = 409) =>
   Object.assign(new Error(message), { code, statusCode });
 const enabled = () => process.env.DOCTOR_IVR_ENABLED === 'true';
 const answerAudioPrefix = 'answer:';
+const MAX_SUPPLEMENT_ROUNDS = 3;
 const patientAudioJobs = new Map();
 function key() {
   const value = keyringEnabled()
@@ -145,19 +154,20 @@ function audioUrl(id, actor) {
   const expires = Math.floor(Date.now() / 1000) + 900;
   return `/api/doctor/ivr/media/${id}?expires=${expires}&actor=${encodeURIComponent(actor)}&signature=${mediaSignature(id, expires, actor)}`;
 }
-async function serialize(db, s, { doctor = false, actor = String(s.user_id) } = {}) {
-  const content = reveal(s.user_id, 'question-set', s.content_enc);
-  const answers = (
-    await db.query(
-      'SELECT * FROM doctor_ivr_answers WHERE session_id=$1 AND active ORDER BY answered_at',
-      [s.id]
-    )
-  ).rows.map((a) => ({
+async function loadActiveAnswers(db, s, actor) {
+  const { rows } = await db.query(
+    `SELECT id, question_id, option_id, answer_type, audio_enc IS NOT NULL AS has_audio,
+           audio_duration_s, transcript_enc, stt_confidence, stt_status, stt_needs_review,
+           is_red_flag, skip_reason, answered_at
+      FROM doctor_ivr_answers WHERE session_id=$1 AND active ORDER BY answered_at`,
+    [s.id]
+  );
+  return rows.map((a) => ({
     id: a.id,
     question_id: a.question_id,
     option_id: a.option_id,
     answer_type: a.answer_type,
-    audio_url: a.audio_enc ? audioUrl(a.id, actor) : null,
+    audio_url: a.has_audio && actor ? audioUrl(a.id, actor) : null,
     audio_duration_s: a.audio_duration_s == null ? null : Number(a.audio_duration_s),
     transcript: reveal(s.user_id, 'transcript', a.transcript_enc),
     stt_confidence: a.stt_confidence == null ? null : Number(a.stt_confidence),
@@ -165,7 +175,7 @@ async function serialize(db, s, { doctor = false, actor = String(s.user_id) } = 
     stt_status: a.stt_status,
     needs_review:
       a.answer_type === 'voice' &&
-      Boolean(a.audio_enc) &&
+      a.has_audio &&
       (a.stt_status === 'failed' ||
         (a.stt_status === 'done' &&
           (a.stt_needs_review || a.stt_confidence === null || Number(a.stt_confidence) < 0.6))),
@@ -173,6 +183,12 @@ async function serialize(db, s, { doctor = false, actor = String(s.user_id) } = 
     skip_reason: a.skip_reason,
     answered_at: a.answered_at,
   }));
+}
+
+async function serialize(db, s, { doctor = false, actor = String(s.user_id) } = {}) {
+  const content = reveal(s.user_id, 'question-set', s.content_enc);
+  const reply = reveal(s.user_id, 'reply', s.reply_enc);
+  const answers = await loadActiveAnswers(db, s, actor);
   const report = (await db.query('SELECT * FROM doctor_ivr_reports WHERE session_id=$1', [s.id]))
     .rows[0];
   const reportValue = doctor && report ? reveal(s.user_id, 'report', report.report_enc) : null;
@@ -226,7 +242,10 @@ async function serialize(db, s, { doctor = false, actor = String(s.user_id) } = 
     content: doctor ? content : patientContent,
     answers,
     report: doctor && report ? { ...reportValue, ai_status: report.ai_status } : null,
-    doctor_reply: reveal(s.user_id, 'reply', s.reply_enc),
+    doctor_reply: typeof reply === 'string' ? reply : null,
+    ...(reply?.public_id ? {
+      doctor_reply_video: { url: replyVideoUrl(reply.public_id) },
+    } : {}),
     replied_at: s.replied_at,
   };
 }
@@ -244,6 +263,91 @@ function assertTaskOpen(task) {
     throw error('IVR_TASK_CLOSED', 'Ca tư vấn đã kết thúc.');
 }
 
+async function taskIvrSessions(db, { tenant, taskId, user }) {
+  const { rows } = await db.query(
+    'SELECT id, is_supplement, status FROM doctor_ivr_sessions WHERE tenant_id=$1 AND task_id=$2 AND user_id=$3 ORDER BY created_at DESC,id DESC',
+    [tenant, taskId, user]
+  );
+  return rows;
+}
+
+const deliveredSessions = (sessions) =>
+  sessions.filter((session) => !['cancelled', 'unreachable'].includes(session.status));
+
+const supplementCount = (sessions) => sessions.filter((session) => session.is_supplement).length;
+
+const canStartSupplement = (sessions) =>
+  ['reported', 'expired'].includes(sessions[0]?.status) &&
+  supplementCount(sessions) < MAX_SUPPLEMENT_ROUNDS &&
+  !sessions.some((session) => ['replied', 'closed'].includes(session.status));
+
+function assertReplySession(latest, sessionId) {
+  if (!latest || latest.id !== sessionId)
+    throw error('IVR_NEWER_SESSION', 'Cần xem câu trả lời của lượt mới nhất.');
+  if (!['reported', 'expired'].includes(latest.status))
+    throw error('IVR_REPORT_NOT_READY', 'Chưa có báo cáo để trả lời.');
+}
+
+function replyVideoUrl(publicId) {
+  try {
+    return authenticatedAssetUrl(publicId, 'video', 'authenticated', 'video/mp4');
+  } catch {
+    return null;
+  }
+}
+
+function readReplyVideo({ mime_type: mimeType, video_base64: base64 }) {
+  const bytes = Buffer.from(base64, 'base64');
+  const validHeader = mimeType === 'video/mp4'
+    ? bytes.subarray(4, 8).toString('ascii') === 'ftyp'
+    : bytes.subarray(0, 4).toString('hex') === '1a45dfa3';
+  if (!validHeader || bytes.length < 12 || bytes.length > 10 * 1024 * 1024 || bytes.toString('base64') !== base64)
+    throw error('IVR_INVALID_REPLY_VIDEO', 'Video không hợp lệ hoặc lớn hơn 10 MB.', 400);
+  return bytes;
+}
+
+async function uploadReplyVideo(bytes) {
+  try {
+    requirePrivateDeliveryConfig();
+    return await uploadBuffer(bytes, {
+      folder: 'asinu/consultation-replies',
+      resource_type: 'video',
+      type: 'authenticated',
+      format: 'mp4',
+      transformation: { video_codec: 'h264', audio_codec: 'aac' },
+      media_metadata: true,
+      timeout: 60_000,
+    });
+  } catch {
+    throw error('IVR_REPLY_VIDEO_UNAVAILABLE', 'Chưa gửi được video. Vui lòng thử lại.', 503);
+  }
+}
+
+async function serializeIntake(pool, s, actor, sessions) {
+  return Promise.all(
+    sessions.map(async ({ id }) =>
+      serialize(pool, await getSession(pool, id, s.user), { doctor: true, actor })
+    )
+  );
+}
+
+async function loadConsultationIvrIntake(pool, scope) {
+  if (!enabled()) return [];
+  const sessions = deliveredSessions(await taskIvrSessions(pool, scope));
+  const history = await Promise.all(sessions.toReversed().map(async ({ id, is_supplement }) => {
+    const session = await getSession(pool, id, scope.user);
+    const answers = await loadActiveAnswers(pool, session);
+    return {
+      is_supplement,
+      answers: intakeAnswers({
+        content: reveal(scope.user, 'question-set', session.content_enc),
+        answers,
+      }),
+    };
+  }));
+  return history.filter((session) => session.answers.length);
+}
+
 async function listQuestionSets(pool, { tenant, taskId, user }) {
   const { rows } = await pool.query(
     `SELECT q.id, q.version, q.status, q.source, q.content_enc,
@@ -255,7 +359,7 @@ async function listQuestionSets(pool, { tenant, taskId, user }) {
            FROM doctor_ivr_events e
           WHERE e.tenant_id=q.tenant_id AND e.task_id=q.task_id AND e.user_id=q.user_id
             AND e.actor=q.created_by AND e.event_type='question_set.saved'
-            AND e.created_at=q.created_at AND q.status='draft' AND q.source='ai'
+            AND e.created_at=q.created_at AND q.status='draft'
           ORDER BY e.id DESC LIMIT 1
        ) saved ON true
        LEFT JOIN LATERAL (
@@ -282,7 +386,14 @@ async function listQuestionSets(pool, { tenant, taskId, user }) {
       isDeepStrictEqual(reveal(user, 'event', row.prior_event)?.content, content)
     )
       return [];
-    return [{ id: row.id, version: row.version, status: row.status, source: row.source, content }];
+    return [{
+      id: row.id,
+      version: row.version,
+      status: row.status,
+      source: row.source,
+      content,
+      ...(typeof save?.supplement === 'boolean' ? { is_supplement: save.supplement } : {}),
+    }];
   });
 }
 
@@ -294,6 +405,7 @@ async function doctorOperation(pool, input) {
   if (!actor) throw error('IVR_INVALID_DOCTOR', 'Thiếu bác sĩ phụ trách.', 400);
   const op = input.operation,
     data = input.data || {};
+  const sessionLock = `ivr:${s.tenant}:${s.taskId}`;
   if (op === 'recording') {
     // The signed Doctor request has already checked the current clinician assignment.
     const entry = (await pool.query(
@@ -313,12 +425,8 @@ async function doctorOperation(pool, input) {
   if (op === 'list') {
     const profile = await readIvrPatientProfile(pool, s.user);
     const sets = await listQuestionSets(pool, s);
-    const sessions = (
-      await pool.query(
-        'SELECT id FROM doctor_ivr_sessions WHERE tenant_id=$1 AND task_id=$2 AND user_id=$3 ORDER BY created_at DESC',
-        [s.tenant, s.taskId, s.user]
-      )
-    ).rows;
+    const sessions = await taskIvrSessions(pool, s);
+    const delivered = deliveredSessions(sessions);
     return {
       enabled: true,
       patient_address: resolveCommunicationStyle({ profile }).patient_address,
@@ -328,11 +436,12 @@ async function doctorOperation(pool, input) {
         confidence: 'model_likelihood_estimate',
       },
       question_sets: sets,
-      sessions: await Promise.all(
-        sessions.map(async (row) =>
-          serialize(pool, await getSession(pool, row.id, s.user), { doctor: true, actor })
-        )
-      ),
+      supplement_rounds: {
+        used: supplementCount(delivered),
+        limit: MAX_SUPPLEMENT_ROUNDS,
+        can_start: canStartSupplement(delivered),
+      },
+      sessions: await serializeIntake(pool, s, actor, sessions),
       templates: (
         await pool.query(
           'SELECT id,name,specialty,content_enc,owner_id,is_shared FROM doctor_ivr_templates WHERE tenant_id=$1 AND (owner_id=$2 OR is_shared) ORDER BY created_at DESC',
@@ -361,7 +470,94 @@ async function doctorOperation(pool, input) {
     }
   }
   assertTaskOpen(s.task);
+  if (op === 'draft_reply') {
+    if (!(await mayProcessAi(pool, s.user)))
+      throw error('AI_CONSENT_REQUIRED', 'Người bệnh chưa đồng ý xử lý AI.', 403);
+    const sessions = deliveredSessions(await taskIvrSessions(pool, s));
+    assertReplySession(sessions[0], data.session_id);
+    const [context, profile, rounds] = await Promise.all([
+      loadDoctorClinicalContext(pool, input),
+      readIvrPatientProfile(pool, s.user),
+      serializeIntake(pool, s, actor, sessions.toReversed()),
+    ]);
+    const addressProfile = profile ?? context.profile;
+    const address = resolveCommunicationStyle({ profile: addressProfile }).patient_address;
+    let reply;
+    try {
+      reply = await withAiUser(pool, s.user, () =>
+        draftPatientReply(context, rounds, { address, addressProfile, revision: data.revision })
+      );
+    } catch (cause) {
+      if (cause.code === 'AI_CONSENT_REQUIRED') throw cause;
+      throw error('IVR_REPLY_DRAFT_UNAVAILABLE', 'Chưa soạn được lời trả lời. Vui lòng thử lại.', 502);
+    }
+    const current = await scope(pool, input);
+    assertTaskOpen(current.task);
+    assertReplySession(deliveredSessions(await taskIvrSessions(pool, current))[0], data.session_id);
+    await audit(pool, current, actor, 'reply.drafted', {
+      rounds: rounds.length,
+      revised: Boolean(data.revision),
+    }, data.session_id);
+    return { reply };
+  }
+  if (op === 'dictate') {
+    if (!(await mayProcessAi(pool, s.user)))
+      throw error('AI_CONSENT_REQUIRED', 'Người bệnh chưa đồng ý xử lý AI.', 403);
+    const audio = data.audio_base64;
+    if (
+      !['audio/webm', 'audio/mp4'].includes(data.mime_type) ||
+      typeof audio !== 'string' ||
+      !audio.length ||
+      audio.length > 700_000 ||
+      audio.length % 4 !== 0 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/u.test(audio)
+    )
+      throw error('IVR_INVALID_DICTATION', 'Bản ghi không hợp lệ hoặc quá dài.', 400);
+    const bytes = Buffer.from(audio, 'base64');
+    if (!isAudioBuffer(bytes))
+      throw error('IVR_INVALID_DICTATION', 'Bản ghi không hợp lệ hoặc quá dài.', 400);
+    const fileName = data.mime_type === 'audio/webm' ? 'dictation.webm' : 'dictation.m4a';
+    let transcript;
+    try {
+      transcript = await withAiUser(pool, s.user, () =>
+        getWhisperTranscription(bytes, fileName, 'vi')
+      );
+    } catch (cause) {
+      if (cause.code === 'AI_CONSENT_REQUIRED') throw cause;
+      throw error(
+        'IVR_DICTATION_UNAVAILABLE',
+        'Chưa chuyển được lời nói thành văn bản. Vui lòng thử lại.',
+        502
+      );
+    }
+    if (typeof transcript !== 'string' || !transcript.trim())
+      throw error(
+        'IVR_DICTATION_EMPTY',
+        'Chưa nghe rõ lời nói. Vui lòng nói lại hoặc nhập nội dung.',
+        422
+      );
+    return { text: transcript.trim() };
+  }
   if (op === 'generate') {
+    const request =
+      typeof data.supplement_request === 'string' ? data.supplement_request.trim() : '';
+    if (
+      data.supplement_request !== undefined &&
+      (data.supplement !== true || !request || request.length > 1200)
+    )
+      throw error(
+        'IVR_INVALID_SUPPLEMENT_REQUEST',
+        'Nhập điều cần hỏi bổ sung, tối đa 1.200 ký tự.',
+        400
+      );
+    let revision;
+    if (data.supplement_revision !== undefined) {
+      const parsed = supplementRevisionInput.safeParse(data.supplement_revision);
+      if (data.supplement !== true || !parsed.success ||
+          (!request && !parsed.data.questions.length && !parsed.data.feedback))
+        throw error('IVR_INVALID_SUPPLEMENT_REVISION', 'Cần nội dung câu hỏi bổ sung hoặc góp ý để AI soạn lại.', 400);
+      revision = parsed.data;
+    }
     if (!(await mayProcessAi(pool, s.user)))
       throw error('AI_CONSENT_REQUIRED', 'Người bệnh chưa đồng ý xử lý AI.', 403);
     const [context, profile] = await Promise.all([
@@ -385,62 +581,34 @@ async function doctorOperation(pool, input) {
     ).rows;
     const previousIntake = [];
     if (data.supplement) {
-      const previous = (
-        await pool.query(
-          "SELECT id FROM doctor_ivr_sessions WHERE tenant_id=$1 AND task_id=$2 AND user_id=$3 AND status IN ('reported','expired') ORDER BY created_at DESC LIMIT 2",
-          [s.tenant, s.taskId, s.user]
-        )
-      ).rows;
-      for (const row of previous) {
-        const state = await serialize(pool, await getSession(pool, row.id, s.user), {
-          doctor: true,
-          actor,
-        });
+      const previous = deliveredSessions(await taskIvrSessions(pool, s));
+      if (supplementCount(previous) >= MAX_SUPPLEMENT_ROUNDS)
+        throw error('IVR_SUPPLEMENT_LIMIT', `Mỗi ca có tối đa ${MAX_SUPPLEMENT_ROUNDS} lượt hỏi bổ sung.`);
+      if (!canStartSupplement(previous))
+        throw error('IVR_SUPPLEMENT_NOT_READY', 'Chỉ bổ sung sau khi lượt trước kết thúc.');
+      const history = await serializeIntake(pool, s, actor, previous.toReversed());
+      for (const state of history) {
         previousIntake.push({
           follow_up_reason: state.report?.follow_up_reason,
-          answers: state.answers.map((a) => {
-            const q = state.content.questions.find((q) => q.id === a.question_id);
-            return {
-              question: q?.text,
-              answer:
-                a.answer_type === 'voice'
-                  ? a.transcript
-                  : q?.options.find((o) => o.id === a.option_id)?.label,
-              skipped: a.answer_type === 'skip',
-            };
-          }),
+          answers: intakeAnswers(state),
         });
       }
     }
-    const initialStatement = String(context.initial_patient_statement?.message || '');
-    const knownFacts = {
-      onset_known:
-        /hôm qua|hôm nay|sáng nay|tối qua|(?:\d+|một|hai|ba|bốn|năm|sáu|bảy|tám|chín|mười)\s+(?:ngày|tuần|tháng)(?:\s+(?:nay|rồi|qua))?/iu.test(
-          initialStatement
-        ),
-      daily_medication_known: [true, 'true', 'yes', '1'].includes(
-        context.profile?.daily_medication
-      ),
-    };
-    const generationContext = {
-      task: context.initial_patient_statement,
-      conversation: context.conversation.slice(-12),
-      profile: {
-        age: profileAge(addressProfile),
-        gender: context.profile?.gender,
-        medical_conditions: context.profile?.conditions ?? context.profile?.medical_conditions,
-        chronic_symptoms: context.profile?.chronic_symptoms,
-        daily_medication: context.profile?.daily_medication,
-        allergies: context.profile?.allergies,
-      },
-      medications: context.medications,
+    const generationContext = buildQuestionGenerationContext({
+      context,
+      addressProfile,
       address,
-      recent_tasks: recent,
-      previous_intake: previousIntake,
+      recent,
+      previousIntake,
       supplement: !!data.supplement,
-      required_content_questions: data.supplement ? '1–3' : '3–7',
-      known_facts: knownFacts,
-    };
+    });
+    const { known_facts: knownFacts } = generationContext;
+    const guidedSupplement = Boolean(request || revision);
+    const generationOptions = { guidedSupplement };
+    const system = generationSystem +
+      (guidedSupplement ? supplementRequestInstruction : '') +
+      (revision ? supplementRevisionInstruction : '');
+    const generationTokenBudget = data.supplement ? 3600 : 1200;
     let last, previousDraft, accepted;
     const repairs = [];
     const configuredTimeout = Number(process.env.DOCTOR_IVR_QUESTION_TIMEOUT_MS);
@@ -452,7 +620,7 @@ async function doctorOperation(pool, input) {
         : 10000;
     const deadline = requestStartedAt + timeout;
     for (let attempt = 0; attempt < 3; attempt++) {
-      const targets = last ? compoundRepairTargets(previousDraft, address) : [];
+      const targets = last ? compoundRepairTargets(previousDraft, address, generationOptions) : [];
       const remainingMs = deadline - Date.now();
       // Generation and repairs share one deadline.
       if (remainingMs < 500) break;
@@ -462,9 +630,11 @@ async function doctorOperation(pool, input) {
             provider: process.env.DOCTOR_IVR_QUESTION_PROVIDER || 'openai',
             model: process.env.DOCTOR_IVR_QUESTION_MODEL || undefined,
             strictProvider: true,
-            system: targets.length ? repairSystem : generationSystem,
+            system: targets.length ? repairSystem : system,
             prompt: JSON.stringify({
               ...generationContext,
+              ...(request ? { supplement_request: request } : {}),
+              ...(revision ? { supplement_revision: revision } : {}),
               previous_error: last?.message,
               ...(targets.length
                 ? {
@@ -477,7 +647,7 @@ async function doctorOperation(pool, input) {
             }),
             jsonMode: true,
             temperature: 0.2,
-            maxTokens: targets.length ? 100 + targets.length * 100 : 1200,
+            maxTokens: targets.length ? 100 + targets.length * 100 : generationTokenBudget,
             timeoutMs: remainingMs,
             maxRetries: 0,
           })
@@ -486,6 +656,12 @@ async function doctorOperation(pool, input) {
         const generated = JSON.parse(
           result.content.replace(/^```(?:json)?\s*/u, '').replace(/\s*```$/u, '')
         );
+        if (guidedSupplement && generated?.follow_up_duration_exceeded === true)
+          throw error(
+            'IVR_SUPPLEMENT_DURATION_LIMIT',
+            `Các ý cần hỏi vượt thời lượng ${generationContext.max_duration_seconds / 60} phút. Vui lòng rút gọn nội dung bổ sung.`,
+            422
+          );
         if (targets.length) {
           const repaired = applyQuestionTextRepairs(previousDraft, targets, generated);
           repairs.push(
@@ -499,11 +675,15 @@ async function doctorOperation(pool, input) {
           );
           previousDraft = repaired;
         } else previousDraft = generated;
-        if (knownFacts.onset_known && previousDraft.questions?.some((q) => q.focus === 'onset'))
+        if (
+          !guidedSupplement &&
+          knownFacts.onset_known &&
+          previousDraft.questions?.some((q) => q.focus === 'onset')
+        )
           throw new Error(
             'Thời điểm bắt đầu đã có trong lời kể. Không dùng focus onset; thay bằng điều còn thiếu.'
           );
-        const value = materializeGeneratedQuestions(previousDraft, address);
+        const value = materializeGeneratedQuestions(previousDraft, address, generationOptions);
         value.greeting = usePatientAddress(value.greeting);
         value.closing = usePatientAddress(value.closing);
         value.questions = value.questions.map((q) => ({ ...q, text: usePatientAddress(q.text) }));
@@ -521,6 +701,7 @@ async function doctorOperation(pool, input) {
             'Hỏi mức đau bằng lời dễ chọn, dùng Đau nhẹ, Đau vừa, Đau nhiều. Không hỏi tự chấm điểm.'
           );
         const repeatedOnset =
+          !guidedSupplement &&
           knownFacts.onset_known &&
           value.questions.find((q) =>
             /từ (?:khi nào|bao giờ)|bắt đầu.*(?:khi nào|bao giờ)|bao lâu (?:rồi|nay)/iu.test(q.text)
@@ -530,6 +711,7 @@ async function doctorOperation(pool, input) {
             `Câu đã biết thời điểm bắt đầu: ${repeatedOnset.text}. Thay bằng một thông tin còn thiếu.`
           );
         const repeatedMedication =
+          !guidedSupplement &&
           knownFacts.daily_medication_known &&
           value.questions.find(
             (q) =>
@@ -557,7 +739,7 @@ async function doctorOperation(pool, input) {
         break;
       } catch (e) {
         last = e;
-        if (e.code === 'AI_CONSENT_REQUIRED') throw e;
+        if (['AI_CONSENT_REQUIRED', 'IVR_SUPPLEMENT_DURATION_LIMIT'].includes(e.code)) throw e;
         if (isAiTimeout(e)) break;
       }
     }
@@ -607,7 +789,7 @@ async function doctorOperation(pool, input) {
       Object.assign(content, validateQuestionSet(content, { supplement: !!data.supplement }));
     }
     const result = await transaction(pool, async (db) => {
-      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`ivr:${s.tenant}:${s.taskId}`]);
+      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [sessionLock]);
       const current = (
         await db.query(
           "SELECT * FROM doctor_ivr_sessions WHERE tenant_id=$1 AND task_id=$2 AND status IN ('draft','sent','in_progress','completed') FOR UPDATE",
@@ -616,23 +798,22 @@ async function doctorOperation(pool, input) {
       ).rows[0];
       if (current && current.status !== 'sent' && current.status !== 'draft')
         throw error('IVR_SESSION_ACTIVE', 'Phiên đã bắt đầu, không được thay bộ câu hỏi.');
-      const prior = (
-        await db.query(
-          "SELECT is_supplement,status FROM doctor_ivr_sessions WHERE tenant_id=$1 AND task_id=$2 AND status NOT IN ('cancelled','unreachable')",
-          [s.tenant, s.taskId]
-        )
-      ).rows;
+      if (data.replace_session_id && current?.id !== data.replace_session_id)
+        throw error('IVR_SESSION_CHANGED', 'Phiên này đã thay đổi. Hãy mở lại bộ câu hỏi.');
+      const prior = deliveredSessions(await taskIvrSessions(db, s));
       if (!data.supplement && prior.length && !current)
-        throw error('IVR_SUPPLEMENT_REQUIRED', 'Chỉ được gửi một phiên bổ sung sau phiên đầu.');
-      if (data.supplement && prior.some((row) => row.is_supplement))
-        throw error('IVR_SUPPLEMENT_LIMIT', 'Mỗi ca chỉ có một phiên bổ sung.');
-      if (data.supplement && prior.some((row) => ['replied', 'closed'].includes(row.status)))
-        throw error(
-          'IVR_SUPPLEMENT_TOO_LATE',
-          'Bác sĩ đã gửi kết quả cuối, không thể gửi phiên mới.'
-        );
-      if (data.supplement && (!prior.length || current))
-        throw error('IVR_SUPPLEMENT_NOT_READY', 'Chỉ bổ sung sau khi phiên trước kết thúc.');
+        throw error('IVR_SUPPLEMENT_REQUIRED', 'Chọn soạn lượt bổ sung sau phiên đầu.');
+      if (current && current.is_supplement !== Boolean(data.supplement))
+        throw error('IVR_SESSION_ACTIVE', 'Đang có lượt câu hỏi chưa hoàn tất.');
+      if (data.supplement) {
+        const earlier = prior.filter((session) => session.id !== current?.id);
+        if (earlier.some((row) => ['replied', 'closed'].includes(row.status)))
+          throw error('IVR_SUPPLEMENT_TOO_LATE', 'Bác sĩ đã gửi kết quả cuối.');
+        if (supplementCount(earlier) >= MAX_SUPPLEMENT_ROUNDS)
+          throw error('IVR_SUPPLEMENT_LIMIT', `Mỗi ca có tối đa ${MAX_SUPPLEMENT_ROUNDS} lượt hỏi bổ sung.`);
+        if ((current && !data.replace_session_id) || !canStartSupplement(earlier))
+          throw error('IVR_SUPPLEMENT_NOT_READY', 'Chỉ bổ sung sau khi lượt trước kết thúc.');
+      }
       if (current && op === 'approve') {
         await db.query(
           "UPDATE doctor_ivr_sessions SET status='cancelled',updated_at=NOW() WHERE id=$1",
@@ -675,7 +856,7 @@ async function doctorOperation(pool, input) {
         : null;
       await audit(db, s, actor, `question_set.${op === 'approve' ? 'approved' : 'saved'}`, {
         version,
-        ...(op === 'save' ? { explicit: true } : {}),
+        ...(op === 'save' ? { explicit: true, supplement: !!data.supplement } : {}),
         content,
         changes: questionSetChanges(previousContent, content),
       });
@@ -753,42 +934,71 @@ async function doctorOperation(pool, input) {
     );
     if (!cancelled.rowCount) throw error('IVR_ALREADY_STARTED', 'Không thể hủy phiên đã bắt đầu.');
     await audit(pool, row, actor, 'session.cancelled', {}, row.id);
+    broadcastIvrInvitationChange(s.tenant, s.taskId, row.id);
     return { ok: true };
   }
-  if (op === 'reply') {
-    const reply = String(data.reply || '').trim();
-    if (!reply || reply.length > 6000)
-      throw error('IVR_INVALID_REPLY', 'Cần nội dung trả lời (tối đa 6000 ký tự).', 400);
-    if (asksForMoreInformation(reply))
-      throw error(
-        'IVR_REPLY_NEEDS_FOLLOW_UP',
-        'Kết quả cuối không được yêu cầu người bệnh trả lời thêm. Hãy gửi phiên bổ sung hoặc trao đổi trong hội thoại trước.',
-        400
-      );
-    const result = await transaction(pool, async (db) => {
-      const row = await getSession(db, data.session_id, s.user, true);
-      if (row.task_id !== s.taskId || row.tenant_id !== s.tenant)
-        throw error('IVR_NOT_FOUND', 'Không tìm thấy phiên.', 404);
-      if (row.status === 'replied' || row.status === 'closed')
-        return { id: row.id, duplicate: true };
-      if (row.status !== 'reported')
-        throw error('IVR_REPORT_NOT_READY', 'Chưa có báo cáo để trả lời.');
-      const latest = (
+  if (op === 'reply' || op === 'reply_video') {
+    const video = op === 'reply_video' ? readReplyVideo(data) : null;
+    const text = typeof data.reply === 'string' ? data.reply.trim() : '';
+    if (!video) {
+      if (!text) throw error('IVR_INVALID_REPLY', 'Cần nội dung trả lời.', 400);
+      if (asksForMoreInformation(text))
+        throw error(
+          'IVR_REPLY_NEEDS_FOLLOW_UP',
+          'Kết quả cuối không được yêu cầu người bệnh trả lời thêm. Hãy gửi phiên bổ sung hoặc trao đổi trong hội thoại trước.',
+          400
+        );
+    }
+    let uploaded;
+    try {
+      return await transaction(pool, async (db) => {
+        await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [sessionLock]);
+        const row = await getSession(db, data.session_id, s.user, true);
+        if (row.task_id !== s.taskId || row.tenant_id !== s.tenant)
+          throw error('IVR_NOT_FOUND', 'Không tìm thấy phiên.', 404);
+        if (row.status === 'replied' || row.status === 'closed') {
+          const sent = reveal(s.user, 'reply', row.reply_enc);
+          if (video ? sent?.request_id === data.request_id : sent === text)
+            return { id: row.id, duplicate: true };
+          throw error('IVR_REPLY_ALREADY_SENT', 'Kết quả tư vấn đã được gửi.');
+        }
+        assertReplySession(deliveredSessions(await taskIvrSessions(db, s))[0], row.id);
+        let reply = text;
+        if (video) {
+          uploaded = await uploadReplyVideo(video);
+          const hasAudio = uploaded.has_audio === true || Boolean(uploaded.audio?.codec || uploaded.audio_codec);
+          if (!uploaded.public_id || uploaded.format !== 'mp4' || !uploaded.width ||
+              !hasAudio || !Number.isFinite(uploaded.duration) || uploaded.duration <= 0 || uploaded.duration > 185 ||
+              !replyVideoUrl(uploaded.public_id))
+            throw error('IVR_INVALID_REPLY_VIDEO', 'Cần video có hình và tiếng, tối đa 3 phút.', 400);
+          assertTaskOpen((await scope(db, input)).task);
+          await db.query(
+            `INSERT INTO doctor_patient_files
+              (user_id, name, mime_type, size_bytes, secure_url, public_id, resource_type, delivery_type, source_task_id, uploaded_by)
+             VALUES ($1,'Video trả lời tư vấn.mp4','video/mp4',$2,$3,$4,'video','authenticated',$5,$6)`,
+            [s.user, uploaded.bytes, uploaded.secure_url, uploaded.public_id, s.taskId, actor]
+          );
+          reply = { public_id: uploaded.public_id, request_id: data.request_id };
+        }
         await db.query(
-          "SELECT id FROM doctor_ivr_sessions WHERE tenant_id=$1 AND task_id=$2 AND status<>'cancelled' ORDER BY created_at DESC LIMIT 1",
-          [s.tenant, s.taskId]
-        )
-      ).rows[0];
-      if (latest.id !== row.id)
-        throw error('IVR_NEWER_SESSION', 'Cần trả lời phiên bổ sung mới nhất.');
-      await db.query(
-        "UPDATE doctor_ivr_sessions SET status='replied',reply_enc=$2,replied_at=NOW(),updated_at=NOW() WHERE id=$1",
-        [row.id, seal(s.user, 'reply', reply)]
-      );
-      await audit(db, row, actor, 'session.replied', { reply }, row.id);
-      return { id: row.id };
-    });
-    return result;
+          "UPDATE doctor_ivr_sessions SET status='replied',reply_enc=$2,replied_at=NOW(),updated_at=NOW() WHERE id=$1",
+          [row.id, seal(s.user, 'reply', reply)]
+        );
+        await audit(db, row, actor, 'session.replied', video ? { reply_type: 'video' } : { reply }, row.id);
+        return { id: row.id };
+      });
+    } catch (cause) {
+      if (uploaded?.public_id) {
+        // A failed COMMIT can have an unknown outcome. Keep assets referenced by a committed file.
+        try {
+          const saved = await pool.query('SELECT 1 FROM doctor_patient_files WHERE user_id=$1 AND public_id=$2', [s.user, uploaded.public_id]);
+          if (!saved.rowCount) await deleteAsset(uploaded.public_id, 'video', 'authenticated');
+        } catch {
+          // Preserve the original error and allow the specialist to retry.
+        }
+      }
+      throw cause;
+    }
   }
   throw error('IVR_INVALID_OPERATION', 'Thao tác không hợp lệ.', 400);
 }
@@ -1172,6 +1382,7 @@ module.exports = {
   transaction,
   getSession,
   serialize,
+  loadConsultationIvrIntake,
   doctorOperation,
   patientList,
   patientGet,

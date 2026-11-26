@@ -3,7 +3,8 @@ const { v2: cloudinary } = require('cloudinary');
 const resourceTypeForMime = (mimeType) => {
   const normalizedMimeType = String(mimeType || '').toLowerCase();
   if (normalizedMimeType.startsWith('image/')) return 'image';
-  if (normalizedMimeType.startsWith('audio/')) return 'video';
+  if (normalizedMimeType.startsWith('audio/') || normalizedMimeType.startsWith('video/'))
+    return 'video';
   return 'raw';
 };
 
@@ -40,6 +41,7 @@ const formatForMime = (mimeType, resourceType) => ({
   'application/pdf': 'pdf', 'audio/mpeg': 'mp3', 'audio/mp3': 'mp3',
   'audio/mp4': 'm4a', 'audio/m4a': 'm4a', 'audio/x-m4a': 'm4a',
   'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/webm': 'webm', 'audio/ogg': 'ogg',
+  'video/mp4': 'mp4',
 }[String(mimeType || '').toLowerCase().split(';')[0]] || (resourceType === 'raw' ? 'pdf' : resourceType === 'video' ? 'mp3' : 'jpg'));
 
 const authenticatedAssetUrl = (publicId, resourceType, deliveryType = 'authenticated', mimeType) => {

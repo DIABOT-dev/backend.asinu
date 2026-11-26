@@ -25,4 +25,23 @@ const createDoctorIvrPreviewLimiter = () =>
     'IVR_PREVIEW_RATE_LIMIT',
     'Bạn đã nghe thử nhiều lần. Vui lòng thử lại sau một phút.'
   );
-module.exports = { createDoctorIvrGenerationLimiter, createDoctorIvrPreviewLimiter };
+const createDoctorIvrDictationLimiter = () =>
+  createOperationLimiter(
+    'dictate',
+    6,
+    'IVR_DICTATION_RATE_LIMIT',
+    'Bạn đã nhập bằng giọng nói nhiều lần. Vui lòng thử lại sau một phút.'
+  );
+const createDoctorIvrReplyDraftLimiter = () =>
+  createOperationLimiter(
+    'draft_reply',
+    5,
+    'IVR_REPLY_DRAFT_RATE_LIMIT',
+    'Bạn đã tạo nhiều bản nháp trả lời. Vui lòng thử lại sau một phút.'
+  );
+module.exports = {
+  createDoctorIvrGenerationLimiter,
+  createDoctorIvrPreviewLimiter,
+  createDoctorIvrDictationLimiter,
+  createDoctorIvrReplyDraftLimiter,
+};

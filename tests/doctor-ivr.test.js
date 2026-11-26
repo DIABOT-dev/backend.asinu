@@ -54,6 +54,20 @@ function content() {
       .concat(fixedFinal()),
   };
 }
+function extendedSupplement(count) {
+  return materializeGeneratedQuestions(
+    {
+      title: 'Hỏi thêm về tình trạng',
+      questions: Array.from({ length: count }, (_, index) => ({
+        focus: 'associated_symptom',
+        text: `Anh có ghi nhận biểu hiện thứ ${index + 1} trong nhật ký không?`,
+        answer_kind: 'yes_no',
+      })),
+    },
+    'Anh',
+    { guidedSupplement: true }
+  );
+}
 describe('physician-reviewed IVR question contract', () => {
   test('reads each question with its own choices in one utterance and greets only once', () => {
     const value = content();
@@ -150,11 +164,30 @@ describe('physician-reviewed IVR question contract', () => {
     q.options[1].range = { min: 4, max: null, include_min: false, include_max: false };
     expect(validateQuestionSet(value)).toBeTruthy();
   });
-  test('a supplement is limited to three content questions', () => {
+  test('a supplement accepts one content question while the first session needs at least three', () => {
     const value = content();
     value.questions.splice(0, 2);
     expect(() => validateQuestionSet(value)).toThrow();
     expect(validateQuestionSet(value, { supplement: true }).questions).toHaveLength(2);
+  });
+  test('allows a supplementary draft longer than three minutes and enforces the five-minute limit', () => {
+    const value = extendedSupplement(16);
+    expect(() => validateQuestionSet(value)).toThrow('Phiên đầu cần 3–7 câu nội dung');
+    const valid = validateQuestionSet(value, { supplement: true });
+    expect(valid.questions).toHaveLength(17);
+    expect(valid.est_duration_s).toBeGreaterThan(180);
+    expect(valid.est_duration_s).toBeLessThanOrEqual(300);
+    expect(() => validateQuestionSet(extendedSupplement(30), { supplement: true }))
+      .toThrow('Nội dung đọc quá dài cho phiên 5 phút');
+  });
+  test('the first session retains the three-minute limit', () => {
+    const value = extendedSupplement(7);
+    value.greeting = 'Chào anh. '.repeat(39);
+    value.closing = 'Cảm ơn. '.repeat(45);
+    value.questions.slice(0, -1).forEach((question, index) => {
+      question.text = `Anh có ghi nhận biểu hiện thứ ${index + 1} trong nhật ký sức khỏe của mình từ hôm qua đến hôm nay không?`;
+    });
+    expect(() => validateQuestionSet(value)).toThrow('Nội dung đọc quá dài cho phiên 3 phút');
   });
   test('AI suggestions never count as a physician-confirmed red flag', () => {
     const value = content();
@@ -180,7 +213,7 @@ describe('IVR encryption boundary', () => {
 
 const describeDb = process.env.DOCTOR_IVR_TEST_DATABASE_URL ? describe : describe.skip;
 describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
-  let pool, admin, ivr, worker, schema, synthesizeAudio;
+  let pool, admin, ivr, worker, schema, synthesizeAudio, replyAi, clinicalContext, uploadVideo, removeVideo;
   const input = {
     tenant_id: 'clinic-demo',
     task_id: 'ivr-fixture-task',
@@ -251,6 +284,8 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
       },
     ]);
     for (const migration of [
+      '081_doctor_patient_records.sql',
+      '082_private_media_delivery.sql',
       '082_doctor_task_messages.sql',
       '085_doctor_chat_messenger_features.sql',
       '109_encrypted_message_storage.sql',
@@ -304,15 +339,27 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     jest
       .spyOn(require('../src/services/integrations/doctor-task.service'), 'deliverDoctorRequest')
       .mockResolvedValue({ status: 200, data: {} });
-    jest.spyOn(require('../src/services/ai/ai.service'), 'callTextAi').mockResolvedValue({
+    replyAi = jest.spyOn(require('../src/services/ai/ai.service'), 'callTextAi').mockResolvedValue({
       content: JSON.stringify({
         summary: 'Đã nhận thông tin.',
         draft_reply: 'Bác sĩ đã xem các câu trả lời.',
       }),
     });
+    clinicalContext = jest.spyOn(
+      require('../src/services/integrations/doctor-context.service'),
+      'loadDoctorClinicalContext'
+    );
     jest
       .spyOn(require('../src/services/ai/providers/openai'), 'getWhisperTranscription')
       .mockResolvedValue('Câu trả lời bằng giọng nói.');
+    const cloudinary = require('../src/services/media/cloudinary-upload.service');
+    uploadVideo = jest.spyOn(cloudinary, 'uploadBuffer').mockRejectedValue(new Error('Unexpected upload'));
+    removeVideo = jest.spyOn(cloudinary, 'deleteAsset').mockResolvedValue(undefined);
+    const privateMedia = require('../src/services/media/private-media.service');
+    jest.spyOn(privateMedia, 'requirePrivateDeliveryConfig').mockImplementation(() => {});
+    jest.spyOn(privateMedia, 'authenticatedAssetUrl').mockImplementation((_id, _type, _delivery, mime) =>
+      mime === 'video/mp4' ? 'https://fixture.invalid/private-video?expires_at=123' : null
+    );
     ivr = require('../src/services/doctor-ivr/ivr.service');
     jest.resetModules();
     // Reload the worker after spies so every external side effect remains mocked.
@@ -368,6 +415,7 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
         id: sent.message_id,
         sender_type: 'system',
         ivr_session_id: sent.session_id,
+        ivr_session_status: 'draft',
         content: 'Bác sĩ đã gửi câu hỏi',
       },
     ]);
@@ -390,6 +438,7 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     await worker.runDoctorIvrWorker(pool);
     let s = await ivr.patientGet(pool, 1, sent.session_id);
     expect(s.status).toBe('sent');
+    expect((await loadChat()).messages[0].ivr_session_status).toBe('sent');
     expect(s.content.questions[0].speech_text).toBe(questionSpeech(value, 'q1'));
     expect(s.content.questions[0].options[1].red_flag).toBeUndefined();
     await expect(ivr.patientGet(pool, 2, s.id)).rejects.toMatchObject({ statusCode: 404 });
@@ -427,9 +476,15 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     expect(
       (await ivr.patientAction(pool, 1, s.id, { action: 'answer', request_id: requestId })).revision
     ).toBe(s.revision);
-    await expect(invoke('approve', { content: value })).rejects.toMatchObject({
+    await expect(invoke('approve', {
+      content: value,
+      replace_session_id: sent.session_id,
+    })).rejects.toMatchObject({
       code: 'IVR_SESSION_ACTIVE',
     });
+    expect((await ivr.patientGet(pool, 1, s.id)).answers).toMatchObject([
+      { question_id: 'q1', option_id: 'q1_b' },
+    ]);
     expect((await loadChat()).messages).toHaveLength(1);
     await expect(invoke('cancel', { session_id: s.id })).rejects.toMatchObject({
       code: 'IVR_ALREADY_STARTED',
@@ -457,6 +512,12 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     expect(s.report.red_flags).toHaveLength(0);
     expect(s.report.red_flag_history).toHaveLength(1);
     expect(s.report.summary).toBe('Đã nhận thông tin.');
+    await expect(invoke('approve', {
+      content: value,
+      replace_session_id: sent.session_id,
+    })).rejects.toMatchObject({
+      code: 'IVR_SESSION_CHANGED',
+    });
     await expect(
       invoke('reply', { session_id: s.id, reply: 'Bác đang dùng thuốc gì không ạ?' })
     ).rejects.toMatchObject({ code: 'IVR_REPLY_NEEDS_FOLLOW_UP' });
@@ -543,7 +604,23 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     });
     const extra = content();
     extra.questions.splice(0, 2);
-    expect((await invoke('approve', { content: extra, supplement: true })).session_id).toBeTruthy();
+    const followUp = await invoke('approve', { content: extra, supplement: true });
+    await worker.runDoctorIvrWorker(pool);
+    await pool.query(
+      "UPDATE doctor_ivr_sessions SET expires_at=NOW()-INTERVAL '1 second' WHERE id=$1",
+      [followUp.session_id]
+    );
+    await worker.runDoctorIvrWorker(pool);
+    expect((await ivr.patientGet(pool, 1, followUp.session_id)).status).toBe('expired');
+    clinicalContext.mockResolvedValueOnce({ conversation: [], profile: {} });
+    replyAi.mockResolvedValueOnce({ content: '{"reply":"Bác sĩ đã xem nội dung tư vấn."}' });
+    await expect(invoke('draft_reply', { session_id: followUp.session_id })).resolves.toMatchObject({
+      reply: 'Bác sĩ đã xem nội dung tư vấn.',
+    });
+    await invoke('reply', { session_id: followUp.session_id, reply: 'Bác sĩ đã xem nội dung tư vấn.' });
+    expect((await invoke('list')).supplement_rounds).toEqual({ used: 1, limit: 3, can_start: false });
+    await expect(invoke('approve', { content: extra, supplement: true }))
+      .rejects.toMatchObject({ code: 'IVR_SUPPLEMENT_TOO_LATE' });
   });
   test('an explicit skip is persisted as missing information, never as a negative answer', async () => {
     await newTask('explicit-skip');
@@ -621,11 +698,40 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     await worker.runDoctorIvrWorker(pool);
     const s = await ivr.patientGet(pool, 1, created.session_id);
     await invoke('cancel', { session_id: s.id });
+    const { listMessages } = require('../src/services/integrations/doctor-messaging.service');
+    expect((await listMessages(pool, input.tenant_id, input.task_id, 1)).messages).toMatchObject([
+      { ivr_session_id: s.id, ivr_session_status: 'cancelled' },
+    ]);
     await expect(ivr.patientAction(pool, 1, s.id, { action: 'start' })).rejects.toMatchObject({
       code: 'IVR_SESSION_ENDED',
     });
     await expect(answer(s, 'q1', 'q1_a')).rejects.toMatchObject({ code: 'IVR_SESSION_ENDED' });
     expect((await ivr.patientGet(pool, 1, s.id)).answers).toHaveLength(0);
+  });
+  test('replacing an unopened invitation keeps its history and enables only the new questionnaire', async () => {
+    await newTask('replacement-invitations');
+    const { listMessages } = require('../src/services/integrations/doctor-messaging.service');
+    const loadChat = () => listMessages(pool, input.tenant_id, input.task_id, 1);
+    const original = await invoke('approve', { content: content() });
+    await worker.runDoctorIvrWorker(pool);
+    const sent = await invoke('approve', {
+      content: content(),
+      replace_session_id: original.session_id,
+    });
+    await worker.runDoctorIvrWorker(pool);
+    expect((await loadChat()).messages).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        ivr_session_id: original.session_id,
+        ivr_session_status: 'cancelled',
+      }),
+      expect.objectContaining({ ivr_session_id: sent.session_id, ivr_session_status: 'sent' }),
+    ]));
+    await expect(
+      ivr.patientAction(pool, 1, original.session_id, { action: 'start' })
+    ).rejects.toMatchObject({ code: 'IVR_SESSION_ENDED' });
+    await expect(
+      ivr.patientAction(pool, 1, sent.session_id, { action: 'start' })
+    ).resolves.toMatchObject({ status: 'in_progress' });
   });
   test('an expired unanswered session stays expired without fabricating a report', async () => {
     await newTask('unanswered-expiry');
@@ -646,7 +752,7 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
       code: 'IVR_SESSION_ENDED',
     });
   });
-  test('resumes the chosen branch, permits one supplement and expires partial sessions', async () => {
+  test('resumes a branch, completes three supplementary rounds and drafts the reply from the entire case', async () => {
     await newTask('branch');
     const questions = content();
     questions.questions[0].options[0].next = 'q3';
@@ -665,21 +771,113 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     const prior = (await invoke('list')).sessions[0];
     expect(prior.status).toBe('reported');
     expect(prior.report.completion).toBe('partial');
-    const extra = content();
-    extra.questions.splice(0, 2);
-    const supplement = await invoke('approve', { content: extra, supplement: true });
-    await worker.runDoctorIvrWorker(pool);
-    s = await ivr.patientGet(pool, 1, supplement.session_id);
-    expect(s.is_supplement).toBe(true);
-    s = await answer(s, 'q3', 'q3_a');
-    s = await answer(s, 'q_final', 'qf_no');
-    await worker.runDoctorIvrWorker(pool);
+    const extra = validateQuestionSet(extendedSupplement(16), { supplement: true });
+    for (let round = 1; round <= 3; round++) {
+      const supplement = await invoke('approve', { content: extra, supplement: true });
+      if (round === 1) {
+        await expect(invoke('approve', { content: extra, supplement: true }))
+          .rejects.toMatchObject({ code: 'IVR_SUPPLEMENT_NOT_READY' });
+      }
+      await worker.runDoctorIvrWorker(pool);
+      s = await ivr.patientGet(pool, 1, supplement.session_id);
+      expect(s.is_supplement).toBe(true);
+      expect(s.content.questions).toHaveLength(17);
+      for (const question of s.content.questions.slice(0, -1))
+        s = await answer(s, question.id, question.options[0].id);
+      expect(s.current_question_id).toBe('q_final');
+      s = await answer(s, 'q_final', 'qf_no');
+      await worker.runDoctorIvrWorker(pool);
+      expect((await invoke('list')).supplement_rounds).toEqual({
+        used: round, limit: 3, can_start: round < 3,
+      });
+    }
     await expect(invoke('approve', { content: extra, supplement: true })).rejects.toMatchObject({
       code: 'IVR_SUPPLEMENT_LIMIT',
     });
     await expect(
       invoke('reply', { session_id: prior.id, reply: 'Nội dung trả lời.' })
     ).rejects.toMatchObject({ code: 'IVR_NEWER_SESSION' });
+    const conversation = Array.from({ length: 20 }, (_, index) => ({
+      role: index % 2 ? 'doctor' : 'patient',
+      message: `Nội dung của lượt chat ${index + 1}.`,
+    }));
+    const clinicalIntake = { symptom_onset: 'today' };
+    clinicalContext.mockResolvedValueOnce({
+      initial_patient_statement: { message: 'Lý do tư vấn.' },
+      conversation,
+      clinical_intake: clinicalIntake,
+      profile: { conditions: ['Tăng huyết áp'] },
+      blood_pressure: [{ systolic: 126, diastolic: 79, occurred_at: '2026-10-20T07:00:00Z' }],
+    });
+    const draft = 'Bác sĩ đã xem các thông tin của ca tư vấn.';
+    replyAi.mockResolvedValueOnce({ content: JSON.stringify({ reply: draft }) });
+    await expect(invoke('draft_reply', { session_id: s.id })).resolves.toEqual({ reply: draft });
+    const prompt = JSON.parse(replyAi.mock.calls.at(-1)[0].prompt);
+    expect(prompt).toMatchObject({
+      conversation,
+      screening: { answers: clinicalIntake },
+      patient_profile: { conditions: ['Tăng huyết áp'] },
+      health_records: { blood_pressure: [{ systolic: 126, diastolic: 79 }] },
+    });
+    expect(prompt.ivr_rounds.map((round) => round.is_supplement)).toEqual([false, true, true, true]);
+    expect(prompt.ivr_rounds[0].answers[0]).toMatchObject({ answer: 'Hôm nay' });
+    expect(prompt.ivr_rounds[3].answers.at(-1)).toMatchObject({ answer: 'Không' });
+    const revision = { current_reply: draft, feedback: 'Giải thích rõ từng vấn đề đã trao đổi.' };
+    const revisedReply = 'Bác sĩ đã xem thông tin tư vấn và hồ sơ sức khỏe. '.repeat(145).trim();
+    expect(revisedReply.length).toBeGreaterThan(6000);
+    clinicalContext.mockResolvedValueOnce({ conversation, clinical_intake: clinicalIntake });
+    replyAi.mockResolvedValueOnce({ content: JSON.stringify({ reply: revisedReply }) });
+    await expect(invoke('draft_reply', { session_id: s.id, revision })).resolves.toEqual({ reply: revisedReply });
+    expect(JSON.parse(replyAi.mock.calls.at(-1)[0].prompt)).toMatchObject({
+      revision, conversation, ivr_rounds: prompt.ivr_rounds,
+    });
+    expect((await ivr.patientGet(pool, 1, s.id)).doctor_reply).toBeNull();
+    await invoke('reply', { session_id: s.id, reply: revisedReply });
+    expect((await ivr.patientGet(pool, 1, s.id)).doctor_reply).toBe(revisedReply);
+  });
+  test('a reviewed video uses private delivery and the same final reply lifecycle', async () => {
+    await newTask('final-video');
+    const created = await invoke('approve', { content: content() });
+    await worker.runDoctorIvrWorker(pool);
+    let session = await ivr.patientGet(pool, 1, created.session_id);
+    const bytes = Buffer.from('1a45dfa3666978747572652d766964656f', 'hex');
+    const data = {
+      session_id: session.id, request_id: randomUUID(), mime_type: 'video/webm',
+      video_base64: bytes.toString('base64'),
+    };
+    await expect(invoke('reply_video', data)).rejects.toMatchObject({ code: 'IVR_REPORT_NOT_READY' });
+    for (const q of content().questions) session = await answer(session, q.id, q.options[0].id);
+    await worker.runDoctorIvrWorker(pool);
+    await expect(invoke('reply_video', { ...data, video_base64: 'ZHVtbXk=' }))
+      .rejects.toMatchObject({ code: 'IVR_INVALID_REPLY_VIDEO' });
+    uploadVideo.mockRejectedValueOnce(new Error('Fixture upload unavailable'));
+    await expect(invoke('reply_video', data)).rejects.toMatchObject({ code: 'IVR_REPLY_VIDEO_UNAVAILABLE' });
+    expect((await ivr.patientGet(pool, 1, session.id)).status).toBe('reported');
+    const asset = {
+      public_id: 'fixture/reply-video', secure_url: 'https://fixture.invalid/authenticated/no-signature',
+      bytes: bytes.length, format: 'mp4', width: 640, audio: { codec: 'aac' }, duration: 24,
+    };
+    uploadVideo.mockResolvedValueOnce({ ...asset, audio: null });
+    await expect(invoke('reply_video', data)).rejects.toMatchObject({ code: 'IVR_INVALID_REPLY_VIDEO' });
+    expect(removeVideo).toHaveBeenCalledWith(asset.public_id, 'video', 'authenticated');
+    uploadVideo.mockResolvedValueOnce(asset);
+    await expect(invoke('reply_video', data)).resolves.toEqual({ id: session.id });
+    expect(uploadVideo).toHaveBeenLastCalledWith(bytes, expect.objectContaining({
+      resource_type: 'video', type: 'authenticated', format: 'mp4',
+    }));
+    await expect(invoke('reply_video', data)).resolves.toEqual({ id: session.id, duplicate: true });
+    await expect(invoke('reply', { session_id: session.id, reply: 'Nội dung thay thế.' }))
+      .rejects.toMatchObject({ code: 'IVR_REPLY_ALREADY_SENT' });
+    const result = await ivr.patientGet(pool, 1, session.id);
+    expect(result).toMatchObject({
+      status: 'replied', doctor_reply: null,
+      doctor_reply_video: { url: 'https://fixture.invalid/private-video?expires_at=123' },
+    });
+    expect(JSON.stringify(result)).not.toContain(asset.public_id);
+    await expect(ivr.patientGet(pool, 2, session.id)).rejects.toMatchObject({ statusCode: 404 });
+    expect((await ivr.patientAction(pool, 1, session.id, { action: 'ack' })).status).toBe('closed');
+    const files = await pool.query('SELECT resource_type,delivery_type FROM doctor_patient_files WHERE source_task_id=$1', [input.task_id]);
+    expect(files.rows).toEqual([{ resource_type: 'video', delivery_type: 'authenticated' }]);
   });
   test('stores original voice bytes, accepts a deferred upload once, preserves unknown STT confidence and signs media for 15 minutes', async () => {
     await newTask('voice');
@@ -721,6 +919,16 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     expect(s.answers[0].transcript).toBe('Câu trả lời bằng giọng nói.');
     expect(s.answers[0].stt_confidence).toBeNull();
     expect(s.answers[0].needs_review).toBe(true);
+    const scope = { tenant: input.tenant_id, taskId: input.task_id, user: 1 };
+    const intake = await ivr.loadConsultationIvrIntake(pool, scope);
+    expect(intake).toMatchObject([{ is_supplement: false, answers: [{
+      question: content().questions[0].text,
+      answer: 'Câu trả lời bằng giọng nói.',
+      answer_type: 'voice',
+      needs_review: true,
+    }] }]);
+    expect(intake[0].answers[0]).not.toHaveProperty('audio_url');
+    await expect(ivr.loadConsultationIvrIntake(pool, { ...scope, user: 2 })).resolves.toEqual([]);
     const url = new URL(s.answers[0].audio_url, 'http://localhost');
     const params = url.searchParams,
       answerId = url.pathname.split('/').at(-1);
