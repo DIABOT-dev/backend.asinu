@@ -371,6 +371,20 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
         content: 'Bác sĩ đã gửi câu hỏi',
       },
     ]);
+    expect((await loadChat()).messages[0]).not.toHaveProperty('ivr_doctor_id');
+    const doctorChat = await listMessages(
+      pool,
+      input.tenant_id,
+      input.task_id,
+      1,
+      'doctor',
+      input.doctor_id
+    );
+    expect(doctorChat.messages[0]).toMatchObject({
+      ivr_session_id: sent.session_id,
+      ivr_doctor_id: input.doctor_id,
+      sender_name: input.doctor_name,
+    });
     const { sendAndSave } = require('../src/services/notification/basic.notification.service');
     sendAndSave.mockResolvedValue(false);
     await worker.runDoctorIvrWorker(pool);

@@ -329,7 +329,7 @@ const listMessages = async (
       LIMIT 500`,
     [tenantId, taskId, userId, ...join.params]
   );
-  const messages = result.rows.map((row) => {
+  let messages = result.rows.map((row) => {
     const message = projectMessage(row);
     return viewerType === 'patient' &&
       message.sender_type === 'doctor' &&
@@ -337,6 +337,24 @@ const listMessages = async (
       ? { ...message, sender_type: 'system' }
       : message;
   });
+  if (viewerType === 'doctor') {
+    const sessionIds = messages.flatMap((message) =>
+      message.ivr_session_id ? [message.ivr_session_id] : []
+    );
+    if (sessionIds.length) {
+      const { rows: sessions } = await pool.query(
+        'SELECT id, doctor_id, doctor_name FROM doctor_ivr_sessions WHERE tenant_id=$1 AND task_id=$2 AND user_id=$3 AND id=ANY($4::uuid[])',
+        [tenantId, taskId, userId, sessionIds]
+      );
+      const byId = new Map(sessions.map((session) => [session.id, session]));
+      messages = messages.map((message) => {
+        const session = byId.get(message.ivr_session_id);
+        return session
+          ? { ...message, ivr_doctor_id: session.doctor_id, sender_name: session.doctor_name }
+          : message;
+      });
+    }
+  }
   const pinned = messages
     .filter((message) => message.is_pinned && !message.is_deleted && !message.is_deleted_for_me)
     .sort((a, b) => new Date(b.pinned_at) - new Date(a.pinned_at));
