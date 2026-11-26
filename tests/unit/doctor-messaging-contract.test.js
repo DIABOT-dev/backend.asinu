@@ -50,6 +50,17 @@ test('Doctor signed action contract binds the actor to the server-side identity'
   ).toBe(false);
 });
 
+test('Doctor and patient reactions accept the expanded emoji set and preserve removal', () => {
+  const patient = { tenant_id: validAction.tenant_id, action: 'react', message_id: validAction.message_id };
+  const doctor = { ...patient, app_user_id: '42', task_id: 'task-1', actor_ref: 'doctor-1' };
+  for (const reaction of ['👍', '❤️', '😊', '😂', '😆', '😍', '😮', '😕', '😢', '😡', '🙏', '👏', null]) {
+    expect(messageActionSchema.safeParse({ ...patient, reaction }).success).toBe(true);
+    expect(doctorMessageActionSchema.safeParse({ ...doctor, reaction }).success).toBe(true);
+  }
+  expect(messageActionSchema.safeParse({ ...patient, reaction: '🎉' }).success).toBe(false);
+  expect(doctorMessageActionSchema.safeParse({ ...doctor, reaction: '🎉' }).success).toBe(false);
+});
+
 test('Voice messages are allowed only with bounded metadata', () => {
   const parsed = doctorVoiceSendSchema.safeParse({
     tenant_id: 'clinic-demo',

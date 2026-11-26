@@ -100,7 +100,10 @@ const doctorReviewsRequestSchema = z
   })
   .strict();
 
-const messageReactionSchema = z.enum(['👍', '❤️', '😊', '😮', '😢', '🙏']).nullable().optional();
+const messageReactionSchema = z
+  .enum(['👍', '❤️', '😊', '😂', '😆', '😍', '😮', '😕', '😢', '😡', '🙏', '👏'])
+  .nullable()
+  .optional();
 
 const patientMessageRequestSchema = z
   .object({
