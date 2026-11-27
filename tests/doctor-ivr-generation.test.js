@@ -488,24 +488,24 @@ const failedDraft = () => ({
     },
   ],
 });
-const poolFixture = ({ supplement = false } = {}) => {
-  const firstSession = supplement && {
-    id: 'first-session',
-    user_id: 1,
-    status: 'reported',
-    is_supplement: false,
-    content_enc: seal(1, 'question-set', { questions: [] }),
-  };
-  const query = jest.fn(async (sql) => ({
+const poolFixture = ({ supplement = false, sessions } = {}) => {
+  const history = sessions ?? (supplement ? [{
+    id: 'first-session', status: 'reported', is_supplement: false,
+  }] : []);
+  const query = jest.fn(async (sql, params) => ({
     rows: sql.includes('FROM users WHERE id=$1 AND deleted_at IS NULL')
       ? [{ id: 1, language_preference: 'vi' }]
       : sql.includes('MAX(version)')
         ? [{ n: 1 }]
-        : firstSession &&
-            (sql.includes('SELECT id, is_supplement, status') ||
-              sql.includes('SELECT s.*,q.content_enc'))
-          ? [firstSession]
-          : [],
+        : sql.includes('SELECT id, is_supplement, status')
+          ? history
+          : sql.includes('SELECT s.*,q.content_enc')
+            ? history.filter(({ id }) => id === params[0]).map((session) => ({
+                ...session,
+                user_id: 1,
+                content_enc: seal(1, 'question-set', { questions: [] }),
+              }))
+            : [],
   }));
   return { query, connect: jest.fn(async () => ({ query, release: jest.fn() })) };
 };
@@ -662,6 +662,35 @@ test('accepts a valid draft that arrives within a configured longer deadline', a
   }
 });
 
+test('allows a supplementary draft to finish after the initial-generation deadline', async () => {
+  let now = 1000;
+  const clock = jest.spyOn(Date, 'now').mockImplementation(() => now);
+  try {
+    callTextAi.mockImplementationOnce(async () => {
+      now += 55_000;
+      return {
+        content: JSON.stringify({
+          title: 'Giờ dùng thuốc',
+          questions: [{
+            text: 'Bác uống thuốc giảm đau vào buổi nào?',
+            focus: 'medication_time',
+            answer_kind: 'single_choice',
+            options: [{ label: 'Buổi sáng' }, { label: 'Buổi tối' }],
+          }],
+        }),
+      };
+    });
+    const { content } = await generate(poolFixture({ supplement: true }), {
+      supplement: true,
+      supplement_request: 'Hỏi thời điểm uống thuốc giảm đau.',
+    });
+    expect(callTextAi.mock.calls[0][0]).toMatchObject({ timeoutMs: 90_000 });
+    expect(content.questions[0].text).toBe('Bác uống thuốc giảm đau vào buổi nào?');
+  } finally {
+    clock.mockRestore();
+  }
+});
+
 test('reports provider timeouts distinctly and does not repeat the request', async () => {
   callTextAi.mockRejectedValueOnce(Object.assign(new Error('timed out'), { name: 'AbortError' }));
   await expect(generate(poolFixture())).rejects.toMatchObject({
@@ -731,6 +760,7 @@ test('a supplement covers more than seven distinct topics requested by the speci
     max_duration_seconds: 300,
   });
   expect(providerRequest.system).toContain('Không thêm chủ đề khác cho đủ số');
+  expect(providerRequest.system).not.toContain('Tạo từ 3 đến 7 câu nội dung');
   expect(content.questions).toHaveLength(9);
   expect(content.questions.at(-2).text).toBe('Bác có bị sốt không?');
   expect(content.questions.at(-1).id).toBe('q_final');
@@ -738,6 +768,139 @@ test('a supplement covers more than seven distinct topics requested by the speci
     'Một viên',
     'Hai viên',
     'Khác, nói câu trả lời',
+  ]);
+});
+
+test('points the repair at the exact supplemental question with too many numeric thresholds', async () => {
+  const question = {
+    text: 'Số trên huyết áp bác đo được khoảng bao nhiêu?',
+    focus: 'blood_pressure_systolic',
+    answer_kind: 'numeric',
+    unit: 'mmHg',
+    thresholds: [110, 120, 130, 140],
+  };
+  const draft = (questions) => ({
+    content: JSON.stringify({ title: 'Hỏi thêm huyết áp', questions }),
+  });
+  callTextAi
+    .mockResolvedValueOnce(draft([question]))
+    .mockResolvedValueOnce({
+      content: JSON.stringify({
+        replacements: [{ index: 0, questions: [{ ...question, thresholds: [120, 140] }] }],
+      }),
+    });
+  const { content } = await generate(poolFixture({ supplement: true }), {
+    supplement: true,
+    supplement_request: 'Hỏi số trên lần đo huyết áp gần nhất.',
+  });
+  expect(JSON.parse(callTextAi.mock.calls[1][0].prompt).previous_error).toContain(
+    'Câu 1: thresholds phải có từ 1 đến 3 số tăng dần'
+  );
+  expect(content.questions[0].options).toHaveLength(4);
+  expect(content.questions[0].options.at(-1).type).toBe('voice');
+});
+
+test('repairs the third supplemental attempt even when it uses unfamiliar topic labels', async () => {
+  const draft = {
+    title: 'Diễn tiến cơn đau',
+    questions: [
+      {
+        text: 'Bác có thấy yếu một bên hoặc nói khó không?',
+        focus: 'new_warning_sign',
+        answer_kind: 'yes_no',
+      },
+      {
+        text: 'Mỗi cơn đau của bác kéo dài khoảng bao lâu?',
+        focus: 'attack_duration',
+        answer_kind: 'numeric',
+        unit: 'phút',
+        thresholds: [15, 30],
+      },
+    ],
+  };
+  callTextAi
+    .mockResolvedValueOnce({ content: 'Invalid fixture JSON' })
+    .mockResolvedValueOnce({ content: 'Invalid fixture JSON' })
+    .mockResolvedValueOnce({ content: JSON.stringify(draft) })
+    .mockResolvedValueOnce({
+      content: JSON.stringify({
+        replacements: [{
+          index: 0,
+          questions: [{ ...draft.questions[0], text: 'Bác có thấy yếu một bên người không?' }],
+        }],
+      }),
+    });
+  const { content } = await generate(poolFixture({ supplement: true }), {
+    supplement: true,
+    supplement_request: 'Hỏi về yếu một bên và thời lượng cơn đau.',
+  });
+  expect(callTextAi).toHaveBeenCalledTimes(4);
+  expect(JSON.parse(callTextAi.mock.calls[3][0].prompt).repair_targets).toMatchObject([
+    { index: 0 },
+  ]);
+  expect(content.questions.map(({ text }) => text)).toEqual([
+    'Bác có thấy yếu một bên người không?',
+    draft.questions[1].text,
+    'Bác có muốn hỏi bác sĩ điều gì không?',
+  ]);
+});
+
+test('repairs a compound question and missing measurement ranges together while keeping valid questions', async () => {
+  const course = {
+    focus: 'course',
+    text: 'Cơn đau của bác thay đổi thế nào?',
+    answer_kind: 'single_choice',
+    options: [{ label: 'Đỡ hơn' }, { label: 'Không đổi' }, { label: 'Nặng hơn' }],
+  };
+  const compound = {
+    focus: 'safety',
+    text: 'Bác có thấy yếu một bên hoặc nói khó không?',
+    answer_kind: 'yes_no',
+  };
+  const duration = {
+    focus: 'duration',
+    text: 'Mỗi cơn đau của bác kéo dài khoảng bao lâu?',
+    answer_kind: 'single_choice',
+    options: [{ label: 'Dưới 15 phút' }, { label: 'Từ 15 phút trở lên' }],
+  };
+  const replacementDuration = {
+    focus: duration.focus,
+    text: duration.text,
+    answer_kind: 'numeric',
+    unit: 'phút',
+    thresholds: [15],
+  };
+  callTextAi
+    .mockResolvedValueOnce({
+      content: JSON.stringify({ title: 'Hỏi thêm cơn đau', questions: [course, compound, duration] }),
+    })
+    .mockResolvedValueOnce({
+      content: JSON.stringify({
+        replacements: [
+          {
+            index: 1,
+            questions: [
+              { ...compound, text: 'Bác có thấy yếu một bên người không?' },
+              { ...compound, text: 'Bác có thấy nói khó không?' },
+            ],
+          },
+          { index: 2, questions: [replacementDuration] },
+        ],
+      }),
+    });
+  const { content } = await generate(poolFixture({ supplement: true }), {
+    supplement: true,
+    supplement_request: 'Hỏi diễn tiến, yếu một bên, nói khó và thời lượng cơn đau.',
+  });
+  const repair = JSON.parse(callTextAi.mock.calls[1][0].prompt);
+  expect(repair.repair_targets.map(({ index }) => index)).toEqual([1, 2]);
+  expect(repair.kept_questions).toEqual([course]);
+  expect(content.questions.map(({ text }) => text)).toEqual([
+    course.text,
+    'Bác có thấy yếu một bên người không?',
+    'Bác có thấy nói khó không?',
+    duration.text,
+    'Bác có muốn hỏi bác sĩ điều gì không?',
   ]);
 });
 
@@ -803,6 +966,56 @@ test('requires a supplement and either draft content or revision feedback', asyn
   await expect(generate(pool, {
     supplement: false, supplement_revision: { ...revision, feedback: 'Hỏi ngắn hơn.' },
   })).rejects.toMatchObject({ code: 'IVR_INVALID_SUPPLEMENT_REVISION' });
+  expect(callTextAi).not.toHaveBeenCalled();
+});
+
+test.each(['draft', 'sent'])('revises a %s third supplement without starting another round', async (status) => {
+  const replacement = { id: 'third-supplement', status, is_supplement: true };
+  const pool = poolFixture({ sessions: [
+    replacement,
+    { id: 'second-supplement', status: 'reported', is_supplement: true },
+    { id: 'first-supplement', status: 'reported', is_supplement: true },
+    { id: 'initial-session', status: 'reported', is_supplement: false },
+  ] });
+  const revision = {
+    title: 'Khó ngủ',
+    questions: [{ text: 'Bác có thức giấc mỗi đêm không?', options: ['Có', 'Không'] }],
+    feedback: 'Hỏi số lần thức giấc.',
+  };
+  callTextAi.mockResolvedValueOnce({ content: JSON.stringify({
+    title: 'Số lần thức giấc',
+    questions: [{
+      text: 'Bác thường thức giấc mấy lần mỗi đêm?',
+      focus: 'course',
+      answer_kind: 'single_choice',
+      options: [{ label: 'Một lần' }, { label: 'Hai lần trở lên' }],
+    }],
+  }) });
+  const result = await generate(pool, {
+    supplement: true,
+    replace_session_id: replacement.id,
+    supplement_revision: revision,
+  });
+  const prompt = JSON.parse(callTextAi.mock.calls[0][0].prompt);
+  expect(prompt.previous_intake).toHaveLength(3);
+  expect(prompt.supplement_revision).toEqual(revision);
+  expect(result.content.questions[0].text).toBe('Bác thường thức giấc mấy lần mỗi đêm?');
+  expect(pool.query.mock.calls.map(([sql]) => sql).join('\n'))
+    .not.toMatch(/(?:UPDATE|INSERT INTO) doctor_ivr_sessions/);
+});
+
+test('a revision cannot target a different round or one the patient has started', async () => {
+  const pool = poolFixture({ sessions: [
+    { id: 'active-supplement', status: 'in_progress', is_supplement: true },
+  ] });
+  const data = {
+    supplement: true,
+    supplement_revision: { title: 'Hỏi thêm', questions: [], feedback: 'Chỉnh cách hỏi.' },
+  };
+  await expect(generate(pool, { ...data, replace_session_id: 'other-supplement' }))
+    .rejects.toMatchObject({ code: 'IVR_SESSION_CHANGED' });
+  await expect(generate(pool, { ...data, replace_session_id: 'active-supplement' }))
+    .rejects.toMatchObject({ code: 'IVR_SESSION_ACTIVE' });
   expect(callTextAi).not.toHaveBeenCalled();
 });
 

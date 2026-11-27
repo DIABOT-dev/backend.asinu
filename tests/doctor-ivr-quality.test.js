@@ -242,6 +242,8 @@ describe('final reply vs additional intake', () => {
     'Bác có thể chia sẻ thêm về giờ ngủ không ạ?',
     'Vui lòng trả lời về giờ ngủ của bác.',
     'Bác cho bác sĩ biết giờ thức dậy.',
+    'Trước khi đi khám, anh hãy cho bác sĩ biết thời điểm bắt đầu ghi nhật ký.',
+    'Khi gặp bác sĩ, anh hãy cho bác sĩ biết thời điểm bắt đầu ghi nhật ký. Anh đã ghi được mấy ngày?',
   ])('does not present an additional question as a final result: %s', (draft) => {
     const report = applyReportQuality(
       { completion: 'full', insufficient: false },
@@ -251,6 +253,17 @@ describe('final reply vs additional intake', () => {
     expect(report.draft_reply).toBe('');
     expect(report.follow_up_reason).toBeTruthy();
     expect(asksForMoreInformation(draft)).toBe(true);
+  });
+  test.each([
+    'Khi gặp bác sĩ, anh hãy cho bác sĩ biết thời điểm bắt đầu ghi nhật ký.',
+    'Nếu chị đi khám trực tiếp, chị nên cho bác sĩ biết chị đã ghi nhật ký bao lâu.',
+  ])('accepts guidance about what to discuss during a visit: %s', (draft) => {
+    const report = applyReportQuality(
+      { completion: 'full', insufficient: false },
+      { summary: 'Đã nhận câu trả lời.', draft_reply: draft }
+    );
+    expect(report.draft_reply).toBe(draft);
+    expect(asksForMoreInformation(draft)).toBe(false);
   });
   test('keeps useful non-question drafts and respects an explicit missing-information decision', () => {
     const generated = {

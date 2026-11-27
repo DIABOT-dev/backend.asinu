@@ -74,8 +74,16 @@ const questionMessages = {
     'Câu chọn một đang liệt kê các biểu hiện có thể cùng xảy ra. Hỏi riêng từng biểu hiện hoặc hỏi biểu hiện khó chịu nhất.',
 };
 function asksForMoreInformation(text) {
+  // A request to tell the doctor during a visit is guidance for the visit.
+  const reply = String(text || '')
+    .replace(/\s+/gu, ' ')
+    .trim()
+    .replace(
+      /((?:^|[.!…] )(?:khi|nếu) (?:(?:anh|chị|bạn|bác|cô|chú|ông|bà) )?(?:đi khám|tái khám|gặp bác sĩ)(?: trực tiếp)?,? (?:thì )?(?:(?:anh|chị|bạn|bác|cô|chú|ông|bà) )?(?:(?:hãy|nên|vui lòng) )?)cho bác sĩ biết/giu,
+      '$1'
+    );
   return /[?？]|(?:cho (?:tôi|bác sĩ|mình) biết|chia sẻ thêm|cung cấp thêm (?:thông tin|chi tiết)|vui lòng trả lời|please (?:tell|share|answer)|could you|can you tell)/iu.test(
-    String(text || '')
+    reply
   );
 }
 function applyReportQuality(report, generated) {

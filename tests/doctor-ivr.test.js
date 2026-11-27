@@ -809,9 +809,12 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
       profile: { conditions: ['Tăng huyết áp'] },
       blood_pressure: [{ systolic: 126, diastolic: 79, occurred_at: '2026-10-20T07:00:00Z' }],
     });
-    const draft = 'Bác sĩ đã xem các thông tin của ca tư vấn.';
-    replyAi.mockResolvedValueOnce({ content: JSON.stringify({ reply: draft }) });
+    const draft = 'Khi gặp bác sĩ, anh hãy cho bác sĩ biết thời điểm bắt đầu ghi nhật ký.';
+    replyAi
+      .mockResolvedValueOnce({ content: JSON.stringify({ reply: 'Anh có thể chia sẻ thêm không?' }) })
+      .mockResolvedValueOnce({ content: JSON.stringify({ reply: draft }) });
     await expect(invoke('draft_reply', { session_id: s.id })).resolves.toEqual({ reply: draft });
+    expect(replyAi.mock.calls.at(-1)[0].system).toContain('Loại bỏ mọi câu hỏi, dấu hỏi');
     const prompt = JSON.parse(replyAi.mock.calls.at(-1)[0].prompt);
     expect(prompt).toMatchObject({
       conversation,
@@ -822,8 +825,22 @@ describeDb('IVR PostgreSQL workflow in an isolated fixture schema', () => {
     expect(prompt.ivr_rounds.map((round) => round.is_supplement)).toEqual([false, true, true, true]);
     expect(prompt.ivr_rounds[0].answers[0]).toMatchObject({ answer: 'Hôm nay' });
     expect(prompt.ivr_rounds[3].answers.at(-1)).toMatchObject({ answer: 'Không' });
+    clinicalContext.mockResolvedValueOnce({ conversation, clinical_intake: clinicalIntake });
+    replyAi
+      .mockResolvedValueOnce({ content: 'Invalid fixture JSON' })
+      .mockResolvedValueOnce({ content: JSON.stringify({ reply: '' }) });
+    await expect(invoke('draft_reply', { session_id: s.id })).rejects.toMatchObject({
+      code: 'IVR_INVALID_REPLY_DRAFT',
+      statusCode: 502,
+    });
+    clinicalContext.mockResolvedValueOnce({ conversation, clinical_intake: clinicalIntake });
+    replyAi.mockRejectedValueOnce(new Error('Fixture provider unavailable'));
+    await expect(invoke('draft_reply', { session_id: s.id })).rejects.toMatchObject({
+      code: 'IVR_REPLY_DRAFT_UNAVAILABLE',
+      statusCode: 502,
+    });
     const revision = { current_reply: draft, feedback: 'Giải thích rõ từng vấn đề đã trao đổi.' };
-    const revisedReply = 'Bác sĩ đã xem thông tin tư vấn và hồ sơ sức khỏe. '.repeat(145).trim();
+    const revisedReply = `${'Bác sĩ đã xem thông tin tư vấn và hồ sơ sức khỏe. '.repeat(145)}${draft}`;
     expect(revisedReply.length).toBeGreaterThan(6000);
     clinicalContext.mockResolvedValueOnce({ conversation, clinical_intake: clinicalIntake });
     replyAi.mockResolvedValueOnce({ content: JSON.stringify({ reply: revisedReply }) });

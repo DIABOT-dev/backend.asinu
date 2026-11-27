@@ -76,8 +76,13 @@ function estimateDuration(content) {
 }
 function validateQuestionSet(value, { supplement = false } = {}) {
   const content = base.parse(value);
-  const fail = (message) => {
-    throw Object.assign(new Error(message), { statusCode: 400, code: 'IVR_INVALID_QUESTION_SET' });
+  const fail = (message, reason, questionIndex) => {
+    throw Object.assign(new Error(message), {
+      statusCode: 400,
+      code: 'IVR_INVALID_QUESTION_SET',
+      reason,
+      questionIndex,
+    });
   };
   const count = content.questions.length - 1;
   if (!supplement && (count < 3 || count > 7)) fail('Phiên đầu cần 3–7 câu nội dung.');
@@ -85,13 +90,17 @@ function validateQuestionSet(value, { supplement = false } = {}) {
     texts = new Set(),
     allOptions = new Set();
   for (const [index, q] of content.questions.entries()) {
-    if (ids.has(q.id)) fail('Mã câu hỏi bị trùng.');
+    const failQuestion = (message, reason) => fail(message, reason, index);
+    if (ids.has(q.id)) failQuestion('Mã câu hỏi bị trùng.', 'duplicate_question_id');
     ids.add(q.id);
     if (texts.has(normalize(q.text)))
-      fail('Câu hỏi bị lặp. Mỗi câu chỉ khai thác một thông tin còn thiếu.');
+      failQuestion(
+        'Câu hỏi bị lặp. Mỗi câu chỉ khai thác một thông tin còn thiếu.',
+        'duplicate_question'
+      );
     texts.add(normalize(q.text));
     const issue = questionIssues(q)[0];
-    if (issue) fail(`Câu ${index + 1}: ${questionMessages[issue]}`);
+    if (issue) failQuestion(`Câu ${index + 1}: ${questionMessages[issue]}`, issue);
     const final = index === content.questions.length - 1;
     const labels = new Set();
     for (const [i, o] of q.options.entries()) {
@@ -100,7 +109,8 @@ function validateQuestionSet(value, { supplement = false } = {}) {
         /^(?:không rõ|không biết|không nhớ|chưa rõ)$/u.test(normalize(o.label))
       )
         o.unknown = true;
-      if (allOptions.has(o.id) || labels.has(normalize(o.label))) fail('Đáp án bị trùng.');
+      if (allOptions.has(o.id) || labels.has(normalize(o.label)))
+        failQuestion('Đáp án bị trùng.', 'duplicate_options');
       allOptions.add(o.id);
       labels.add(normalize(o.label));
       if (o.key !== i + 1) fail('Phím đáp án phải liên tục từ 1.');
@@ -137,7 +147,8 @@ function validateQuestionSet(value, { supplement = false } = {}) {
       )
         fail('Mỗi câu phải kết thúc bằng Khác, nói câu trả lời (30 giây).');
       const ordinary = q.options.filter((o) => o.type === 'option' && !o.unknown);
-      if (ordinary.length < 2 || ordinary.length > 4) fail('Mỗi câu cần 2–4 đáp án nội dung.');
+      if (ordinary.length < 2 || ordinary.length > 4)
+        failQuestion('Mỗi câu cần 2–4 đáp án nội dung.', 'option_count');
       const measurement = /đường huyết|huyết áp|cân nặng|nhiệt độ/iu.test(q.text);
       if (
         q.unit ||
@@ -149,7 +160,10 @@ function validateQuestionSet(value, { supplement = false } = {}) {
             ordinary.some((o) => /\d/u.test(o.label))))
       ) {
         if (!q.unit || ordinary.some((o) => !o.range))
-          fail('Câu hỏi số đo cần đơn vị và khoảng số cho từng đáp án.');
+          failQuestion(
+            'Câu hỏi số đo cần đơn vị và khoảng số cho từng đáp án.',
+            'measurement_ranges_required'
+          );
         const ranges = ordinary.map((o) => o.range);
         if (ranges[0].min !== null || ranges.at(-1).max !== null)
           fail('Khoảng số phải bao phủ cả hai đầu.');
@@ -168,7 +182,8 @@ function validateQuestionSet(value, { supplement = false } = {}) {
   }
   const duration = estimateDuration(content);
   const durationLimit = maxIvrDurationSeconds(supplement);
-  if (duration > durationLimit) fail(`Nội dung đọc quá dài cho phiên ${durationLimit / 60} phút.`);
+  if (duration > durationLimit)
+    fail(`Nội dung đọc quá dài cho phiên ${durationLimit / 60} phút.`, 'duration_limit');
   return { ...content, est_duration_s: duration };
 }
 function nextQuestion(content, questionId, optionId) {
@@ -245,6 +260,34 @@ function generatedOptions(q) {
     ...(q.suggested_red_flag_keys?.includes(index + 1) ? { suggested_red_flag: true } : {}),
   }));
 }
+const generatedFocus = z.enum([
+  'symptom',
+  'associated_symptom',
+  'onset',
+  'onset_pattern',
+  'course',
+  'impact',
+  'context',
+  'safety',
+  'blood_pressure_systolic',
+  'blood_pressure_diastolic',
+  'glucose',
+  'measurement_time',
+  'medication',
+  'medication_time',
+  'medication_dose',
+]);
+// Guided rounds can repeat a topic. Preserve recognized labels and use the
+// general label for new ones so the actual question still goes through validation.
+const guidedFocus = generatedFocus.or(
+  z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .transform(() => 'context')
+);
+
 function materializeGeneratedQuestions(
   value,
   address = 'Anh/chị',
@@ -259,25 +302,7 @@ function materializeGeneratedQuestions(
           z
             .object({
               text: phrase(25),
-              focus: z
-                .enum([
-                  'symptom',
-                  'associated_symptom',
-                  'onset',
-                  'onset_pattern',
-                  'course',
-                  'impact',
-                  'context',
-                  'safety',
-                  'blood_pressure_systolic',
-                  'blood_pressure_diastolic',
-                  'glucose',
-                  'measurement_time',
-                  'medication',
-                  'medication_time',
-                  'medication_dose',
-                ])
-                .optional(),
+              focus: (guidedSupplement ? guidedFocus : generatedFocus).optional(),
               answer_kind: z
                 .enum(['yes_no', 'frequency', 'impact', 'numeric', 'single_choice'])
                 .optional(),

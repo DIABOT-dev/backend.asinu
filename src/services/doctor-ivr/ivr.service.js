@@ -2,6 +2,7 @@ const { getSecret, keyringEnabled } = require('../../security/openbao-keyring.cj
 ('use strict');
 const crypto = require('node:crypto');
 const { isDeepStrictEqual } = require('node:util');
+const logger = require('../../lib/logger');
 const { compatibleDeviceTokens } = require('./ivr.devices');
 const { inspectRecording } = require('./recording');
 const { isAudioBuffer } = require('../../middleware/upload.middleware');
@@ -35,9 +36,16 @@ const {
 } = require('../integrations/doctor-communication-style');
 const {
   generationSystem,
+  questionSetOutputInstruction,
+  initialQuestionCountInstruction,
+  supplementQuestionCountInstruction,
+  questionGenerationFeedback,
   repairSystem,
+  guidedRepairSystem,
   compoundRepairTargets,
+  guidedQuestionRepairTargets,
   applyQuestionTextRepairs,
+  applyGuidedQuestionRepairs,
   buildQuestionGenerationContext,
   supplementRequestInstruction,
   supplementRevisionInstruction,
@@ -48,6 +56,7 @@ const error = (code, message, statusCode = 409) =>
 const enabled = () => process.env.DOCTOR_IVR_ENABLED === 'true';
 const answerAudioPrefix = 'answer:';
 const MAX_SUPPLEMENT_ROUNDS = 3;
+const SUPPLEMENT_GENERATION_TIMEOUT_MS = 90_000;
 const patientAudioJobs = new Map();
 function key() {
   const value = keyringEnabled()
@@ -488,8 +497,15 @@ async function doctorOperation(pool, input) {
         draftPatientReply(context, rounds, { address, addressProfile, revision: data.revision })
       );
     } catch (cause) {
-      if (cause.code === 'AI_CONSENT_REQUIRED') throw cause;
-      throw error('IVR_REPLY_DRAFT_UNAVAILABLE', 'Chưa soạn được lời trả lời. Vui lòng thử lại.', 502);
+      if (cause?.code === 'AI_CONSENT_REQUIRED') throw cause;
+      if (cause?.code === 'IVR_INVALID_REPLY_DRAFT') {
+        throw error(
+          'IVR_INVALID_REPLY_DRAFT',
+          'AI chưa tạo được bản nháp hợp lệ. Bạn có thể thử lại hoặc tự nhập câu trả lời.',
+          502
+        );
+      }
+      throw error('IVR_REPLY_DRAFT_UNAVAILABLE', 'Chưa soạn được câu trả lời. Vui lòng thử lại.', 502);
     }
     const current = await scope(pool, input);
     assertTaskOpen(current.task);
@@ -553,11 +569,16 @@ async function doctorOperation(pool, input) {
     let revision;
     if (data.supplement_revision !== undefined) {
       const parsed = supplementRevisionInput.safeParse(data.supplement_revision);
-      if (data.supplement !== true || !parsed.success ||
-          (!request && !parsed.data.questions.length && !parsed.data.feedback))
+      if (
+        data.supplement !== true ||
+        !parsed.success ||
+        (!request && !parsed.data.questions.length && !parsed.data.feedback)
+      )
         throw error('IVR_INVALID_SUPPLEMENT_REVISION', 'Cần nội dung câu hỏi bổ sung hoặc góp ý để AI soạn lại.', 400);
       revision = parsed.data;
     }
+    if (data.replace_session_id !== undefined && !revision)
+      throw error('IVR_INVALID_SUPPLEMENT_REVISION', 'Cần nội dung câu hỏi bổ sung hoặc góp ý để AI soạn lại.', 400);
     if (!(await mayProcessAi(pool, s.user)))
       throw error('AI_CONSENT_REQUIRED', 'Người bệnh chưa đồng ý xử lý AI.', 403);
     const [context, profile] = await Promise.all([
@@ -582,6 +603,14 @@ async function doctorOperation(pool, input) {
     const previousIntake = [];
     if (data.supplement) {
       const previous = deliveredSessions(await taskIvrSessions(pool, s));
+      if (data.replace_session_id !== undefined) {
+        const current = previous[0];
+        if (current?.id !== data.replace_session_id || !current.is_supplement)
+          throw error('IVR_SESSION_CHANGED', 'Phiên này đã thay đổi. Hãy mở lại bộ câu hỏi.');
+        if (!['draft', 'sent'].includes(current.status))
+          throw error('IVR_SESSION_ACTIVE', 'Phiên đã bắt đầu, không được thay bộ câu hỏi.');
+        previous.shift();
+      }
       if (supplementCount(previous) >= MAX_SUPPLEMENT_ROUNDS)
         throw error('IVR_SUPPLEMENT_LIMIT', `Mỗi ca có tối đa ${MAX_SUPPLEMENT_ROUNDS} lượt hỏi bổ sung.`);
       if (!canStartSupplement(previous))
@@ -606,21 +635,29 @@ async function doctorOperation(pool, input) {
     const guidedSupplement = Boolean(request || revision);
     const generationOptions = { guidedSupplement };
     const system = generationSystem +
+      (data.supplement ? supplementQuestionCountInstruction : initialQuestionCountInstruction) +
+      (data.supplement && !guidedSupplement ? '\nMỗi focus xuất hiện một lần.' : '') +
       (guidedSupplement ? supplementRequestInstruction : '') +
-      (revision ? supplementRevisionInstruction : '');
+      (revision ? supplementRevisionInstruction : '') +
+      questionSetOutputInstruction;
     const generationTokenBudget = data.supplement ? 3600 : 1200;
     let last, previousDraft, accepted;
     const repairs = [];
     const configuredTimeout = Number(process.env.DOCTOR_IVR_QUESTION_TIMEOUT_MS);
-    const timeout =
+    const questionTimeout =
       Number.isSafeInteger(configuredTimeout) &&
       configuredTimeout >= 10000 &&
       configuredTimeout <= 30000
         ? configuredTimeout
         : 10000;
+    const timeout = data.supplement === true ? SUPPLEMENT_GENERATION_TIMEOUT_MS : questionTimeout;
     const deadline = requestStartedAt + timeout;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const targets = last ? compoundRepairTargets(previousDraft, address, generationOptions) : [];
+    for (let attempt = 0; attempt <= 3; attempt++) {
+      const targets = !last ? [] : guidedSupplement
+        ? guidedQuestionRepairTargets(previousDraft, last, address)
+        : compoundRepairTargets(previousDraft, address, generationOptions);
+      // A guided draft can use its remaining time for one last targeted repair.
+      if (attempt === 3 && (!guidedSupplement || !targets.length)) break;
       const remainingMs = deadline - Date.now();
       // Generation and repairs share one deadline.
       if (remainingMs < 500) break;
@@ -630,12 +667,12 @@ async function doctorOperation(pool, input) {
             provider: process.env.DOCTOR_IVR_QUESTION_PROVIDER || 'openai',
             model: process.env.DOCTOR_IVR_QUESTION_MODEL || undefined,
             strictProvider: true,
-            system: targets.length ? repairSystem : system,
+            system: targets.length ? (guidedSupplement ? guidedRepairSystem : repairSystem) : system,
             prompt: JSON.stringify({
               ...generationContext,
               ...(request ? { supplement_request: request } : {}),
               ...(revision ? { supplement_revision: revision } : {}),
-              previous_error: last?.message,
+              previous_error: last ? questionGenerationFeedback(last) : undefined,
               ...(targets.length
                 ? {
                     repair_targets: targets,
@@ -647,7 +684,11 @@ async function doctorOperation(pool, input) {
             }),
             jsonMode: true,
             temperature: 0.2,
-            maxTokens: targets.length ? 100 + targets.length * 100 : generationTokenBudget,
+            maxTokens: targets.length
+              ? guidedSupplement
+                ? Math.min(generationTokenBudget, 500 + targets.length * 400)
+                : 100 + targets.length * 100
+              : generationTokenBudget,
             timeoutMs: remainingMs,
             maxRetries: 0,
           })
@@ -663,13 +704,18 @@ async function doctorOperation(pool, input) {
             422
           );
         if (targets.length) {
-          const repaired = applyQuestionTextRepairs(previousDraft, targets, generated);
+          const repaired = guidedSupplement
+            ? applyGuidedQuestionRepairs(previousDraft, targets, generated)
+            : applyQuestionTextRepairs(previousDraft, targets, generated);
+          const replacements = new Map(generated.replacements.map((item) => [item.index, item]));
           repairs.push(
             ...targets.map((target) => ({
               attempt: attempt + 1,
               index: target.index,
-              before: target.text,
-              after: repaired.questions[target.index].text,
+              before: target.question?.text ?? target.text,
+              after: guidedSupplement
+                ? replacements.get(target.index).questions.map(({ text }) => text).join(' ')
+                : repaired.questions[target.index].text,
               reason: target.reason,
             }))
           );
@@ -741,6 +787,14 @@ async function doctorOperation(pool, input) {
         last = e;
         if (['AI_CONSENT_REQUIRED', 'IVR_SUPPLEMENT_DURATION_LIMIT'].includes(e.code)) throw e;
         if (isAiTimeout(e)) break;
+        const issues = e.issues?.slice(0, 6).map(({ code, path }) => ({ code, path }));
+        logger.warn('doctor_ivr.question_generation_rejected', {
+          attempt: attempt + 1,
+          supplement: data.supplement === true,
+          reason: e.code === 'IVR_INVALID_QUESTION_SET' && e.reason ? e.reason : e.code || e.name,
+          questionIndex: e.questionIndex,
+          issues,
+        });
       }
     }
     if (accepted) {
@@ -751,6 +805,8 @@ async function doctorOperation(pool, input) {
     }
     if (isAiTimeout(last) || deadline - Date.now() < 500)
       throw error('IVR_GENERATION_TIMEOUT', 'AI chưa hoàn tất bộ câu hỏi trong thời gian chờ.', 504);
+    if (guidedSupplement && last?.reason === 'duration_limit')
+      throw error('IVR_SUPPLEMENT_DURATION_LIMIT', 'Nội dung đọc quá dài cho phiên 5 phút.', 422);
     throw error(
       'IVR_GENERATION_FAILED',
       'Chưa tạo được bộ câu hỏi hợp lệ. Hãy thử lại hoặc tự soạn.',
